@@ -44,8 +44,10 @@ The WGPU project has multiple official platforms for community engagement:
 - `wgpu` Maintainership Meetings: Every week, the maintainership of the wgpu
   project meets to discuss the project's direction and review ongoing work.
   These meetings are open to the public, and you are welcome to attend. They
-  happen on Google Meet and happen on Wednesday at 16:00 UTC and last approximately
-  an hour. Remember to obey the [`CODE_OF_CONDUCT.md`] in the meeting.
+  happen on Google Meet and happen on Wednesday at 11:00 US Eastern Standard
+  Time and last approximately an hour. Remember to obey the
+  [`CODE_OF_CONDUCT.md`] in the meeting.
+
   - [Meeting Notes]
   - [Meeting Link]
 - [GitHub discussions]: TODO: Experimentally used by some enthusiastic members
@@ -129,3 +131,8 @@ you make significant efforts…
 The "Assigned" field on a PR indicates who has taken responsibility
 for reviewing the PR, not who is responsible for the content of the
 PR.
+
+You can see some common things that PR reviewers are going to look for in
+[`REVIEW-CHECKLIST.md`].
+
+[`REVIEW-CHECKLIST.md`]: ./REVIEW-CHECKLIST.md

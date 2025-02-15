@@ -75,12 +75,7 @@ impl Instance {
                 let hal_desc = hal::InstanceDescriptor {
                     name: "wgpu",
                     flags: instance_desc.flags,
-                    dx12_shader_compiler: instance_desc
-                        .backend_options
-                        .dx12
-                        .shader_compiler
-                        .clone(),
-                    gles_minor_version: instance_desc.backend_options.gl.gles_minor_version,
+                    backend_options: instance_desc.backend_options.clone(),
                 };
 
                 use hal::Instance as _;
@@ -112,6 +107,8 @@ impl Instance {
         init(hal::api::Dx12, instance_desc, &mut instance_per_backend);
         #[cfg(gles)]
         init(hal::api::Gles, instance_desc, &mut instance_per_backend);
+        #[cfg(feature = "noop")]
+        init(hal::api::Noop, instance_desc, &mut instance_per_backend);
 
         Self {
             name: name.to_string(),

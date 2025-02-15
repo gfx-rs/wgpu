@@ -7,6 +7,10 @@ mod renderpass;
 mod resource_creation;
 mod shader;
 
+fn is_test() -> bool {
+    std::env::var("NEXTEST").is_ok()
+}
+
 struct DeviceState {
     adapter_info: wgpu::AdapterInfo,
     device: wgpu::Device,

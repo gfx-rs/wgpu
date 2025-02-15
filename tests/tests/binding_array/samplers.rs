@@ -243,7 +243,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     ctx.queue.submit(Some(encoder.finish()));
 
     readback_buffer.slice(..).map_async(MapMode::Read, |_| {});
-    ctx.device.poll(Maintain::Wait);
+    ctx.device.poll(PollType::Wait).unwrap();
 
     let readback_buffer_slice = readback_buffer.slice(..).get_mapped_range();
 

@@ -3,6 +3,7 @@ use crate::arena::{Arena, Handle};
 
 pub struct ExpressionTracer<'tracer> {
     pub constants: &'tracer Arena<crate::Constant>,
+    pub overrides: &'tracer Arena<crate::Override>,
 
     /// The arena in which we are currently tracing expressions.
     pub expressions: &'tracer Arena<crate::Expression>,
@@ -12,6 +13,9 @@ pub struct ExpressionTracer<'tracer> {
 
     /// The used map for `constants`.
     pub constants_used: &'tracer mut HandleSet<crate::Constant>,
+
+    /// The used map for `overrides`.
+    pub overrides_used: &'tracer mut HandleSet<crate::Override>,
 
     /// The used set for `arena`.
     ///
@@ -62,167 +66,180 @@ impl ExpressionTracer<'_> {
             }
 
             log::trace!("tracing new expression {:?}", expr);
+            self.trace_expression(expr);
+        }
+    }
 
-            use crate::Expression as Ex;
-            match *expr {
-                // Expressions that do not contain handles that need to be traced.
-                Ex::Literal(_)
-                | Ex::FunctionArgument(_)
-                | Ex::GlobalVariable(_)
-                | Ex::LocalVariable(_)
-                | Ex::CallResult(_)
-                | Ex::SubgroupBallotResult
-                | Ex::RayQueryProceedResult => {}
+    pub fn trace_expression(&mut self, expr: &crate::Expression) {
+        use crate::Expression as Ex;
+        match *expr {
+            // Expressions that do not contain handles that need to be traced.
+            Ex::Literal(_)
+            | Ex::FunctionArgument(_)
+            | Ex::GlobalVariable(_)
+            | Ex::LocalVariable(_)
+            | Ex::CallResult(_)
+            | Ex::SubgroupBallotResult
+            | Ex::RayQueryProceedResult => {}
 
-                Ex::Constant(handle) => {
-                    self.constants_used.insert(handle);
-                    // Constants and expressions are mutually recursive, which
-                    // complicates our nice one-pass algorithm. However, since
-                    // constants don't refer to each other, we can get around
-                    // this by looking *through* each constant and marking its
-                    // initializer as used. Since `expr` refers to the constant,
-                    // and the constant refers to the initializer, it must
-                    // precede `expr` in the arena.
-                    let init = self.constants[handle].init;
+            // Expressions can refer to constants and overrides, which can refer
+            // in turn to expressions, which complicates our nice one-pass
+            // algorithm. But since constants and overrides don't refer to each
+            // other directly, only via expressions, we can get around this by
+            // looking *through* each constant/override and marking its
+            // initializer expression as used immediately. Since `expr` refers
+            // to the constant/override, which then refers to the initializer,
+            // the initializer must precede `expr` in the arena, so we know we
+            // have yet to visit the initializer, so it's not too late to mark
+            // it.
+            Ex::Constant(handle) => {
+                self.constants_used.insert(handle);
+                let constant = &self.constants[handle];
+                self.types_used.insert(constant.ty);
+                match self.global_expressions_used {
+                    Some(ref mut used) => used.insert(constant.init),
+                    None => self.expressions_used.insert(constant.init),
+                };
+            }
+            Ex::Override(handle) => {
+                self.overrides_used.insert(handle);
+                let r#override = &self.overrides[handle];
+                self.types_used.insert(r#override.ty);
+                if let Some(init) = r#override.init {
                     match self.global_expressions_used {
                         Some(ref mut used) => used.insert(init),
                         None => self.expressions_used.insert(init),
                     };
                 }
-                Ex::Override(_) => {
-                    // All overrides are considered used by definition. We mark
-                    // their types and initialization expressions as used in
-                    // `compact::compact`, so we have no more work to do here.
+            }
+            Ex::ZeroValue(ty) => {
+                self.types_used.insert(ty);
+            }
+            Ex::Compose { ty, ref components } => {
+                self.types_used.insert(ty);
+                self.expressions_used
+                    .insert_iter(components.iter().cloned());
+            }
+            Ex::Access { base, index } => self.expressions_used.insert_iter([base, index]),
+            Ex::AccessIndex { base, index: _ } => {
+                self.expressions_used.insert(base);
+            }
+            Ex::Splat { size: _, value } => {
+                self.expressions_used.insert(value);
+            }
+            Ex::Swizzle {
+                size: _,
+                vector,
+                pattern: _,
+            } => {
+                self.expressions_used.insert(vector);
+            }
+            Ex::Load { pointer } => {
+                self.expressions_used.insert(pointer);
+            }
+            Ex::ImageSample {
+                image,
+                sampler,
+                gather: _,
+                coordinate,
+                array_index,
+                offset,
+                ref level,
+                depth_ref,
+            } => {
+                self.expressions_used
+                    .insert_iter([image, sampler, coordinate]);
+                self.expressions_used.insert_iter(array_index);
+                match self.global_expressions_used {
+                    Some(ref mut used) => used.insert_iter(offset),
+                    None => self.expressions_used.insert_iter(offset),
                 }
-                Ex::ZeroValue(ty) => {
-                    self.types_used.insert(ty);
-                }
-                Ex::Compose { ty, ref components } => {
-                    self.types_used.insert(ty);
-                    self.expressions_used
-                        .insert_iter(components.iter().cloned());
-                }
-                Ex::Access { base, index } => self.expressions_used.insert_iter([base, index]),
-                Ex::AccessIndex { base, index: _ } => {
-                    self.expressions_used.insert(base);
-                }
-                Ex::Splat { size: _, value } => {
-                    self.expressions_used.insert(value);
-                }
-                Ex::Swizzle {
-                    size: _,
-                    vector,
-                    pattern: _,
-                } => {
-                    self.expressions_used.insert(vector);
-                }
-                Ex::Load { pointer } => {
-                    self.expressions_used.insert(pointer);
-                }
-                Ex::ImageSample {
-                    image,
-                    sampler,
-                    gather: _,
-                    coordinate,
-                    array_index,
-                    offset,
-                    ref level,
-                    depth_ref,
-                } => {
-                    self.expressions_used
-                        .insert_iter([image, sampler, coordinate]);
-                    self.expressions_used.insert_iter(array_index);
-                    match self.global_expressions_used {
-                        Some(ref mut used) => used.insert_iter(offset),
-                        None => self.expressions_used.insert_iter(offset),
+                use crate::SampleLevel as Sl;
+                match *level {
+                    Sl::Auto | Sl::Zero => {}
+                    Sl::Exact(expr) | Sl::Bias(expr) => {
+                        self.expressions_used.insert(expr);
                     }
-                    use crate::SampleLevel as Sl;
-                    match *level {
-                        Sl::Auto | Sl::Zero => {}
-                        Sl::Exact(expr) | Sl::Bias(expr) => {
-                            self.expressions_used.insert(expr);
-                        }
-                        Sl::Gradient { x, y } => self.expressions_used.insert_iter([x, y]),
-                    }
-                    self.expressions_used.insert_iter(depth_ref);
+                    Sl::Gradient { x, y } => self.expressions_used.insert_iter([x, y]),
                 }
-                Ex::ImageLoad {
-                    image,
-                    coordinate,
-                    array_index,
-                    sample,
-                    level,
-                } => {
-                    self.expressions_used.insert(image);
-                    self.expressions_used.insert(coordinate);
-                    self.expressions_used.insert_iter(array_index);
-                    self.expressions_used.insert_iter(sample);
-                    self.expressions_used.insert_iter(level);
+                self.expressions_used.insert_iter(depth_ref);
+            }
+            Ex::ImageLoad {
+                image,
+                coordinate,
+                array_index,
+                sample,
+                level,
+            } => {
+                self.expressions_used.insert(image);
+                self.expressions_used.insert(coordinate);
+                self.expressions_used.insert_iter(array_index);
+                self.expressions_used.insert_iter(sample);
+                self.expressions_used.insert_iter(level);
+            }
+            Ex::ImageQuery { image, ref query } => {
+                self.expressions_used.insert(image);
+                use crate::ImageQuery as Iq;
+                match *query {
+                    Iq::Size { level } => self.expressions_used.insert_iter(level),
+                    Iq::NumLevels | Iq::NumLayers | Iq::NumSamples => {}
                 }
-                Ex::ImageQuery { image, ref query } => {
-                    self.expressions_used.insert(image);
-                    use crate::ImageQuery as Iq;
-                    match *query {
-                        Iq::Size { level } => self.expressions_used.insert_iter(level),
-                        Iq::NumLevels | Iq::NumLayers | Iq::NumSamples => {}
-                    }
-                }
-                Ex::Unary { op: _, expr } => {
-                    self.expressions_used.insert(expr);
-                }
-                Ex::Binary { op: _, left, right } => {
-                    self.expressions_used.insert_iter([left, right]);
-                }
-                Ex::Select {
-                    condition,
-                    accept,
-                    reject,
-                } => self
-                    .expressions_used
-                    .insert_iter([condition, accept, reject]),
-                Ex::Derivative {
-                    axis: _,
-                    ctrl: _,
-                    expr,
-                } => {
-                    self.expressions_used.insert(expr);
-                }
-                Ex::Relational { fun: _, argument } => {
-                    self.expressions_used.insert(argument);
-                }
-                Ex::Math {
-                    fun: _,
-                    arg,
-                    arg1,
-                    arg2,
-                    arg3,
-                } => {
-                    self.expressions_used.insert(arg);
-                    self.expressions_used.insert_iter(arg1);
-                    self.expressions_used.insert_iter(arg2);
-                    self.expressions_used.insert_iter(arg3);
-                }
-                Ex::As {
-                    expr,
-                    kind: _,
-                    convert: _,
-                } => {
-                    self.expressions_used.insert(expr);
-                }
-                Ex::ArrayLength(expr) => {
-                    self.expressions_used.insert(expr);
-                }
-                Ex::AtomicResult { ty, comparison: _ }
-                | Ex::WorkGroupUniformLoadResult { ty }
-                | Ex::SubgroupOperationResult { ty } => {
-                    self.types_used.insert(ty);
-                }
-                Ex::RayQueryGetIntersection {
-                    query,
-                    committed: _,
-                } => {
-                    self.expressions_used.insert(query);
-                }
+            }
+            Ex::Unary { op: _, expr } => {
+                self.expressions_used.insert(expr);
+            }
+            Ex::Binary { op: _, left, right } => {
+                self.expressions_used.insert_iter([left, right]);
+            }
+            Ex::Select {
+                condition,
+                accept,
+                reject,
+            } => self
+                .expressions_used
+                .insert_iter([condition, accept, reject]),
+            Ex::Derivative {
+                axis: _,
+                ctrl: _,
+                expr,
+            } => {
+                self.expressions_used.insert(expr);
+            }
+            Ex::Relational { fun: _, argument } => {
+                self.expressions_used.insert(argument);
+            }
+            Ex::Math {
+                fun: _,
+                arg,
+                arg1,
+                arg2,
+                arg3,
+            } => {
+                self.expressions_used.insert(arg);
+                self.expressions_used.insert_iter(arg1);
+                self.expressions_used.insert_iter(arg2);
+                self.expressions_used.insert_iter(arg3);
+            }
+            Ex::As {
+                expr,
+                kind: _,
+                convert: _,
+            } => {
+                self.expressions_used.insert(expr);
+            }
+            Ex::ArrayLength(expr) => {
+                self.expressions_used.insert(expr);
+            }
+            Ex::AtomicResult { ty, comparison: _ }
+            | Ex::WorkGroupUniformLoadResult { ty }
+            | Ex::SubgroupOperationResult { ty } => {
+                self.types_used.insert(ty);
+            }
+            Ex::RayQueryGetIntersection {
+                query,
+                committed: _,
+            } => {
+                self.expressions_used.insert(query);
             }
         }
     }
@@ -253,11 +270,9 @@ impl ModuleMap {
             | Ex::SubgroupBallotResult
             | Ex::RayQueryProceedResult => {}
 
-            // All overrides are retained, so their handles never change.
-            Ex::Override(_) => {}
-
             // Expressions that contain handles that need to be adjusted.
             Ex::Constant(ref mut constant) => self.constants.adjust(constant),
+            Ex::Override(ref mut r#override) => self.overrides.adjust(r#override),
             Ex::ZeroValue(ref mut ty) => self.types.adjust(ty),
             Ex::Compose {
                 ref mut ty,

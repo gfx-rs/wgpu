@@ -8,7 +8,6 @@ mod webgpu_sys;
 use js_sys::Promise;
 use std::{
     cell::RefCell,
-    collections::HashMap,
     fmt,
     future::Future,
     ops::Range,
@@ -927,7 +926,8 @@ fn future_request_device(
             )
         })
         .map_err(|error_value| crate::RequestDeviceError {
-            inner: crate::RequestDeviceErrorKind::WebGpu(error_value),
+            // wasm-bindgen provides a reasonable error stringification via `Debug` impl
+            inner: crate::RequestDeviceErrorKind::WebGpu(format!("{error_value:?}")),
         })
 }
 
@@ -1368,7 +1368,11 @@ pub struct WebQueueWriteBuffer {
 #[derive(Debug)]
 pub struct WebBufferMappedRange {
     actual_mapping: js_sys::Uint8Array,
+    /// Copy of the mapped data that lives in the Rust/Wasm heap instead of JS,
+    /// so Rust code can borrow it.
     temporary_mapping: Vec<u8>,
+    /// Whether `temporary_mapping` has possibly been written to and needs to be written back to JS.
+    temporary_mapping_modified: bool,
     /// Unique identifier for this BufferMappedRange.
     ident: crate::cmp::Identifier,
 }
@@ -1751,14 +1755,17 @@ impl dispatch::DeviceInterface for WebDevice {
             crate::ShaderSource::Glsl {
                 ref shader,
                 stage,
-                ref defines,
+                defines,
             } => {
                 use naga::front;
 
                 // Parse the given shader code and store its representation.
                 let options = front::glsl::Options {
                     stage,
-                    defines: defines.clone(),
+                    defines: defines
+                        .iter()
+                        .map(|&(key, value)| (String::from(key), String::from(value)))
+                        .collect(),
                 };
                 let mut parser = front::glsl::Frontend::default();
                 parser
@@ -2407,9 +2414,9 @@ impl dispatch::DeviceInterface for WebDevice {
         // No capturing api in webgpu
     }
 
-    fn poll(&self, _maintain: crate::Maintain) -> crate::MaintainResult {
+    fn poll(&self, _poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError> {
         // Device is polled automatically
-        crate::MaintainResult::SubmissionQueueEmpty
+        Ok(crate::PollStatus::QueueEmpty)
     }
 
     fn get_internal_counters(&self) -> crate::InternalCounters {
@@ -2672,6 +2679,7 @@ impl dispatch::BufferInterface for WebBuffer {
         WebBufferMappedRange {
             actual_mapping,
             temporary_mapping,
+            temporary_mapping_modified: false,
             ident: crate::cmp::Identifier::create(),
         }
         .into()
@@ -3102,6 +3110,18 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         _tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
     ) {
         unimplemented!("Raytracing not implemented for web");
+    }
+
+    fn transition_resources<'a>(
+        &mut self,
+        _buffer_transitions: &mut dyn Iterator<
+            Item = wgt::BufferTransition<&'a dispatch::DispatchBuffer>,
+        >,
+        _texture_transitions: &mut dyn Iterator<
+            Item = wgt::TextureTransition<&'a dispatch::DispatchTexture>,
+        >,
+    ) {
+        // no-op
     }
 }
 impl Drop for WebCommandEncoder {
@@ -3768,11 +3788,18 @@ impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
 
     #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
+        self.temporary_mapping_modified = true;
         &mut self.temporary_mapping
     }
 }
 impl Drop for WebBufferMappedRange {
     fn drop(&mut self) {
+        if !self.temporary_mapping_modified {
+            // For efficiency, skip the copy if it is not needed.
+            // This is also how we skip copying back on *read-only* mappings.
+            return;
+        }
+
         // Copy from the temporary mapping back into the array buffer that was
         // originally provided by the browser
         let temporary_mapping_slice = self.temporary_mapping.as_slice();
@@ -3810,19 +3837,23 @@ impl Drop for WebQueueWriteBuffer {
 /// exposed by `wasm-bindgen`. See the following issues for details:
 /// - [gfx-rs/wgpu#5688](https://github.com/gfx-rs/wgpu/pull/5688)
 /// - [rustwasm/wasm-bindgen#3587](https://github.com/rustwasm/wasm-bindgen/issues/3587)
-fn insert_constants_map(target: &JsValue, map: &HashMap<String, f64>) {
+fn insert_constants_map(target: &JsValue, map: &[(&str, f64)]) {
     if !map.is_empty() {
-        js_sys::Reflect::set(target, &"constants".into(), &hashmap_to_jsvalue(map))
-            .expect("Setting the values in a Javascript pipeline descriptor should never fail");
+        js_sys::Reflect::set(
+            target,
+            &JsValue::from_str("constants"),
+            &hashmap_to_jsvalue(map),
+        )
+        .expect("Setting the values in a Javascript pipeline descriptor should never fail");
     }
 }
 
 /// Converts a hashmap to a Javascript object.
-fn hashmap_to_jsvalue(map: &HashMap<String, f64>) -> JsValue {
+fn hashmap_to_jsvalue(map: &[(&str, f64)]) -> JsValue {
     let obj = js_sys::Object::new();
 
-    for (k, v) in map.iter() {
-        js_sys::Reflect::set(&obj, &k.into(), &(*v).into())
+    for &(key, v) in map.iter() {
+        js_sys::Reflect::set(&obj, &JsValue::from_str(key), &JsValue::from_f64(v))
             .expect("Setting the values in a Javascript map should never fail");
     }
 

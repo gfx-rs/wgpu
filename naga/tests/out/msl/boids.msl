@@ -55,8 +55,11 @@ kernel void main_(
     vPos = _e8;
     metal::float2 _e14 = particlesSrc.particles[index].vel;
     vVel = _e14;
+    uint2 loop_bound = uint2(0u);
     bool loop_init = true;
     while(true) {
+        if (metal::all(loop_bound == uint2(4294967295u))) { break; }
+        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
         if (!loop_init) {
             uint _e91 = i;
             i = _e91 + 1u;
@@ -105,8 +108,6 @@ kernel void main_(
             int _e88 = cVelCount;
             cVelCount = as_type<int>(as_type<uint>(_e88) + as_type<uint>(1));
         }
-#define LOOP_IS_BOUNDED { volatile bool unpredictable_break_from_loop = false; if (unpredictable_break_from_loop) break; }
-        LOOP_IS_BOUNDED
     }
     int _e94 = cMassCount;
     if (_e94 > 0) {

@@ -312,6 +312,8 @@ pub struct ConstantEvaluator<'a> {
 
     /// Tracks the constness of expressions residing in [`Self::expressions`]
     expression_kind_tracker: &'a mut ExpressionKindTracker,
+
+    layouter: &'a mut crate::proc::Layouter,
 }
 
 #[derive(Debug)]
@@ -594,6 +596,7 @@ impl<'a> ConstantEvaluator<'a> {
     pub fn for_wgsl_module(
         module: &'a mut crate::Module,
         global_expression_kind_tracker: &'a mut ExpressionKindTracker,
+        layouter: &'a mut crate::proc::Layouter,
         in_override_ctx: bool,
     ) -> Self {
         Self::for_module(
@@ -604,6 +607,7 @@ impl<'a> ConstantEvaluator<'a> {
             }),
             module,
             global_expression_kind_tracker,
+            layouter,
         )
     }
 
@@ -614,11 +618,13 @@ impl<'a> ConstantEvaluator<'a> {
     pub fn for_glsl_module(
         module: &'a mut crate::Module,
         global_expression_kind_tracker: &'a mut ExpressionKindTracker,
+        layouter: &'a mut crate::proc::Layouter,
     ) -> Self {
         Self::for_module(
             Behavior::Glsl(GlslRestrictions::Const),
             module,
             global_expression_kind_tracker,
+            layouter,
         )
     }
 
@@ -626,6 +632,7 @@ impl<'a> ConstantEvaluator<'a> {
         behavior: Behavior<'a>,
         module: &'a mut crate::Module,
         global_expression_kind_tracker: &'a mut ExpressionKindTracker,
+        layouter: &'a mut crate::proc::Layouter,
     ) -> Self {
         Self {
             behavior,
@@ -634,6 +641,7 @@ impl<'a> ConstantEvaluator<'a> {
             overrides: &module.overrides,
             expressions: &mut module.global_expressions,
             expression_kind_tracker: global_expression_kind_tracker,
+            layouter,
         }
     }
 
@@ -645,6 +653,7 @@ impl<'a> ConstantEvaluator<'a> {
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
         local_expression_kind_tracker: &'a mut ExpressionKindTracker,
+        layouter: &'a mut crate::proc::Layouter,
         emitter: &'a mut super::Emitter,
         block: &'a mut crate::Block,
         is_const: bool,
@@ -665,6 +674,7 @@ impl<'a> ConstantEvaluator<'a> {
             overrides: &module.overrides,
             expressions,
             expression_kind_tracker: local_expression_kind_tracker,
+            layouter,
         }
     }
 
@@ -676,6 +686,7 @@ impl<'a> ConstantEvaluator<'a> {
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
         local_expression_kind_tracker: &'a mut ExpressionKindTracker,
+        layouter: &'a mut crate::proc::Layouter,
         emitter: &'a mut super::Emitter,
         block: &'a mut crate::Block,
     ) -> Self {
@@ -690,6 +701,7 @@ impl<'a> ConstantEvaluator<'a> {
             overrides: &module.overrides,
             expressions,
             expression_kind_tracker: local_expression_kind_tracker,
+            layouter,
         }
     }
 
@@ -945,9 +957,7 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::RayQueryProceedResult | Expression::RayQueryGetIntersection { .. } => {
                 Err(ConstantEvaluatorError::RayQueryExpression)
             }
-            Expression::SubgroupBallotResult { .. } => {
-                Err(ConstantEvaluatorError::SubgroupExpression)
-            }
+            Expression::SubgroupBallotResult => Err(ConstantEvaluatorError::SubgroupExpression),
             Expression::SubgroupOperationResult { .. } => {
                 Err(ConstantEvaluatorError::SubgroupExpression)
             }
@@ -1398,14 +1408,30 @@ impl<'a> ConstantEvaluator<'a> {
     /// [`Compose`]: Expression::Compose
     fn eval_zero_value_and_splat(
         &mut self,
-        expr: Handle<Expression>,
+        mut expr: Handle<Expression>,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        match self.expressions[expr] {
-            Expression::ZeroValue(ty) => self.eval_zero_value_impl(ty, span),
-            Expression::Splat { size, value } => self.splat(value, size, span),
-            _ => Ok(expr),
+        // If expr is a Compose expression, eliminate ZeroValue and Splat expressions for
+        // each of its components.
+        if let Expression::Compose { ty, ref components } = self.expressions[expr] {
+            let components = components
+                .clone()
+                .iter()
+                .map(|component| self.eval_zero_value_and_splat(*component, span))
+                .collect::<Result<_, _>>()?;
+            expr = self.register_evaluated_expr(Expression::Compose { ty, components }, span)?;
         }
+
+        // The result of the splat() for a Splat of a scalar ZeroValue is a
+        // vector ZeroValue, so we must call eval_zero_value_impl() after
+        // splat() in order to ensure we have no ZeroValues remaining.
+        if let Expression::Splat { size, value } = self.expressions[expr] {
+            expr = self.splat(value, size, span)?;
+        }
+        if let Expression::ZeroValue(ty) = self.expressions[expr] {
+            expr = self.eval_zero_value_impl(ty, span)?;
+        }
+        Ok(expr)
     }
 
     /// Lower [`ZeroValue`] expressions to [`Literal`] and [`Compose`] expressions.
@@ -1713,7 +1739,11 @@ impl<'a> ConstantEvaluator<'a> {
                 self.types.insert(Type { name: None, inner }, span)
             }
         };
-        let new_base_stride = self.types[new_base].inner.size(self.to_ctx());
+        let mut layouter = std::mem::take(self.layouter);
+        layouter.update(self.to_ctx()).unwrap();
+        *self.layouter = layouter;
+
+        let new_base_stride = self.layouter[new_base].to_stride();
         let new_array_ty = self.types.insert(
             Type {
                 name: None,
@@ -2562,6 +2592,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let res1 = solver
@@ -2648,6 +2679,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let res = solver
@@ -2766,6 +2798,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let root1 = Expression::AccessIndex { base, index: 1 };
@@ -2859,6 +2892,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let solved_compose = solver
@@ -2941,6 +2975,7 @@ mod tests {
             overrides: &overrides,
             expressions: &mut global_expressions,
             expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
         };
 
         let solved_compose = solver
@@ -2968,6 +3003,87 @@ mod tests {
                     && components.iter().all(|&component| {
                         let component = &global_expressions[component];
                         matches!(*component, Expression::Literal(Literal::I32(-4)))
+                    })
+            }
+            _ => false,
+        };
+        if !pass {
+            panic!("unexpected evaluation result")
+        }
+    }
+
+    #[test]
+    fn splat_of_zero_value() {
+        let mut types = UniqueArena::new();
+        let constants = Arena::new();
+        let overrides = Arena::new();
+        let mut global_expressions = Arena::new();
+
+        let f32_ty = types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Scalar(crate::Scalar::F32),
+            },
+            Default::default(),
+        );
+
+        let vec2_f32_ty = types.insert(
+            Type {
+                name: None,
+                inner: TypeInner::Vector {
+                    size: VectorSize::Bi,
+                    scalar: crate::Scalar::F32,
+                },
+            },
+            Default::default(),
+        );
+
+        let five =
+            global_expressions.append(Expression::Literal(Literal::F32(5.0)), Default::default());
+        let five_splat = global_expressions.append(
+            Expression::Splat {
+                size: VectorSize::Bi,
+                value: five,
+            },
+            Default::default(),
+        );
+        let zero = global_expressions.append(Expression::ZeroValue(f32_ty), Default::default());
+        let zero_splat = global_expressions.append(
+            Expression::Splat {
+                size: VectorSize::Bi,
+                value: zero,
+            },
+            Default::default(),
+        );
+
+        let expression_kind_tracker = &mut ExpressionKindTracker::from_arena(&global_expressions);
+        let mut solver = ConstantEvaluator {
+            behavior: Behavior::Wgsl(WgslRestrictions::Const(None)),
+            types: &mut types,
+            constants: &constants,
+            overrides: &overrides,
+            expressions: &mut global_expressions,
+            expression_kind_tracker,
+            layouter: &mut crate::proc::Layouter::default(),
+        };
+
+        let solved_add = solver
+            .try_eval_and_append(
+                Expression::Binary {
+                    op: crate::BinaryOperator::Add,
+                    left: zero_splat,
+                    right: five_splat,
+                },
+                Default::default(),
+            )
+            .unwrap();
+
+        let pass = match global_expressions[solved_add] {
+            Expression::Compose { ty, ref components } => {
+                ty == vec2_f32_ty
+                    && components.iter().all(|&component| {
+                        let component = &global_expressions[component];
+                        matches!(*component, Expression::Literal(Literal::F32(5.0)))
                     })
             }
             _ => false,

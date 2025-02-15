@@ -1,8 +1,8 @@
 //! Tests for buffer usages validation.
 
+use wgpu::BufferAddress;
 use wgpu::{BufferUsages as Bu, MapMode as Ma};
 use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
-use wgt::BufferAddress;
 
 const BUFFER_SIZE: BufferAddress = 1234;
 
@@ -139,9 +139,7 @@ async fn map_test(
         buffer.destroy();
     }
 
-    ctx.async_poll(wgpu::Maintain::wait())
-        .await
-        .panic_on_timeout();
+    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
 
     if !before_unmap && !before_destroy {
         {

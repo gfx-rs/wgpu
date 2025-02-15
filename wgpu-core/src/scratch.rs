@@ -1,8 +1,8 @@
 use crate::device::{Device, DeviceError};
 use crate::resource_log;
-use hal::BufferUses;
 use std::mem::ManuallyDrop;
 use std::sync::Arc;
+use wgt::BufferUses;
 
 #[derive(Debug)]
 pub struct ScratchBuffer {

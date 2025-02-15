@@ -17,10 +17,9 @@ use crate::{
     FastHashSet,
 };
 
-use wgt::{math::align_to, BufferUsages, Features};
+use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 
 use super::CommandBufferMutable;
-use hal::BufferUses;
 use std::{
     cmp::max,
     num::NonZeroU64,
@@ -397,7 +396,7 @@ impl Global {
                         instance.map(|instance| TraceTlasInstance {
                             blas_id: instance.blas_id,
                             transform: *instance.transform,
-                            custom_index: instance.custom_index,
+                            custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
                     })
@@ -445,7 +444,7 @@ impl Global {
                 instance.as_ref().map(|instance| TlasInstance {
                     blas_id: instance.blas_id,
                     transform: &instance.transform,
-                    custom_index: instance.custom_index,
+                    custom_data: instance.custom_data,
                     mask: instance.mask,
                 })
             });
@@ -513,7 +512,7 @@ impl Global {
 
             let mut instance_count = 0;
             for instance in package.instances.flatten() {
-                if instance.custom_index >= (1u32 << 24u32) {
+                if instance.custom_data >= (1u32 << 24u32) {
                     return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
                         tlas.error_ident(),
                     ));
@@ -525,7 +524,7 @@ impl Global {
                 instance_buffer_staging_source.extend(device.raw().tlas_instance_to_bytes(
                     hal::TlasInstance {
                         transform: *instance.transform,
-                        custom_index: instance.custom_index,
+                        custom_data: instance.custom_data,
                         mask: instance.mask,
                         blas_address: blas.handle,
                     },
@@ -923,6 +922,14 @@ fn iter_blas<'a>(
                         None
                     };
                     let transform_data = if let Some(transform_id) = mesh.transform_buffer {
+                        if !blas
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            return Err(BuildAccelerationStructureError::UseTransformMissing(
+                                blas.error_ident(),
+                            ));
+                        }
                         let transform_buffer = hub.buffers.get(transform_id).get()?;
                         if mesh.transform_buffer_offset.is_none() {
                             return Err(BuildAccelerationStructureError::MissingAssociatedData(
@@ -935,6 +942,14 @@ fn iter_blas<'a>(
                         );
                         Some((transform_buffer, data))
                     } else {
+                        if blas
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            return Err(BuildAccelerationStructureError::TransformMissing(
+                                blas.error_ident(),
+                            ));
+                        }
                         None
                     };
                     temp_buffer.push(TriangleBufferStore {

@@ -3,12 +3,15 @@
 //!  and run the tests through them.
 //!
 //!  Test requirements:
-//!    - all IDs have the backend `Empty`
+//!    - all IDs have the backend `Noop`
 //!    - all expected buffers have `MAP_READ` usage
 //!    - last action is `Submit`
 //!    - no swapchain use
 
 #![cfg(not(target_arch = "wasm32"))]
+
+extern crate wgpu_core as wgc;
+extern crate wgpu_types as wgt;
 
 use player::GlobalPlay;
 use std::{
@@ -71,9 +74,7 @@ impl Test<'_> {
             wgt::Backend::Gl => "Gl",
             _ => unreachable!(),
         };
-        let string = read_to_string(&path)
-            .unwrap()
-            .replace("Empty", backend_name);
+        let string = read_to_string(&path).unwrap().replace("Noop", backend_name);
         ron::de::from_str(&string)
             .unwrap_or_else(|e| panic!("{path:?}:{} {}", e.position.line, e.code))
     }
@@ -132,7 +133,7 @@ impl Test<'_> {
 
         println!("\t\t\tWaiting...");
         global
-            .device_poll(device_id, wgt::Maintain::wait())
+            .device_poll(device_id, wgt::PollType::wait())
             .unwrap();
 
         for expect in self.expectations {

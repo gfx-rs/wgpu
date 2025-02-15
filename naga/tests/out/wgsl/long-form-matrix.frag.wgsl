@@ -8,6 +8,7 @@ fn main_1() {
     var d: mat3x3<f32> = mat3x3<f32>(vec3<f32>(2f, 2f, 1f), vec3<f32>(1f, 1f, 1f), vec3<f32>(1f, 1f, 1f));
     var e: mat4x4<f32> = mat4x4<f32>(vec4<f32>(2f, 2f, 1f, 1f), vec4<f32>(1f, 1f, 2f, 2f), vec4<f32>(1f, 1f, 1f, 1f), vec4<f32>(1f, 1f, 1f, 1f));
 
+    return;
 }
 
 @fragment 

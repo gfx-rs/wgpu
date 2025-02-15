@@ -192,6 +192,7 @@ impl super::Adapter {
 
     pub(super) unsafe fn expose(
         context: super::AdapterContext,
+        backend_options: wgt::GlBackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         let gl = context.lock();
         let extensions = gl.supported_extensions();
@@ -824,6 +825,8 @@ impl super::Adapter {
                     private_caps,
                     workarounds,
                     features,
+                    limits: limits.clone(),
+                    options: backend_options,
                     shading_language_version,
                     next_shader_id: Default::default(),
                     program_cache: Default::default(),
@@ -1211,7 +1214,7 @@ impl crate::Adapter for super::Adapter {
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 maximum_frame_latency: 2..=2, //TODO, unused currently
                 current_extent: None,
-                usage: crate::TextureUses::COLOR_TARGET,
+                usage: wgt::TextureUses::COLOR_TARGET,
             })
         } else {
             None

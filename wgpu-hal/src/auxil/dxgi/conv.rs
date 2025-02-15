@@ -181,7 +181,7 @@ pub fn map_texture_format_for_copy(
 
 pub fn map_texture_format_for_resource(
     format: wgt::TextureFormat,
-    usage: crate::TextureUses,
+    usage: wgt::TextureUses,
     has_view_formats: bool,
     casting_fully_typed_format_supported: bool,
 ) -> Dxgi::Common::DXGI_FORMAT {
@@ -206,10 +206,10 @@ pub fn map_texture_format_for_resource(
     // We might view this resource as SRV/UAV but also as DSV
     } else if format.is_depth_stencil_format()
         && usage.intersects(
-            crate::TextureUses::RESOURCE
-                | crate::TextureUses::STORAGE_READ_ONLY
-                | crate::TextureUses::STORAGE_WRITE_ONLY
-                | crate::TextureUses::STORAGE_READ_WRITE,
+            wgt::TextureUses::RESOURCE
+                | wgt::TextureUses::STORAGE_READ_ONLY
+                | wgt::TextureUses::STORAGE_WRITE_ONLY
+                | wgt::TextureUses::STORAGE_READ_WRITE,
         )
     {
         match format {
@@ -281,6 +281,13 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> Dxgi::Common::DXGI_FORMAT
     }
 }
 
-pub fn map_acomposite_alpha_mode(_mode: wgt::CompositeAlphaMode) -> Dxgi::Common::DXGI_ALPHA_MODE {
-    Dxgi::Common::DXGI_ALPHA_MODE_IGNORE
+pub fn map_acomposite_alpha_mode(mode: wgt::CompositeAlphaMode) -> Dxgi::Common::DXGI_ALPHA_MODE {
+    match mode {
+        wgt::CompositeAlphaMode::PreMultiplied => Dxgi::Common::DXGI_ALPHA_MODE_PREMULTIPLIED,
+        wgt::CompositeAlphaMode::PostMultiplied => Dxgi::Common::DXGI_ALPHA_MODE_STRAIGHT,
+        wgt::CompositeAlphaMode::Opaque => Dxgi::Common::DXGI_ALPHA_MODE_IGNORE,
+        wgt::CompositeAlphaMode::Auto | wgt::CompositeAlphaMode::Inherit => {
+            Dxgi::Common::DXGI_ALPHA_MODE_UNSPECIFIED
+        }
+    }
 }

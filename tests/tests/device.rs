@@ -27,9 +27,7 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
             });
         }
 
-        ctx.async_poll(wgpu::Maintain::Poll)
-            .await
-            .panic_on_timeout();
+        ctx.async_poll(wgpu::PollType::Poll).await.unwrap();
     });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
@@ -119,7 +117,7 @@ async fn request_device_error_message() {
             let expected = "TypeError";
         } else {
             // This message appears whenever wgpu-core is used as the implementation.
-            let expected = "Unsupported features were requested: Features(";
+            let expected = "Unsupported features were requested: Features {";
         }
     }
     assert!(device_error.contains(expected), "{device_error}");
@@ -603,7 +601,7 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
         let callback = Box::new(|reason, _m| {
             WAS_CALLED.store(true, std::sync::atomic::Ordering::SeqCst);
             assert!(
-                matches!(reason, wgt::DeviceLostReason::Destroyed),
+                matches!(reason, wgpu::DeviceLostReason::Destroyed),
                 "Device lost info reason should match DeviceLostReason::Destroyed."
             );
         });
@@ -615,8 +613,9 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
         // Make sure the device queues are empty, which ensures that the closure
         // has been called.
         assert!(ctx
-            .async_poll(wgpu::Maintain::wait())
+            .async_poll(wgpu::PollType::wait())
             .await
+            .unwrap()
             .is_queue_empty());
 
         assert!(
@@ -669,18 +668,18 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
                     ),
                 });
 
-        let my_texture = ctx.device.create_texture(&wgt::TextureDescriptor {
+        let my_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
-            size: wgt::Extent3d {
+            size: wgpu::Extent3d {
                 width: 1024,
                 height: 512,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
-            dimension: wgt::TextureDimension::D2,
-            format: wgt::TextureFormat::Rgba8Unorm,
-            usage: wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TEXTURE_BINDING,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
 
@@ -689,7 +688,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
             format: None,
             dimension: None,
             usage: None,
-            aspect: wgt::TextureAspect::All,
+            aspect: wgpu::TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,
             base_array_layer: 0,
@@ -707,10 +706,10 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
                     module: &trivial_shaders_with_some_reversed_bindings,
                     entry_point: Some("fs_main"),
                     compilation_options: Default::default(),
-                    targets: &[Some(wgt::ColorTargetState {
-                        format: wgt::TextureFormat::Bgra8Unorm,
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Bgra8Unorm,
                         blend: None,
-                        write_mask: wgt::ColorWrites::ALL,
+                        write_mask: wgpu::ColorWrites::ALL,
                     })],
                 }),
                 layout: None,
@@ -723,9 +722,9 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
                     compilation_options: Default::default(),
                     buffers: &[],
                 },
-                primitive: wgt::PrimitiveState::default(),
+                primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None,
-                multisample: wgt::MultisampleState::default(),
+                multisample: wgpu::MultisampleState::default(),
                 multiview: None,
                 cache: None,
             });

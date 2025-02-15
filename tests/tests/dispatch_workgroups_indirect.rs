@@ -180,7 +180,7 @@ impl TestResources {
                 label: None,
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgt::ShaderStages::COMPUTE,
+                    visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: false },
                         has_dynamic_offset: false,
@@ -195,8 +195,8 @@ impl TestResources {
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[&bgl],
-                push_constant_ranges: &[wgt::PushConstantRange {
-                    stages: wgt::ShaderStages::COMPUTE,
+                push_constant_ranges: &[wgpu::PushConstantRange {
+                    stages: wgpu::ShaderStages::COMPUTE,
                     range: 0..4,
                 }],
             });
@@ -300,9 +300,7 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| {});
 
-        ctx.async_poll(wgpu::Maintain::wait())
-            .await
-            .panic_on_timeout();
+        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
 
         let view = test_resources.readback_buffer.slice(..).get_mapped_range();
 

@@ -13,6 +13,7 @@ use std::{
     ptr,
     time::Instant,
 };
+use wgpu_types::Dx12BackendOptions;
 use winit::window::WindowButtons;
 
 const DESIRED_MAX_LATENCY: u32 = 2;
@@ -32,7 +33,7 @@ impl std::fmt::Debug for AccelerationStructureInstance {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Instance")
             .field("transform", &self.transform)
-            .field("custom_index()", &self.custom_index())
+            .field("custom_data()", &self.custom_index())
             .field("mask()", &self.mask())
             .field(
                 "shader_binding_table_record_offset()",
@@ -196,7 +197,7 @@ struct Example<A: hal::Api> {
     instance: A::Instance,
     adapter: A::Adapter,
     surface: A::Surface,
-    surface_format: wgt::TextureFormat,
+    surface_format: wgpu_types::TextureFormat,
     device: A::Device,
     queue: A::Queue,
 
@@ -238,12 +239,13 @@ impl<A: hal::Api> Example<A> {
 
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
-            flags: wgt::InstanceFlags::default(),
-            dx12_shader_compiler: wgt::Dx12Compiler::DynamicDxc {
-                dxc_path: "dxcompiler.dll".to_string(),
-                dxil_path: "dxil.dll".to_string(),
+            flags: wgpu_types::InstanceFlags::default(),
+            backend_options: wgpu_types::BackendOptions {
+                dx12: Dx12BackendOptions {
+                    shader_compiler: wgpu_types::Dx12Compiler::default_dynamic_dxc(),
+                },
+                ..Default::default()
             },
-            gles_minor_version: wgt::Gles3MinorVersion::default(),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let surface = {
@@ -274,8 +276,8 @@ impl<A: hal::Api> Example<A> {
             adapter
                 .open(
                     features,
-                    &wgt::Limits::default(),
-                    &wgt::MemoryHints::Performance,
+                    &wgpu_types::Limits::default(),
+                    &wgpu_types::MemoryHints::Performance,
                 )
                 .unwrap()
         };
@@ -284,9 +286,9 @@ impl<A: hal::Api> Example<A> {
         dbg!(&surface_caps.formats);
         let surface_format = if surface_caps
             .formats
-            .contains(&wgt::TextureFormat::Rgba8Unorm)
+            .contains(&wgpu_types::TextureFormat::Rgba8Unorm)
         {
-            wgt::TextureFormat::Rgba8Unorm
+            wgpu_types::TextureFormat::Rgba8Unorm
         } else {
             *surface_caps.formats.first().unwrap()
         };
@@ -294,15 +296,15 @@ impl<A: hal::Api> Example<A> {
             maximum_frame_latency: DESIRED_MAX_LATENCY
                 .max(*surface_caps.maximum_frame_latency.start())
                 .min(*surface_caps.maximum_frame_latency.end()),
-            present_mode: wgt::PresentMode::Fifo,
-            composite_alpha_mode: wgt::CompositeAlphaMode::Opaque,
+            present_mode: wgpu_types::PresentMode::Fifo,
+            composite_alpha_mode: wgpu_types::CompositeAlphaMode::Opaque,
             format: surface_format,
-            extent: wgt::Extent3d {
+            extent: wgpu_types::Extent3d {
                 width: window_size.0,
                 height: window_size.1,
                 depth_or_array_layers: 1,
             },
-            usage: hal::TextureUses::COLOR_TARGET | hal::TextureUses::COPY_DST,
+            usage: wgpu_types::TextureUses::COLOR_TARGET | wgpu_types::TextureUses::COPY_DST,
             view_formats: vec![surface_format],
         };
         unsafe {
@@ -319,30 +321,30 @@ impl<A: hal::Api> Example<A> {
             label: None,
             flags: hal::BindGroupLayoutFlags::empty(),
             entries: &[
-                wgt::BindGroupLayoutEntry {
+                wgpu_types::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgt::ShaderStages::COMPUTE,
-                    ty: wgt::BindingType::Buffer {
-                        ty: wgt::BufferBindingType::Uniform,
+                    visibility: wgpu_types::ShaderStages::COMPUTE,
+                    ty: wgpu_types::BindingType::Buffer {
+                        ty: wgpu_types::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: wgt::BufferSize::new(size_of::<Uniforms>() as _),
+                        min_binding_size: wgpu_types::BufferSize::new(size_of::<Uniforms>() as _),
                     },
                     count: None,
                 },
-                wgt::BindGroupLayoutEntry {
+                wgpu_types::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgt::ShaderStages::COMPUTE,
-                    ty: wgt::BindingType::StorageTexture {
-                        access: wgt::StorageTextureAccess::WriteOnly,
-                        format: wgt::TextureFormat::Rgba8Unorm,
-                        view_dimension: wgt::TextureViewDimension::D2,
+                    visibility: wgpu_types::ShaderStages::COMPUTE,
+                    ty: wgpu_types::BindingType::StorageTexture {
+                        access: wgpu_types::StorageTextureAccess::WriteOnly,
+                        format: wgpu_types::TextureFormat::Rgba8Unorm,
+                        view_dimension: wgpu_types::TextureViewDimension::D2,
                     },
                     count: None,
                 },
-                wgt::BindGroupLayoutEntry {
+                wgpu_types::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgt::ShaderStages::COMPUTE,
-                    ty: wgt::BindingType::AccelerationStructure,
+                    visibility: wgpu_types::ShaderStages::COMPUTE,
+                    ty: wgpu_types::BindingType::AccelerationStructure,
                     count: None,
                 },
             ],
@@ -371,7 +373,7 @@ impl<A: hal::Api> Example<A> {
         };
         let shader_desc = hal::ShaderModuleDescriptor {
             label: None,
-            runtime_checks: wgt::ShaderRuntimeChecks::checked(),
+            runtime_checks: wgpu_types::ShaderRuntimeChecks::checked(),
         };
         let shader_module = unsafe {
             device
@@ -419,8 +421,8 @@ impl<A: hal::Api> Example<A> {
                 .create_buffer(&hal::BufferDescriptor {
                     label: Some("vertices buffer"),
                     size: vertices_size_in_bytes as u64,
-                    usage: hal::BufferUses::MAP_WRITE
-                        | hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    usage: wgpu_types::BufferUses::MAP_WRITE
+                        | wgpu_types::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
                 })
                 .unwrap();
@@ -445,8 +447,8 @@ impl<A: hal::Api> Example<A> {
                     .create_buffer(&hal::BufferDescriptor {
                         label: Some("indices buffer"),
                         size: indices_size_in_bytes as u64,
-                        usage: hal::BufferUses::MAP_WRITE
-                            | hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                        usage: wgpu_types::BufferUses::MAP_WRITE
+                            | wgpu_types::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         memory_flags: hal::MemoryFlags::TRANSIENT
                             | hal::MemoryFlags::PREFER_COHERENT,
                     })
@@ -472,14 +474,14 @@ impl<A: hal::Api> Example<A> {
         let blas_triangles = vec![hal::AccelerationStructureTriangles {
             vertex_buffer: Some(&vertices_buffer),
             first_vertex: 0,
-            vertex_format: wgt::VertexFormat::Float32x3,
+            vertex_format: wgpu_types::VertexFormat::Float32x3,
             // each vertex is 3 floats, and floats are stored raw in the array
             vertex_count: vertices.len() as u32 / 3,
             vertex_stride: 3 * 4,
             indices: indices_buffer.as_ref().map(|(buf, len)| {
                 hal::AccelerationStructureTriangleIndices {
                     buffer: Some(buf),
-                    format: wgt::IndexFormat::Uint32,
+                    format: wgpu_types::IndexFormat::Uint32,
                     offset: 0,
                     count: *len as u32,
                 }
@@ -523,6 +525,7 @@ impl<A: hal::Api> Example<A> {
                 label: Some("blas"),
                 size: blas_sizes.acceleration_structure_size,
                 format: hal::AccelerationStructureFormat::BottomLevel,
+                allow_compaction: false,
             })
         }
         .unwrap();
@@ -532,6 +535,7 @@ impl<A: hal::Api> Example<A> {
                 label: Some("tlas"),
                 size: tlas_sizes.acceleration_structure_size,
                 format: hal::AccelerationStructureFormat::TopLevel,
+                allow_compaction: false,
             })
         }
         .unwrap();
@@ -553,7 +557,7 @@ impl<A: hal::Api> Example<A> {
                 .create_buffer(&hal::BufferDescriptor {
                     label: Some("uniform buffer"),
                     size: uniforms_size as u64,
-                    usage: hal::BufferUses::MAP_WRITE | hal::BufferUses::UNIFORM,
+                    usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
                     memory_flags: hal::MemoryFlags::PREFER_COHERENT,
                 })
                 .unwrap();
@@ -573,27 +577,27 @@ impl<A: hal::Api> Example<A> {
 
         let texture_desc = hal::TextureDescriptor {
             label: None,
-            size: wgt::Extent3d {
+            size: wgpu_types::Extent3d {
                 width: 512,
                 height: 512,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
-            dimension: wgt::TextureDimension::D2,
-            format: wgt::TextureFormat::Rgba8Unorm,
-            usage: hal::TextureUses::STORAGE_READ_WRITE | hal::TextureUses::COPY_SRC,
+            dimension: wgpu_types::TextureDimension::D2,
+            format: wgpu_types::TextureFormat::Rgba8Unorm,
+            usage: wgpu_types::TextureUses::STORAGE_READ_WRITE | wgpu_types::TextureUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::empty(),
-            view_formats: vec![wgt::TextureFormat::Rgba8Unorm],
+            view_formats: vec![wgpu_types::TextureFormat::Rgba8Unorm],
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
         let view_desc = hal::TextureViewDescriptor {
             label: None,
             format: texture_desc.format,
-            dimension: wgt::TextureViewDimension::D2,
-            usage: hal::TextureUses::STORAGE_READ_WRITE | hal::TextureUses::COPY_SRC,
-            range: wgt::ImageSubresourceRange::default(),
+            dimension: wgpu_types::TextureViewDimension::D2,
+            usage: wgpu_types::TextureUses::STORAGE_READ_WRITE | wgpu_types::TextureUses::COPY_SRC,
+            range: wgpu_types::ImageSubresourceRange::default(),
         };
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
@@ -605,7 +609,7 @@ impl<A: hal::Api> Example<A> {
             };
             let texture_binding = hal::TextureBinding {
                 view: &texture_view,
-                usage: hal::TextureUses::STORAGE_READ_WRITE,
+                usage: wgpu_types::TextureUses::STORAGE_READ_WRITE,
             };
             let group_desc = hal::BindGroupDescriptor {
                 label: Some("bind group"),
@@ -642,7 +646,7 @@ impl<A: hal::Api> Example<A> {
                     size: blas_sizes
                         .build_scratch_size
                         .max(tlas_sizes.build_scratch_size),
-                    usage: hal::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
+                    usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
                     memory_flags: hal::MemoryFlags::empty(),
                 })
                 .unwrap()
@@ -694,8 +698,8 @@ impl<A: hal::Api> Example<A> {
                 .create_buffer(&hal::BufferDescriptor {
                     label: Some("instances_buffer"),
                     size: instances_buffer_size as u64,
-                    usage: hal::BufferUses::MAP_WRITE
-                        | hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    usage: wgpu_types::BufferUses::MAP_WRITE
+                        | wgpu_types::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
                 })
                 .unwrap();
@@ -754,8 +758,8 @@ impl<A: hal::Api> Example<A> {
             let scratch_buffer_barrier = hal::BufferBarrier {
                 buffer: &scratch_buffer,
                 usage: hal::StateTransition {
-                    from: hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                    to: hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    from: wgpu_types::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    to: wgpu_types::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 },
             };
             cmd_encoder.transition_buffers(iter::once(scratch_buffer_barrier));
@@ -789,10 +793,10 @@ impl<A: hal::Api> Example<A> {
 
             let texture_barrier = hal::TextureBarrier {
                 texture: &texture,
-                range: wgt::ImageSubresourceRange::default(),
+                range: wgpu_types::ImageSubresourceRange::default(),
                 usage: hal::StateTransition {
-                    from: hal::TextureUses::UNINITIALIZED,
-                    to: hal::TextureUses::STORAGE_READ_WRITE,
+                    from: wgpu_types::TextureUses::UNINITIALIZED,
+                    to: wgpu_types::TextureUses::STORAGE_READ_WRITE,
                 },
             };
 
@@ -863,10 +867,10 @@ impl<A: hal::Api> Example<A> {
 
         let target_barrier0 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
-            range: wgt::ImageSubresourceRange::default(),
+            range: wgpu_types::ImageSubresourceRange::default(),
             usage: hal::StateTransition {
-                from: hal::TextureUses::UNINITIALIZED,
-                to: hal::TextureUses::COPY_DST,
+                from: wgpu_types::TextureUses::UNINITIALIZED,
+                to: wgpu_types::TextureUses::COPY_DST,
             },
         };
 
@@ -935,8 +939,8 @@ impl<A: hal::Api> Example<A> {
             let scratch_buffer_barrier = hal::BufferBarrier {
                 buffer: &self.scratch_buffer,
                 usage: hal::StateTransition {
-                    from: hal::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                    to: hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    from: wgpu_types::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    to: wgpu_types::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 },
             };
             ctx.encoder
@@ -948,9 +952,9 @@ impl<A: hal::Api> Example<A> {
         let surface_view_desc = hal::TextureViewDescriptor {
             label: None,
             format: self.surface_format,
-            dimension: wgt::TextureViewDimension::D2,
-            usage: hal::TextureUses::COPY_DST,
-            range: wgt::ImageSubresourceRange::default(),
+            dimension: wgpu_types::TextureViewDimension::D2,
+            usage: wgpu_types::TextureUses::COPY_DST,
+            range: wgpu_types::ImageSubresourceRange::default(),
         };
         let surface_tex_view = unsafe {
             self.device
@@ -972,26 +976,26 @@ impl<A: hal::Api> Example<A> {
 
         let target_barrier1 = hal::TextureBarrier {
             texture: surface_tex.borrow(),
-            range: wgt::ImageSubresourceRange::default(),
+            range: wgpu_types::ImageSubresourceRange::default(),
             usage: hal::StateTransition {
-                from: hal::TextureUses::COPY_DST,
-                to: hal::TextureUses::PRESENT,
+                from: wgpu_types::TextureUses::COPY_DST,
+                to: wgpu_types::TextureUses::PRESENT,
             },
         };
         let target_barrier2 = hal::TextureBarrier {
             texture: &self.texture,
-            range: wgt::ImageSubresourceRange::default(),
+            range: wgpu_types::ImageSubresourceRange::default(),
             usage: hal::StateTransition {
-                from: hal::TextureUses::STORAGE_READ_WRITE,
-                to: hal::TextureUses::COPY_SRC,
+                from: wgpu_types::TextureUses::STORAGE_READ_WRITE,
+                to: wgpu_types::TextureUses::COPY_SRC,
             },
         };
         let target_barrier3 = hal::TextureBarrier {
             texture: &self.texture,
-            range: wgt::ImageSubresourceRange::default(),
+            range: wgpu_types::ImageSubresourceRange::default(),
             usage: hal::StateTransition {
-                from: hal::TextureUses::COPY_SRC,
-                to: hal::TextureUses::STORAGE_READ_WRITE,
+                from: wgpu_types::TextureUses::COPY_SRC,
+                to: wgpu_types::TextureUses::STORAGE_READ_WRITE,
             },
         };
         unsafe {
@@ -999,19 +1003,19 @@ impl<A: hal::Api> Example<A> {
             ctx.encoder.transition_textures(iter::once(target_barrier2));
             ctx.encoder.copy_texture_to_texture(
                 &self.texture,
-                hal::TextureUses::COPY_SRC,
+                wgpu_types::TextureUses::COPY_SRC,
                 surface_tex.borrow(),
                 std::iter::once(hal::TextureCopy {
                     src_base: hal::TextureCopyBase {
                         mip_level: 0,
                         array_layer: 0,
-                        origin: wgt::Origin3d::ZERO,
+                        origin: wgpu_types::Origin3d::ZERO,
                         aspect: hal::FormatAspects::COLOR,
                     },
                     dst_base: hal::TextureCopyBase {
                         mip_level: 0,
                         array_layer: 0,
-                        origin: wgt::Origin3d::ZERO,
+                        origin: wgpu_types::Origin3d::ZERO,
                         aspect: hal::FormatAspects::COLOR,
                     },
                     size: hal::CopyExtent {
@@ -1125,7 +1129,7 @@ cfg_if::cfg_if! {
     }
     // Fallback
     else {
-        type Api = hal::api::Empty;
+        type Api = hal::api::Noop;
     }
 }
 

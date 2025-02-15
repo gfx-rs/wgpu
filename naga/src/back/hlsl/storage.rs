@@ -76,6 +76,11 @@ const STORE_TEMP_NAME: &str = "_value";
 /// [`Storage`]: crate::AddressSpace::Storage
 #[derive(Debug)]
 pub(super) enum SubAccess {
+    BufferOffset {
+        group: u32,
+        offset: u32,
+    },
+
     /// Add the given byte offset. This is used for struct members, or
     /// known components of a vector or matrix. In all those cases,
     /// the byte offset is a compile-time constant.
@@ -119,6 +124,9 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 write!(self.out, "+")?;
             }
             match *access {
+                SubAccess::BufferOffset { group, offset } => {
+                    write!(self.out, "__dynamic_buffer_offsets{group}._{offset}")?;
+                }
                 SubAccess::Offset(offset) => {
                     write!(self.out, "{offset}")?;
                 }
@@ -492,7 +500,21 @@ impl<W: fmt::Write> super::Writer<'_, W> {
 
         loop {
             let (next_expr, access_index) = match func_ctx.expressions[cur_expr] {
-                crate::Expression::GlobalVariable(handle) => return Ok(handle),
+                crate::Expression::GlobalVariable(handle) => {
+                    if let Some(ref binding) = module.global_variables[handle].binding {
+                        // this was already resolved earlier when we started evaluating an entry point.
+                        let bt = self.options.resolve_resource_binding(binding).unwrap();
+                        if let Some(dynamic_storage_buffer_offsets_index) =
+                            bt.dynamic_storage_buffer_offsets_index
+                        {
+                            self.temp_access_chain.push(SubAccess::BufferOffset {
+                                group: binding.group,
+                                offset: dynamic_storage_buffer_offsets_index,
+                            });
+                        }
+                    }
+                    return Ok(handle);
+                }
                 crate::Expression::Access { base, index } => (base, AccessIndex::Expression(index)),
                 crate::Expression::AccessIndex { base, index } => {
                     (base, AccessIndex::Constant(index))

@@ -192,7 +192,7 @@ pub trait DeviceInterface: CommonTraits {
     fn start_capture(&self);
     fn stop_capture(&self);
 
-    fn poll(&self, maintain: crate::Maintain) -> crate::MaintainResult;
+    fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError>;
 
     fn get_internal_counters(&self) -> crate::InternalCounters;
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
@@ -349,6 +349,12 @@ pub trait CommandEncoderInterface: CommonTraits {
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
         tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
+    );
+
+    fn transition_resources<'a>(
+        &mut self,
+        buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
+        texture_transitions: &mut dyn Iterator<Item = wgt::TextureTransition<&'a DispatchTexture>>,
     );
 }
 pub trait ComputePassInterface: CommonTraits {
@@ -832,7 +838,7 @@ dispatch_types! {
         {mut type DispatchCommandEncoder = InterfaceTypes::CommandEncoder: CommandEncoderInterface};
         {mut type DispatchComputePass = InterfaceTypes::ComputePass: ComputePassInterface};
         {mut type DispatchRenderPass = InterfaceTypes::RenderPass: RenderPassInterface};
-        {ref type DispatchCommandBuffer = InterfaceTypes::CommandBuffer: CommandBufferInterface};
+        {mut type DispatchCommandBuffer = InterfaceTypes::CommandBuffer: CommandBufferInterface};
         {mut type DispatchRenderBundleEncoder = InterfaceTypes::RenderBundleEncoder: RenderBundleEncoderInterface};
         {ref type DispatchRenderBundle = InterfaceTypes::RenderBundle: RenderBundleInterface};
         {ref type DispatchSurface = InterfaceTypes::Surface: SurfaceInterface};

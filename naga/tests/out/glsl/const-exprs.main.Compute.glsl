@@ -23,14 +23,17 @@ const bvec2 compare_vec = bvec2(true, false);
 
 void swizzle_of_compose() {
     ivec4 out_ = ivec4(4, 3, 2, 1);
+    return;
 }
 
 void index_of_compose() {
     int out_1 = 2;
+    return;
 }
 
 void compose_three_deep() {
     int out_2 = 6;
+    return;
 }
 
 void non_constant_initializers() {
@@ -53,14 +56,17 @@ void non_constant_initializers() {
 
 void splat_of_constant() {
     ivec4 out_4 = ivec4(-4, -4, -4, -4);
+    return;
 }
 
 void compose_of_constant() {
     ivec4 out_5 = ivec4(-4, -4, -4, -4);
+    return;
 }
 
 void compose_of_splat() {
     vec4 x_1 = vec4(2.0, 1.0, 1.0, 1.0);
+    return;
 }
 
 uint map_texture_kind(int texture_kind) {
@@ -78,6 +84,13 @@ uint map_texture_kind(int texture_kind) {
             return 0u;
         }
     }
+}
+
+void compose_vector_zero_val_binop() {
+    ivec3 a = ivec3(1, 1, 1);
+    ivec3 b = ivec3(0, 1, 2);
+    ivec3 c = ivec3(1, 0, 2);
+    return;
 }
 
 void main() {

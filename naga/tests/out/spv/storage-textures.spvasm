@@ -1,0 +1,79 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 42
+OpCapability Shader
+OpCapability StorageImageExtendedFormats
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %20 "csLoad"
+OpEntryPoint GLCompute %35 "csStore"
+OpExecutionMode %20 LocalSize 1 1 1
+OpExecutionMode %35 LocalSize 1 1 1
+OpDecorate %7 NonWritable
+OpDecorate %7 DescriptorSet 0
+OpDecorate %7 Binding 0
+OpDecorate %9 NonWritable
+OpDecorate %9 DescriptorSet 0
+OpDecorate %9 Binding 1
+OpDecorate %11 NonWritable
+OpDecorate %11 DescriptorSet 0
+OpDecorate %11 Binding 2
+OpDecorate %13 NonReadable
+OpDecorate %13 DescriptorSet 1
+OpDecorate %13 Binding 0
+OpDecorate %15 NonReadable
+OpDecorate %15 DescriptorSet 1
+OpDecorate %15 Binding 1
+OpDecorate %17 NonReadable
+OpDecorate %17 DescriptorSet 1
+OpDecorate %17 Binding 2
+%2 = OpTypeVoid
+%4 = OpTypeFloat 32
+%3 = OpTypeImage %4 2D 0 0 0 2 R32f
+%5 = OpTypeImage %4 2D 0 0 0 2 Rg32f
+%6 = OpTypeImage %4 2D 0 0 0 2 Rgba32f
+%8 = OpTypePointer UniformConstant %3
+%7 = OpVariable  %8  UniformConstant
+%10 = OpTypePointer UniformConstant %5
+%9 = OpVariable  %10  UniformConstant
+%12 = OpTypePointer UniformConstant %6
+%11 = OpVariable  %12  UniformConstant
+%14 = OpTypePointer UniformConstant %3
+%13 = OpVariable  %14  UniformConstant
+%16 = OpTypePointer UniformConstant %5
+%15 = OpVariable  %16  UniformConstant
+%18 = OpTypePointer UniformConstant %6
+%17 = OpVariable  %18  UniformConstant
+%21 = OpTypeFunction %2
+%25 = OpTypeInt 32 0
+%26 = OpConstant  %25  0
+%27 = OpTypeVector %25 2
+%28 = OpConstantComposite  %27  %26 %26
+%30 = OpTypeVector %4 4
+%39 = OpConstant  %4  0.0
+%40 = OpConstantComposite  %30  %39 %39 %39 %39
+%20 = OpFunction  %2  None %21
+%19 = OpLabel
+%22 = OpLoad  %3  %7
+%23 = OpLoad  %5  %9
+%24 = OpLoad  %6  %11
+OpBranch %29
+%29 = OpLabel
+%31 = OpImageRead  %30  %22 %28
+%32 = OpImageRead  %30  %23 %28
+%33 = OpImageRead  %30  %24 %28
+OpReturn
+OpFunctionEnd
+%35 = OpFunction  %2  None %21
+%34 = OpLabel
+%36 = OpLoad  %3  %13
+%37 = OpLoad  %5  %15
+%38 = OpLoad  %6  %17
+OpBranch %41
+%41 = OpLabel
+OpImageWrite %36 %28 %40
+OpImageWrite %37 %28 %40
+OpImageWrite %38 %28 %40
+OpReturn
+OpFunctionEnd
