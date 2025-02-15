@@ -54,4 +54,22 @@ mod buffer_slice {
             (&buffer, 10, NonZero::new(90).unwrap())
         );
     }
+
+    #[test]
+    fn into_buffer_binding() {
+        let (device, _queue) = crate::request_noop_device();
+        let buffer = device.create_buffer(ARBITRARY_DESC);
+
+        // BindingResource doesn’t implement PartialEq, so use matching
+        let wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+            buffer: b,
+            offset: 50,
+            size: Some(size),
+        }) = wgpu::BindingResource::from(buffer.slice(50..80))
+        else {
+            panic!("didn't match")
+        };
+        assert_eq!(b, &buffer);
+        assert_eq!(size, NonZero::new(30).unwrap());
+    }
 }

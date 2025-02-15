@@ -123,6 +123,7 @@ By @cwfitzgerald in [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
 
 - Add `Buffer` methods corresponding to `BufferSlice` methods, so you can skip creating a `BufferSlice` when it offers no benefit, and `BufferSlice::slice()` for sub-slicing a slice. By @kpreid in [#7123](https://github.com/gfx-rs/wgpu/pull/7123).
 - Add `BufferSlice::buffer()`, `BufferSlice::offset()` and `BufferSlice::size()`. By @kpreid in [#7148](https://github.com/gfx-rs/wgpu/pull/7148).
+- Add `impl From<BufferSlice> for BufferBinding` and `impl From<BufferSlice> for BindingResource`, allowing `BufferSlice`s to be easily used in creating bind groups. By @kpreid in [#7148](https://github.com/gfx-rs/wgpu/pull/7148).
 
 - Add `util::StagingBelt::allocate()` so the staging belt can be used to write textures. By @kpreid in [#6900](https://github.com/gfx-rs/wgpu/pull/6900).
 - Added `CommandEncoder::transition_resources()` for native API interop, and allowing users to slightly optimize barriers. By @JMS55 in [#6678](https://github.com/gfx-rs/wgpu/pull/6678).

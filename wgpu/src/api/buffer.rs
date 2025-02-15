@@ -360,7 +360,8 @@ impl Buffer {
 ///
 /// You can pass buffer slices to methods like [`RenderPass::set_vertex_buffer`]
 /// and [`RenderPass::set_index_buffer`] to indicate which portion of the buffer
-/// a draw call should consult.
+/// a draw call should consult. You can also convert it to a [`BufferBinding`]
+/// with `.into()`.
 ///
 /// To access the slice's contents on the CPU, you must first [map] the buffer,
 /// and then call [`BufferSlice::get_mapped_range`] or
@@ -527,6 +528,26 @@ impl<'a> BufferSlice<'a> {
             (|| BufferSize::new(self.buffer.size().checked_sub(self.offset)?))()
                 .expect("can't happen: slice has incorrect size for its buffer")
         })
+    }
+}
+
+impl<'a> From<BufferSlice<'a>> for crate::BufferBinding<'a> {
+    /// Convert a [`BufferSlice`] to an equivalent [`BufferBinding`],
+    /// provided that it will be used without a dynamic offset.
+    fn from(value: BufferSlice<'a>) -> Self {
+        BufferBinding {
+            buffer: value.buffer,
+            offset: value.offset,
+            size: value.size,
+        }
+    }
+}
+
+impl<'a> From<BufferSlice<'a>> for crate::BindingResource<'a> {
+    /// Convert a [`BufferSlice`] to an equivalent [`BindingResource::Buffer`],
+    /// provided that it will be used without a dynamic offset.
+    fn from(value: BufferSlice<'a>) -> Self {
+        crate::BindingResource::Buffer(crate::BufferBinding::from(value))
     }
 }
 
