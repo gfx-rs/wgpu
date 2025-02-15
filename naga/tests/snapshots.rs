@@ -12,7 +12,7 @@ const BASE_DIR_IN: &str = "tests/in";
 const BASE_DIR_OUT: &str = "tests/out";
 
 bitflags::bitflags! {
-    #[derive(Clone, Copy, Default)]
+    #[derive(Clone, Copy)]
     #[cfg_attr(
         feature = "deserialize",
         derive(serde::Deserialize),
@@ -33,6 +33,12 @@ bitflags::bitflags! {
         const HLSL = 1 << 6;
         const WGSL = 1 << 7;
         const NO_VALIDATION = 1 << 8;
+    }
+}
+
+impl Default for Targets {
+    fn default() -> Self {
+        Targets::WGSL
     }
 }
 
@@ -902,24 +908,6 @@ fn convert_snapshots_spv() {
 }
 
 #[cfg(feature = "glsl-in")]
-#[test]
-fn convert_glsl_variations_check() {
-    let input = Input::new(None, "variations", "glsl");
-    let source = input.read_source();
-    let mut parser = naga::front::glsl::Frontend::default();
-    let mut module = parser
-        .parse(
-            &naga::front::glsl::Options {
-                stage: naga::ShaderStage::Fragment,
-                defines: Default::default(),
-            },
-            &source,
-        )
-        .unwrap();
-    check_targets(&input, &mut module, None, None);
-}
-
-#[cfg(feature = "glsl-in")]
 #[allow(unused_variables)]
 #[test]
 fn convert_glsl_folder() {
@@ -931,49 +919,27 @@ fn convert_glsl_folder() {
             ..input
         };
         let file_name = &input.file_name;
-        if file_name.ends_with(".ron") {
-            // No needed to validate ron files
-            continue;
-        }
+
+        let stage = match file_name.extension().and_then(|s| s.to_str()).unwrap() {
+            "vert" => naga::ShaderStage::Vertex,
+            "frag" => naga::ShaderStage::Fragment,
+            "comp" => naga::ShaderStage::Compute,
+            // Configuration file
+            "ron" => continue,
+            ext => panic!("Unknown extension for glsl file {ext}"),
+        };
 
         let mut parser = naga::front::glsl::Frontend::default();
         let mut module = parser
             .parse(
                 &naga::front::glsl::Options {
-                    stage: match file_name.extension().and_then(|s| s.to_str()).unwrap() {
-                        "vert" => naga::ShaderStage::Vertex,
-                        "frag" => naga::ShaderStage::Fragment,
-                        "comp" => naga::ShaderStage::Compute,
-                        ext => panic!("Unknown extension for glsl file {ext}"),
-                    },
+                    stage,
                     defines: Default::default(),
                 },
                 &input.read_source(),
             )
             .unwrap();
 
-        let info = naga::valid::Validator::new(
-            naga::valid::ValidationFlags::all(),
-            naga::valid::Capabilities::all(),
-        )
-        .validate(&module)
-        .unwrap();
-
-        #[cfg(feature = "compact")]
-        let info = {
-            naga::compact::compact(&mut module);
-
-            naga::valid::Validator::new(
-                naga::valid::ValidationFlags::all(),
-                naga::valid::Capabilities::all(),
-            )
-            .validate(&module)
-            .unwrap()
-        };
-
-        #[cfg(wgsl_out)]
-        {
-            write_output_wgsl(&input, &module, &info, &WgslOutParameters::default());
-        }
+        check_targets(&input, &mut module, None, None);
     }
 }
