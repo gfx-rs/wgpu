@@ -2341,7 +2341,7 @@ dependencies = [
  "strum 0.26.3",
  "termcolor",
  "thiserror 2.0.11",
- "unicode-xid",
+ "unicode-ident",
 ]
 
 [[package]]

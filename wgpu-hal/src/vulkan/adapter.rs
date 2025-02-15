@@ -12,7 +12,8 @@ fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
 //TODO: const fn?
 fn indexing_features() -> wgt::Features {
     wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-        | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+        | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+        | wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS
         | wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY
 }
 
@@ -234,14 +235,12 @@ impl PhysicalDeviceFeatures {
                 | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
                 | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
         );
-        let needs_uniform_buffer_non_uniform = requested_features.contains(
-            wgt::Features::TEXTURE_BINDING_ARRAY
-                | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-        );
+        let needs_uniform_buffer_non_uniform =
+            requested_features.contains(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS);
         let needs_storage_image_non_uniform = requested_features.contains(
             wgt::Features::TEXTURE_BINDING_ARRAY
                 | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
-                | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
         );
         let needs_partially_bound =
             requested_features.intersects(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
@@ -537,7 +536,6 @@ impl PhysicalDeviceFeatures {
         phd: vk::PhysicalDevice,
         caps: &PhysicalDeviceProperties,
     ) -> (wgt::Features, wgt::DownlevelFlags) {
-        use crate::auxil::db;
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
             | F::SPIRV_SHADER_PASSTHROUGH
@@ -622,30 +620,12 @@ impl PhysicalDeviceFeatures {
             F::VERTEX_WRITABLE_STORAGE,
             self.core.vertex_pipeline_stores_and_atomics != 0,
         );
-        //if self.core.shader_image_gather_extended != 0 {
-        //if self.core.shader_storage_image_extended_formats != 0 {
-        features.set(
-            F::BUFFER_BINDING_ARRAY,
-            self.core.shader_uniform_buffer_array_dynamic_indexing != 0,
-        );
-        features.set(
-            F::TEXTURE_BINDING_ARRAY,
-            self.core.shader_sampled_image_array_dynamic_indexing != 0,
-        );
-        features.set(F::SHADER_PRIMITIVE_INDEX, self.core.geometry_shader != 0);
-        features.set(
-            F::STORAGE_RESOURCE_BINDING_ARRAY,
-            (features.contains(F::BUFFER_BINDING_ARRAY)
-                && self.core.shader_storage_buffer_array_dynamic_indexing != 0)
-                || (features.contains(F::TEXTURE_BINDING_ARRAY)
-                    && self.core.shader_storage_image_array_dynamic_indexing != 0),
-        );
-        //if self.core.shader_storage_image_array_dynamic_indexing != 0 {
-        //if self.core.shader_clip_distance != 0 {
-        //if self.core.shader_cull_distance != 0 {
+
         features.set(F::SHADER_F64, self.core.shader_float64 != 0);
         features.set(F::SHADER_INT64, self.core.shader_int64 != 0);
         features.set(F::SHADER_I16, self.core.shader_int16 != 0);
+
+        features.set(F::SHADER_PRIMITIVE_INDEX, self.core.geometry_shader != 0);
 
         if let Some(ref shader_atomic_int64) = self.shader_atomic_int64 {
             features.set(
@@ -684,29 +664,38 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(ext::conservative_rasterization::NAME),
         );
 
-        let intel_windows = caps.properties.vendor_id == db::intel::VENDOR && cfg!(windows);
-
         if let Some(ref descriptor_indexing) = self.descriptor_indexing {
-            const STORAGE: F = F::STORAGE_RESOURCE_BINDING_ARRAY;
-            features.set(
-                F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-                (features.contains(F::TEXTURE_BINDING_ARRAY)
-                    && descriptor_indexing.shader_sampled_image_array_non_uniform_indexing != 0)
-                    && (features.contains(F::BUFFER_BINDING_ARRAY | STORAGE)
-                        && descriptor_indexing.shader_storage_buffer_array_non_uniform_indexing
-                            != 0),
-            );
-            features.set(
-                F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-                (features.contains(F::BUFFER_BINDING_ARRAY)
-                    && descriptor_indexing.shader_uniform_buffer_array_non_uniform_indexing != 0)
-                    && (features.contains(F::TEXTURE_BINDING_ARRAY | STORAGE)
-                        && descriptor_indexing.shader_storage_image_array_non_uniform_indexing
-                            != 0),
-            );
-            if descriptor_indexing.descriptor_binding_partially_bound != 0 && !intel_windows {
-                features |= F::PARTIALLY_BOUND_BINDING_ARRAY;
-            }
+            // We use update-after-bind descriptors for all bind groups containing binding arrays.
+            //
+            // In those bind groups, we allow all binding types except uniform buffers to be present.
+            //
+            // As we can only switch between update-after-bind and not on a per bind group basis,
+            // all supported binding types need to be able to be marked update after bind.
+            //
+            // As such, we enable all features as a whole, rather individually.
+            let supports_descriptor_indexing =
+                // Sampled Images
+                descriptor_indexing.shader_sampled_image_array_non_uniform_indexing != 0
+                    && descriptor_indexing.descriptor_binding_sampled_image_update_after_bind != 0
+                    // Storage Images
+                    && descriptor_indexing.shader_storage_image_array_non_uniform_indexing != 0
+                    && descriptor_indexing.descriptor_binding_storage_image_update_after_bind != 0
+                    // Storage Buffers
+                    && descriptor_indexing.shader_storage_buffer_array_non_uniform_indexing != 0
+                    && descriptor_indexing.descriptor_binding_storage_buffer_update_after_bind != 0;
+
+            let descriptor_indexing_features = F::BUFFER_BINDING_ARRAY
+                | F::TEXTURE_BINDING_ARRAY
+                | F::STORAGE_RESOURCE_BINDING_ARRAY
+                | F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                | F::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
+
+            features.set(descriptor_indexing_features, supports_descriptor_indexing);
+
+            let supports_partially_bound =
+                descriptor_indexing.descriptor_binding_partially_bound != 0;
+
+            features.set(F::PARTIALLY_BOUND_BINDING_ARRAY, supports_partially_bound);
         }
 
         features.set(F::DEPTH_CLIP_CONTROL, self.core.depth_clamp != 0);
@@ -1916,7 +1905,8 @@ impl super::Adapter {
 
             if features.intersects(
                 wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                    | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                    | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                    | wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS,
             ) {
                 capabilities.push(spv::Capability::ShaderNonUniform);
             }

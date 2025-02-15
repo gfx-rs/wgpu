@@ -7,10 +7,7 @@ use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, Tes
 static BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(
-                Features::BUFFER_BINDING_ARRAY
-                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            )
+            .features(Features::BUFFER_BINDING_ARRAY | Features::UNIFORM_BUFFER_BINDING_ARRAYS)
             .limits(Limits {
                 max_uniform_buffers_per_shader_stage: 16,
                 ..Limits::default()
@@ -31,7 +28,7 @@ static PARTIAL_BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConf
             .features(
                 Features::BUFFER_BINDING_ARRAY
                     | Features::PARTIALLY_BOUND_BINDING_ARRAY
-                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                    | Features::UNIFORM_BUFFER_BINDING_ARRAYS,
             )
             .limits(Limits {
                 max_uniform_buffers_per_shader_stage: 32,

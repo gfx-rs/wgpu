@@ -201,6 +201,12 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
 - Improve efficiency of dropping read-only buffer mappings. By @kpreid in [#7007](https://github.com/gfx-rs/wgpu/pull/7007).
 
+### Performance
+
+#### Naga
+
+- Replace `unicode-xid` with `unicode-ident`. By @CrazyboyQCD in [#7135](https://github.com/gfx-rs/wgpu/pull/7135)
+
 ### Documentation
 
 - Improved documentation around pipeline caches and `TextureBlitter`. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978) and [#7003](https://github.com/gfx-rs/wgpu/pull/7003).
