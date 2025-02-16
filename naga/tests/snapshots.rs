@@ -7,6 +7,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use ron::de;
+
 const CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 const BASE_DIR_IN: &str = "tests/in";
 const BASE_DIR_OUT: &str = "tests/out";
@@ -71,6 +73,12 @@ struct WgslOutParameters {
 }
 
 #[derive(Default, serde::Deserialize)]
+struct FragmentModule {
+    path: String,
+    entry_point: String,
+}
+
+#[derive(Default, serde::Deserialize)]
 #[serde(default)]
 struct Parameters {
     // -- GOD MODE --
@@ -98,11 +106,17 @@ struct Parameters {
     // -- HLSL options --
     #[cfg(all(feature = "deserialize", hlsl_out))]
     hlsl: naga::back::hlsl::Options,
+    hlsl_module_path: Option<String>,
 
     // -- WGSL options --
     wgsl: WgslOutParameters,
 
     // -- General options --
+
+    // Allow backends to be aware of the fragment module.
+    // Is the name of a WGSL file in the same directory as the test file.
+    fragment_module: Option<FragmentModule>,
+
     #[cfg(feature = "deserialize")]
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
 
@@ -294,21 +308,11 @@ type FragmentEntryPoint<'a> = naga::back::hlsl::FragmentEntryPoint<'a>;
 type FragmentEntryPoint<'a> = ();
 
 #[allow(unused_variables)]
-fn check_targets(
-    input: &Input,
-    module: &mut naga::Module,
-    source_code: Option<&str>,
-    // For testing hlsl generation when fragment shader doesn't consume all vertex outputs.
-    frag_ep: Option<FragmentEntryPoint>,
-) {
+fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&str>) {
     let params = input.read_parameters();
     let name = &input.file_name;
 
     let targets = params.targets;
-
-    if frag_ep.is_some() && !targets.contains(Targets::HLSL) {
-        panic!("Providing FragmentEntryPoint only makes sense when testing hlsl-out");
-    }
 
     let (capabilities, subgroup_stages, subgroup_operations) = if params.god_mode {
         (
@@ -457,6 +461,33 @@ fn check_targets(
     #[cfg(all(feature = "deserialize", hlsl_out))]
     {
         if targets.contains(Targets::HLSL) {
+            let frag_module;
+            let mut frag_ep = None;
+            if let Some(ref module_spec) = params.fragment_module {
+                let full_path = input.input_directory().join(&module_spec.path);
+
+                assert_eq!(
+                    full_path.extension().unwrap().to_string_lossy(),
+                    "wgsl",
+                    "Currently all fragment modules must be in WGSL"
+                );
+
+                let frag_src = fs::read_to_string(full_path).unwrap();
+
+                frag_module = naga::front::wgsl::parse_str(&frag_src)
+                    .expect("Failed to parse fragment module");
+
+                frag_ep = Some(
+                    naga::back::hlsl::FragmentEntryPoint::new(
+                        &frag_module,
+                        &module_spec.entry_point,
+                    )
+                    .expect("Could not find fragment entry point"),
+                );
+            }
+
+            dbg!(frag_ep.is_some());
+
             write_output_hlsl(
                 input,
                 module,
@@ -717,43 +748,13 @@ fn convert_snapshots_wgsl() {
         // crlf will make the large split output different on different platform
         let source = source.replace('\r', "");
         match naga::front::wgsl::parse_str(&source) {
-            Ok(mut module) => check_targets(&input, &mut module, Some(&source), None),
+            Ok(mut module) => check_targets(&input, &mut module, Some(&source)),
             Err(e) => panic!(
                 "{}",
                 e.emit_to_string_with_path(&source, input.input_path())
             ),
         }
     }
-}
-
-#[cfg(all(feature = "wgsl-in", hlsl_out))]
-#[test]
-fn unconsumed_vertex_outputs_hlsl_out() {
-    let load_and_parse = |name| {
-        // WGSL shaders lives in root dir as a privileged.
-        let input = Input::new(None, name, "wgsl");
-        let source = input.read_source();
-        let module = match naga::front::wgsl::parse_str(&source) {
-            Ok(module) => module,
-            Err(e) => panic!(
-                "{}",
-                e.emit_to_string_with_path(&source, input.input_path())
-            ),
-        };
-        (input, module)
-    };
-
-    // Uses separate wgsl files to make sure the tested code doesn't accidentally rely on
-    // the fragment entry point being from the same parsed content (e.g. accidentally using the
-    // wrong `Module` when looking up info). We also don't just create a module from the same file
-    // twice since everything would probably be stored behind the same keys.
-    let (input, mut module) = load_and_parse("unconsumed_vertex_outputs_vert");
-    let (frag_input, mut frag_module) = load_and_parse("unconsumed_vertex_outputs_frag");
-    let frag_ep = naga::back::hlsl::FragmentEntryPoint::new(&frag_module, "fs_main")
-        .expect("fs_main not found");
-
-    check_targets(&input, &mut module, None, Some(frag_ep));
-    check_targets(&frag_input, &mut frag_module, None, None);
 }
 
 #[cfg(feature = "spv-in")]
@@ -795,7 +796,8 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool) {
         },
     )
     .unwrap();
-    check_targets(&input, &mut module, None, None);
+
+    check_targets(&input, &mut module, None);
 }
 
 #[cfg(feature = "spv-in")]
@@ -855,6 +857,6 @@ fn convert_snapshots_glsl() {
             )
             .unwrap();
 
-        check_targets(&input, &mut module, None, None);
+        check_targets(&input, &mut module, None);
     }
 }
