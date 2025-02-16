@@ -18,9 +18,8 @@ env:
   #
 
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
-  #
-  # We don't include the 4th version number, as it's not used in any URL.
   VULKAN_SDK_VERSION: "1.4.304"
+  VULKAN_FULL_SDK_VERSION: "1.4.304.1"
   # Sourced from https://www.nuget.org/packages/Microsoft.Direct3D.WARP
   WARP_VERSION: "1.0.13"
 
@@ -56,7 +55,7 @@ env:
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: d # cache busting
-  WGPU_TESTING: true
+  WGPU_CI: true
 
 # We distinguish the following kinds of builds:
 # - native: build for the same target as we compile on
@@ -567,6 +566,32 @@ jobs:
           echo "VK_DRIVER_FILES=`cygpath --windows $PWD/mesa/lvp_icd.x86_64.json`" >> "$GITHUB_ENV"
           echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
 
+      - name: (windows) install vulkan sdk
+        if: matrix.os == 'windows-2022'
+        shell: bash
+        run: |
+          set -e
+
+          curl.exe -L --retry 5 https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_FULL_SDK_VERSION }}/windows/VulkanSDK-${{ env.VULKAN_FULL_SDK_VERSION }}-Installer.exe -o vulkan-sdk-installer.exe
+
+          ./vulkan-sdk-installer.exe --accept-licenses --default-answer --confirm-command install
+
+          echo "C:/VulkanSDK/${{ env.VULKAN_FULL_SDK_VERSION }}/Bin" >> "$GITHUB_PATH"
+
+      - name: (mac) install vulkan sdk
+        if: matrix.os == 'macos-14'
+        shell: bash
+        run: |
+          set -e
+
+          curl -L --retry 5 https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_FULL_SDK_VERSION }}/mac/vulkansdk-macos-${{ env.VULKAN_FULL_SDK_VERSION }}.zip -o vulkan-sdk.zip
+          unzip vulkan-sdk.zip -d vulkan-sdk
+
+          ls -l vulkan-sdk
+          sudo ./vulkan-sdk/InstallVulkan-${{ env.VULKAN_FULL_SDK_VERSION }}.app/Contents/MacOS/InstallVulkan-${{ env.VULKAN_FULL_SDK_VERSION }} --root "$HOME/VulkanSDK" --accept-licenses --default-answer --confirm-command install
+
+          echo "$HOME/VulkanSDK/macOS/bin" >> "$GITHUB_PATH"
+
       - name: (linux) install vulkan sdk
         if: matrix.os == 'ubuntu-24.04'
         shell: bash
@@ -577,7 +602,7 @@ jobs:
 
           # vulkan sdk
           wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list https://packages.lunarg.com/vulkan/$VULKAN_SDK_VERSION/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${{ env.VULKAN_SDK_VERSION }}-noble.list https://packages.lunarg.com/vulkan/${{ env.VULKAN_SDK_VERSION }}/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list
 
           sudo apt-get update
           sudo apt install -y vulkan-sdk
