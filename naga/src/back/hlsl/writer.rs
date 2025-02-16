@@ -7,10 +7,12 @@ use super::{
     storage::StoreValue,
     BackendResult, Error, FragmentEntryPoint, Options,
 };
+use crate::back::FunctionCtx;
 use crate::{
     back::{self, Baked},
     proc::{self, index, ExpressionKindTracker, NameKey},
-    valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
+    valid, Expression, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage,
+    TypeInner,
 };
 use std::{fmt, mem};
 
@@ -3213,57 +3215,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 array_index,
                 sample,
                 level,
-            } => {
-                let mut wrapping_type = None;
-                match *func_ctx.resolve_type(image, &module.types) {
-                    TypeInner::Image {
-                        class: crate::ImageClass::Storage { format, .. },
-                        ..
-                    } => {
-                        if format.single_component() {
-                            wrapping_type = Some(Scalar::from(format));
-                        }
-                    }
-                    _ => {}
-                }
-                if let Some(scalar) = wrapping_type {
-                    write!(
-                        self.out,
-                        "{}{}(",
-                        help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
-                        scalar.to_hlsl_str()?
-                    )?;
-                }
-                // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
-                self.write_expr(module, image, func_ctx)?;
-                write!(self.out, ".Load(")?;
-
-                self.write_texture_coordinates(
-                    "int",
-                    coordinate,
-                    array_index,
-                    level,
-                    module,
-                    func_ctx,
-                )?;
-
-                if let Some(sample) = sample {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, sample, func_ctx)?;
-                }
-
-                // close bracket for Load function
-                write!(self.out, ")")?;
-
-                if wrapping_type.is_some() {
-                    write!(self.out, ")")?;
-                }
-
-                // return x component if return type is scalar
-                if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
-                    write!(self.out, ".x")?;
-                }
-            }
+            } => self.write_image_load(
+                &module,
+                expr,
+                func_ctx,
+                image,
+                coordinate,
+                array_index,
+                sample,
+                level,
+            )?,
             Expression::GlobalVariable(handle) => {
                 let global_variable = &module.global_variables[handle];
                 let ty = &module.types[global_variable.ty].inner;
@@ -3999,6 +3960,62 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         if !closing_bracket.is_empty() {
             write!(self.out, "{closing_bracket}")?;
+        }
+        Ok(())
+    }
+
+    fn write_image_load(
+        &mut self,
+        module: &&Module,
+        expr: Handle<Expression>,
+        func_ctx: &FunctionCtx,
+        image: Handle<Expression>,
+        coordinate: Handle<Expression>,
+        array_index: Option<Handle<Expression>>,
+        sample: Option<Handle<Expression>>,
+        level: Option<Handle<Expression>>,
+    ) -> Result<(), Error> {
+        let mut wrapping_type = None;
+        match *func_ctx.resolve_type(image, &module.types) {
+            TypeInner::Image {
+                class: crate::ImageClass::Storage { format, .. },
+                ..
+            } => {
+                if format.single_component() {
+                    wrapping_type = Some(Scalar::from(format));
+                }
+            }
+            _ => {}
+        }
+        if let Some(scalar) = wrapping_type {
+            write!(
+                self.out,
+                "{}{}(",
+                help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
+                scalar.to_hlsl_str()?
+            )?;
+        }
+        // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
+        self.write_expr(module, image, func_ctx)?;
+        write!(self.out, ".Load(")?;
+
+        self.write_texture_coordinates("int", coordinate, array_index, level, module, func_ctx)?;
+
+        if let Some(sample) = sample {
+            write!(self.out, ", ")?;
+            self.write_expr(module, sample, func_ctx)?;
+        }
+
+        // close bracket for Load function
+        write!(self.out, ")")?;
+
+        if wrapping_type.is_some() {
+            write!(self.out, ")")?;
+        }
+
+        // return x component if return type is scalar
+        if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
+            write!(self.out, ".x")?;
         }
         Ok(())
     }
