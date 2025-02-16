@@ -244,6 +244,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         }
     }
 
+    #[allow(dead_code)]
     fn as_global(&mut self) -> GlobalContext<'a, '_, '_> {
         GlobalContext {
             ast_expressions: self.ast_expressions,
@@ -1536,16 +1537,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let ectx = &mut ctx.as_const(block, &mut emitter);
 
-                    let explicit_ty = c
-                        .ty
-                        .map(|ast| self.resolve_ast_type(ast, &mut ectx.as_global().as_const()))
+                    let explicit_ty =
+                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_const()))
                         .transpose()?;
 
                     let (_ty, init) = self.type_and_init(
                         c.name,
                         Some(c.init),
                         explicit_ty,
-                        &mut ectx.as_global().as_const(),
+                        &mut ectx.as_const(),
                     )?;
                     let init = init.expect("Local const must have init");
 
