@@ -374,16 +374,19 @@ fn check_targets(
 
     #[cfg(all(feature = "deserialize", spv_out))]
     {
-        let debug_info = source_code.map(|code| naga::back::spv::DebugInfo {
-            source_code: code,
-            file_name: name.as_ref(),
-            // wgpu#6266: we technically know all the information here to
-            // produce the valid language but it's not too important for
-            // validation purposes
-            language: naga::back::spv::SourceLanguage::Unknown,
-        });
-
         if targets.contains(Targets::SPIRV) {
+            let mut debug_info = None;
+            if let Some(source_code) = source_code {
+                debug_info = Some(naga::back::spv::DebugInfo {
+                    source_code,
+                    file_name: name,
+                    // wgpu#6266: we technically know all the information here to
+                    // produce the valid language but it's not too important for
+                    // validation purposes
+                    language: naga::back::spv::SourceLanguage::Unknown,
+                })
+            }
+
             write_output_spv(
                 input,
                 module,
@@ -800,7 +803,7 @@ fn convert_wgsl() {
         // crlf will make the large split output different on different platform
         let source = source.replace('\r', "");
         match naga::front::wgsl::parse_str(&source) {
-            Ok(mut module) => check_targets(&input, &mut module, None, None),
+            Ok(mut module) => check_targets(&input, &mut module, Some(&source), None),
             Err(e) => panic!(
                 "{}",
                 e.emit_to_string_with_path(&source, input.input_path())
