@@ -378,11 +378,11 @@ impl crate::framework::Example for Example {
         native (ray-tracing is not yet on web).
 
         If an application is not dependent on compaction e.g. due to low memory then it may be
-        better to write it in the render loop like this.
+        better to write it in the render loop:
 
         ````rust
         let blas_s_pending_compaction = // An iterator of whatever BLASes you have called
-        //`prepare_compaction_async`. on.
+        //`prepare_compaction_async` on.
         for blas in blas_s_pending_compaction {
             if blas.ready_for_compaction() {
                 let compacted_blas = queue.compact_blas(&blas);
