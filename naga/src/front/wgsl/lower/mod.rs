@@ -1539,7 +1539,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let explicit_ty =
                         c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_const()))
-                        .transpose()?;
+                            .transpose()?;
 
                     let (_ty, init) = self.type_and_init(
                         c.name,
