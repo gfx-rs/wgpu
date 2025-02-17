@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: debug symbols to line-tables-only
+      - name: Debug symbols to `line-tables-only`
         shell: bash
         run: |
           mkdir -p .cargo
@@ -86,7 +86,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: debug symbols to line-tables-only
+      - name: Debug symbols to line-tables-only
         shell: bash
         run: |
           mkdir -p .cargo
@@ -111,7 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: install vulkan sdk
+      - name: Install Vulkan SDK
         shell: bash
         run: |
           set -e
@@ -125,10 +125,10 @@ jobs:
           sudo apt-get update
           sudo apt install -y vulkan-sdk
 
-      - name: Install graphviz
+      - name: Install Graphviz
         run: sudo apt-get install graphviz
 
-      - name: debug symbols to line-tables-only
+      - name: Debug symbols to `line-tables-only`
         shell: bash
         run: |
           mkdir -p .cargo

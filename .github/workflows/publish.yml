@@ -17,7 +17,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the code
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -25,7 +25,7 @@ jobs:
       - name: Install Rust WASM target
         run: rustup target add wasm32-unknown-unknown
 
-      - name: Get wasm-bindgen version
+      - name: Get `wasm-bindgen` version
         run: |
           WASM_BINDGEN_VERSION=$(cargo metadata --format-version 1 --all-features | jq '.packages[] | select(.name == "wasm-bindgen") | .version' | tr -d '"')
 
@@ -33,10 +33,10 @@ jobs:
 
           echo "WASM_BINDGEN_VERSION=$WASM_BINDGEN_VERSION" >> "$GITHUB_ENV"
 
-      - name: Install wasm-bindgen
+      - name: Install `wasm-bindgen`
         run: cargo +stable install wasm-bindgen-cli --version=$WASM_BINDGEN_VERSION
 
-      - name: debug symbols to line-tables-only
+      - name: Debug symbols to line-tables-only
         shell: bash
         run: |
           mkdir -p .cargo
@@ -46,7 +46,7 @@ jobs:
             debug = "line-tables-only"
           EOF
 
-      - name: caching
+      - name: Caching
         uses: Swatinem/rust-cache@v2
         with:
           key: publish-build
