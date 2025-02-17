@@ -2706,11 +2706,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ///
     /// # Notes
     /// Doesn't add any newlines or leading/trailing spaces
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn write_expr(
         &mut self,
         module: &Module,
-        expr: Handle<crate::Expression>,
-        func_ctx: &back::FunctionCtx<'_>,
+        expr: Handle<Expression>,
+        func_ctx: &FunctionCtx<'_>,
     ) -> BackendResult {
         use crate::Expression;
 
