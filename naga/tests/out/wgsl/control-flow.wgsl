@@ -122,6 +122,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     storageBarrier();
     workgroupBarrier();
+    textureBarrier();
     switch 1i {
         default: {
             pos = 1i;

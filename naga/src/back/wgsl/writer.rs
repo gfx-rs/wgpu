@@ -973,7 +973,7 @@ impl<W: Write> Writer<W> {
                 if barrier.contains(crate::Barrier::SUB_GROUP) {
                     writeln!(self.out, "{level}subgroupBarrier();")?;
                 }
-                
+
                 if barrier.contains(crate::Barrier::TEXTURE) {
                     writeln!(self.out, "{level}textureBarrier();")?;
                 }

@@ -1371,7 +1371,7 @@ bitflags::bitflags! {
         const WORK_GROUP = 1 << 1;
         /// Barrier synchronizes execution across all invocations within a subgroup that execute this instruction.
         const SUB_GROUP = 1 << 2;
-        /// Barrier synchronize texture memory accesses in a workgroup.
+        /// Barrier synchronizes texture memory accesses in a workgroup.
         const TEXTURE = 1 << 3;
     }
 }
