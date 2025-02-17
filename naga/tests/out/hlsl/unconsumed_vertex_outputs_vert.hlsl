@@ -7,7 +7,9 @@ struct VertexOut {
 };
 
 struct VertexOutput_vs_main {
+    float unused_value : LOC0;
     float value : LOC1;
+    float4 unused_value2_ : LOC2;
     float value2_ : LOC3;
     float4 position : SV_Position;
 };
@@ -25,6 +27,6 @@ VertexOut ConstructVertexOut(float4 arg0, float arg1, float4 arg2, float arg3, f
 VertexOutput_vs_main vs_main()
 {
     const VertexOut vertexout = ConstructVertexOut((1.0).xxxx, 1.0, (2.0).xxxx, 1.0, 0.5);
-    const VertexOutput_vs_main vertexout_1 = { vertexout.value, vertexout.value2_, vertexout.position };
+    const VertexOutput_vs_main vertexout_1 = { vertexout.unused_value, vertexout.value, vertexout.unused_value2_, vertexout.value2_, vertexout.position };
     return vertexout_1;
 }

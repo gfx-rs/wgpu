@@ -125,7 +125,7 @@ struct Input {
     /// True if output filenames should add the output extension on top of
     /// `file_name`'s existing extension, rather than replacing it.
     ///
-    /// This is used by `convert_glsl_folder`, which wants to take input files
+    /// This is used by `convert_snapshots_glsl`, which wants to take input files
     /// like `210-bevy-2d-shader.frag` and just add `.wgsl` to it, producing
     /// `210-bevy-2d-shader.frag.wgsl`.
     keep_input_extension: bool,
@@ -151,32 +151,45 @@ impl Input {
     }
 
     /// Return an iterator that produces an `Input` for each entry in `subdirectory`.
-    fn files_in_dir(subdirectory: &str) -> impl Iterator<Item = Input> + 'static {
-        let subdirectory = subdirectory.to_string();
+    fn files_in_dir(
+        subdirectory: Option<&'static str>,
+        file_extants: &'static [&'static str],
+    ) -> impl Iterator<Item = Input> + 'static {
         let mut input_directory = Path::new(env!("CARGO_MANIFEST_DIR")).join(BASE_DIR_IN);
-        input_directory.push(&subdirectory);
-        match std::fs::read_dir(&input_directory) {
-            Ok(entries) => entries.map(move |result| {
-                let entry = result.expect("error reading directory");
-                let file_name = PathBuf::from(entry.file_name());
-                let extension = file_name
-                    .extension()
-                    .expect("all files in snapshot input directory should have extensions");
-                let input = Input::new(
-                    Some(&subdirectory),
-                    file_name.file_stem().unwrap().to_str().unwrap(),
-                    extension.to_str().unwrap(),
-                );
-                input
-            }),
-            Err(err) => {
-                panic!(
-                    "Error opening directory '{}': {}",
-                    input_directory.display(),
-                    err
-                );
-            }
+        if let Some(ref subdirectory) = subdirectory {
+            input_directory.push(subdirectory);
         }
+        let entries = match std::fs::read_dir(&input_directory) {
+            Ok(entries) => entries,
+            Err(err) => panic!(
+                "Error opening directory '{}': {}",
+                input_directory.display(),
+                err
+            ),
+        };
+
+        entries.filter_map(move |result| {
+            let entry = result.expect("error reading directory");
+            if !entry.file_type().unwrap().is_file() {
+                return None;
+            }
+
+            let file_name = PathBuf::from(entry.file_name());
+            let extension = file_name
+                .extension()
+                .expect("all files in snapshot input directory should have extensions");
+
+            if !file_extants.contains(&extension.to_str().unwrap()) {
+                return None;
+            }
+
+            let input = Input::new(
+                subdirectory,
+                file_name.file_stem().unwrap().to_str().unwrap(),
+                extension.to_str().unwrap(),
+            );
+            Some(input)
+        })
     }
 
     /// Return the path to the input directory.
@@ -268,6 +281,7 @@ impl Input {
     /// `subdirectory`, with `extension`.
     fn write_output_file(&self, subdirectory: &str, extension: &str, data: impl AsRef<[u8]>) {
         let output_path = self.output_path(subdirectory, extension);
+        fs::create_dir_all(output_path.parent().unwrap()).unwrap();
         if let Err(err) = fs::write(&output_path, data) {
             panic!("Error writing {}: {}", output_path.display(), err);
         }
@@ -695,110 +709,10 @@ fn write_output_wgsl(
 
 #[cfg(feature = "wgsl-in")]
 #[test]
-fn convert_wgsl() {
+fn convert_snapshots_wgsl() {
     let _ = env_logger::try_init();
 
-    let inputs = [
-        "array-in-ctor",
-        "array-in-function-return-type",
-        "empty",
-        "quad",
-        "bits",
-        "bitcast",
-        "boids",
-        "skybox",
-        "collatz",
-        "shadow",
-        "image",
-        "extra",
-        "push-constants",
-        "operators",
-        "functions",
-        "fragment-output",
-        "dualsource",
-        "functions-webgl",
-        "interpolate",
-        "interpolate_compat",
-        "access",
-        "atomicOps",
-        "atomicCompareExchange",
-        "padding",
-        "atomicOps-int64",
-        "atomicOps-int64-min-max",
-        "atomicTexture",
-        "atomicOps-float32",
-        "atomicTexture-int64",
-        "atomicCompareExchange-int64",
-        "pointers",
-        "control-flow",
-        "standard",
-        "interface",
-        "globals",
-        "bounds-check-zero",
-        "bounds-check-zero-atomic",
-        "bounds-check-restrict",
-        "bounds-check-image-restrict",
-        "bounds-check-image-rzsw",
-        "policy-mix",
-        "bounds-check-dynamic-buffer",
-        "texture-arg",
-        "cubeArrayShadow",
-        "sample-cube-array-depth-lod",
-        "use-gl-ext-over-grad-workaround-if-instructed",
-        "local-const",
-        "math-functions",
-        "binding-arrays",
-        "binding-buffer-arrays",
-        "resource-binding-map",
-        "multiview",
-        "multiview_webgl",
-        "break-if",
-        "lexical-scopes",
-        "type-alias",
-        "module-scope",
-        "workgroup-var-init",
-        "workgroup-uniform-load",
-        "runtime-array-in-unused-struct",
-        "sprite",
-        "force_point_size_vertex_shader_webgl",
-        "invariant",
-        "ray-query",
-        "hlsl-keyword",
-        "constructors",
-        "msl-varyings",
-        "const-exprs",
-        "const_assert",
-        "separate-entry-points",
-        "struct-layout",
-        "f64",
-        "abstract-types-const",
-        "abstract-types-function-calls",
-        "abstract-types-var",
-        "abstract-types-operators",
-        "abstract-types-return",
-        "int64",
-        "subgroup-operations",
-        "overrides",
-        "overrides-atomicCompareExchangeWeak",
-        "overrides-ray-query",
-        "vertex-pulling-transform",
-        "cross",
-        "phony_assignment",
-        "6220-break-from-loop",
-        "index-by-value",
-        "6438-conflicting-idents",
-        "diagnostic-filter",
-        "6772-unpack-expr-accesses",
-        "must-use",
-        "storage-textures",
-        "debug-symbol-simple",
-        "debug-symbol-terrain",
-        "debug-symbol-large-source",
-    ];
-
-    for &name in inputs.iter() {
-        // WGSL shaders lives in root dir as a privileged.
-        let input = Input::new(None, name, "wgsl");
+    for input in Input::files_in_dir(None, &["wgsl"]) {
         let source = input.read_source();
         // crlf will make the large split output different on different platform
         let source = source.replace('\r', "");
@@ -913,10 +827,10 @@ fn convert_snapshots_spv() {
 #[cfg(feature = "glsl-in")]
 #[allow(unused_variables)]
 #[test]
-fn convert_glsl_folder() {
+fn convert_snapshots_glsl() {
     let _ = env_logger::try_init();
 
-    for input in Input::files_in_dir("glsl") {
+    for input in Input::files_in_dir(Some("glsl"), &["vert", "frag", "comp"]) {
         let input = Input {
             keep_input_extension: true,
             ..input
@@ -927,8 +841,6 @@ fn convert_glsl_folder() {
             "vert" => naga::ShaderStage::Vertex,
             "frag" => naga::ShaderStage::Fragment,
             "comp" => naga::ShaderStage::Compute,
-            // Configuration file
-            "ron" => continue,
             ext => panic!("Unknown extension for glsl file {ext}"),
         };
 
