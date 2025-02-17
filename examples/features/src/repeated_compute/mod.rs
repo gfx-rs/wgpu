@@ -31,7 +31,7 @@ async fn run() {
 
 fn generate_rand() -> u16 {
     let mut bytes = [0u8; 2];
-    getrandom::getrandom(&mut bytes[..]).unwrap();
+    getrandom::fill(&mut bytes[..]).unwrap();
     u16::from_le_bytes(bytes)
 }
 
