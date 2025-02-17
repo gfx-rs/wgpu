@@ -2706,7 +2706,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ///
     /// # Notes
     /// Doesn't add any newlines or leading/trailing spaces
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn write_expr(
         &mut self,
         module: &Module,
@@ -3965,6 +3964,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_image_load(
         &mut self,
         module: &&Module,
