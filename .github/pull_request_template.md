@@ -11,7 +11,7 @@ _Explain how this change is tested._
 Thanks for filing! The codeowners file will automatically request reviews from the appropriate teams.
 
 After you get a review and have addressed any comments, please explicitly re-request a review from the
-person(s) who reviewed your changes. This will make sure it gets re-added to their review queue - you're no bothering us!
+person(s) who reviewed your changes. This will make sure it gets re-added to their review queue - you're not bothering us!
 -->
 
 **Checklist**
