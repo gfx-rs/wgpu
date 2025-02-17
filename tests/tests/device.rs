@@ -75,8 +75,25 @@ static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
-static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|_ctx| request_device_error_message());
+static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters({
+        let default = TestParameters::default();
+
+        // On CI, we have the vulkan SDK installed and this test initializes the Vulkan backend when all
+        // normal tests do not, so we get these weird error messages. This only actually gets hooked up
+        // on Windows, because that's the only platform where the actual runtime gets hooked up and there
+        // are no drivers.
+        if std::env::var("WGPU_CI").is_ok() && cfg!(windows) {
+            default.expect_fail(
+                FailureCase::always()
+                    .validation_error("Registry lookup failed to get ICD manifest files.  Possibly missing Vulkan driver?")
+                    .validation_error("vkCreateInstance: Found no drivers!")
+            )
+        } else {
+            default
+        }
+    })
+    .run_async(|_ctx| request_device_error_message());
 
 /// Check that `RequestDeviceError`s produced have some diagnostic information.
 ///

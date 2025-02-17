@@ -1956,9 +1956,6 @@ impl Device {
             entries: &hal_bindings,
         };
 
-        let raw = unsafe { self.raw().create_bind_group_layout(&hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
-
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
         for entry in entry_map.values() {
             count_validator.add_binding(entry);
@@ -1971,6 +1968,9 @@ impl Device {
 
         // Validate that binding arrays don't conflict with dynamic offsets.
         count_validator.validate_binding_arrays()?;
+
+        let raw = unsafe { self.raw().create_bind_group_layout(&hal_desc) }
+            .map_err(|e| self.handle_hal_error(e))?;
 
         let bgl = BindGroupLayout {
             raw: ManuallyDrop::new(raw),

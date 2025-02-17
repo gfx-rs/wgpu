@@ -373,14 +373,11 @@ impl super::Adapter {
             wgt::Features::TEXTURE_BINDING_ARRAY
                 | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
                 | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-                | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            shader_model >= naga::back::hlsl::ShaderModel::V5_1,
-        );
-
-        // See note below the table https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
-        features.set(
-            wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY,
-            options.ResourceBindingTier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0,
+                | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                // See note below the table https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
+                | wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY,
+            shader_model >= naga::back::hlsl::ShaderModel::V5_1
+                && options.ResourceBindingTier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0,
         );
 
         let bgra8unorm_storage_supported = {
@@ -529,6 +526,8 @@ impl super::Adapter {
                     max_storage_buffers_per_shader_stage: uav_count / 4,
                     max_storage_textures_per_shader_stage: uav_count / 4,
                     max_uniform_buffers_per_shader_stage: full_heap_count,
+                    max_binding_array_elements_per_shader_stage: full_heap_count,
+                    max_binding_array_sampler_elements_per_shader_stage: full_heap_count,
                     max_uniform_buffer_binding_size:
                         Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
                     max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE,

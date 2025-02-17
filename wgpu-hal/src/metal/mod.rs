@@ -262,6 +262,8 @@ struct PrivateCapabilities {
     max_vertex_buffers: ResourceIndex,
     max_textures_per_stage: ResourceIndex,
     max_samplers_per_stage: ResourceIndex,
+    max_binding_array_elements: ResourceIndex,
+    max_sampler_binding_array_elements: ResourceIndex,
     buffer_alignment: u64,
     max_buffer_size: u64,
     max_texture_size: u64,

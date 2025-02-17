@@ -360,7 +360,8 @@ impl Buffer {
 ///
 /// You can pass buffer slices to methods like [`RenderPass::set_vertex_buffer`]
 /// and [`RenderPass::set_index_buffer`] to indicate which portion of the buffer
-/// a draw call should consult.
+/// a draw call should consult. You can also convert it to a [`BufferBinding`]
+/// with `.into()`.
 ///
 /// To access the slice's contents on the CPU, you must first [map] the buffer,
 /// and then call [`BufferSlice::get_mapped_range`] or
@@ -505,6 +506,48 @@ impl<'a> BufferSlice<'a> {
             inner: range,
             readable: self.buffer.usage.contains(BufferUsages::MAP_READ),
         }
+    }
+
+    /// Returns the buffer this is a slice of.
+    ///
+    /// You should usually not need to call this, and if you received the buffer from code you
+    /// do not control, you should refrain from accessing the buffer outside the bounds of the
+    /// slice. Nevertheless, it’s possible to get this access, so this method makes it simple.
+    pub fn buffer(&self) -> &'a Buffer {
+        self.buffer
+    }
+
+    /// Returns the offset in [`Self::buffer()`] this slice starts at.
+    pub fn offset(&self) -> BufferAddress {
+        self.offset
+    }
+
+    /// Returns the size of this slice.
+    pub fn size(&self) -> BufferSize {
+        self.size.unwrap_or_else(|| {
+            (|| BufferSize::new(self.buffer.size().checked_sub(self.offset)?))()
+                .expect("can't happen: slice has incorrect size for its buffer")
+        })
+    }
+}
+
+impl<'a> From<BufferSlice<'a>> for crate::BufferBinding<'a> {
+    /// Convert a [`BufferSlice`] to an equivalent [`BufferBinding`],
+    /// provided that it will be used without a dynamic offset.
+    fn from(value: BufferSlice<'a>) -> Self {
+        BufferBinding {
+            buffer: value.buffer,
+            offset: value.offset,
+            size: value.size,
+        }
+    }
+}
+
+impl<'a> From<BufferSlice<'a>> for crate::BindingResource<'a> {
+    /// Convert a [`BufferSlice`] to an equivalent [`BindingResource::Buffer`],
+    /// provided that it will be used without a dynamic offset.
+    fn from(value: BufferSlice<'a>) -> Self {
+        crate::BindingResource::Buffer(crate::BufferBinding::from(value))
     }
 }
 

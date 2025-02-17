@@ -1,3 +1,6 @@
+; SPIR-V
+; Version: 1.0
+
 ;; Make sure we handle globals whose assigned name is "".
 ;;
 ;; In MSL, the anonymous global sometimes ends up looking like

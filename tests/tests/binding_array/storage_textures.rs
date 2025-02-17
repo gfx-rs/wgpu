@@ -17,7 +17,7 @@ static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
                     | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
             )
             .limits(Limits {
-                max_storage_textures_per_shader_stage: 17,
+                max_binding_array_elements_per_shader_stage: 17,
                 ..Limits::default()
             })
             .expect_fail(FailureCase::backend(Backends::METAL)),
@@ -36,7 +36,7 @@ static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestCon
                     | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
             )
             .limits(Limits {
-                max_storage_textures_per_shader_stage: 33,
+                max_binding_array_elements_per_shader_stage: 33,
                 ..Limits::default()
             })
             .expect_fail(FailureCase::backend(Backends::METAL)),

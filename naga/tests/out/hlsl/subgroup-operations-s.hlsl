@@ -1,16 +1,16 @@
-static uint num_subgroups_1 = (uint)0;
-static uint subgroup_id_1 = (uint)0;
-static uint subgroup_size_1 = (uint)0;
-static uint subgroup_invocation_id_1 = (uint)0;
+static uint global = (uint)0;
+static uint global_1 = (uint)0;
+static uint global_2 = (uint)0;
+static uint global_3 = (uint)0;
 
 struct ComputeInput_main {
     uint __local_invocation_index : SV_GroupIndex;
 };
 
-void main_1()
+void function()
 {
-    uint _e5 = subgroup_size_1;
-    uint _e6 = subgroup_invocation_id_1;
+    uint _e5 = global_2;
+    uint _e6 = global_3;
     const uint4 _e9 = WaveActiveBallot(((_e6 & 1u) == 1u));
     const uint4 _e10 = WaveActiveBallot(true);
     const bool _e12 = WaveActiveAllTrue((_e6 != 0u));
@@ -38,13 +38,13 @@ void main_1()
 [numthreads(1, 1, 1)]
 void main(ComputeInput_main computeinput_main)
 {
-    uint num_subgroups = (1u + WaveGetLaneCount() - 1u) / WaveGetLaneCount();
-    uint subgroup_id = computeinput_main.__local_invocation_index / WaveGetLaneCount();
-    uint subgroup_size = WaveGetLaneCount();
-    uint subgroup_invocation_id = WaveGetLaneIndex();
-    num_subgroups_1 = num_subgroups;
-    subgroup_id_1 = subgroup_id;
-    subgroup_size_1 = subgroup_size;
-    subgroup_invocation_id_1 = subgroup_invocation_id;
-    main_1();
+    uint param = (1u + WaveGetLaneCount() - 1u) / WaveGetLaneCount();
+    uint param_1 = computeinput_main.__local_invocation_index / WaveGetLaneCount();
+    uint param_2 = WaveGetLaneCount();
+    uint param_3 = WaveGetLaneIndex();
+    global = param;
+    global_1 = param_1;
+    global_2 = param_2;
+    global_3 = param_3;
+    function();
 }
