@@ -2353,6 +2353,7 @@ dependencies = [
  "strum 0.26.3",
  "termcolor",
  "thiserror 2.0.11",
+ "toml",
  "unicode-ident",
  "walkdir",
 ]

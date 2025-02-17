@@ -48,6 +48,28 @@ impl Default for SpvOutVersion {
     }
 }
 
+#[cfg(all(feature = "deserialize", spv_out))]
+#[derive(serde::Deserialize)]
+struct BindingMapSerialization {
+    resource_binding: naga::ResourceBinding,
+    bind_target: naga::back::spv::BindingInfo,
+}
+
+#[cfg(all(feature = "deserialize", spv_out))]
+fn deserialize_binding_map<'de, D>(deserializer: D) -> Result<naga::back::spv::BindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<BindingMapSerialization>::deserialize(deserializer)?;
+    let mut map = naga::back::spv::BindingMap::default();
+    for item in vec {
+        map.insert(item.resource_binding, item.bind_target);
+    }
+    Ok(map)
+}
+
 #[derive(Default, serde::Deserialize)]
 #[serde(default)]
 struct SpirvOutParameters {
@@ -59,6 +81,7 @@ struct SpirvOutParameters {
     clamp_frag_depth: bool,
     separate_entry_points: bool,
     #[cfg(all(feature = "deserialize", spv_out))]
+    #[serde(deserialize_with = "deserialize_binding_map")]
     binding_map: naga::back::spv::BindingMap,
 }
 
@@ -274,9 +297,9 @@ impl Input {
     /// Return this input's parameter file, parsed.
     fn read_parameters(&self) -> Parameters {
         let mut param_path = self.input_path();
-        param_path.set_extension("param.ron");
+        param_path.set_extension("toml");
         match fs::read_to_string(&param_path) {
-            Ok(string) => match ron::de::from_str(&string) {
+            Ok(string) => match toml::de::from_str(&string) {
                 Ok(params) => params,
                 Err(e) => panic!(
                     "Couldn't parse param file: {} due to: {e}",
