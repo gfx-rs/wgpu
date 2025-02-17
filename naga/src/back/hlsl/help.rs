@@ -748,9 +748,7 @@ impl<W: Write> super::Writer<'_, W> {
             _ => unreachable!(),
         };
         let vec_ty = match module.types[member.ty].inner {
-            TypeInner::Matrix { rows, scalar, .. } => {
-                TypeInner::Vector { size: rows, scalar }
-            }
+            TypeInner::Matrix { rows, scalar, .. } => TypeInner::Vector { size: rows, scalar },
             _ => unreachable!(),
         };
         self.write_value_type(module, &vec_ty)?;
