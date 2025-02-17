@@ -226,9 +226,18 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if dxc_container.is_none() {
-            naga::back::hlsl::ShaderModel::V5_1
-        } else {
+        let shader_model = if let Some(ref dxc_container) = dxc_container {
+            let max_shader_model = match dxc_container.max_shader_model {
+                wgt::DxcShaderModel::V6_0 => Direct3D12::D3D_SHADER_MODEL_6_0,
+                wgt::DxcShaderModel::V6_1 => Direct3D12::D3D_SHADER_MODEL_6_1,
+                wgt::DxcShaderModel::V6_2 => Direct3D12::D3D_SHADER_MODEL_6_2,
+                wgt::DxcShaderModel::V6_3 => Direct3D12::D3D_SHADER_MODEL_6_3,
+                wgt::DxcShaderModel::V6_4 => Direct3D12::D3D_SHADER_MODEL_6_4,
+                wgt::DxcShaderModel::V6_5 => Direct3D12::D3D_SHADER_MODEL_6_5,
+                wgt::DxcShaderModel::V6_6 => Direct3D12::D3D_SHADER_MODEL_6_6,
+                wgt::DxcShaderModel::V6_7 => Direct3D12::D3D_SHADER_MODEL_6_7,
+            };
+
             let mut versions = [
                 Direct3D12::D3D_SHADER_MODEL_6_7,
                 Direct3D12::D3D_SHADER_MODEL_6_6,
@@ -239,7 +248,8 @@ impl super::Adapter {
                 Direct3D12::D3D_SHADER_MODEL_6_1,
                 Direct3D12::D3D_SHADER_MODEL_6_0,
             ]
-            .iter();
+            .iter()
+            .filter(|shader_model| shader_model.0 <= max_shader_model.0);
 
             let highest_shader_model = loop {
                 if let Some(&sm) = versions.next() {
@@ -274,6 +284,8 @@ impl super::Adapter {
                 Direct3D12::D3D_SHADER_MODEL_6_7 => naga::back::hlsl::ShaderModel::V6_7,
                 _ => unreachable!(),
             }
+        } else {
+            naga::back::hlsl::ShaderModel::V5_1
         };
         let private_caps = super::PrivateCapabilities {
             instance_flags,

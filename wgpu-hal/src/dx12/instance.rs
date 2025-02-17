@@ -71,10 +71,12 @@ impl crate::Instance for super::Instance {
             wgt::Dx12Compiler::DynamicDxc {
                 dxil_path,
                 dxc_path,
+                max_shader_model,
             } => {
                 let container = super::shader_compilation::get_dynamic_dxc_container(
                     dxc_path.into(),
                     dxil_path.into(),
+                    max_shader_model,
                 )
                 .map_err(|e| {
                     crate::InstanceError::with_source(String::from("Failed to load dynamic DXC"), e)

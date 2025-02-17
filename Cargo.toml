@@ -159,7 +159,7 @@ gpu-descriptor = "0.3"
 # DX12 dependencies
 gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
-mach-dxcompiler-rs = { version = "0.1.4", default-features = false }
+mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.58", default-features = false }
 
 # Gles dependencies

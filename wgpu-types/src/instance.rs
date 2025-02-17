@@ -337,6 +337,20 @@ impl NoopBackendOptions {
     }
 }
 
+/// DXC shader model.
+#[derive(Clone, Debug)]
+#[allow(missing_docs)]
+pub enum DxcShaderModel {
+    V6_0,
+    V6_1,
+    V6_2,
+    V6_3,
+    V6_4,
+    V6_5,
+    V6_6,
+    V6_7,
+}
+
 /// Selects which DX12 shader compiler to use.
 ///
 /// If the `DynamicDxc` option is selected, but `dxcompiler.dll` and `dxil.dll` files aren't found,
@@ -361,6 +375,8 @@ pub enum Dx12Compiler {
         dxc_path: String,
         /// Path to `dxil.dll`.
         dxil_path: String,
+        /// Maximum shader model the given dll supports.
+        max_shader_model: DxcShaderModel,
     },
     /// The statically-linked variant of Dxc.
     ///
@@ -371,10 +387,13 @@ pub enum Dx12Compiler {
 
 impl Dx12Compiler {
     /// Helper function to construct a `DynamicDxc` variant with default paths.
+    ///
+    /// The dll must support at least shader model 6.5.
     pub fn default_dynamic_dxc() -> Self {
         Self::DynamicDxc {
             dxc_path: String::from("dxcompiler.dll"),
             dxil_path: String::from("dxil.dll"),
+            max_shader_model: DxcShaderModel::V6_5,
         }
     }
 
