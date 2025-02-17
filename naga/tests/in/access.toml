@@ -1,0 +1,34 @@
+targets = "SPIRV | METAL | GLSL | HLSL | WGSL | IR | ANALYSIS"
+
+[msl]
+fake_missing_bindings = false
+lang_version = [1, 2]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = true
+
+[msl.per_entry_point_map.atomics]
+resources = [
+    { bind_target = { buffer = 0, mutable = true }, resource_binding = { group = 0, binding = 0 } },
+]
+sizes_buffer = 24
+
+[msl.per_entry_point_map.foo_frag]
+resources = [
+    { bind_target = { buffer = 0, mutable = true }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { buffer = 2, mutable = true }, resource_binding = { group = 0, binding = 2 } },
+]
+sizes_buffer = 24
+
+[msl.per_entry_point_map.foo_vert]
+resources = [
+    { bind_target = { buffer = 0, mutable = false }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { buffer = 1, mutable = false }, resource_binding = { group = 0, binding = 1 } },
+    { bind_target = { buffer = 2, mutable = false }, resource_binding = { group = 0, binding = 2 } },
+    { bind_target = { buffer = 3, mutable = false }, resource_binding = { group = 0, binding = 3 } },
+]
+sizes_buffer = 24
+
+[spv]
+adjust_coordinate_space = false
+debug = true
+version = [1, 1]

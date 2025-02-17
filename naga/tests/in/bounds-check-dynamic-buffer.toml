@@ -1,0 +1,32 @@
+targets = "HLSL"
+
+[hlsl]
+restrict_indexing = true
+dynamic_storage_buffer_offsets_targets = [
+    { index = 0, bind_target = { register = 1, size = 2, space = 0 } },
+    { index = 1, bind_target = { register = 2, size = 1, space = 0 } },
+]
+
+[[hlsl.binding_map]]
+bind_target = { register = 0, space = 0 }
+resource_binding = { group = 0, binding = 0 }
+
+[[hlsl.binding_map]]
+bind_target = { dynamic_storage_buffer_offsets_index = 0, register = 4, space = 0 }
+resource_binding = { group = 1, binding = 0 }
+
+[[hlsl.binding_map]]
+bind_target = { register = 1, space = 0 }
+resource_binding = { group = 0, binding = 1 }
+
+[[hlsl.binding_map]]
+bind_target = { register = 0, restrict_indexing = true, space = 0 }
+resource_binding = { group = 0, binding = 2 }
+
+[[hlsl.binding_map]]
+bind_target = { dynamic_storage_buffer_offsets_index = 0, register = 2, space = 0 }
+resource_binding = { group = 0, binding = 3 }
+
+[[hlsl.binding_map]]
+bind_target = { dynamic_storage_buffer_offsets_index = 1, register = 3, space = 0 }
+resource_binding = { group = 0, binding = 4 }

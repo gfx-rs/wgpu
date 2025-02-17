@@ -1,6 +1,0 @@
-(
-	spv: (
-		version: (1, 4),
-	),
-	targets: "SPIRV",
-)

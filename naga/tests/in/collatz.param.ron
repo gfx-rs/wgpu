@@ -1,7 +1,0 @@
-(
-	spv: (
-		version: (1, 0),
-		debug: true,
-	),
-	targets: "SPIRV | METAL | IR | ANALYSIS | HLSL | WGSL",
-)

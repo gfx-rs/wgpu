@@ -1,0 +1,20 @@
+targets = "METAL"
+
+[msl_pipeline]
+allow_and_force_point_size = false
+vertex_pulling_transform = true
+
+[[msl_pipeline.vertex_buffer_mappings]]
+attributes = [
+    { offset = 0, shader_location = 0, format = "Float32" },
+    { offset = 4, shader_location = 1, format = "Float32x4" },
+]
+id = 1
+indexed_by_vertex = true
+stride = 20
+
+[[msl_pipeline.vertex_buffer_mappings]]
+attributes = [{ offset = 0, shader_location = 2, format = "Float32x2" }]
+id = 2
+indexed_by_vertex = false
+stride = 16
