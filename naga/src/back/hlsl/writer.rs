@@ -7,12 +7,10 @@ use super::{
     storage::StoreValue,
     BackendResult, Error, FragmentEntryPoint, Options,
 };
-use crate::back::FunctionCtx;
 use crate::{
     back::{self, Baked},
     proc::{self, index, ExpressionKindTracker, NameKey},
-    valid, Expression, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage,
-    TypeInner,
+    valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
 use std::{fmt, mem};
 
@@ -2709,8 +2707,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     pub(super) fn write_expr(
         &mut self,
         module: &Module,
-        expr: Handle<Expression>,
-        func_ctx: &FunctionCtx<'_>,
+        expr: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx<'_>,
     ) -> BackendResult {
         use crate::Expression;
 
@@ -3968,13 +3966,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     fn write_image_load(
         &mut self,
         module: &&Module,
-        expr: Handle<Expression>,
-        func_ctx: &FunctionCtx,
-        image: Handle<Expression>,
-        coordinate: Handle<Expression>,
-        array_index: Option<Handle<Expression>>,
-        sample: Option<Handle<Expression>>,
-        level: Option<Handle<Expression>>,
+        expr: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
+        coordinate: Handle<crate::Expression>,
+        array_index: Option<Handle<crate::Expression>>,
+        sample: Option<Handle<crate::Expression>>,
+        level: Option<Handle<crate::Expression>>,
     ) -> Result<(), Error> {
         let mut wrapping_type = None;
         match *func_ctx.resolve_type(image, &module.types) {
