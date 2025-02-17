@@ -1571,6 +1571,10 @@ impl Writer {
             spirv::MemorySemantics::WORKGROUP_MEMORY,
             flags.contains(crate::Barrier::WORK_GROUP),
         );
+        semantics.set(
+            spirv::MemorySemantics::IMAGE_MEMORY,
+            flags.contains(crate::Barrier::TEXTURE),
+        );
         let exec_scope_id = if flags.contains(crate::Barrier::SUB_GROUP) {
             self.get_index_constant(spirv::Scope::Subgroup as u32)
         } else {

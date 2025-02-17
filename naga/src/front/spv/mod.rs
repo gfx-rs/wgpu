@@ -3846,6 +3846,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                     .bits()
                                 != 0,
                         );
+                        flags.set(
+                            crate::Barrier::TEXTURE,
+                            semantics & spirv::MemorySemantics::IMAGE_MEMORY.bits() != 0,
+                        );
                         block.push(crate::Statement::Barrier(flags), span);
                     } else {
                         log::warn!("Unsupported barrier execution scope: {}", exec_scope);

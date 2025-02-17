@@ -4130,6 +4130,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if barrier.contains(crate::Barrier::SUB_GROUP) {
             // Does not exist in DirectX
         }
+        if barrier.contains(crate::Barrier::TEXTURE) {
+            writeln!(self.out, "{level}DeviceMemoryBarrierWithGroupSync();")?;
+        }
         Ok(())
     }
 }

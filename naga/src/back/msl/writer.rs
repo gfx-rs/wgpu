@@ -6513,6 +6513,12 @@ template <typename A>
                 "{level}{NAMESPACE}::simdgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
             )?;
         }
+        if flags.contains(crate::Barrier::TEXTURE) {
+            writeln!(
+                self.out,
+                "{level}{NAMESPACE}::threadgroup_barrier({NAMESPACE}::mem_flags::mem_texture);",
+            )?;
+        }
         Ok(())
     }
 }
