@@ -54,7 +54,7 @@ fn unbuilt_blas_compaction(ctx: TestingContext) {
     fail(
         &ctx.device,
         || {
-            // Prepare checks the compaction buffer
+            // Prepare checks the BLAS has been built
             as_ctx.blas.prepare_compaction_async(|_| {})
         },
         None,
@@ -86,7 +86,7 @@ fn blas_compaction_without_flags(ctx: TestingContext) {
     fail(
         &ctx.device,
         || {
-            // Prepare checks the compaction buffer
+            // Prepare checks whether te BLAS is able to be compacted
             as_ctx.blas.prepare_compaction_async(|_| {})
         },
         None,
@@ -136,10 +136,12 @@ fn blas_compaction(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
+    // Build the BLAS to be compacted (so compaction is valid).
     encoder.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
 
     ctx.queue.submit([encoder.finish()]);
 
+    // Prepare
     let (send, recv) = std::sync::mpsc::channel();
     as_ctx.blas.prepare_compaction_async(move |res| {
         res.unwrap();
@@ -148,12 +150,22 @@ fn blas_compaction(ctx: TestingContext) {
 
     // On native this will trigger the callback.
     ctx.device.poll(Maintain::Wait);
+    // Check that the callback actually gets called (this test will timeout if it doesn't).
     recv.recv().unwrap();
 
-    ctx.queue.compact_blas(&as_ctx.blas);
+    let compacted = ctx.queue.compact_blas(&as_ctx.blas);
 
     // This actually executes the compact call.
     ctx.queue.submit([]);
+
+    let mut fail_encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+
+    let mut build_entry = as_ctx.blas_build_entry();
+    build_entry.blas = &compacted;
+
+    fail(&ctx.device, || fail_encoder.build_acceleration_structures([&build_entry], []), None);
 }
 
 #[gpu_test]

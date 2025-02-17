@@ -1184,16 +1184,18 @@ fn map_blas<'a>(
         log::info!("only rebuild implemented")
     }
     let raw = blas.try_raw(snatch_guard)?;
+
+    let state_lock = blas.compacted_state.lock();
+    if let BlasCompactState::Compacted = *state_lock {
+        return Err(BuildAccelerationStructureError::CompactedBlas(
+            blas.error_ident(),
+        ));
+    }
+
     if blas
         .flags
         .contains(AccelerationStructureFlags::ALLOW_COMPACTION)
     {
-        let state_lock = blas.compacted_state.lock();
-        if let BlasCompactState::Compacted = *state_lock {
-            return Err(BuildAccelerationStructureError::CompactedBlas(
-                blas.error_ident(),
-            ));
-        }
         blas_s_compactable.push((blas.compaction_buffer.as_ref().unwrap().as_ref(), raw));
     }
     Ok(hal::BuildAccelerationStructureDescriptor {
