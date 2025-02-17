@@ -1,2 +1,5 @@
 [alias]
 xtask = "run --manifest-path xtask/Cargo.toml --"
+
+[target.'cfg(target_arch = "wasm32")']
+rustflags = '--cfg getrandom_backend="wasm_js"'
