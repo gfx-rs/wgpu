@@ -70,6 +70,12 @@ fn compose_of_splat() {
     return;
 }
 
+fn test_local_const() {
+    var arr: array<f32, 2>;
+
+    return;
+}
+
 fn map_texture_kind(texture_kind: i32) -> u32 {
     switch texture_kind {
         case 0: {
@@ -117,5 +123,6 @@ fn main() {
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
+    test_local_const();
     return;
 }
