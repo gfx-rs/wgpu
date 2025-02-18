@@ -120,25 +120,25 @@ static-dxc = ["wgpu-hal/static-dxc"]
 # platform crates collude to provide platform-specific behavior.
 
 ## DX12 backend
-dx12 = ["wgpu-core-platform-windows-linux-android/dx12"]
+dx12 = ["wgpu-core-deps-windows-linux-android/dx12"]
 ## Metal backend
-metal = ["wgpu-core-platform-apple/metal"]
+metal = ["wgpu-core-deps-apple/metal"]
 ## Vulkan backend, only available on Windows, Linux, Android
-vulkan = ["wgpu-core-platform-windows-linux-android/vulkan"]
+vulkan = ["wgpu-core-deps-windows-linux-android/vulkan"]
 ## OpenGL backend, only available on Windows, Linux, Android, and Emscripten
 gles = [
-    "wgpu-core-platform-windows-linux-android/gles",
-    "wgpu-core-platform-emscripten/gles",
+    "wgpu-core-deps-windows-linux-android/gles",
+    "wgpu-core-deps-emscripten/gles",
 ]
 
 ## WebGL backend, only available on Emscripten
-webgl = ["wgpu-core-platform-wasm/webgl"]
+webgl = ["wgpu-core-deps-wasm/webgl"]
 ## OpenGL backend, on macOS only
-angle = ["wgpu-core-platform-apple/angle"]
+angle = ["wgpu-core-deps-apple/angle"]
 ## Vulkan portability backend, only available on macOS
-vulkan-portability = ["wgpu-core-platform-apple/vulkan-portability"]
+vulkan-portability = ["wgpu-core-deps-apple/vulkan-portability"]
 ## Renderdoc integration, only available on Windows, Linux, and Android
-renderdoc = ["wgpu-core-platform-windows-linux-android/renderdoc"]
+renderdoc = ["wgpu-core-deps-windows-linux-android/renderdoc"]
 
 ## Enable the `noop` backend.
 # TODO(https://github.com/gfx-rs/wgpu/issues/7120): there should be a hal feature
@@ -148,13 +148,13 @@ noop = []
 # platform crates from being included in the build at a time, preventing users
 # from getting confused by seeing them in the list of crates.
 [target.'cfg(target_vendor = "apple")'.dependencies]
-wgpu-core-platform-apple = { workspace = true, optional = true }
+wgpu-core-deps-apple = { workspace = true, optional = true }
 [target.'cfg(target_os = "emscripten")'.dependencies]
-wgpu-core-platform-emscripten = { workspace = true, optional = true }
+wgpu-core-deps-emscripten = { workspace = true, optional = true }
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
-wgpu-core-platform-wasm = { workspace = true, optional = true }
+wgpu-core-deps-wasm = { workspace = true, optional = true }
 [target.'cfg(any(windows, target_os = "linux", target_os = "android"))'.dependencies]
-wgpu-core-platform-windows-linux-android = { workspace = true, optional = true }
+wgpu-core-deps-windows-linux-android = { workspace = true, optional = true }
 
 [dependencies]
 naga.workspace = true

@@ -1,5 +1,5 @@
 [package]
-name = "wgpu-core-platform-wasm"
+name = "wgpu-core-deps-wasm"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

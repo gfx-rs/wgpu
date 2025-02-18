@@ -1,5 +1,5 @@
 [package]
-name = "wgpu-core-platform-apple"
+name = "wgpu-core-deps-apple"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

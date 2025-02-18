@@ -1,5 +1,5 @@
 [package]
-name = "wgpu-core-platform-windows-linux-android"
+name = "wgpu-core-deps-windows-linux-android"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

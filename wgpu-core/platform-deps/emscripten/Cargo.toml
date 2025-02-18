@@ -1,5 +1,5 @@
 [package]
-name = "wgpu-core-platform-emscripten"
+name = "wgpu-core-deps-emscripten"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

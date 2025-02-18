@@ -4556,37 +4556,37 @@ dependencies = [
  "serde",
  "smallvec",
  "thiserror 2.0.11",
- "wgpu-core-platform-apple",
- "wgpu-core-platform-emscripten",
- "wgpu-core-platform-wasm",
- "wgpu-core-platform-windows-linux-android",
+ "wgpu-core-deps-apple",
+ "wgpu-core-deps-emscripten",
+ "wgpu-core-deps-wasm",
+ "wgpu-core-deps-windows-linux-android",
  "wgpu-hal",
  "wgpu-types",
 ]
 
 [[package]]
-name = "wgpu-core-platform-apple"
+name = "wgpu-core-deps-apple"
 version = "24.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
-name = "wgpu-core-platform-emscripten"
+name = "wgpu-core-deps-emscripten"
 version = "24.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
-name = "wgpu-core-platform-wasm"
+name = "wgpu-core-deps-wasm"
 version = "24.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
-name = "wgpu-core-platform-windows-linux-android"
+name = "wgpu-core-deps-windows-linux-android"
 version = "24.0.0"
 dependencies = [
  "wgpu-hal",
