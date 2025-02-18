@@ -14,12 +14,8 @@ const BASE_DIR_IN: &str = "tests/in";
 const BASE_DIR_OUT: &str = "tests/out";
 
 bitflags::bitflags! {
-    #[derive(Clone, Copy)]
-    #[cfg_attr(
-        feature = "deserialize",
-        derive(serde::Deserialize),
-        serde(transparent)
-    )]
+    #[derive(Clone, Copy, serde::Deserialize)]
+    #[serde(transparent)]
     #[derive(Debug, Eq, PartialEq)]
     struct Targets: u32 {
         /// A serialization of the `naga::Module`, in RON format.
@@ -167,7 +163,7 @@ impl Input {
     /// Return an iterator that produces an `Input` for each entry in `subdirectory`.
     fn files_in_dir(
         subdirectory: Option<&'static str>,
-        file_extants: &'static [&'static str],
+        file_extensions: &'static [&'static str],
     ) -> impl Iterator<Item = Input> + 'static {
         let mut input_directory = Path::new(env!("CARGO_MANIFEST_DIR")).join(BASE_DIR_IN);
         if let Some(ref subdirectory) = subdirectory {
@@ -193,7 +189,7 @@ impl Input {
                 .extension()
                 .expect("all files in snapshot input directory should have extensions");
 
-            if !file_extants.contains(&extension.to_str().unwrap()) {
+            if !file_extensions.contains(&extension.to_str().unwrap()) {
                 return None;
             }
 
@@ -485,8 +481,6 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
                     .expect("Could not find fragment entry point"),
                 );
             }
-
-            dbg!(frag_ep.is_some());
 
             write_output_hlsl(
                 input,
