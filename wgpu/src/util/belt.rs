@@ -1,5 +1,5 @@
 use crate::{
-    util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages,
+    util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferSlice, BufferUsages,
     BufferViewMut, CommandEncoder, Device, MapMode,
 };
 use std::fmt;
@@ -77,14 +77,14 @@ impl StagingBelt {
         size: BufferSize,
         device: &Device,
     ) -> BufferViewMut<'_> {
-        let (mapped, belt_buffer, offset_in_belt_buffer) = self.allocate(
+        let (mapped, slice_of_belt) = self.allocate(
             size,
             const { BufferSize::new(crate::COPY_BUFFER_ALIGNMENT).unwrap() },
             device,
         );
         encoder.copy_buffer_to_buffer(
-            belt_buffer,
-            offset_in_belt_buffer,
+            slice_of_belt.buffer(),
+            slice_of_belt.offset(),
             target,
             offset,
             size.get(),
@@ -120,7 +120,7 @@ impl StagingBelt {
         size: BufferSize,
         alignment: BufferSize,
         device: &Device,
-    ) -> (BufferViewMut<'_>, &Buffer, BufferAddress) {
+    ) -> (BufferViewMut<'_>, BufferSlice<'_>) {
         assert!(
             alignment.get().is_power_of_two(),
             "alignment must be a power of two, not {alignment}"
@@ -161,14 +161,10 @@ impl StagingBelt {
         self.active_chunks.push(chunk);
         let chunk = self.active_chunks.last().unwrap();
 
-        (
-            chunk
-                .buffer
-                .slice(allocation_offset..allocation_offset + size.get())
-                .get_mapped_range_mut(),
-            &chunk.buffer,
-            allocation_offset,
-        )
+        let slice = chunk
+            .buffer
+            .slice(allocation_offset..allocation_offset + size.get());
+        (slice.get_mapped_range_mut(), slice)
     }
 
     /// Prepare currently mapped buffers for use in a submission.
