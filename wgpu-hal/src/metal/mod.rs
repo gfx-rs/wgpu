@@ -356,6 +356,10 @@ impl Queue {
             timestamp_period,
         }
     }
+
+    pub fn as_raw(&self) -> parking_lot::MutexGuard<'_, metal::CommandQueue> {
+        self.raw.lock()
+    }
 }
 
 pub struct Device {

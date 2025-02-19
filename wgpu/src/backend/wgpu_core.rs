@@ -360,6 +360,14 @@ impl ContextWgpuCore {
 
         format!("Validation Error\n\nCaused by:\n{output}")
     }
+
+    pub unsafe fn queue_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Queue>) -> R, R>(
+        &self,
+        queue: &CoreQueue,
+        hal_queue_callback: F,
+    ) -> R {
+        unsafe { self.0.queue_as_hal::<A, F, R>(queue.id, hal_queue_callback) }
+    }
 }
 
 fn map_buffer_copy_view(view: crate::TexelCopyBufferInfo<'_>) -> wgc::command::TexelCopyBufferInfo {
