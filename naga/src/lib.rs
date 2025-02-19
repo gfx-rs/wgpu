@@ -839,10 +839,10 @@ pub enum TypeInner {
     Sampler { comparison: bool },
 
     /// Opaque object representing an acceleration structure of geometry.
-    AccelerationStructure,
+    AccelerationStructure { vertex_return: bool },
 
     /// Locally used handle for ray queries.
-    RayQuery,
+    RayQuery { vertex_return: bool },
 
     /// Array of bindings.
     ///
@@ -1686,6 +1686,14 @@ pub enum Expression {
     /// This doesn't match the semantics of spirv's `OpArrayLength`, which must be passed
     /// a pointer to a structure containing a runtime array in its' last field.
     ArrayLength(Handle<Expression>),
+
+    /// Get the Positions of the triangle hit by the [`RayQuery`]
+    ///
+    /// [`RayQuery`]: Statement::RayQuery
+    RayQueryVertexPositions {
+        query: Handle<Expression>,
+        committed: bool,
+    },
 
     /// Result of a [`Proceed`] [`RayQuery`] statement.
     ///

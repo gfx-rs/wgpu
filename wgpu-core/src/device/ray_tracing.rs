@@ -30,9 +30,8 @@ impl Device {
         if blas_desc
             .flags
             .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
-            && !self.features.contains(Features::RAY_HIT_VERTEX_RETURN)
         {
-            return Err(CreateBlasError::MissingVertexReturnFeature);
+            self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
         }
 
         let size_info = match &sizes {
@@ -150,9 +149,8 @@ impl Device {
         if desc
             .flags
             .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
-            && !self.features.contains(Features::RAY_HIT_VERTEX_RETURN)
         {
-            return Err(CreateTlasError::MissingVertexReturnFeature);
+            self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
         }
 
         let size_info = unsafe {

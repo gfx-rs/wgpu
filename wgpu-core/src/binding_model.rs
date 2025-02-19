@@ -381,7 +381,7 @@ impl BindingTypeMaxCountValidator {
                 wgt::BindingType::StorageTexture { .. } => {
                     self.storage_textures.add(binding.visibility, count);
                 }
-                wgt::BindingType::AccelerationStructure => {
+                wgt::BindingType::AccelerationStructure { .. } => {
                     self.acceleration_structures.add(binding.visibility, count);
                 }
             }

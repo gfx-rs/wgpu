@@ -558,6 +558,10 @@ impl super::Validator {
             crate::Expression::RayQueryGetIntersection {
                 query,
                 committed: _,
+            }
+            | crate::Expression::RayQueryVertexPositions {
+                query,
+                committed: _,
             } => {
                 handle.check_dep(query)?;
             }

@@ -792,6 +792,20 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn ray_query_return_vertex_position(
+        result_type_id: Word,
+        id: Word,
+        query: Word,
+        intersection: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::RayQueryGetIntersectionTriangleVertexPositionsKHR);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(query);
+        instruction.add_operand(intersection);
+        instruction
+    }
+
     pub(super) fn ray_query_get_intersection(
         op: Op,
         result_type_id: Word,

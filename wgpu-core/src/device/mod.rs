@@ -468,6 +468,10 @@ pub fn create_validator(
         Caps::SUBGROUP_VERTEX_STAGE,
         features.contains(wgt::Features::SUBGROUP_VERTEX),
     );
+    caps.set(
+        Caps::RAY_HIT_VERTEX_POSITION,
+        features.intersects(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN),
+    );
 
     naga::valid::Validator::new(flags, caps)
 }

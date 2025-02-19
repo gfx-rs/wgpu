@@ -185,6 +185,12 @@ impl ExpressionTracer<'_> {
                     Iq::NumLevels | Iq::NumLayers | Iq::NumSamples => {}
                 }
             }
+            Ex::RayQueryVertexPositions {
+                query,
+                committed: _,
+            } => {
+                self.expressions_used.insert(query);
+            }
             Ex::Unary { op: _, expr } => {
                 self.expressions_used.insert(expr);
             }
@@ -399,6 +405,10 @@ impl ModuleMap {
             Ex::SubgroupOperationResult { ref mut ty } => self.types.adjust(ty),
             Ex::ArrayLength(ref mut expr) => adjust(expr),
             Ex::RayQueryGetIntersection {
+                ref mut query,
+                committed: _,
+            } => adjust(query),
+            Ex::RayQueryVertexPositions {
                 ref mut query,
                 committed: _,
             } => adjust(query),

@@ -736,7 +736,7 @@ impl crate::Device for super::Device {
                                     wgt::StorageTextureAccess::Atomic => true,
                                 };
                             }
-                            wgt::BindingType::AccelerationStructure => unimplemented!(),
+                            wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
                         }
                         wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
                     }
@@ -962,7 +962,7 @@ impl crate::Device for super::Device {
                                 );
                                 counter.textures += 1;
                             }
-                            wgt::BindingType::AccelerationStructure => unimplemented!(),
+                            wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
                         }
                     }
                     wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),

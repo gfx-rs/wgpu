@@ -724,6 +724,11 @@ fn write_function_expressions(
             }
             E::SubgroupBallotResult => ("SubgroupBallotResult".into(), 4),
             E::SubgroupOperationResult { .. } => ("SubgroupOperationResult".into(), 4),
+            E::RayQueryVertexPositions { query, committed } => {
+                edges.insert("", query);
+                let ty = if committed { "Committed" } else { "Candidate" };
+                (format!("get{}HitVertexPositions", ty).into(), 4)
+            }
         };
 
         // give uniform expressions an outline

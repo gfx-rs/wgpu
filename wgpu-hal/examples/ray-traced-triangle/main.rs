@@ -344,7 +344,9 @@ impl<A: hal::Api> Example<A> {
                 wgpu_types::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu_types::ShaderStages::COMPUTE,
-                    ty: wgpu_types::BindingType::AccelerationStructure,
+                    ty: wgpu_types::BindingType::AccelerationStructure {
+                        vertex_return: false,
+                    },
                     count: None,
                 },
             ],
