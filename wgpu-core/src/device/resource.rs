@@ -1896,7 +1896,7 @@ impl Device {
                         },
                     )
                 }
-                Bt::AccelerationStructure => (None, WritableStorage::No),
+                Bt::AccelerationStructure { .. } => (None, WritableStorage::No),
             };
 
             // Validate the count parameter
@@ -2240,7 +2240,15 @@ impl Device {
         tlas.same_device(self)?;
 
         match decl.ty {
-            wgt::BindingType::AccelerationStructure => (),
+            wgt::BindingType::AccelerationStructure { vertex_return } => {
+                if vertex_return
+                    && !tlas.flags.contains(
+                        wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+                    )
+                {
+                    return Err(Error::MissingTLASVertexReturn { binding });
+                }
+            }
             _ => {
                 return Err(Error::WrongBindingType {
                     binding,

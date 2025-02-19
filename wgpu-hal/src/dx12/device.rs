@@ -771,7 +771,7 @@ impl crate::Device for super::Device {
                 wgt::BindingType::Buffer { .. }
                 | wgt::BindingType::Texture { .. }
                 | wgt::BindingType::StorageTexture { .. }
-                | wgt::BindingType::AccelerationStructure => num_views += count,
+                | wgt::BindingType::AccelerationStructure { .. } => num_views += count,
                 wgt::BindingType::Sampler { .. } => has_sampler_in_group = true,
             }
         }
@@ -1512,7 +1512,7 @@ impl crate::Device for super::Device {
                         sampler_indexes.push(data.index);
                     }
                 }
-                wgt::BindingType::AccelerationStructure => {
+                wgt::BindingType::AccelerationStructure { .. } => {
                     let start = entry.resource_index as usize;
                     let end = start + entry.count as usize;
                     for data in &desc.acceleration_structures[start..end] {

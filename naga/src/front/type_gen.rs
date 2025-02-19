@@ -102,6 +102,36 @@ impl crate::Module {
         handle
     }
 
+    /// Make sure the types for the vertex return are in the module's type
+    pub fn generate_vertex_return_type(&mut self) -> Handle<crate::Type> {
+        if let Some(handle) = self.special_types.ray_vertex_return {
+            return handle;
+        }
+        let ty_vec3f = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Vector {
+                    size: crate::VectorSize::Tri,
+                    scalar: crate::Scalar::F32,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        let array = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Array {
+                    base: ty_vec3f,
+                    size: crate::ArraySize::Constant(std::num::NonZeroU32::new(3).unwrap()),
+                    stride: 16,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        self.special_types.ray_vertex_return = Some(array);
+        array
+    }
+
     /// Populate this module's [`SpecialTypes::ray_intersection`] type.
     ///
     /// [`SpecialTypes::ray_intersection`] is the type of a

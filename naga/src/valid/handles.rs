@@ -309,8 +309,8 @@ impl super::Validator {
             | crate::TypeInner::Atomic { .. }
             | crate::TypeInner::Image { .. }
             | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure
-            | crate::TypeInner::RayQuery => None,
+            | crate::TypeInner::AccelerationStructure { .. }
+            | crate::TypeInner::RayQuery { .. } => None,
             crate::TypeInner::Pointer { base, space: _ } => {
                 handle.check_dep(base)?;
                 None
@@ -556,6 +556,10 @@ impl super::Validator {
                 handle.check_dep(array)?;
             }
             crate::Expression::RayQueryGetIntersection {
+                query,
+                committed: _,
+            }
+            | crate::Expression::RayQueryVertexPositions {
                 query,
                 committed: _,
             } => {

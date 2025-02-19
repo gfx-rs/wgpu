@@ -127,10 +127,17 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Blas {0:?} is missing the flag USE_TRANSFORM but the transform buffer is set")]
     UseTransformMissing(ResourceErrorIdent),
+    #[error(
+        "Tlas {0:?} dependent {1:?} is missing AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN"
+    )]
+    TlasDependentMissingVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateBlasActionsError {
+    #[error("BlasId is invalid or destroyed")]
+    InvalidBlas,
+
     #[error("Blas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 }
@@ -148,6 +155,9 @@ pub enum ValidateTlasActionsError {
 
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
+
+    #[error("Blas {0:?} was missing flag ALLOW_RAY_HIT_VERTEX_RETURN while tlas {1:?} had flag")]
+    MissingBlasVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
 }
 
 #[derive(Debug)]

@@ -147,6 +147,7 @@ impl Clone for TypeResolution {
                     scalar,
                     space,
                 },
+                Ti::Array { base, size, stride } => Ti::Array { base, size, stride },
                 _ => unreachable!("Unexpected clone type: {:?}", v),
             }),
         }
@@ -895,6 +896,13 @@ impl<'a> ResolveContext<'a> {
                 let result = self
                     .special_types
                     .ray_intersection
+                    .ok_or(ResolveError::MissingSpecialType)?;
+                TypeResolution::Handle(result)
+            }
+            crate::Expression::RayQueryVertexPositions { .. } => {
+                let result = self
+                    .special_types
+                    .ray_vertex_return
                     .ok_or(ResolveError::MissingSpecialType)?;
                 TypeResolution::Handle(result)
             }

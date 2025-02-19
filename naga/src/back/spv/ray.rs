@@ -118,7 +118,17 @@ impl Writer {
             .types
             .get(&Type {
                 name: None,
-                inner: TypeInner::RayQuery,
+                inner: TypeInner::RayQuery {
+                    vertex_return: false,
+                },
+            })
+            .or_else(|| {
+                ir_module.types.get(&Type {
+                    name: None,
+                    inner: TypeInner::RayQuery {
+                        vertex_return: true,
+                    },
+                })
             })
             .expect("ray_query type should have been populated by the variable passed into this!");
         let argument_type_id = self.get_type_id(LookupType::Local(LocalType::Pointer {
@@ -623,5 +633,40 @@ impl BlockContext<'_> {
             }
             crate::RayQueryFunction::Terminate => {}
         }
+    }
+
+    pub(super) fn write_ray_query_return_vertex_position(
+        &mut self,
+        query: Handle<crate::Expression>,
+        block: &mut Block,
+        is_committed: bool,
+    ) -> spirv::Word {
+        let query_id = self.cached[query];
+        let id = self.gen_id();
+        let result = self
+            .ir_module
+            .special_types
+            .ray_vertex_return
+            .expect("type should have been populated");
+        let intersection_id =
+            self.writer
+                .get_constant_scalar(crate::Literal::U32(if is_committed {
+                    spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR
+                } else {
+                    spirv::RayQueryIntersection::RayQueryCandidateIntersectionKHR
+                } as _));
+        block
+            .body
+            .push(Instruction::ray_query_return_vertex_position(
+                *self
+                    .writer
+                    .lookup_type
+                    .get(&LookupType::Handle(result))
+                    .expect("type should have been populated"),
+                id,
+                query_id,
+                intersection_id,
+            ));
+        id
     }
 }

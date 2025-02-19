@@ -1441,7 +1441,7 @@ impl crate::Device for super::Device {
                 wgt::BindingType::StorageTexture { .. } => {
                     desc_count.storage_image += count;
                 }
-                wgt::BindingType::AccelerationStructure => {
+                wgt::BindingType::AccelerationStructure { .. } => {
                     desc_count.acceleration_structure += count;
                 }
             }

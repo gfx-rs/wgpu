@@ -281,10 +281,16 @@ impl Display for TypeContext<'_> {
             crate::TypeInner::Sampler { comparison: _ } => {
                 write!(out, "{NAMESPACE}::sampler")
             }
-            crate::TypeInner::AccelerationStructure => {
+            crate::TypeInner::AccelerationStructure { vertex_return } => {
+                if vertex_return {
+                    unimplemented!("metal does not support vertex ray hit return")
+                }
                 write!(out, "{RT_NAMESPACE}::instance_acceleration_structure")
             }
-            crate::TypeInner::RayQuery => {
+            crate::TypeInner::RayQuery { vertex_return } => {
+                if vertex_return {
+                    unimplemented!("metal does not support vertex ray hit return")
+                }
                 write!(out, "{RAY_QUERY_TYPE}")
             }
             crate::TypeInner::BindingArray { base, .. } => {
@@ -561,8 +567,8 @@ impl crate::Type {
             // handle types may be different, depending on the global var access, so we always inline them
             Ti::Image { .. }
             | Ti::Sampler { .. }
-            | Ti::AccelerationStructure
-            | Ti::RayQuery
+            | Ti::AccelerationStructure { .. }
+            | Ti::RayQuery { .. }
             | Ti::BindingArray { .. } => false,
         }
     }
@@ -2350,6 +2356,9 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 }
             }
+            crate::Expression::RayQueryVertexPositions { .. } => {
+                unimplemented!()
+            }
             crate::Expression::RayQueryGetIntersection {
                 query,
                 committed: _,
@@ -3808,12 +3817,12 @@ impl<W: Write> Writer<W> {
         let mut uses_ray_query = false;
         for (_, ty) in module.types.iter() {
             match ty.inner {
-                crate::TypeInner::AccelerationStructure => {
+                crate::TypeInner::AccelerationStructure { .. } => {
                     if options.lang_version < (2, 4) {
                         return Err(Error::UnsupportedRayTracing);
                     }
                 }
-                crate::TypeInner::RayQuery => {
+                crate::TypeInner::RayQuery { .. } => {
                     if options.lang_version < (2, 4) {
                         return Err(Error::UnsupportedRayTracing);
                     }

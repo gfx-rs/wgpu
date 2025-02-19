@@ -27,6 +27,13 @@ impl Device {
         self.check_is_valid()?;
         self.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
 
+        if blas_desc
+            .flags
+            .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
+        {
+            self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
+        }
+
         let size_info = match &sizes {
             wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => {
                 let mut entries =
@@ -137,6 +144,13 @@ impl Device {
             return Err(CreateTlasError::DisallowedFlag(
                 wgt::AccelerationStructureFlags::USE_TRANSFORM,
             ));
+        }
+
+        if desc
+            .flags
+            .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
+        {
+            self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
         }
 
         let size_info = unsafe {

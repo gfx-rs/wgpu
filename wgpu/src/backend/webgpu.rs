@@ -1953,7 +1953,7 @@ impl dispatch::DeviceInterface for WebDevice {
                             .set_view_dimension(map_texture_view_dimension(view_dimension));
                         mapped_entry.set_storage_texture(&storage_texture);
                     }
-                    wgt::BindingType::AccelerationStructure => todo!(),
+                    wgt::BindingType::AccelerationStructure { .. } => todo!(),
                 }
 
                 mapped_entry

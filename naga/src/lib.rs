@@ -839,10 +839,10 @@ pub enum TypeInner {
     Sampler { comparison: bool },
 
     /// Opaque object representing an acceleration structure of geometry.
-    AccelerationStructure,
+    AccelerationStructure { vertex_return: bool },
 
     /// Locally used handle for ray queries.
-    RayQuery,
+    RayQuery { vertex_return: bool },
 
     /// Array of bindings.
     ///
@@ -1687,6 +1687,14 @@ pub enum Expression {
     /// a pointer to a structure containing a runtime array in its' last field.
     ArrayLength(Handle<Expression>),
 
+    /// Get the Positions of the triangle hit by the [`RayQuery`]
+    ///
+    /// [`RayQuery`]: Statement::RayQuery
+    RayQueryVertexPositions {
+        query: Handle<Expression>,
+        committed: bool,
+    },
+
     /// Result of a [`Proceed`] [`RayQuery`] statement.
     ///
     /// [`Proceed`]: RayQueryFunction::Proceed
@@ -2330,6 +2338,11 @@ pub struct SpecialTypes {
     /// Call [`Module::generate_ray_intersection_type`] to populate
     /// this if needed and return the handle.
     pub ray_intersection: Option<Handle<Type>>,
+
+    /// Type for `RayVertexReturn
+    ///
+    /// Call [`Module::generate_vertex_return_type`]
+    pub ray_vertex_return: Option<Handle<Type>>,
 
     /// Types for predeclared wgsl types instantiated on demand.
     ///

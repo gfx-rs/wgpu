@@ -873,7 +873,7 @@ impl Writer {
                 id,
                 spirv::StorageClass::Function,
                 init_word.or_else(|| match ir_module.types[variable.ty].inner {
-                    crate::TypeInner::RayQuery => None,
+                    crate::TypeInner::RayQuery { .. } => None,
                     _ => {
                         let type_id = context.get_type_id(LookupType::Handle(variable.ty));
                         Some(context.writer.write_constant_null(type_id))
@@ -1098,11 +1098,27 @@ impl Writer {
                     _ => {}
                 }
             }
-            crate::TypeInner::AccelerationStructure => {
-                self.require_any("Acceleration Structure", &[spirv::Capability::RayQueryKHR])?;
+            crate::TypeInner::AccelerationStructure { vertex_return } => {
+                let caps = if vertex_return {
+                    vec![
+                        spirv::Capability::RayQueryKHR,
+                        spirv::Capability::RayTracingPositionFetchKHR,
+                    ]
+                } else {
+                    vec![spirv::Capability::RayQueryKHR]
+                };
+                self.require_any("Acceleration Structure", &caps)?;
             }
-            crate::TypeInner::RayQuery => {
-                self.require_any("Ray Query", &[spirv::Capability::RayQueryKHR])?;
+            crate::TypeInner::RayQuery { vertex_return } => {
+                let caps = if vertex_return {
+                    vec![
+                        spirv::Capability::RayQueryKHR,
+                        spirv::Capability::RayTracingPositionFetchKHR,
+                    ]
+                } else {
+                    vec![spirv::Capability::RayQueryKHR]
+                };
+                self.require_any("Ray Query", &caps)?;
             }
             crate::TypeInner::Atomic(crate::Scalar { width: 8, kind: _ }) => {
                 self.require_any("64 bit integer atomics", &[spirv::Capability::Int64Atomics])?;
@@ -1181,8 +1197,8 @@ impl Writer {
                 let class = map_storage_class(space);
                 Instruction::type_pointer(id, class, inner_ty)
             }
-            LocalType::AccelerationStructure => Instruction::type_acceleration_structure(id),
-            LocalType::RayQuery => Instruction::type_ray_query(id),
+            LocalType::AccelerationStructure { .. } => Instruction::type_acceleration_structure(id),
+            LocalType::RayQuery { .. } => Instruction::type_ray_query(id),
         };
 
         instruction.to_words(&mut self.logical_layout.declarations);
@@ -1284,8 +1300,8 @@ impl Writer {
                 | crate::TypeInner::ValuePointer { .. }
                 | crate::TypeInner::Image { .. }
                 | crate::TypeInner::Sampler { .. }
-                | crate::TypeInner::AccelerationStructure
-                | crate::TypeInner::RayQuery => unreachable!(),
+                | crate::TypeInner::AccelerationStructure { .. }
+                | crate::TypeInner::RayQuery { .. } => unreachable!(),
             };
 
             instruction.to_words(&mut self.logical_layout.declarations);
@@ -2155,9 +2171,13 @@ impl Writer {
             .any(|arg| has_view_index_check(ir_module, arg.binding.as_ref(), arg.ty));
         let mut has_ray_query = ir_module.special_types.ray_desc.is_some()
             | ir_module.special_types.ray_intersection.is_some();
+        let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
 
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
-            if let &crate::TypeInner::AccelerationStructure | &crate::TypeInner::RayQuery = inner {
+            // spirv does not about whether these have vertex return - that is done by us
+            if let &crate::TypeInner::AccelerationStructure { .. }
+            | &crate::TypeInner::RayQuery { .. } = inner
+            {
                 has_ray_query = true
             }
         }
@@ -2174,6 +2194,12 @@ impl Writer {
         if has_ray_query {
             Instruction::extension("SPV_KHR_ray_query")
                 .to_words(&mut self.logical_layout.extensions)
+        }
+        if has_vertex_return {
+            Instruction::extension("SPV_KHR_ray_tracing_position_fetch")
+                .to_words(&mut self.logical_layout.extensions);
+            Instruction::capability(spirv::Capability::RayQueryPositionFetchKHR)
+                .to_words(&mut self.logical_layout.capabilities)
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
