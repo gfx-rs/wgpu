@@ -275,6 +275,7 @@ impl BlockContext<'_> {
         if self.fun_info[expr_handle].ref_count == 0 && !is_named_expression {
             return Ok(());
         }
+
         let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
         let id = match self.ir_function.expressions[expr_handle] {
             crate::Expression::Literal(literal) => self.writer.get_constant_scalar(literal),
