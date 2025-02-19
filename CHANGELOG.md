@@ -128,7 +128,7 @@ By @cwfitzgerald in [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
 - Add `util::StagingBelt::allocate()` so the staging belt can be used to write textures. By @kpreid in [#6900](https://github.com/gfx-rs/wgpu/pull/6900).
 - Added `CommandEncoder::transition_resources()` for native API interop, and allowing users to slightly optimize barriers. By @JMS55 in [#6678](https://github.com/gfx-rs/wgpu/pull/6678).
 
-- Support getting vertices of the hit triangle when raytracing. By @Vecvec in [#7141](https://github.com/gfx-rs/wgpu/pull/7141) .
+- Support getting vertices of the hit triangle when raytracing. By @Vecvec in [#7183](https://github.com/gfx-rs/wgpu/pull/7183) .
 
 #### Naga
 
