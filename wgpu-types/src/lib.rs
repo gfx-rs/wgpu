@@ -7163,8 +7163,8 @@ bitflags::bitflags!(
         /// Allow for incremental updates (no change in size), currently this is unimplemented
         /// and will build as normal (this is fine, update vs build should be unnoticeable)
         const ALLOW_UPDATE = 1 << 0;
-        /// Allow the acceleration structure to be compacted in a copy operation, the function
-        /// to compact is not currently implemented.
+        /// Allow the acceleration structure to be compacted in a copy operation
+        /// (`Blas::prepare_for_compaction`, `CommandEncoder::compact_blas`).
         const ALLOW_COMPACTION = 1 << 1;
         /// Optimize for fast ray tracing performance, recommended if the geometry is unlikely
         /// to change (e.g. in a game: non-interactive scene geometry)
