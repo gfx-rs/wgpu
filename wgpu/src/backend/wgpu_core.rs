@@ -1,3 +1,20 @@
+use alloc::{
+    borrow::Cow::Borrowed,
+    boxed::Box,
+    format,
+    string::{String, ToString as _},
+    sync::Arc,
+    vec,
+    vec::Vec,
+};
+use core::{error::Error, fmt, future::ready, ops::Range, pin::Pin, ptr::NonNull, slice};
+
+use arrayvec::ArrayVec;
+use parking_lot::Mutex;
+use smallvec::SmallVec;
+use wgc::{command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError};
+use wgt::WasmNotSendSync;
+
 use crate::{
     api,
     dispatch::{self, BufferMappedRangeInterface, InterfaceTypes},
@@ -5,16 +22,6 @@ use crate::{
     CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor,
 };
-
-use arrayvec::ArrayVec;
-use parking_lot::Mutex;
-use smallvec::SmallVec;
-use std::{
-    borrow::Cow::Borrowed, error::Error, fmt, future::ready, ops::Range, pin::Pin, ptr::NonNull,
-    slice, sync::Arc,
-};
-use wgc::{command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError};
-use wgt::WasmNotSendSync;
 
 #[derive(Clone)]
 pub struct ContextWgpuCore(Arc<wgc::global::Global>);
@@ -338,7 +345,7 @@ impl ContextWgpuCore {
 
         fn print_tree(output: &mut String, level: &mut usize, e: &(dyn Error + 'static)) {
             let mut print = |e: &(dyn Error + 'static)| {
-                use std::fmt::Write;
+                use core::fmt::Write;
                 writeln!(output, "{}{}", " ".repeat(*level * 2), e).unwrap();
 
                 if let Some(e) = e.source() {
@@ -642,7 +649,7 @@ impl ErrorSinkRaw {
 }
 
 impl fmt::Debug for ErrorSinkRaw {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "ErrorSink")
     }
 }
@@ -2304,7 +2311,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             &wgc::command::RenderPassDescriptor {
                 label: desc.label.map(Borrowed),
                 timestamp_writes: timestamp_writes.as_ref(),
-                color_attachments: std::borrow::Cow::Borrowed(&colors),
+                color_attachments: Borrowed(&colors),
                 depth_stencil_attachment: depth_stencil.as_ref(),
                 occlusion_query_set: desc.occlusion_query_set.map(|qs| qs.inner.as_core().id),
             },

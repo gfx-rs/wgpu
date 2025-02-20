@@ -13,7 +13,8 @@
 
 use crate::{WasmNotSend, WasmNotSendSync};
 
-use std::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin, sync::Arc};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin};
 
 use crate::backend;
 
@@ -632,7 +633,7 @@ macro_rules! dispatch_types_inner {
             }
         }
 
-        impl std::ops::Deref for $name {
+        impl core::ops::Deref for $name {
             type Target = dyn $trait;
 
             #[inline]
@@ -763,7 +764,7 @@ macro_rules! dispatch_types_inner {
             }
         }
 
-        impl std::ops::Deref for $name {
+        impl core::ops::Deref for $name {
             type Target = dyn $trait;
 
             #[inline]
@@ -779,7 +780,7 @@ macro_rules! dispatch_types_inner {
             }
         }
 
-        impl std::ops::DerefMut for $name {
+        impl core::ops::DerefMut for $name {
             #[inline]
             fn deref_mut(&mut self) -> &mut Self::Target {
                 match self {

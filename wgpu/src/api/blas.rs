@@ -1,6 +1,9 @@
+use alloc::{boxed::Box, vec::Vec};
+
+use wgt::WasmNotSendSync;
+
 use crate::dispatch;
 use crate::{Buffer, Label};
-use wgt::WasmNotSendSync;
 
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
 pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;
