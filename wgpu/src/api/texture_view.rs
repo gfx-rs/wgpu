@@ -2,8 +2,11 @@ use crate::*;
 
 /// Handle to a texture view.
 ///
-/// A `TextureView` object describes a texture and associated metadata needed by a
-/// [`RenderPipeline`] or [`BindGroup`].
+/// A `TextureView` object refers to a [`Texture`], or a subset of its layers and mip levels, and
+/// specifies an interpretation of the texture’s texels, which is needed to use a texture as a
+/// binding in a [`BindGroup`] or as an attachment in a [`RenderPass`].
+/// It can be created using [`Texture::create_view()`], which accepts a [`TextureViewDescriptor`]
+/// specifying the properties of the view.
 ///
 /// Corresponds to [WebGPU `GPUTextureView`](https://gpuweb.github.io/gpuweb/#gputextureview).
 #[derive(Debug, Clone)]

@@ -28,4 +28,5 @@ fn main() {
     const cit2_ = array<i32, 4>(0i, 1i, 2i, 3i);
     const ic4_ = vec2<u32>(0u, 0u);
     const ic5_ = mat2x3<f32>(vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f));
+    return;
 }

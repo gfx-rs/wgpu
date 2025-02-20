@@ -86,14 +86,17 @@ void runtime_values(
     uint _e52 = u;
     uint _e53 = u;
     plus_u_u_u = _e52 + _e53;
+    return;
 }
 
 void wgpu_4445_(
 ) {
+    return;
 }
 
 void wgpu_4435_(
     threadgroup type_3& a
 ) {
     uint y = a.inner[as_type<int>(as_type<uint>(1) - as_type<uint>(1))];
+    return;
 }

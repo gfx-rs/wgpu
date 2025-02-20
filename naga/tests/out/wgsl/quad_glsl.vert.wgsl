@@ -16,6 +16,7 @@ fn main_1() {
     let _e6 = a_pos_1;
     let _e7 = (c_scale * _e6);
     gl_Position = vec4<f32>(_e7.x, _e7.y, 0f, 1f);
+    return;
 }
 
 @vertex 
@@ -23,7 +24,7 @@ fn main(@location(0) a_pos: vec2<f32>, @location(1) a_uv: vec2<f32>) -> VertexOu
     a_pos_1 = a_pos;
     a_uv_1 = a_uv;
     main_1();
-    let _e13 = v_uv;
-    let _e15 = gl_Position;
-    return VertexOutput(_e13, _e15);
+    let _e5 = v_uv;
+    let _e7 = gl_Position;
+    return VertexOutput(_e5, _e7);
 }

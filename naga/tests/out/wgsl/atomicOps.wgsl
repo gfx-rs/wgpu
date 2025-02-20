@@ -103,4 +103,5 @@ fn cs_main(@builtin(local_invocation_id) id: vec3<u32>) {
     let _e295 = atomicExchange((&workgroup_atomic_arr[1]), 1i);
     let _e299 = atomicExchange((&workgroup_struct.atomic_scalar), 1u);
     let _e304 = atomicExchange((&workgroup_struct.atomic_arr[1]), 1i);
+    return;
 }

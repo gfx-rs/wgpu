@@ -36,4 +36,5 @@ kernel void main_(
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
     type_1 _e3 = w_mem.arr;
     output = _e3;
+    return;
 }

@@ -35,4 +35,5 @@ void main()
     out_.Store(8, asuint(_e19));
     uint _e25 = asuint(in_data_storage_g1_b0_.Load(0+i*16+__dynamic_buffer_offsets1._0));
     out_.Store(12, asuint(_e25));
+    return;
 }

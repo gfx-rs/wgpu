@@ -119,6 +119,9 @@
                         value: 3,
                         result: Some(4),
                     ),
+                    Return(
+                        value: None,
+                    ),
                 ],
                 diagnostic_filter_leaf: None,
             ),

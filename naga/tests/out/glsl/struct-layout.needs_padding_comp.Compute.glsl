@@ -25,5 +25,6 @@ void main() {
     x_1 = _e2;
     NeedsPadding _e4 = _group_0_binding_3_cs;
     x_1 = _e4;
+    return;
 }
 

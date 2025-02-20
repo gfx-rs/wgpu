@@ -179,6 +179,18 @@ pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
         &mut self,
         barrier: AccelerationStructureBarrier,
     );
+
+    unsafe fn copy_acceleration_structure_to_acceleration_structure(
+        &mut self,
+        src: &dyn DynAccelerationStructure,
+        dst: &dyn DynAccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
+    );
+    unsafe fn read_acceleration_structure_compact_size(
+        &mut self,
+        acceleration_structure: &dyn DynAccelerationStructure,
+        buf: &dyn DynBuffer,
+    );
 }
 
 impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
@@ -610,6 +622,26 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         barrier: AccelerationStructureBarrier,
     ) {
         unsafe { C::place_acceleration_structure_barrier(self, barrier) };
+    }
+
+    unsafe fn copy_acceleration_structure_to_acceleration_structure(
+        &mut self,
+        src: &dyn DynAccelerationStructure,
+        dst: &dyn DynAccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
+    ) {
+        let src = src.expect_downcast_ref();
+        let dst = dst.expect_downcast_ref();
+        unsafe { C::copy_acceleration_structure_to_acceleration_structure(self, src, dst, copy) };
+    }
+    unsafe fn read_acceleration_structure_compact_size(
+        &mut self,
+        acceleration_structure: &dyn DynAccelerationStructure,
+        buf: &dyn DynBuffer,
+    ) {
+        let acceleration_structure = acceleration_structure.expect_downcast_ref();
+        let buf = buf.expect_downcast_ref();
+        unsafe { C::read_acceleration_structure_compact_size(self, acceleration_structure, buf) }
     }
 }
 

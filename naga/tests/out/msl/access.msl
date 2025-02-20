@@ -110,6 +110,7 @@ void test_matrix_within_struct_accesses(
     int _e85 = idx;
     int _e87 = idx;
     t.m[_e85][_e87] = 40.0;
+    return;
 }
 
 void test_matrix_within_array_within_struct_accesses(
@@ -147,6 +148,7 @@ void test_matrix_within_array_within_struct_accesses(
     int _e100 = idx_1;
     int _e102 = idx_1;
     t_1.am.inner[0][_e100][_e102] = 40.0;
+    return;
 }
 
 float read_from_private(
@@ -166,12 +168,14 @@ void assign_through_ptr_fn(
     thread uint& p
 ) {
     p = 42u;
+    return;
 }
 
 void assign_array_through_ptr_fn(
     thread type_22& foo_2
 ) {
     foo_2 = type_22 {metal::float4(1.0), metal::float4(2.0)};
+    return;
 }
 
 uint fetch_arg_ptr_member(
@@ -185,6 +189,7 @@ void assign_to_arg_ptr_member(
     thread AssignToMember& p_2
 ) {
     p_2.x = 10u;
+    return;
 }
 
 uint fetch_arg_ptr_array_element(
@@ -198,6 +203,7 @@ void assign_to_arg_ptr_array_element(
     thread type_25& p_4
 ) {
     p_4.inner[1] = 10u;
+    return;
 }
 
 bool index_ptr(
@@ -298,6 +304,7 @@ kernel void assign_through_ptr(
     type_22 arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);
+    return;
 }
 
 
@@ -309,4 +316,5 @@ kernel void assign_to_ptr_components(
     uint _e1 = fetch_arg_ptr_member(s1_);
     assign_to_arg_ptr_array_element(a1_);
     uint _e3 = fetch_arg_ptr_array_element(a1_);
+    return;
 }

@@ -27,4 +27,5 @@ fn main(sizes: Structure, @builtin(subgroup_id) subgroup_id: u32, @builtin(subgr
     let _e35 = subgroupShuffleDown(subgroup_invocation_id, 1u);
     let _e37 = subgroupShuffleUp(subgroup_invocation_id, 1u);
     let _e41 = subgroupShuffleXor(subgroup_invocation_id, (sizes.subgroup_size - 1u));
+    return;
 }

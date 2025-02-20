@@ -84,6 +84,7 @@ fn test_matrix_within_struct_accesses() {
     let _e85 = idx;
     let _e87 = idx;
     t.m[_e85][_e87] = 40f;
+    return;
 }
 
 fn test_matrix_within_array_within_struct_accesses() {
@@ -120,6 +121,7 @@ fn test_matrix_within_array_within_struct_accesses() {
     let _e100 = idx_1;
     let _e102 = idx_1;
     t_1.am[0][_e100][_e102] = 40f;
+    return;
 }
 
 fn read_from_private(foo_1: ptr<function, f32>) -> f32 {
@@ -133,10 +135,12 @@ fn test_arr_as_arg(a: array<array<f32, 10>, 5>) -> f32 {
 
 fn assign_through_ptr_fn(p: ptr<function, u32>) {
     (*p) = 42u;
+    return;
 }
 
 fn assign_array_through_ptr_fn(foo_2: ptr<function, array<vec4<f32>, 2>>) {
     (*foo_2) = array<vec4<f32>, 2>(vec4(1f), vec4(2f));
+    return;
 }
 
 fn fetch_arg_ptr_member(p_1: ptr<function, AssignToMember>) -> u32 {
@@ -146,6 +150,7 @@ fn fetch_arg_ptr_member(p_1: ptr<function, AssignToMember>) -> u32 {
 
 fn assign_to_arg_ptr_member(p_2: ptr<function, AssignToMember>) {
     (*p_2).x = 10u;
+    return;
 }
 
 fn fetch_arg_ptr_array_element(p_3: ptr<function, array<u32, 4>>) -> u32 {
@@ -155,6 +160,7 @@ fn fetch_arg_ptr_array_element(p_3: ptr<function, array<u32, 4>>) -> u32 {
 
 fn assign_to_arg_ptr_array_element(p_4: ptr<function, array<u32, 4>>) {
     (*p_4)[1] = 10u;
+    return;
 }
 
 fn index_ptr(value: bool) -> bool {
@@ -237,6 +243,7 @@ fn assign_through_ptr() {
 
     assign_through_ptr_fn((&val));
     assign_array_through_ptr_fn((&arr));
+    return;
 }
 
 @compute @workgroup_size(1, 1, 1) 
@@ -248,4 +255,5 @@ fn assign_to_ptr_components() {
     let _e1 = fetch_arg_ptr_member((&s1_));
     assign_to_arg_ptr_array_element((&a1_));
     let _e3 = fetch_arg_ptr_array_element((&a1_));
+    return;
 }

@@ -27,4 +27,5 @@ fn cs_main(@builtin(local_invocation_id) id: vec3<u32>) {
     atomicMin((&storage_atomic_arr[1]), (1lu + _e24));
     atomicMin((&storage_struct.atomic_scalar), 1lu);
     atomicMin((&storage_struct.atomic_arr[1]), u64(id.x));
+    return;
 }

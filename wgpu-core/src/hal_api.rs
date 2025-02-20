@@ -4,8 +4,8 @@ pub trait HalApi: hal::Api + 'static + WasmNotSendSync {
     const VARIANT: Backend;
 }
 
-impl HalApi for hal::api::Empty {
-    const VARIANT: Backend = Backend::Empty;
+impl HalApi for hal::api::Noop {
+    const VARIANT: Backend = Backend::Noop;
 }
 
 #[cfg(vulkan)]

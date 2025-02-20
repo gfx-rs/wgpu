@@ -1,0 +1,319 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Storage(
+                    format: R32Float,
+                    access: ("LOAD"),
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Storage(
+                    format: Rg32Float,
+                    access: ("LOAD"),
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Storage(
+                    format: Rgba32Float,
+                    access: ("LOAD"),
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Storage(
+                    format: R32Float,
+                    access: ("STORE"),
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Storage(
+                    format: Rg32Float,
+                    access: ("STORE"),
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: Storage(
+                    format: Rgba32Float,
+                    access: ("STORE"),
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("s_r_r"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 0,
+            init: None,
+        ),
+        (
+            name: Some("s_rg_r"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 1,
+            )),
+            ty: 1,
+            init: None,
+        ),
+        (
+            name: Some("s_rgba_r"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 2,
+            )),
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("s_r_w"),
+            space: Handle,
+            binding: Some((
+                group: 1,
+                binding: 0,
+            )),
+            ty: 3,
+            init: None,
+        ),
+        (
+            name: Some("s_rg_w"),
+            space: Handle,
+            binding: Some((
+                group: 1,
+                binding: 1,
+            )),
+            ty: 4,
+            init: None,
+        ),
+        (
+            name: Some("s_rgba_w"),
+            space: Handle,
+            binding: Some((
+                group: 1,
+                binding: 2,
+            )),
+            ty: 5,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [],
+    entry_points: [
+        (
+            name: "csLoad",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("csLoad"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(0),
+                    Literal(U32(0)),
+                    Splat(
+                        size: Bi,
+                        value: 1,
+                    ),
+                    ImageLoad(
+                        image: 0,
+                        coordinate: 2,
+                        array_index: None,
+                        sample: None,
+                        level: None,
+                    ),
+                    GlobalVariable(1),
+                    Literal(U32(0)),
+                    Splat(
+                        size: Bi,
+                        value: 5,
+                    ),
+                    ImageLoad(
+                        image: 4,
+                        coordinate: 6,
+                        array_index: None,
+                        sample: None,
+                        level: None,
+                    ),
+                    GlobalVariable(2),
+                    Literal(U32(0)),
+                    Splat(
+                        size: Bi,
+                        value: 9,
+                    ),
+                    ImageLoad(
+                        image: 8,
+                        coordinate: 10,
+                        array_index: None,
+                        sample: None,
+                        level: None,
+                    ),
+                ],
+                named_expressions: {
+                    3: "phony",
+                    7: "phony",
+                    11: "phony",
+                },
+                body: [
+                    Emit((
+                        start: 2,
+                        end: 4,
+                    )),
+                    Emit((
+                        start: 6,
+                        end: 8,
+                    )),
+                    Emit((
+                        start: 10,
+                        end: 12,
+                    )),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+        (
+            name: "csStore",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("csStore"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(3),
+                    Literal(U32(0)),
+                    Splat(
+                        size: Bi,
+                        value: 1,
+                    ),
+                    Literal(F32(0.0)),
+                    Splat(
+                        size: Quad,
+                        value: 3,
+                    ),
+                    GlobalVariable(4),
+                    Literal(U32(0)),
+                    Splat(
+                        size: Bi,
+                        value: 6,
+                    ),
+                    Literal(F32(0.0)),
+                    Splat(
+                        size: Quad,
+                        value: 8,
+                    ),
+                    GlobalVariable(5),
+                    Literal(U32(0)),
+                    Splat(
+                        size: Bi,
+                        value: 11,
+                    ),
+                    Literal(F32(0.0)),
+                    Splat(
+                        size: Quad,
+                        value: 13,
+                    ),
+                ],
+                named_expressions: {},
+                body: [
+                    Emit((
+                        start: 2,
+                        end: 3,
+                    )),
+                    Emit((
+                        start: 4,
+                        end: 5,
+                    )),
+                    ImageStore(
+                        image: 0,
+                        coordinate: 2,
+                        array_index: None,
+                        value: 4,
+                    ),
+                    Emit((
+                        start: 7,
+                        end: 8,
+                    )),
+                    Emit((
+                        start: 9,
+                        end: 10,
+                    )),
+                    ImageStore(
+                        image: 5,
+                        coordinate: 7,
+                        array_index: None,
+                        value: 9,
+                    ),
+                    Emit((
+                        start: 12,
+                        end: 13,
+                    )),
+                    Emit((
+                        start: 14,
+                        end: 15,
+                    )),
+                    ImageStore(
+                        image: 10,
+                        coordinate: 12,
+                        array_index: None,
+                        value: 14,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+)

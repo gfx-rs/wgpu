@@ -23,5 +23,6 @@ void main() {
     barrier();
     uint _e3[512] = w_mem.arr;
     _group_0_binding_0_cs = _e3;
+    return;
 }
 

@@ -40,5 +40,6 @@ void main() {
     uint _e35 = subgroupShuffleDown(subgroup_invocation_id, 1u);
     uint _e37 = subgroupShuffleUp(subgroup_invocation_id, 1u);
     uint _e41 = subgroupShuffleXor(subgroup_invocation_id, (sizes.subgroup_size - 1u));
+    return;
 }
 

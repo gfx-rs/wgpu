@@ -93,7 +93,7 @@ GlobalConst ConstructGlobalConst(uint arg0, uint3 arg1, int arg2) {
     return ret;
 }
 
-static GlobalConst global_const = ConstructGlobalConst(0u, uint3(0u, 0u, 0u), 0);
+static GlobalConst global_const = ConstructGlobalConst(0u, uint3(0u, 0u, 0u), int(0));
 RWByteAddressBuffer bar : register(u0);
 cbuffer baz : register(b1) { Baz baz; }
 RWByteAddressBuffer qux : register(u2);
@@ -135,11 +135,11 @@ void SetMatScalarmOnBaz(Baz obj, float scalar, uint mat_idx, uint vec_idx) {
 
 void test_matrix_within_struct_accesses()
 {
-    int idx = 1;
+    int idx = int(1);
     Baz t = ConstructBaz(float3x2((1.0).xx, (2.0).xx, (3.0).xx));
 
     int _e3 = idx;
-    idx = (_e3 - 1);
+    idx = asint(asuint(_e3) - asuint(int(1)));
     float3x2 l0_ = GetMatmOnBaz(baz);
     float2 l1_ = GetMatmOnBaz(baz)[0];
     int _e14 = idx;
@@ -153,7 +153,7 @@ void test_matrix_within_struct_accesses()
     int _e38 = idx;
     float l6_ = GetMatmOnBaz(baz)[_e36][_e38];
     int _e51 = idx;
-    idx = (_e51 + 1);
+    idx = asint(asuint(_e51) + asuint(int(1)));
     SetMatmOnBaz(t, float3x2((6.0).xx, (5.0).xx, (4.0).xx));
     t.m_0 = (9.0).xx;
     int _e66 = idx;
@@ -166,6 +166,7 @@ void test_matrix_within_struct_accesses()
     int _e85 = idx;
     int _e87 = idx;
     SetMatScalarmOnBaz(t, 40.0, _e85, _e87);
+    return;
 }
 
 MatCx2InArray ConstructMatCx2InArray(float4x2 arg0[2]) {
@@ -181,11 +182,11 @@ ret_ZeroValuearray2_float4x2_ ZeroValuearray2_float4x2_() {
 
 void test_matrix_within_array_within_struct_accesses()
 {
-    int idx_1 = 1;
+    int idx_1 = int(1);
     MatCx2InArray t_1 = ConstructMatCx2InArray(ZeroValuearray2_float4x2_());
 
     int _e3 = idx_1;
-    idx_1 = (_e3 - 1);
+    idx_1 = asint(asuint(_e3) - asuint(int(1)));
     float4x2 l0_1[2] = ((float4x2[2])nested_mat_cx2_.am);
     float4x2 l1_1 = ((float4x2)nested_mat_cx2_.am[0]);
     float2 l2_1 = nested_mat_cx2_.am[0]._0;
@@ -200,7 +201,7 @@ void test_matrix_within_array_within_struct_accesses()
     int _e48 = idx_1;
     float l7_ = __get_col_of_mat4x2(nested_mat_cx2_.am[0], _e46)[_e48];
     int _e55 = idx_1;
-    idx_1 = (_e55 + 1);
+    idx_1 = asint(asuint(_e55) + asuint(int(1)));
     t_1.am = (__mat4x2[2])ZeroValuearray2_float4x2_();
     t_1.am[0] = (__mat4x2)float4x2((8.0).xx, (7.0).xx, (6.0).xx, (5.0).xx);
     t_1.am[0]._0 = (9.0).xx;
@@ -214,6 +215,7 @@ void test_matrix_within_array_within_struct_accesses()
     int _e100 = idx_1;
     int _e102 = idx_1;
     __set_el_of_mat4x2(t_1.am[0], _e100, _e102, 40.0);
+    return;
 }
 
 float read_from_private(inout float foo_1)
@@ -230,6 +232,7 @@ float test_arr_as_arg(float a[5][10])
 void assign_through_ptr_fn(inout uint p)
 {
     p = 42u;
+    return;
 }
 
 typedef float4 ret_Constructarray2_float4_[2];
@@ -241,6 +244,7 @@ ret_Constructarray2_float4_ Constructarray2_float4_(float4 arg0, float4 arg1) {
 void assign_array_through_ptr_fn(inout float4 foo_2[2])
 {
     foo_2 = Constructarray2_float4_((1.0).xxxx, (2.0).xxxx);
+    return;
 }
 
 uint fetch_arg_ptr_member(inout AssignToMember p_1)
@@ -252,6 +256,7 @@ uint fetch_arg_ptr_member(inout AssignToMember p_1)
 void assign_to_arg_ptr_member(inout AssignToMember p_2)
 {
     p_2.x = 10u;
+    return;
 }
 
 uint fetch_arg_ptr_array_element(inout uint p_3[4])
@@ -263,6 +268,7 @@ uint fetch_arg_ptr_array_element(inout uint p_3[4])
 void assign_to_arg_ptr_array_element(inout uint p_4[4])
 {
     p_4[1] = 10u;
+    return;
 }
 
 typedef bool ret_Constructarray1_bool_[1];
@@ -288,7 +294,7 @@ S ConstructS(int arg0) {
 
 int member_ptr()
 {
-    S s = ConstructS(42);
+    S s = ConstructS(int(42));
 
     int _e4 = s.m;
     return _e4;
@@ -364,8 +370,8 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     int a_2 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 160) / 8) - 2u)*8+160));
     int2 c = asint(qux.Load2(0));
     const float _e33 = read_from_private(foo);
-    c2_ = Constructarray5_int_(a_2, int(b), 3, 4, 5);
-    c2_[min(uint((vi + 1u)), 4u)] = 42;
+    c2_ = Constructarray5_int_(a_2, int(b), int(3), int(4), int(5));
+    c2_[min(uint((vi + 1u)), 4u)] = int(42);
     int value_1 = c2_[min(uint(vi), 4u)];
     const float _e47 = test_arr_as_arg(ZeroValuearray5_array10_float__());
     return float4(mul(float4((value_1).xxxx), _matrix), 2.0);
@@ -390,7 +396,7 @@ float4 foo_frag() : SV_Target0
         bar.Store2(144+0, asuint(_value2[0]));
         bar.Store2(144+8, asuint(_value2[1]));
     }
-    bar.Store(0+8+160, asuint(1));
+    bar.Store(0+8+160, asuint(int(1)));
     qux.Store2(0, asuint(ZeroValueint2()));
     return (0.0).xxxx;
 }
@@ -403,6 +409,7 @@ void assign_through_ptr()
 
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);
+    return;
 }
 
 [numthreads(1, 1, 1)]
@@ -415,4 +422,5 @@ void assign_to_ptr_components()
     const uint _e1 = fetch_arg_ptr_member(s1_);
     assign_to_arg_ptr_array_element(a1_);
     const uint _e3 = fetch_arg_ptr_array_element(a1_);
+    return;
 }

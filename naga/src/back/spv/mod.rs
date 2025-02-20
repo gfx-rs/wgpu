@@ -302,6 +302,26 @@ impl NumericType {
             _ => None,
         }
     }
+
+    const fn scalar(self) -> crate::Scalar {
+        match self {
+            NumericType::Scalar(scalar)
+            | NumericType::Vector { scalar, .. }
+            | NumericType::Matrix { scalar, .. } => scalar,
+        }
+    }
+
+    const fn with_scalar(self, scalar: crate::Scalar) -> Self {
+        match self {
+            NumericType::Scalar(_) => NumericType::Scalar(scalar),
+            NumericType::Vector { size, .. } => NumericType::Vector { size, scalar },
+            NumericType::Matrix { columns, rows, .. } => NumericType::Matrix {
+                columns,
+                rows,
+                scalar,
+            },
+        }
+    }
 }
 
 /// A SPIR-V type constructed during code generation.
@@ -473,6 +493,18 @@ enum Dimension {
     Scalar,
     Vector,
     Matrix,
+}
+
+/// Key used to look up an operation which we have wrapped in a helper
+/// function, which should be called instead of directly emitting code
+/// for the expression. See [`Writer::wrapped_functions`].
+#[derive(Debug, Eq, PartialEq, Hash)]
+enum WrappedFunction {
+    BinaryOp {
+        op: crate::BinaryOperator,
+        left_type_id: Word,
+        right_type_id: Word,
+    },
 }
 
 /// A map from evaluated [`Expression`](crate::Expression)s to their SPIR-V ids.
@@ -752,6 +784,10 @@ pub struct Writer {
     lookup_type: crate::FastHashMap<LookupType, Word>,
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
     lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
+    /// Operations which have been wrapped in a helper function. The value is
+    /// the ID of the function, which should be called instead of emitting code
+    /// for the operation directly.
+    wrapped_functions: crate::FastHashMap<WrappedFunction, Word>,
     /// Indexed by const-expression handle indexes
     constant_ids: HandleVec<crate::Expression, Word>,
     cached_constants: crate::FastHashMap<CachedConstant, Word>,

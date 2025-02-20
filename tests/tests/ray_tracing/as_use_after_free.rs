@@ -7,7 +7,7 @@ use wgpu::{
     BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors, BlasTriangleGeometry,
     BlasTriangleGeometrySizeDescriptor, BufferAddress, BufferUsages, CommandEncoderDescriptor,
     ComputePassDescriptor, ComputePipelineDescriptor, CreateBlasDescriptor, CreateTlasDescriptor,
-    Maintain, TlasInstance, TlasPackage, VertexFormat,
+    PollType, TlasInstance, TlasPackage, VertexFormat,
 };
 use wgpu_macros::gpu_test;
 use wgpu_test::{FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
@@ -89,7 +89,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
 
     // Drop the blas and ensure that if it was going to die, it is dead.
     drop(blas);
-    ctx.device.poll(Maintain::Wait);
+    ctx.device.poll(PollType::Wait).unwrap();
 
     // build the tlas package to ensure the blas is dropped
     let mut encoder = ctx
@@ -124,7 +124,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
 
     // Drop the TLAS package and ensure that if it was going to die, it is dead.
     drop(tlas_package);
-    ctx.device.poll(Maintain::Wait);
+    ctx.device.poll(PollType::Wait).unwrap();
 
     // Run the pass with the bind group that references the TLAS package.
     let mut encoder = ctx

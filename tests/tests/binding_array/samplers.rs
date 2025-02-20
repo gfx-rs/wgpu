@@ -12,7 +12,8 @@ static BINDING_ARRAY_SAMPLERS: GpuTestConfiguration = GpuTestConfiguration::new(
                     | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             )
             .limits(Limits {
-                max_samplers_per_shader_stage: 2,
+                max_binding_array_elements_per_shader_stage: 2,
+                max_binding_array_sampler_elements_per_shader_stage: 2,
                 ..Limits::default()
             }),
     )
@@ -28,7 +29,8 @@ static PARTIAL_BINDING_ARRAY_SAMPLERS: GpuTestConfiguration = GpuTestConfigurati
                     | Features::PARTIALLY_BOUND_BINDING_ARRAY,
             )
             .limits(Limits {
-                max_samplers_per_shader_stage: 4,
+                max_binding_array_elements_per_shader_stage: 4,
+                max_binding_array_sampler_elements_per_shader_stage: 4,
                 ..Limits::default()
             }),
     )
@@ -243,7 +245,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     ctx.queue.submit(Some(encoder.finish()));
 
     readback_buffer.slice(..).map_async(MapMode::Read, |_| {});
-    ctx.device.poll(Maintain::Wait);
+    ctx.device.poll(PollType::Wait).unwrap();
 
     let readback_buffer_slice = readback_buffer.slice(..).get_mapped_range();
 

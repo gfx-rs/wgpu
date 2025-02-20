@@ -11,9 +11,11 @@ void barriers() {
     barrier();
     memoryBarrierShared();
     barrier();
+    return;
 }
 
 void main() {
     barriers();
+    return;
 }
 

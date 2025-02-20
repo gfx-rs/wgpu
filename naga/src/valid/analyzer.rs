@@ -531,7 +531,8 @@ impl FunctionInfo {
                         ..
                     } => {
                         // these are nasty aliases, but these idents are too long and break rustfmt
-                        let ub_st = super::Capabilities::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
+                        let sto = super::Capabilities::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
+                        let uni = super::Capabilities::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
                         let st_sb = super::Capabilities::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
                         let sampler = super::Capabilities::SAMPLER_NON_UNIFORM_INDEXING;
 
@@ -542,7 +543,7 @@ impl FunctionInfo {
                         needed_caps |= match *array_element_ty {
                             // If we're an image, use the appropriate limit.
                             crate::TypeInner::Image { class, .. } => match class {
-                                crate::ImageClass::Storage { .. } => ub_st,
+                                crate::ImageClass::Storage { .. } => sto,
                                 _ => st_sb,
                             },
                             crate::TypeInner::Sampler { .. } => sampler,
@@ -551,7 +552,7 @@ impl FunctionInfo {
                                 if let E::GlobalVariable(global_handle) = expression_arena[base] {
                                     let global = &resolve_context.global_vars[global_handle];
                                     match global.space {
-                                        crate::AddressSpace::Uniform => ub_st,
+                                        crate::AddressSpace::Uniform => uni,
                                         crate::AddressSpace::Storage { .. } => st_sb,
                                         _ => unreachable!(),
                                     }
@@ -1080,13 +1081,20 @@ impl FunctionInfo {
                 }
                 S::RayQuery { query, ref fun } => {
                     let _ = self.add_ref(query);
-                    if let crate::RayQueryFunction::Initialize {
-                        acceleration_structure,
-                        descriptor,
-                    } = *fun
-                    {
-                        let _ = self.add_ref(acceleration_structure);
-                        let _ = self.add_ref(descriptor);
+                    match *fun {
+                        crate::RayQueryFunction::Initialize {
+                            acceleration_structure,
+                            descriptor,
+                        } => {
+                            let _ = self.add_ref(acceleration_structure);
+                            let _ = self.add_ref(descriptor);
+                        }
+                        crate::RayQueryFunction::Proceed { result: _ } => {}
+                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                            let _ = self.add_ref(hit_t);
+                        }
+                        crate::RayQueryFunction::ConfirmIntersection => {}
+                        crate::RayQueryFunction::Terminate => {}
                     }
                     FunctionUniformity::new()
                 }

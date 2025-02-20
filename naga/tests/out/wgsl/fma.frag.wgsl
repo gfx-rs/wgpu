@@ -28,19 +28,20 @@ fn Fma(d: ptr<function, Mat4x3_>, m: Mat4x3_, s: f32) {
     let _e24 = m_1;
     let _e26 = s_1;
     (*d).mz = (_e22.mz + (_e24.mz * _e26));
+    return;
 }
 
 fn main_1() {
-    let _e1 = o_color;
     o_color.x = 1f;
     o_color.y = 1f;
     o_color.z = 1f;
     o_color.w = 1f;
+    return;
 }
 
 @fragment 
 fn main() -> FragmentOutput {
     main_1();
-    let _e3 = o_color;
-    return FragmentOutput(_e3);
+    let _e1 = o_color;
+    return FragmentOutput(_e1);
 }

@@ -1,3 +1,9 @@
+; SPIR-V
+; Version: 1.0
+; Generator: Google Shaderc over Glslang; 11
+; Bound: 34
+; Schema: 0
+
 ;; Make sure that we don't have a validation error due to lacking capabilities
 ;; for bulltins such as ClipDistance when those builtin are not actually used.
 ;;
@@ -22,11 +28,6 @@
 ;; } 
 ;; ```
 ;;
-; SPIR-V
-; Version: 1.0
-; Generator: Google Shaderc over Glslang; 11
-; Bound: 34
-; Schema: 0
                OpCapability Shader
           %1 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450

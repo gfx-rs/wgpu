@@ -1,9 +1,7 @@
 use std::num::NonZeroU32;
 
 use wgpu::*;
-use wgpu_test::{
-    fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
-};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 #[gpu_test]
 static VALIDATION: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -12,12 +10,9 @@ static VALIDATION: GpuTestConfiguration = GpuTestConfiguration::new()
             .features(Features::TEXTURE_BINDING_ARRAY)
             .limits(Limits {
                 max_dynamic_storage_buffers_per_pipeline_layout: 1,
+                max_binding_array_elements_per_shader_stage: 4,
                 ..Limits::downlevel_defaults()
-            })
-            .expect_fail(
-                // https://github.com/gfx-rs/wgpu/issues/6950
-                FailureCase::backend(Backends::VULKAN).validation_error("has not been destroyed"),
-            ),
+            }),
     )
     .run_async(validation);
 

@@ -16,6 +16,7 @@ void breakIfEmpty() {
         }
         loop_init = false;
     }
+    return;
 }
 
 void breakIfEmptyBody(bool a) {
@@ -34,6 +35,7 @@ void breakIfEmptyBody(bool a) {
         }
         loop_init_1 = false;
     }
+    return;
 }
 
 void breakIf(bool a_1) {
@@ -52,6 +54,7 @@ void breakIf(bool a_1) {
         bool _e2 = d;
         e = (a_1 != _e2);
     }
+    return;
 }
 
 void breakIfSeparateVariable() {
@@ -68,8 +71,10 @@ void breakIfSeparateVariable() {
         uint _e3 = counter;
         counter = (_e3 + 1u);
     }
+    return;
 }
 
 void main() {
+    return;
 }
 

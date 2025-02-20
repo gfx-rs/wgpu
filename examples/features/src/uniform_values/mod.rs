@@ -217,7 +217,7 @@ impl WgpuContext {
 }
 
 async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
-    let mut wgpu_context = Some(WgpuContext::new(window).await);
+    let mut wgpu_context = Some(WgpuContext::new(window.clone()).await);
     // (6)
     let mut state = Some(AppState::default());
     let main_window_id = wgpu_context.as_ref().unwrap().window.id();
@@ -330,6 +330,7 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                                 render_pass.draw(0..3, 0..1);
                             }
                             wgpu_context_ref.queue.submit(Some(encoder.finish()));
+                            window.pre_present_notify();
                             frame.present();
                         }
                         _ => {}

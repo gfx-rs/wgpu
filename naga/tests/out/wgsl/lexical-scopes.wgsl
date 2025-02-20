@@ -1,18 +1,23 @@
 fn blockLexicalScope(a: bool) {
     {
         {
+            return;
         }
     }
 }
 
 fn ifLexicalScope(a_1: bool) {
     if a_1 {
+        return;
+    } else {
+        return;
     }
 }
 
 fn loopLexicalScope(a_2: bool) {
     loop {
     }
+    return;
 }
 
 fn forLexicalScope(a_3: f32) {
@@ -31,6 +36,7 @@ fn forLexicalScope(a_3: f32) {
             a_4 = (_e8 + 1i);
         }
     }
+    return;
 }
 
 fn whileLexicalScope(a_5: i32) {
@@ -42,6 +48,7 @@ fn whileLexicalScope(a_5: i32) {
         {
         }
     }
+    return;
 }
 
 fn switchLexicalScope(a_6: i32) {
@@ -54,5 +61,6 @@ fn switchLexicalScope(a_6: i32) {
         }
     }
     let test = (a_6 == 2i);
+    return;
 }
 

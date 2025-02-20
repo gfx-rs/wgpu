@@ -44,6 +44,7 @@ fn test_atomic_compare_exchange_i32_() {
             i = (_e27 + 1u);
         }
     }
+    return;
 }
 
 @compute @workgroup_size(1, 1, 1) 
@@ -85,4 +86,5 @@ fn test_atomic_compare_exchange_u32_() {
             i_1 = (_e27 + 1u);
         }
     }
+    return;
 }

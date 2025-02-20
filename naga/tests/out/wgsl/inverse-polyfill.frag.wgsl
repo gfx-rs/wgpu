@@ -25,6 +25,7 @@ fn main_1() {
     m3_inverse = _naga_inverse_3x3_f32(_e66);
     let _e69 = m2_;
     m2_inverse = _naga_inverse_2x2_f32(_e69);
+    return;
 }
 
 @fragment 

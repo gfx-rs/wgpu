@@ -371,11 +371,11 @@
             )),
             local_variables: [],
             expressions: [
-                GlobalVariable(0),
                 GlobalVariable(1),
+                GlobalVariable(0),
+                Constant(1),
                 Constant(2),
                 Constant(3),
-                Constant(1),
                 Constant(0),
                 FunctionArgument(0),
                 FunctionArgument(1),
@@ -406,8 +406,8 @@
                 Compose(
                     ty: 4,
                     components: [
-                        2,
                         3,
+                        4,
                     ],
                 ),
                 Binary(
@@ -421,7 +421,7 @@
                 ),
                 Binary(
                     op: Divide,
-                    left: 4,
+                    left: 2,
                     right: 15,
                 ),
                 Binary(
@@ -431,7 +431,7 @@
                 ),
                 Splat(
                     size: Bi,
-                    value: 2,
+                    value: 3,
                 ),
                 Binary(
                     op: Add,
@@ -474,7 +474,7 @@
                 ),
                 Binary(
                     op: Divide,
-                    left: 4,
+                    left: 2,
                     right: 26,
                 ),
                 Binary(
@@ -507,8 +507,8 @@
                     convert: Some(4),
                 ),
                 ImageSample(
-                    image: 0,
-                    sampler: 1,
+                    image: 1,
+                    sampler: 0,
                     gather: None,
                     coordinate: 31,
                     array_index: Some(33),
@@ -527,7 +527,7 @@
                     condition: 9,
                     accept: [
                         Return(
-                            value: Some(4),
+                            value: Some(2),
                         ),
                     ],
                     reject: [],
@@ -559,25 +559,25 @@
                 ),
             ],
             expressions: [
-                GlobalVariable(2),
-                GlobalVariable(5),
-                GlobalVariable(4),
                 GlobalVariable(3),
+                GlobalVariable(5),
                 GlobalVariable(6),
-                Constant(16),
-                Constant(14),
-                Constant(12),
-                Constant(17),
-                Constant(15),
-                Constant(18),
-                Constant(8),
-                Constant(6),
-                Constant(1),
+                GlobalVariable(4),
+                GlobalVariable(2),
                 Constant(10),
+                Constant(17),
+                Constant(8),
+                Constant(1),
                 Constant(13),
-                Constant(9),
                 Constant(11),
+                Constant(18),
+                Constant(6),
+                Constant(15),
+                Constant(12),
+                Constant(9),
                 Constant(0),
+                Constant(14),
+                Constant(16),
                 Constant(5),
                 LocalVariable(0),
                 Constant(7),
@@ -586,12 +586,12 @@
                     pointer: 22,
                 ),
                 AccessIndex(
-                    base: 0,
+                    base: 4,
                     index: 0,
                 ),
                 Access(
                     base: 24,
-                    index: 16,
+                    index: 15,
                 ),
                 Load(
                     pointer: 25,
@@ -615,7 +615,7 @@
                     pointer: 22,
                 ),
                 AccessIndex(
-                    base: 3,
+                    base: 0,
                     index: 0,
                 ),
                 Load(
@@ -633,7 +633,7 @@
                     pointer: 34,
                 ),
                 Load(
-                    pointer: 2,
+                    pointer: 3,
                 ),
                 Binary(
                     op: Multiply,
@@ -652,7 +652,7 @@
                     arg3: None,
                 ),
                 AccessIndex(
-                    base: 3,
+                    base: 0,
                     index: 0,
                 ),
                 Load(
@@ -668,13 +668,13 @@
                 ),
                 Access(
                     base: 44,
-                    index: 14,
+                    index: 5,
                 ),
                 Load(
                     pointer: 45,
                 ),
                 AccessIndex(
-                    base: 3,
+                    base: 0,
                     index: 0,
                 ),
                 Load(
@@ -690,13 +690,13 @@
                 ),
                 Access(
                     base: 50,
-                    index: 17,
+                    index: 10,
                 ),
                 Load(
                     pointer: 51,
                 ),
                 AccessIndex(
-                    base: 3,
+                    base: 0,
                     index: 0,
                 ),
                 Load(
@@ -712,7 +712,7 @@
                 ),
                 Access(
                     base: 56,
-                    index: 7,
+                    index: 14,
                 ),
                 Load(
                     pointer: 57,
@@ -726,22 +726,22 @@
                     ],
                 ),
                 Access(
-                    base: 2,
-                    index: 15,
+                    base: 3,
+                    index: 9,
                 ),
                 Load(
                     pointer: 60,
                 ),
                 Access(
-                    base: 2,
-                    index: 6,
+                    base: 3,
+                    index: 17,
                 ),
                 Load(
                     pointer: 62,
                 ),
                 Access(
-                    base: 2,
-                    index: 9,
+                    base: 3,
+                    index: 13,
                 ),
                 Load(
                     pointer: 64,
@@ -775,7 +775,7 @@
                 ),
                 Math(
                     fun: Max,
-                    arg: 18,
+                    arg: 16,
                     arg1: Some(69),
                     arg2: None,
                     arg3: None,
@@ -786,7 +786,7 @@
                     right: 70,
                 ),
                 AccessIndex(
-                    base: 3,
+                    base: 0,
                     index: 0,
                 ),
                 Load(
@@ -802,13 +802,13 @@
                 ),
                 Access(
                     base: 75,
-                    index: 5,
+                    index: 18,
                 ),
                 Load(
                     pointer: 76,
                 ),
                 AccessIndex(
-                    base: 3,
+                    base: 0,
                     index: 0,
                 ),
                 Load(
@@ -824,13 +824,13 @@
                 ),
                 Access(
                     base: 81,
-                    index: 8,
+                    index: 6,
                 ),
                 Load(
                     pointer: 82,
                 ),
                 AccessIndex(
-                    base: 3,
+                    base: 0,
                     index: 0,
                 ),
                 Load(
@@ -846,7 +846,7 @@
                 ),
                 Access(
                     base: 87,
-                    index: 10,
+                    index: 11,
                 ),
                 Load(
                     pointer: 88,
@@ -875,7 +875,7 @@
                 Binary(
                     op: Add,
                     left: 93,
-                    right: 11,
+                    right: 7,
                 ),
                 Load(
                     pointer: 20,
@@ -884,7 +884,7 @@
                     ty: 3,
                     components: [
                         95,
-                        13,
+                        8,
                     ],
                 ),
             ],
@@ -942,7 +942,7 @@
                     end: 97,
                 )),
                 Store(
-                    pointer: 4,
+                    pointer: 2,
                     value: 96,
                 ),
                 Return(

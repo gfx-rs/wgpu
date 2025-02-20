@@ -12,7 +12,7 @@ use crate::{
     GpuTestConfiguration,
 };
 
-/// Parameters and resources hadned to the test function.
+/// Parameters and resources handed to the test function.
 pub struct TestingContext {
     pub instance: Instance,
     pub adapter: Adapter,

@@ -93,7 +93,7 @@ pub fn did_fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool
     (failed, result)
 }
 
-/// Adds the necissary main function for our gpu test harness.
+/// Adds the necessary main function for our gpu test harness.
 #[macro_export]
 macro_rules! gpu_test_main {
     () => {

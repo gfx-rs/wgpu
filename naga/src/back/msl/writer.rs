@@ -2,8 +2,7 @@ use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, Transl
 use crate::{
     arena::{Handle, HandleSet},
     back::{self, Baked},
-    proc::index,
-    proc::{self, NameKey, TypeResolution},
+    proc::{self, index, ExpressionKindTracker, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
 };
 #[cfg(test)]
@@ -30,12 +29,17 @@ const RT_NAMESPACE: &str = "metal::raytracing";
 const RAY_QUERY_TYPE: &str = "_RayQuery";
 const RAY_QUERY_FIELD_INTERSECTOR: &str = "intersector";
 const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
+const RAY_QUERY_MODERN_SUPPORT: bool = false; //TODO
 const RAY_QUERY_FIELD_READY: &str = "ready";
 const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
 pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+pub(crate) const ABS_FUNCTION: &str = "naga_abs";
+pub(crate) const DIV_FUNCTION: &str = "naga_div";
+pub(crate) const MOD_FUNCTION: &str = "naga_mod";
+pub(crate) const NEG_FUNCTION: &str = "naga_neg";
 /// For some reason, Metal does not let you have `metal::texture<..>*` as a buffer argument.
 /// However, if you put that texture inside a struct, everything is totally fine. This
 /// baffles me to no end.
@@ -369,6 +373,23 @@ impl TypedGlobalVariable<'_> {
     }
 }
 
+#[derive(Eq, PartialEq, Hash)]
+enum WrappedFunction {
+    UnaryOp {
+        op: crate::UnaryOperator,
+        ty: (Option<crate::VectorSize>, crate::Scalar),
+    },
+    BinaryOp {
+        op: crate::BinaryOperator,
+        left_ty: (Option<crate::VectorSize>, crate::Scalar),
+        right_ty: (Option<crate::VectorSize>, crate::Scalar),
+    },
+    Math {
+        fun: crate::MathFunction,
+        arg_ty: (Option<crate::VectorSize>, crate::Scalar),
+    },
+}
+
 pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
@@ -376,6 +397,7 @@ pub struct Writer<W> {
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
     need_bake_expressions: back::NeedBakeExpressions,
     namer: proc::Namer,
+    wrapped_functions: FastHashSet<WrappedFunction>,
     #[cfg(test)]
     put_expression_stack_pointers: FastHashSet<*const ()>,
     #[cfg(test)]
@@ -383,11 +405,6 @@ pub struct Writer<W> {
     /// Set of (struct type, struct field index) denoting which fields require
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
-
-    /// Name of the force-bounded-loop macro.
-    ///
-    /// See `emit_force_bounded_loop_macro` for details.
-    force_bounded_loop_macro_name: String,
 }
 
 impl crate::Scalar {
@@ -601,7 +618,7 @@ struct ExpressionContext<'a> {
     /// accesses. These may need to be cached in temporary variables. See
     /// `index::find_checked_indexes` for details.
     guarded_indices: HandleSet<crate::Expression>,
-    /// See [`Writer::emit_force_bounded_loop_macro`] for details.
+    /// See [`Writer::gen_force_bounded_loop_statements`] for details.
     force_loop_bounding: bool,
 }
 
@@ -680,12 +697,12 @@ impl<W: Write> Writer<W> {
             named_expressions: Default::default(),
             need_bake_expressions: Default::default(),
             namer: proc::Namer::default(),
+            wrapped_functions: FastHashSet::default(),
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
             #[cfg(test)]
             put_block_stack_pointers: Default::default(),
             struct_member_pads: FastHashSet::default(),
-            force_bounded_loop_macro_name: String::default(),
         }
     }
 
@@ -696,17 +713,11 @@ impl<W: Write> Writer<W> {
         self.out
     }
 
-    /// Define a macro to invoke at the bottom of each loop body, to
-    /// defeat MSL infinite loop reasoning.
-    ///
-    /// If we haven't done so already, emit the definition of a preprocessor
-    /// macro to be invoked at the end of each loop body in the generated MSL,
-    /// to ensure that the MSL compiler's optimizations do not remove bounds
-    /// checks.
-    ///
-    /// Only the first call to this function for a given module actually causes
-    /// the macro definition to be written. Subsequent loops can simply use the
-    /// prior macro definition, since macros aren't block-scoped.
+    /// Generates statements to be inserted immediately before and at the very
+    /// start of the body of each loop, to defeat MSL infinite loop reasoning.
+    /// The 0th item of the returned tuple should be inserted immediately prior
+    /// to the loop and the 1st item should be inserted at the very start of
+    /// the loop body.
     ///
     /// # What is this trying to solve?
     ///
@@ -774,7 +785,8 @@ impl<W: Write> Writer<W> {
     /// but which in fact generates no instructions. Unfortunately, inline
     /// assembly is not handled correctly by some Metal device drivers.
     ///
-    /// Instead, we add the following code to the bottom of every loop:
+    /// A previously used approach was to add the following code to the bottom
+    /// of every loop:
     ///
     /// ```ignore
     /// if (volatile bool unpredictable = false; unpredictable)
@@ -785,37 +797,47 @@ impl<W: Write> Writer<W> {
     /// the `volatile` qualifier prevents the compiler from assuming this. Thus,
     /// it must assume that the `break` might be reached, and hence that the
     /// loop is not unbounded. This prevents the range analysis impact described
-    /// above.
+    /// above. Unfortunately this prevented the compiler from making important,
+    /// and safe, optimizations such as loop unrolling and was observed to
+    /// significantly hurt performance.
     ///
-    /// Unfortunately, what makes this a kludge, not a hack, is that this
-    /// solution leaves the GPU executing a pointless conditional branch, at
-    /// runtime, in every iteration of the loop. There's no part of the system
-    /// that has a global enough view to be sure that `unpredictable` is true,
-    /// and remove it from the code. Adding the branch also affects
-    /// optimization: for example, it's impossible to unroll this loop. This
-    /// transformation has been observed to significantly hurt performance.
+    /// Our current approach declares a counter before every loop and
+    /// increments it every iteration, breaking after 2^64 iterations:
     ///
-    /// To make our output a bit more legible, we pull the condition out into a
-    /// preprocessor macro defined at the top of the module.
+    /// ```ignore
+    /// uint2 loop_bound = uint2(0);
+    /// while (true) {
+    ///   if (metal::all(loop_bound == uint2(4294967295))) { break; }
+    ///   loop_bound += uint2(loop_bound.y == 4294967295, 1);
+    /// }
+    /// ```
+    ///
+    /// This convinces the compiler that the loop is finite and therefore may
+    /// execute, whilst at the same time allowing optimizations such as loop
+    /// unrolling. Furthermore the 64-bit counter is large enough it seems
+    /// implausible that it would affect the execution of any shader.
     ///
     /// This approach is also used by Chromium WebGPU's Dawn shader compiler:
-    /// <https://dawn.googlesource.com/dawn/+/a37557db581c2b60fb1cd2c01abdb232927dd961/src/tint/lang/msl/writer/printer/printer.cc#222>
-    fn emit_force_bounded_loop_macro(&mut self) -> BackendResult {
-        if !self.force_bounded_loop_macro_name.is_empty() {
-            return Ok(());
+    /// <https://dawn.googlesource.com/dawn/+/d9e2d1f718678ebee0728b999830576c410cce0a/src/tint/lang/core/ir/transform/prevent_infinite_loops.cc>
+    fn gen_force_bounded_loop_statements(
+        &mut self,
+        level: back::Level,
+        context: &StatementContext,
+    ) -> Option<(String, String)> {
+        if !context.expression.force_loop_bounding {
+            return None;
         }
 
-        self.force_bounded_loop_macro_name = self.namer.call("LOOP_IS_BOUNDED");
-        let loop_bounded_volatile_name = self.namer.call("unpredictable_break_from_loop");
-        writeln!(
-            self.out,
-            "#define {} {{ volatile bool {} = false; if ({}) break; }}",
-            self.force_bounded_loop_macro_name,
-            loop_bounded_volatile_name,
-            loop_bounded_volatile_name,
-        )?;
+        let loop_bound_name = self.namer.call("loop_bound");
+        let decl = format!("{level}uint2 {loop_bound_name} = uint2(0u);");
+        let level = level.next();
+        let max = u32::MAX;
+        let break_and_inc = format!(
+            "{level}if ({NAMESPACE}::all({loop_bound_name} == uint2({max}u))) {{ break; }}
+{level}{loop_bound_name} += uint2({loop_bound_name}.y == {max}u, 1u);"
+        );
 
-        Ok(())
+        Some((decl, break_and_inc))
     }
 
     fn put_call_parameters(
@@ -1749,7 +1771,12 @@ impl<W: Write> Writer<W> {
             },
             crate::Expression::Unary { op, expr } => {
                 let op_str = match op {
-                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::Negate => {
+                        match context.resolve_type(expr).scalar_kind() {
+                            Some(crate::ScalarKind::Sint) => NEG_FUNCTION,
+                            _ => "-",
+                        }
+                    }
                     crate::UnaryOperator::LogicalNot => "!",
                     crate::UnaryOperator::BitwiseNot => "~",
                 };
@@ -1763,20 +1790,27 @@ impl<W: Write> Writer<W> {
                     .scalar_kind()
                     .ok_or(Error::UnsupportedBinaryOp(op))?;
 
-                // TODO: handle undefined behavior of BinaryOperator::Modulo
-                //
-                // sint:
-                // if right == 0 return 0
-                // if left == min(type_of(left)) && right == -1 return 0
-                // if sign(left) == -1 || sign(right) == -1 return result as defined by WGSL
-                //
-                // uint:
-                // if right == 0 return 0
-                //
-                // float:
-                // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
-
-                if op == crate::BinaryOperator::Modulo && kind == crate::ScalarKind::Float {
+                if op == crate::BinaryOperator::Divide
+                    && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
+                {
+                    write!(self.out, "{DIV_FUNCTION}(")?;
+                    self.put_expression(left, context, true)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(right, context, true)?;
+                    write!(self.out, ")")?;
+                } else if op == crate::BinaryOperator::Modulo
+                    && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
+                {
+                    write!(self.out, "{MOD_FUNCTION}(")?;
+                    self.put_expression(left, context, true)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(right, context, true)?;
+                    write!(self.out, ")")?;
+                } else if op == crate::BinaryOperator::Modulo && kind == crate::ScalarKind::Float {
+                    // TODO: handle undefined behavior of BinaryOperator::Modulo
+                    //
+                    // float:
+                    // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
                     write!(self.out, "{NAMESPACE}::fmod(")?;
                     self.put_expression(left, context, true)?;
                     write!(self.out, ", ")?;
@@ -2038,6 +2072,11 @@ impl<W: Write> Writer<W> {
                 }
 
                 match fun {
+                    Mf::Abs if arg_type.scalar_kind() == Some(crate::ScalarKind::Sint) => {
+                        write!(self.out, "{ABS_FUNCTION}(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, ")")?;
+                    }
                     Mf::Distance if scalar_argument => {
                         write!(self.out, "{NAMESPACE}::abs(")?;
                         self.put_expression(arg, context, false)?;
@@ -3201,10 +3240,23 @@ impl<W: Write> Writer<W> {
                     ref continuing,
                     break_if,
                 } => {
-                    if !continuing.is_empty() || break_if.is_some() {
-                        let gate_name = self.namer.call("loop_init");
+                    let force_loop_bound_statements =
+                        self.gen_force_bounded_loop_statements(level, context);
+                    let gate_name = (!continuing.is_empty() || break_if.is_some())
+                        .then(|| self.namer.call("loop_init"));
+
+                    if let Some((ref decl, _)) = force_loop_bound_statements {
+                        writeln!(self.out, "{decl}")?;
+                    }
+                    if let Some(ref gate_name) = gate_name {
                         writeln!(self.out, "{level}bool {gate_name} = true;")?;
-                        writeln!(self.out, "{level}while(true) {{",)?;
+                    }
+
+                    writeln!(self.out, "{level}while(true) {{",)?;
+                    if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
+                        writeln!(self.out, "{break_and_inc}")?;
+                    }
+                    if let Some(ref gate_name) = gate_name {
                         let lif = level.next();
                         let lcontinuing = lif.next();
                         writeln!(self.out, "{lif}if (!{gate_name}) {{")?;
@@ -3218,19 +3270,9 @@ impl<W: Write> Writer<W> {
                         }
                         writeln!(self.out, "{lif}}}")?;
                         writeln!(self.out, "{lif}{gate_name} = false;")?;
-                    } else {
-                        writeln!(self.out, "{level}while(true) {{",)?;
                     }
                     self.put_block(level.next(), body, context)?;
-                    if context.expression.force_loop_bounding {
-                        self.emit_force_bounded_loop_macro()?;
-                        writeln!(
-                            self.out,
-                            "{}{}",
-                            level.next(),
-                            self.force_bounded_loop_macro_name
-                        )?;
-                    }
+
                     writeln!(self.out, "{level}}}")?;
                 }
                 crate::Statement::Break => {
@@ -3504,16 +3546,41 @@ impl<W: Write> Writer<W> {
                             self.named_expressions.insert(result, name);
                             self.put_expression(query, &context.expression, true)?;
                             writeln!(self.out, ".{RAY_QUERY_FIELD_READY};")?;
-                            //TODO: actually proceed?
-
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                writeln!(self.out, ".?.next();")?;
+                            }
+                        }
+                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                write!(self.out, ".?.commit_bounding_box_intersection(")?;
+                                self.put_expression(hit_t, &context.expression, true)?;
+                                writeln!(self.out, ");")?;
+                            } else {
+                                log::warn!("Ray Query GenerateIntersection is not yet supported");
+                            }
+                        }
+                        crate::RayQueryFunction::ConfirmIntersection => {
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                writeln!(self.out, ".?.commit_triangle_intersection();")?;
+                            } else {
+                                log::warn!("Ray Query ConfirmIntersection is not yet supported");
+                            }
+                        }
+                        crate::RayQueryFunction::Terminate => {
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                writeln!(self.out, ".?.abort();")?;
+                            }
                             write!(self.out, "{level}")?;
                             self.put_expression(query, &context.expression, true)?;
                             writeln!(self.out, ".{RAY_QUERY_FIELD_READY} = false;")?;
-                        }
-                        crate::RayQueryFunction::Terminate => {
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION}.abort();")?;
                         }
                     }
                 }
@@ -3724,7 +3791,7 @@ impl<W: Write> Writer<W> {
             &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
         );
-        self.force_bounded_loop_macro_name.clear();
+        self.wrapped_functions.clear();
         self.struct_member_pads.clear();
 
         writeln!(
@@ -4991,6 +5058,269 @@ template <typename A>
         }
     }
 
+    pub(super) fn write_wrapped_functions(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+    ) -> BackendResult {
+        for (expr_handle, expr) in func_ctx.expressions.iter() {
+            match *expr {
+                crate::Expression::Unary { op, expr: operand } => {
+                    let operand_ty = func_ctx.resolve_type(operand, &module.types);
+                    match op {
+                        // Negating the TYPE_MIN of a two's complement signed integer
+                        // type causes overflow, which is undefined behaviour in MSL. To
+                        // avoid this we bitcast the value to unsigned and negate it,
+                        // then bitcast back to signed.
+                        // This adheres to the WGSL spec in that the negative of the
+                        // type's minimum value should equal to the minimum value.
+                        crate::UnaryOperator::Negate
+                            if operand_ty.scalar_kind() == Some(crate::ScalarKind::Sint) =>
+                        {
+                            let Some((vector_size, scalar)) = operand_ty.vector_size_and_scalar()
+                            else {
+                                continue;
+                            };
+                            let wrapped = WrappedFunction::UnaryOp {
+                                op,
+                                ty: (vector_size, scalar),
+                            };
+                            if !self.wrapped_functions.insert(wrapped) {
+                                continue;
+                            }
+
+                            let unsigned_scalar = crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                ..scalar
+                            };
+                            let mut type_name = String::new();
+                            let mut unsigned_type_name = String::new();
+                            match vector_size {
+                                None => {
+                                    put_numeric_type(&mut type_name, scalar, &[])?;
+                                    put_numeric_type(&mut unsigned_type_name, unsigned_scalar, &[])?
+                                }
+                                Some(size) => {
+                                    put_numeric_type(&mut type_name, scalar, &[size])?;
+                                    put_numeric_type(
+                                        &mut unsigned_type_name,
+                                        unsigned_scalar,
+                                        &[size],
+                                    )?;
+                                }
+                            };
+
+                            writeln!(self.out, "{type_name} {NEG_FUNCTION}({type_name} val) {{")?;
+                            let level = back::Level(1);
+                            writeln!(self.out, "{level}return as_type<{type_name}>(-as_type<{unsigned_type_name}>(val));")?;
+                            writeln!(self.out, "}}")?;
+                            writeln!(self.out)?;
+                        }
+                        _ => {}
+                    }
+                }
+                crate::Expression::Binary { op, left, right } => {
+                    let expr_ty = func_ctx.resolve_type(expr_handle, &module.types);
+                    let left_ty = func_ctx.resolve_type(left, &module.types);
+                    let right_ty = func_ctx.resolve_type(right, &module.types);
+                    match (op, expr_ty.scalar_kind()) {
+                        // Signed integer division of TYPE_MIN / -1, or signed or
+                        // unsigned division by zero, gives an unspecified value in MSL.
+                        // We override the divisor to 1 in these cases.
+                        // This adheres to the WGSL spec in that:
+                        // * TYPE_MIN / -1 == TYPE_MIN
+                        // * x / 0 == x
+                        (
+                            crate::BinaryOperator::Divide,
+                            Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
+                        ) => {
+                            let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
+                                continue;
+                            };
+                            let Some(right_wrapped_ty) = right_ty.vector_size_and_scalar() else {
+                                continue;
+                            };
+                            let wrapped = WrappedFunction::BinaryOp {
+                                op,
+                                left_ty: left_wrapped_ty,
+                                right_ty: right_wrapped_ty,
+                            };
+                            if !self.wrapped_functions.insert(wrapped) {
+                                continue;
+                            }
+
+                            let Some((vector_size, scalar)) = expr_ty.vector_size_and_scalar()
+                            else {
+                                continue;
+                            };
+                            let mut type_name = String::new();
+                            match vector_size {
+                                None => put_numeric_type(&mut type_name, scalar, &[])?,
+                                Some(size) => put_numeric_type(&mut type_name, scalar, &[size])?,
+                            };
+                            writeln!(
+                                self.out,
+                                "{type_name} {DIV_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
+                            )?;
+                            let level = back::Level(1);
+                            match scalar.kind {
+                                crate::ScalarKind::Sint => {
+                                    let min = -1i64 << (scalar.width as u32 * 8 - 1);
+                                    writeln!(self.out, "{level}return lhs / metal::select(rhs, 1, (lhs == {min} & rhs == -1) | (rhs == 0));")?
+                                }
+                                crate::ScalarKind::Uint => writeln!(
+                                    self.out,
+                                    "{level}return lhs / metal::select(rhs, 1u, rhs == 0u);"
+                                )?,
+                                _ => unreachable!(),
+                            }
+                            writeln!(self.out, "}}")?;
+                            writeln!(self.out)?;
+                        }
+                        // Integer modulo where one or both operands are negative, or the
+                        // divisor is zero, is undefined behaviour in MSL. To avoid this
+                        // we use the following equation:
+                        //
+                        // dividend - (dividend / divisor) * divisor
+                        //
+                        // overriding the divisor to 1 if either it is 0, or it is -1
+                        // and the dividend is TYPE_MIN.
+                        //
+                        // This adheres to the WGSL spec in that:
+                        // * TYPE_MIN % -1 == 0
+                        // * x % 0 == 0
+                        (
+                            crate::BinaryOperator::Modulo,
+                            Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
+                        ) => {
+                            let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
+                                continue;
+                            };
+                            let Some((right_vector_size, right_scalar)) =
+                                right_ty.vector_size_and_scalar()
+                            else {
+                                continue;
+                            };
+                            let wrapped = WrappedFunction::BinaryOp {
+                                op,
+                                left_ty: left_wrapped_ty,
+                                right_ty: (right_vector_size, right_scalar),
+                            };
+                            if !self.wrapped_functions.insert(wrapped) {
+                                continue;
+                            }
+
+                            let Some((vector_size, scalar)) = expr_ty.vector_size_and_scalar()
+                            else {
+                                continue;
+                            };
+                            let mut type_name = String::new();
+                            match vector_size {
+                                None => put_numeric_type(&mut type_name, scalar, &[])?,
+                                Some(size) => put_numeric_type(&mut type_name, scalar, &[size])?,
+                            };
+                            let mut rhs_type_name = String::new();
+                            match right_vector_size {
+                                None => put_numeric_type(&mut rhs_type_name, right_scalar, &[])?,
+                                Some(size) => {
+                                    put_numeric_type(&mut rhs_type_name, right_scalar, &[size])?
+                                }
+                            };
+
+                            writeln!(
+                                self.out,
+                                "{type_name} {MOD_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
+                            )?;
+                            let level = back::Level(1);
+                            match scalar.kind {
+                                crate::ScalarKind::Sint => {
+                                    let min = -1i64 << (scalar.width as u32 * 8 - 1);
+                                    writeln!(self.out, "{level}{rhs_type_name} divisor = metal::select(rhs, 1, (lhs == {min} & rhs == -1) | (rhs == 0));")?;
+                                    writeln!(
+                                        self.out,
+                                        "{level}return lhs - (lhs / divisor) * divisor;"
+                                    )?
+                                }
+                                crate::ScalarKind::Uint => writeln!(
+                                    self.out,
+                                    "{level}return lhs % metal::select(rhs, 1u, rhs == 0u);"
+                                )?,
+                                _ => unreachable!(),
+                            }
+                            writeln!(self.out, "}}")?;
+                            writeln!(self.out)?;
+                        }
+                        _ => {}
+                    }
+                }
+                crate::Expression::Math {
+                    fun,
+                    arg,
+                    arg1: _,
+                    arg2: _,
+                    arg3: _,
+                } => {
+                    let arg_ty = func_ctx.resolve_type(arg, &module.types);
+                    match fun {
+                        // Taking the absolute value of the TYPE_MIN of a two's
+                        // complement signed integer type causes overflow, which is
+                        // undefined behaviour in MSL. To avoid this, when the value is
+                        // negative we bitcast the value to unsigned and negate it, then
+                        // bitcast back to signed.
+                        // This adheres to the WGSL spec in that the absolute of the
+                        // type's minimum value should equal to the minimum value.
+                        crate::MathFunction::Abs
+                            if arg_ty.scalar_kind() == Some(crate::ScalarKind::Sint) =>
+                        {
+                            let Some((vector_size, scalar)) = arg_ty.vector_size_and_scalar()
+                            else {
+                                continue;
+                            };
+                            let wrapped = WrappedFunction::Math {
+                                fun,
+                                arg_ty: (vector_size, scalar),
+                            };
+                            if !self.wrapped_functions.insert(wrapped) {
+                                continue;
+                            }
+
+                            let unsigned_scalar = crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                ..scalar
+                            };
+                            let mut type_name = String::new();
+                            let mut unsigned_type_name = String::new();
+                            match vector_size {
+                                None => {
+                                    put_numeric_type(&mut type_name, scalar, &[])?;
+                                    put_numeric_type(&mut unsigned_type_name, unsigned_scalar, &[])?
+                                }
+                                Some(size) => {
+                                    put_numeric_type(&mut type_name, scalar, &[size])?;
+                                    put_numeric_type(
+                                        &mut unsigned_type_name,
+                                        unsigned_scalar,
+                                        &[size],
+                                    )?;
+                                }
+                            };
+
+                            writeln!(self.out, "{type_name} {ABS_FUNCTION}({type_name} val) {{")?;
+                            let level = back::Level(1);
+                            writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(-as_type<{unsigned_type_name}>(val)), val, val >= 0);")?;
+                            writeln!(self.out, "}}")?;
+                            writeln!(self.out)?;
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
     // Returns the array of mapped entry point names.
     fn write_functions(
         &mut self,
@@ -5102,6 +5432,17 @@ template <typename A>
                 fun_handle
             );
 
+            let ctx = back::FunctionCtx {
+                ty: back::FunctionType::Function(fun_handle),
+                info: &mod_info[fun_handle],
+                expressions: &fun.expressions,
+                named_expressions: &fun.named_expressions,
+                expr_kind_tracker: ExpressionKindTracker::from_arena(&fun.expressions),
+            };
+
+            writeln!(self.out)?;
+            self.write_wrapped_functions(module, &ctx)?;
+
             let fun_info = &mod_info[fun_handle];
             pass_through_globals.clear();
             let mut needs_buffer_sizes = false;
@@ -5114,7 +5455,6 @@ template <typename A>
                 }
             }
 
-            writeln!(self.out)?;
             let fun_name = &self.names[&NameKey::Function(fun_handle)];
             match fun.result {
                 Some(ref result) => {
@@ -5252,6 +5592,16 @@ template <typename A>
                 ep_index
             );
 
+            let ctx = back::FunctionCtx {
+                ty: back::FunctionType::EntryPoint(ep_index as u16),
+                info: fun_info,
+                expressions: &fun.expressions,
+                named_expressions: &fun.named_expressions,
+                expr_kind_tracker: ExpressionKindTracker::from_arena(&fun.expressions),
+            };
+
+            self.write_wrapped_functions(module, &ctx)?;
+
             let (em_str, in_mode, out_mode, can_vertex_pull) = match ep.stage {
                 crate::ShaderStage::Vertex => (
                     "vertex",
@@ -5259,13 +5609,13 @@ template <typename A>
                     LocationMode::VertexOutput,
                     true,
                 ),
-                crate::ShaderStage::Fragment { .. } => (
+                crate::ShaderStage::Fragment => (
                     "fragment",
                     LocationMode::FragmentInput,
                     LocationMode::FragmentOutput,
                     false,
                 ),
-                crate::ShaderStage::Compute { .. } => (
+                crate::ShaderStage::Compute => (
                     "kernel",
                     LocationMode::Uniform,
                     LocationMode::Uniform,

@@ -275,12 +275,15 @@ impl super::Device {
 
         let needs_temp_options = stage.zero_initialize_workgroup_memory
             != layout.naga_options.zero_initialize_workgroup_memory
-            || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing;
+            || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing
+            || stage.module.runtime_checks.force_loop_bounding
+                != layout.naga_options.force_loop_bounding;
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
             temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
             temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
+            temp_options.force_loop_bounding = stage.module.runtime_checks.force_loop_bounding;
             &temp_options
         } else {
             &layout.naga_options
@@ -1351,6 +1354,7 @@ impl crate::Device for super::Device {
                 restrict_indexing: true,
                 sampler_heap_target,
                 sampler_buffer_binding_map,
+                force_loop_bounding: true,
             },
         })
     }
@@ -2138,7 +2142,31 @@ impl crate::Device for super::Device {
                     let index_count = triangle.indices.as_ref().map_or(0, |indices| indices.count);
 
                     let triangle_desc = Direct3D12::D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC {
-                        Transform3x4: 0,
+                        // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device5-getraytracingaccelerationstructureprebuildinfo
+                        // It may not inspect/dereference any GPU virtual addresses, other than
+                        // to check to see if a pointer is NULL or not, such as the optional
+                        // transform in D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC, without
+                        // dereferencing it.
+                        //
+                        // This suggests we could pass a non-zero invalid address here if fetching the
+                        // real address has significant overhead, but we pass the real one to be on the
+                        // safe side for now.
+                        Transform3x4: if desc
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            unsafe {
+                                triangle
+                                    .transform
+                                    .as_ref()
+                                    .unwrap()
+                                    .buffer
+                                    .resource
+                                    .GetGPUVirtualAddress()
+                            }
+                        } else {
+                            0
+                        },
                         IndexFormat: index_format,
                         VertexFormat: auxil::dxgi::conv::map_vertex_format(triangle.vertex_format),
                         IndexCount: index_count,
@@ -2312,7 +2340,7 @@ impl crate::Device for super::Device {
         const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
         let temp = Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC {
             Transform: instance.transform,
-            _bitfield1: (instance.custom_index & MAX_U24) | (u32::from(instance.mask) << 24),
+            _bitfield1: (instance.custom_data & MAX_U24) | (u32::from(instance.mask) << 24),
             _bitfield2: 0,
             AccelerationStructure: instance.blas_address,
         };

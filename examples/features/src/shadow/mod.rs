@@ -1,4 +1,4 @@
-use std::{f32::consts, iter, ops::Range, sync::Arc};
+use std::{f32::consts, iter, ops::Range};
 
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::{align_to, DeviceExt};
@@ -80,8 +80,8 @@ struct Entity {
     mx_world: glam::Mat4,
     rotation_speed: f32,
     color: wgpu::Color,
-    vertex_buf: Arc<wgpu::Buffer>,
-    index_buf: Arc<wgpu::Buffer>,
+    vertex_buf: wgpu::Buffer,
+    index_buf: wgpu::Buffer,
     index_format: wgpu::IndexFormat,
     index_count: usize,
     uniform_offset: wgpu::DynamicOffset,
@@ -221,21 +221,17 @@ impl crate::framework::Example for Example {
         // Create the vertex and index buffers
         let vertex_size = size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
-        let cube_vertex_buf = Arc::new(device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Cubes Vertex Buffer"),
-                contents: bytemuck::cast_slice(&cube_vertex_data),
-                usage: wgpu::BufferUsages::VERTEX,
-            },
-        ));
+        let cube_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Cubes Vertex Buffer"),
+            contents: bytemuck::cast_slice(&cube_vertex_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
 
-        let cube_index_buf = Arc::new(device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Cubes Index Buffer"),
-                contents: bytemuck::cast_slice(&cube_index_data),
-                usage: wgpu::BufferUsages::INDEX,
-            },
-        ));
+        let cube_index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Cubes Index Buffer"),
+            contents: bytemuck::cast_slice(&cube_index_data),
+            usage: wgpu::BufferUsages::INDEX,
+        });
 
         let (plane_vertex_data, plane_index_data) = create_plane(7);
         let plane_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -306,8 +302,8 @@ impl crate::framework::Example for Example {
                 mx_world: glam::Mat4::IDENTITY,
                 rotation_speed: 0.0,
                 color: wgpu::Color::WHITE,
-                vertex_buf: Arc::new(plane_vertex_buf),
-                index_buf: Arc::new(plane_index_buf),
+                vertex_buf: plane_vertex_buf,
+                index_buf: plane_index_buf,
                 index_format,
                 index_count: plane_index_data.len(),
                 uniform_offset: 0,
@@ -327,8 +323,8 @@ impl crate::framework::Example for Example {
                 mx_world,
                 rotation_speed: cube.rotation,
                 color: wgpu::Color::GREEN,
-                vertex_buf: Arc::clone(&cube_vertex_buf),
-                index_buf: Arc::clone(&cube_index_buf),
+                vertex_buf: cube_vertex_buf.clone(),
+                index_buf: cube_index_buf.clone(),
                 index_format,
                 index_count: cube_index_data.len(),
                 uniform_offset: ((i + 1) * uniform_alignment as usize) as _,

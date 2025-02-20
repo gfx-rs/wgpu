@@ -95,8 +95,11 @@ float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0
     uint i = 0u;
 
     float3 normal_1 = normalize(in_.world_normal);
+    uint2 loop_bound = uint2(0u, 0u);
     bool loop_init = true;
     while(true) {
+        if (all(loop_bound == uint2(4294967295u, 4294967295u))) { break; }
+        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
         if (!loop_init) {
             uint _e40 = i;
             i = (_e40 + 1u);
@@ -131,8 +134,11 @@ float4 fs_main_without_storage(FragmentInput_fs_main_without_storage fragmentinp
     uint i_1 = 0u;
 
     float3 normal_2 = normalize(in_1.world_normal);
+    uint2 loop_bound_1 = uint2(0u, 0u);
     bool loop_init_1 = true;
     while(true) {
+        if (all(loop_bound_1 == uint2(4294967295u, 4294967295u))) { break; }
+        loop_bound_1 += uint2(loop_bound_1.y == 4294967295u, 1u);
         if (!loop_init_1) {
             uint _e40 = i_1;
             i_1 = (_e40 + 1u);

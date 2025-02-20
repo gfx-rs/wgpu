@@ -75,6 +75,13 @@ impl Surface<'_> {
 
     /// Initializes [`Surface`] for presentation.
     ///
+    /// If the surface is already configured, this will wait for the GPU to come idle
+    /// before recreating the swapchain to prevent race conditions.
+    ///
+    /// # Validation Errors
+    /// - Submissions that happen _during_ the configure may cause the
+    ///   internal wait-for-idle to fail, raising a validation error.
+    ///
     /// # Panics
     ///
     /// - A old [`SurfaceTexture`] is still alive referencing an old surface.
@@ -272,7 +279,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - `raw_window_handle` & `raw_display_handle` must be valid objects to create a surface upon.
     /// - `raw_window_handle` & `raw_display_handle` must remain valid until after the returned
-    ///    [`Surface`] is  dropped.
+    ///   [`Surface`] is  dropped.
     RawHandle {
         /// Raw display handle, underlying display must outlive the surface created from this.
         raw_display_handle: raw_window_handle::RawDisplayHandle,

@@ -27,9 +27,7 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
             });
         }
 
-        ctx.async_poll(wgpu::Maintain::Poll)
-            .await
-            .panic_on_timeout();
+        ctx.async_poll(wgpu::PollType::Poll).await.unwrap();
     });
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
@@ -77,8 +75,25 @@ static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
 
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
-static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|_ctx| request_device_error_message());
+static REQUEST_DEVICE_ERROR_MESSAGE_NATIVE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters({
+        let default = TestParameters::default();
+
+        // On CI, we have the vulkan SDK installed and this test initializes the Vulkan backend when all
+        // normal tests do not, so we get these weird error messages. This only actually gets hooked up
+        // on Windows, because that's the only platform where the actual runtime gets hooked up and there
+        // are no drivers.
+        if std::env::var("WGPU_CI").is_ok() && cfg!(windows) {
+            default.expect_fail(
+                FailureCase::always()
+                    .validation_error("Registry lookup failed to get ICD manifest files.  Possibly missing Vulkan driver?")
+                    .validation_error("vkCreateInstance: Found no drivers!")
+            )
+        } else {
+            default
+        }
+    })
+    .run_async(|_ctx| request_device_error_message());
 
 /// Check that `RequestDeviceError`s produced have some diagnostic information.
 ///
@@ -119,7 +134,7 @@ async fn request_device_error_message() {
             let expected = "TypeError";
         } else {
             // This message appears whenever wgpu-core is used as the implementation.
-            let expected = "Unsupported features were requested: Features(";
+            let expected = "Unsupported features were requested: Features {";
         }
     }
     assert!(device_error.contains(expected), "{device_error}");
@@ -615,8 +630,9 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
         // Make sure the device queues are empty, which ensures that the closure
         // has been called.
         assert!(ctx
-            .async_poll(wgpu::Maintain::wait())
+            .async_poll(wgpu::PollType::wait())
             .await
+            .unwrap()
             .is_queue_empty());
 
         assert!(

@@ -685,6 +685,8 @@ impl super::Adapter {
             max_storage_buffers_per_shader_stage,
             max_storage_textures_per_shader_stage,
             max_uniform_buffers_per_shader_stage,
+            max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_sampler_elements_per_shader_stage: 0,
             max_uniform_buffer_binding_size: unsafe {
                 gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
             } as u32,
@@ -825,6 +827,7 @@ impl super::Adapter {
                     private_caps,
                     workarounds,
                     features,
+                    limits: limits.clone(),
                     options: backend_options,
                     shading_language_version,
                     next_shader_id: Default::default(),

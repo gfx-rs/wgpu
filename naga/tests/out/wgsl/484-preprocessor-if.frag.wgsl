@@ -1,4 +1,5 @@
 fn main_1() {
+    return;
 }
 
 @fragment 

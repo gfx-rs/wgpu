@@ -38,4 +38,5 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let _e9 = v_indices.data[global_id.x];
     let _e10 = collatz_iterations(_e9);
     v_indices.data[global_id.x] = _e10;
+    return;
 }

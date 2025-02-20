@@ -922,6 +922,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
         ),
         (
+            "abstract-types-return",
+            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
+        ),
+        (
             "int64",
             Targets::SPIRV | Targets::HLSL | Targets::WGSL | Targets::METAL,
         ),
@@ -967,6 +971,10 @@ fn convert_wgsl() {
             Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
         ),
         ("must-use", Targets::IR),
+        (
+            "storage-textures",
+            Targets::IR | Targets::ANALYSIS | Targets::SPIRV | Targets::METAL | Targets::HLSL,
+        ),
     ];
 
     for &(name, targets) in inputs.iter() {
@@ -1038,11 +1046,36 @@ fn unconsumed_vertex_outputs_hlsl_out() {
 
 #[cfg(feature = "spv-in")]
 fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
+    use std::process::Command;
+
     let _ = env_logger::try_init();
 
-    let input = Input::new(Some("spv"), name, "spv");
+    let input = Input::new(Some("spv"), name, "spvasm");
+
+    println!("Assembling '{}'", input.file_name.display());
+
+    let command = Command::new("spirv-as")
+        .arg(input.input_path())
+        .arg("-o")
+        .arg("-")
+        .output()
+        .expect(
+            "Failed to execute spirv-as. It can be installed \
+            by installing the Vulkan SDK and adding it to your path.",
+        );
+
+    println!("Processing '{}'", input.file_name.display());
+
+    if !command.status.success() {
+        panic!(
+            "spirv-as failed: {}\n{}",
+            String::from_utf8_lossy(&command.stdout),
+            String::from_utf8_lossy(&command.stderr)
+        );
+    }
+
     let mut module = naga::front::spv::parse_u8_slice(
-        &input.read_bytes(),
+        &command.stdout,
         &naga::front::spv::Options {
             adjust_coordinate_space,
             strict_capabilities: false,
@@ -1050,6 +1083,7 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
         },
     )
     .unwrap();
+
     check_targets(&input, &mut module, targets, None, None);
 }
 
@@ -1143,7 +1177,7 @@ fn convert_glsl_folder() {
         }
 
         let mut parser = naga::front::glsl::Frontend::default();
-        let module = parser
+        let mut module = parser
             .parse(
                 &naga::front::glsl::Options {
                     stage: match file_name.extension().and_then(|s| s.to_str()).unwrap() {
@@ -1164,6 +1198,18 @@ fn convert_glsl_folder() {
         )
         .validate(&module)
         .unwrap();
+
+        #[cfg(feature = "compact")]
+        let info = {
+            naga::compact::compact(&mut module);
+
+            naga::valid::Validator::new(
+                naga::valid::ValidationFlags::all(),
+                naga::valid::Capabilities::all(),
+            )
+            .validate(&module)
+            .unwrap()
+        };
 
         #[cfg(wgsl_out)]
         {

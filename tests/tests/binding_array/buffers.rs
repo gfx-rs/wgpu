@@ -7,12 +7,9 @@ use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, Tes
 static BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(
-                Features::BUFFER_BINDING_ARRAY
-                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            )
+            .features(Features::BUFFER_BINDING_ARRAY | Features::UNIFORM_BUFFER_BINDING_ARRAYS)
             .limits(Limits {
-                max_uniform_buffers_per_shader_stage: 16,
+                max_binding_array_elements_per_shader_stage: 16,
                 ..Limits::default()
             })
             // Naga bug on vulkan: https://github.com/gfx-rs/wgpu/issues/6733
@@ -31,10 +28,10 @@ static PARTIAL_BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConf
             .features(
                 Features::BUFFER_BINDING_ARRAY
                     | Features::PARTIALLY_BOUND_BINDING_ARRAY
-                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                    | Features::UNIFORM_BUFFER_BINDING_ARRAYS,
             )
             .limits(Limits {
-                max_uniform_buffers_per_shader_stage: 32,
+                max_binding_array_elements_per_shader_stage: 32,
                 ..Limits::default()
             })
             // Naga bug on vulkan: https://github.com/gfx-rs/wgpu/issues/6733
@@ -56,7 +53,7 @@ static BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguratio
                     | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             )
             .limits(Limits {
-                max_storage_buffers_per_shader_stage: 17,
+                max_binding_array_elements_per_shader_stage: 17,
                 ..Limits::default()
             })
             // See https://github.com/gfx-rs/wgpu/issues/6745.
@@ -75,7 +72,7 @@ static PARTIAL_BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConf
                     | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             )
             .limits(Limits {
-                max_storage_buffers_per_shader_stage: 33,
+                max_binding_array_elements_per_shader_stage: 33,
                 ..Limits::default()
             })
             // See https://github.com/gfx-rs/wgpu/issues/6745.
@@ -257,7 +254,7 @@ async fn binding_array_buffers(
     let slice = readback_buffer.slice(..);
     slice.map_async(MapMode::Read, |_| {});
 
-    ctx.device.poll(Maintain::Wait);
+    ctx.device.poll(PollType::Wait).unwrap();
 
     let data = slice.get_mapped_range();
 

@@ -10,12 +10,20 @@ use handle_set_map::HandleMap;
 
 /// Remove unused types, expressions, and constants from `module`.
 ///
-/// Assuming that all globals, named constants, special types,
-/// functions and entry points in `module` are used, determine which
-/// types, constants, and expressions (both function-local and global
+/// Assume that the following are used by definition:
+/// - global variables
+/// - named constants and overrides
+/// - special types
+/// - functions and entry points, and within those:
+///     - arguments
+///     - local variables
+///     - named expressions
+///
+/// Given those assumptions, determine which types, constants,
+/// overrides, and expressions (both function-local and global
 /// constant expressions) are actually used, and remove the rest,
-/// adjusting all handles as necessary. The result should be a module
-/// functionally identical to the original.
+/// adjusting all handles as necessary. The result should always be a
+/// module functionally identical to the original.
 ///
 /// This may be useful to apply to modules generated in the snapshot
 /// tests. Our backends often generate temporary names based on handle
@@ -28,8 +36,62 @@ use handle_set_map::HandleMap;
 ///
 /// # Panics
 ///
-/// If `module` has not passed validation, this may panic.
+/// If `module` would not pass validation, this may panic.
 pub fn compact(module: &mut crate::Module) {
+    // The trickiest part of compaction is determining what is used and what is
+    // not. Once we have computed that correctly, it's easy enough to call
+    // `retain_mut` on each arena, drop unused elements, and fix up the handles
+    // in what's left.
+    //
+    // Some arenas' contents are considered used by definition, like
+    // `Module::global_variables` and `Module::functions`, so those are never
+    // compacted.
+    //
+    // But for every compactable arena in a `Module`, whether global to the
+    // `Module` or local to a function or entry point, the `ModuleTracer` type
+    // holds a bitmap indicating which elements of that arena are used. Our task
+    // is to populate those bitmaps correctly.
+    //
+    // First, we mark everything that is considered used by definition, as
+    // described in this function's documentation.
+    //
+    // Since functions and entry points are considered used by definition, we
+    // traverse their statement trees, and mark the referents of all handles
+    // appearing in those statements as used.
+    //
+    // Once we've marked which elements of an arena are referred to directly by
+    // handles elsewhere (for example, which of a function's expressions are
+    // referred to by handles in its body statements), we can mark all the other
+    // arena elements that are used indirectly in a single pass, traversing the
+    // arena from back to front. Since Naga allows arena elements to refer only
+    // to prior elements, we know that by the time we reach an element, all
+    // other elements that could possibly refer to it have already been visited.
+    // Thus, if the present element has not been marked as used, then it is
+    // definitely unused, and compaction can remove it. Otherwise, the element
+    // is used and must be retained, so we must mark everything it refers to.
+    //
+    // The final step is to mark the global expressions and types, which must be
+    // traversed simultaneously; see `ModuleTracer::type_expression_tandem`'s
+    // documentation for details.
+    //
+    // # A definition and a rule of thumb
+    //
+    // In this module, to "trace" something is to mark everything else it refers
+    // to as used, on the assumption that the thing itself is used. For example,
+    // to trace an `Expression` is to mark its subexpressions as used, as well
+    // as any types, constants, overrides, etc. that it refers to. This is what
+    // `ExpressionTracer::trace_expression` does.
+    //
+    // Given that we we want to visit each thing only once (to keep compaction
+    // linear in the size of the module), this definition of "trace" implies
+    // that things that are not "used by definition" must be marked as used
+    // *before* we trace them.
+    //
+    // Thus, whenever you are marking something as used, it's a good idea to ask
+    // yourself how you know that thing will be traced in the future. If you're
+    // not sure, then you could be marking it too late to be noticed. The thing
+    // itself will be retained by compaction, but since it will not be traced,
+    // anything it refers to could be compacted away.
     let mut module_tracer = ModuleTracer::new(module);
 
     // We treat all globals as used by definition.
@@ -45,21 +107,30 @@ pub fn compact(module: &mut crate::Module) {
     }
 
     // We treat all special types as used by definition.
+    log::trace!("tracing special types");
     module_tracer.trace_special_types(&module.special_types);
 
     // We treat all named constants as used by definition.
+    log::trace!("tracing named constants");
     for (handle, constant) in module.constants.iter() {
         if constant.name.is_some() {
+            log::trace!("tracing constant {:?}", constant.name.as_ref().unwrap());
             module_tracer.constants_used.insert(handle);
+            module_tracer.types_used.insert(constant.ty);
             module_tracer.global_expressions_used.insert(constant.init);
         }
     }
 
-    // We treat all overrides as used by definition.
-    for (_, override_) in module.overrides.iter() {
-        module_tracer.types_used.insert(override_.ty);
-        if let Some(init) = override_.init {
-            module_tracer.global_expressions_used.insert(init);
+    // We treat all named overrides as used by definition.
+    log::trace!("tracing named overrides");
+    for (handle, r#override) in module.overrides.iter() {
+        if r#override.name.is_some() {
+            log::trace!("tracing override {:?}", r#override.name.as_ref().unwrap());
+            module_tracer.overrides_used.insert(handle);
+            module_tracer.types_used.insert(r#override.ty);
+            if let Some(init) = r#override.init {
+                module_tracer.global_expressions_used.insert(init);
+            }
         }
     }
 
@@ -100,15 +171,6 @@ pub fn compact(module: &mut crate::Module) {
             FunctionMap::from(used)
         })
         .collect();
-
-    // Constants' initializers are taken care of already, because
-    // expression tracing sees through constants. But we still need to
-    // note type usage.
-    for (handle, constant) in module.constants.iter() {
-        if module_tracer.constants_used.contains(handle) {
-            module_tracer.types_used.insert(constant.ty);
-        }
-    }
 
     // Treat all named types as used.
     for (handle, ty) in module.types.iter() {
@@ -167,14 +229,19 @@ pub fn compact(module: &mut crate::Module) {
         }
     });
 
-    // Adjust override types and initializers.
+    // Drop unused overrides in place, reusing existing storage.
     log::trace!("adjusting overrides");
-    for (_, override_) in module.overrides.iter_mut() {
-        module_map.types.adjust(&mut override_.ty);
-        if let Some(init) = override_.init.as_mut() {
-            module_map.global_expressions.adjust(init);
+    module.overrides.retain_mut(|handle, r#override| {
+        if module_map.overrides.used(handle) {
+            module_map.types.adjust(&mut r#override.ty);
+            if let Some(ref mut init) = r#override.init {
+                module_map.global_expressions.adjust(init);
+            }
+            true
+        } else {
+            false
         }
-    }
+    });
 
     // Adjust workgroup_size_overrides
     log::trace!("adjusting workgroup_size_overrides");
@@ -223,6 +290,7 @@ struct ModuleTracer<'module> {
     module: &'module crate::Module,
     types_used: HandleSet<crate::Type>,
     constants_used: HandleSet<crate::Constant>,
+    overrides_used: HandleSet<crate::Override>,
     global_expressions_used: HandleSet<crate::Expression>,
 }
 
@@ -232,6 +300,7 @@ impl<'module> ModuleTracer<'module> {
             module,
             types_used: HandleSet::for_arena(&module.types),
             constants_used: HandleSet::for_arena(&module.constants),
+            overrides_used: HandleSet::for_arena(&module.overrides),
             global_expressions_used: HandleSet::for_arena(&module.global_expressions),
         }
     }
@@ -275,15 +344,16 @@ impl<'module> ModuleTracer<'module> {
             previous = std::cmp::max(
                 previous,
                 match ty.inner {
-                    crate::TypeInner::Array {
-                        base: _,
-                        size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(expr)),
-                        stride: _,
-                    }
-                    | crate::TypeInner::BindingArray {
-                        base: _,
-                        size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(expr)),
-                    } => Some(expr),
+                    crate::TypeInner::Array { size, .. }
+                    | crate::TypeInner::BindingArray { size, .. } => match size {
+                        crate::ArraySize::Constant(_) | crate::ArraySize::Dynamic => None,
+                        crate::ArraySize::Pending(pending) => match pending {
+                            crate::PendingArraySize::Expression(handle) => Some(handle),
+                            crate::PendingArraySize::Override(handle) => {
+                                self.module.overrides[handle].init
+                            }
+                        },
+                    },
                     _ => None,
                 },
             );
@@ -303,8 +373,9 @@ impl<'module> ModuleTracer<'module> {
         // as used by the time we visit it is genuinely unused, and can be
         // ignored.
         let mut exprs = self.module.global_expressions.iter().rev().peekable();
-        for ((ty_handle, ty), dep) in self.module.types.iter().rev().zip(max_dep.iter().rev()) {
-            while let Some((expr_handle, expr)) = exprs.next_if(|&(h, _)| Some(h) > *dep) {
+
+        for ((ty_handle, ty), dep) in self.module.types.iter().zip(max_dep).rev() {
+            while let Some((expr_handle, expr)) = exprs.next_if(|&(h, _)| Some(h) > dep) {
                 if self.global_expressions_used.contains(expr_handle) {
                     self.as_const_expression().trace_expression(expr);
                 }
@@ -323,18 +394,22 @@ impl<'module> ModuleTracer<'module> {
 
     fn as_type(&mut self) -> types::TypeTracer {
         types::TypeTracer {
+            overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             expressions_used: &mut self.global_expressions_used,
+            overrides_used: &mut self.overrides_used,
         }
     }
 
     fn as_const_expression(&mut self) -> expressions::ExpressionTracer {
         expressions::ExpressionTracer {
-            expressions: &self.module.global_expressions,
             constants: &self.module.constants,
+            overrides: &self.module.overrides,
+            expressions: &self.module.global_expressions,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
             expressions_used: &mut self.global_expressions_used,
+            overrides_used: &mut self.overrides_used,
             global_expressions_used: None,
         }
     }
@@ -346,8 +421,10 @@ impl<'module> ModuleTracer<'module> {
         FunctionTracer {
             function,
             constants: &self.module.constants,
+            overrides: &self.module.overrides,
             types_used: &mut self.types_used,
             constants_used: &mut self.constants_used,
+            overrides_used: &mut self.overrides_used,
             global_expressions_used: &mut self.global_expressions_used,
             expressions_used: HandleSet::for_arena(&function.expressions),
         }
@@ -357,6 +434,7 @@ impl<'module> ModuleTracer<'module> {
 struct ModuleMap {
     types: HandleMap<crate::Type>,
     constants: HandleMap<crate::Constant>,
+    overrides: HandleMap<crate::Override>,
     global_expressions: HandleMap<crate::Expression>,
 }
 
@@ -365,6 +443,7 @@ impl From<ModuleTracer<'_>> for ModuleMap {
         ModuleMap {
             types: HandleMap::from_set(used.types_used),
             constants: HandleMap::from_set(used.constants_used),
+            overrides: HandleMap::from_set(used.overrides_used),
             global_expressions: HandleMap::from_set(used.global_expressions_used),
         }
     }
@@ -512,4 +591,482 @@ fn type_expression_interdependence() {
     assert!(!cmp_modules(&module, &untouched));
     compact(&mut module);
     assert!(cmp_modules(&module, &untouched));
+}
+
+#[test]
+fn array_length_override() {
+    let mut module: crate::Module = Default::default();
+    let ty_bool = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar::BOOL),
+        },
+        crate::Span::default(),
+    );
+    let ty_u32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar::U32),
+        },
+        crate::Span::default(),
+    );
+    let one = module.global_expressions.append(
+        crate::Expression::Literal(crate::Literal::U32(1)),
+        crate::Span::default(),
+    );
+    let _unused_override = module.overrides.append(
+        crate::Override {
+            name: None,
+            id: Some(40),
+            ty: ty_u32,
+            init: None,
+        },
+        crate::Span::default(),
+    );
+    let o = module.overrides.append(
+        crate::Override {
+            name: None,
+            id: Some(42),
+            ty: ty_u32,
+            init: Some(one),
+        },
+        crate::Span::default(),
+    );
+    let _ty_array = module.types.insert(
+        crate::Type {
+            name: Some("array<bool, o>".to_string()),
+            inner: crate::TypeInner::Array {
+                base: ty_bool,
+                size: crate::ArraySize::Pending(crate::PendingArraySize::Override(o)),
+                stride: 4,
+            },
+        },
+        crate::Span::default(),
+    );
+
+    let mut validator = super::valid::Validator::new(
+        super::valid::ValidationFlags::all(),
+        super::valid::Capabilities::all(),
+    );
+
+    assert!(validator.validate(&module).is_ok());
+    compact(&mut module);
+    assert!(validator.validate(&module).is_ok());
+}
+
+/// Test mutual references between types and expressions via override
+/// lengths.
+#[test]
+fn array_length_override_mutual() {
+    use crate::Expression as Ex;
+    use crate::Scalar as Sc;
+    use crate::TypeInner as Ti;
+
+    let nowhere = crate::Span::default();
+    let mut module = crate::Module::default();
+    let ty_u32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: Ti::Scalar(Sc::U32),
+        },
+        nowhere,
+    );
+
+    // This type is only referred to by the override's init
+    // expression, so if we visit that too early, this type will be
+    // removed incorrectly.
+    let ty_i32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: Ti::Scalar(Sc::I32),
+        },
+        nowhere,
+    );
+
+    // An override that the other override's init can refer to.
+    let first_override = module.overrides.append(
+        crate::Override {
+            name: None, // so it is not considered used by definition
+            id: Some(41),
+            ty: ty_i32,
+            init: None,
+        },
+        nowhere,
+    );
+
+    // Initializer expression for the override:
+    //
+    //     (first_override + 0) as u32
+    //
+    // The `first_override` makes it an override expression; the `0`
+    // gets a use of `ty_i32` in there; and the `as` makes it match
+    // the type of `second_override` without actually making
+    // `second_override` point at `ty_i32` directly.
+    let first_override_expr = module
+        .global_expressions
+        .append(Ex::Override(first_override), nowhere);
+    let zero = module
+        .global_expressions
+        .append(Ex::ZeroValue(ty_i32), nowhere);
+    let sum = module.global_expressions.append(
+        Ex::Binary {
+            op: crate::BinaryOperator::Add,
+            left: first_override_expr,
+            right: zero,
+        },
+        nowhere,
+    );
+    let init = module.global_expressions.append(
+        Ex::As {
+            expr: sum,
+            kind: crate::ScalarKind::Uint,
+            convert: None,
+        },
+        nowhere,
+    );
+
+    // Override that serves as the array's length.
+    let second_override = module.overrides.append(
+        crate::Override {
+            name: None, // so it is not considered used by definition
+            id: Some(42),
+            ty: ty_u32,
+            init: Some(init),
+        },
+        nowhere,
+    );
+
+    // Array type that uses the overload as its length.
+    // Since this is named, it is considered used by definition.
+    let _ty_array = module.types.insert(
+        crate::Type {
+            name: Some("delicious_array".to_string()),
+            inner: Ti::Array {
+                base: ty_u32,
+                size: crate::ArraySize::Pending(crate::PendingArraySize::Override(second_override)),
+                stride: 4,
+            },
+        },
+        nowhere,
+    );
+
+    let mut validator = super::valid::Validator::new(
+        super::valid::ValidationFlags::all(),
+        super::valid::Capabilities::all(),
+    );
+
+    assert!(validator.validate(&module).is_ok());
+    compact(&mut module);
+    assert!(validator.validate(&module).is_ok());
+}
+
+#[test]
+fn array_length_expression() {
+    let mut module: crate::Module = Default::default();
+    let ty_u32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar::U32),
+        },
+        crate::Span::default(),
+    );
+    let _unused_zero = module.global_expressions.append(
+        crate::Expression::Literal(crate::Literal::U32(0)),
+        crate::Span::default(),
+    );
+    let one = module.global_expressions.append(
+        crate::Expression::Literal(crate::Literal::U32(1)),
+        crate::Span::default(),
+    );
+    let _ty_array = module.types.insert(
+        crate::Type {
+            name: Some("array<u32, 1>".to_string()),
+            inner: crate::TypeInner::Array {
+                base: ty_u32,
+                size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(one)),
+                stride: 4,
+            },
+        },
+        crate::Span::default(),
+    );
+
+    let mut validator = super::valid::Validator::new(
+        super::valid::ValidationFlags::all(),
+        super::valid::Capabilities::all(),
+    );
+
+    assert!(validator.validate(&module).is_ok());
+    compact(&mut module);
+    assert!(validator.validate(&module).is_ok());
+}
+
+#[test]
+fn global_expression_override() {
+    let mut module: crate::Module = Default::default();
+    let ty_u32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar::U32),
+        },
+        crate::Span::default(),
+    );
+
+    // This will only be retained if we trace the initializers
+    // of overrides referred to by `Expression::Override`
+    // in global expressions.
+    let expr1 = module.global_expressions.append(
+        crate::Expression::Literal(crate::Literal::U32(1)),
+        crate::Span::default(),
+    );
+
+    // This will only be traced via a global `Expression::Override`.
+    let o = module.overrides.append(
+        crate::Override {
+            name: None,
+            id: Some(42),
+            ty: ty_u32,
+            init: Some(expr1),
+        },
+        crate::Span::default(),
+    );
+
+    // This is retained by _p.
+    let expr2 = module
+        .global_expressions
+        .append(crate::Expression::Override(o), crate::Span::default());
+
+    // Since this is named, it will be retained.
+    let _p = module.overrides.append(
+        crate::Override {
+            name: Some("p".to_string()),
+            id: None,
+            ty: ty_u32,
+            init: Some(expr2),
+        },
+        crate::Span::default(),
+    );
+
+    let mut validator = super::valid::Validator::new(
+        super::valid::ValidationFlags::all(),
+        super::valid::Capabilities::all(),
+    );
+
+    assert!(validator.validate(&module).is_ok());
+    compact(&mut module);
+    assert!(validator.validate(&module).is_ok());
+}
+
+#[test]
+fn local_expression_override() {
+    let mut module: crate::Module = Default::default();
+    let ty_u32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar::U32),
+        },
+        crate::Span::default(),
+    );
+
+    // This will only be retained if we trace the initializers
+    // of overrides referred to by `Expression::Override` in a function.
+    let expr1 = module.global_expressions.append(
+        crate::Expression::Literal(crate::Literal::U32(1)),
+        crate::Span::default(),
+    );
+
+    // This will be removed by compaction.
+    let _unused_override = module.overrides.append(
+        crate::Override {
+            name: None,
+            id: Some(41),
+            ty: ty_u32,
+            init: None,
+        },
+        crate::Span::default(),
+    );
+
+    // This will only be traced via an `Expression::Override` in a function.
+    let o = module.overrides.append(
+        crate::Override {
+            name: None,
+            id: Some(42),
+            ty: ty_u32,
+            init: Some(expr1),
+        },
+        crate::Span::default(),
+    );
+
+    let mut fun = crate::Function {
+        result: Some(crate::FunctionResult {
+            ty: ty_u32,
+            binding: None,
+        }),
+        ..crate::Function::default()
+    };
+
+    // This is used by the `Return` statement.
+    let o_expr = fun
+        .expressions
+        .append(crate::Expression::Override(o), crate::Span::default());
+    fun.body.push(
+        crate::Statement::Return {
+            value: Some(o_expr),
+        },
+        crate::Span::default(),
+    );
+
+    module.functions.append(fun, crate::Span::default());
+
+    let mut validator = super::valid::Validator::new(
+        super::valid::ValidationFlags::all(),
+        super::valid::Capabilities::all(),
+    );
+
+    assert!(validator.validate(&module).is_ok());
+    compact(&mut module);
+    assert!(validator.validate(&module).is_ok());
+}
+
+#[test]
+fn unnamed_constant_type() {
+    let mut module = crate::Module::default();
+    let nowhere = crate::Span::default();
+
+    // This type is used only by the unnamed constant.
+    let ty_u32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar::U32),
+        },
+        nowhere,
+    );
+
+    // This type is used by the named constant.
+    let ty_vec_u32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Vector {
+                size: crate::VectorSize::Bi,
+                scalar: crate::Scalar::U32,
+            },
+        },
+        nowhere,
+    );
+
+    let unnamed_init = module
+        .global_expressions
+        .append(crate::Expression::Literal(crate::Literal::U32(0)), nowhere);
+
+    let unnamed_constant = module.constants.append(
+        crate::Constant {
+            name: None,
+            ty: ty_u32,
+            init: unnamed_init,
+        },
+        nowhere,
+    );
+
+    // The named constant is initialized using a Splat expression, to
+    // give the named constant a type distinct from the unnamed
+    // constant's.
+    let unnamed_constant_expr = module
+        .global_expressions
+        .append(crate::Expression::Constant(unnamed_constant), nowhere);
+    let named_init = module.global_expressions.append(
+        crate::Expression::Splat {
+            size: crate::VectorSize::Bi,
+            value: unnamed_constant_expr,
+        },
+        nowhere,
+    );
+
+    let _named_constant = module.constants.append(
+        crate::Constant {
+            name: Some("totally_named".to_string()),
+            ty: ty_vec_u32,
+            init: named_init,
+        },
+        nowhere,
+    );
+
+    let mut validator = super::valid::Validator::new(
+        super::valid::ValidationFlags::all(),
+        super::valid::Capabilities::all(),
+    );
+
+    assert!(validator.validate(&module).is_ok());
+    compact(&mut module);
+    assert!(validator.validate(&module).is_ok());
+}
+
+#[test]
+fn unnamed_override_type() {
+    let mut module = crate::Module::default();
+    let nowhere = crate::Span::default();
+
+    // This type is used only by the unnamed override.
+    let ty_u32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar::U32),
+        },
+        nowhere,
+    );
+
+    // This type is used by the named override.
+    let ty_i32 = module.types.insert(
+        crate::Type {
+            name: None,
+            inner: crate::TypeInner::Scalar(crate::Scalar::I32),
+        },
+        nowhere,
+    );
+
+    let unnamed_init = module
+        .global_expressions
+        .append(crate::Expression::Literal(crate::Literal::U32(0)), nowhere);
+
+    let unnamed_override = module.overrides.append(
+        crate::Override {
+            name: None,
+            id: Some(42),
+            ty: ty_u32,
+            init: Some(unnamed_init),
+        },
+        nowhere,
+    );
+
+    // The named override is initialized using a Splat expression, to
+    // give the named override a type distinct from the unnamed
+    // override's.
+    let unnamed_override_expr = module
+        .global_expressions
+        .append(crate::Expression::Override(unnamed_override), nowhere);
+    let named_init = module.global_expressions.append(
+        crate::Expression::As {
+            expr: unnamed_override_expr,
+            kind: crate::ScalarKind::Sint,
+            convert: None,
+        },
+        nowhere,
+    );
+
+    let _named_override = module.overrides.append(
+        crate::Override {
+            name: Some("totally_named".to_string()),
+            id: None,
+            ty: ty_i32,
+            init: Some(named_init),
+        },
+        nowhere,
+    );
+
+    let mut validator = super::valid::Validator::new(
+        super::valid::ValidationFlags::all(),
+        super::valid::Capabilities::all(),
+    );
+
+    assert!(validator.validate(&module).is_ok());
+    compact(&mut module);
+    assert!(validator.validate(&module).is_ok());
 }

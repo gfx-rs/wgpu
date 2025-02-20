@@ -27,8 +27,8 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     float2 cMass = float2(0.0, 0.0);
     float2 cVel = float2(0.0, 0.0);
     float2 colVel = float2(0.0, 0.0);
-    int cMassCount = 0;
-    int cVelCount = 0;
+    int cMassCount = int(0);
+    int cVelCount = int(0);
     float2 pos = (float2)0;
     float2 vel = (float2)0;
     uint i = 0u;
@@ -41,8 +41,11 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     vPos = _e8;
     float2 _e14 = asfloat(particlesSrc.Load2(8+index*16+0));
     vVel = _e14;
+    uint2 loop_bound = uint2(0u, 0u);
     bool loop_init = true;
     while(true) {
+        if (all(loop_bound == uint2(4294967295u, 4294967295u))) { break; }
+        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
         if (!loop_init) {
             uint _e91 = i;
             i = (_e91 + 1u);
@@ -70,7 +73,7 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
             float2 _e61 = pos;
             cMass = (_e60 + _e61);
             int _e63 = cMassCount;
-            cMassCount = (_e63 + 1);
+            cMassCount = asint(asuint(_e63) + asuint(int(1)));
         }
         float2 _e66 = pos;
         float2 _e67 = vPos;
@@ -89,18 +92,18 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
             float2 _e86 = vel;
             cVel = (_e85 + _e86);
             int _e88 = cVelCount;
-            cVelCount = (_e88 + 1);
+            cVelCount = asint(asuint(_e88) + asuint(int(1)));
         }
     }
     int _e94 = cMassCount;
-    if ((_e94 > 0)) {
+    if ((_e94 > int(0))) {
         float2 _e97 = cMass;
         int _e98 = cMassCount;
         float2 _e102 = vPos;
         cMass = ((_e97 / (float(_e98)).xx) - _e102);
     }
     int _e104 = cVelCount;
-    if ((_e104 > 0)) {
+    if ((_e104 > int(0))) {
         float2 _e107 = cVel;
         int _e108 = cVelCount;
         cVel = (_e107 / (float(_e108)).xx);
@@ -140,4 +143,5 @@ void main(uint3 global_invocation_id : SV_DispatchThreadID)
     particlesDst.Store2(0+index*16+0, asuint(_e174));
     float2 _e179 = vVel;
     particlesDst.Store2(8+index*16+0, asuint(_e179));
+    return;
 }

@@ -2,8 +2,10 @@ use super::{HandleSet, ModuleMap};
 use crate::Handle;
 
 pub struct TypeTracer<'a> {
+    pub overrides: &'a crate::Arena<crate::Override>,
     pub types_used: &'a mut HandleSet<crate::Type>,
     pub expressions_used: &'a mut HandleSet<crate::Expression>,
+    pub overrides_used: &'a mut HandleSet<crate::Override>,
 }
 
 impl TypeTracer<'_> {
@@ -24,23 +26,29 @@ impl TypeTracer<'_> {
             // Types that do contain handles.
             Ti::Array {
                 base,
-                size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(expr)),
+                size,
                 stride: _,
             }
-            | Ti::BindingArray {
-                base,
-                size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(expr)),
-            } => {
-                self.expressions_used.insert(expr);
+            | Ti::BindingArray { base, size } => {
                 self.types_used.insert(base);
+                match size {
+                    crate::ArraySize::Pending(pending) => match pending {
+                        crate::PendingArraySize::Expression(expr) => {
+                            self.expressions_used.insert(expr);
+                        }
+                        crate::PendingArraySize::Override(handle) => {
+                            self.overrides_used.insert(handle);
+                            let r#override = &self.overrides[handle];
+                            self.types_used.insert(r#override.ty);
+                            if let Some(expr) = r#override.init {
+                                self.expressions_used.insert(expr);
+                            }
+                        }
+                    },
+                    crate::ArraySize::Constant(_) | crate::ArraySize::Dynamic => {}
+                }
             }
-            Ti::Pointer { base, space: _ }
-            | Ti::Array {
-                base,
-                size: _,
-                stride: _,
-            }
-            | Ti::BindingArray { base, size: _ } => {
+            Ti::Pointer { base, space: _ } => {
                 self.types_used.insert(base);
             }
             Ti::Struct {
@@ -79,13 +87,24 @@ impl ModuleMap {
                 ref mut base,
                 ref mut size,
                 stride: _,
+            }
+            | Ti::BindingArray {
+                ref mut base,
+                ref mut size,
             } => {
                 adjust(base);
-                if let crate::ArraySize::Pending(crate::PendingArraySize::Expression(
-                    ref mut size_expr,
-                )) = *size
-                {
-                    self.global_expressions.adjust(size_expr);
+                match *size {
+                    crate::ArraySize::Pending(crate::PendingArraySize::Expression(
+                        ref mut size_expr,
+                    )) => {
+                        self.global_expressions.adjust(size_expr);
+                    }
+                    crate::ArraySize::Pending(crate::PendingArraySize::Override(
+                        ref mut r#override,
+                    )) => {
+                        self.overrides.adjust(r#override);
+                    }
+                    crate::ArraySize::Constant(_) | crate::ArraySize::Dynamic => {}
                 }
             }
             Ti::Struct {
@@ -95,12 +114,6 @@ impl ModuleMap {
                 for member in members {
                     self.types.adjust(&mut member.ty);
                 }
-            }
-            Ti::BindingArray {
-                ref mut base,
-                size: _,
-            } => {
-                adjust(base);
             }
         };
     }
