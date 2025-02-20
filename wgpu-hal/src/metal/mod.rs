@@ -13,6 +13,8 @@ end of the VS buffer table.
 
 !*/
 
+#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
+
 // `MTLFeatureSet` is superseded by `MTLGpuFamily`.
 // However, `MTLGpuFamily` is only supported starting MacOS 10.15, whereas our minimum target is MacOS 10.13,
 // See https://github.com/gpuweb/gpuweb/issues/1069 for minimum spec.
@@ -27,10 +29,13 @@ mod surface;
 mod time;
 
 use std::{
+    borrow::ToOwned as _,
     fmt, iter, ops,
     ptr::NonNull,
+    string::String,
     sync::{atomic, Arc},
     thread,
+    vec::Vec,
 };
 
 use arrayvec::ArrayVec;

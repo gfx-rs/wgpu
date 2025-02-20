@@ -1,7 +1,5 @@
-use core::cell::UnsafeCell;
-use core::ops::Range;
-use core::ptr;
-use std::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
+use core::{cell::UnsafeCell, ops::Range, ptr};
 
 #[derive(Clone, Debug)]
 pub struct Buffer {

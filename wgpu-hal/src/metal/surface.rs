@@ -1,5 +1,6 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
+use std::borrow::ToOwned as _;
 use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
 use std::thread;

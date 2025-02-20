@@ -2,6 +2,8 @@
 //!
 //! Nearly identical to the Vulkan sampler cache, with added descriptor heap management.
 
+use std::vec::Vec;
+
 use hashbrown::{hash_map::Entry, HashMap};
 
 use ordered_float::OrderedFloat;

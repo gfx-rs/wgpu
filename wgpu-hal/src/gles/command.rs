@@ -1,9 +1,13 @@
-use super::{conv, Command as C};
-use arrayvec::ArrayVec;
-use std::{
+use alloc::string::String;
+use core::{
     mem::{self, size_of, size_of_val},
     ops::Range,
+    slice,
 };
+
+use arrayvec::ArrayVec;
+
+use super::{conv, Command as C};
 
 #[derive(Clone, Copy, Debug, Default)]
 struct TextureSlotDesc {
@@ -84,8 +88,7 @@ impl super::CommandBuffer {
     }
 
     fn add_push_constant_data(&mut self, data: &[u32]) -> Range<u32> {
-        let data_raw =
-            unsafe { std::slice::from_raw_parts(data.as_ptr().cast(), size_of_val(data)) };
+        let data_raw = unsafe { slice::from_raw_parts(data.as_ptr().cast(), size_of_val(data)) };
         let start = self.data_bytes.len();
         assert!(start < u32::MAX as usize);
         self.data_bytes.extend_from_slice(data_raw);
@@ -262,7 +265,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         self.state = State::default();
-        self.cmd_buffer.label = label.map(str::to_string);
+        self.cmd_buffer.label = label.map(String::from);
         Ok(())
     }
     unsafe fn discard_encoding(&mut self) {

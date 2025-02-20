@@ -1,6 +1,6 @@
 //! RenderDoc integration - <https://renderdoc.org/>
 
-use std::{ffi, os, ptr};
+use std::{ffi, os, ptr, string::String};
 
 /// The dynamically loaded RenderDoc API function table
 #[repr(C)]
