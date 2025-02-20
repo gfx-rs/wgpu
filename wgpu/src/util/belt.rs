@@ -1,5 +1,5 @@
 use crate::{
-    util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsages,
+    util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferSlice, BufferUsages,
     BufferViewMut, CommandEncoder, Device, MapMode,
 };
 use std::fmt;
@@ -77,26 +77,32 @@ impl StagingBelt {
         size: BufferSize,
         device: &Device,
     ) -> BufferViewMut<'_> {
-        let (mapped, belt_buffer, offset_in_belt_buffer) = self.allocate(
+        let slice_of_belt = self.allocate(
             size,
             const { BufferSize::new(crate::COPY_BUFFER_ALIGNMENT).unwrap() },
             device,
         );
         encoder.copy_buffer_to_buffer(
-            belt_buffer,
-            offset_in_belt_buffer,
+            slice_of_belt.buffer(),
+            slice_of_belt.offset(),
             target,
             offset,
             size.get(),
         );
-        mapped
+        slice_of_belt.get_mapped_range_mut()
     }
 
     /// Allocate a staging belt slice with the given `size` and `alignment` and return it.
     ///
-    /// This allows you to do whatever you want with the slice after, such as
-    /// copying it to a texture or executing a compute shader that reads it, whereas
-    /// [`StagingBelt::write_buffer()`] can only write to other buffers.
+    /// To use this slice, call [`BufferSlice::get_mapped_range_mut()`] and write your data into
+    /// that [`BufferViewMut`].
+    /// (The view must be dropped before [`StagingBelt::finish()`] is called.)
+    ///
+    /// You can then record your own GPU commands to perform with the slice,
+    /// such as copying it to a texture or executing a compute shader that reads it (whereas
+    /// [`StagingBelt::write_buffer()`] can only write to other buffers).
+    /// All commands involving this slice must be submitted after
+    /// [`StagingBelt::finish()`] is called and before [`StagingBelt::recall()`] is called.
     ///
     /// If the `size` is greater than the space available in any free internal buffer, a new buffer
     /// will be allocated for it. Therefore, the `chunk_size` passed to [`StagingBelt::new()`]
@@ -104,23 +110,13 @@ impl StagingBelt {
     ///
     /// The chosen slice will be positioned within the buffer at a multiple of `alignment`,
     /// which may be used to meet alignment requirements for the operation you wish to perform
-    /// with the slice. This does not necessarily affect the alignment of the mapping.
-    ///
-    /// Three values are returned:
-    ///
-    /// * The mapped buffer view which you should write into from the CPU side (Rust code).
-    /// * The buffer containing the slice, for you to use in GPU commands.
-    ///   All commands involving this slice must be submitted after
-    ///   [`StagingBelt::finish()`] is called and before [`StagingBelt::recall()`] is called.
-    /// * The offset within the buffer at which the slice starts.
-    ///   This offset should be used for all GPU commands, and should not be used with
-    ///   the mapped buffer view.
+    /// with the slice. This does not necessarily affect the alignment of the [`BufferViewMut`].
     pub fn allocate(
         &mut self,
         size: BufferSize,
         alignment: BufferSize,
         device: &Device,
-    ) -> (BufferViewMut<'_>, &Buffer, BufferAddress) {
+    ) -> BufferSlice<'_> {
         assert!(
             alignment.get().is_power_of_two(),
             "alignment must be a power of two, not {alignment}"
@@ -161,14 +157,9 @@ impl StagingBelt {
         self.active_chunks.push(chunk);
         let chunk = self.active_chunks.last().unwrap();
 
-        (
-            chunk
-                .buffer
-                .slice(allocation_offset..allocation_offset + size.get())
-                .get_mapped_range_mut(),
-            &chunk.buffer,
-            allocation_offset,
-        )
+        chunk
+            .buffer
+            .slice(allocation_offset..allocation_offset + size.get())
     }
 
     /// Prepare currently mapped buffers for use in a submission.
