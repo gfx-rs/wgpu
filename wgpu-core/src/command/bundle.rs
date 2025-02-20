@@ -78,6 +78,21 @@ index format changes.
 
 #![allow(clippy::reversed_empty_ranges)]
 
+use alloc::{
+    borrow::{Cow, ToOwned as _},
+    string::String,
+    sync::Arc,
+    vec::Vec,
+};
+use core::{
+    mem::size_of,
+    num::{NonZeroU32, NonZeroU64},
+    ops::Range,
+};
+
+use arrayvec::ArrayVec;
+use thiserror::Error;
+
 use crate::{
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
@@ -101,10 +116,6 @@ use crate::{
     track::RenderBundleScope,
     Label, LabelHelpers,
 };
-use arrayvec::ArrayVec;
-
-use std::{borrow::Cow, mem::size_of, num::NonZeroU32, ops::Range, sync::Arc};
-use thiserror::Error;
 
 use super::{
     render_command::{ArcRenderCommand, RenderCommand},
@@ -455,7 +466,7 @@ impl RenderBundleEncoder {
 
         let render_bundle = RenderBundle {
             base: BasePass {
-                label: desc.label.as_ref().map(|cow| cow.to_string()),
+                label: desc.label.as_deref().map(str::to_owned),
                 commands,
                 dynamic_offsets: flat_dynamic_offsets,
                 string_data: self.base.string_data,
@@ -591,7 +602,7 @@ fn set_index_buffer(
     buffer_id: id::Id<id::markers::Buffer>,
     index_format: wgt::IndexFormat,
     offset: u64,
-    size: Option<std::num::NonZeroU64>,
+    size: Option<NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
     let buffer = buffer_guard.get(buffer_id).get()?;
 
@@ -624,7 +635,7 @@ fn set_vertex_buffer(
     slot: u32,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
-    size: Option<std::num::NonZeroU64>,
+    size: Option<NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
     let max_vertex_buffers = state.device.limits.max_vertex_buffers;
     if slot >= max_vertex_buffers {
@@ -1493,7 +1504,7 @@ where
 pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
     use crate::{id, RawString};
-    use std::{convert::TryInto, slice};
+    use core::{convert::TryInto, slice};
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
     /// # Safety

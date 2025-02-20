@@ -1,4 +1,5 @@
-use std::{ops::Range, sync::Arc};
+use alloc::{sync::Arc, vec::Vec};
+use core::ops::Range;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;

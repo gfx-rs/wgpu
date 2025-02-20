@@ -14,8 +14,9 @@ mod timestamp_writes;
 mod transfer;
 mod transition_resources;
 
-use std::mem::{self, ManuallyDrop};
-use std::sync::Arc;
+use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::mem::{self, ManuallyDrop};
+use core::ops;
 
 pub(crate) use self::clear::clear_texture;
 pub use self::{
@@ -202,7 +203,7 @@ impl<'a> Drop for RecordingGuard<'a> {
     }
 }
 
-impl<'a> std::ops::Deref for RecordingGuard<'a> {
+impl<'a> ops::Deref for RecordingGuard<'a> {
     type Target = CommandBufferMutable;
 
     fn deref(&self) -> &Self::Target {
@@ -213,7 +214,7 @@ impl<'a> std::ops::Deref for RecordingGuard<'a> {
     }
 }
 
-impl<'a> std::ops::DerefMut for RecordingGuard<'a> {
+impl<'a> ops::DerefMut for RecordingGuard<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self.inner {
             CommandEncoderStatus::Recording(command_buffer_mutable) => command_buffer_mutable,
@@ -707,7 +708,7 @@ pub struct BasePass<C> {
 impl<C: Clone> BasePass<C> {
     fn new(label: &Label) -> Self {
         Self {
-            label: label.as_ref().map(|cow| cow.to_string()),
+            label: label.as_deref().map(str::to_owned),
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
@@ -783,7 +784,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
-            list.push(TraceCommand::PushDebugGroup(label.to_string()));
+            list.push(TraceCommand::PushDebugGroup(label.to_owned()));
         }
 
         let cmd_buf_raw = cmd_buf_data.encoder.open()?;
@@ -818,7 +819,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut list) = cmd_buf_data.commands {
-            list.push(TraceCommand::InsertDebugMarker(label.to_string()));
+            list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
         }
 
         if !cmd_buf
