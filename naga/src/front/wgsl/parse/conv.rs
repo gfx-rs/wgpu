@@ -1,3 +1,6 @@
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtensions, ImplementedEnableExtension,
+};
 use crate::front::wgsl::{Error, Result, Scalar};
 use crate::Span;
 
@@ -113,10 +116,17 @@ pub fn map_storage_format(word: &str, span: Span) -> Result<'_, crate::StorageFo
     })
 }
 
-pub fn get_scalar_type(word: &str) -> Option<Scalar> {
+pub fn get_scalar_type(
+    enable_extensions: &EnableExtensions,
+    span: Span,
+    word: &str,
+) -> Result<'static, Option<Scalar>> {
     use crate::ScalarKind as Sk;
-    match word {
-        // "f16" => Some(Scalar { kind: Sk::Float, width: 2 }),
+    let scalar = match word {
+        "f16" => Some(Scalar {
+            kind: Sk::Float,
+            width: 2,
+        }),
         "f32" => Some(Scalar {
             kind: Sk::Float,
             width: 4,
@@ -146,7 +156,18 @@ pub fn get_scalar_type(word: &str) -> Option<Scalar> {
             width: crate::BOOL_WIDTH,
         }),
         _ => None,
+    };
+
+    if matches!(scalar, Some(Scalar::F16))
+        && !enable_extensions.contains(ImplementedEnableExtension::F16)
+    {
+        return Err(Box::new(Error::EnableExtensionNotEnabled {
+            span,
+            kind: ImplementedEnableExtension::F16.into(),
+        }));
     }
+
+    Ok(scalar)
 }
 
 pub fn map_derivative(word: &str) -> Option<(crate::DerivativeAxis, crate::DerivativeControl)> {

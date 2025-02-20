@@ -6,9 +6,7 @@ use crate::diagnostic_filter::{
     ShouldConflictOnFullDuplicate, StandardFilterableTriggeringRule,
 };
 use crate::front::wgsl::error::{DiagnosticAttributeNotSupportedPosition, Error, ExpectedToken};
-use crate::front::wgsl::parse::directive::enable_extension::{
-    EnableExtension, EnableExtensions, UnimplementedEnableExtension,
-};
+use crate::front::wgsl::parse::directive::enable_extension::{EnableExtension, EnableExtensions};
 use crate::front::wgsl::parse::directive::language_extension::LanguageExtension;
 use crate::front::wgsl::parse::directive::DirectiveKind;
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
@@ -364,7 +362,7 @@ impl Parser {
         span: Span,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, Option<ast::ConstructorType<'a>>> {
-        if let Some(scalar) = conv::get_scalar_type(word) {
+        if let Some(scalar) = conv::get_scalar_type(&lexer.enable_extensions, span, word)? {
             return Ok(Some(ast::ConstructorType::Scalar(scalar)));
         }
 
@@ -393,6 +391,13 @@ impl Parser {
                     ty_span: Span::UNDEFINED,
                 }))
             }
+            "vec2h" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Bi,
+                    ty: ctx.new_scalar(Scalar::F16),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
             "vec3" => ast::ConstructorType::PartialVector {
                 size: crate::VectorSize::Tri,
             },
@@ -414,6 +419,13 @@ impl Parser {
                 return Ok(Some(ast::ConstructorType::Vector {
                     size: crate::VectorSize::Tri,
                     ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
+            "vec3h" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Tri,
+                    ty: ctx.new_scalar(Scalar::F16),
                     ty_span: Span::UNDEFINED,
                 }))
             }
@@ -441,6 +453,13 @@ impl Parser {
                     ty_span: Span::UNDEFINED,
                 }))
             }
+            "vec4h" => {
+                return Ok(Some(ast::ConstructorType::Vector {
+                    size: crate::VectorSize::Quad,
+                    ty: ctx.new_scalar(Scalar::F16),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
             "mat2x2" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Bi,
                 rows: crate::VectorSize::Bi,
@@ -450,6 +469,14 @@ impl Parser {
                     columns: crate::VectorSize::Bi,
                     rows: crate::VectorSize::Bi,
                     ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
+            "mat2x2h" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Bi,
+                    rows: crate::VectorSize::Bi,
+                    ty: ctx.new_scalar(Scalar::F16),
                     ty_span: Span::UNDEFINED,
                 }))
             }
@@ -465,6 +492,14 @@ impl Parser {
                     ty_span: Span::UNDEFINED,
                 }))
             }
+            "mat2x3h" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Bi,
+                    rows: crate::VectorSize::Tri,
+                    ty: ctx.new_scalar(Scalar::F16),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
             "mat2x4" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Bi,
                 rows: crate::VectorSize::Quad,
@@ -474,6 +509,14 @@ impl Parser {
                     columns: crate::VectorSize::Bi,
                     rows: crate::VectorSize::Quad,
                     ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
+            "mat2x4h" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Bi,
+                    rows: crate::VectorSize::Quad,
+                    ty: ctx.new_scalar(Scalar::F16),
                     ty_span: Span::UNDEFINED,
                 }))
             }
@@ -489,6 +532,14 @@ impl Parser {
                     ty_span: Span::UNDEFINED,
                 }))
             }
+            "mat3x2h" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Bi,
+                    ty: ctx.new_scalar(Scalar::F16),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
             "mat3x3" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Tri,
                 rows: crate::VectorSize::Tri,
@@ -498,6 +549,14 @@ impl Parser {
                     columns: crate::VectorSize::Tri,
                     rows: crate::VectorSize::Tri,
                     ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
+            "mat3x3h" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Tri,
+                    ty: ctx.new_scalar(Scalar::F16),
                     ty_span: Span::UNDEFINED,
                 }))
             }
@@ -513,6 +572,14 @@ impl Parser {
                     ty_span: Span::UNDEFINED,
                 }))
             }
+            "mat3x4h" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Quad,
+                    ty: ctx.new_scalar(Scalar::F16),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
             "mat4x2" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Bi,
@@ -522,6 +589,14 @@ impl Parser {
                     columns: crate::VectorSize::Quad,
                     rows: crate::VectorSize::Bi,
                     ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
+            "mat4x2h" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Quad,
+                    rows: crate::VectorSize::Bi,
+                    ty: ctx.new_scalar(Scalar::F16),
                     ty_span: Span::UNDEFINED,
                 }))
             }
@@ -537,6 +612,14 @@ impl Parser {
                     ty_span: Span::UNDEFINED,
                 }))
             }
+            "mat4x3h" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Quad,
+                    rows: crate::VectorSize::Tri,
+                    ty: ctx.new_scalar(Scalar::F16),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
             "mat4x4" => ast::ConstructorType::PartialMatrix {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Quad,
@@ -546,6 +629,14 @@ impl Parser {
                     columns: crate::VectorSize::Quad,
                     rows: crate::VectorSize::Quad,
                     ty: ctx.new_scalar(Scalar::F32),
+                    ty_span: Span::UNDEFINED,
+                }))
+            }
+            "mat4x4h" => {
+                return Ok(Some(ast::ConstructorType::Matrix {
+                    columns: crate::VectorSize::Quad,
+                    rows: crate::VectorSize::Quad,
+                    ty: ctx.new_scalar(Scalar::F16),
                     ty_span: Span::UNDEFINED,
                 }))
             }
@@ -744,15 +835,17 @@ impl Parser {
             }
             (Token::Number(res), span) => {
                 let _ = lexer.next();
-                let num = res.map_err(|err| match err {
-                    super::error::NumberError::UnimplementedF16 => {
-                        Error::EnableExtensionNotEnabled {
-                            kind: EnableExtension::Unimplemented(UnimplementedEnableExtension::F16),
+                let num = res.map_err(|err| Error::BadNumber(span, err))?;
+
+                if let Some(enable_extension) = num.required_enable_extension() {
+                    if !lexer.enable_extensions.contains(enable_extension) {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            kind: enable_extension.into(),
                             span,
-                        }
+                        }));
                     }
-                    err => Error::BadNumber(span, err),
-                })?;
+                }
+
                 ast::Expression::Literal(ast::Literal::Number(num))
             }
             (Token::Word("RAY_FLAG_NONE"), _) => {
@@ -1340,9 +1433,10 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         word: &'a str,
+        span: Span,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, Option<ast::Type<'a>>> {
-        if let Some(scalar) = conv::get_scalar_type(word) {
+        if let Some(scalar) = conv::get_scalar_type(&lexer.enable_extensions, span, word)? {
             return Ok(Some(ast::Type::Scalar(scalar)));
         }
 
@@ -1370,6 +1464,11 @@ impl Parser {
                 ty: ctx.new_scalar(Scalar::F32),
                 ty_span: Span::UNDEFINED,
             },
+            "vec2h" => ast::Type::Vector {
+                size: crate::VectorSize::Bi,
+                ty: ctx.new_scalar(Scalar::F16),
+                ty_span: Span::UNDEFINED,
+            },
             "vec3" => {
                 let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
                 ast::Type::Vector {
@@ -1391,6 +1490,11 @@ impl Parser {
             "vec3f" => ast::Type::Vector {
                 size: crate::VectorSize::Tri,
                 ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
+            },
+            "vec3h" => ast::Type::Vector {
+                size: crate::VectorSize::Tri,
+                ty: ctx.new_scalar(Scalar::F16),
                 ty_span: Span::UNDEFINED,
             },
             "vec4" => {
@@ -1416,6 +1520,11 @@ impl Parser {
                 ty: ctx.new_scalar(Scalar::F32),
                 ty_span: Span::UNDEFINED,
             },
+            "vec4h" => ast::Type::Vector {
+                size: crate::VectorSize::Quad,
+                ty: ctx.new_scalar(Scalar::F16),
+                ty_span: Span::UNDEFINED,
+            },
             "mat2x2" => {
                 self.matrix_with_type(lexer, ctx, crate::VectorSize::Bi, crate::VectorSize::Bi)?
             }
@@ -1423,6 +1532,12 @@ impl Parser {
                 columns: crate::VectorSize::Bi,
                 rows: crate::VectorSize::Bi,
                 ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
+            },
+            "mat2x2h" => ast::Type::Matrix {
+                columns: crate::VectorSize::Bi,
+                rows: crate::VectorSize::Bi,
+                ty: ctx.new_scalar(Scalar::F16),
                 ty_span: Span::UNDEFINED,
             },
             "mat2x3" => {
@@ -1434,6 +1549,12 @@ impl Parser {
                 ty: ctx.new_scalar(Scalar::F32),
                 ty_span: Span::UNDEFINED,
             },
+            "mat2x3h" => ast::Type::Matrix {
+                columns: crate::VectorSize::Bi,
+                rows: crate::VectorSize::Tri,
+                ty: ctx.new_scalar(Scalar::F16),
+                ty_span: Span::UNDEFINED,
+            },
             "mat2x4" => {
                 self.matrix_with_type(lexer, ctx, crate::VectorSize::Bi, crate::VectorSize::Quad)?
             }
@@ -1441,6 +1562,12 @@ impl Parser {
                 columns: crate::VectorSize::Bi,
                 rows: crate::VectorSize::Quad,
                 ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
+            },
+            "mat2x4h" => ast::Type::Matrix {
+                columns: crate::VectorSize::Bi,
+                rows: crate::VectorSize::Quad,
+                ty: ctx.new_scalar(Scalar::F16),
                 ty_span: Span::UNDEFINED,
             },
             "mat3x2" => {
@@ -1452,6 +1579,12 @@ impl Parser {
                 ty: ctx.new_scalar(Scalar::F32),
                 ty_span: Span::UNDEFINED,
             },
+            "mat3x2h" => ast::Type::Matrix {
+                columns: crate::VectorSize::Tri,
+                rows: crate::VectorSize::Bi,
+                ty: ctx.new_scalar(Scalar::F16),
+                ty_span: Span::UNDEFINED,
+            },
             "mat3x3" => {
                 self.matrix_with_type(lexer, ctx, crate::VectorSize::Tri, crate::VectorSize::Tri)?
             }
@@ -1459,6 +1592,12 @@ impl Parser {
                 columns: crate::VectorSize::Tri,
                 rows: crate::VectorSize::Tri,
                 ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
+            },
+            "mat3x3h" => ast::Type::Matrix {
+                columns: crate::VectorSize::Tri,
+                rows: crate::VectorSize::Tri,
+                ty: ctx.new_scalar(Scalar::F16),
                 ty_span: Span::UNDEFINED,
             },
             "mat3x4" => {
@@ -1470,6 +1609,12 @@ impl Parser {
                 ty: ctx.new_scalar(Scalar::F32),
                 ty_span: Span::UNDEFINED,
             },
+            "mat3x4h" => ast::Type::Matrix {
+                columns: crate::VectorSize::Tri,
+                rows: crate::VectorSize::Quad,
+                ty: ctx.new_scalar(Scalar::F16),
+                ty_span: Span::UNDEFINED,
+            },
             "mat4x2" => {
                 self.matrix_with_type(lexer, ctx, crate::VectorSize::Quad, crate::VectorSize::Bi)?
             }
@@ -1477,6 +1622,12 @@ impl Parser {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Bi,
                 ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
+            },
+            "mat4x2h" => ast::Type::Matrix {
+                columns: crate::VectorSize::Quad,
+                rows: crate::VectorSize::Bi,
+                ty: ctx.new_scalar(Scalar::F16),
                 ty_span: Span::UNDEFINED,
             },
             "mat4x3" => {
@@ -1488,6 +1639,12 @@ impl Parser {
                 ty: ctx.new_scalar(Scalar::F32),
                 ty_span: Span::UNDEFINED,
             },
+            "mat4x3h" => ast::Type::Matrix {
+                columns: crate::VectorSize::Quad,
+                rows: crate::VectorSize::Tri,
+                ty: ctx.new_scalar(Scalar::F16),
+                ty_span: Span::UNDEFINED,
+            },
             "mat4x4" => {
                 self.matrix_with_type(lexer, ctx, crate::VectorSize::Quad, crate::VectorSize::Quad)?
             }
@@ -1495,6 +1652,12 @@ impl Parser {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Quad,
                 ty: ctx.new_scalar(Scalar::F32),
+                ty_span: Span::UNDEFINED,
+            },
+            "mat4x4h" => ast::Type::Matrix {
+                columns: crate::VectorSize::Quad,
+                rows: crate::VectorSize::Quad,
+                ty: ctx.new_scalar(Scalar::F16),
                 ty_span: Span::UNDEFINED,
             },
             "atomic" => {
@@ -1763,7 +1926,7 @@ impl Parser {
 
             let (name, span) = lexer.next_ident_with_span()?;
 
-            let ty = match this.type_decl_impl(lexer, name, ctx)? {
+            let ty = match this.type_decl_impl(lexer, name, span, ctx)? {
                 Some(ty) => ty,
                 None => {
                     ctx.unresolved.insert(ast::Dependency {

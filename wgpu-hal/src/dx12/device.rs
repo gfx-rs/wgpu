@@ -33,9 +33,11 @@ use crate::{
 const NAGA_LOCATION_SEMANTIC: &[u8] = c"LOC".to_bytes();
 
 impl super::Device {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         raw: Direct3D12::ID3D12Device,
         present_queue: Direct3D12::ID3D12CommandQueue,
+        features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
         private_caps: super::PrivateCapabilities,
@@ -178,6 +180,7 @@ impl super::Device {
                 event: Event::create(false, false)?,
             },
             private_caps,
+            features,
             shared: Arc::new(shared),
             rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(descriptor::CpuPool::new(

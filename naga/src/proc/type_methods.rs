@@ -20,6 +20,10 @@ impl crate::ScalarKind {
 }
 
 impl crate::Scalar {
+    pub const F16: Self = Self {
+        kind: crate::ScalarKind::Float,
+        width: 2,
+    };
     pub const I32: Self = Self {
         kind: crate::ScalarKind::Sint,
         width: 4,

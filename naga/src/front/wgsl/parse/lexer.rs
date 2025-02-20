@@ -413,14 +413,17 @@ impl<'a> Lexer<'a> {
     /// Parses a generic scalar type, for example `<f32>`.
     pub(in crate::front::wgsl) fn next_scalar_generic(&mut self) -> Result<'a, Scalar> {
         self.expect_generic_paren('<')?;
-        let pair = match self.next() {
+        let (scalar, _span) = match self.next() {
             (Token::Word(word), span) => {
-                conv::get_scalar_type(word).ok_or(Error::UnknownScalarType(span))
+                conv::get_scalar_type(&self.enable_extensions, span, word)?
+                    .map(|scalar| (scalar, span))
+                    .ok_or(Error::UnknownScalarType(span))?
             }
-            (_, span) => Err(Error::UnknownScalarType(span)),
-        }?;
+            (_, span) => return Err(Box::new(Error::UnknownScalarType(span))),
+        };
+
         self.expect_generic_paren('>')?;
-        Ok(pair)
+        Ok(scalar)
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
@@ -430,14 +433,18 @@ impl<'a> Lexer<'a> {
         &mut self,
     ) -> Result<'a, (Scalar, Span)> {
         self.expect_generic_paren('<')?;
-        let pair = match self.next() {
-            (Token::Word(word), span) => conv::get_scalar_type(word)
-                .map(|scalar| (scalar, span))
-                .ok_or(Error::UnknownScalarType(span)),
-            (_, span) => Err(Error::UnknownScalarType(span)),
-        }?;
+
+        let (scalar, span) = match self.next() {
+            (Token::Word(word), span) => {
+                conv::get_scalar_type(&self.enable_extensions, span, word)?
+                    .map(|scalar| (scalar, span))
+                    .ok_or(Error::UnknownScalarType(span))?
+            }
+            (_, span) => return Err(Box::new(Error::UnknownScalarType(span))),
+        };
+
         self.expect_generic_paren('>')?;
-        Ok(pair)
+        Ok((scalar, span))
     }
 
     pub(in crate::front::wgsl) fn next_storage_access(
@@ -518,6 +525,7 @@ fn sub_test(source: &str, expected_tokens: &[Token]) {
 
 #[test]
 fn test_numbers() {
+    use half::f16;
     // WGSL spec examples //
 
     // decimal integer
@@ -542,14 +550,16 @@ fn test_numbers() {
             Token::Number(Ok(Number::AbstractFloat(0.01))),
             Token::Number(Ok(Number::AbstractFloat(12.34))),
             Token::Number(Ok(Number::F32(0.))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F16(f16::from_f32(0.)))),
             Token::Number(Ok(Number::AbstractFloat(0.001))),
             Token::Number(Ok(Number::AbstractFloat(43.75))),
             Token::Number(Ok(Number::F32(16.))),
             Token::Number(Ok(Number::AbstractFloat(0.1875))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            // https://github.com/gfx-rs/wgpu/issues/7046
+            Token::Number(Err(NumberError::NotRepresentable)), // Should be 0.75
             Token::Number(Ok(Number::AbstractFloat(0.12109375))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            // https://github.com/gfx-rs/wgpu/issues/7046
+            Token::Number(Err(NumberError::NotRepresentable)), // Should be 12.5
         ],
     );
 

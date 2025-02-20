@@ -11,19 +11,23 @@ use alloc::boxed::Box;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnableExtensions {
     dual_source_blending: bool,
+    /// Whether `enable f16;` was written earlier in the shader module.
+    f16: bool,
 }
 
 impl EnableExtensions {
     pub(crate) const fn empty() -> Self {
         Self {
+            f16: false,
             dual_source_blending: false,
         }
     }
 
     /// Add an enable-extension to the set requested by a module.
     pub(crate) fn add(&mut self, ext: ImplementedEnableExtension) {
-        let field: &mut bool = match ext {
+        let field = match ext {
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
+            ImplementedEnableExtension::F16 => &mut self.f16,
         };
         *field = true;
     }
@@ -32,6 +36,7 @@ impl EnableExtensions {
     pub(crate) const fn contains(&self, ext: ImplementedEnableExtension) -> bool {
         match ext {
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
+            ImplementedEnableExtension::F16 => self.f16,
         }
     }
 }
@@ -47,7 +52,6 @@ impl Default for EnableExtensions {
 /// WGSL spec.: <https://www.w3.org/TR/WGSL/#enable-extensions-sec>
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum EnableExtension {
-    #[allow(unused)]
     Implemented(ImplementedEnableExtension),
     Unimplemented(UnimplementedEnableExtension),
 }
@@ -66,7 +70,7 @@ impl EnableExtension {
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<Self> {
         Ok(match word {
-            Self::F16 => Self::Unimplemented(UnimplementedEnableExtension::F16),
+            Self::F16 => Self::Implemented(ImplementedEnableExtension::F16),
             Self::CLIP_DISTANCES => {
                 Self::Unimplemented(UnimplementedEnableExtension::ClipDistances)
             }
@@ -82,10 +86,9 @@ impl EnableExtension {
         match self {
             Self::Implemented(kind) => match kind {
                 ImplementedEnableExtension::DualSourceBlending => Self::DUAL_SOURCE_BLENDING,
+                ImplementedEnableExtension::F16 => Self::F16,
             },
-
             Self::Unimplemented(kind) => match kind {
-                UnimplementedEnableExtension::F16 => Self::F16,
                 UnimplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
             },
         }
@@ -101,17 +104,17 @@ pub enum ImplementedEnableExtension {
     ///
     /// [`enable dual_source_blending;`]: https://www.w3.org/TR/WGSL/#extension-dual_source_blending
     DualSourceBlending,
-}
-
-/// A variant of [`EnableExtension::Unimplemented`].
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-pub enum UnimplementedEnableExtension {
     /// Enables `f16`/`half` primitive support in all shader languages.
     ///
     /// In the WGSL standard, this corresponds to [`enable f16;`].
     ///
     /// [`enable f16;`]: https://www.w3.org/TR/WGSL/#extension-f16
     F16,
+}
+
+/// A variant of [`EnableExtension::Unimplemented`].
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub enum UnimplementedEnableExtension {
     /// Enables the `clip_distances` variable in WGSL.
     ///
     /// In the WGSL standard, this corresponds to [`enable clip_distances;`].
@@ -123,7 +126,6 @@ pub enum UnimplementedEnableExtension {
 impl UnimplementedEnableExtension {
     pub(crate) const fn tracking_issue_num(self) -> u16 {
         match self {
-            Self::F16 => 4384,
             Self::ClipDistances => 6236,
         }
     }

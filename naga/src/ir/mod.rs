@@ -225,6 +225,7 @@ use alloc::{string::String, vec::Vec};
 
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
+use half::f16;
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
@@ -818,6 +819,7 @@ pub enum Literal {
     F64(f64),
     /// May not be NaN or infinity.
     F32(f32),
+    F16(f16),
     U32(u32),
     I32(i32),
     U64(u64),

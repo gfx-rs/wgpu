@@ -8,6 +8,9 @@ use core::{
     fmt::{Display, Error as FmtError, Formatter, Write},
     iter,
 };
+use num_traits::real::Real as _;
+
+use half::f16;
 
 use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
 use crate::{
@@ -182,9 +185,11 @@ impl Display for TypeContext<'_> {
                 write!(out, "{}::atomic_{}", NAMESPACE, scalar.to_msl_name())
             }
             crate::TypeInner::Vector { size, scalar } => put_numeric_type(out, scalar, &[size]),
-            crate::TypeInner::Matrix { columns, rows, .. } => {
-                put_numeric_type(out, crate::Scalar::F32, &[rows, columns])
-            }
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => put_numeric_type(out, scalar, &[rows, columns]),
             crate::TypeInner::Pointer { base, space } => {
                 let sub = Self {
                     handle: base,
@@ -425,8 +430,12 @@ impl crate::Scalar {
         match self {
             Self {
                 kind: Sk::Float,
-                width: _,
+                width: 4,
             } => "float",
+            Self {
+                kind: Sk::Float,
+                width: 2,
+            } => "half",
             Self {
                 kind: Sk::Sint,
                 width: 4,
@@ -483,7 +492,7 @@ fn should_pack_struct_member(
     match *ty_inner {
         crate::TypeInner::Vector {
             size: crate::VectorSize::Tri,
-            scalar: scalar @ crate::Scalar { width: 4, .. },
+            scalar: scalar @ crate::Scalar { width: 4 | 2, .. },
         } if is_tight => Some(scalar),
         _ => None,
     }
@@ -1458,6 +1467,21 @@ impl<W: Write> Writer<W> {
             crate::Expression::Literal(literal) => match literal {
                 crate::Literal::F64(_) => {
                     return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
+                }
+                crate::Literal::F16(value) => {
+                    if value.is_infinite() {
+                        let sign = if value.is_sign_negative() { "-" } else { "" };
+                        write!(self.out, "{sign}INFINITY")?;
+                    } else if value.is_nan() {
+                        write!(self.out, "NAN")?;
+                    } else {
+                        let suffix = if value.fract() == f16::from_f32(0.0) {
+                            ".0h"
+                        } else {
+                            "h"
+                        };
+                        write!(self.out, "{value}{suffix}")?;
+                    }
                 }
                 crate::Literal::F32(value) => {
                     if value.is_infinite() {

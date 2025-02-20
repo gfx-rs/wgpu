@@ -109,9 +109,15 @@ pub enum ErrorKind {
     /// Unsupported matrix of the form matCx2
     ///
     /// Our IR expects matrices of the form matCx2 to have a stride of 8 however
-    /// matrices in the std140 layout have a stride of at least 16
-    #[error("unsupported matrix of the form matCx2 in std140 block layout")]
-    UnsupportedMatrixTypeInStd140,
+    /// matrices in the std140 layout have a stride of at least 16.
+    #[error("unsupported matrix of the form matCx2 (in this case mat{columns}x2) in std140 block layout. See https://github.com/gfx-rs/wgpu/issues/4375")]
+    UnsupportedMatrixWithTwoRowsInStd140 { columns: u8 },
+    /// Unsupported matrix of the form f16matCxR
+    ///
+    /// Our IR expects matrices of the form f16matCxR to have a stride of 4/8/8 depending on row-count,
+    /// however matrices in the std140 layout have a stride of at least 16.
+    #[error("unsupported matrix of the form f16matCxR (in this case f16mat{columns}x{rows}) in std140 block layout. See https://github.com/gfx-rs/wgpu/issues/4375")]
+    UnsupportedF16MatrixInStd140 { columns: u8, rows: u8 },
     /// A variable with the same name already exists in the current scope.
     #[error("Variable already declared: {0}")]
     VariableAlreadyDeclared(String),

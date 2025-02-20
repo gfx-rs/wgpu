@@ -153,8 +153,6 @@ pub enum NumberError {
     Invalid,
     #[error("numeric literal not representable by target type")]
     NotRepresentable,
-    #[error("unimplemented f16 type")]
-    UnimplementedF16,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -1026,19 +1024,18 @@ impl<'a> Error<'a> {
                 )],
             },
             Error::EnableExtensionNotEnabled { kind, span } => ParseError {
-                message: format!("`{}` enable-extension is not enabled", kind.to_ident()),
+                message: format!("the `{}` language extension is not enabled", kind.to_ident()),
                 labels: vec![(
                     span,
                     format!(
                         concat!(
-                            "the `{}` enable-extension is needed for this functionality, ",
-                            "but it is not currently enabled"
+                            "the `{0}` language extension is needed for this functionality, ",
+                            "but it is not currently enabled."
                         ),
                         kind.to_ident()
                     )
                     .into(),
                 )],
-                #[allow(irrefutable_let_patterns)]
                 notes: if let EnableExtension::Unimplemented(kind) = kind {
                     vec![format!(
                         concat!(
@@ -1050,7 +1047,12 @@ impl<'a> Error<'a> {
                         kind.tracking_issue_num()
                     )]
                 } else {
-                    vec![]
+                    vec![
+                        format!(
+                            "You can enable this extension by adding `enable {};` at the top of the shader.",
+                            kind.to_ident()
+                        ),
+                    ]
                 },
             },
             Error::LanguageExtensionNotYetImplemented { kind, span } => ParseError {

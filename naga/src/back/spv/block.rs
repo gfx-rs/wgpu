@@ -4,6 +4,7 @@ Implementations for `BlockContext` methods.
 
 use alloc::vec::Vec;
 
+use arrayvec::ArrayVec;
 use spirv::Word;
 
 use super::{
@@ -1612,159 +1613,7 @@ impl BlockContext<'_> {
                 expr,
                 kind,
                 convert,
-            } => {
-                use crate::ScalarKind as Sk;
-
-                let expr_id = self.cached[expr];
-                let (src_scalar, src_size, is_matrix) =
-                    match *self.fun_info[expr].ty.inner_with(&self.ir_module.types) {
-                        crate::TypeInner::Scalar(scalar) => (scalar, None, false),
-                        crate::TypeInner::Vector { scalar, size } => (scalar, Some(size), false),
-                        crate::TypeInner::Matrix { scalar, .. } => (scalar, None, true),
-                        ref other => {
-                            log::error!("As source {:?}", other);
-                            return Err(Error::Validation("Unexpected Expression::As source"));
-                        }
-                    };
-
-                enum Cast {
-                    Identity,
-                    Unary(spirv::Op),
-                    Binary(spirv::Op, Word),
-                    Ternary(spirv::Op, Word, Word),
-                }
-
-                let cast = if is_matrix {
-                    // we only support identity casts for matrices
-                    Cast::Unary(spirv::Op::CopyObject)
-                } else {
-                    match (src_scalar.kind, kind, convert) {
-                        // Filter out identity casts. Some Adreno drivers are
-                        // confused by no-op OpBitCast instructions.
-                        (src_kind, kind, convert)
-                            if src_kind == kind
-                                && convert.filter(|&width| width != src_scalar.width).is_none() =>
-                        {
-                            Cast::Identity
-                        }
-                        (Sk::Bool, Sk::Bool, _) => Cast::Unary(spirv::Op::CopyObject),
-                        (_, _, None) => Cast::Unary(spirv::Op::Bitcast),
-                        // casting to a bool - generate `OpXxxNotEqual`
-                        (_, Sk::Bool, Some(_)) => {
-                            let op = match src_scalar.kind {
-                                Sk::Sint | Sk::Uint => spirv::Op::INotEqual,
-                                Sk::Float => spirv::Op::FUnordNotEqual,
-                                Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => unreachable!(),
-                            };
-                            let zero_scalar_id =
-                                self.writer.get_constant_scalar_with(0, src_scalar)?;
-                            let zero_id = match src_size {
-                                Some(size) => {
-                                    let ty = LocalType::Numeric(NumericType::Vector {
-                                        size,
-                                        scalar: src_scalar,
-                                    })
-                                    .into();
-
-                                    self.temp_list.clear();
-                                    self.temp_list.resize(size as _, zero_scalar_id);
-
-                                    self.writer.get_constant_composite(ty, &self.temp_list)
-                                }
-                                None => zero_scalar_id,
-                            };
-
-                            Cast::Binary(op, zero_id)
-                        }
-                        // casting from a bool - generate `OpSelect`
-                        (Sk::Bool, _, Some(dst_width)) => {
-                            let dst_scalar = crate::Scalar {
-                                kind,
-                                width: dst_width,
-                            };
-                            let zero_scalar_id =
-                                self.writer.get_constant_scalar_with(0, dst_scalar)?;
-                            let one_scalar_id =
-                                self.writer.get_constant_scalar_with(1, dst_scalar)?;
-                            let (accept_id, reject_id) = match src_size {
-                                Some(size) => {
-                                    let ty = LocalType::Numeric(NumericType::Vector {
-                                        size,
-                                        scalar: dst_scalar,
-                                    })
-                                    .into();
-
-                                    self.temp_list.clear();
-                                    self.temp_list.resize(size as _, zero_scalar_id);
-
-                                    let vec0_id =
-                                        self.writer.get_constant_composite(ty, &self.temp_list);
-
-                                    self.temp_list.fill(one_scalar_id);
-
-                                    let vec1_id =
-                                        self.writer.get_constant_composite(ty, &self.temp_list);
-
-                                    (vec1_id, vec0_id)
-                                }
-                                None => (one_scalar_id, zero_scalar_id),
-                            };
-
-                            Cast::Ternary(spirv::Op::Select, accept_id, reject_id)
-                        }
-                        (Sk::Float, Sk::Uint, Some(_)) => Cast::Unary(spirv::Op::ConvertFToU),
-                        (Sk::Float, Sk::Sint, Some(_)) => Cast::Unary(spirv::Op::ConvertFToS),
-                        (Sk::Float, Sk::Float, Some(dst_width))
-                            if src_scalar.width != dst_width =>
-                        {
-                            Cast::Unary(spirv::Op::FConvert)
-                        }
-                        (Sk::Sint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertSToF),
-                        (Sk::Sint, Sk::Sint, Some(dst_width)) if src_scalar.width != dst_width => {
-                            Cast::Unary(spirv::Op::SConvert)
-                        }
-                        (Sk::Uint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertUToF),
-                        (Sk::Uint, Sk::Uint, Some(dst_width)) if src_scalar.width != dst_width => {
-                            Cast::Unary(spirv::Op::UConvert)
-                        }
-                        (Sk::Uint, Sk::Sint, Some(dst_width)) if src_scalar.width != dst_width => {
-                            Cast::Unary(spirv::Op::SConvert)
-                        }
-                        (Sk::Sint, Sk::Uint, Some(dst_width)) if src_scalar.width != dst_width => {
-                            Cast::Unary(spirv::Op::UConvert)
-                        }
-                        // We assume it's either an identity cast, or int-uint.
-                        _ => Cast::Unary(spirv::Op::Bitcast),
-                    }
-                };
-
-                let id = self.gen_id();
-                let instruction = match cast {
-                    Cast::Identity => None,
-                    Cast::Unary(op) => Some(Instruction::unary(op, result_type_id, id, expr_id)),
-                    Cast::Binary(op, operand) => Some(Instruction::binary(
-                        op,
-                        result_type_id,
-                        id,
-                        expr_id,
-                        operand,
-                    )),
-                    Cast::Ternary(op, op1, op2) => Some(Instruction::ternary(
-                        op,
-                        result_type_id,
-                        id,
-                        expr_id,
-                        op1,
-                        op2,
-                    )),
-                };
-                if let Some(instruction) = instruction {
-                    block.body.push(instruction);
-                    id
-                } else {
-                    expr_id
-                }
-            }
+            } => self.write_as_expression(expr, convert, kind, block, result_type_id)?,
             crate::Expression::ImageLoad {
                 image,
                 coordinate,
@@ -1923,6 +1772,237 @@ impl BlockContext<'_> {
 
         self.cached[expr_handle] = id;
         Ok(())
+    }
+
+    /// Helper which focuses on generating the `As` expressions and the various conversions
+    /// that need to happen because of that.
+    fn write_as_expression(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        convert: Option<u8>,
+        kind: crate::ScalarKind,
+
+        block: &mut Block,
+        result_type_id: u32,
+    ) -> Result<u32, Error> {
+        use crate::ScalarKind as Sk;
+        let expr_id = self.cached[expr];
+        let ty = self.fun_info[expr].ty.inner_with(&self.ir_module.types);
+
+        // Matrix casts needs special treatment in SPIR-V, as the cast functions
+        // can take vectors or scalars, but not matrices. In order to cast a matrix
+        // we need to cast each column of the matrix individually and construct a new
+        // matrix from the converted columns.
+        if let crate::TypeInner::Matrix {
+            columns,
+            rows,
+            scalar,
+        } = *ty
+        {
+            let Some(convert) = convert else {
+                // No conversion needs to be done, passes through.
+                return Ok(expr_id);
+            };
+
+            if convert == scalar.width {
+                // No conversion needs to be done, passes through.
+                return Ok(expr_id);
+            }
+
+            if kind != Sk::Float {
+                // Only float conversions are supported for matrices.
+                return Err(Error::Validation("Matrices must be floats"));
+            }
+
+            // Type of each extracted column
+            let column_src_ty =
+                self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                    size: rows,
+                    scalar,
+                })));
+
+            // Type of the column after conversion
+            let column_dst_ty =
+                self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                    size: rows,
+                    scalar: crate::Scalar {
+                        kind,
+                        width: convert,
+                    },
+                })));
+
+            let mut components = ArrayVec::<Word, 4>::new();
+
+            for column in 0..columns as usize {
+                let column_id = self.gen_id();
+                block.body.push(Instruction::composite_extract(
+                    column_src_ty,
+                    column_id,
+                    expr_id,
+                    &[column as u32],
+                ));
+
+                let column_conv_id = self.gen_id();
+                block.body.push(Instruction::unary(
+                    spirv::Op::FConvert,
+                    column_dst_ty,
+                    column_conv_id,
+                    column_id,
+                ));
+
+                components.push(column_conv_id);
+            }
+
+            let construct_id = self.gen_id();
+
+            block.body.push(Instruction::composite_construct(
+                result_type_id,
+                construct_id,
+                &components,
+            ));
+
+            return Ok(construct_id);
+        }
+
+        let (src_scalar, src_size) = match *ty {
+            crate::TypeInner::Scalar(scalar) => (scalar, None),
+            crate::TypeInner::Vector { scalar, size } => (scalar, Some(size)),
+            ref other => {
+                log::error!("As source {:?}", other);
+                return Err(Error::Validation("Unexpected Expression::As source"));
+            }
+        };
+
+        enum Cast {
+            Identity,
+            Unary(spirv::Op),
+            Binary(spirv::Op, Word),
+            Ternary(spirv::Op, Word, Word),
+        }
+        let cast = match (src_scalar.kind, kind, convert) {
+            // Filter out identity casts. Some Adreno drivers are
+            // confused by no-op OpBitCast instructions.
+            (src_kind, kind, convert)
+                if src_kind == kind
+                    && convert.filter(|&width| width != src_scalar.width).is_none() =>
+            {
+                Cast::Identity
+            }
+            (Sk::Bool, Sk::Bool, _) => Cast::Unary(spirv::Op::CopyObject),
+            (_, _, None) => Cast::Unary(spirv::Op::Bitcast),
+            // casting to a bool - generate `OpXxxNotEqual`
+            (_, Sk::Bool, Some(_)) => {
+                let op = match src_scalar.kind {
+                    Sk::Sint | Sk::Uint => spirv::Op::INotEqual,
+                    Sk::Float => spirv::Op::FUnordNotEqual,
+                    Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => unreachable!(),
+                };
+                let zero_scalar_id = self.writer.get_constant_scalar_with(0, src_scalar)?;
+                let zero_id = match src_size {
+                    Some(size) => {
+                        let ty = LocalType::Numeric(NumericType::Vector {
+                            size,
+                            scalar: src_scalar,
+                        })
+                        .into();
+
+                        self.temp_list.clear();
+                        self.temp_list.resize(size as _, zero_scalar_id);
+
+                        self.writer.get_constant_composite(ty, &self.temp_list)
+                    }
+                    None => zero_scalar_id,
+                };
+
+                Cast::Binary(op, zero_id)
+            }
+            // casting from a bool - generate `OpSelect`
+            (Sk::Bool, _, Some(dst_width)) => {
+                let dst_scalar = crate::Scalar {
+                    kind,
+                    width: dst_width,
+                };
+                let zero_scalar_id = self.writer.get_constant_scalar_with(0, dst_scalar)?;
+                let one_scalar_id = self.writer.get_constant_scalar_with(1, dst_scalar)?;
+                let (accept_id, reject_id) = match src_size {
+                    Some(size) => {
+                        let ty = LocalType::Numeric(NumericType::Vector {
+                            size,
+                            scalar: dst_scalar,
+                        })
+                        .into();
+
+                        self.temp_list.clear();
+                        self.temp_list.resize(size as _, zero_scalar_id);
+
+                        let vec0_id = self.writer.get_constant_composite(ty, &self.temp_list);
+
+                        self.temp_list.fill(one_scalar_id);
+
+                        let vec1_id = self.writer.get_constant_composite(ty, &self.temp_list);
+
+                        (vec1_id, vec0_id)
+                    }
+                    None => (one_scalar_id, zero_scalar_id),
+                };
+
+                Cast::Ternary(spirv::Op::Select, accept_id, reject_id)
+            }
+            (Sk::Float, Sk::Uint, Some(_)) => Cast::Unary(spirv::Op::ConvertFToU),
+            (Sk::Float, Sk::Sint, Some(_)) => Cast::Unary(spirv::Op::ConvertFToS),
+            (Sk::Float, Sk::Float, Some(dst_width)) if src_scalar.width != dst_width => {
+                Cast::Unary(spirv::Op::FConvert)
+            }
+            (Sk::Sint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertSToF),
+            (Sk::Sint, Sk::Sint, Some(dst_width)) if src_scalar.width != dst_width => {
+                Cast::Unary(spirv::Op::SConvert)
+            }
+            (Sk::Uint, Sk::Float, Some(_)) => Cast::Unary(spirv::Op::ConvertUToF),
+            (Sk::Uint, Sk::Uint, Some(dst_width)) if src_scalar.width != dst_width => {
+                Cast::Unary(spirv::Op::UConvert)
+            }
+            (Sk::Uint, Sk::Sint, Some(dst_width)) if src_scalar.width != dst_width => {
+                Cast::Unary(spirv::Op::SConvert)
+            }
+            (Sk::Sint, Sk::Uint, Some(dst_width)) if src_scalar.width != dst_width => {
+                Cast::Unary(spirv::Op::UConvert)
+            }
+            // We assume it's either an identity cast, or int-uint.
+            _ => Cast::Unary(spirv::Op::Bitcast),
+        };
+        Ok(match cast {
+            Cast::Identity => expr_id,
+            Cast::Unary(op) => {
+                let id = self.gen_id();
+                block
+                    .body
+                    .push(Instruction::unary(op, result_type_id, id, expr_id));
+                id
+            }
+            Cast::Binary(op, operand) => {
+                let id = self.gen_id();
+                block.body.push(Instruction::binary(
+                    op,
+                    result_type_id,
+                    id,
+                    expr_id,
+                    operand,
+                ));
+                id
+            }
+            Cast::Ternary(op, op1, op2) => {
+                let id = self.gen_id();
+                block.body.push(Instruction::ternary(
+                    op,
+                    result_type_id,
+                    id,
+                    expr_id,
+                    op1,
+                    op2,
+                ));
+                id
+            }
+        })
     }
 
     /// Build an `OpAccessChain` instruction.

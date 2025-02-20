@@ -5,6 +5,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt::Write;
+use hashbrown::HashSet;
 
 use super::Error;
 use super::ToWgslIfImplemented as _;
@@ -129,6 +130,9 @@ impl<W: Write> Writer<W> {
         // Write all needed directives.
         self.write_enable_dual_source_blending_if_needed(module)?;
 
+        // Write all `enable` declarations
+        self.write_enable_declarations(module)?;
+
         // Write all structs
         for (handle, ty) in module.types.iter() {
             if let TypeInner::Struct { ref members, .. } = ty.inner {
@@ -216,6 +220,41 @@ impl<W: Write> Writer<W> {
         for polyfill in &self.required_polyfills {
             writeln!(self.out)?;
             write!(self.out, "{}", polyfill.source)?;
+            writeln!(self.out)?;
+        }
+
+        Ok(())
+    }
+
+    /// Helper method which writes all the `enable` declarations
+    /// needed for a module.
+    fn write_enable_declarations(&mut self, module: &Module) -> BackendResult {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        enum WrittenDeclarations {
+            F16,
+        }
+
+        let mut written_declarations = HashSet::new();
+
+        // Write all the `enable` declarations
+        for (_, ty) in module.types.iter() {
+            match ty.inner {
+                TypeInner::Scalar(scalar)
+                | TypeInner::Vector { scalar, .. }
+                | TypeInner::Matrix { scalar, .. } => {
+                    if scalar == crate::Scalar::F16
+                        && !written_declarations.contains(&WrittenDeclarations::F16)
+                    {
+                        writeln!(self.out, "enable f16;")?;
+                        written_declarations.insert(WrittenDeclarations::F16);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if !written_declarations.is_empty() {
+            // Empty line for readability
             writeln!(self.out)?;
         }
 
@@ -1092,6 +1131,7 @@ impl<W: Write> Writer<W> {
 
         match expressions[expr] {
             Expression::Literal(literal) => match literal {
+                crate::Literal::F16(value) => write!(self.out, "{value}h")?,
                 crate::Literal::F32(value) => write!(self.out, "{value}f")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
                 crate::Literal::I32(value) => {

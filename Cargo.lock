@@ -1790,6 +1790,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "half-2"
+version = "2.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c36518ae13d88b7cbdc61401256df5d9fc27921ea66353a16660869b47af8864"
+dependencies = [
+ "arbitrary",
+ "bytemuck",
+ "cfg-if",
+ "crunchy",
+ "num-traits",
+ "serde",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2194,6 +2208,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libm"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
+
+[[package]]
 name = "libredox"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2393,12 +2413,14 @@ dependencies = [
  "codespan-reporting",
  "diff",
  "env_logger",
+ "half-2",
  "hashbrown",
  "hexf-parse",
  "hlsl-snapshots",
  "indexmap",
  "itertools 0.13.0",
  "log",
+ "num-traits",
  "petgraph 0.7.1",
  "pp-rs",
  "ron",
@@ -2574,6 +2596,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+ "libm",
 ]
 
 [[package]]
@@ -4843,6 +4866,7 @@ dependencies = [
  "env_logger",
  "futures-lite",
  "glam",
+ "half-2",
  "image",
  "itertools 0.13.0",
  "js-sys",

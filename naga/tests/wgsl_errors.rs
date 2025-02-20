@@ -8,7 +8,8 @@ use naga::valid::Capabilities;
 #[track_caller]
 fn check(input: &str, snapshot: &str) {
     let output = naga::front::wgsl::parse_str(input)
-        .expect_err("expected parser error")
+        .map(|_| panic!("expected parser error, but parsing succeeded!"))
+        .unwrap_err()
         .emit_to_string(input);
     if output != snapshot {
         for diff in diff::lines(snapshot, &output) {
@@ -19,6 +20,19 @@ fn check(input: &str, snapshot: &str) {
             }
         }
         panic!("Error snapshot failed");
+    }
+}
+
+#[track_caller]
+fn check_success(input: &str) {
+    match naga::front::wgsl::parse_str(input) {
+        Ok(_) => {}
+        Err(err) => {
+            panic!(
+                "expected success, but parsing failed with:\n{}",
+                err.emit_to_string(input)
+            );
+        }
     }
 }
 
@@ -827,6 +841,50 @@ fn matrix_constructor_inferred() {
     );
 }
 
+#[test]
+fn float16_requires_enable() {
+    check(
+        r#"
+            const a: f16 = 1.0;
+        "#,
+        r#"error: the `f16` language extension is not enabled
+  ┌─ wgsl:2:22
+  │
+2 │             const a: f16 = 1.0;
+  │                      ^^^ the `f16` language extension is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader.
+
+"#,
+    );
+
+    check(
+        r#"
+            const a = 1.0h;
+        "#,
+        r#"error: the `f16` language extension is not enabled
+  ┌─ wgsl:2:23
+  │
+2 │             const a = 1.0h;
+  │                       ^^^^ the `f16` language extension is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader.
+
+"#,
+    );
+}
+
+#[test]
+fn multiple_enables_valid() {
+    check_success(
+        r#"
+            enable f16;
+            enable f16;
+            const a: f16 = 1.0h;
+        "#,
+    );
+}
+
 /// Check the result of validating a WGSL program against a pattern.
 ///
 /// Unless you are generating code programmatically, the
@@ -929,6 +987,53 @@ fn int64_capability() {
             source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability {flag: "SHADER_INT64",..}),
             ..
         })
+    }
+}
+
+#[test]
+fn float16_capability() {
+    check_validation! {
+        "enable f16; var input: f16;",
+        "enable f16; var input: vec2<f16>;":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability {flag: "FLOAT16",..}),
+            ..
+        })
+    }
+}
+
+#[test]
+fn float16_in_push_constant() {
+    check_validation! {
+        "enable f16; var<push_constant> input: f16;",
+        "enable f16; var<push_constant> input: vec2<f16>;",
+        "enable f16; var<push_constant> input: mat4x4<f16>;",
+        "enable f16; struct S { a: f16 }; var<push_constant> input: S;",
+        "enable f16; struct S1 { a: f16 }; struct S2 { a : S1 } var<push_constant> input: S2;":
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::InvalidPushConstantType(
+                naga::valid::PushConstantError::InvalidScalar(
+                    naga::Scalar::F16
+                )
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_FLOAT16 | naga::valid::Capabilities::PUSH_CONSTANT
+    }
+}
+
+#[test]
+fn float16_in_atomic() {
+    check_validation! {
+        "enable f16; var<storage> a: atomic<f16>;":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::InvalidAtomicWidth(
+                naga::ScalarKind::Float,
+                2
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_FLOAT16
     }
 }
 

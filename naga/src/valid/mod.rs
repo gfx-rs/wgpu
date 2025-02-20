@@ -31,7 +31,7 @@ pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
-pub use r#type::{Disalignment, TypeError, TypeFlags, WidthError};
+pub use r#type::{Disalignment, PushConstantError, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
 
@@ -163,6 +163,8 @@ bitflags::bitflags! {
         const TEXTURE_INT64_ATOMIC = 1 << 24;
         /// Support for ray queries returning vertex position
         const RAY_HIT_VERTEX_POSITION = 1 << 25;
+        /// Support for 16-bit floating-point types.
+        const SHADER_FLOAT16 = 1 << 26;
     }
 }
 

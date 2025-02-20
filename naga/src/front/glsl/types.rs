@@ -12,6 +12,10 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
             name: None,
             inner: TypeInner::Scalar(Scalar::BOOL),
         }),
+        "float16_t" => Some(Type {
+            name: None,
+            inner: TypeInner::Scalar(Scalar::F16),
+        }),
         "float" => Some(Type {
             name: None,
             inner: TypeInner::Scalar(Scalar::F32),
@@ -42,6 +46,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
                     "i" => Scalar::I32,
                     "u" => Scalar::U32,
                     "d" => Scalar::F64,
+                    "f16" => Scalar::F16,
                     _ => return None,
                 })
             }
