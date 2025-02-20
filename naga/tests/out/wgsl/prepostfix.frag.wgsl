@@ -13,22 +13,22 @@ fn main_1() {
     let _e8 = (_e6 - 1i);
     scalar = _e8;
     scalar_target = _e8;
-    let _e14 = vec;
-    vec = (_e14 - vec2(1u));
-    vec_target = _e14;
-    let _e18 = vec;
-    let _e21 = (_e18 + vec2(1u));
-    vec = _e21;
-    vec_target = _e21;
-    let _e32 = mat;
-    const _e34 = vec3(1f);
-    mat = (_e32 + mat4x3<f32>(_e34, _e34, _e34, _e34));
-    mat_target = _e32;
-    let _e37 = mat;
-    const _e39 = vec3(1f);
-    let _e41 = (_e37 - mat4x3<f32>(_e39, _e39, _e39, _e39));
-    mat = _e41;
-    mat_target = _e41;
+    let _e13 = vec;
+    vec = (_e13 - vec2(1u));
+    vec_target = _e13;
+    let _e17 = vec;
+    let _e20 = (_e17 + vec2(1u));
+    vec = _e20;
+    vec_target = _e20;
+    let _e30 = mat;
+    const _e32 = vec3(1f);
+    mat = (_e30 + mat4x3<f32>(_e32, _e32, _e32, _e32));
+    mat_target = _e30;
+    let _e35 = mat;
+    const _e37 = vec3(1f);
+    let _e39 = (_e35 - mat4x3<f32>(_e37, _e37, _e37, _e37));
+    mat = _e39;
+    mat_target = _e39;
     return;
 }
 

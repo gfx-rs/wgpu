@@ -1177,7 +1177,7 @@ fn convert_glsl_folder() {
         }
 
         let mut parser = naga::front::glsl::Frontend::default();
-        let module = parser
+        let mut module = parser
             .parse(
                 &naga::front::glsl::Options {
                     stage: match file_name.extension().and_then(|s| s.to_str()).unwrap() {
@@ -1198,6 +1198,18 @@ fn convert_glsl_folder() {
         )
         .validate(&module)
         .unwrap();
+
+        #[cfg(feature = "compact")]
+        let info = {
+            naga::compact::compact(&mut module);
+
+            naga::valid::Validator::new(
+                naga::valid::ValidationFlags::all(),
+                naga::valid::Capabilities::all(),
+            )
+            .validate(&module)
+            .unwrap()
+        };
 
         #[cfg(wgsl_out)]
         {

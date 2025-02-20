@@ -37,7 +37,7 @@ fn main(@location(0) position: vec2<f32>, @location(1) color: vec4<f32>) -> Vert
     position_1 = position;
     color_1 = color;
     main_1();
-    let _e15 = frag_color;
-    let _e17 = gl_Position;
-    return VertexOutput(_e15, _e17);
+    let _e5 = frag_color;
+    let _e7 = gl_Position;
+    return VertexOutput(_e5, _e7);
 }
