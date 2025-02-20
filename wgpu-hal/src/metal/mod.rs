@@ -22,6 +22,7 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod layer_observer;
 mod surface;
 mod time;
 
