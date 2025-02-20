@@ -1,5 +1,5 @@
 use criterion::*;
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, process::Command};
 
 struct Input {
     filename: String,
@@ -122,10 +122,22 @@ fn parse_glsl(stage: naga::ShaderStage, inputs: &Inputs) {
     }
 }
 
+fn get_wgsl_inputs() -> Inputs {
+    let mut inputs = Inputs::from_dir("../naga/tests/in", "wgsl");
+
+    // remove "large-source" tests, they skew the results
+    inputs
+        .inner
+        .retain(|input| !input.filename.contains("large-source"));
+
+    inputs
+}
+
 fn frontends(c: &mut Criterion) {
     let mut group = c.benchmark_group("front");
 
-    let mut inputs_wgsl = Inputs::from_dir("../naga/tests/in", "wgsl");
+    let mut inputs_wgsl = get_wgsl_inputs();
+
     group.throughput(Throughput::Bytes(inputs_wgsl.bytes()));
     group.bench_function("shader: naga module bincode decode", |b| {
         inputs_wgsl.parse();
@@ -154,16 +166,40 @@ fn frontends(c: &mut Criterion) {
         });
     });
 
-    let mut inputs_spirv = Inputs::from_dir("../naga/tests/in/spv", "spv");
-    group.throughput(Throughput::Bytes(inputs_spirv.bytes()));
-    group.bench_function("shader: spv-in", |b| {
-        inputs_spirv.load();
+    let inputs_spirv = Inputs::from_dir("../naga/tests/in/spv", "spvasm");
 
+    // Assemble all the SPIR-V assembly.
+    let mut assembled_spirv = Vec::<Vec<u32>>::new();
+    for input in &inputs_spirv.inner {
+        let output = Command::new("spirv-as")
+            .arg(&input.filename)
+            .arg("-o")
+            .arg("-")
+            .output()
+            .expect(
+                "Failed to execute spirv-as. It can be installed \
+           q by installing the Vulkan SDK and adding it to your path.",
+            );
+
+        if !output.status.success() {
+            panic!(
+                "spirv-as failed: {}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        assembled_spirv.push(bytemuck::pod_collect_to_vec(&output.stdout));
+    }
+
+    let total_bytes = assembled_spirv.iter().map(|spv| spv.len() as u64).sum();
+
+    group.throughput(Throughput::Bytes(total_bytes));
+    group.bench_function("shader: spv-in", |b| {
         b.iter(|| {
             let options = naga::front::spv::Options::default();
-            for input in &inputs_spirv.inner {
-                let spv = bytemuck::cast_slice(&input.data);
-                let parser = naga::front::spv::Frontend::new(spv.iter().cloned(), &options);
+            for input in &assembled_spirv {
+                let parser = naga::front::spv::Frontend::new(input.iter().cloned(), &options);
                 parser.parse().unwrap();
             }
         });
@@ -189,7 +225,7 @@ fn frontends(c: &mut Criterion) {
 }
 
 fn validation(c: &mut Criterion) {
-    let mut inputs = Inputs::from_dir("../naga/tests/in", "wgsl");
+    let mut inputs = get_wgsl_inputs();
 
     let mut group = c.benchmark_group("validate");
     group.throughput(Throughput::Bytes(inputs.bytes()));
@@ -215,7 +251,7 @@ fn validation(c: &mut Criterion) {
 }
 
 fn backends(c: &mut Criterion) {
-    let mut inputs = Inputs::from_dir("../naga/tests/in", "wgsl");
+    let mut inputs = get_wgsl_inputs();
 
     let mut group = c.benchmark_group("back");
     // While normally this would be done inside the bench_function callback, we need to
