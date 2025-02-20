@@ -440,14 +440,13 @@ impl crate::Instance for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (WGL) Backend");
         let opengl_module =
-            unsafe { LibraryLoader::LoadLibraryA(PCSTR("opengl32.dll\0".as_ptr())) }.map_err(
-                |e| {
+            unsafe { LibraryLoader::LoadLibraryA(PCSTR(c"opengl32.dll".as_ptr().cast())) }
+                .map_err(|e| {
                     crate::InstanceError::with_source(
                         String::from("unable to load the OpenGL library"),
                         e,
                     )
-                },
-            )?;
+                })?;
 
         let device = create_instance_device()?;
         let dc = device.dc;
