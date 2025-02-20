@@ -117,3 +117,6 @@ pub use raw_window_handle as rwh;
 ///
 #[cfg(any(webgl, webgpu))]
 pub use web_sys;
+
+#[doc(hidden)]
+pub use macros::helpers as __macro_helpers;
