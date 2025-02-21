@@ -663,6 +663,12 @@ pub struct Queue {
     temp_lists: Mutex<Vec<Option<Direct3D12::ID3D12CommandList>>>,
 }
 
+impl Queue {
+    pub fn as_raw(&self) -> &Direct3D12::ID3D12CommandQueue {
+        &self.raw
+    }
+}
+
 unsafe impl Send for Queue {}
 unsafe impl Sync for Queue {}
 
