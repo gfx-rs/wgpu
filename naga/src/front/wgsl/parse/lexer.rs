@@ -352,7 +352,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(in crate::front::wgsl) fn optional_generic_term(&mut self) -> bool {
+    pub(in crate::front::wgsl) fn end_of_generic_arguments(&mut self) -> bool {
         self.skip(Token::Separator(',')) && self.peek().0 != Token::Paren('>')
     }
 

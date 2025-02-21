@@ -576,7 +576,7 @@ impl Parser {
             (Token::Paren('<'), ast::ConstructorType::PartialArray) => {
                 lexer.expect_generic_paren('<')?;
                 let base = self.type_decl(lexer, ctx)?;
-                let size = if lexer.optional_generic_term() {
+                let size = if lexer.end_of_generic_arguments() {
                     let expr = self.const_generic_expression(lexer, ctx)?;
                     lexer.skip(Token::Separator(','));
                     ast::ArraySize::Constant(expr)
@@ -1438,7 +1438,7 @@ impl Parser {
                 lexer.expect(Token::Separator(','))?;
                 let base = self.type_decl(lexer, ctx)?;
                 if let crate::AddressSpace::Storage { ref mut access } = space {
-                    *access = if lexer.optional_generic_term() {
+                    *access = if lexer.end_of_generic_arguments() {
                         let result = lexer.next_storage_access()?;
                         lexer.skip(Token::Separator(','));
                         result
@@ -1452,7 +1452,7 @@ impl Parser {
             "array" => {
                 lexer.expect_generic_paren('<')?;
                 let base = self.type_decl(lexer, ctx)?;
-                let size = if lexer.optional_generic_term() {
+                let size = if lexer.end_of_generic_arguments() {
                     let size = self.const_generic_expression(lexer, ctx)?;
                     lexer.skip(Token::Separator(','));
                     ast::ArraySize::Constant(size)
@@ -1466,7 +1466,7 @@ impl Parser {
             "binding_array" => {
                 lexer.expect_generic_paren('<')?;
                 let base = self.type_decl(lexer, ctx)?;
-                let size = if lexer.optional_generic_term() {
+                let size = if lexer.end_of_generic_arguments() {
                     let size = self.unary_expression(lexer, ctx)?;
                     lexer.skip(Token::Separator(','));
                     ast::ArraySize::Constant(size)
