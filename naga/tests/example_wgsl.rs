@@ -30,7 +30,7 @@ pub fn parse_example_wgsl() {
         }
     }
 
-    assert_ne!(example_paths.len(), 0, "No examples found!");
+    assert!(!example_paths.is_empty(), "No examples found!");
 
     println!("Found {} examples", example_paths.len());
 
