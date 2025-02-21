@@ -1,17 +1,16 @@
-use super::{conv, PrivateCapabilities};
-use crate::auxil::map_naga_stage;
+use alloc::{
+    borrow::ToOwned, format, string::String, string::ToString as _, sync::Arc, vec, vec::Vec,
+};
+use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Ordering};
+use std::sync::Mutex;
+
+use arrayvec::ArrayVec;
 use glow::HasContext;
 use naga::FastHashMap;
-use std::{
-    cmp::max,
-    convert::TryInto,
-    ptr,
-    sync::{Arc, Mutex},
-};
 
+use super::{conv, PrivateCapabilities};
+use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
-use arrayvec::ArrayVec;
-use std::sync::atomic::Ordering;
 
 type ShaderStage<'a> = (
     naga::ShaderStage,
@@ -24,7 +23,7 @@ struct CompilationContext<'a> {
     sampler_map: &'a mut super::SamplerBindMap,
     name_binding_map: &'a mut NameBindingMap,
     push_constant_items: &'a mut Vec<naga::back::glsl::PushConstantItem>,
-    multiview: Option<std::num::NonZeroU32>,
+    multiview: Option<NonZeroU32>,
 }
 
 impl CompilationContext<'_> {
@@ -117,7 +116,7 @@ impl super::Device {
     #[cfg(any(native, Emscripten))]
     pub unsafe fn texture_from_raw(
         &self,
-        name: std::num::NonZeroU32,
+        name: NonZeroU32,
         desc: &crate::TextureDescriptor,
         drop_callback: Option<crate::DropCallback>,
     ) -> super::Texture {
@@ -144,7 +143,7 @@ impl super::Device {
     #[cfg(any(native, Emscripten))]
     pub unsafe fn texture_from_raw_renderbuffer(
         &self,
-        name: std::num::NonZeroU32,
+        name: NonZeroU32,
         desc: &crate::TextureDescriptor,
         drop_callback: Option<crate::DropCallback>,
     ) -> super::Texture {
@@ -212,7 +211,7 @@ impl super::Device {
         use naga::back::glsl;
         let pipeline_options = glsl::PipelineOptions {
             shader_stage: naga_stage,
-            entry_point: stage.entry_point.to_string(),
+            entry_point: stage.entry_point.to_owned(),
             multiview: context.multiview,
         };
 
@@ -300,7 +299,7 @@ impl super::Device {
         shaders: ArrayVec<ShaderStage<'a>, { crate::MAX_CONCURRENT_SHADER_STAGES }>,
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
-        multiview: Option<std::num::NonZeroU32>,
+        multiview: Option<NonZeroU32>,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let mut program_stages = ArrayVec::new();
         let mut group_to_binding_to_slot = Vec::with_capacity(layout.group_infos.len());
@@ -349,7 +348,7 @@ impl super::Device {
         shaders: ArrayVec<ShaderStage<'a>, { crate::MAX_CONCURRENT_SHADER_STAGES }>,
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
-        multiview: Option<std::num::NonZeroU32>,
+        multiview: Option<NonZeroU32>,
         glsl_version: naga::back::glsl::Version,
         private_caps: PrivateCapabilities,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {

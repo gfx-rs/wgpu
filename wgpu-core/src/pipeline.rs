@@ -1,3 +1,16 @@
+use alloc::{
+    borrow::Cow,
+    boxed::Box,
+    string::{String, ToString as _},
+    sync::Arc,
+    vec::Vec,
+};
+use core::{marker::PhantomData, mem::ManuallyDrop, num::NonZeroU32};
+
+use arrayvec::ArrayVec;
+use naga::error::ShaderError;
+use thiserror::Error;
+
 pub use crate::pipeline_cache::PipelineCacheValidationError;
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
@@ -7,10 +20,6 @@ use crate::{
     resource::{InvalidResourceError, Labeled, TrackingData},
     resource_log, validation, Label,
 };
-use arrayvec::ArrayVec;
-use naga::error::ShaderError;
-use std::{borrow::Cow, marker::PhantomData, mem::ManuallyDrop, num::NonZeroU32, sync::Arc};
-use thiserror::Error;
 
 /// Information about buffer bindings, which
 /// is validated against the shader (and pipeline)

@@ -1,4 +1,5 @@
-use std::{error, fmt, future::Future, sync::Arc};
+use alloc::{boxed::Box, string::String, sync::Arc};
+use core::{error, fmt, future::Future};
 
 use parking_lot::Mutex;
 
@@ -162,7 +163,7 @@ impl Device {
         let encoder = self.inner.create_render_bundle_encoder(desc);
         RenderBundleEncoder {
             inner: encoder,
-            _p: std::marker::PhantomData,
+            _p: core::marker::PhantomData,
         }
     }
 

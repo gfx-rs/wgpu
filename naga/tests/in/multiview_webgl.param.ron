@@ -10,4 +10,5 @@
 		zero_initialize_workgroup_memory: true,
 	),
 	glsl_multiview: Some(2),
+	targets: "GLSL",
 )

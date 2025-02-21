@@ -1,2 +1,7 @@
 (
+	targets: "HLSL",
+	fragment_module: Some(FragmentModule(
+		path: "unconsumed_vertex_outputs_frag.wgsl",
+		entry_point: "fs_main"
+	)),
 )

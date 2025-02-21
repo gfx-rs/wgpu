@@ -1,3 +1,6 @@
+use alloc::{sync::Arc, vec, vec::Vec};
+use core::{iter, mem};
+
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
@@ -13,7 +16,6 @@ use crate::{
     track::{StatelessTracker, TrackerIndex},
     FastHashMap,
 };
-use std::{iter, sync::Arc};
 use thiserror::Error;
 use wgt::BufferAddress;
 
@@ -39,7 +41,7 @@ impl QueryResetMap {
                 )
             });
 
-        std::mem::replace(&mut vec_pair.0[query as usize], true)
+        mem::replace(&mut vec_pair.0[query as usize], true)
     }
 
     pub fn reset_queries(&mut self, raw_encoder: &mut dyn hal::DynCommandEncoder) {

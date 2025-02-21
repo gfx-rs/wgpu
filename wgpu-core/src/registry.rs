@@ -1,4 +1,5 @@
-use std::{mem::size_of, sync::Arc};
+use alloc::sync::Arc;
+use core::mem::size_of;
 
 use crate::{
     id::Id,
@@ -126,11 +127,10 @@ impl<T: StorageItem + Clone> Registry<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use crate::{id::Marker, resource::ResourceType, storage::StorageItem};
-
     use super::Registry;
+    use crate::{id::Marker, resource::ResourceType, storage::StorageItem};
+    use alloc::sync::Arc;
+
     struct TestData;
     struct TestDataId;
     impl Marker for TestDataId {}

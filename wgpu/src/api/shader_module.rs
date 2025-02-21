@@ -1,4 +1,10 @@
-use std::{borrow::Cow, future::Future, marker::PhantomData};
+use alloc::{
+    borrow::Cow,
+    string::{String, ToString as _},
+    vec,
+    vec::Vec,
+};
+use core::{future::Future, marker::PhantomData};
 
 use crate::*;
 

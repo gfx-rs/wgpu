@@ -2,7 +2,8 @@ use crate::{
     util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferSlice, BufferUsages,
     BufferViewMut, CommandEncoder, Device, MapMode,
 };
-use std::fmt;
+use alloc::vec::Vec;
+use core::fmt;
 use std::sync::mpsc;
 
 /// Efficiently performs many buffer writes by sharing and reusing temporary buffers.

@@ -1,5 +1,5 @@
-use std::slice::Iter;
-use std::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
+use core::slice::Iter;
 
 /// A tracker that holds strong references to resources.
 ///

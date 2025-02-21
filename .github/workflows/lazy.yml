@@ -53,7 +53,7 @@ jobs:
           cd naga
           cargo build --release -p naga-cli
 
-      - name: Convert metal shaders
+      - name: Convert Metal shaders
         run: |
           # No needed to stop workflow if we can't validate one file
           set +e
@@ -89,14 +89,14 @@ jobs:
         run: |
           cargo build --release -p naga-cli
 
-      - name: Install spirv-tools
+      - name: Install `spirv-tools`
         run: |
           cd naga
           wget -q https://storage.googleapis.com/spirv-tools/artifacts/prod/graphics_shader_compiler/spirv-tools/linux-clang-release/continuous/1489/20210629-121459/install.tgz
           tar zxf install.tgz
           ./install/bin/spirv-as --version
 
-      - name: Compile spv from spvasm
+      - name: Compile `spv` from `spvasm`
         run: |
            cd naga/spirv-samples
            mkdir -p spv
@@ -107,7 +107,7 @@ jobs:
                ../install/bin/spirv-as --target-env spv1.3 $(realpath ${fname}) -o ./spv/$(basename ${fname}).spv
            done;
 
-      - name: Validate spv and generate wgsl
+      - name: Validate `spv` and generate `wgsl`
         run: |
            set +e
            cd naga/spirv-samples
@@ -132,7 +132,7 @@ jobs:
            done
            cat counter
 
-      - name: Validate output wgsl
+      - name: Validate output `wgsl`
         run: |
            set +e
            cd naga/spirv-samples

@@ -1,3 +1,5 @@
+use std::vec::Vec;
+
 use ash::vk;
 
 impl super::PrivateCapabilities {

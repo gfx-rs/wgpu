@@ -64,4 +64,5 @@
 		zero_initialize_workgroup_memory: true,
 		restrict_indexing: true
 	),
+	targets: "SPIRV | METAL | GLSL | HLSL | WGSL",
 )

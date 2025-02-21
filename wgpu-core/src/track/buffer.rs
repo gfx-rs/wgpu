@@ -4,7 +4,13 @@
 //! a 16 bit bitflag of buffer usages. Because there is only ever
 //! one subresource, they have no selector.
 
-use std::sync::{Arc, Weak};
+use alloc::{
+    sync::{Arc, Weak},
+    vec::Vec,
+};
+
+use hal::BufferBarrier;
+use wgt::{strict_assert, strict_assert_eq, BufferUses};
 
 use super::{PendingTransition, TrackerIndex};
 use crate::{
@@ -15,8 +21,6 @@ use crate::{
         ResourceUsageCompatibilityError, ResourceUses,
     },
 };
-use hal::BufferBarrier;
-use wgt::{strict_assert, strict_assert_eq, BufferUses};
 
 impl ResourceUses for BufferUses {
     const EXCLUSIVE: Self = Self::EXCLUSIVE;

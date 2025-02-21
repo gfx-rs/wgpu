@@ -1,4 +1,6 @@
 (
+	//TODO: GLSL https://github.com/gfx-rs/naga/issues/874
+	targets: "SPIRV | METAL | HLSL | WGSL",
 	spv: (
 		version: (1, 0),
 		capabilities: [ Shader, SampleRateShading ],

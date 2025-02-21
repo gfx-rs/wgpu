@@ -7,4 +7,5 @@
 		debug: true,
 		adjust_coordinate_space: false,
 	),
+	targets: "SPIRV | WGSL",
 )

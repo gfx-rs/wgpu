@@ -1,4 +1,15 @@
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::{
+    cmp::max,
+    num::NonZeroU64,
+    ops::{Deref, Range},
+    sync::atomic::Ordering,
+};
+
+use wgt::{math::align_to, BufferUsages, BufferUses, Features};
+
 use crate::{
+    command::CommandBufferMutable,
     device::queue::TempResource,
     global::Global,
     hub::Hub,
@@ -15,16 +26,6 @@ use crate::{
     snatch::SnatchGuard,
     track::PendingTransition,
     FastHashSet,
-};
-
-use wgt::{math::align_to, BufferUsages, BufferUses, Features};
-
-use super::CommandBufferMutable;
-use std::{
-    cmp::max,
-    num::NonZeroU64,
-    ops::{Deref, Range},
-    sync::{atomic::Ordering, Arc},
 };
 
 struct TriangleBufferStore<'a> {

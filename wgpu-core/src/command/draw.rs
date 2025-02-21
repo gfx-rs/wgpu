@@ -1,3 +1,7 @@
+use alloc::boxed::Box;
+
+use thiserror::Error;
+
 use crate::{
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
     resource::{
@@ -6,8 +10,6 @@ use crate::{
     },
     track::ResourceUsageCompatibilityError,
 };
-
-use thiserror::Error;
 
 use super::bind::BinderError;
 

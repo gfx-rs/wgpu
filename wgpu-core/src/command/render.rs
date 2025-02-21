@@ -1,3 +1,13 @@
+use alloc::{borrow::Cow, sync::Arc, vec::Vec};
+use core::{fmt, mem::size_of, num::NonZeroU32, ops::Range, str};
+
+use arrayvec::ArrayVec;
+use thiserror::Error;
+use wgt::{
+    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
+    TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
+};
+
 use crate::binding_model::BindGroup;
 use crate::command::{
     validate_and_begin_occlusion_query, validate_and_begin_pipeline_statistics_query,
@@ -33,19 +43,10 @@ use crate::{
     Label,
 };
 
-use arrayvec::ArrayVec;
-use thiserror::Error;
-use wgt::{
-    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
-    TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
-};
-
 #[cfg(feature = "serde")]
 use serde::Deserialize;
 #[cfg(feature = "serde")]
 use serde::Serialize;
-
-use std::{borrow::Cow, fmt, mem::size_of, num::NonZeroU32, ops::Range, str, sync::Arc};
 
 use super::render_command::ArcRenderCommand;
 use super::{

@@ -1,8 +1,10 @@
+use alloc::{boxed::Box, sync::Arc};
+use core::mem::ManuallyDrop;
+
+use wgt::BufferUses;
+
 use crate::device::{Device, DeviceError};
 use crate::resource_log;
-use std::mem::ManuallyDrop;
-use std::sync::Arc;
-use wgt::BufferUses;
 
 #[derive(Debug)]
 pub struct ScratchBuffer {

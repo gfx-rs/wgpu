@@ -1,5 +1,5 @@
 use std::{
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     path::Path,
     process::Stdio,
 };
@@ -214,17 +214,23 @@ fn validate_spirv(path: &Path, spirv_as: &str, spirv_val: &str) -> anyhow::Resul
     else {
         bail!("no {expected_header_prefix:?} header found in {path:?}");
     };
-    let file = open_file(path)?;
     let mut spirv_as_cmd = EasyCommand::new(spirv_as, |cmd| {
-        cmd.stdin(Stdio::from(file))
-            .stdout(Stdio::piped())
+        cmd.stdout(Stdio::piped())
             .arg("--target-env")
             .arg(format!("spv{version}"))
-            .args(["-", "-o", "-"])
+            .args([path.to_str().unwrap(), "-o", "-"])
     });
-    let child = spirv_as_cmd
-        .spawn()
-        .with_context(|| format!("failed to spawn {spirv_as_cmd:?}"))?;
+    let assembled_spirv = spirv_as_cmd
+        .output()
+        .with_context(|| format!("Failed to run {spirv_as_cmd}"))?;
+
+    if !assembled_spirv.status.success() {
+        bail!(
+            "Failed to assemble {path:?} with {spirv_as_cmd}:\n{}",
+            String::from_utf8_lossy(&assembled_spirv.stderr)
+        );
+    }
+
     let error_message = || {
         format!(
             "Failed to validate {path:?}.
@@ -234,9 +240,26 @@ Note: Labels and line numbers will not match the input file.
             path.display(),
         )
     };
-    EasyCommand::new(spirv_val, |cmd| cmd.stdin(child.stdout.unwrap()))
-        .success()
-        .with_context(error_message)
+    let mut spirv_val_command = EasyCommand::new(spirv_val, |cmd| cmd.stdin(Stdio::piped()));
+    let mut spirv_val_process = spirv_val_command
+        .spawn()
+        .with_context(|| format!("Failed to run {spirv_val_command}"))?;
+
+    spirv_val_process
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(&assembled_spirv.stdout)?;
+
+    let spirv_val_output = spirv_val_process
+        .wait()
+        .with_context(|| format!("Failed to wait for {spirv_val_command}"))?;
+
+    if !spirv_val_output.success() {
+        bail!("{}", error_message());
+    }
+
+    Ok(())
 }
 
 fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {
@@ -257,22 +280,17 @@ fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {
     } else {
         format!("-std={language}")
     };
-    let file = open_file(path)?;
     EasyCommand::new(xcrun, |cmd| {
-        cmd.stdin(Stdio::from(file))
-            .args(["-sdk", "macosx", "metal", "-mmacosx-version-min=10.11"])
+        cmd.args(["-sdk", "macosx", "metal", "-mmacosx-version-min=10.11"])
             .arg(std_arg)
-            .args(["-x", "metal", "-", "-o", "/dev/null"])
+            .args(["-x", "metal", &*path.to_string_lossy(), "-o", "/dev/null"])
     })
     .success()
 }
 
 fn validate_glsl(path: &Path, type_arg: &str, glslang_validator: &str) -> anyhow::Result<()> {
-    let file = open_file(path)?;
     EasyCommand::new(glslang_validator, |cmd| {
-        cmd.stdin(Stdio::from(file))
-            .args(["--stdin", "-S"])
-            .arg(type_arg)
+        cmd.args([&*path.to_string_lossy(), "-S"]).arg(type_arg)
     })
     .success()
 }

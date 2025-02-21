@@ -1,3 +1,9 @@
+use alloc::{sync::Arc, vec::Vec};
+
+use arrayvec::ArrayVec;
+use thiserror::Error;
+use wgt::{BufferAddress, BufferUsages, Extent3d, TextureSelector, TextureUsages};
+
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
@@ -17,12 +23,6 @@ use crate::{
     },
     snatch::SnatchGuard,
 };
-
-use arrayvec::ArrayVec;
-use thiserror::Error;
-use wgt::{BufferAddress, BufferUsages, Extent3d, TextureSelector, TextureUsages};
-
-use std::sync::Arc;
 
 use super::{ClearError, CommandBufferMutable};
 

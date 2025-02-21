@@ -14,5 +14,6 @@
     ),
     pipeline_constants: {
         "o": 2.0
-    }
+    },
+	targets: "IR | SPIRV | METAL",
 )

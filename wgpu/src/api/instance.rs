@@ -1,8 +1,10 @@
+#[cfg(native)]
+use alloc::vec::Vec;
+use core::future::Future;
+
 use parking_lot::Mutex;
 
 use crate::{dispatch::InstanceInterface, *};
-
-use std::future::Future;
 
 bitflags::bitflags! {
     /// WGSL language extensions.
@@ -309,7 +311,7 @@ impl Instance {
                 handle_source = None;
 
                 let value: &wasm_bindgen::JsValue = &canvas;
-                let obj = std::ptr::NonNull::from(value).cast();
+                let obj = core::ptr::NonNull::from(value).cast();
                 let raw_window_handle = raw_window_handle::WebCanvasWindowHandle::new(obj).into();
                 let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
 
@@ -328,7 +330,7 @@ impl Instance {
                 handle_source = None;
 
                 let value: &wasm_bindgen::JsValue = &canvas;
-                let obj = std::ptr::NonNull::from(value).cast();
+                let obj = core::ptr::NonNull::from(value).cast();
                 let raw_window_handle =
                     raw_window_handle::WebOffscreenCanvasWindowHandle::new(obj).into();
                 let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();

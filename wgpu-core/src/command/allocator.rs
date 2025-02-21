@@ -1,3 +1,5 @@
+use alloc::{boxed::Box, vec::Vec};
+
 use crate::lock::{rank, Mutex};
 
 /// A pool of free [`wgpu_hal::CommandEncoder`]s, owned by a `Device`.

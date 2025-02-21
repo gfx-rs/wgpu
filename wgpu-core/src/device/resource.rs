@@ -1,3 +1,26 @@
+use alloc::{
+    borrow::Cow,
+    boxed::Box,
+    string::{String, ToString as _},
+    sync::{Arc, Weak},
+    vec::Vec,
+};
+use core::{
+    fmt,
+    mem::{self, ManuallyDrop},
+    num::NonZeroU32,
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+};
+use std::sync::OnceLock;
+
+use arrayvec::ArrayVec;
+use bitflags::Flags;
+use smallvec::SmallVec;
+use wgt::{
+    math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureSelector,
+    TextureViewDimension,
+};
+
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
@@ -18,8 +41,8 @@ use crate::{
     pipeline,
     pool::ResourcePool,
     resource::{
-        self, Buffer, Fallible, Labeled, ParentDevice, QuerySet, Sampler, StagingBuffer, Texture,
-        TextureView, TextureViewNotRenderableReason, TrackingData,
+        self, AccelerationStructure, Buffer, Fallible, Labeled, ParentDevice, QuerySet, Sampler,
+        StagingBuffer, Texture, TextureView, TextureViewNotRenderableReason, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
@@ -27,25 +50,6 @@ use crate::{
     validation::{self, validate_color_attachment_bytes_per_sample},
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers,
-};
-
-use arrayvec::ArrayVec;
-use bitflags::Flags;
-use smallvec::SmallVec;
-use wgt::{
-    math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureSelector,
-    TextureViewDimension,
-};
-
-use crate::resource::{AccelerationStructure, Tlas};
-use std::{
-    borrow::Cow,
-    mem::{self, ManuallyDrop},
-    num::NonZeroU32,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, OnceLock, Weak,
-    },
 };
 
 use super::{
@@ -133,8 +137,8 @@ pub(crate) enum DeferredDestroy {
     BindGroups(WeakVec<BindGroup>),
 }
 
-impl std::fmt::Debug for Device {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Device {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Device")
             .field("label", &self.label())
             .field("limits", &self.limits)
@@ -656,7 +660,7 @@ impl Device {
             let map_size = buffer.size;
             let mapping = if map_size == 0 {
                 hal::BufferMapping {
-                    ptr: std::ptr::NonNull::dangling(),
+                    ptr: core::ptr::NonNull::dangling(),
                     is_coherent: true,
                 }
             } else {
@@ -975,7 +979,7 @@ impl Device {
             ));
         }
 
-        let mut hal_view_formats = vec![];
+        let mut hal_view_formats = Vec::new();
         for format in desc.view_formats.iter() {
             if desc.format == *format {
                 continue;

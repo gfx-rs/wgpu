@@ -1,5 +1,5 @@
 use crate::{Epoch, Index};
-use std::{
+use core::{
     cmp::Ordering,
     fmt::{self, Debug},
     hash::Hash,
@@ -165,7 +165,7 @@ where
     T: Marker,
 {
     #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }

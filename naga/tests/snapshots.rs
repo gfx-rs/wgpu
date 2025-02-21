@@ -7,12 +7,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use ron::de;
+
 const CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 const BASE_DIR_IN: &str = "tests/in";
 const BASE_DIR_OUT: &str = "tests/out";
 
 bitflags::bitflags! {
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, serde::Deserialize)]
+    #[serde(transparent)]
+    #[derive(Debug, Eq, PartialEq)]
     struct Targets: u32 {
         /// A serialization of the `naga::Module`, in RON format.
         const IR = 1;
@@ -27,6 +31,12 @@ bitflags::bitflags! {
         const HLSL = 1 << 6;
         const WGSL = 1 << 7;
         const NO_VALIDATION = 1 << 8;
+    }
+}
+
+impl Default for Targets {
+    fn default() -> Self {
+        Targets::WGSL
     }
 }
 
@@ -59,6 +69,12 @@ struct WgslOutParameters {
 }
 
 #[derive(Default, serde::Deserialize)]
+struct FragmentModule {
+    path: String,
+    entry_point: String,
+}
+
+#[derive(Default, serde::Deserialize)]
 #[serde(default)]
 struct Parameters {
     // -- GOD MODE --
@@ -66,6 +82,8 @@ struct Parameters {
 
     // -- SPIR-V options --
     spv: SpirvOutParameters,
+
+    targets: Targets,
 
     // -- MSL options --
     #[cfg(all(feature = "deserialize", msl_out))]
@@ -84,11 +102,17 @@ struct Parameters {
     // -- HLSL options --
     #[cfg(all(feature = "deserialize", hlsl_out))]
     hlsl: naga::back::hlsl::Options,
+    hlsl_module_path: Option<String>,
 
     // -- WGSL options --
     wgsl: WgslOutParameters,
 
     // -- General options --
+
+    // Allow backends to be aware of the fragment module.
+    // Is the name of a WGSL file in the same directory as the test file.
+    fragment_module: Option<FragmentModule>,
+
     #[cfg(feature = "deserialize")]
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
 
@@ -111,7 +135,7 @@ struct Input {
     /// True if output filenames should add the output extension on top of
     /// `file_name`'s existing extension, rather than replacing it.
     ///
-    /// This is used by `convert_glsl_folder`, which wants to take input files
+    /// This is used by `convert_snapshots_glsl`, which wants to take input files
     /// like `210-bevy-2d-shader.frag` and just add `.wgsl` to it, producing
     /// `210-bevy-2d-shader.frag.wgsl`.
     keep_input_extension: bool,
@@ -137,32 +161,45 @@ impl Input {
     }
 
     /// Return an iterator that produces an `Input` for each entry in `subdirectory`.
-    fn files_in_dir(subdirectory: &str) -> impl Iterator<Item = Input> + 'static {
-        let subdirectory = subdirectory.to_string();
+    fn files_in_dir(
+        subdirectory: Option<&'static str>,
+        file_extensions: &'static [&'static str],
+    ) -> impl Iterator<Item = Input> + 'static {
         let mut input_directory = Path::new(env!("CARGO_MANIFEST_DIR")).join(BASE_DIR_IN);
-        input_directory.push(&subdirectory);
-        match std::fs::read_dir(&input_directory) {
-            Ok(entries) => entries.map(move |result| {
-                let entry = result.expect("error reading directory");
-                let file_name = PathBuf::from(entry.file_name());
-                let extension = file_name
-                    .extension()
-                    .expect("all files in snapshot input directory should have extensions");
-                let input = Input::new(
-                    Some(&subdirectory),
-                    file_name.file_stem().unwrap().to_str().unwrap(),
-                    extension.to_str().unwrap(),
-                );
-                input
-            }),
-            Err(err) => {
-                panic!(
-                    "Error opening directory '{}': {}",
-                    input_directory.display(),
-                    err
-                );
-            }
+        if let Some(ref subdirectory) = subdirectory {
+            input_directory.push(subdirectory);
         }
+        let entries = match std::fs::read_dir(&input_directory) {
+            Ok(entries) => entries,
+            Err(err) => panic!(
+                "Error opening directory '{}': {}",
+                input_directory.display(),
+                err
+            ),
+        };
+
+        entries.filter_map(move |result| {
+            let entry = result.expect("error reading directory");
+            if !entry.file_type().unwrap().is_file() {
+                return None;
+            }
+
+            let file_name = PathBuf::from(entry.file_name());
+            let extension = file_name
+                .extension()
+                .expect("all files in snapshot input directory should have extensions");
+
+            if !file_extensions.contains(&extension.to_str().unwrap()) {
+                return None;
+            }
+
+            let input = Input::new(
+                subdirectory,
+                file_name.file_stem().unwrap().to_str().unwrap(),
+                extension.to_str().unwrap(),
+            );
+            Some(input)
+        })
     }
 
     /// Return the path to the input directory.
@@ -254,6 +291,7 @@ impl Input {
     /// `subdirectory`, with `extension`.
     fn write_output_file(&self, subdirectory: &str, extension: &str, data: impl AsRef<[u8]>) {
         let output_path = self.output_path(subdirectory, extension);
+        fs::create_dir_all(output_path.parent().unwrap()).unwrap();
         if let Err(err) = fs::write(&output_path, data) {
             panic!("Error writing {}: {}", output_path.display(), err);
         }
@@ -266,20 +304,11 @@ type FragmentEntryPoint<'a> = naga::back::hlsl::FragmentEntryPoint<'a>;
 type FragmentEntryPoint<'a> = ();
 
 #[allow(unused_variables)]
-fn check_targets(
-    input: &Input,
-    module: &mut naga::Module,
-    targets: Targets,
-    source_code: Option<&str>,
-    // For testing hlsl generation when fragment shader doesn't consume all vertex outputs.
-    frag_ep: Option<FragmentEntryPoint>,
-) {
-    if frag_ep.is_some() && !targets.contains(Targets::HLSL) {
-        panic!("Providing FragmentEntryPoint only makes sense when testing hlsl-out");
-    }
-
+fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&str>) {
     let params = input.read_parameters();
     let name = &input.file_name;
+
+    let targets = params.targets;
 
     let (capabilities, subgroup_stages, subgroup_operations) = if params.god_mode {
         (
@@ -359,16 +388,19 @@ fn check_targets(
 
     #[cfg(all(feature = "deserialize", spv_out))]
     {
-        let debug_info = source_code.map(|code| naga::back::spv::DebugInfo {
-            source_code: code,
-            file_name: name.as_ref(),
-            // wgpu#6266: we technically know all the information here to
-            // produce the valid language but it's not too important for
-            // validation purposes
-            language: naga::back::spv::SourceLanguage::Unknown,
-        });
-
         if targets.contains(Targets::SPIRV) {
+            let mut debug_info = None;
+            if let Some(source_code) = source_code {
+                debug_info = Some(naga::back::spv::DebugInfo {
+                    source_code,
+                    file_name: name,
+                    // wgpu#6266: we technically know all the information here to
+                    // produce the valid language but it's not too important for
+                    // validation purposes
+                    language: naga::back::spv::SourceLanguage::Unknown,
+                })
+            }
+
             write_output_spv(
                 input,
                 module,
@@ -425,6 +457,31 @@ fn check_targets(
     #[cfg(all(feature = "deserialize", hlsl_out))]
     {
         if targets.contains(Targets::HLSL) {
+            let frag_module;
+            let mut frag_ep = None;
+            if let Some(ref module_spec) = params.fragment_module {
+                let full_path = input.input_directory().join(&module_spec.path);
+
+                assert_eq!(
+                    full_path.extension().unwrap().to_string_lossy(),
+                    "wgsl",
+                    "Currently all fragment modules must be in WGSL"
+                );
+
+                let frag_src = fs::read_to_string(full_path).unwrap();
+
+                frag_module = naga::front::wgsl::parse_str(&frag_src)
+                    .expect("Failed to parse fragment module");
+
+                frag_ep = Some(
+                    naga::back::hlsl::FragmentEntryPoint::new(
+                        &frag_module,
+                        &module_spec.entry_point,
+                    )
+                    .expect("Could not find fragment entry point"),
+                );
+            }
+
             write_output_hlsl(
                 input,
                 module,
@@ -677,375 +734,25 @@ fn write_output_wgsl(
 
 #[cfg(feature = "wgsl-in")]
 #[test]
-fn convert_wgsl() {
+fn convert_snapshots_wgsl() {
     let _ = env_logger::try_init();
 
-    let inputs = [
-        (
-            "array-in-ctor",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "array-in-function-return-type",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "empty",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "quad",
-            Targets::SPIRV
-                | Targets::METAL
-                | Targets::GLSL
-                | Targets::DOT
-                | Targets::HLSL
-                | Targets::WGSL,
-        ),
-        (
-            "bits",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "bitcast",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "boids",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "skybox",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "collatz",
-            Targets::SPIRV
-                | Targets::METAL
-                | Targets::IR
-                | Targets::ANALYSIS
-                | Targets::HLSL
-                | Targets::WGSL,
-        ),
-        (
-            "shadow",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "image",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL | Targets::GLSL,
-        ),
-        ("extra", Targets::SPIRV | Targets::METAL | Targets::WGSL),
-        ("push-constants", Targets::GLSL | Targets::HLSL),
-        (
-            "operators",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "functions",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "fragment-output",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "dualsource",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("functions-webgl", Targets::GLSL),
-        (
-            "interpolate",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "interpolate_compat",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "access",
-            Targets::SPIRV
-                | Targets::METAL
-                | Targets::GLSL
-                | Targets::HLSL
-                | Targets::WGSL
-                | Targets::IR
-                | Targets::ANALYSIS,
-        ),
-        (
-            "atomicOps",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicCompareExchange",
-            Targets::SPIRV | Targets::METAL | Targets::WGSL,
-        ),
-        (
-            "padding",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicOps-int64",
-            Targets::SPIRV | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicOps-int64-min-max",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicTexture",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicOps-float32",
-            Targets::SPIRV | Targets::METAL | Targets::WGSL,
-        ),
-        (
-            "atomicTexture-int64",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "atomicCompareExchange-int64",
-            Targets::SPIRV | Targets::WGSL,
-        ),
-        ("pointers", Targets::SPIRV | Targets::WGSL),
-        (
-            "control-flow",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "standard",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        //TODO: GLSL https://github.com/gfx-rs/naga/issues/874
-        (
-            "interface",
-            Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "globals",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("bounds-check-zero", Targets::SPIRV | Targets::METAL),
-        ("bounds-check-zero-atomic", Targets::METAL),
-        ("bounds-check-restrict", Targets::SPIRV | Targets::METAL),
-        (
-            "bounds-check-image-restrict",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL,
-        ),
-        (
-            "bounds-check-image-rzsw",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL,
-        ),
-        ("policy-mix", Targets::SPIRV | Targets::METAL),
-        ("bounds-check-dynamic-buffer", Targets::HLSL),
-        (
-            "texture-arg",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("cubeArrayShadow", Targets::GLSL),
-        ("sample-cube-array-depth-lod", Targets::GLSL),
-        (
-            "use-gl-ext-over-grad-workaround-if-instructed",
-            Targets::GLSL,
-        ),
-        ("local-const", Targets::IR | Targets::WGSL),
-        (
-            "math-functions",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "binding-arrays",
-            Targets::WGSL | Targets::HLSL | Targets::METAL | Targets::SPIRV,
-        ),
-        (
-            "binding-buffer-arrays",
-            Targets::WGSL | Targets::SPIRV, //TODO: more backends, eventually merge into "binding-arrays"
-        ),
-        ("resource-binding-map", Targets::METAL),
-        ("multiview", Targets::SPIRV | Targets::GLSL | Targets::WGSL),
-        ("multiview_webgl", Targets::GLSL),
-        (
-            "break-if",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        ("lexical-scopes", Targets::WGSL),
-        ("type-alias", Targets::WGSL),
-        ("module-scope", Targets::WGSL),
-        (
-            "workgroup-var-init",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        (
-            "workgroup-uniform-load",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        ("runtime-array-in-unused-struct", Targets::SPIRV),
-        ("sprite", Targets::SPIRV),
-        ("force_point_size_vertex_shader_webgl", Targets::GLSL),
-        ("invariant", Targets::GLSL),
-        ("ray-query", Targets::SPIRV | Targets::METAL | Targets::HLSL),
-        ("hlsl-keyword", Targets::HLSL),
-        (
-            "constructors",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("msl-varyings", Targets::METAL),
-        (
-            "const-exprs",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("const_assert", Targets::WGSL | Targets::IR),
-        ("separate-entry-points", Targets::SPIRV | Targets::GLSL),
-        (
-            "struct-layout",
-            Targets::WGSL | Targets::GLSL | Targets::SPIRV | Targets::HLSL | Targets::METAL,
-        ),
-        (
-            "f64",
-            Targets::SPIRV | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "abstract-types-const",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
-        ),
-        (
-            "abstract-types-function-calls",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
-        ),
-        (
-            "abstract-types-var",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
-        ),
-        (
-            "abstract-types-operators",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::WGSL,
-        ),
-        (
-            "abstract-types-return",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "int64",
-            Targets::SPIRV | Targets::HLSL | Targets::WGSL | Targets::METAL,
-        ),
-        (
-            "subgroup-operations",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "overrides",
-            Targets::IR
-                | Targets::ANALYSIS
-                | Targets::SPIRV
-                | Targets::METAL
-                | Targets::HLSL
-                | Targets::GLSL,
-        ),
-        (
-            "overrides-atomicCompareExchangeWeak",
-            Targets::IR | Targets::SPIRV | Targets::METAL,
-        ),
-        (
-            "overrides-ray-query",
-            Targets::IR | Targets::SPIRV | Targets::METAL,
-        ),
-        ("vertex-pulling-transform", Targets::METAL),
-        (
-            "cross",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        (
-            "phony_assignment",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("6220-break-from-loop", Targets::SPIRV),
-        ("index-by-value", Targets::SPIRV | Targets::IR),
-        (
-            "6438-conflicting-idents",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("diagnostic-filter", Targets::IR),
-        (
-            "6772-unpack-expr-accesses",
-            Targets::SPIRV | Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-        ),
-        ("must-use", Targets::IR),
-        (
-            "storage-textures",
-            Targets::IR | Targets::ANALYSIS | Targets::SPIRV | Targets::METAL | Targets::HLSL,
-        ),
-    ];
-
-    for &(name, targets) in inputs.iter() {
-        // WGSL shaders lives in root dir as a privileged.
-        let input = Input::new(None, name, "wgsl");
+    for input in Input::files_in_dir(None, &["wgsl"]) {
         let source = input.read_source();
+        // crlf will make the large split output different on different platform
+        let source = source.replace('\r', "");
         match naga::front::wgsl::parse_str(&source) {
-            Ok(mut module) => check_targets(&input, &mut module, targets, None, None),
+            Ok(mut module) => check_targets(&input, &mut module, Some(&source)),
             Err(e) => panic!(
                 "{}",
                 e.emit_to_string_with_path(&source, input.input_path())
             ),
         }
     }
-
-    {
-        let inputs = [
-            ("debug-symbol-simple", Targets::SPIRV),
-            ("debug-symbol-terrain", Targets::SPIRV),
-            ("debug-symbol-large-source", Targets::SPIRV),
-        ];
-        for &(name, targets) in inputs.iter() {
-            // WGSL shaders lives in root dir as a privileged.
-            let input = Input::new(None, name, "wgsl");
-            let source = input.read_source();
-
-            // crlf will make the large split output different on different platform
-            let source = source.replace('\r', "");
-            match naga::front::wgsl::parse_str(&source) {
-                Ok(mut module) => check_targets(&input, &mut module, targets, Some(&source), None),
-                Err(e) => panic!(
-                    "{}",
-                    e.emit_to_string_with_path(&source, input.input_path())
-                ),
-            }
-        }
-    }
-}
-
-#[cfg(all(feature = "wgsl-in", hlsl_out))]
-#[test]
-fn unconsumed_vertex_outputs_hlsl_out() {
-    let load_and_parse = |name| {
-        // WGSL shaders lives in root dir as a privileged.
-        let input = Input::new(None, name, "wgsl");
-        let source = input.read_source();
-        let module = match naga::front::wgsl::parse_str(&source) {
-            Ok(module) => module,
-            Err(e) => panic!(
-                "{}",
-                e.emit_to_string_with_path(&source, input.input_path())
-            ),
-        };
-        (input, module)
-    };
-
-    // Uses separate wgsl files to make sure the tested code doesn't accidentally rely on
-    // the fragment entry point being from the same parsed content (e.g. accidentally using the
-    // wrong `Module` when looking up info). We also don't just create a module from the same file
-    // twice since everything would probably be stored behind the same keys.
-    let (input, mut module) = load_and_parse("unconsumed_vertex_outputs_vert");
-    let (frag_input, mut frag_module) = load_and_parse("unconsumed_vertex_outputs_frag");
-    let frag_ep = naga::back::hlsl::FragmentEntryPoint::new(&frag_module, "fs_main")
-        .expect("fs_main not found");
-
-    check_targets(&input, &mut module, Targets::HLSL, None, Some(frag_ep));
-    check_targets(&frag_input, &mut frag_module, Targets::HLSL, None, None);
 }
 
 #[cfg(feature = "spv-in")]
-fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
+fn convert_spv(name: &str, adjust_coordinate_space: bool) {
     use std::process::Command;
 
     let _ = env_logger::try_init();
@@ -1084,136 +791,66 @@ fn convert_spv(name: &str, adjust_coordinate_space: bool, targets: Targets) {
     )
     .unwrap();
 
-    check_targets(&input, &mut module, targets, None, None);
+    check_targets(&input, &mut module, None);
 }
 
 #[cfg(feature = "spv-in")]
 #[test]
-fn convert_spv_all() {
-    convert_spv(
-        "quad-vert",
-        false,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv("shadow", true, Targets::IR | Targets::ANALYSIS);
-    convert_spv(
-        "inv-hyperbolic-trig-functions",
-        true,
-        Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv(
-        "empty-global-name",
-        true,
-        Targets::HLSL | Targets::WGSL | Targets::METAL,
-    );
-    convert_spv("degrees", false, Targets::empty());
-    convert_spv("binding-arrays.dynamic", true, Targets::WGSL);
-    convert_spv("binding-arrays.static", true, Targets::WGSL);
-    convert_spv(
-        "do-while",
-        true,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv(
-        "unnamed-gl-per-vertex",
-        true,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv("builtin-accessed-outside-entrypoint", true, Targets::WGSL);
-    convert_spv("spec-constants", true, Targets::IR);
-    convert_spv("spec-constants-issue-5598", true, Targets::GLSL);
-    convert_spv(
-        "subgroup-operations-s",
-        false,
-        Targets::METAL | Targets::GLSL | Targets::HLSL | Targets::WGSL,
-    );
-    convert_spv("atomic_i_increment", false, Targets::WGSL);
-    convert_spv("atomic_load_and_store", false, Targets::WGSL);
-    convert_spv("atomic_exchange", false, Targets::WGSL);
-    convert_spv("atomic_compare_exchange", false, Targets::WGSL);
-    convert_spv("atomic_i_decrement", false, Targets::WGSL);
-    convert_spv("atomic_i_add_sub", false, Targets::WGSL);
-    convert_spv("atomic_global_struct_field_vertex", false, Targets::WGSL);
-    convert_spv(
-        "fetch_depth",
-        false,
-        Targets::IR | Targets::SPIRV | Targets::METAL | Targets::HLSL | Targets::WGSL,
-    );
-}
-
-#[cfg(feature = "glsl-in")]
-#[test]
-fn convert_glsl_variations_check() {
-    let input = Input::new(None, "variations", "glsl");
-    let source = input.read_source();
-    let mut parser = naga::front::glsl::Frontend::default();
-    let mut module = parser
-        .parse(
-            &naga::front::glsl::Options {
-                stage: naga::ShaderStage::Fragment,
-                defines: Default::default(),
-            },
-            &source,
-        )
-        .unwrap();
-    check_targets(&input, &mut module, Targets::GLSL, None, None);
+fn convert_snapshots_spv() {
+    convert_spv("quad-vert", false);
+    convert_spv("shadow", true);
+    convert_spv("inv-hyperbolic-trig-functions", true);
+    convert_spv("empty-global-name", true);
+    convert_spv("degrees", false);
+    convert_spv("binding-arrays.dynamic", true);
+    convert_spv("binding-arrays.static", true);
+    convert_spv("do-while", true);
+    convert_spv("unnamed-gl-per-vertex", true);
+    convert_spv("builtin-accessed-outside-entrypoint", true);
+    convert_spv("spec-constants", true);
+    convert_spv("spec-constants-issue-5598", true);
+    convert_spv("subgroup-operations-s", false);
+    convert_spv("atomic_i_increment", false);
+    convert_spv("atomic_load_and_store", false);
+    convert_spv("atomic_exchange", false);
+    convert_spv("atomic_compare_exchange", false);
+    convert_spv("atomic_i_decrement", false);
+    convert_spv("atomic_i_add_sub", false);
+    convert_spv("atomic_global_struct_field_vertex", false);
+    convert_spv("fetch_depth", false);
 }
 
 #[cfg(feature = "glsl-in")]
 #[allow(unused_variables)]
 #[test]
-fn convert_glsl_folder() {
+fn convert_snapshots_glsl() {
     let _ = env_logger::try_init();
 
-    for input in Input::files_in_dir("glsl") {
+    for input in Input::files_in_dir(Some("glsl"), &["vert", "frag", "comp"]) {
         let input = Input {
             keep_input_extension: true,
             ..input
         };
         let file_name = &input.file_name;
-        if file_name.ends_with(".ron") {
-            // No needed to validate ron files
-            continue;
-        }
+
+        let stage = match file_name.extension().and_then(|s| s.to_str()).unwrap() {
+            "vert" => naga::ShaderStage::Vertex,
+            "frag" => naga::ShaderStage::Fragment,
+            "comp" => naga::ShaderStage::Compute,
+            ext => panic!("Unknown extension for glsl file {ext}"),
+        };
 
         let mut parser = naga::front::glsl::Frontend::default();
         let mut module = parser
             .parse(
                 &naga::front::glsl::Options {
-                    stage: match file_name.extension().and_then(|s| s.to_str()).unwrap() {
-                        "vert" => naga::ShaderStage::Vertex,
-                        "frag" => naga::ShaderStage::Fragment,
-                        "comp" => naga::ShaderStage::Compute,
-                        ext => panic!("Unknown extension for glsl file {ext}"),
-                    },
+                    stage,
                     defines: Default::default(),
                 },
                 &input.read_source(),
             )
             .unwrap();
 
-        let info = naga::valid::Validator::new(
-            naga::valid::ValidationFlags::all(),
-            naga::valid::Capabilities::all(),
-        )
-        .validate(&module)
-        .unwrap();
-
-        #[cfg(feature = "compact")]
-        let info = {
-            naga::compact::compact(&mut module);
-
-            naga::valid::Validator::new(
-                naga::valid::ValidationFlags::all(),
-                naga::valid::Capabilities::all(),
-            )
-            .validate(&module)
-            .unwrap()
-        };
-
-        #[cfg(wgsl_out)]
-        {
-            write_output_wgsl(&input, &module, &info, &WgslOutParameters::default());
-        }
+        check_targets(&input, &mut module, None);
     }
 }

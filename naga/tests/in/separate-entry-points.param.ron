@@ -3,4 +3,5 @@
         version: (1, 0),
 		separate_entry_points: true,
 	),
+	targets: "SPIRV | GLSL",
 )

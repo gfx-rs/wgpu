@@ -1,9 +1,11 @@
+use alloc::vec::Vec;
+use core::{fmt::Debug, marker::PhantomData};
+
 use crate::{
     id::{Id, Marker},
     lock::{rank, Mutex},
     Epoch, Index,
 };
-use std::{fmt::Debug, marker::PhantomData};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum IdSource {

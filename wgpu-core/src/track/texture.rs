@@ -34,11 +34,11 @@ use naga::FastHashMap;
 
 use wgt::{strict_assert, strict_assert_eq, TextureSelector, TextureUses};
 
-use std::{
-    iter,
+use alloc::{
     sync::{Arc, Weak},
-    vec::Drain,
+    vec::{Drain, Vec},
 };
+use core::iter;
 
 impl ResourceUses for TextureUses {
     const EXCLUSIVE: Self = Self::EXCLUSIVE;
