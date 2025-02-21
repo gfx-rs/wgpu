@@ -2354,6 +2354,7 @@ dependencies = [
  "termcolor",
  "thiserror 2.0.11",
  "unicode-ident",
+ "walkdir",
 ]
 
 [[package]]

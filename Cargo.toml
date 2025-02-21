@@ -142,6 +142,7 @@ strum = { version = "0.26.3", default-features = false, features = ["derive"] }
 trybuild = "1"
 tracy-client = "0.17"
 thiserror = { version = "2", default-features = false }
+walkdir = "2"
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
