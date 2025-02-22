@@ -1,16 +1,31 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
         native: { not(target_arch = "wasm32") },
-        webgl: { all(target_arch = "wasm32", not(target_os = "emscripten"), feature = "webgl") },
-        webgpu: { all(target_arch = "wasm32", not(target_os = "emscripten"), feature = "webgpu") },
         Emscripten: { all(target_arch = "wasm32", target_os = "emscripten") },
-        wgpu_core: { any(native, webgl, Emscripten) },
+
         send_sync: { any(
-            not(target_arch = "wasm32"),
+            native,
             all(feature = "fragile-send-sync-non-atomic-wasm", not(target_feature = "atomics"))
         ) },
+
+        // Backends - keep this in sync with `wgpu-core/Cargo.toml` & docs in `wgpu/Cargo.toml`
+        webgpu: { all(not(native), not(Emscripten), feature = "webgpu") },
+        webgl: { all(not(native), not(Emscripten), feature = "webgl") },
         dx12: { all(target_os = "windows", feature = "dx12") },
         metal: { all(target_vendor = "apple", feature = "metal") },
+        vulkan: { any(
+            all(any(windows, target_os = "linux", target_os = "android"), feature = "vulkan"),
+            all(target_vendor = "apple", feature = "vulkan-portability")
+        ) },
+        gles: { any(
+            all(any(windows, target_os = "linux", target_os = "android", Emscripten), feature = "gles"),
+            all(target_vendor = "apple", feature = "angle")
+        ) },
+        noop: { feature = "noop" },
+
+        // wgpu_core is *needed* if any backend other than WebGPU is enabled.
+        wgpu_core: { any(webgl, dx12, metal, vulkan, gles, noop) },
+
         // This alias is _only_ if _we_ need naga in the wrapper. wgpu-core provides
         // its own re-export of naga, which can be used in other situations
         naga: { any(feature = "naga-ir", feature = "spirv", feature = "glsl") },
