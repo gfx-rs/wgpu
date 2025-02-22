@@ -1,6 +1,0 @@
-(
-	bounds_check_policies: (
-		index: ReadZeroSkipWrite,
-		buffer: ReadZeroSkipWrite,
-	),
-)

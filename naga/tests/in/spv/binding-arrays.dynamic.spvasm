@@ -1,3 +1,6 @@
+; SPIR-V
+; Version: 1.0
+
 ;; Make sure that we promote `OpTypeRuntimeArray` of textures and samplers into
 ;; `TypeInner::BindingArray` and support indexing it through `OpAccessChain`
 ;; and `OpInBoundsAccessChain`.

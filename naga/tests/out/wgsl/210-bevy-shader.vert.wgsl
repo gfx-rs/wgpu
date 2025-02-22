@@ -30,16 +30,16 @@ fn main_1() {
     let _e11 = Vertex_Normal_1;
     v_Normal = (_e10 * vec4<f32>(_e11.x, _e11.y, _e11.z, 1f)).xyz;
     let _e19 = global_1.Model;
-    let _e29 = Vertex_Normal_1;
-    v_Normal = (mat3x3<f32>(_e19[0].xyz, _e19[1].xyz, _e19[2].xyz) * _e29);
-    let _e31 = global_1.Model;
-    let _e32 = Vertex_Position_1;
-    v_Position = (_e31 * vec4<f32>(_e32.x, _e32.y, _e32.z, 1f)).xyz;
-    let _e40 = Vertex_Uv_1;
-    v_Uv = _e40;
-    let _e42 = global.ViewProj;
-    let _e43 = v_Position;
-    gl_Position = (_e42 * vec4<f32>(_e43.x, _e43.y, _e43.z, 1f));
+    let _e27 = Vertex_Normal_1;
+    v_Normal = (mat3x3<f32>(_e19[0].xyz, _e19[1].xyz, _e19[2].xyz) * _e27);
+    let _e29 = global_1.Model;
+    let _e30 = Vertex_Position_1;
+    v_Position = (_e29 * vec4<f32>(_e30.x, _e30.y, _e30.z, 1f)).xyz;
+    let _e38 = Vertex_Uv_1;
+    v_Uv = _e38;
+    let _e40 = global.ViewProj;
+    let _e41 = v_Position;
+    gl_Position = (_e40 * vec4<f32>(_e41.x, _e41.y, _e41.z, 1f));
     return;
 }
 
@@ -49,9 +49,9 @@ fn main(@location(0) Vertex_Position: vec3<f32>, @location(1) Vertex_Normal: vec
     Vertex_Normal_1 = Vertex_Normal;
     Vertex_Uv_1 = Vertex_Uv;
     main_1();
-    let _e23 = v_Position;
-    let _e25 = v_Normal;
-    let _e27 = v_Uv;
-    let _e29 = gl_Position;
-    return VertexOutput(_e23, _e25, _e27, _e29);
+    let _e7 = v_Position;
+    let _e9 = v_Normal;
+    let _e11 = v_Uv;
+    let _e13 = gl_Position;
+    return VertexOutput(_e7, _e9, _e11, _e13);
 }

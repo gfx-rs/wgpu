@@ -35,10 +35,10 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
 [lib]
 
 [features]
-## Internally count resources and events for debugging purposes. If the counters
-## feature is disabled, the counting infrastructure is removed from the build and
-## the exposed counters always return 0.
-counters = ["wgpu-types/counters"]
+#! See docuemntation for the `wgpu` crate for more in-depth information on these features.
+
+#! ### Logging Configuration
+# --------------------------------------------------------------------
 
 ## Log all API entry points at info instead of trace level.
 ## Also, promotes certain debug log calls to info.
@@ -47,17 +47,25 @@ api_log_info = []
 ## Log resource lifecycle management at info instead of trace level.
 resource_log_info = []
 
-## Support the Renderdoc graphics debugger:
-## <https://renderdoc.org/>
-renderdoc = ["wgpu-hal/renderdoc"]
+#! ### Runtime Checks
+# --------------------------------------------------------------------
+
+## Validates indirect draw/dispatch calls. This will also enable naga's
+## WGSL frontend since we use a WGSL compute shader to do the validation.
+indirect-validation = ["naga/wgsl-in"]
 
 ## Apply run-time checks, even in release builds. These are in addition
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgpu-types/strict_asserts"]
 
-## Validates indirect draw/dispatch calls. This will also enable naga's
-## WGSL frontend since we use a WGSL compute shader to do the validation.
-indirect-validation = ["naga/wgsl-in"]
+#! ### Debugging
+# --------------------------------------------------------------------
+
+## Enable lock order observation.
+observe_locks = ["dep:ron", "serde/serde_derive"]
+
+#! ### Serialization
+# --------------------------------------------------------------------
 
 ## Enables serialization via `serde` on common wgpu types.
 serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde"]
@@ -65,14 +73,17 @@ serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde"]
 ## Enable API tracing.
 trace = ["dep:ron", "serde", "naga/serialize"]
 
-## Enable lock order observation.
-observe_locks = ["dep:ron", "serde/serde_derive"]
-
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
 
-## Enable creating instances using raw-window-handle
+#! ### Surface Support
+# --------------------------------------------------------------------
+
+## Enable creating surfaces using raw-window-handle
 raw-window-handle = ["dep:raw-window-handle"]
+
+#! ### Shading Language Support
+# --------------------------------------------------------------------
 
 ## Enable `ShaderModuleSource::Wgsl`
 wgsl = ["naga/wgsl-in"]
@@ -83,39 +94,67 @@ glsl = ["naga/glsl-in"]
 ## Enable `ShaderModuleSource::SpirV`
 spirv = ["naga/spv-in", "dep:bytemuck"]
 
-## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
-##
-## WebGL/WebGPU objects can not be shared between threads.
-## However, it can be useful to artificially mark them as `Send` and `Sync`
-## anyways to make it easier to write cross-platform code.
-## This is technically *very* unsafe in a multithreaded environment,
-## but on a wasm binary compiled without atomics we know we are definitely
-## not in a multithreaded environment.
-fragile-send-sync-non-atomic-wasm = [
-    "wgpu-hal/fragile-send-sync-non-atomic-wasm",
-    "wgpu-types/fragile-send-sync-non-atomic-wasm",
-]
-
-#! ### Backends, passed through to wgpu-hal
+#! ### Other
 # --------------------------------------------------------------------
 
-## Enable the `metal` backend.
-metal = ["wgpu-hal/metal"]
+## Internally count resources and events for debugging purposes. If the counters
+## feature is disabled, the counting infrastructure is removed from the build and
+## the exposed counters always return 0.
+counters = ["wgpu-types/counters"]
 
-## Enable the `vulkan` backend.
-vulkan = ["wgpu-hal/vulkan"]
+## Implement `Send` and `Sync` on Wasm, but only if atomics are not enabled.
+fragile-send-sync-non-atomic-wasm = [
+    "wgpu-hal/fragile-send-sync-non-atomic-wasm",
+]
 
-## Enable the `GLES` backend.
-##
-## This is used for all of GLES, OpenGL, and WebGL.
-gles = ["wgpu-hal/gles"]
+#! ### External libraries
+# --------------------------------------------------------------------
+#! The following features facilitate integration with third-party supporting libraries.
 
-## Enable the `dx12` backend.
-dx12 = ["wgpu-hal/dx12"]
+## Enable using the `mach-dxcompiler-rs` crate to compile DX12 shaders.
+static-dxc = ["wgpu-hal/static-dxc"]
+
+#! ### Target Conditional Features
+# --------------------------------------------------------------------
+# Look to wgpu-hal's Cargo.toml for explaination how these features and the wgpu-core
+# platform crates collude to provide platform-specific behavior.
+
+## DX12 backend
+dx12 = ["wgpu-core-deps-windows-linux-android/dx12"]
+## Metal backend
+metal = ["wgpu-core-deps-apple/metal"]
+## Vulkan backend, only available on Windows, Linux, Android
+vulkan = ["wgpu-core-deps-windows-linux-android/vulkan"]
+## OpenGL backend, only available on Windows, Linux, Android, and Emscripten
+gles = [
+    "wgpu-core-deps-windows-linux-android/gles",
+    "wgpu-core-deps-emscripten/gles",
+]
+
+## WebGL backend, only available on Emscripten
+webgl = ["wgpu-core-deps-wasm/webgl"]
+## OpenGL backend, on macOS only
+angle = ["wgpu-core-deps-apple/angle"]
+## Vulkan portability backend, only available on macOS
+vulkan-portability = ["wgpu-core-deps-apple/vulkan-portability"]
+## Renderdoc integration, only available on Windows, Linux, and Android
+renderdoc = ["wgpu-core-deps-windows-linux-android/renderdoc"]
 
 ## Enable the `noop` backend.
 # TODO(https://github.com/gfx-rs/wgpu/issues/7120): there should be a hal feature
 noop = []
+
+# The target limitation here isn't needed, but prevents more than one of these
+# platform crates from being included in the build at a time, preventing users
+# from getting confused by seeing them in the list of crates.
+[target.'cfg(target_vendor = "apple")'.dependencies]
+wgpu-core-deps-apple = { workspace = true, optional = true }
+[target.'cfg(target_os = "emscripten")'.dependencies]
+wgpu-core-deps-emscripten = { workspace = true, optional = true }
+[target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+wgpu-core-deps-wasm = { workspace = true, optional = true }
+[target.'cfg(any(windows, target_os = "linux", target_os = "android"))'.dependencies]
+wgpu-core-deps-windows-linux-android = { workspace = true, optional = true }
 
 [dependencies]
 naga.workspace = true

@@ -1,5 +1,6 @@
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt;
-use std::{error::Error, sync::Arc};
+use std::error::Error; // TODO(https://github.com/gfx-rs/wgpu/issues/6826): use core::error after MSRV bump
 
 use thiserror::Error;
 

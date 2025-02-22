@@ -1,3 +1,6 @@
+use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::{ptr::NonNull, sync::atomic::Ordering};
+
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
@@ -27,12 +30,6 @@ use crate::{
 };
 
 use wgt::{BufferAddress, TextureFormat};
-
-use std::{
-    borrow::Cow,
-    ptr::NonNull,
-    sync::{atomic::Ordering, Arc},
-};
 
 use super::{ImplicitPipelineIds, UserClosures};
 
@@ -112,7 +109,7 @@ impl Global {
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 let mut desc = desc.clone();
-                let mapped_at_creation = std::mem::replace(&mut desc.mapped_at_creation, false);
+                let mapped_at_creation = core::mem::replace(&mut desc.mapped_at_creation, false);
                 if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                     desc.usage |= wgt::BufferUsages::COPY_DST;
                 }
@@ -239,7 +236,7 @@ impl Global {
         }
         .map_err(|e| device.handle_hal_error(e))?;
 
-        unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
+        unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
 
         if !mapping.is_coherent {
             #[allow(clippy::single_range_in_vec_init)]
@@ -968,7 +965,7 @@ impl Global {
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 let data = trace.make_binary("spv", unsafe {
-                    std::slice::from_raw_parts(source.as_ptr().cast::<u8>(), source.len() * 4)
+                    core::slice::from_raw_parts(source.as_ptr().cast::<u8>(), source.len() * 4)
                 });
                 trace.add(trace::Action::CreateShaderModule {
                     id: fid.id(),
@@ -1809,7 +1806,7 @@ impl Global {
                     Err(_) => break 'error E::UnsupportedQueueFamily,
                 };
 
-                let mut hal_view_formats = vec![];
+                let mut hal_view_formats = Vec::new();
                 for format in config.view_formats.iter() {
                     if *format == config.format {
                         continue;

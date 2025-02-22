@@ -9,7 +9,8 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use std::{mem::ManuallyDrop, sync::Arc};
+use alloc::{sync::Arc, vec::Vec};
+use core::mem::ManuallyDrop;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
@@ -131,7 +132,7 @@ impl Surface {
         let suf = self.raw(device.backend()).unwrap();
         let (texture, status) = match unsafe {
             suf.acquire_texture(
-                Some(std::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
+                Some(core::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
                 fence.as_ref(),
             )
         } {
@@ -139,7 +140,7 @@ impl Surface {
                 drop(fence);
 
                 let texture_desc = wgt::TextureDescriptor {
-                    label: Some(std::borrow::Cow::Borrowed("<Surface Texture>")),
+                    label: Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
                     size: wgt::Extent3d {
                         width: config.width,
                         height: config.height,

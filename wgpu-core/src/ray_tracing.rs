@@ -7,18 +7,21 @@
 // - partial instance buffer uploads (api surface already designed with this in mind)
 // - ([non performance] extract function in build (rust function extraction with guards is a pain))
 
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::num::NonZeroU64;
+
+use thiserror::Error;
+use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
+
 use crate::{
     command::CommandEncoderError,
     device::{DeviceError, MissingFeatures},
     id::{BlasId, BufferId, TlasId},
-    resource::{DestroyedResourceError, InvalidResourceError, MissingBufferUsageError},
+    resource::{
+        Blas, DestroyedResourceError, InvalidResourceError, MissingBufferUsageError,
+        ResourceErrorIdent, Tlas,
+    },
 };
-use std::num::NonZeroU64;
-use std::sync::Arc;
-
-use crate::resource::{Blas, ResourceErrorIdent, Tlas};
-use thiserror::Error;
-use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBlasError {

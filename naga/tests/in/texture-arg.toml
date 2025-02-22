@@ -1,0 +1,6 @@
+targets = "SPIRV | METAL | GLSL | HLSL | WGSL"
+
+[spv]
+adjust_coordinate_space = true
+debug = true
+version = [1, 0]

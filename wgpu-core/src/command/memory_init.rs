@@ -1,4 +1,8 @@
-use std::{ops::Range, sync::Arc, vec::Drain};
+use alloc::{
+    sync::Arc,
+    vec::{Drain, Vec},
+};
+use core::ops::Range;
 
 use hashbrown::hash_map::Entry;
 

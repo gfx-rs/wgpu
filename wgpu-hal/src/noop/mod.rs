@@ -1,8 +1,13 @@
 #![allow(unused_variables)]
 
+use alloc::{string::String, vec, vec::Vec};
+use core::{
+    ptr,
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
+
 use crate::TlasInstance;
-use core::ptr;
-use core::sync::atomic::{AtomicU64, Ordering};
 
 mod buffer;
 pub use buffer::Buffer;
@@ -71,7 +76,7 @@ impl crate::DynSurfaceTexture for Resource {}
 impl crate::DynTexture for Resource {}
 impl crate::DynTextureView for Resource {}
 
-impl std::borrow::Borrow<dyn crate::DynTexture> for Resource {
+impl core::borrow::Borrow<dyn crate::DynTexture> for Resource {
     fn borrow(&self) -> &dyn crate::DynTexture {
         self
     }
@@ -147,6 +152,8 @@ const CAPABILITIES: crate::Capabilities = {
             max_storage_buffers_per_shader_stage: ALLOC_MAX_U32,
             max_storage_textures_per_shader_stage: ALLOC_MAX_U32,
             max_uniform_buffers_per_shader_stage: ALLOC_MAX_U32,
+            max_binding_array_elements_per_shader_stage: ALLOC_MAX_U32,
+            max_binding_array_sampler_elements_per_shader_stage: ALLOC_MAX_U32,
             max_uniform_buffer_binding_size: ALLOC_MAX_U32,
             max_storage_buffer_binding_size: ALLOC_MAX_U32,
             max_vertex_buffers: ALLOC_MAX_U32,
@@ -200,7 +207,7 @@ impl crate::Surface for Context {
 
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<Duration>,
         fence: &Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         Ok(None)

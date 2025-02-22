@@ -1,12 +1,20 @@
+use thiserror::Error;
+use wgt::{BufferAddress, DynamicOffset};
+
+use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
+use core::{fmt, mem::size_of, str};
+
 use crate::{
     binding_model::{
         BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
     },
     command::{
-        bind::Binder,
+        bind::{Binder, BinderError},
         compute_command::ArcComputeCommand,
         end_pipeline_statistics_query,
-        memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
+        memory_init::{
+            fixup_discarded_surfaces, CommandBufferTextureMemoryActions, SurfacesInDiscardState,
+        },
         validate_and_begin_pipeline_statistics_query, ArcPassTimestampWrites, BasePass,
         BindGroupStateChange, CommandBuffer, CommandEncoderError, MapPassErr, PassErrorScope,
         PassTimestampWrites, QueryUseError, StateChange,
@@ -16,6 +24,7 @@ use crate::{
     hal_label, id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     pipeline::ComputePipeline,
+    ray_tracing::TlasAction,
     resource::{
         self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
         MissingBufferUsageError, ParentDevice,
@@ -24,13 +33,6 @@ use crate::{
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex, UsageScope},
     Label,
 };
-
-use thiserror::Error;
-use wgt::{BufferAddress, DynamicOffset};
-
-use super::{bind::BinderError, memory_init::CommandBufferTextureMemoryActions};
-use crate::ray_tracing::TlasAction;
-use std::{fmt, mem::size_of, str, sync::Arc};
 
 pub struct ComputePass {
     /// All pass data & records is stored here.
@@ -281,7 +283,7 @@ impl Global {
     /// If successful, puts the encoder into the [`Locked`] state.
     ///
     /// [`Locked`]: crate::command::CommandEncoderStatus::Locked
-    pub fn command_encoder_create_compute_pass(
+    pub fn command_encoder_begin_compute_pass(
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &ComputePassDescriptor<'_>,
@@ -289,7 +291,7 @@ impl Global {
         let hub = &self.hub;
 
         let mut arc_desc = ArcComputePassDescriptor {
-            label: desc.label.as_deref().map(std::borrow::Cow::Borrowed),
+            label: desc.label.as_deref().map(Cow::Borrowed),
             timestamp_writes: None, // Handle only once we resolved the encoder.
         };
 
@@ -360,10 +362,10 @@ impl Global {
             push_constant_data,
         } = base;
 
-        let (mut compute_pass, encoder_error) = self.command_encoder_create_compute_pass(
+        let (mut compute_pass, encoder_error) = self.command_encoder_begin_compute_pass(
             encoder_id,
             &ComputePassDescriptor {
-                label: label.as_deref().map(std::borrow::Cow::Borrowed),
+                label: label.as_deref().map(Cow::Borrowed),
                 timestamp_writes: timestamp_writes.cloned(),
             },
         );

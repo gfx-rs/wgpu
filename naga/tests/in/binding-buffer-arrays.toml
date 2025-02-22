@@ -1,0 +1,13 @@
+targets = "WGSL | SPIRV"
+
+[bounds_check_policies]
+index = "ReadZeroSkipWrite"
+buffer = "ReadZeroSkipWrite"
+image = "ReadZeroSkipWrite"
+
+[spv]
+version = [1, 1]
+
+[[spv.binding_map]]
+bind_target = { binding_array_size = 10 }
+resource_binding = { group = 0, binding = 0 }

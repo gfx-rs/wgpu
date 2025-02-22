@@ -1,5 +1,7 @@
 static const uint TWO = 2u;
 static const int THREE = int(3);
+static const bool TRUE = true;
+static const bool FALSE = false;
 static const int FOUR = int(4);
 static const int FOUR_ALIAS = int(4);
 static const int TEST_CONSTANT_ADDITION = int(8);
@@ -98,6 +100,20 @@ void compose_vector_zero_val_binop()
     int3 a = int3(int(1), int(1), int(1));
     int3 b = int3(int(0), int(1), int(2));
     int3 c = int3(int(1), int(0), int(2));
+
+    return;
+}
+
+void relational()
+{
+    bool scalar_any_false = false;
+    bool scalar_any_true = true;
+    bool scalar_all_false = false;
+    bool scalar_all_true = true;
+    bool vec_any_false = false;
+    bool vec_any_true = true;
+    bool vec_all_false = false;
+    bool vec_all_true = true;
 
     return;
 }

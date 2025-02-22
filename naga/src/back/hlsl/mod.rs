@@ -149,6 +149,28 @@ pub struct OffsetsBindTarget {
     pub size: u32,
 }
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct BindingMapSerialization {
+    resource_binding: crate::ResourceBinding,
+    bind_target: BindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_binding_map<'de, D>(deserializer: D) -> Result<BindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<BindingMapSerialization>::deserialize(deserializer)?;
+    let mut map = BindingMap::default();
+    for item in vec {
+        map.insert(item.resource_binding, item.bind_target);
+    }
+    Ok(map)
+}
+
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
@@ -245,9 +267,62 @@ impl Default for SamplerHeapBindTargets {
     }
 }
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct SamplerIndexBufferBindingSerialization {
+    group: u32,
+    bind_target: BindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_sampler_index_buffer_bindings<'de, D>(
+    deserializer: D,
+) -> Result<SamplerIndexBufferBindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<SamplerIndexBufferBindingSerialization>::deserialize(deserializer)?;
+    let mut map = SamplerIndexBufferBindingMap::default();
+    for item in vec {
+        map.insert(
+            SamplerIndexBufferKey { group: item.group },
+            item.bind_target,
+        );
+    }
+    Ok(map)
+}
+
 // We use a BTreeMap here so that we can hash it.
 pub type SamplerIndexBufferBindingMap =
     std::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
+
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct DynamicStorageBufferOffsetTargetSerialization {
+    index: u32,
+    bind_target: OffsetsBindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_storage_buffer_offsets<'de, D>(
+    deserializer: D,
+) -> Result<DynamicStorageBufferOffsetsTargets, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<DynamicStorageBufferOffsetTargetSerialization>::deserialize(deserializer)?;
+    let mut map = DynamicStorageBufferOffsetsTargets::default();
+    for item in vec {
+        map.insert(item.index, item.bind_target);
+    }
+    Ok(map)
+}
+
+pub type DynamicStorageBufferOffsetsTargets = std::collections::BTreeMap<u32, OffsetsBindTarget>;
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
@@ -269,6 +344,10 @@ pub struct Options {
     /// The hlsl shader model to be used
     pub shader_model: ShaderModel,
     /// Map of resources association to binding locations.
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_binding_map")
+    )]
     pub binding_map: BindingMap,
     /// Don't panic on missing bindings, instead generate any HLSL.
     pub fake_missing_bindings: bool,
@@ -280,9 +359,17 @@ pub struct Options {
     /// Bind target of the sampler heap and comparison sampler heap.
     pub sampler_heap_target: SamplerHeapBindTargets,
     /// Mapping of each bind group's sampler index buffer to a bind target.
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_sampler_index_buffer_bindings")
+    )]
     pub sampler_buffer_binding_map: SamplerIndexBufferBindingMap,
     /// Bind target for dynamic storage buffer offsets
-    pub dynamic_storage_buffer_offsets_targets: std::collections::BTreeMap<u32, OffsetsBindTarget>,
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_storage_buffer_offsets")
+    )]
+    pub dynamic_storage_buffer_offsets_targets: DynamicStorageBufferOffsetsTargets,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: bool,
     /// Should we restrict indexing of vectors, matrices and arrays?

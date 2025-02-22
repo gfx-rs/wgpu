@@ -1,20 +1,21 @@
-use super::{conv, RawTlasInstance};
-
-use arrayvec::ArrayVec;
-use ash::{khr, vk};
-use hashbrown::hash_map::Entry;
-use parking_lot::Mutex;
-
-use crate::TlasInstance;
 use std::{
-    borrow::Cow,
+    borrow::{Cow, ToOwned as _},
     collections::BTreeMap,
     ffi::{CStr, CString},
     mem::{self, size_of, MaybeUninit},
     num::NonZeroU32,
     ptr, slice,
     sync::Arc,
+    vec::Vec,
 };
+
+use arrayvec::ArrayVec;
+use ash::{khr, vk};
+use hashbrown::hash_map::Entry;
+use parking_lot::Mutex;
+
+use super::{conv, RawTlasInstance};
+use crate::TlasInstance;
 
 impl super::DeviceShared {
     /// Set the name of `object` to `name`.
@@ -903,7 +904,7 @@ impl super::Device {
                 runtime_checks,
             } => {
                 let pipeline_options = naga::back::spv::PipelineOptions {
-                    entry_point: stage.entry_point.to_string(),
+                    entry_point: stage.entry_point.to_owned(),
                     shader_stage: naga_stage,
                 };
                 let needs_temp_options = !runtime_checks.bounds_checks
@@ -1461,44 +1462,47 @@ impl crate::Device for super::Device {
             })
             .collect::<Vec<_>>();
 
-        let vk_info = vk::DescriptorSetLayoutCreateInfo::default().bindings(&vk_bindings);
-
-        let binding_arrays = desc
+        let binding_arrays: Vec<_> = desc
             .entries
             .iter()
             .enumerate()
             .filter_map(|(idx, entry)| entry.count.map(|count| (idx as u32, count)))
             .collect();
 
-        let mut binding_flag_info;
-        let binding_flag_vec;
+        let vk_info = vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(&vk_bindings)
+            .flags(if !binding_arrays.is_empty() {
+                vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL
+            } else {
+                vk::DescriptorSetLayoutCreateFlags::empty()
+            });
 
         let partially_bound = desc
             .flags
             .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
 
-        let vk_info = if partially_bound {
-            binding_flag_vec = desc
-                .entries
-                .iter()
-                .map(|entry| {
-                    let mut flags = vk::DescriptorBindingFlags::empty();
+        let binding_flag_vec = desc
+            .entries
+            .iter()
+            .map(|entry| {
+                let mut flags = vk::DescriptorBindingFlags::empty();
 
-                    if partially_bound && entry.count.is_some() {
-                        flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
-                    }
+                if partially_bound && entry.count.is_some() {
+                    flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
+                }
 
-                    flags
-                })
-                .collect::<Vec<_>>();
+                if entry.count.is_some() {
+                    flags |= vk::DescriptorBindingFlags::UPDATE_AFTER_BIND;
+                }
 
-            binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
-                .binding_flags(&binding_flag_vec);
+                flags
+            })
+            .collect::<Vec<_>>();
 
-            vk_info.push_next(&mut binding_flag_info)
-        } else {
-            vk_info
-        };
+        let mut binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
+            .binding_flags(&binding_flag_vec);
+
+        let vk_info = vk_info.push_next(&mut binding_flag_info);
 
         let raw = unsafe {
             self.shared

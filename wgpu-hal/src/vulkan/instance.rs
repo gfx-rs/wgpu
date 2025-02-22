@@ -1,9 +1,13 @@
 use std::{
+    borrow::ToOwned as _,
+    boxed::Box,
     ffi::{c_void, CStr, CString},
     slice,
     str::FromStr,
+    string::{String, ToString as _},
     sync::Arc,
     thread,
+    vec::Vec,
 };
 
 use arrayvec::ArrayVec;

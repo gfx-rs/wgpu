@@ -14,7 +14,7 @@ static BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
                     | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             )
             .limits(Limits {
-                max_sampled_textures_per_shader_stage: 16,
+                max_binding_array_elements_per_shader_stage: 16,
                 ..Limits::default()
             }),
     )
@@ -30,7 +30,7 @@ static PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestCon
                     | Features::PARTIALLY_BOUND_BINDING_ARRAY,
             )
             .limits(Limits {
-                max_sampled_textures_per_shader_stage: 32,
+                max_binding_array_elements_per_shader_stage: 32,
                 ..Limits::default()
             }),
     )

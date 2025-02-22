@@ -1,9 +1,8 @@
+use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
+use core::{ptr::NonNull, sync::atomic};
+use std::{thread, time};
+
 use parking_lot::Mutex;
-use std::{
-    ptr::NonNull,
-    sync::{atomic, Arc},
-    thread, time,
-};
 
 use super::conv;
 use crate::auxil::map_naga_stage;
@@ -157,7 +156,7 @@ impl super::Device {
             spirv_cross_compatibility: false,
             fake_missing_bindings: false,
             per_entry_point_map: naga::back::msl::EntryPointResourceMap::from([(
-                stage.entry_point.to_string(),
+                stage.entry_point.to_owned(),
                 ep_resources.clone(),
             )]),
             bounds_check_policies: naga::proc::BoundsCheckPolicies {

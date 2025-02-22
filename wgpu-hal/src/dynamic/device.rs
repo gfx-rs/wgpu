@@ -1,3 +1,5 @@
+use alloc::{borrow::ToOwned as _, boxed::Box, vec::Vec};
+
 use crate::{
     AccelerationStructureBuildSizes, AccelerationStructureDescriptor, Api, BindGroupDescriptor,
     BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping, CommandEncoderDescriptor,

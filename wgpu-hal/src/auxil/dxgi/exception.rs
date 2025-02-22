@@ -1,4 +1,8 @@
-use std::{borrow::Cow, slice};
+use std::{
+    borrow::Cow,
+    slice,
+    string::{String, ToString as _},
+};
 
 use parking_lot::Mutex;
 use windows::Win32::{Foundation, System::Diagnostics::Debug};

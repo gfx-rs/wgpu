@@ -12,17 +12,17 @@ var<storage, read_write> global: type_5;
 var<storage, read_write> global_1: type_3;
 
 fn function() {
-    var phi_40_: bool;
+    var phi_33_: bool;
 
     loop {
         let _e8 = atomicSub((&global.member), 1u);
         if (_e8 < arrayLength((&global_1.member))) {
             global_1.member[_e8] = _e8;
-            phi_40_ = select(true, false, (_e8 == 0u));
+            phi_33_ = select(true, false, (_e8 == 0u));
         } else {
-            phi_40_ = false;
+            phi_33_ = false;
         }
-        let _e16 = phi_40_;
+        let _e16 = phi_33_;
         continue;
         continuing {
             break if !(_e16);

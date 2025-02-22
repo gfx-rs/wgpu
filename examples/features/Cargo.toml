@@ -18,6 +18,7 @@ ignored = ["wasm_bindgen_test"]
 [lib]
 path = "src/lib.rs"
 harness = false
+bench = false
 
 [[bin]]
 name = "wgpu-examples"
@@ -34,7 +35,6 @@ bytemuck.workspace = true
 cfg-if.workspace = true
 encase = { workspace = true, features = ["glam"] }
 flume.workspace = true
-getrandom.workspace = true
 glam = { workspace = true, features = ["bytemuck"] }
 ktx2.workspace = true
 log.workspace = true

@@ -510,7 +510,6 @@ impl Writer {
         );
 
         function.to_words(&mut self.logical_layout.function_definitions);
-        Instruction::function_end().to_words(&mut self.logical_layout.function_definitions);
         self.ray_get_intersection_function = Some(func_id);
         func_id
     }

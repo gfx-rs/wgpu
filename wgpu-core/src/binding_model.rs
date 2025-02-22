@@ -1,3 +1,21 @@
+use alloc::{
+    borrow::{Cow, ToOwned},
+    boxed::Box,
+    string::String,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
+use core::{fmt, mem::ManuallyDrop, ops::Range};
+use std::sync::OnceLock;
+
+use arrayvec::ArrayVec;
+use thiserror::Error;
+
+#[cfg(feature = "serde")]
+use serde::Deserialize;
+#[cfg(feature = "serde")]
+use serde::Serialize;
+
 use crate::{
     device::{
         bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
@@ -7,30 +25,13 @@ use crate::{
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
         Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        MissingTextureUsageError, ResourceErrorIdent, Sampler, TextureView, TrackingData,
+        MissingTextureUsageError, ResourceErrorIdent, Sampler, TextureView, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
     track::{BindGroupStates, ResourceUsageCompatibilityError},
     Label,
 };
-
-use arrayvec::ArrayVec;
-
-#[cfg(feature = "serde")]
-use serde::Deserialize;
-#[cfg(feature = "serde")]
-use serde::Serialize;
-
-use std::{
-    borrow::Cow,
-    mem::ManuallyDrop,
-    ops::Range,
-    sync::{Arc, OnceLock, Weak},
-};
-
-use crate::resource::Tlas;
-use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -229,6 +230,8 @@ pub enum BindingTypeMaxCountErrorKind {
     StorageBuffers,
     StorageTextures,
     UniformBuffers,
+    BindingArrayElements,
+    BindingArraySamplerElements,
 }
 
 impl BindingTypeMaxCountErrorKind {
@@ -249,6 +252,12 @@ impl BindingTypeMaxCountErrorKind {
                 "max_storage_textures_per_shader_stage"
             }
             BindingTypeMaxCountErrorKind::UniformBuffers => "max_uniform_buffers_per_shader_stage",
+            BindingTypeMaxCountErrorKind::BindingArrayElements => {
+                "max_binding_array_elements_per_shader_stage"
+            }
+            BindingTypeMaxCountErrorKind::BindingArraySamplerElements => {
+                "max_binding_array_elements_per_shader_stage"
+            }
         }
     }
 }
@@ -323,48 +332,58 @@ pub(crate) struct BindingTypeMaxCountValidator {
     storage_textures: PerStageBindingTypeCounter,
     uniform_buffers: PerStageBindingTypeCounter,
     acceleration_structures: PerStageBindingTypeCounter,
+    binding_array_elements: PerStageBindingTypeCounter,
+    binding_array_sampler_elements: PerStageBindingTypeCounter,
     has_bindless_array: bool,
 }
 
 impl BindingTypeMaxCountValidator {
     pub(crate) fn add_binding(&mut self, binding: &wgt::BindGroupLayoutEntry) {
         let count = binding.count.map_or(1, |count| count.get());
-        match binding.ty {
-            wgt::BindingType::Buffer {
-                ty: wgt::BufferBindingType::Uniform,
-                has_dynamic_offset,
-                ..
-            } => {
-                self.uniform_buffers.add(binding.visibility, count);
-                if has_dynamic_offset {
-                    self.dynamic_uniform_buffers += count;
-                }
-            }
-            wgt::BindingType::Buffer {
-                ty: wgt::BufferBindingType::Storage { .. },
-                has_dynamic_offset,
-                ..
-            } => {
-                self.storage_buffers.add(binding.visibility, count);
-                if has_dynamic_offset {
-                    self.dynamic_storage_buffers += count;
-                }
-            }
-            wgt::BindingType::Sampler { .. } => {
-                self.samplers.add(binding.visibility, count);
-            }
-            wgt::BindingType::Texture { .. } => {
-                self.sampled_textures.add(binding.visibility, count);
-            }
-            wgt::BindingType::StorageTexture { .. } => {
-                self.storage_textures.add(binding.visibility, count);
-            }
-            wgt::BindingType::AccelerationStructure => {
-                self.acceleration_structures.add(binding.visibility, count);
-            }
-        }
+
         if binding.count.is_some() {
+            self.binding_array_elements.add(binding.visibility, count);
             self.has_bindless_array = true;
+
+            if let wgt::BindingType::Sampler(_) = binding.ty {
+                self.binding_array_sampler_elements
+                    .add(binding.visibility, count);
+            }
+        } else {
+            match binding.ty {
+                wgt::BindingType::Buffer {
+                    ty: wgt::BufferBindingType::Uniform,
+                    has_dynamic_offset,
+                    ..
+                } => {
+                    self.uniform_buffers.add(binding.visibility, count);
+                    if has_dynamic_offset {
+                        self.dynamic_uniform_buffers += count;
+                    }
+                }
+                wgt::BindingType::Buffer {
+                    ty: wgt::BufferBindingType::Storage { .. },
+                    has_dynamic_offset,
+                    ..
+                } => {
+                    self.storage_buffers.add(binding.visibility, count);
+                    if has_dynamic_offset {
+                        self.dynamic_storage_buffers += count;
+                    }
+                }
+                wgt::BindingType::Sampler { .. } => {
+                    self.samplers.add(binding.visibility, count);
+                }
+                wgt::BindingType::Texture { .. } => {
+                    self.sampled_textures.add(binding.visibility, count);
+                }
+                wgt::BindingType::StorageTexture { .. } => {
+                    self.storage_textures.add(binding.visibility, count);
+                }
+                wgt::BindingType::AccelerationStructure => {
+                    self.acceleration_structures.add(binding.visibility, count);
+                }
+            }
         }
     }
 
@@ -376,6 +395,12 @@ impl BindingTypeMaxCountValidator {
         self.storage_buffers.merge(&other.storage_buffers);
         self.storage_textures.merge(&other.storage_textures);
         self.uniform_buffers.merge(&other.uniform_buffers);
+        self.acceleration_structures
+            .merge(&other.acceleration_structures);
+        self.binding_array_elements
+            .merge(&other.binding_array_elements);
+        self.binding_array_sampler_elements
+            .merge(&other.binding_array_sampler_elements);
     }
 
     pub(crate) fn validate(&self, limits: &wgt::Limits) -> Result<(), BindingTypeMaxCountError> {
@@ -415,6 +440,14 @@ impl BindingTypeMaxCountValidator {
             limits.max_uniform_buffers_per_shader_stage,
             BindingTypeMaxCountErrorKind::UniformBuffers,
         )?;
+        self.binding_array_elements.validate(
+            limits.max_binding_array_elements_per_shader_stage,
+            BindingTypeMaxCountErrorKind::BindingArrayElements,
+        )?;
+        self.binding_array_sampler_elements.validate(
+            limits.max_binding_array_sampler_elements_per_shader_stage,
+            BindingTypeMaxCountErrorKind::BindingArraySamplerElements,
+        )?;
         Ok(())
     }
 
@@ -445,9 +478,9 @@ where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
-    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
-    <[S] as ToOwned>::Owned: std::fmt::Debug,
-    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+    <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
+    <[S] as ToOwned>::Owned: fmt::Debug,
+    <[TV] as ToOwned>::Owned: fmt::Debug,
 {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
@@ -478,11 +511,11 @@ pub struct BindGroupDescriptor<
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
-    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
-    <[S] as ToOwned>::Owned: std::fmt::Debug,
-    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+    <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
+    <[S] as ToOwned>::Owned: fmt::Debug,
+    <[TV] as ToOwned>::Owned: fmt::Debug,
     [BindGroupEntry<'a, B, S, TV, TLAS>]: ToOwned,
-    <[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: std::fmt::Debug,
+    <[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: fmt::Debug,
 {
     /// Debug label of the bind group.
     ///
@@ -532,8 +565,8 @@ pub(crate) enum ExclusivePipeline {
     Compute(Weak<ComputePipeline>),
 }
 
-impl std::fmt::Display for ExclusivePipeline {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ExclusivePipeline {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ExclusivePipeline::None => f.write_str("None"),
             ExclusivePipeline::Render(p) => {
@@ -671,7 +704,7 @@ pub enum PushConstantUploadError {
 pub struct PipelineLayoutDescriptor<'a, BGL = BindGroupLayoutId>
 where
     [BGL]: ToOwned,
-    <[BGL] as ToOwned>::Owned: std::fmt::Debug,
+    <[BGL] as ToOwned>::Owned: fmt::Debug,
 {
     /// Debug label of the pipeline layout.
     ///
@@ -834,9 +867,9 @@ where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
-    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
-    <[S] as ToOwned>::Owned: std::fmt::Debug,
-    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+    <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
+    <[S] as ToOwned>::Owned: fmt::Debug,
+    <[TV] as ToOwned>::Owned: fmt::Debug,
 {
     Buffer(BufferBinding<B>),
     #[cfg_attr(

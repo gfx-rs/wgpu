@@ -1,0 +1,8 @@
+god_mode = true
+targets = "SPIRV | METAL | GLSL | HLSL | WGSL"
+
+[msl]
+fake_missing_bindings = false
+lang_version = [1, 2]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = true

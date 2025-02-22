@@ -29,13 +29,10 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
-default = ["wgsl", "dx12", "metal", "webgpu"]
+default = ["dx12", "metal", "gles", "vulkan", "wgsl", "webgpu"]
 
 #! ### Backends
 # --------------------------------------------------------------------
-#! ⚠️ WIP: Not all backends can be manually configured today.
-#! On Windows, Linux & Android the Vulkan & GLES backends are always enabled.
-#! See [#3514](https://github.com/gfx-rs/wgpu/issues/3514) for more details.
 
 ## Enables the DX12 backend on Windows.
 dx12 = ["wgpu-core?/dx12"]
@@ -43,19 +40,35 @@ dx12 = ["wgpu-core?/dx12"]
 ## Enables the Metal backend on macOS & iOS.
 metal = ["wgpu-core?/metal"]
 
-## Enables the WebGPU backend on Wasm. Disabled when targeting `emscripten`.
-webgpu = ["naga?/wgsl-out"]
+## Enables the Vulkan backend on Windows, Linux, and Android.
+vulkan = ["wgpu-core?/vulkan"]
 
-## Enables the GLES backend via [ANGLE](https://github.com/google/angle) on macOS using.
-angle = ["wgpu-core?/gles"]
+## Enables the OpenGL/GLES backend on Windows, Linux, Android, and Emscripten.
+gles = ["wgpu-core?/gles"]
 
-## Enables the Vulkan backend on macOS & iOS.
-vulkan-portability = ["wgpu-core?/vulkan"]
+## Enables the WebGPU backend on WebAssembly.
+webgpu = [
+    "naga?/wgsl-out",
+    "dep:wasm-bindgen-futures",
+    "web-sys/Document",
+    "web-sys/Event",
+    "web-sys/Navigator",
+    "web-sys/NodeList",
+    "web-sys/Window",
+    "web-sys/WorkerGlobalScope",
+    "web-sys/WorkerNavigator",
+]
 
-## Enables the GLES backend on Wasm
-##
-## * ⚠️ WIP: Currently will also enable GLES dependencies on any other targets.
-webgl = ["dep:wgpu-hal", "wgpu-core/gles"]
+#! ### Conditional Backends
+
+## Enables the GLES backend on macOS only for use with [ANGLE](https://github.com/google/angle).
+angle = ["wgpu-core?/angle"]
+
+## Enables the Vulkan backend on macOS & iOS only for use with [MoltenVK](https://github.com/KhronosGroup/MoltenVK).
+vulkan-portability = ["wgpu-core?/vulkan-portability"]
+
+## Enables the GLES backend on WebAssembly only.
+webgl = ["wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
 
 ## Enables the noop backend for testing.
 ##
@@ -71,6 +84,8 @@ noop = ["wgpu-core/noop"]
 
 #! ### Shading language support
 # --------------------------------------------------------------------
+#! These features enable support for that input language on all platforms.
+#! We will translate the input language to whatever the backend requires.
 
 ## Enable accepting SPIR-V shaders as input.
 spirv = ["naga/spv-in", "wgpu-core?/spirv"]
@@ -84,24 +99,32 @@ wgsl = ["wgpu-core?/wgsl"]
 ## Enable accepting naga IR shaders as input.
 naga-ir = ["dep:naga"]
 
-#! ### Logging & Tracing
+#! ### Assertions and Serialization
 # --------------------------------------------------------------------
-#! The following features do not have any effect on the WebGPU backend.
-
 ## Apply run-time checks, even in release builds. These are in addition
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgpu-core?/strict_asserts", "wgpu-types/strict_asserts"]
 
 ## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgpu-core?/serde"]
+serde = ["wgpu-core?/serde", "wgpu-types/serde"]
 
 # Uncomment once we get to https://github.com/gfx-rs/wgpu/issues/5974
 # ## Allow writing of trace capture files. See [`Adapter::request_device`].
 # trace = ["serde", "wgpu-core/trace"]
 
-## Allow deserializing of trace capture files that were written with the `trace` feature.
-## To replay a trace file use the [wgpu player](https://github.com/gfx-rs/wgpu/tree/trunk/player).
-replay = ["serde", "wgpu-core?/replay"]
+#! ### External libraries
+# --------------------------------------------------------------------
+#! The following features facilitate integration with third-party supporting libraries.
+
+## Enables statically linking DXC.
+##
+## Normally, to use the modern DXC shader compiler with WGPU, the final application
+## must be shipped alongside `dxcompiler.dll` and `dxil.dll` (which can be downloaded from [Microsoft's GitHub][dxc]).
+## This feature statically links a version of DXC so that no external binaries are required
+## to compile DX12 shaders.
+##
+## [dxc]: https://github.com/Microsoft/DirectXShaderCompiler
+static-dxc = ["wgpu-core?/static-dxc"]
 
 #! ### Other
 # --------------------------------------------------------------------
@@ -117,25 +140,11 @@ counters = ["wgpu-core?/counters"]
 ## However, it can be useful to artificially mark them as `Send` and `Sync`
 ## anyways to make it easier to write cross-platform code.
 ## This is technically *very* unsafe in a multithreaded environment,
-## but on a wasm binary compiled without atomics we know we are definitely
-## not in a multithreaded environment.
+## but on a wasm binary compiled without atomics is a definitionally single-threaded environment.
 fragile-send-sync-non-atomic-wasm = [
-    "wgpu-hal?/fragile-send-sync-non-atomic-wasm",
     "wgpu-core?/fragile-send-sync-non-atomic-wasm",
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
-
-
-#! ### External libraries
-# --------------------------------------------------------------------
-#! The following features facilitate integration with third-party supporting libraries.
-
-## Enables statically linking DXC.
-## Normally, to use the modern DXC shader compiler with WGPU, the final application
-## must be shipped alongside `dxcompiler.dll` and `dxil.dll` (which can be downloaded from Microsoft's GitHub).
-## This feature statically links a version of DXC so that no external binaries are required
-## to compile DX12 shaders.
-static-dxc = ["wgpu-hal?/static-dxc"]
 
 #########################
 # Standard Dependencies #
@@ -144,8 +153,9 @@ static-dxc = ["wgpu-hal?/static-dxc"]
 [dependencies]
 naga = { workspace = true, optional = true }
 wgpu-core = { workspace = true, optional = true }
-wgpu-types = { workspace = true, features = ["serde"] }
+wgpu-types.workspace = true
 
+# Needed for both wgpu-core and webgpu
 arrayvec.workspace = true
 bitflags.workspace = true
 document-features.workspace = true
@@ -154,70 +164,57 @@ log.workspace = true
 parking_lot.workspace = true
 profiling.workspace = true
 raw-window-handle = { workspace = true, features = ["std"] }
-serde = { workspace = true, features = ["default", "derive"], optional = true }
-smallvec.workspace = true
 static_assertions.workspace = true
 
 ########################################
 # Target Specific Feature Dependencies #
 ########################################
 
-# Windows
-[target.'cfg(windows)'.dependencies]
+###################
+# Not Webassembly #
+###################
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Needed for only wgpu-core backend. Not optional as only wgpu-core backend exists on native platforms.
 wgpu-core = { workspace = true, features = [
     "raw-window-handle",
-    "vulkan",
-    "gles",
+    "renderdoc",
+    "indirect-validation",
 ] }
-wgpu-hal = { workspace = true, features = ["renderdoc"] }
+wgpu-hal.workspace = true
 
-# Apple Platforms
-[target.'cfg(target_vendor = "apple")'.dependencies]
-wgpu-core = { workspace = true, features = ["raw-window-handle"] }
-wgpu-hal = { workspace = true, features = [] }
+smallvec.workspace = true
 
-# Linux + Android
-[target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
-wgpu-core = { workspace = true, features = [
-    "raw-window-handle",
-    "vulkan",
-    "gles",
-] }
-wgpu-hal = { workspace = true, features = ["renderdoc"] }
-
-# Webassembly
+###############
+# Webassembly #
+###############
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
+# Needed for all backends
+js-sys = { workspace = true, features = ["default"] }
+wasm-bindgen.workspace = true
+web-sys = { workspace = true, features = [
+    "HtmlCanvasElement",
+    "OffscreenCanvas",
+] }
+
+# Needed for only wgpu-core backend. Optional as webgl is optional on WebAssembly.
 wgpu-core = { workspace = true, optional = true, features = [
     "raw-window-handle",
 ] }
 wgpu-hal = { workspace = true, optional = true }
 
-js-sys = { workspace = true, features = ["default"] }
-parking_lot.workspace = true
-wasm-bindgen-futures.workspace = true
-wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = [
-    "default",
-    "Document",
-    "Navigator",
-    "Node",
-    "NodeList",
-    "HtmlCanvasElement",
-    "OffscreenCanvas",
-    "ImageBitmap",
-    "ImageBitmapRenderingContext",
-    "Window",
-    "WorkerGlobalScope",
-    "WorkerNavigator",
-    # Needed by webgpu_sys
-    "Event",
-    "EventTarget",
-] }
+smallvec = { workspace = true, optional = true }
 
-# Emscripten
+# Needed for the webgpu backend. Optional as webgpu is optional on WebAssembly.
+wasm-bindgen-futures = { workspace = true, optional = true }
+
+##############
+# Emscripten #
+##############
 [target.'cfg(target_os = "emscripten")'.dependencies]
-wgpu-core = { workspace = true, features = ["raw-window-handle", "gles"] }
-wgpu-hal = { workspace = true }
+wgpu-core = { workspace = true, features = ["raw-window-handle"] }
+wgpu-hal.workspace = true
+
+smallvec.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true

@@ -1,4 +1,5 @@
-use std::ops::Range;
+use alloc::{boxed::Box, vec::Vec};
+use core::ops::Range;
 
 use crate::{
     AccelerationStructureBarrier, Api, Attachment, BufferBarrier, BufferBinding, BufferCopy,
@@ -13,7 +14,7 @@ use super::{
     DynTexture, DynTextureView,
 };
 
-pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
+pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
 
     unsafe fn discard_encoding(&mut self);

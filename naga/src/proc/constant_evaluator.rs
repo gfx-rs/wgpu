@@ -4,8 +4,8 @@ use arrayvec::ArrayVec;
 
 use crate::{
     arena::{Arena, Handle, HandleVec, UniqueArena},
-    ArraySize, BinaryOperator, Constant, Expression, Literal, Override, ScalarKind, Span, Type,
-    TypeInner, UnaryOperator,
+    ArraySize, BinaryOperator, Constant, Expression, Literal, Override, RelationalFunction,
+    ScalarKind, Span, Type, TypeInner, UnaryOperator,
 };
 
 /// A macro that allows dollar signs (`$`) to be emitted by other macros. Useful for generating
@@ -547,6 +547,8 @@ pub enum ConstantEvaluatorError {
     InvalidMathArg,
     #[error("{0:?} built-in function expects {1:?} arguments but {2:?} were supplied")]
     InvalidMathArgCount(crate::MathFunction, usize, usize),
+    #[error("Cannot apply relational function to type")]
+    InvalidRelationalArg(RelationalFunction),
     #[error("value of `low` is greater than `high` for clamp built-in function")]
     InvalidClamp,
     #[error("Splat is defined only on scalar values")]
@@ -931,9 +933,10 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::Select { .. } => Err(ConstantEvaluatorError::NotImplemented(
                 "select built-in function".into(),
             )),
-            Expression::Relational { fun, .. } => Err(ConstantEvaluatorError::NotImplemented(
-                format!("{fun:?} built-in function"),
-            )),
+            Expression::Relational { fun, argument } => {
+                let argument = self.check_and_get(argument)?;
+                self.relational(fun, argument, span)
+            }
             Expression::ArrayLength(expr) => match self.behavior {
                 Behavior::Wgsl(_) => Err(ConstantEvaluatorError::ArrayLength),
                 Behavior::Glsl(_) => {
@@ -2101,6 +2104,41 @@ impl<'a> ConstantEvaluator<'a> {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Expression::Compose { ty, components })
+    }
+
+    fn relational(
+        &mut self,
+        fun: RelationalFunction,
+        arg: Handle<Expression>,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let arg = self.eval_zero_value_and_splat(arg, span)?;
+        match fun {
+            RelationalFunction::All | RelationalFunction::Any => match self.expressions[arg] {
+                Expression::Literal(Literal::Bool(_)) => Ok(arg),
+                Expression::Compose { ty, ref components }
+                    if matches!(self.types[ty].inner, TypeInner::Vector { .. }) =>
+                {
+                    let components =
+                        crate::proc::flatten_compose(ty, components, self.expressions, self.types)
+                            .map(|component| match self.expressions[component] {
+                                Expression::Literal(Literal::Bool(val)) => Ok(val),
+                                _ => Err(ConstantEvaluatorError::InvalidRelationalArg(fun)),
+                            })
+                            .collect::<Result<ArrayVec<bool, { crate::VectorSize::MAX }>, _>>()?;
+                    let result = match fun {
+                        RelationalFunction::All => components.iter().all(|c| *c),
+                        RelationalFunction::Any => components.iter().any(|c| *c),
+                        _ => unreachable!(),
+                    };
+                    self.register_evaluated_expr(Expression::Literal(Literal::Bool(result)), span)
+                }
+                _ => Err(ConstantEvaluatorError::InvalidRelationalArg(fun)),
+            },
+            _ => Err(ConstantEvaluatorError::NotImplemented(format!(
+                "{fun:?} built-in function"
+            ))),
+        }
     }
 
     /// Deep copy `expr` from `expressions` into `self.expressions`.

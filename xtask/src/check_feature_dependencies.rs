@@ -3,7 +3,6 @@ use xshell::Shell;
 
 #[derive(Debug)]
 enum Search<'a> {
-    #[expect(dead_code)]
     Positive(&'a str),
     Negative(&'a str),
 }
@@ -30,7 +29,6 @@ const ALL_WGPU_FEATURES: &[&str] = &[
     "wgsl",
     "naga-ir",
     "serde",
-    "replay",
     "counters",
     "fragile-send-sync-non-atomic-wasm",
     "static-dxc",
@@ -63,6 +61,100 @@ pub fn check_feature_dependencies(shell: Shell, arguments: Arguments) -> anyhow:
             default_features: false,
             search_terms: &[Search::Negative("naga")],
         },
+        Requirement {
+            human_readable_name: "wasm32 with `webgl` feature depends on `glow`",
+            target: "wasm32-unknown-unknown",
+            packages: &["wgpu"],
+            features: &["webgl"],
+            default_features: false,
+            search_terms: &[Search::Positive("glow")],
+        },
+        Requirement {
+            human_readable_name: "windows with `webgl` does not depend on `glow`",
+            target: "x86_64-pc-windows-msvc",
+            packages: &["wgpu"],
+            features: &["webgl"],
+            default_features: false,
+            search_terms: &[Search::Negative("glow")],
+        },
+        Requirement {
+            human_readable_name: "apple with `vulkan` feature does not depend on `ash`",
+            target: "aarch64-apple-darwin",
+            packages: &["wgpu"],
+            features: &["vulkan"],
+            default_features: false,
+            search_terms: &[Search::Negative("ash")],
+        },
+        Requirement {
+            human_readable_name:
+                "apple with `vulkan-portability` feature depends on `ash` and `renderdoc-sys`",
+            target: "aarch64-apple-darwin",
+            packages: &["wgpu"],
+            features: &["vulkan-portability"],
+            default_features: false,
+            search_terms: &[Search::Positive("ash"), Search::Positive("renderdoc-sys")],
+        },
+        Requirement {
+            human_readable_name: "apple with 'gles' feature does not depend on 'glow'",
+            target: "aarch64-apple-darwin",
+            packages: &["wgpu"],
+            features: &["gles"],
+            default_features: false,
+            search_terms: &[Search::Negative("glow")],
+        },
+        Requirement {
+            human_readable_name: "apple with 'angle' feature depends on 'glow' and `renderdoc-sys`",
+            target: "aarch64-apple-darwin",
+            packages: &["wgpu"],
+            features: &["angle"],
+            default_features: false,
+            search_terms: &[Search::Positive("glow"), Search::Positive("renderdoc-sys")],
+        },
+        Requirement {
+            human_readable_name: "apple with no features does not depend on 'renderdoc-sys'",
+            target: "aarch64-apple-darwin",
+            packages: &["wgpu"],
+            features: &[],
+            default_features: false,
+            search_terms: &[Search::Negative("renderdoc-sys")],
+        },
+        Requirement {
+            human_readable_name:
+                "windows with no features does not depend on 'glow', `windows`, or `ash`",
+            target: "x86_64-pc-windows-msvc",
+            packages: &["wgpu"],
+            features: &[],
+            default_features: false,
+            search_terms: &[
+                Search::Negative("glow"),
+                Search::Negative("windows"),
+                Search::Negative("ash"),
+            ],
+        },
+        Requirement {
+            human_readable_name: "windows with no features depends on renderdoc-sys",
+            target: "x86_64-pc-windows-msvc",
+            packages: &["wgpu"],
+            features: &[],
+            default_features: false,
+            search_terms: &[Search::Positive("renderdoc-sys")],
+        },
+        Requirement {
+            human_readable_name: "emscripten with webgl feature does not depend on glow",
+            target: "wasm32-unknown-emscripten",
+            packages: &["wgpu"],
+            features: &["webgl"],
+            default_features: false,
+            search_terms: &[Search::Negative("glow")],
+        },
+        Requirement {
+            human_readable_name: "emscripten with gles feature depends on glow",
+            target: "wasm32-unknown-emscripten",
+            packages: &["wgpu"],
+            features: &["gles"],
+            default_features: false,
+            search_terms: &[Search::Positive("glow")],
+        },
     ];
 
     let mut any_failures = false;
@@ -91,16 +183,25 @@ pub fn check_feature_dependencies(shell: Shell, arguments: Arguments) -> anyhow:
 
         log::debug!("{output}");
 
-        for search_term in requirement.search_terms {
+        for (i, search_term) in requirement.search_terms.into_iter().enumerate() {
+            // Add a space and after to make sure we're getting a full match
             let found = match search_term {
-                Search::Positive(search_term) => output.contains(search_term),
-                Search::Negative(search_term) => !output.contains(search_term),
+                Search::Positive(search_term) => output.contains(&format!(" {search_term} ")),
+                Search::Negative(search_term) => !output.contains(&format!(" {search_term} ")),
             };
 
             if found {
-                log::info!("✅ Passed!");
+                log::info!(
+                    "✅ Passed! ({} of {})",
+                    i + 1,
+                    requirement.search_terms.len()
+                );
             } else {
-                log::info!("❌ Failed");
+                log::info!(
+                    "❌ Failed! ({} of {})",
+                    i + 1,
+                    requirement.search_terms.len()
+                );
                 any_failures = true;
             }
         }

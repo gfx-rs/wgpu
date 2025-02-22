@@ -1,0 +1,3 @@
+glsl_multiview = 2
+god_mode = true
+targets = "SPIRV | GLSL | WGSL"
