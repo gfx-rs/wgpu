@@ -219,7 +219,7 @@ impl PhysicalDeviceFeatures {
     /// [`Adapter::required_device_extensions`]: super::Adapter::required_device_extensions
     fn from_extensions_and_requested_features(
         phd_capabilities: &PhysicalDeviceProperties,
-        phd_features: &PhysicalDeviceFeatures,
+        _phd_features: &PhysicalDeviceFeatures,
         enabled_extensions: &[&'static CStr],
         requested_features: wgt::Features,
         downlevel_flags: wgt::DownlevelFlags,
