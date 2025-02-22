@@ -2326,7 +2326,7 @@ impl crate::Device for super::Device {
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
         }
-
+        // NOTE: this could leak shaders in case of an error.
         if let Some(CompiledStage {
             temp_raw_module: Some(raw_module),
             ..

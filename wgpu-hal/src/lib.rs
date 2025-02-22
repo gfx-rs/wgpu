@@ -2175,7 +2175,6 @@ pub struct RenderPipelineDescriptor<
     /// The cache which will be used and filled when compiling this pipeline
     pub cache: Option<&'a Pc>,
 }
-// TODO: redesign this struct
 pub struct MeshPipelineDescriptor<
     'a,
     Pl: DynPipelineLayout + ?Sized,

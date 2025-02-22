@@ -499,16 +499,20 @@ impl PhysicalDeviceFeatures {
             },
             mesh_shader: if enabled_extensions.contains(&ext::mesh_shader::NAME) {
                 let needed = requested_features.contains(wgt::Features::MESH_SHADER);
-                let multiview = requested_features.contains(wgt::Features::MULTIVIEW);
                 Some(
                     vk::PhysicalDeviceMeshShaderFeaturesEXT::default()
                         .mesh_shader(needed)
                         .task_shader(needed)
-                        .multiview_mesh_shader(
-                            needed
-                                && multiview
-                                && phd_features.mesh_shader.unwrap().multiview_mesh_shader == 1,
-                        ),
+                        .multiview_mesh_shader(false),
+                    /*
+                    let multiview = requested_features.contains(wgt::Features::MULTIVIEW);
+
+                    .multiview_mesh_shader(
+                        needed
+                            && multiview
+                            && phd_features.mesh_shader.unwrap().multiview_mesh_shader == 1,
+                    )
+                    */
                 )
             } else {
                 None
@@ -903,7 +907,8 @@ pub struct PhysicalDeviceProperties {
     /// `VK_EXT_robustness2` extension.
     robustness2: Option<vk::PhysicalDeviceRobustness2PropertiesEXT<'static>>,
 
-    /// This may be used at some point
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_EXT_mesh_shader` extension.
     _mesh_shader: Option<vk::PhysicalDeviceMeshShaderPropertiesEXT<'static>>,
 
     /// The device API version.

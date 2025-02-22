@@ -1159,6 +1159,10 @@ bitflags_array! {
         /// Supported platforms:
         /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html))
         ///
+        /// Potential Platforms:
+        /// - DX12
+        /// - Metal
+        ///
         /// This is a native only feature.
         const MESH_SHADER = 1 << 47;
     }
