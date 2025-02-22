@@ -6,10 +6,10 @@ use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, Testing
 const SHADER: &str = r#"
     override n = 8;
 
-    var<workgroup> arr: array<u32, n - 2,>;
+    var<workgroup> arr: array<u32, n - 2>;
 
     @group(0) @binding(0)
-    var<storage, read_write> output: array<u32,>;
+    var<storage, read_write> output: array<u32>;
 
     @compute @workgroup_size(1) fn main() {
         // 1d spiral
