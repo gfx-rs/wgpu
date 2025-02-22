@@ -25,14 +25,16 @@ mod device;
 mod surface;
 mod time;
 
-use std::{fmt, iter, ops, ptr::NonNull, sync::Arc, thread};
-mod atomic {
-    #[cfg(feature = "portable-atomic")]
-    pub use portable_atomic::AtomicU64;
-    #[cfg(not(feature = "portable-atomic"))]
-    pub use std::sync::atomic::AtomicU64;
-    pub use std::sync::atomic::Ordering;
-}
+#[cfg(feature = "portable-atomic")]
+pub use portable_atomic::AtomicU64;
+#[cfg(not(feature = "portable-atomic"))]
+pub use std::sync::atomic::AtomicU64;
+use std::{
+    fmt, iter, ops,
+    ptr::NonNull,
+    sync::{atomic::Ordering, Arc},
+    thread,
+};
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
@@ -414,7 +416,7 @@ impl crate::Queue for Queue {
             let extra_command_buffer = {
                 let completed_value = Arc::clone(&signal_fence.completed_value);
                 let block = block::ConcreteBlock::new(move |_cmd_buf| {
-                    completed_value.store(signal_value, atomic::Ordering::Release);
+                    completed_value.store(signal_value, Ordering::Release);
                 })
                 .copy();
 
@@ -867,7 +869,7 @@ unsafe impl Sync for QuerySet {}
 
 #[derive(Debug)]
 pub struct Fence {
-    completed_value: Arc<atomic::AtomicU64>,
+    completed_value: Arc<AtomicU64>,
     /// The pending fence values have to be ascending.
     pending_command_buffers: Vec<(crate::FenceValue, metal::CommandBuffer)>,
     shared_event: Option<metal::SharedEvent>,
@@ -880,7 +882,7 @@ unsafe impl Sync for Fence {}
 
 impl Fence {
     fn get_latest(&self) -> crate::FenceValue {
-        let mut max_value = self.completed_value.load(atomic::Ordering::Acquire);
+        let mut max_value = self.completed_value.load(Ordering::Acquire);
         for &(value, ref cmd_buf) in self.pending_command_buffers.iter() {
             if cmd_buf.status() == metal::MTLCommandBufferStatus::Completed {
                 max_value = value;

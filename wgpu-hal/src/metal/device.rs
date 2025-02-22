@@ -1,12 +1,13 @@
 use parking_lot::Mutex;
-use std::{ptr::NonNull, sync::Arc, thread, time};
-mod atomic {
-    #[cfg(feature = "portable-atomic")]
-    pub use portable_atomic::AtomicU64;
-    #[cfg(not(feature = "portable-atomic"))]
-    pub use std::sync::atomic::AtomicU64;
-    pub use std::sync::atomic::Ordering;
-}
+#[cfg(feature = "portable-atomic")]
+pub use portable_atomic::AtomicU64;
+#[cfg(not(feature = "portable-atomic"))]
+pub use std::sync::atomic::AtomicU64;
+use std::{
+    ptr::NonNull,
+    sync::{atomic::Ordering, Arc},
+    thread, time,
+};
 
 use super::conv;
 use crate::auxil::map_naga_stage;
@@ -1431,7 +1432,7 @@ impl crate::Device for super::Device {
             None
         };
         Ok(super::Fence {
-            completed_value: Arc::new(atomic::AtomicU64::new(0)),
+            completed_value: Arc::new(AtomicU64::new(0)),
             pending_command_buffers: Vec::new(),
             shared_event,
         })
@@ -1442,7 +1443,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
-        let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
+        let mut max_value = fence.completed_value.load(Ordering::Acquire);
         for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
             if cmd_buf.status() == metal::MTLCommandBufferStatus::Completed {
                 max_value = value;
@@ -1456,7 +1457,7 @@ impl crate::Device for super::Device {
         wait_value: crate::FenceValue,
         timeout_ms: u32,
     ) -> DeviceResult<bool> {
-        if wait_value <= fence.completed_value.load(atomic::Ordering::Acquire) {
+        if wait_value <= fence.completed_value.load(Ordering::Acquire) {
             return Ok(true);
         }
 
