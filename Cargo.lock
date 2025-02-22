@@ -4595,7 +4595,6 @@ dependencies = [
  "env_logger",
  "fern",
  "flume",
- "getrandom 0.2.15",
  "glam",
  "ktx2",
  "log",

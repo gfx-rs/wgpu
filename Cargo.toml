@@ -98,7 +98,6 @@ env_logger = "0.11"
 fern = "0.7"
 flume = "0.11"
 futures-lite = "2"
-getrandom = "0.2"
 glam = "0.29"
 hashbrown = { version = "0.14.5", default-features = false, features = [
     "ahash",
