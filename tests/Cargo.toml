@@ -14,7 +14,7 @@ publish = false
 
 [[test]]
 name = "wgpu-compile-test"
-path = "compile_tests/root.rs"
+path = "compile-tests/root.rs"
 harness = true
 
 [[test]]
