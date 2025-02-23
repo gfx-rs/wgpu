@@ -14,16 +14,24 @@ fn main() {
         dx12: { all(target_os = "windows", feature = "dx12") },
         metal: { all(target_vendor = "apple", feature = "metal") },
         vulkan: { any(
+            // The `vulkan` feature enables the Vulkan backend only on "native Vulkan" platforms, i.e. Windows/Linux/Android
             all(any(windows, target_os = "linux", target_os = "android"), feature = "vulkan"),
+            // On Apple platforms, however, we require the `vulkan-portability` feature
+            // to explicitly opt-in to Vulkan since it's meant to be used with MoltenVK.
             all(target_vendor = "apple", feature = "vulkan-portability")
         ) },
         gles: { any(
+            // The `gles` feature enables the OpenGL/GLES backend only on "native OpenGL" platforms, i.e. Windows, Linux, Android, and Emscripten.
+            // (Note that WebGL is also not included here!)
             all(any(windows, target_os = "linux", target_os = "android", Emscripten), feature = "gles"),
+            // On Apple platforms, however, we require the `angle` feature to explicitly opt-in to OpenGL
+            // since its meant to be used with ANGLE.
             all(target_vendor = "apple", feature = "angle")
         ) },
         noop: { feature = "noop" },
 
-        wgpu_core: { any(
+        wgpu_core: {
+            any(
                 // On native, wgpu_core is currently always enabled, even if there's no backend enabled at all.
                 native,
                 // `wgpu_core` is implied if any backend other than WebGPU is enabled.
