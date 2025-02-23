@@ -1,16 +1,13 @@
 use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
+use alloc::sync::Arc;
 use arrayvec::ArrayVec;
+use core::{mem::size_of, slice, sync::atomic::Ordering};
 use glow::HasContext;
-use std::{
-    mem::size_of,
-    slice,
-    sync::{atomic::Ordering, Arc},
-};
 
 const DEBUG_ID: u32 = 0;
 
-fn extract_marker<'a>(data: &'a [u8], range: &std::ops::Range<u32>) -> &'a str {
-    std::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
+fn extract_marker<'a>(data: &'a [u8], range: &core::ops::Range<u32>) -> &'a str {
+    core::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
 
 fn get_2d_target(target: u32, array_layer: u32) -> u32 {

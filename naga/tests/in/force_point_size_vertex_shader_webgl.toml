@@ -1,0 +1,6 @@
+targets = "GLSL"
+
+[glsl]
+version.Embedded = { is_webgl = true, version = 300 }
+writer_flags = "FORCE_POINT_SIZE"
+zero_initialize_workgroup_memory = true

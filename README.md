@@ -1,6 +1,5 @@
-<img align="right" width="25%" src="logo.png">
-
 # wgpu
+<img align="right" width="20%" src="logo.png">
 
 [![Matrix Space](https://img.shields.io/static/v1?label=Space&message=%23Wgpu&color=blue&logo=matrix)](https://matrix.to/#/#Wgpu:matrix.org)
 [![Dev Matrix  ](https://img.shields.io/static/v1?label=devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org)
@@ -37,7 +36,7 @@ The following binaries:
 - `cts_runner` - WebGPU Conformance Test Suite runner using `deno_webgpu`.
 - `player` - standalone application for replaying the API traces.
 
-For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./etc/big-picture.png).
+For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./docs/big-picture.png).
 
 ## Getting Started
 
@@ -87,7 +86,7 @@ For high-level documentation on how to use these extensions, see the individual 
 
 🧪EXPERIMENTAL🧪 APIs are subject to change and may allow undefined behavior if used incorrectly.
 
-- 🧪EXPERIMENTAL🧪 [Ray Tracing](./etc/specs/ray_tracing.md).
+- 🧪EXPERIMENTAL🧪 [Ray Tracing](./docs/api-specs/ray_tracing.md).
 
 ## Supported Platforms
 
@@ -264,4 +263,4 @@ wgpu uses the coordinate systems of D3D and Metal:
 
 | Render                                              | Texture                                               |
 | --------------------------------------------------- | ----------------------------------------------------- |
-| ![render_coordinates](./etc/render_coordinates.png) | ![texture_coordinates](./etc/texture_coordinates.png) |
+| ![render_coordinates](./docs/render_coordinates.png) | ![texture_coordinates](./docs/texture_coordinates.png) |

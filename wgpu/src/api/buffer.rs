@@ -1,7 +1,7 @@
-use std::{
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::{
     error, fmt,
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
-    sync::Arc,
 };
 
 use parking_lot::Mutex;
@@ -701,7 +701,7 @@ pub struct BufferView<'a> {
     inner: dispatch::DispatchBufferMappedRange,
 }
 
-impl std::ops::Deref for BufferView<'_> {
+impl core::ops::Deref for BufferView<'_> {
     type Target = [u8];
 
     #[inline]

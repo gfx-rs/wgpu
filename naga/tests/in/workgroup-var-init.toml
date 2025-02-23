@@ -1,0 +1,17 @@
+targets = "WGSL | GLSL | SPIRV | HLSL | METAL"
+
+[msl]
+fake_missing_bindings = false
+lang_version = [1, 0]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = true
+
+[msl.per_entry_point_map.main]
+resources = [
+    { bind_target = { buffer = 0, mutable = true }, resource_binding = { group = 0, binding = 0 } },
+]
+
+[spv]
+adjust_coordinate_space = false
+debug = true
+version = [1, 1]

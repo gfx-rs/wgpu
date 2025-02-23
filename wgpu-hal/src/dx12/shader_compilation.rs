@@ -1,6 +1,6 @@
+use std::{ffi::CStr, path::PathBuf, string::String, vec::Vec};
+
 use crate::auxil::dxgi::result::HResult;
-use std::ffi::CStr;
-use std::path::PathBuf;
 use thiserror::Error;
 use windows::{
     core::{Interface, PCSTR, PCWSTR},

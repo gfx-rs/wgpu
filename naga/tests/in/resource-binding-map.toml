@@ -1,0 +1,45 @@
+god_mode = true
+targets = "METAL"
+
+[bounds_check_policies]
+index = "ReadZeroSkipWrite"
+buffer = "ReadZeroSkipWrite"
+image_load = "ReadZeroSkipWrite"
+
+[msl]
+fake_missing_bindings = false
+lang_version = [1, 0]
+
+[msl.per_entry_point_map.entry_point_one]
+resources = [
+    { bind_target = { texture = 0 }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { sampler.Inline = 0 }, resource_binding = { group = 0, binding = 2 } },
+    { bind_target = { buffer = 0 }, resource_binding = { group = 0, binding = 4 } },
+]
+
+[msl.per_entry_point_map.entry_point_two]
+resources = [
+    { bind_target = { texture = 0 }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { sampler.Resource = 0 }, resource_binding = { group = 0, binding = 2 } },
+    { bind_target = { buffer = 0 }, resource_binding = { group = 0, binding = 4 } },
+]
+
+[msl.per_entry_point_map.entry_point_three]
+resources = [
+    { bind_target = { texture = 0 }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { buffer = 1 }, resource_binding = { group = 1, binding = 0 } },
+    { bind_target = { texture = 1 }, resource_binding = { group = 0, binding = 1 } },
+    { bind_target = { sampler.Inline = 0 }, resource_binding = { group = 0, binding = 2 } },
+    { bind_target = { sampler.Resource = 1 }, resource_binding = { group = 0, binding = 3 } },
+    { bind_target = { buffer = 0 }, resource_binding = { group = 0, binding = 4 } },
+]
+
+[[msl.inline_samplers]]
+coord = "Normalized"
+address = ["ClampToEdge", "ClampToEdge", "ClampToEdge"]
+mag_filter = "Linear"
+min_filter = "Linear"
+border_color = "TransparentBlack"
+compare_func = "Never"
+lod_clamp = { start = 0.5, end = 10.0 }
+max_anisotropy = 8

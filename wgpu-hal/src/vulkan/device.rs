@@ -1,20 +1,21 @@
-use super::{conv, RawTlasInstance};
-
-use arrayvec::ArrayVec;
-use ash::{khr, vk};
-use hashbrown::hash_map::Entry;
-use parking_lot::Mutex;
-
-use crate::TlasInstance;
 use std::{
-    borrow::Cow,
+    borrow::{Cow, ToOwned as _},
     collections::BTreeMap,
     ffi::{CStr, CString},
     mem::{self, size_of, MaybeUninit},
     num::NonZeroU32,
     ptr, slice,
     sync::Arc,
+    vec::Vec,
 };
+
+use arrayvec::ArrayVec;
+use ash::{khr, vk};
+use hashbrown::hash_map::Entry;
+use parking_lot::Mutex;
+
+use super::{conv, RawTlasInstance};
+use crate::TlasInstance;
 
 impl super::DeviceShared {
     /// Set the name of `object` to `name`.
@@ -903,7 +904,7 @@ impl super::Device {
                 runtime_checks,
             } => {
                 let pipeline_options = naga::back::spv::PipelineOptions {
-                    entry_point: stage.entry_point.to_string(),
+                    entry_point: stage.entry_point.to_owned(),
                     shader_stage: naga_stage,
                 };
                 let needs_temp_options = !runtime_checks.bounds_checks

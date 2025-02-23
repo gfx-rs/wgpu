@@ -5,6 +5,8 @@
 //! hello-compute example does not such as mapping buffers
 //! and why use the async channels.
 
+use nanorand::Rng;
+
 const OVERFLOW: u32 = 0xffffffff;
 
 async fn run() {
@@ -13,7 +15,7 @@ async fn run() {
 
     for _ in 0..10 {
         for p in numbers.iter_mut() {
-            *p = generate_rand() as u32;
+            *p = nanorand::tls_rng().generate::<u16>() as u32;
         }
 
         compute(&mut numbers, &context).await;
@@ -27,12 +29,6 @@ async fn run() {
             .collect::<Vec<String>>();
         log::info!("Results: {printed_numbers:?}");
     }
-}
-
-fn generate_rand() -> u16 {
-    let mut bytes = [0u8; 2];
-    getrandom::getrandom(&mut bytes[..]).unwrap();
-    u16::from_le_bytes(bytes)
 }
 
 async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {

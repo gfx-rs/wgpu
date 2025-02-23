@@ -2353,7 +2353,9 @@ dependencies = [
  "strum 0.26.3",
  "termcolor",
  "thiserror 2.0.11",
+ "toml",
  "unicode-ident",
+ "walkdir",
 ]
 
 [[package]]
@@ -4507,7 +4509,6 @@ dependencies = [
  "parking_lot",
  "profiling",
  "raw-window-handle 0.6.2",
- "serde",
  "smallvec",
  "static_assertions",
  "wasm-bindgen",
@@ -4557,8 +4558,40 @@ dependencies = [
  "serde",
  "smallvec",
  "thiserror 2.0.11",
+ "wgpu-core-deps-apple",
+ "wgpu-core-deps-emscripten",
+ "wgpu-core-deps-wasm",
+ "wgpu-core-deps-windows-linux-android",
  "wgpu-hal",
  "wgpu-types",
+]
+
+[[package]]
+name = "wgpu-core-deps-apple"
+version = "24.0.0"
+dependencies = [
+ "wgpu-hal",
+]
+
+[[package]]
+name = "wgpu-core-deps-emscripten"
+version = "24.0.0"
+dependencies = [
+ "wgpu-hal",
+]
+
+[[package]]
+name = "wgpu-core-deps-wasm"
+version = "24.0.0"
+dependencies = [
+ "wgpu-hal",
+]
+
+[[package]]
+name = "wgpu-core-deps-windows-linux-android"
+version = "24.0.0"
+dependencies = [
+ "wgpu-hal",
 ]
 
 [[package]]
@@ -4593,7 +4626,6 @@ dependencies = [
  "env_logger",
  "fern",
  "flume",
- "getrandom 0.2.15",
  "glam",
  "ktx2",
  "log",

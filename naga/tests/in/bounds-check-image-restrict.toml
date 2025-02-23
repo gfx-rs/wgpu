@@ -1,0 +1,18 @@
+targets = "SPIRV | METAL | GLSL"
+
+[bounds_check_policies]
+image_load = "Restrict"
+
+[msl]
+fake_missing_bindings = true
+lang_version = [1, 2]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = true
+
+[glsl]
+version.Desktop = 430
+zero_initialize_workgroup_memory = true
+
+[spv]
+debug = true
+version = [1, 1]

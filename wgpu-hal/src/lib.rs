@@ -202,6 +202,7 @@
 //!
 //! [wiki-debug]: https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications
 
+#![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
     // this happens on the GL backend, where it is both thread safe and non-thread safe in the same code.
@@ -226,7 +227,10 @@
     clippy::pattern_type_mismatch,
 )]
 #![warn(
+    clippy::alloc_instead_of_core,
     clippy::ptr_as_ptr,
+    clippy::std_instead_of_alloc,
+    clippy::std_instead_of_core,
     trivial_casts,
     trivial_numeric_casts,
     unsafe_op_in_unsafe_fn,
@@ -234,7 +238,12 @@
     unused_qualifications
 )]
 
+extern crate alloc;
 extern crate wgpu_types as wgt;
+// TODO(https://github.com/gfx-rs/wgpu/issues/6826): disable std except on noop and gles-WebGL.
+// Requires Rust 1.81 for core::error::Error.
+#[macro_use]
+extern crate std;
 
 /// DirectX12 API internals.
 #[cfg(dx12)]
@@ -276,14 +285,17 @@ pub use dynamic::{
     DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture, DynTextureView,
 };
 
-use std::{
-    borrow::{Borrow, Cow},
+#[allow(unused)]
+use alloc::boxed::Box;
+use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
+use core::{
+    borrow::Borrow,
     fmt,
     num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
-    sync::Arc,
 };
+use std::error::Error; // TODO(https://github.com/gfx-rs/wgpu/issues/6826): use core::error after MSRV bump
 
 use bitflags::bitflags;
 use parking_lot::Mutex;
@@ -305,7 +317,7 @@ pub const QUERY_SIZE: wgt::BufferAddress = 8;
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
-pub type AtomicFenceValue = std::sync::atomic::AtomicU64;
+pub type AtomicFenceValue = core::sync::atomic::AtomicU64;
 
 /// A callback to signal that wgpu is no longer using a resource.
 #[cfg(any(gles, vulkan))]
@@ -417,7 +429,7 @@ pub struct InstanceError {
 
     /// Underlying error value, if any is available.
     #[source]
-    source: Option<Arc<dyn std::error::Error + Send + Sync + 'static>>,
+    source: Option<Arc<dyn Error + Send + Sync + 'static>>,
 }
 
 impl InstanceError {
@@ -429,10 +441,7 @@ impl InstanceError {
         }
     }
     #[allow(dead_code)] // may be unused on some platforms
-    pub(crate) fn with_source(
-        message: String,
-        source: impl std::error::Error + Send + Sync + 'static,
-    ) -> Self {
+    pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
         Self {
             message,
             source: Some(Arc::new(source)),
@@ -585,13 +594,13 @@ pub trait Surface: WasmNotSendSync {
     ///
     /// [`texture`]: AcquiredSurfaceTexture::texture
     /// [`SurfaceTexture`]: Api::SurfaceTexture
-    /// [`borrow`]: std::borrow::Borrow::borrow
+    /// [`borrow`]: alloc::borrow::Borrow::borrow
     /// [`Texture`]: Api::Texture
     /// [`Fence`]: Api::Fence
     /// [`self.discard_texture`]: Surface::discard_texture
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<core::time::Duration>,
         fence: &<Self::A as Api>::Fence,
     ) -> Result<Option<AcquiredSurfaceTexture<Self::A>>, SurfaceError>;
 

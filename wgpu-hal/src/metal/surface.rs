@@ -1,8 +1,8 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
+use std::borrow::ToOwned as _;
 use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
-use std::sync::Once;
 use std::thread;
 
 use core_graphics_types::{
@@ -11,55 +11,17 @@ use core_graphics_types::{
 };
 use metal::foreign_types::ForeignType;
 use objc::{
-    class,
-    declare::ClassDecl,
-    msg_send,
+    class, msg_send,
     rc::{autoreleasepool, StrongPtr},
-    runtime::{Class, Object, Sel, BOOL, NO, YES},
+    runtime::{Object, BOOL, NO, YES},
     sel, sel_impl,
 };
 use parking_lot::{Mutex, RwLock};
 
+use crate::metal::layer_observer::new_observer_layer;
+
 #[link(name = "QuartzCore", kind = "framework")]
-extern "C" {
-    #[allow(non_upper_case_globals)]
-    static kCAGravityResize: *mut Object;
-}
-
-extern "C" fn layer_should_inherit_contents_scale_from_window(
-    _: &Class,
-    _: Sel,
-    _layer: *mut Object,
-    _new_scale: CGFloat,
-    _from_window: *mut Object,
-) -> BOOL {
-    YES
-}
-
-static CAML_DELEGATE_REGISTER: Once = Once::new();
-
-#[derive(Debug)]
-pub struct HalManagedMetalLayerDelegate(&'static Class);
-
-impl HalManagedMetalLayerDelegate {
-    pub fn new() -> Self {
-        let class_name = format!("HalManagedMetalLayerDelegate@{:p}", &CAML_DELEGATE_REGISTER);
-
-        CAML_DELEGATE_REGISTER.call_once(|| {
-            type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
-            let mut decl = ClassDecl::new(&class_name, class!(NSObject)).unwrap();
-            unsafe {
-                // <https://developer.apple.com/documentation/appkit/nsviewlayercontentscaledelegate/3005294-layer?language=objc>
-                decl.add_class_method::<Fun>(
-                    sel!(layer:shouldInheritContentsScale:fromWindow:),
-                    layer_should_inherit_contents_scale_from_window,
-                );
-            }
-            decl.register();
-        });
-        Self(Class::get(&class_name).unwrap())
-    }
-}
+extern "C" {}
 
 impl super::Surface {
     fn new(layer: metal::MetalLayer) -> Self {
@@ -140,120 +102,10 @@ impl super::Surface {
             // is the default for most views).
             //
             // This case is trickier! We cannot use the existing layer with
-            // Metal, so we must do something else. There are a few options:
-            //
-            // 1. Panic here, and require the user to pass a view with a
-            //    `CAMetalLayer` layer.
-            //
-            //    While this would "work", it doesn't solve the problem, and
-            //    instead passes the ball onwards to the user and ecosystem to
-            //    figure it out.
-            //
-            // 2. Override the existing layer with a newly created layer.
-            //
-            //    If we overlook that this does not work in UIKit since
-            //    `UIView`'s `layer` is `readonly`, and that as such we will
-            //    need to do something different there anyhow, this is
-            //    actually a fairly good solution, and was what the original
-            //    implementation did.
-            //
-            //    It has some problems though, due to:
-            //
-            //    a. `wgpu` in our API design choosing not to register a
-            //       callback with `-[CALayerDelegate displayLayer:]`, but
-            //       instead leaves it up to the user to figure out when to
-            //       redraw. That is, we rely on other libraries' callbacks
-            //       telling us when to render.
-            //
-            //       (If this were an API only for Metal, we would probably
-            //       make the user provide a `render` closure that we'd call
-            //       in the right situations. But alas, we have to be
-            //       cross-platform here).
-            //
-            //    b. Overwriting the `layer` on `NSView` makes the view
-            //       "layer-hosting", see [wantsLayer], which disables drawing
-            //       functionality on the view like `drawRect:`/`updateLayer`.
-            //
-            //    These two in combination makes it basically impossible for
-            //    crates like Winit to provide a robust rendering callback
-            //    that integrates with the system's built-in mechanisms for
-            //    redrawing, exactly because overwriting the layer would be
-            //    implicitly disabling those mechanisms!
-            //
-            //    [wantsLayer]: https://developer.apple.com/documentation/appkit/nsview/1483695-wantslayer?language=objc
-            //
-            // 3. Create a sublayer.
-            //
-            //    `CALayer` has the concept of "sublayers", which we can use
-            //    instead of overriding the layer.
-            //
-            //    This is also the recommended solution on UIKit, so it's nice
-            //    that we can use (almost) the same implementation for these.
-            //
-            //    It _might_, however, perform ever so slightly worse than
-            //    overriding the layer directly.
-            //
-            // 4. Create a new `MTKView` (or a custom view), and add it as a
-            //    subview.
-            //
-            //    Similar to creating a sublayer (see above), but also
-            //    provides a bunch of event handling that we don't need.
-            //
-            // Option 3 seems like the most robust solution, so this is what
-            // we're going to do.
-
-            // Create a new sublayer.
-            let new_layer: *mut Object = msg_send![class!(CAMetalLayer), new];
-            let () = msg_send![root_layer, addSublayer: new_layer];
-
-            #[cfg(target_os = "macos")]
-            {
-                // Automatically resize the sublayer's frame to match the
-                // superlayer's bounds.
-                //
-                // Note that there is a somewhat hidden design decision in this:
-                // We define the `width` and `height` in `configure` to control
-                // the `drawableSize` of the layer, while `bounds` and `frame` are
-                // outside of the user's direct control - instead, though, they
-                // can control the size of the view (or root layer), and get the
-                // desired effect that way.
-                //
-                // We _could_ also let `configure` set the `bounds` size, however
-                // that would be inconsistent with using the root layer directly
-                // (as we may do, see above).
-                let width_sizable = 1 << 1; // kCALayerWidthSizable
-                let height_sizable = 1 << 4; // kCALayerHeightSizable
-                let mask: std::ffi::c_uint = width_sizable | height_sizable;
-                let () = msg_send![new_layer, setAutoresizingMask: mask];
-            }
-
-            // Specify the relative size that the auto resizing mask above
-            // will keep (i.e. tell it to fill out its superlayer).
-            let frame: CGRect = msg_send![root_layer, bounds];
-            let () = msg_send![new_layer, setFrame: frame];
-
-            // The gravity to use when the layer's `drawableSize` isn't the
-            // same as the bounds rectangle.
-            //
-            // The desired content gravity is `kCAGravityResize`, because it
-            // masks / alleviates issues with resizing when
-            // `present_with_transaction` is disabled, and behaves better when
-            // moving the window between monitors.
-            //
-            // Unfortunately, it also makes it harder to see changes to
-            // `width` and `height` in `configure`. When debugging resize
-            // issues, swap this for `kCAGravityTopLeft` instead.
-            let _: () = msg_send![new_layer, setContentsGravity: unsafe { kCAGravityResize }];
-
-            // Set initial scale factor of the layer. This is kept in sync by
-            // `configure` (on UIKit), and the delegate below (on AppKit).
-            let scale_factor: CGFloat = msg_send![root_layer, contentsScale];
-            let () = msg_send![new_layer, setContentsScale: scale_factor];
-
-            let delegate = HalManagedMetalLayerDelegate::new();
-            let () = msg_send![new_layer, setDelegate: delegate.0];
-
-            unsafe { StrongPtr::new(new_layer) }
+            // Metal, so we must do something else. There are a few options,
+            // we do the same as outlined in:
+            // https://docs.rs/raw-window-metal/1.1.0/raw_window_metal/#reasoning-behind-creating-a-sublayer
+            unsafe { new_observer_layer(root_layer) }
         }
     }
 
@@ -301,29 +153,6 @@ impl crate::Surface for super::Surface {
             wgt::CompositeAlphaMode::Opaque => render_layer.set_opaque(true),
             wgt::CompositeAlphaMode::PostMultiplied => render_layer.set_opaque(false),
             _ => (),
-        }
-
-        // AppKit / UIKit automatically sets the correct scale factor for
-        // layers attached to a view. Our layer, however, may not be directly
-        // attached to a view; in those cases, we need to set the scale
-        // factor ourselves.
-        //
-        // For AppKit, we do so by adding a delegate on the layer with the
-        // `layer:shouldInheritContentsScale:fromWindow:` method returning
-        // `true` - this tells the system to automatically update the scale
-        // factor when it changes.
-        //
-        // For UIKit, we manually update the scale factor from the super layer
-        // here, if there is one.
-        //
-        // TODO: Is there a way that we could listen to such changes instead?
-        #[cfg(not(target_os = "macos"))]
-        {
-            let superlayer: *mut Object = msg_send![render_layer.as_ptr(), superlayer];
-            if !superlayer.is_null() {
-                let scale_factor: CGFloat = msg_send![superlayer, contentsScale];
-                let () = msg_send![render_layer.as_ptr(), setContentsScale: scale_factor];
-            }
         }
 
         let device_raw = device.shared.device.lock();

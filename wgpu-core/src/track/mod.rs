@@ -109,7 +109,9 @@ use crate::{
     snatch::SnatchGuard,
 };
 
-use std::{fmt, ops, sync::Arc};
+use alloc::{sync::Arc, vec::Vec};
+use core::{fmt, mem, ops};
+
 use thiserror::Error;
 
 pub(crate) use buffer::{
@@ -513,10 +515,9 @@ impl<'a> Drop for UsageScope<'a> {
         // clear vecs and push into pool
         self.buffers.clear();
         self.textures.clear();
-        self.pool.lock().push((
-            std::mem::take(&mut self.buffers),
-            std::mem::take(&mut self.textures),
-        ));
+        self.pool
+            .lock()
+            .push((mem::take(&mut self.buffers), mem::take(&mut self.textures)));
     }
 }
 
