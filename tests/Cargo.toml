@@ -24,7 +24,7 @@ harness = false
 
 [[test]]
 name = "wgpu-validation-test"
-path = "validation_tests/root.rs"
+path = "validation-tests/root.rs"
 harness = true
 
 [features]
