@@ -86,7 +86,7 @@ For high-level documentation on how to use these extensions, see the individual 
 
 🧪EXPERIMENTAL🧪 APIs are subject to change and may allow undefined behavior if used incorrectly.
 
-- 🧪EXPERIMENTAL🧪 [Ray Tracing](./docs/specs/ray_tracing.md).
+- 🧪EXPERIMENTAL🧪 [Ray Tracing](./docs/api-specs/ray_tracing.md).
 
 ## Supported Platforms
 
