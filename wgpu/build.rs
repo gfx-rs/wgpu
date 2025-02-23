@@ -23,8 +23,14 @@ fn main() {
         ) },
         noop: { feature = "noop" },
 
-        // wgpu_core is *needed* if any backend other than WebGPU is enabled.
-        wgpu_core: { any(webgl, dx12, metal, vulkan, gles, noop) },
+        wgpu_core: { any(
+                // On native, wgpu_core is currently always enabled, even if there's no backend enabled at all.
+                native,
+                // `wgpu_core` is implied if any backend other than WebGPU is enabled.
+                // (this is redundant except for `gles` and `noop`)
+                webgl, dx12, metal, vulkan, gles, noop
+            )
+        },
 
         // This alias is _only_ if _we_ need naga in the wrapper. wgpu-core provides
         // its own re-export of naga, which can be used in other situations
