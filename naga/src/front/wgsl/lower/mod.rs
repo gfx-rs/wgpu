@@ -1101,10 +1101,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ast::GlobalDeclKind::Const(ref c) => {
                     let mut ectx = ctx.as_const();
 
-                    let explicit_ty = c
-                        .ty
-                        .map(|ast| self.resolve_ast_type(ast, &mut ectx.as_global().as_const()))
-                        .transpose()?;
+                    let explicit_ty =
+                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx))
+                            .transpose()?;
 
                     let (ty, init) =
                         self.type_and_init(c.name, Some(c.init), explicit_ty, &mut ectx)?;
