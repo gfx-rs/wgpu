@@ -810,10 +810,11 @@ fn multi_draw_indirect(
     };
     let instance_limit = vertex_limits.instance_limit;
 
-    #[cfg(feature = "indirect-validation")]
-    let buffer_uses = wgt::BufferUses::STORAGE_READ_ONLY;
-    #[cfg(not(feature = "indirect-validation"))]
-    let buffer_uses = wgt::BufferUses::INDIRECT;
+    let buffer_uses = if state.device.indirect_draw_validation.is_some() {
+        wgt::BufferUses::STORAGE_READ_ONLY
+    } else {
+        wgt::BufferUses::INDIRECT
+    };
 
     state.trackers.buffers.merge_single(&buffer, buffer_uses)?;
 
@@ -900,9 +901,7 @@ impl RenderBundle {
     pub(super) unsafe fn execute(
         &self,
         raw: &mut dyn hal::DynCommandEncoder,
-        #[cfg(feature = "indirect-validation")]
         indirect_draw_validation_resources: &mut crate::indirect_draw_validation::IndirectDrawValidationResources,
-        #[cfg(feature = "indirect-validation")]
         indirect_draw_validation_batcher: &mut crate::indirect_draw_validation::IndirectDrawValidationBatcher,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), ExecutionError> {
@@ -1048,21 +1047,22 @@ impl RenderBundle {
                     count: 1,
                     indexed,
 
-                    vertex_or_index_limit: _vertex_or_index_limit,
-                    instance_limit: _instance_limit,
+                    vertex_or_index_limit,
+                    instance_limit,
                 } => {
-                    #[cfg(feature = "indirect-validation")]
-                    let (buffer, offset) = indirect_draw_validation_batcher.add(
-                        indirect_draw_validation_resources,
-                        &self.device,
-                        buffer.clone(),
-                        *offset,
-                        *indexed,
-                        *_vertex_or_index_limit,
-                        *_instance_limit,
-                    )?;
-                    #[cfg(not(feature = "indirect-validation"))]
-                    let (buffer, offset) = (buffer.try_raw(snatch_guard)?, *offset);
+                    let (buffer, offset) = if self.device.indirect_draw_validation.is_some() {
+                        indirect_draw_validation_batcher.add(
+                            indirect_draw_validation_resources,
+                            &self.device,
+                            buffer.clone(),
+                            *offset,
+                            *indexed,
+                            *vertex_or_index_limit,
+                            *instance_limit,
+                        )?
+                    } else {
+                        (buffer.try_raw(snatch_guard)?, *offset)
+                    };
                     if *indexed {
                         unsafe { raw.draw_indexed_indirect(buffer, offset, 1) };
                     } else {

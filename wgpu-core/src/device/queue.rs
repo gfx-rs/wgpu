@@ -267,9 +267,8 @@ pub(crate) struct EncoderInFlight {
     inner: crate::command::CommandEncoder,
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
-    #[cfg(feature = "indirect-validation")]
-    #[allow(unused)] // We only need to keep these resources alive.
-    indirect_draw_validation_resources:
+    /// We only need to keep these resources alive.
+    _indirect_draw_validation_resources:
         crate::indirect_draw_validation::IndirectDrawValidationResources,
 
     /// These are the buffers that have been tracked by `PendingWrites`.
@@ -381,8 +380,7 @@ impl PendingWrites {
                 },
                 trackers: Tracker::new(),
                 temp_resources: mem::take(&mut self.temp_resources),
-                #[cfg(feature = "indirect-validation")]
-                indirect_draw_validation_resources:
+                _indirect_draw_validation_resources:
                     crate::indirect_draw_validation::IndirectDrawValidationResources::new(
                         device.clone(),
                     ),
@@ -1205,8 +1203,7 @@ impl Queue {
                             inner: baked.encoder,
                             trackers: baked.trackers,
                             temp_resources: baked.temp_resources,
-                            #[cfg(feature = "indirect-validation")]
-                            indirect_draw_validation_resources: baked
+                            _indirect_draw_validation_resources: baked
                                 .indirect_draw_validation_resources,
                             pending_buffers: FastHashMap::default(),
                             pending_textures: FastHashMap::default(),

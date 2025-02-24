@@ -96,6 +96,7 @@ impl IndirectValidation {
             )
         };
 
+        #[cfg(feature = "wgsl")]
         let module = naga::front::wgsl::parse_str(&src).map_err(|inner| {
             CreateShaderModuleError::Parsing(naga::error::ShaderError {
                 source: src.clone(),
@@ -103,6 +104,10 @@ impl IndirectValidation {
                 inner: Box::new(inner),
             })
         })?;
+        #[cfg(not(feature = "wgsl"))]
+        #[allow(clippy::diverging_sub_expression)]
+        let module = panic!("Indirect validation requires the wgsl feature flag to be enabled!");
+
         let info = crate::device::create_validator(
             wgt::Features::PUSH_CONSTANTS,
             wgt::DownlevelFlags::empty(),

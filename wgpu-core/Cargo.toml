@@ -55,10 +55,6 @@ resource_log_info = []
 #! ### Runtime Checks
 # --------------------------------------------------------------------
 
-## Validates indirect draw/dispatch calls. This will also enable naga's
-## WGSL frontend since we use a WGSL compute shader to do the validation.
-indirect-validation = ["naga/wgsl-in"]
-
 ## Apply run-time checks, even in release builds. These are in addition
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgpu-types/strict_asserts"]

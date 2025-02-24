@@ -1631,7 +1631,6 @@ impl Global {
         let device = &cmd_buf.device;
         let snatch_guard = &device.snatchable_lock.read();
 
-        #[cfg(feature = "indirect-validation")]
         let mut indirect_draw_validation_batcher =
             crate::indirect_draw_validation::IndirectDrawValidationBatcher::new();
 
@@ -1643,7 +1642,6 @@ impl Global {
             let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
             let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
             let pending_query_resets = &mut cmd_buf_data.pending_query_resets;
-            #[cfg(feature = "indirect-validation")]
             let indirect_draw_validation_resources =
                 &mut cmd_buf_data.indirect_draw_validation_resources;
 
@@ -1840,9 +1838,7 @@ impl Global {
                         };
                         multi_draw_indirect(
                             &mut state,
-                            #[cfg(feature = "indirect-validation")]
                             indirect_draw_validation_resources,
-                            #[cfg(feature = "indirect-validation")]
                             &mut indirect_draw_validation_batcher,
                             cmd_buf,
                             buffer,
@@ -1962,9 +1958,7 @@ impl Global {
                         let scope = PassErrorScope::ExecuteBundle;
                         execute_bundle(
                             &mut state,
-                            #[cfg(feature = "indirect-validation")]
                             indirect_draw_validation_resources,
-                            #[cfg(feature = "indirect-validation")]
                             &mut indirect_draw_validation_batcher,
                             cmd_buf,
                             bundle,
@@ -2003,7 +1997,6 @@ impl Global {
 
             CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope, snatch_guard);
 
-            #[cfg(feature = "indirect-validation")]
             if let Some(ref indirect_draw_validation) = device.indirect_draw_validation {
                 indirect_draw_validation
                     .inject_validation_pass(
@@ -2501,9 +2494,7 @@ fn draw_indexed(
 
 fn multi_draw_indirect(
     state: &mut State,
-    #[cfg(feature = "indirect-validation")]
     indirect_draw_validation_resources: &mut crate::indirect_draw_validation::IndirectDrawValidationResources,
-    #[cfg(feature = "indirect-validation")]
     indirect_draw_validation_batcher: &mut crate::indirect_draw_validation::IndirectDrawValidationBatcher,
     cmd_buf: &Arc<CommandBuffer>,
     indirect_buffer: Arc<crate::resource::Buffer>,
@@ -2555,8 +2546,7 @@ fn multi_draw_indirect(
         ),
     );
 
-    #[cfg(feature = "indirect-validation")]
-    let (indirect_raw, offset) = if count == 1 {
+    let (indirect_raw, offset) = if count == 1 && state.device.indirect_draw_validation.is_some() {
         state
             .info
             .usage_scope
@@ -2577,16 +2567,6 @@ fn multi_draw_indirect(
             state.vertex.limits.instance_limit,
         )?
     } else {
-        state
-            .info
-            .usage_scope
-            .buffers
-            .merge_single(&indirect_buffer, wgt::BufferUses::INDIRECT)?;
-
-        (indirect_buffer.try_raw(state.snatch_guard)?, offset)
-    };
-    #[cfg(not(feature = "indirect-validation"))]
-    let (indirect_raw, offset) = {
         state
             .info
             .usage_scope
@@ -2801,9 +2781,7 @@ fn write_timestamp(
 
 fn execute_bundle(
     state: &mut State,
-    #[cfg(feature = "indirect-validation")]
     indirect_draw_validation_resources: &mut crate::indirect_draw_validation::IndirectDrawValidationResources,
-    #[cfg(feature = "indirect-validation")]
     indirect_draw_validation_batcher: &mut crate::indirect_draw_validation::IndirectDrawValidationBatcher,
     cmd_buf: &Arc<CommandBuffer>,
     bundle: Arc<super::RenderBundle>,
@@ -2857,9 +2835,7 @@ fn execute_bundle(
     unsafe {
         bundle.execute(
             state.raw_encoder,
-            #[cfg(feature = "indirect-validation")]
             indirect_draw_validation_resources,
-            #[cfg(feature = "indirect-validation")]
             indirect_draw_validation_batcher,
             state.snatch_guard,
         )

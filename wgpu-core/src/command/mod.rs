@@ -436,7 +436,6 @@ pub(crate) struct BakedCommands {
     pub(crate) encoder: CommandEncoder,
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
-    #[cfg(feature = "indirect-validation")]
     pub(crate) indirect_draw_validation_resources:
         crate::indirect_draw_validation::IndirectDrawValidationResources,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
@@ -469,7 +468,6 @@ pub struct CommandBufferMutable {
     tlas_actions: Vec<TlasAction>,
     temp_resources: Vec<TempResource>,
 
-    #[cfg(feature = "indirect-validation")]
     indirect_draw_validation_resources:
         crate::indirect_draw_validation::IndirectDrawValidationResources,
 
@@ -492,7 +490,6 @@ impl CommandBufferMutable {
             encoder: self.encoder,
             trackers: self.trackers,
             temp_resources: self.temp_resources,
-            #[cfg(feature = "indirect-validation")]
             indirect_draw_validation_resources: self.indirect_draw_validation_resources,
             buffer_memory_init_actions: self.buffer_memory_init_actions,
             texture_memory_actions: self.texture_memory_actions,
@@ -561,7 +558,6 @@ impl CommandBuffer {
                     blas_actions: Default::default(),
                     tlas_actions: Default::default(),
                     temp_resources: Default::default(),
-                    #[cfg(feature = "indirect-validation")]
                     indirect_draw_validation_resources:
                         crate::indirect_draw_validation::IndirectDrawValidationResources::new(
                             device.clone(),

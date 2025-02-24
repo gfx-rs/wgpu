@@ -31,7 +31,6 @@ impl<T> Mutex<T> {
         MutexGuard(self.0.lock())
     }
 
-    #[allow(dead_code)]
     pub fn into_inner(self) -> T {
         self.0.into_inner()
     }
