@@ -26,6 +26,6 @@ threads-required = 8
 
 # https://github.com/gfx-rs/wgpu/issues/7200
 [[profile.default.overrides]]
-filter = 'test(wgpu_test::image_atomics::image_32_atomics)'
-# platform = 'cfg(target_vendor = "apple")'
+filter = 'test(wgpu_gpu_test::image_atomics::image_32_atomics)'
+platform = 'cfg(target_vendor = "apple")'
 retries = 1
