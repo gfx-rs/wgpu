@@ -78,6 +78,21 @@ index format changes.
 
 #![allow(clippy::reversed_empty_ranges)]
 
+use alloc::{
+    borrow::{Cow, ToOwned as _},
+    string::String,
+    sync::Arc,
+    vec::Vec,
+};
+use core::{
+    mem::size_of,
+    num::{NonZeroU32, NonZeroU64},
+    ops::Range,
+};
+
+use arrayvec::ArrayVec;
+use thiserror::Error;
+
 use crate::{
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
@@ -101,100 +116,11 @@ use crate::{
     track::RenderBundleScope,
     Label, LabelHelpers,
 };
-use arrayvec::ArrayVec;
-
-use std::{borrow::Cow, mem::size_of, num::NonZeroU32, ops::Range, sync::Arc};
-use thiserror::Error;
 
 use super::{
     render_command::{ArcRenderCommand, RenderCommand},
     DrawKind,
 };
-
-/// <https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-draw>
-fn validate_draw(
-    vertex: &[Option<VertexState>],
-    step: &[VertexStep],
-    first_vertex: u32,
-    vertex_count: u32,
-    first_instance: u32,
-    instance_count: u32,
-) -> Result<(), DrawError> {
-    let vertices_end = first_vertex as u64 + vertex_count as u64;
-    let instances_end = first_instance as u64 + instance_count as u64;
-
-    for (idx, (vbs, step)) in vertex.iter().zip(step).enumerate() {
-        let Some(vbs) = vbs else {
-            continue;
-        };
-
-        let stride_count = match step.mode {
-            wgt::VertexStepMode::Vertex => vertices_end,
-            wgt::VertexStepMode::Instance => instances_end,
-        };
-
-        if stride_count == 0 {
-            continue;
-        }
-
-        let offset = (stride_count - 1) * step.stride + step.last_stride;
-        let limit = vbs.range.end - vbs.range.start;
-        if offset > limit {
-            return Err(DrawError::VertexOutOfBounds {
-                step_mode: step.mode,
-                offset,
-                limit,
-                slot: idx as u32,
-            });
-        }
-    }
-
-    Ok(())
-}
-
-// See https://gpuweb.github.io/gpuweb/#dom-gpurendercommandsmixin-drawindexed
-fn validate_indexed_draw(
-    vertex: &[Option<VertexState>],
-    step: &[VertexStep],
-    index_state: &IndexState,
-    first_index: u32,
-    index_count: u32,
-    first_instance: u32,
-    instance_count: u32,
-) -> Result<(), DrawError> {
-    let last_index = first_index as u64 + index_count as u64;
-    let index_limit = index_state.limit();
-    if last_index > index_limit {
-        return Err(DrawError::IndexBeyondLimit {
-            last_index,
-            index_limit,
-        });
-    }
-
-    let stride_count = first_instance as u64 + instance_count as u64;
-    for (idx, (vbs, step)) in vertex.iter().zip(step).enumerate() {
-        let Some(vbs) = vbs else {
-            continue;
-        };
-
-        if stride_count == 0 || step.mode != wgt::VertexStepMode::Instance {
-            continue;
-        }
-
-        let offset = (stride_count - 1) * step.stride + step.last_stride;
-        let limit = vbs.range.end - vbs.range.start;
-        if offset > limit {
-            return Err(DrawError::VertexOutOfBounds {
-                step_mode: step.mode,
-                offset,
-                limit,
-                slot: idx as u32,
-            });
-        }
-    }
-
-    Ok(())
-}
 
 /// Describes a [`RenderBundleEncoder`].
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -359,7 +285,7 @@ impl RenderBundleEncoder {
             trackers: RenderBundleScope::new(),
             pipeline: None,
             bind: (0..hal::MAX_BIND_GROUPS).map(|_| None).collect(),
-            vertex: (0..hal::MAX_VERTEX_BUFFERS).map(|_| None).collect(),
+            vertex: Default::default(),
             index: None,
             flat_dynamic_offsets: Vec::new(),
             device: device.clone(),
@@ -540,7 +466,7 @@ impl RenderBundleEncoder {
 
         let render_bundle = RenderBundle {
             base: BasePass {
-                label: desc.label.as_ref().map(|cow| cow.to_string()),
+                label: desc.label.as_deref().map(str::to_owned),
                 commands,
                 dynamic_offsets: flat_dynamic_offsets,
                 string_data: self.base.string_data,
@@ -676,7 +602,7 @@ fn set_index_buffer(
     buffer_id: id::Id<id::markers::Buffer>,
     index_format: wgt::IndexFormat,
     offset: u64,
-    size: Option<std::num::NonZeroU64>,
+    size: Option<NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
     let buffer = buffer_guard.get(buffer_id).get()?;
 
@@ -709,7 +635,7 @@ fn set_vertex_buffer(
     slot: u32,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
-    size: Option<std::num::NonZeroU64>,
+    size: Option<NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
     let max_vertex_buffers = state.device.limits.max_vertex_buffers;
     if slot >= max_vertex_buffers {
@@ -781,14 +707,9 @@ fn draw(
     let pipeline = state.pipeline()?;
     let used_bind_groups = pipeline.used_bind_groups;
 
-    validate_draw(
-        &state.vertex[..],
-        &pipeline.steps,
-        first_vertex,
-        vertex_count,
-        first_instance,
-        instance_count,
-    )?;
+    let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
+    vertex_limits.validate_vertex_limit(first_vertex, vertex_count)?;
+    vertex_limits.validate_instance_limit(first_instance, instance_count)?;
 
     if instance_count > 0 && vertex_count > 0 {
         state.flush_vertices();
@@ -819,15 +740,18 @@ fn draw_indexed(
         None => return Err(DrawError::MissingIndexBuffer.into()),
     };
 
-    validate_indexed_draw(
-        &state.vertex[..],
-        &pipeline.steps,
-        index,
-        first_index,
-        index_count,
-        first_instance,
-        instance_count,
-    )?;
+    let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
+
+    let last_index = first_index as u64 + index_count as u64;
+    let index_limit = index.limit();
+    if last_index > index_limit {
+        return Err(DrawError::IndexBeyondLimit {
+            last_index,
+            index_limit,
+        }
+        .into());
+    }
+    vertex_limits.validate_instance_limit(first_instance, instance_count)?;
 
     if instance_count > 0 && index_count > 0 {
         state.flush_index();
@@ -1330,7 +1254,7 @@ struct State {
     bind: ArrayVec<Option<BindState>, { hal::MAX_BIND_GROUPS }>,
 
     /// The state of each vertex buffer slot.
-    vertex: ArrayVec<Option<VertexState>, { hal::MAX_VERTEX_BUFFERS }>,
+    vertex: [Option<VertexState>; hal::MAX_VERTEX_BUFFERS],
 
     /// The current index buffer, if one has been set. We flush this state
     /// before indexed draw commands.
@@ -1513,6 +1437,12 @@ impl State {
 
         self.commands.extend(commands);
     }
+
+    fn vertex_buffer_sizes(&self) -> impl Iterator<Item = Option<wgt::BufferAddress>> + '_ {
+        self.vertex
+            .iter()
+            .map(|vbs| vbs.as_ref().map(|vbs| vbs.range.end - vbs.range.start))
+    }
 }
 
 /// Error encountered when finishing recording a render bundle.
@@ -1574,7 +1504,7 @@ where
 pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
     use crate::{id, RawString};
-    use std::{convert::TryInto, slice};
+    use core::{convert::TryInto, slice};
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
     /// # Safety

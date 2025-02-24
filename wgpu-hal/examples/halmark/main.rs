@@ -815,7 +815,7 @@ cfg_if::cfg_if! {
     }
     // Fallback
     else {
-        type Api = hal::api::Empty;
+        type Api = hal::api::Noop;
     }
 }
 

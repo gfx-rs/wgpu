@@ -1,6 +1,6 @@
 //! Module containing the [`WeakVec`] API.
 
-use std::sync::Weak;
+use alloc::{sync::Weak, vec::Vec};
 
 /// An optimized container for `Weak` references of `T` that minimizes reallocations by
 /// dropping older elements that no longer have strong references to them.
@@ -45,7 +45,7 @@ impl<T> WeakVec<T> {
 }
 
 pub(crate) struct WeakVecIter<T> {
-    inner: std::vec::IntoIter<Weak<T>>,
+    inner: alloc::vec::IntoIter<Weak<T>>,
 }
 
 impl<T> Iterator for WeakVecIter<T> {

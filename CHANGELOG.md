@@ -40,16 +40,111 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Features
+
+#### Hashmaps Removed from APIs
+
+Both `PipelineCompilationOptions::constants` and `ShaderSource::Glsl::defines` now take
+slices of key-value pairs instead of `hashmap`s. This is to prepare for `no_std`
+support and allow us to keep which `hashmap` hasher and such as implementation details. It
+also allows more easily creating these structures inline.
+
+By @cwfitzgerald in [#7133](https://github.com/gfx-rs/wgpu/pull/7133)
+
+#### All Backends Now Have Features
+
+Previously, the `vulkan` and `gles` backends were non-optional on windows, linux, and android and there was no way to disable them. We have now figured out how to properly make them disablable! Additionally, if you turn on the `webgl` feature, you will only get the GLES backend on WebAssembly, it won't leak into native builds, like previously it might have.
+
+By @cwfitzgerald in [#7076](https://github.com/gfx-rs/wgpu/pull/7076).
+
+#### `device.poll` Api Reworked
+
+This release reworked the poll api significantly to allow polling to return errors when polling hits internal timeout limits.
+
+`Maintain` was renamed `PollType`. Additionally, `poll` now returns a result containing information about what happened during the poll.
+
+```diff
+-pub fn wgpu::Device::poll(&self, maintain: wgpu::Maintain) -> wgpu::MaintainResult
++pub fn wgpu::Device::poll(&self, poll_type: wgpu::PollType) -> Result<wgpu::PollStatus, wgpu::PollError>
+
+-device.poll(wgpu::Maintain::Poll);
++device.poll(wgpu::PollType::Poll).unwrap();
+```
+
+```rust
+pub enum PollType<T> {
+    /// On wgpu-core based backends, block until the given submission has
+    /// completed execution, and any callbacks have been invoked.
+    ///
+    /// On WebGPU, this has no effect. Callbacks are invoked from the
+    /// window event loop.
+    WaitForSubmissionIndex(T),
+    /// Same as WaitForSubmissionIndex but waits for the most recent submission.
+    Wait,
+    /// Check the device for a single time without blocking.
+    Poll,
+}
+
+pub enum PollStatus {
+    /// There are no active submissions in flight as of the beginning of the poll call.
+    /// Other submissions may have been queued on other threads during the call.
+    ///
+    /// This implies that the given Wait was satisfied before the timeout.
+    QueueEmpty,
+
+    /// The requested Wait was satisfied before the timeout.
+    WaitSucceeded,
+
+    /// This was a poll.
+    Poll,
+}
+
+pub enum PollError {
+    /// The requested Wait timed out before the submission was completed.
+    Timeout,
+}
+```
+
+> [!WARNING]
+> As part of this change, WebGL's default behavior has changed. Previously `device.poll(Wait)` appeared as though it functioned correctly. This was a quirk caused by the bug that these PRs fixed. Now it will always return `Timeout` if the submission has not already completed. As many people rely on this behavior on WebGL, there is a new options in `BackendOptions`. If you want the old behavior, set the following on instance creation:
+> 
+> ```rust
+> instance_desc.backend_options.gl.fence_behavior = wgpu::GlFenceBehavior::AutoFinish;
+> ```
+> 
+> You will lose the ability to know exactly when a submission has completed, but `device.poll(Wait)` will behave the same as it does on native.
+
+By @cwfitzgerald in [#6942](https://github.com/gfx-rs/wgpu/pull/6942).  
+By @cwfitzgerald in [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
+
 ### New Features
+
+#### General
+
+- It is now possible to create a dummy `wgpu` device even when no GPU is available. This may be useful for testing of code which manages graphics resources. Currently, it supports reading and writing buffers, and other resource types can be created but do nothing.
+
+  To use it, enable the `noop` feature of `wgpu`, and add `NoopBackendOptions { enable: true }` to the backend options; this is an additional safeguard beyond the `Backends` bits.
+
+  By @kpreid in [#7063](https://github.com/gfx-rs/wgpu/pull/7063).
+
+- Add `Buffer` methods corresponding to `BufferSlice` methods, so you can skip creating a `BufferSlice` when it offers no benefit, and `BufferSlice::slice()` for sub-slicing a slice. By @kpreid in [#7123](https://github.com/gfx-rs/wgpu/pull/7123).
+- Add `BufferSlice::buffer()`, `BufferSlice::offset()` and `BufferSlice::size()`. By @kpreid in [#7148](https://github.com/gfx-rs/wgpu/pull/7148).
+- Add `impl From<BufferSlice> for BufferBinding` and `impl From<BufferSlice> for BindingResource`, allowing `BufferSlice`s to be easily used in creating bind groups. By @kpreid in [#7148](https://github.com/gfx-rs/wgpu/pull/7148).
+
+- Add `util::StagingBelt::allocate()` so the staging belt can be used to write textures. By @kpreid in [#6900](https://github.com/gfx-rs/wgpu/pull/6900).
+- Added `CommandEncoder::transition_resources()` for native API interop, and allowing users to slightly optimize barriers. By @JMS55 in [#6678](https://github.com/gfx-rs/wgpu/pull/6678).
 
 #### Naga
 
 - Support @must_use attribute on function declarations. By @turbocrime in [#6801](https://github.com/gfx-rs/wgpu/pull/6801).
+- Support for generating the candidate intersections from AABB geometry, and confirming the hits. By @kvark in [#7047](https://github.com/gfx-rs/wgpu/pull/7047).
+- Make naga::back::spv::Function::to_words write the OpFunctionEnd instruction in itself, instead of making another call after it. By @junjunjd in [#7156](https://github.com/gfx-rs/wgpu/pull/7156).
 
 ### Changes
 
 #### General
 
+- Support BLAS compaction in wgpu-hal. By @Vecvec in [#7101](https://github.com/gfx-rs/wgpu/pull/7101).
 - Avoid using default features in many dependencies, etc. By Brody in [#7031](https://github.com/gfx-rs/wgpu/pull/7031)
 - Use `hashbrown` to simplify no-std support. By Brody in [#6938](https://github.com/gfx-rs/wgpu/pull/6938) & [#6925](https://github.com/gfx-rs/wgpu/pull/6925).
 - If you use Binding Arrays in a bind group, you may not use Dynamic Offset Buffers or Uniform Buffers in that bind group. By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811)
@@ -58,7 +153,7 @@ Bottom level categories:
 
 ##### Split up `Features` internally
 
-Internally split up the `Features` struct and recombine them internally using a macro. There should be no breaking 
+Internally split up the `Features` struct and recombine them internally using a macro. There should be no breaking
 changes from this. This means there are also namespaces (as well as the old `Features::*`) for all wgpu specific
 features and webgpu feature (`FeaturesWGPU` and `FeaturesWebGPU` respectively) and `Features::from_internal_flags` which
 allow you to be explicit about whether features you need are available on the web too.
@@ -83,6 +178,7 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
 - Fix some instances of functions which have a return type but don't return a value being incorrectly validated. By @jamienicol in [#7013](https://github.com/gfx-rs/wgpu/pull/7013).
 - Allow abstract expressions to be used in WGSL function return statements. By @jamienicol in [#7035](https://github.com/gfx-rs/wgpu/pull/7035).
+- Error if structs have two fields with the same name. By @SparkyPotato in [#7088](https://github.com/gfx-rs/wgpu/pull/7088).
 
 #### General
 
@@ -90,27 +186,44 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 - Add Flush to GL Queue::submit. By @cwfitzgerald in [#6941](https://github.com/gfx-rs/wgpu/pull/6941).
 - Fix `wgpu` not building with `--no-default-features` on when targeting `wasm32-unknown-unknown`. By @wumpf in [#6946](https://github.com/gfx-rs/wgpu/pull/6946).
 - Fix `CopyExternalImageDestInfo` not exported on `wgpu`. By @wumpf in [#6962](https://github.com/gfx-rs/wgpu/pull/6962).
+- Reduce downlevel `max_color_attachments` limit from 8 to 4 for better GLES compatibility. By @adrian17 in [#6994](https://github.com/gfx-rs/wgpu/pull/6994).
 - Fix drop order in `Surface`. By @ed-2100 in [#6997](https://github.com/gfx-rs/wgpu/pull/6997)
 - Fix a possible deadlock within `Queue::write_texture`. By @metamuffin in [#7004](https://github.com/gfx-rs/wgpu/pull/7004)
-- Fix building a BLAS with a transform buffer by adding a flag to indicate usage of the transform buffer. By @Vecvec in 
+- Fix building a BLAS with a transform buffer by adding a flag to indicate usage of the transform buffer. By @Vecvec in
 [#7062](https://github.com/gfx-rs/wgpu/pull/7062).
 
 #### Vulkan
 
 - Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
 
+#### Metal
+
+- Use resize observers for smoother resizing. By @madsmtm in [#7026](https://github.com/gfx-rs/wgpu/pull/7026).
+
+#### Gles
+
+- Support OpenHarmony render with `gles`. By @richerfu in [#7085](https://github.com/gfx-rs/wgpu/pull/7085)
+
 #### Dx12
 
-- Fix HLSL storage format generation. By @Vecvec in [#6993](https://github.com/gfx-rs/wgpu/pull/6993)
+- Fix HLSL storage format generation. By @Vecvec in [#6993](https://github.com/gfx-rs/wgpu/pull/6993) and [#7104](https://github.com/gfx-rs/wgpu/pull/7104)
 - Fix 3D storage texture bindings. By @SparkyPotato in [#7071](https://github.com/gfx-rs/wgpu/pull/7071)
+- Fix DX12 composite alpha modes. By @amrbashir in [#7117](https://github.com/gfx-rs/wgpu/pull/7117)
 
 #### WebGPU
 
 - Improve efficiency of dropping read-only buffer mappings. By @kpreid in [#7007](https://github.com/gfx-rs/wgpu/pull/7007).
 
+### Performance
+
+#### Naga
+
+- Replace `unicode-xid` with `unicode-ident`. By @CrazyboyQCD in [#7135](https://github.com/gfx-rs/wgpu/pull/7135)
+
 ### Documentation
 
 - Improved documentation around pipeline caches and `TextureBlitter`. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978) and [#7003](https://github.com/gfx-rs/wgpu/pull/7003).
+- Improved documentation of `PresentMode`. By @kpreid in [#7211](https://github.com/gfx-rs/wgpu/pull/7211).
 
 - Added a hello window example. By @laycookie in [#6992](https://github.com/gfx-rs/wgpu/pull/6992).
 
@@ -315,7 +428,6 @@ By @ErichDonGubler in [#6456](https://github.com/gfx-rs/wgpu/pull/6456), [#6148]
 - Image atomic support in shaders. By @atlv24 in [#6706](https://github.com/gfx-rs/wgpu/pull/6706)
 - 64 bit image atomic support in shaders. By @atlv24 in [#5537](https://github.com/gfx-rs/wgpu/pull/5537)
 - Add `no_std` support to `wgpu-types`. By @bushrat011899 in [#6892](https://github.com/gfx-rs/wgpu/pull/6892).
-- Added `CommandEncoder::transition_resources()` for native API interop, and allowing users to slightly optimize barriers. By @JMS55 in [6678](https://github.com/gfx-rs/wgpu/pull/6678).
 
 ##### Vulkan
 

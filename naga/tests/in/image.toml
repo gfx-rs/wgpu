@@ -1,0 +1,11 @@
+glsl_exclude_list = ["depth_load", "depth_no_comparison"]
+targets = "SPIRV | METAL | HLSL | WGSL | GLSL"
+
+[glsl]
+version.Desktop = 430
+writer_flags = ""
+zero_initialize_workgroup_memory = true
+
+[spv]
+debug = true
+version = [1, 1]

@@ -72,6 +72,8 @@ Otherwise, we pass a range corresponding only to the current bind group.
 
 !*/
 
+#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
+
 mod adapter;
 mod command;
 mod conv;
@@ -84,7 +86,7 @@ mod suballocation;
 mod types;
 mod view;
 
-use std::{ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc};
+use std::{borrow::ToOwned as _, ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc, vec::Vec};
 
 use arrayvec::ArrayVec;
 use parking_lot::{Mutex, RwLock};

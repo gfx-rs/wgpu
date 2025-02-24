@@ -1,13 +1,8 @@
+use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
+use core::{ptr::NonNull, sync::atomic};
+use std::{thread, time};
+
 use parking_lot::Mutex;
-#[cfg(feature = "portable-atomic")]
-pub use portable_atomic::AtomicU64;
-#[cfg(not(feature = "portable-atomic"))]
-pub use std::sync::atomic::AtomicU64;
-use std::{
-    ptr::NonNull,
-    sync::{atomic::Ordering, Arc},
-    thread, time,
-};
 
 use super::conv;
 use crate::auxil::map_naga_stage;
@@ -161,7 +156,7 @@ impl super::Device {
             spirv_cross_compatibility: false,
             fake_missing_bindings: false,
             per_entry_point_map: naga::back::msl::EntryPointResourceMap::from([(
-                stage.entry_point.to_string(),
+                stage.entry_point.to_owned(),
                 ep_resources.clone(),
             )]),
             bounds_check_policies: naga::proc::BoundsCheckPolicies {
@@ -1432,7 +1427,7 @@ impl crate::Device for super::Device {
             None
         };
         Ok(super::Fence {
-            completed_value: Arc::new(AtomicU64::new(0)),
+            completed_value: Arc::new(atomic::AtomicU64::new(0)),
             pending_command_buffers: Vec::new(),
             shared_event,
         })
@@ -1443,7 +1438,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
-        let mut max_value = fence.completed_value.load(Ordering::Acquire);
+        let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
         for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
             if cmd_buf.status() == metal::MTLCommandBufferStatus::Completed {
                 max_value = value;
@@ -1457,7 +1452,7 @@ impl crate::Device for super::Device {
         wait_value: crate::FenceValue,
         timeout_ms: u32,
     ) -> DeviceResult<bool> {
-        if wait_value <= fence.completed_value.load(Ordering::Acquire) {
+        if wait_value <= fence.completed_value.load(atomic::Ordering::Acquire) {
             return Ok(true);
         }
 

@@ -1,5 +1,7 @@
 const TWO: u32 = 2u;
 const THREE: i32 = 3i;
+const TRUE = true;
+const FALSE = false;
 
 @compute @workgroup_size(TWO, THREE, TWO - 1u)
 fn main() {
@@ -10,6 +12,7 @@ fn main() {
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
+    test_local_const();
 }
 
 // Swizzle the value of nested Compose expressions.
@@ -87,3 +90,28 @@ fn compose_of_splat() {
 
 const add_vec = vec2(1.0f) + vec2(3.0f, 4.0f);
 const compare_vec = vec2(3.0f) == vec2(3.0f, 4.0f);
+
+// Ensure binary ops correctly flatten compositions of vector zero values
+fn compose_vector_zero_val_binop() {
+    var a = vec3(vec2i(), 0) + vec3(1);
+    var b = vec3(vec2i(), 0) + vec3(0, 1, 2);
+    var c = vec3(vec2i(), 2) + vec3(1, vec2i());
+}
+
+fn relational() {
+    // Test scalar and vector forms of any() and all(), with a mixture of
+    // consts, literals, zero-values, composes, and splats.
+    var scalar_any_false = any(false);
+    var scalar_any_true  = any(true);
+    var scalar_all_false = all(false);
+    var scalar_all_true  = all(true);
+    var vec_any_false    = any(vec4<bool>());
+    var vec_any_true     = any(vec4(bool(), true, vec2(FALSE)));
+    var vec_all_false    = all(vec4(vec3(vec2<bool>(), TRUE), false));
+    var vec_all_true     = all(vec4(true));
+}
+
+fn test_local_const() {
+    const local_const = 2;
+	var arr: array<f32, local_const>;
+}

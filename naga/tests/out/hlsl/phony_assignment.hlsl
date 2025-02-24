@@ -2,7 +2,7 @@ cbuffer binding : register(b0) { float binding; }
 
 int five()
 {
-    return 5;
+    return int(5);
 }
 
 [numthreads(1, 1, 1)]

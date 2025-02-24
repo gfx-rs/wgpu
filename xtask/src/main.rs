@@ -29,6 +29,8 @@ Commands:
     --list      List all of the tests and their executables without running them
     --retries   Number of times to retry failing tests
 
+    All extra arguments will be forwarded to cargo-nextest (NOT wgpu-info)
+
   vendor-web-sys
     Re-vendor the WebGPU web-sys bindings.
 

@@ -1,5 +1,18 @@
+use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
+use core::{
+    iter,
+    mem::{self, ManuallyDrop},
+    ptr::NonNull,
+    sync::atomic::Ordering,
+};
+
+use smallvec::SmallVec;
+use thiserror::Error;
+
+use super::{life::LifetimeTracker, Device};
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
+use crate::scratch::ScratchBuffer;
 use crate::{
     api_log,
     command::{
@@ -24,19 +37,6 @@ use crate::{
     track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };
-
-use smallvec::SmallVec;
-
-use crate::scratch::ScratchBuffer;
-use std::{
-    iter,
-    mem::{self, ManuallyDrop},
-    ptr::NonNull,
-    sync::{atomic::Ordering, Arc},
-};
-use thiserror::Error;
-
-use super::{life::LifetimeTracker, Device};
 
 pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
@@ -721,7 +721,7 @@ impl Queue {
             if has_copy_partial_init_tracker_coverage(size, destination.mip_level, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
-                    .collect::<Vec<std::ops::Range<u32>>>()
+                    .collect::<Vec<core::ops::Range<u32>>>()
                 {
                     let mut trackers = self.device.trackers.lock();
                     crate::command::clear_texture(
@@ -974,7 +974,7 @@ impl Queue {
             if has_copy_partial_init_tracker_coverage(&size, destination.mip_level, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
-                    .collect::<Vec<std::ops::Range<u32>>>()
+                    .collect::<Vec<core::ops::Range<u32>>>()
                 {
                     let mut trackers = self.device.trackers.lock();
                     crate::command::clear_texture(
@@ -1301,17 +1301,22 @@ impl Queue {
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
             let fence_guard = RwLockWriteGuard::downgrade(fence);
-            let (closures, _) =
-                match self
-                    .device
-                    .maintain(fence_guard, wgt::Maintain::Poll, snatch_guard)
-                {
-                    Ok(closures) => closures,
-                    Err(WaitIdleError::Device(err)) => {
-                        break 'error Err(QueueSubmitError::Queue(err))
-                    }
-                    Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
-                };
+            let (closures, result) =
+                self.device
+                    .maintain(fence_guard, wgt::PollType::Poll, snatch_guard);
+            match result {
+                Ok(status) => {
+                    debug_assert!(matches!(
+                        status,
+                        wgt::PollStatus::QueueEmpty | wgt::PollStatus::Poll
+                    ));
+                }
+                Err(WaitIdleError::Device(err)) => break 'error Err(QueueSubmitError::Queue(err)),
+                Err(WaitIdleError::WrongSubmissionIndex(..)) => {
+                    unreachable!("Cannot get WrongSubmissionIndex from Poll")
+                }
+                Err(WaitIdleError::Timeout) => unreachable!("Cannot get Timeout from Poll"),
+            };
 
             Ok(closures)
         };

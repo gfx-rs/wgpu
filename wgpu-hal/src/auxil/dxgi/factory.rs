@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{ops::Deref, string::String, vec::Vec};
 
 use windows::{core::Interface as _, Win32::Graphics::Dxgi};
 

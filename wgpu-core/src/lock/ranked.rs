@@ -55,8 +55,9 @@
 //!
 //! [`lock::rank`]: crate::lock::rank
 
+use core::{cell::Cell, fmt, ops, panic::Location};
+
 use super::rank::LockRank;
-use std::{cell::Cell, panic::Location};
 
 /// A `Mutex` instrumented for deadlock prevention.
 ///
@@ -80,7 +81,7 @@ pub struct MutexGuard<'a, T> {
     saved: LockStateGuard,
 }
 
-thread_local! {
+std::thread_local! {
     static LOCK_STATE: Cell<LockState> = const { Cell::new(LockState::INITIAL) };
 }
 
@@ -191,7 +192,7 @@ impl<T> Mutex<T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for MutexGuard<'a, T> {
+impl<'a, T> ops::Deref for MutexGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -199,14 +200,14 @@ impl<'a, T> std::ops::Deref for MutexGuard<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::DerefMut for MutexGuard<'a, T> {
+impl<'a, T> ops::DerefMut for MutexGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.deref_mut()
     }
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for Mutex<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: fmt::Debug> fmt::Debug for Mutex<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
@@ -280,13 +281,13 @@ impl<'a, T> RwLockWriteGuard<'a, T> {
     }
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for RwLock<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: fmt::Debug> fmt::Debug for RwLock<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl<'a, T> std::ops::Deref for RwLockReadGuard<'a, T> {
+impl<'a, T> ops::Deref for RwLockReadGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -294,7 +295,7 @@ impl<'a, T> std::ops::Deref for RwLockReadGuard<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for RwLockWriteGuard<'a, T> {
+impl<'a, T> ops::Deref for RwLockWriteGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -302,7 +303,7 @@ impl<'a, T> std::ops::Deref for RwLockWriteGuard<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::DerefMut for RwLockWriteGuard<'a, T> {
+impl<'a, T> ops::DerefMut for RwLockWriteGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.deref_mut()
     }
@@ -381,7 +382,7 @@ fn non_stack_like() {
 
     // Avoid a double panic from dropping this while unwinding due to the panic
     // we're testing for.
-    std::mem::forget(guard2);
+    core::mem::forget(guard2);
 
     drop(guard1);
 }

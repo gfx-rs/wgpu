@@ -6,7 +6,19 @@ First of all, welcome to the WGPU community! 👋 We're glad you want to
 contribute. If you are unfamiliar with the WGPU project, we recommend you read
 [`GOVERNANCE.md`] for an overview of its goals, and how it's governed.
 
+## Documentation Overview:
+
+- [`GOVERNANCE.md`]: An overview of the WGPU project's goals and governance.
+- [`CODE_OF_CONDUCT.md`]: The code of conduct for the WGPU project.
+- [`docs/release-checklist.md`]: Checklist for creating a new release of WGPU.
+- [`docs/review-checklist.md`]: Checklist for reviewing a pull request in WGPU.
+- [`docs/testing.md`]: Information on the test suites in WGPU and Naga.
+
 [`GOVERNANCE.md`]: ./GOVERNANCE.md
+[`CODE_OF_CONDUCT.md`]: ./CODE_OF_CONDUCT.md
+[`docs/release-checklist.md`]: ./docs/release-checklist.md
+[`docs/review-checklist.md`]: ./docs/review-checklist.md
+[`docs/testing.md`]: ./docs/testing.md
 
 ## Talking to other humans in the WGPU project
 
@@ -133,6 +145,4 @@ for reviewing the PR, not who is responsible for the content of the
 PR.
 
 You can see some common things that PR reviewers are going to look for in
-[`REVIEW-CHECKLIST.md`].
-
-[`REVIEW-CHECKLIST.md`]: ./REVIEW-CHECKLIST.md
+[`docs/review-checklist.md`].

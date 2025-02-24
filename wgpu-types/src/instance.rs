@@ -4,6 +4,9 @@ use alloc::string::String;
 
 use crate::Backends;
 
+#[cfg(doc)]
+use crate::Backend;
+
 /// Options for creating an instance.
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor {
@@ -119,7 +122,7 @@ impl InstanceFlags {
 
     /// Infer decent defaults from the build type.
     ///
-    /// If cfg!(debug_assertions) is true, then this returns [`Self::debugging()`].
+    /// If `cfg!(debug_assertions)` is true, then this returns [`Self::debugging()`].
     /// Otherwise, it returns [`Self::empty()`].
     #[must_use]
     pub fn from_build_config() -> Self {
@@ -143,7 +146,7 @@ impl InstanceFlags {
     /// - If the environment variable is not present, then the flag retains its initial value.
     ///
     /// For example `let flags = InstanceFlags::debugging().with_env();` with `WGPU_VALIDATION=0`
-    /// does not contain `InstanceFlags::VALIDATION`.
+    /// does not contain [`InstanceFlags::VALIDATION`].
     ///
     /// The environment variables are named after the flags prefixed with "WGPU_". For example:
     /// - `WGPU_DEBUG`
@@ -181,12 +184,16 @@ impl InstanceFlags {
 }
 
 /// Options that are passed to a given backend.
+///
+/// Part of [`InstanceDescriptor`].
 #[derive(Clone, Debug, Default)]
 pub struct BackendOptions {
-    /// Options for the OpenGL/OpenGLES backend.
+    /// Options for the OpenGL/OpenGLES backend, [`Backend::Gl`].
     pub gl: GlBackendOptions,
-    /// Options for the DX12 backend.
+    /// Options for the DX12 backend, [`Backend::Dx12`].
     pub dx12: Dx12BackendOptions,
+    /// Options for the noop backend, [`Backend::Noop`].
+    pub noop: NoopBackendOptions,
 }
 
 impl BackendOptions {
@@ -195,9 +202,11 @@ impl BackendOptions {
     /// See those methods for more information.
     #[must_use]
     pub fn from_env_or_default() -> Self {
-        let gl = GlBackendOptions::from_env_or_default();
-        let dx12 = Dx12BackendOptions::from_env_or_default();
-        Self { gl, dx12 }
+        Self {
+            gl: GlBackendOptions::from_env_or_default(),
+            dx12: Dx12BackendOptions::from_env_or_default(),
+            noop: NoopBackendOptions::from_env_or_default(),
+        }
     }
 
     /// Takes the given options, modifies them based on the environment variables, and returns the result.
@@ -205,19 +214,23 @@ impl BackendOptions {
     /// This is equivalent to calling `with_env` on every field.
     #[must_use]
     pub fn with_env(self) -> Self {
-        let gl = self.gl.with_env();
-        let dx12 = self.dx12.with_env();
-        Self { gl, dx12 }
+        Self {
+            gl: self.gl.with_env(),
+            dx12: self.dx12.with_env(),
+            noop: self.noop.with_env(),
+        }
     }
 }
 
 /// Configuration for the OpenGL/OpenGLES backend.
+///
+/// Part of [`BackendOptions`].
 #[derive(Clone, Debug, Default)]
 pub struct GlBackendOptions {
     /// Which OpenGL ES 3 minor version to request, if using OpenGL ES.
     pub gles_minor_version: Gles3MinorVersion,
     /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
-    pub short_circuit_fences: GlFenceBehavior,
+    pub fence_behavior: GlFenceBehavior,
 }
 
 impl GlBackendOptions {
@@ -229,7 +242,7 @@ impl GlBackendOptions {
         let gles_minor_version = Gles3MinorVersion::from_env().unwrap_or_default();
         Self {
             gles_minor_version,
-            short_circuit_fences: GlFenceBehavior::Normal,
+            fence_behavior: GlFenceBehavior::Normal,
         }
     }
 
@@ -239,15 +252,17 @@ impl GlBackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let gles_minor_version = self.gles_minor_version.with_env();
-        let short_circuit_fences = self.short_circuit_fences.with_env();
+        let short_circuit_fences = self.fence_behavior.with_env();
         Self {
             gles_minor_version,
-            short_circuit_fences,
+            fence_behavior: short_circuit_fences,
         }
     }
 }
 
 /// Configuration for the DX12 backend.
+///
+/// Part of [`BackendOptions`].
 #[derive(Clone, Debug, Default)]
 pub struct Dx12BackendOptions {
     /// Which DX12 shader compiler to use.
@@ -276,6 +291,66 @@ impl Dx12BackendOptions {
     }
 }
 
+/// Configuration for the noop backend.
+///
+/// Part of [`BackendOptions`].
+#[derive(Clone, Debug, Default)]
+pub struct NoopBackendOptions {
+    /// Whether to allow the noop backend to be used.
+    ///
+    /// The noop backend stubs out all operations except for buffer creation and mapping, so
+    /// it must not be used when not expected. Therefore, it will not be used unless explicitly
+    /// enabled.
+    pub enable: bool,
+}
+
+impl NoopBackendOptions {
+    /// Choose whether the noop backend is enabled from the environment.
+    ///
+    /// It will be enabled if the environment variable `WGPU_NOOP_BACKEND` has the value `1`
+    /// and not otherwise. Future versions may assign other meanings to other values.
+    #[must_use]
+    pub fn from_env_or_default() -> Self {
+        Self {
+            enable: Self::enable_from_env().unwrap_or(false),
+        }
+    }
+
+    /// Takes the given options, modifies them based on the environment variables, and returns the
+    /// result.
+    ///
+    /// See [`from_env_or_default()`](Self::from_env_or_default) for the interpretation.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        Self {
+            enable: Self::enable_from_env().unwrap_or(self.enable),
+        }
+    }
+
+    fn enable_from_env() -> Option<bool> {
+        let value = crate::env::var("WGPU_NOOP_BACKEND")?;
+        match value.as_str() {
+            "1" => Some(true),
+            "0" => Some(false),
+            _ => None,
+        }
+    }
+}
+
+/// DXC shader model.
+#[derive(Clone, Debug)]
+#[allow(missing_docs)]
+pub enum DxcShaderModel {
+    V6_0,
+    V6_1,
+    V6_2,
+    V6_3,
+    V6_4,
+    V6_5,
+    V6_6,
+    V6_7,
+}
+
 /// Selects which DX12 shader compiler to use.
 ///
 /// If the `DynamicDxc` option is selected, but `dxcompiler.dll` and `dxil.dll` files aren't found,
@@ -300,6 +375,8 @@ pub enum Dx12Compiler {
         dxc_path: String,
         /// Path to `dxil.dll`.
         dxil_path: String,
+        /// Maximum shader model the given dll supports.
+        max_shader_model: DxcShaderModel,
     },
     /// The statically-linked variant of Dxc.
     ///
@@ -310,10 +387,13 @@ pub enum Dx12Compiler {
 
 impl Dx12Compiler {
     /// Helper function to construct a `DynamicDxc` variant with default paths.
+    ///
+    /// The dll must support at least shader model 6.5.
     pub fn default_dynamic_dxc() -> Self {
         Self::DynamicDxc {
             dxc_path: String::from("dxcompiler.dll"),
             dxil_path: String::from("dxil.dll"),
+            max_shader_model: DxcShaderModel::V6_5,
         }
     }
 
@@ -411,7 +491,7 @@ pub enum GlFenceBehavior {
     ///
     /// This solves a very specific issue that arose due to a bug in wgpu-core that made
     /// many WebGL programs work when they "shouldn't" have. If you have code that is trying
-    /// to call `device.poll(wgpu::Maintain::Wait)` on WebGL, you need to enable this option
+    /// to call `device.poll(wgpu::PollType::Wait)` on WebGL, you need to enable this option
     /// for the "Wait" to behave how you would expect.
     ///
     /// Previously all `poll(Wait)` acted like the OpenGL fences were signalled even if they weren't.

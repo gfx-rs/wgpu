@@ -1,3 +1,8 @@
+use alloc::{sync::Arc, vec::Vec};
+
+use smallvec::SmallVec;
+use thiserror::Error;
+
 use crate::{
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
@@ -7,10 +12,6 @@ use crate::{
     snatch::SnatchGuard,
     SubmissionIndex,
 };
-use smallvec::SmallVec;
-
-use std::sync::Arc;
-use thiserror::Error;
 
 /// A command submitted to the GPU for execution.
 ///
@@ -109,6 +110,17 @@ pub enum WaitIdleError {
     Device(#[from] DeviceError),
     #[error("Tried to wait using a submission index ({0}) that has not been returned by a successful submission (last successful submission: {1})")]
     WrongSubmissionIndex(SubmissionIndex, SubmissionIndex),
+    #[error("Timed out trying to wait for the given submission index.")]
+    Timeout,
+}
+
+impl WaitIdleError {
+    pub fn to_poll_error(&self) -> Option<wgt::PollError> {
+        match self {
+            WaitIdleError::Timeout => Some(wgt::PollError::Timeout),
+            _ => None,
+        }
+    }
 }
 
 /// Resource tracking for a device.

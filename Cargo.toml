@@ -16,6 +16,7 @@ members = [
     "player",
     "tests",
     "wgpu-core",
+    "wgpu-core/platform-deps/*",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
@@ -35,6 +36,7 @@ default-members = [
     "player",
     "tests",
     "wgpu-core",
+    "wgpu-core/platform-deps/*",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
@@ -65,6 +67,8 @@ wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features
     "dx12",
     "metal",
     "static-dxc",
+    "webgl",
+    "noop",       # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
 wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "24.0.0", path = "./wgpu-hal" }
@@ -72,7 +76,12 @@ wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "24.0.0", path = "./tests" }
 wgpu-types = { version = "24.0.0", path = "./wgpu-types" }
 
-anyhow = { version = "1.0.95", default-features = false }
+wgpu-core-deps-windows-linux-android = { version = "24.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
+wgpu-core-deps-apple = { version = "24.0.0", path = "./wgpu-core/platform-deps/apple" }
+wgpu-core-deps-wasm = { version = "24.0.0", path = "./wgpu-core/platform-deps/wasm" }
+wgpu-core-deps-emscripten = { version = "24.0.0", path = "./wgpu-core/platform-deps/emscripten" }
+
+anyhow = { version = "1.0.96", default-features = false }
 approx = "0.5"
 argh = "0.1.13"
 arrayvec = { version = "0.7.6", default-features = false }
@@ -80,19 +89,22 @@ bincode = "1"
 bit-set = { version = "0.8", default-features = false }
 bit-vec = { version = "0.8", default-features = false }
 bitflags = "2.7"
-bytemuck = { version = "1.21", features = ["derive", "min_const_generics"] }
+bytemuck = { version = "1.21", features = [
+    "derive",
+    "extern_crate_alloc",
+    "min_const_generics",
+] }
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.5"
 codespan-reporting = "0.11"
 ctor = "0.2"
-document-features = "0.2.10"
+document-features = "0.2.11"
 encase = "0.10.0"
 env_logger = "0.11"
 fern = "0.7"
 flume = "0.11"
 futures-lite = "2"
-getrandom = "0.2"
 glam = "0.29"
 hashbrown = { version = "0.14.5", default-features = false, features = [
     "ahash",
@@ -133,7 +145,7 @@ ron = "0.8"
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1", default-features = false }
-serde_json = "1.0.138"
+serde_json = "1.0.139"
 serde = { version = "1", default-features = false }
 smallvec = "1"
 static_assertions = "1.1.0"
@@ -141,6 +153,7 @@ strum = { version = "0.26.3", default-features = false, features = ["derive"] }
 trybuild = "1"
 tracy-client = "0.17"
 thiserror = { version = "2", default-features = false }
+walkdir = "2"
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
@@ -158,7 +171,7 @@ gpu-descriptor = "0.3"
 # DX12 dependencies
 gpu-allocator = { version = "0.27", default-features = false }
 range-alloc = "0.1"
-mach-dxcompiler-rs = { version = "0.1.4", default-features = false }
+mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.58", default-features = false }
 
 # Gles dependencies
@@ -182,19 +195,21 @@ web-sys = { version = "0.3.74", default-features = false }
 web-time = "1.1.0"
 
 # deno dependencies
-deno_console = "0.179.0"
-deno_core = "0.321.0"
-deno_url = "0.179.0"
-deno_web = "0.210.0"
-deno_webidl = "0.179.0"
-deno_webgpu = { version = "0.146.0", path = "./deno_webgpu" }
+deno_console = "0.190.0"
+deno_core = "0.336.0"
+deno_url = "0.190.0"
+deno_web = "0.221.0"
+deno_webidl = "0.190.0"
+deno_webgpu = { version = "0.157.0", path = "./deno_webgpu" }
+deno_unsync = "0.4.2"
+deno_error = "0.5.5"
 tokio = "1.41.1"
 termcolor = "1.4.1"
 
 # android dependencies
 ndk-sys = "0.5.0"
 
-# These overrides allow our examples to explicitly depend on release crates 
+# These overrides allow our examples to explicitly depend on release crates
 [patch.crates-io]
 wgpu = { path = "./wgpu" }
 

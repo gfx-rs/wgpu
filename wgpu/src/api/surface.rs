@@ -1,4 +1,6 @@
-use std::{error, fmt};
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use core::fmt;
+use std::error; // TODO(https://github.com/gfx-rs/wgpu/issues/6826): use core::error after MSRV bump
 
 use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -74,6 +76,13 @@ impl Surface<'_> {
     }
 
     /// Initializes [`Surface`] for presentation.
+    ///
+    /// If the surface is already configured, this will wait for the GPU to come idle
+    /// before recreating the swapchain to prevent race conditions.
+    ///
+    /// # Validation Errors
+    /// - Submissions that happen _during_ the configure may cause the
+    ///   internal wait-for-idle to fail, raising a validation error.
     ///
     /// # Panics
     ///
@@ -272,7 +281,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - `raw_window_handle` & `raw_display_handle` must be valid objects to create a surface upon.
     /// - `raw_window_handle` & `raw_display_handle` must remain valid until after the returned
-    ///    [`Surface`] is  dropped.
+    ///   [`Surface`] is  dropped.
     RawHandle {
         /// Raw display handle, underlying display must outlive the surface created from this.
         raw_display_handle: raw_window_handle::RawDisplayHandle,
@@ -287,7 +296,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - layer must be a valid object to create a surface upon.
     #[cfg(metal)]
-    CoreAnimationLayer(*mut std::ffi::c_void),
+    CoreAnimationLayer(*mut core::ffi::c_void),
 
     /// Surface from `IDCompositionVisual`.
     ///
@@ -295,7 +304,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - visual must be a valid `IDCompositionVisual` to create a surface upon.  Its refcount will be incremented internally and kept live as long as the resulting [`Surface`] is live.
     #[cfg(dx12)]
-    CompositionVisual(*mut std::ffi::c_void),
+    CompositionVisual(*mut core::ffi::c_void),
 
     /// Surface from DX12 `DirectComposition` handle.
     ///
@@ -306,7 +315,7 @@ pub enum SurfaceTargetUnsafe {
     /// - surface_handle must be a valid `DirectComposition` handle to create a surface upon.   Its lifetime **will not** be internally managed: this handle **should not** be freed before
     ///   the resulting [`Surface`] is destroyed.
     #[cfg(dx12)]
-    SurfaceHandle(*mut std::ffi::c_void),
+    SurfaceHandle(*mut core::ffi::c_void),
 
     /// Surface from DX12 `SwapChainPanel`.
     ///
@@ -314,7 +323,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - visual must be a valid SwapChainPanel to create a surface upon.  Its refcount will be incremented internally and kept live as long as the resulting [`Surface`] is live.
     #[cfg(dx12)]
-    SwapChainPanel(*mut std::ffi::c_void),
+    SwapChainPanel(*mut core::ffi::c_void),
 }
 
 impl SurfaceTargetUnsafe {

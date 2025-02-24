@@ -525,6 +525,7 @@ impl<A: hal::Api> Example<A> {
                 label: Some("blas"),
                 size: blas_sizes.acceleration_structure_size,
                 format: hal::AccelerationStructureFormat::BottomLevel,
+                allow_compaction: false,
             })
         }
         .unwrap();
@@ -534,6 +535,7 @@ impl<A: hal::Api> Example<A> {
                 label: Some("tlas"),
                 size: tlas_sizes.acceleration_structure_size,
                 format: hal::AccelerationStructureFormat::TopLevel,
+                allow_compaction: false,
             })
         }
         .unwrap();
@@ -1127,7 +1129,7 @@ cfg_if::cfg_if! {
     }
     // Fallback
     else {
-        type Api = hal::api::Empty;
+        type Api = hal::api::Noop;
     }
 }
 

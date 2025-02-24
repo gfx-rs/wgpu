@@ -1,5 +1,7 @@
 const TWO: u32 = 2u;
 const THREE: i32 = 3i;
+const TRUE: bool = true;
+const FALSE: bool = false;
 const FOUR: i32 = 4i;
 const FOUR_ALIAS: i32 = 4i;
 const TEST_CONSTANT_ADDITION: i32 = 8i;
@@ -68,6 +70,12 @@ fn compose_of_splat() {
     return;
 }
 
+fn test_local_const() {
+    var arr: array<f32, 2>;
+
+    return;
+}
+
 fn map_texture_kind(texture_kind: i32) -> u32 {
     switch texture_kind {
         case 0: {
@@ -85,6 +93,27 @@ fn map_texture_kind(texture_kind: i32) -> u32 {
     }
 }
 
+fn compose_vector_zero_val_binop() {
+    var a: vec3<i32> = vec3<i32>(1i, 1i, 1i);
+    var b: vec3<i32> = vec3<i32>(0i, 1i, 2i);
+    var c: vec3<i32> = vec3<i32>(1i, 0i, 2i);
+
+    return;
+}
+
+fn relational() {
+    var scalar_any_false: bool = false;
+    var scalar_any_true: bool = true;
+    var scalar_all_false: bool = false;
+    var scalar_all_true: bool = true;
+    var vec_any_false: bool = false;
+    var vec_any_true: bool = true;
+    var vec_all_false: bool = false;
+    var vec_all_true: bool = true;
+
+    return;
+}
+
 @compute @workgroup_size(2, 3, 1) 
 fn main() {
     swizzle_of_compose();
@@ -94,5 +123,6 @@ fn main() {
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
+    test_local_const();
     return;
 }

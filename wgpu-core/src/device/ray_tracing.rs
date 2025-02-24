@@ -1,5 +1,5 @@
-use std::mem::ManuallyDrop;
-use std::sync::Arc;
+use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use core::mem::ManuallyDrop;
 
 use crate::api_log;
 #[cfg(feature = "trace")]
@@ -98,6 +98,8 @@ impl Device {
                     label: blas_desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
+                    // change this once compaction is implemented in wgpu-core
+                    allow_compaction: false,
                 })
         }
         .map_err(DeviceError::from_hal)?;
@@ -158,6 +160,7 @@ impl Device {
                     label: desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::TopLevel,
+                    allow_compaction: false,
                 })
         }
         .map_err(DeviceError::from_hal)?;

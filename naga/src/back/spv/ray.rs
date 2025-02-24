@@ -510,7 +510,6 @@ impl Writer {
         );
 
         function.to_words(&mut self.logical_layout.function_definitions);
-        Instruction::function_end().to_words(&mut self.logical_layout.function_definitions);
         self.ray_get_intersection_function = Some(func_id);
         func_id
     }
@@ -608,6 +607,19 @@ impl BlockContext<'_> {
                 block
                     .body
                     .push(Instruction::ray_query_proceed(result_type_id, id, query_id));
+            }
+            crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                let hit_id = self.cached[hit_t];
+                block
+                    .body
+                    .push(Instruction::ray_query_generate_intersection(
+                        query_id, hit_id,
+                    ));
+            }
+            crate::RayQueryFunction::ConfirmIntersection => {
+                block
+                    .body
+                    .push(Instruction::ray_query_confirm_intersection(query_id));
             }
             crate::RayQueryFunction::Terminate => {}
         }

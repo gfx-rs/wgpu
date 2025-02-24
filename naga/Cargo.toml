@@ -54,7 +54,7 @@ spv-out = ["dep:spirv"]
 wgsl-in = [
     "dep:hexf-parse",
     "dep:strum",
-    "dep:unicode-xid",
+    "dep:unicode-ident",
     "indexmap/std",
     "compact",
 ]
@@ -90,14 +90,14 @@ log = "0.4"
 strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.217", features = [
+serde = { version = "1.0.218", features = [
     "default",
     "derive",
 ], optional = true }
 petgraph = { version = "0.7", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
-unicode-xid = { version = "0.2.6", optional = true }
+unicode-ident = { version = "1.0", optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true
@@ -118,3 +118,5 @@ ron = "0.8.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 serde = { workspace = true, features = ["default", "derive"] }
 spirv = { version = "0.3", features = ["deserialize"] }
+toml = "0.8"
+walkdir.workspace = true

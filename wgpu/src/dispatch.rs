@@ -13,7 +13,8 @@
 
 use crate::{WasmNotSend, WasmNotSendSync};
 
-use std::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin, sync::Arc};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin};
 
 use crate::backend;
 
@@ -192,7 +193,7 @@ pub trait DeviceInterface: CommonTraits {
     fn start_capture(&self);
     fn stop_capture(&self);
 
-    fn poll(&self, maintain: crate::Maintain) -> crate::MaintainResult;
+    fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError>;
 
     fn get_internal_counters(&self) -> crate::InternalCounters;
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
@@ -553,7 +554,7 @@ pub trait BufferMappedRangeInterface: CommonTraits {
 /// Generates Dispatch types for each of the interfaces. Each type is a wrapper around the
 /// wgpu_core and webgpu types, and derefs to the appropriate interface trait-object.
 ///
-/// When there is only one backend, deviritualization fires and all dispatches should turn into
+/// When there is only one backend, devirtualization fires and all dispatches should turn into
 /// direct calls. If there are multiple, some dispatching will occur.
 ///
 /// This also provides `as_*` methods so that the backend implementations can dereference other
@@ -632,7 +633,7 @@ macro_rules! dispatch_types_inner {
             }
         }
 
-        impl std::ops::Deref for $name {
+        impl core::ops::Deref for $name {
             type Target = dyn $trait;
 
             #[inline]
@@ -763,7 +764,7 @@ macro_rules! dispatch_types_inner {
             }
         }
 
-        impl std::ops::Deref for $name {
+        impl core::ops::Deref for $name {
             type Target = dyn $trait;
 
             #[inline]
@@ -779,7 +780,7 @@ macro_rules! dispatch_types_inner {
             }
         }
 
-        impl std::ops::DerefMut for $name {
+        impl core::ops::DerefMut for $name {
             #[inline]
             fn deref_mut(&mut self) -> &mut Self::Target {
                 match self {

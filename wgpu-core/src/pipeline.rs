@@ -1,3 +1,16 @@
+use alloc::{
+    borrow::Cow,
+    boxed::Box,
+    string::{String, ToString as _},
+    sync::Arc,
+    vec::Vec,
+};
+use core::{marker::PhantomData, mem::ManuallyDrop, num::NonZeroU32};
+
+use arrayvec::ArrayVec;
+use naga::error::ShaderError;
+use thiserror::Error;
+
 pub use crate::pipeline_cache::PipelineCacheValidationError;
 use crate::{
     binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
@@ -7,10 +20,6 @@ use crate::{
     resource::{InvalidResourceError, Labeled, TrackingData},
     resource_log, validation, Label,
 };
-use arrayvec::ArrayVec;
-use naga::error::ShaderError;
-use std::{borrow::Cow, marker::PhantomData, mem::ManuallyDrop, num::NonZeroU32, sync::Arc};
-use thiserror::Error;
 
 /// Information about buffer bindings, which
 /// is validated against the shader (and pipeline)
@@ -139,7 +148,7 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     /// the key must be the constant's identifier name.
     ///
     /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: Cow<'a, naga::back::PipelineConstants>,
+    pub constants: naga::back::PipelineConstants,
     /// Whether workgroup scoped memory will be initialized with zero values for this stage.
     ///
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
@@ -147,6 +156,7 @@ pub struct ProgrammableStageDescriptor<'a, SM = ShaderModuleId> {
     pub zero_initialize_workgroup_memory: bool,
 }
 
+/// cbindgen:ignore
 pub type ResolvedProgrammableStageDescriptor<'a> =
     ProgrammableStageDescriptor<'a, Arc<ShaderModule>>;
 
@@ -186,6 +196,7 @@ pub struct ComputePipelineDescriptor<
     pub cache: Option<PLC>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedComputePipelineDescriptor<'a> =
     ComputePipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
@@ -307,6 +318,7 @@ pub struct VertexState<'a, SM = ShaderModuleId> {
     pub buffers: Cow<'a, [VertexBufferLayout<'a>]>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedVertexState<'a> = VertexState<'a, Arc<ShaderModule>>;
 
 /// Describes fragment processing in a render pipeline.
@@ -319,6 +331,7 @@ pub struct FragmentState<'a, SM = ShaderModuleId> {
     pub targets: Cow<'a, [Option<wgt::ColorTargetState>]>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedFragmentState<'a> = FragmentState<'a, Arc<ShaderModule>>;
 
 /// Describes a render (graphics) pipeline.
@@ -353,6 +366,7 @@ pub struct RenderPipelineDescriptor<
     pub cache: Option<PLC>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedRenderPipelineDescriptor<'a> =
     RenderPipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 

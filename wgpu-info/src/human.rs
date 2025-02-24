@@ -137,15 +137,14 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_storage_buffers_per_shader_stage,
         max_storage_textures_per_shader_stage,
         max_uniform_buffers_per_shader_stage,
+        max_binding_array_elements_per_shader_stage,
+        max_binding_array_sampler_elements_per_shader_stage,
         max_uniform_buffer_binding_size,
         max_storage_buffer_binding_size,
-        max_buffer_size,
         max_vertex_buffers,
+        max_buffer_size,
         max_vertex_attributes,
         max_vertex_buffer_array_stride,
-        min_subgroup_size,
-        max_subgroup_size,
-        max_push_constant_size,
         min_uniform_buffer_offset_alignment,
         min_storage_buffer_offset_alignment,
         max_inter_stage_shader_components,
@@ -157,41 +156,46 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_compute_workgroup_size_y,
         max_compute_workgroup_size_z,
         max_compute_workgroups_per_dimension,
+        min_subgroup_size,
+        max_subgroup_size,
+        max_push_constant_size,
         max_non_sampler_bindings,
     } = limits;
-    writeln!(output, "\t\t                        Max Texture Dimension 1d: {max_texture_dimension_1d}")?;
-    writeln!(output, "\t\t                        Max Texture Dimension 2d: {max_texture_dimension_2d}")?;
-    writeln!(output, "\t\t                        Max Texture Dimension 3d: {max_texture_dimension_3d}")?;
-    writeln!(output, "\t\t                        Max Texture Array Layers: {max_texture_array_layers}")?;
-    writeln!(output, "\t\t                                 Max Bind Groups: {max_bind_groups}")?;
-    writeln!(output, "\t\t                     Max Bindings Per Bind Group: {max_bindings_per_bind_group}")?;
-    writeln!(output, "\t\t Max Dynamic Uniform Buffers Per Pipeline Layout: {max_dynamic_uniform_buffers_per_pipeline_layout}")?;
-    writeln!(output, "\t\t Max Dynamic Storage Buffers Per Pipeline Layout: {max_dynamic_storage_buffers_per_pipeline_layout}")?;
-    writeln!(output, "\t\t           Max Sampled Textures Per Shader Stage: {max_sampled_textures_per_shader_stage}")?;
-    writeln!(output, "\t\t                   Max Samplers Per Shader Stage: {max_samplers_per_shader_stage}")?;
-    writeln!(output, "\t\t            Max Storage Buffers Per Shader Stage: {max_storage_buffers_per_shader_stage}")?;
-    writeln!(output, "\t\t           Max Storage Textures Per Shader Stage: {max_storage_textures_per_shader_stage}")?;
-    writeln!(output, "\t\t            Max Uniform Buffers Per Shader Stage: {max_uniform_buffers_per_shader_stage}")?;
-    writeln!(output, "\t\t                 Max Uniform Buffer Binding Size: {max_uniform_buffer_binding_size}")?;
-    writeln!(output, "\t\t                 Max Storage Buffer Binding Size: {max_storage_buffer_binding_size}")?;
-    writeln!(output, "\t\t                                 Max Buffer Size: {max_buffer_size}")?;
-    writeln!(output, "\t\t                              Max Vertex Buffers: {max_vertex_buffers}")?;
-    writeln!(output, "\t\t                           Max Vertex Attributes: {max_vertex_attributes}")?;
-    writeln!(output, "\t\t                  Max Vertex Buffer Array Stride: {max_vertex_buffer_array_stride}")?;
-    writeln!(output, "\t\t                               Min Subgroup Size: {min_subgroup_size}")?;
-    writeln!(output, "\t\t                               Max Subgroup Size: {max_subgroup_size}")?;
-    writeln!(output, "\t\t                          Max Push Constant Size: {max_push_constant_size}")?;
-    writeln!(output, "\t\t             Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
-    writeln!(output, "\t\t             Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;
-    writeln!(output, "\t\t                Max Inter-Stage Shader Component: {max_inter_stage_shader_components}")?;
-    writeln!(output, "\t\t                           Max Color Attachments: {max_color_attachments}")?;
-    writeln!(output, "\t\t           Max Color Attachment Bytes per sample: {max_color_attachment_bytes_per_sample}")?;
-    writeln!(output, "\t\t              Max Compute Workgroup Storage Size: {max_compute_workgroup_storage_size}")?;
-    writeln!(output, "\t\t           Max Compute Invocations Per Workgroup: {max_compute_invocations_per_workgroup}")?;
-    writeln!(output, "\t\t                    Max Compute Workgroup Size X: {max_compute_workgroup_size_x}")?;
-    writeln!(output, "\t\t                    Max Compute Workgroup Size Y: {max_compute_workgroup_size_y}")?;
-    writeln!(output, "\t\t                    Max Compute Workgroup Size Z: {max_compute_workgroup_size_z}")?;
-    writeln!(output, "\t\t            Max Compute Workgroups Per Dimension: {max_compute_workgroups_per_dimension}")?;
+    writeln!(output, "\t\t                           Max Texture Dimension 1d: {max_texture_dimension_1d}")?;
+    writeln!(output, "\t\t                           Max Texture Dimension 2d: {max_texture_dimension_2d}")?;
+    writeln!(output, "\t\t                           Max Texture Dimension 3d: {max_texture_dimension_3d}")?;
+    writeln!(output, "\t\t                           Max Texture Array Layers: {max_texture_array_layers}")?;
+    writeln!(output, "\t\t                                    Max Bind Groups: {max_bind_groups}")?;
+    writeln!(output, "\t\t                        Max Bindings Per Bind Group: {max_bindings_per_bind_group}")?;
+    writeln!(output, "\t\t    Max Dynamic Uniform Buffers Per Pipeline Layout: {max_dynamic_uniform_buffers_per_pipeline_layout}")?;
+    writeln!(output, "\t\t    Max Dynamic Storage Buffers Per Pipeline Layout: {max_dynamic_storage_buffers_per_pipeline_layout}")?;
+    writeln!(output, "\t\t              Max Sampled Textures Per Shader Stage: {max_sampled_textures_per_shader_stage}")?;
+    writeln!(output, "\t\t                      Max Samplers Per Shader Stage: {max_samplers_per_shader_stage}")?;
+    writeln!(output, "\t\t               Max Storage Buffers Per Shader Stage: {max_storage_buffers_per_shader_stage}")?;
+    writeln!(output, "\t\t              Max Storage Textures Per Shader Stage: {max_storage_textures_per_shader_stage}")?;
+    writeln!(output, "\t\t               Max Uniform Buffers Per Shader Stage: {max_uniform_buffers_per_shader_stage}")?;
+    writeln!(output, "\t\t        Max Binding Array Elements Per Shader Stage: {max_binding_array_elements_per_shader_stage}")?;
+    writeln!(output, "\t\tMax Binding Array Sampler Elements Per Shader Stage: {max_binding_array_sampler_elements_per_shader_stage}")?;
+    writeln!(output, "\t\t                    Max Uniform Buffer Binding Size: {max_uniform_buffer_binding_size}")?;
+    writeln!(output, "\t\t                    Max Storage Buffer Binding Size: {max_storage_buffer_binding_size}")?;
+    writeln!(output, "\t\t                                    Max Buffer Size: {max_buffer_size}")?;
+    writeln!(output, "\t\t                                 Max Vertex Buffers: {max_vertex_buffers}")?;
+    writeln!(output, "\t\t                              Max Vertex Attributes: {max_vertex_attributes}")?;
+    writeln!(output, "\t\t                     Max Vertex Buffer Array Stride: {max_vertex_buffer_array_stride}")?;
+    writeln!(output, "\t\t                                  Min Subgroup Size: {min_subgroup_size}")?;
+    writeln!(output, "\t\t                                  Max Subgroup Size: {max_subgroup_size}")?;
+    writeln!(output, "\t\t                             Max Push Constant Size: {max_push_constant_size}")?;
+    writeln!(output, "\t\t                Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
+    writeln!(output, "\t\t                Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;
+    writeln!(output, "\t\t                   Max Inter-Stage Shader Component: {max_inter_stage_shader_components}")?;
+    writeln!(output, "\t\t                              Max Color Attachments: {max_color_attachments}")?;
+    writeln!(output, "\t\t              Max Color Attachment Bytes per sample: {max_color_attachment_bytes_per_sample}")?;
+    writeln!(output, "\t\t                 Max Compute Workgroup Storage Size: {max_compute_workgroup_storage_size}")?;
+    writeln!(output, "\t\t              Max Compute Invocations Per Workgroup: {max_compute_invocations_per_workgroup}")?;
+    writeln!(output, "\t\t                       Max Compute Workgroup Size X: {max_compute_workgroup_size_x}")?;
+    writeln!(output, "\t\t                       Max Compute Workgroup Size Y: {max_compute_workgroup_size_y}")?;
+    writeln!(output, "\t\t                       Max Compute Workgroup Size Z: {max_compute_workgroup_size_z}")?;
+    writeln!(output, "\t\t               Max Compute Workgroups Per Dimension: {max_compute_workgroups_per_dimension}")?;
 
     // This one reflects more of a wgpu implementation limitations than a hardware limit
     // so don't show it here.

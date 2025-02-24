@@ -17,43 +17,43 @@ var<storage, read_write> global: type_5;
 var<storage> global_1: type_3;
 
 fn function() {
-    var phi_33_: type_2;
-    var phi_34_: type_2;
-    var phi_49_: type_2;
-    var phi_63_: bool;
+    var phi_28_: type_2;
+    var phi_29_: type_2;
+    var phi_43_: type_2;
+    var phi_54_: bool;
 
     let _e11 = global_1.member;
-    phi_33_ = type_2(0u, _e11);
+    phi_28_ = type_2(0u, _e11);
     loop {
-        let _e14 = phi_33_;
+        let _e14 = phi_28_;
         if (_e14.member < _e14.member_1) {
-            phi_34_ = type_2((_e14.member + 1u), _e14.member_1);
-            phi_49_ = type_2(1u, _e14.member);
+            phi_29_ = type_2((_e14.member + 1u), _e14.member_1);
+            phi_43_ = type_2(1u, _e14.member);
         } else {
-            phi_34_ = _e14;
-            phi_49_ = type_2(0u, type_2().member_1);
+            phi_29_ = _e14;
+            phi_43_ = type_2(0u, type_2().member_1);
         }
-        let _e25 = phi_34_;
-        let _e27 = phi_49_;
+        let _e25 = phi_29_;
+        let _e27 = phi_43_;
         switch bitcast<i32>(_e27.member) {
             case 0: {
-                phi_63_ = false;
+                phi_54_ = false;
                 break;
             }
             case 1: {
                 let _e31 = atomicCompareExchangeWeak((&global.member), 3u, _e27.member_1);
-                phi_63_ = select(true, false, (_e31.old_value == 3u));
+                phi_54_ = select(true, false, (_e31.old_value == 3u));
                 break;
             }
             default: {
-                phi_63_ = bool();
+                phi_54_ = bool();
                 break;
             }
         }
-        let _e36 = phi_63_;
+        let _e36 = phi_54_;
         continue;
         continuing {
-            phi_33_ = _e25;
+            phi_28_ = _e25;
             break if !(_e36);
         }
     }

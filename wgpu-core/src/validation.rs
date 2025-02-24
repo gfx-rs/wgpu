@@ -1,9 +1,16 @@
-use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString as _},
+    vec::Vec,
+};
+use core::fmt;
+
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
-use std::fmt;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
+
+use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
 
 #[derive(Debug)]
 enum ResourceType {
@@ -35,7 +42,7 @@ impl From<&ResourceType> for BindingTypeName {
             ResourceType::Buffer { .. } => BindingTypeName::Buffer,
             ResourceType::Texture { .. } => BindingTypeName::Texture,
             ResourceType::Sampler { .. } => BindingTypeName::Sampler,
-            ResourceType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+            ResourceType::AccelerationStructure => BindingTypeName::AccelerationStructure,
         }
     }
 }
@@ -47,7 +54,7 @@ impl From<&BindingType> for BindingTypeName {
             BindingType::Texture { .. } => BindingTypeName::Texture,
             BindingType::StorageTexture { .. } => BindingTypeName::Texture,
             BindingType::Sampler { .. } => BindingTypeName::Sampler,
-            BindingType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+            BindingType::AccelerationStructure => BindingTypeName::AccelerationStructure,
         }
     }
 }

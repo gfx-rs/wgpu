@@ -4,8 +4,13 @@
 
 using metal::uint;
 
+struct type_6 {
+    float inner[2];
+};
 constant uint TWO = 2u;
 constant int THREE = 3;
+constant bool TRUE = true;
+constant bool FALSE = false;
 constant int FOUR = 4;
 constant int FOUR_ALIAS = 4;
 constant int TEST_CONSTANT_ADDITION = 8;
@@ -74,6 +79,12 @@ void compose_of_splat(
     return;
 }
 
+void test_local_const(
+) {
+    type_6 arr = {};
+    return;
+}
+
 uint map_texture_kind(
     int texture_kind
 ) {
@@ -93,6 +104,27 @@ uint map_texture_kind(
     }
 }
 
+void compose_vector_zero_val_binop(
+) {
+    metal::int3 a = metal::int3(1, 1, 1);
+    metal::int3 b = metal::int3(0, 1, 2);
+    metal::int3 c = metal::int3(1, 0, 2);
+    return;
+}
+
+void relational(
+) {
+    bool scalar_any_false = false;
+    bool scalar_any_true = true;
+    bool scalar_all_false = false;
+    bool scalar_all_true = true;
+    bool vec_any_false = false;
+    bool vec_any_true = true;
+    bool vec_all_false = false;
+    bool vec_all_true = true;
+    return;
+}
+
 kernel void main_(
 ) {
     swizzle_of_compose();
@@ -102,5 +134,6 @@ kernel void main_(
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
+    test_local_const();
     return;
 }

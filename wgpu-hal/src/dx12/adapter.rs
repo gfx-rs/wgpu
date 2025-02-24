@@ -1,8 +1,10 @@
 use std::{
     mem::{size_of, size_of_val},
     ptr,
+    string::String,
     sync::Arc,
     thread,
+    vec::Vec,
 };
 
 use parking_lot::Mutex;
@@ -226,9 +228,18 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if dxc_container.is_none() {
-            naga::back::hlsl::ShaderModel::V5_1
-        } else {
+        let shader_model = if let Some(ref dxc_container) = dxc_container {
+            let max_shader_model = match dxc_container.max_shader_model {
+                wgt::DxcShaderModel::V6_0 => Direct3D12::D3D_SHADER_MODEL_6_0,
+                wgt::DxcShaderModel::V6_1 => Direct3D12::D3D_SHADER_MODEL_6_1,
+                wgt::DxcShaderModel::V6_2 => Direct3D12::D3D_SHADER_MODEL_6_2,
+                wgt::DxcShaderModel::V6_3 => Direct3D12::D3D_SHADER_MODEL_6_3,
+                wgt::DxcShaderModel::V6_4 => Direct3D12::D3D_SHADER_MODEL_6_4,
+                wgt::DxcShaderModel::V6_5 => Direct3D12::D3D_SHADER_MODEL_6_5,
+                wgt::DxcShaderModel::V6_6 => Direct3D12::D3D_SHADER_MODEL_6_6,
+                wgt::DxcShaderModel::V6_7 => Direct3D12::D3D_SHADER_MODEL_6_7,
+            };
+
             let mut versions = [
                 Direct3D12::D3D_SHADER_MODEL_6_7,
                 Direct3D12::D3D_SHADER_MODEL_6_6,
@@ -239,7 +250,8 @@ impl super::Adapter {
                 Direct3D12::D3D_SHADER_MODEL_6_1,
                 Direct3D12::D3D_SHADER_MODEL_6_0,
             ]
-            .iter();
+            .iter()
+            .filter(|shader_model| shader_model.0 <= max_shader_model.0);
 
             let highest_shader_model = loop {
                 if let Some(&sm) = versions.next() {
@@ -274,6 +286,8 @@ impl super::Adapter {
                 Direct3D12::D3D_SHADER_MODEL_6_7 => naga::back::hlsl::ShaderModel::V6_7,
                 _ => unreachable!(),
             }
+        } else {
+            naga::back::hlsl::ShaderModel::V5_1
         };
         let private_caps = super::PrivateCapabilities {
             instance_flags,
@@ -372,15 +386,12 @@ impl super::Adapter {
         features.set(
             wgt::Features::TEXTURE_BINDING_ARRAY
                 | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
-                | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-                | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            shader_model >= naga::back::hlsl::ShaderModel::V5_1,
-        );
-
-        // See note below the table https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
-        features.set(
-            wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY,
-            options.ResourceBindingTier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0,
+                | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                // See note below the table https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
+                | wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY,
+            shader_model >= naga::back::hlsl::ShaderModel::V5_1
+                && options.ResourceBindingTier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0,
         );
 
         let bgra8unorm_storage_supported = {
@@ -529,6 +540,8 @@ impl super::Adapter {
                     max_storage_buffers_per_shader_stage: uav_count / 4,
                     max_storage_textures_per_shader_stage: uav_count / 4,
                     max_uniform_buffers_per_shader_stage: full_heap_count,
+                    max_binding_array_elements_per_shader_stage: full_heap_count,
+                    max_binding_array_sampler_elements_per_shader_stage: full_heap_count,
                     max_uniform_buffer_binding_size:
                         Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
                     max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE,
@@ -863,7 +876,18 @@ impl crate::Adapter for super::Adapter {
                 | wgt::TextureUses::COPY_SRC
                 | wgt::TextureUses::COPY_DST,
             present_modes,
-            composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            composite_alpha_modes: match surface.target {
+                SurfaceTarget::WndHandle(_) => vec![wgt::CompositeAlphaMode::Opaque],
+                SurfaceTarget::Visual(_)
+                | SurfaceTarget::SurfaceHandle(_)
+                | SurfaceTarget::SwapChainPanel(_) => vec![
+                    wgt::CompositeAlphaMode::Auto,
+                    wgt::CompositeAlphaMode::Inherit,
+                    wgt::CompositeAlphaMode::Opaque,
+                    wgt::CompositeAlphaMode::PostMultiplied,
+                    wgt::CompositeAlphaMode::PreMultiplied,
+                ],
+            },
         })
     }
 
