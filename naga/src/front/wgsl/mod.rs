@@ -40,9 +40,9 @@ impl Frontend {
     }
 
     fn inner<'a>(&mut self, source: &'a str) -> Result<crate::Module, Error<'a>> {
-        let mut tu = self.parser.parse(source)?;
+        let tu = self.parser.parse(source)?;
         let index = index::Index::generate(&tu)?;
-        let module = Lowerer::new(&index).lower(&mut tu)?;
+        let module = Lowerer::new(&index).lower(tu)?;
 
         Ok(module)
     }

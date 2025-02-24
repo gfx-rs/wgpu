@@ -1049,10 +1049,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
     pub fn lower(
         &mut self,
-        tu: &'temp mut ast::TranslationUnit<'source>,
+        tu: ast::TranslationUnit<'source>,
     ) -> Result<crate::Module, Error<'source>> {
         let mut module = crate::Module {
-            diagnostic_filters: std::mem::take(&mut tu.diagnostic_filters),
+            diagnostic_filters: tu.diagnostic_filters,
             diagnostic_filter_leaf: tu.diagnostic_filter_leaf,
             ..Default::default()
         };
