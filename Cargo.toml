@@ -81,7 +81,7 @@ wgpu-core-deps-apple = { version = "24.0.0", path = "./wgpu-core/platform-deps/a
 wgpu-core-deps-wasm = { version = "24.0.0", path = "./wgpu-core/platform-deps/wasm" }
 wgpu-core-deps-emscripten = { version = "24.0.0", path = "./wgpu-core/platform-deps/emscripten" }
 
-anyhow = { version = "1.0.95", default-features = false }
+anyhow = { version = "1.0.96", default-features = false }
 approx = "0.5"
 argh = "0.1.13"
 arrayvec = { version = "0.7.6", default-features = false }
@@ -144,7 +144,7 @@ ron = "0.8"
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1", default-features = false }
-serde_json = "1.0.138"
+serde_json = "1.0.139"
 serde = { version = "1", default-features = false }
 smallvec = "1"
 static_assertions = "1.1.0"
