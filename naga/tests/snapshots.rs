@@ -760,7 +760,7 @@ fn write_output_wgsl(
 fn convert_snapshots_wgsl() {
     let _ = env_logger::try_init();
 
-    for input in Input::files_in_dir(None, &["wgsl"]) {
+    for input in Input::files_in_dir(Some("wgsl"), &["wgsl"]) {
         let source = input.read_source();
         // crlf will make the large split output different on different platform
         let source = source.replace('\r', "");
