@@ -34,7 +34,7 @@ use super::{
     },
     BackendResult,
 };
-use crate::{arena::Handle, proc::NameKey, ScalarKind, TypeInner};
+use crate::{arena::Handle, proc::NameKey, ScalarKind};
 use std::fmt::Write;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -380,7 +380,7 @@ impl<W: Write> super::Writer<'_, W> {
         module: &crate::Module,
         constructor: WrappedConstructor,
     ) -> BackendResult {
-        let name = TypeInner::hlsl_type_id(constructor.ty, module.to_ctx(), &self.names)?;
+        let name = crate::TypeInner::hlsl_type_id(constructor.ty, module.to_ctx(), &self.names)?;
         write!(self.out, "Construct{name}")?;
         Ok(())
     }
@@ -397,7 +397,7 @@ impl<W: Write> super::Writer<'_, W> {
         const RETURN_VARIABLE_NAME: &str = "ret";
 
         // Write function return type and name
-        if let TypeInner::Array { base, size, .. } = module.types[constructor.ty].inner {
+        if let crate::TypeInner::Array { base, size, .. } = module.types[constructor.ty].inner {
             write!(self.out, "typedef ")?;
             self.write_type(module, constructor.ty)?;
             write!(self.out, " ret_")?;
@@ -422,19 +422,19 @@ impl<W: Write> super::Writer<'_, W> {
             }
             self.write_type(module, ty)?;
             write!(self.out, " {ARGUMENT_VARIABLE_NAME}{i}")?;
-            if let TypeInner::Array { base, size, .. } = module.types[ty].inner {
+            if let crate::TypeInner::Array { base, size, .. } = module.types[ty].inner {
                 self.write_array_size(module, base, size)?;
             }
             Ok(())
         };
 
         match module.types[constructor.ty].inner {
-            TypeInner::Struct { ref members, .. } => {
+            crate::TypeInner::Struct { ref members, .. } => {
                 for (i, member) in members.iter().enumerate() {
                     write_arg(i, member.ty)?;
                 }
             }
-            TypeInner::Array {
+            crate::TypeInner::Array {
                 base,
                 size: crate::ArraySize::Constant(size),
                 ..
@@ -452,7 +452,7 @@ impl<W: Write> super::Writer<'_, W> {
         writeln!(self.out, " {{")?;
 
         match module.types[constructor.ty].inner {
-            TypeInner::Struct { ref members, .. } => {
+            crate::TypeInner::Struct { ref members, .. } => {
                 let struct_name = &self.names[&NameKey::Type(constructor.ty)];
                 writeln!(
                     self.out,
@@ -462,7 +462,7 @@ impl<W: Write> super::Writer<'_, W> {
                     let field_name = &self.names[&NameKey::StructMember(constructor.ty, i as u32)];
 
                     match module.types[member.ty].inner {
-                        TypeInner::Matrix {
+                        crate::TypeInner::Matrix {
                             columns,
                             rows: crate::VectorSize::Bi,
                             ..
@@ -489,7 +489,7 @@ impl<W: Write> super::Writer<'_, W> {
                                     "{}{}.{} = (__mat{}x2",
                                     INDENT, RETURN_VARIABLE_NAME, field_name, columns as u8
                                 )?;
-                                if let TypeInner::Array { base, size, .. } = *other {
+                                if let crate::TypeInner::Array { base, size, .. } = *other {
                                     self.write_array_size(module, base, size)?;
                                 }
                                 writeln!(self.out, "){ARGUMENT_VARIABLE_NAME}{i};",)?;
@@ -503,7 +503,7 @@ impl<W: Write> super::Writer<'_, W> {
                     }
                 }
             }
-            TypeInner::Array {
+            crate::TypeInner::Array {
                 base,
                 size: crate::ArraySize::Constant(size),
                 ..
@@ -611,7 +611,7 @@ impl<W: Write> super::Writer<'_, W> {
 
         // Write function return type and name
         let member = match module.types[access.ty].inner {
-            TypeInner::Struct { ref members, .. } => &members[access.index as usize],
+            crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
             _ => unreachable!(),
         };
         let ret_ty = &module.types[member.ty].inner;
@@ -633,7 +633,7 @@ impl<W: Write> super::Writer<'_, W> {
         write!(self.out, "(")?;
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
         match module.types[member.ty].inner {
-            TypeInner::Matrix { columns, .. } => {
+            crate::TypeInner::Matrix { columns, .. } => {
                 for i in 0..columns as u8 {
                     if i != 0 {
                         write!(self.out, ", ")?;
@@ -683,7 +683,7 @@ impl<W: Write> super::Writer<'_, W> {
         let struct_name = &self.names[&NameKey::Type(access.ty)];
         write!(self.out, "{struct_name} {STRUCT_ARGUMENT_VARIABLE_NAME}, ")?;
         let member = match module.types[access.ty].inner {
-            TypeInner::Struct { ref members, .. } => &members[access.index as usize],
+            crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
             _ => unreachable!(),
         };
         self.write_type(module, member.ty)?;
@@ -694,7 +694,7 @@ impl<W: Write> super::Writer<'_, W> {
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
 
         match module.types[member.ty].inner {
-            TypeInner::Matrix { columns, .. } => {
+            crate::TypeInner::Matrix { columns, .. } => {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
@@ -744,11 +744,13 @@ impl<W: Write> super::Writer<'_, W> {
         let struct_name = &self.names[&NameKey::Type(access.ty)];
         write!(self.out, "{struct_name} {STRUCT_ARGUMENT_VARIABLE_NAME}, ")?;
         let member = match module.types[access.ty].inner {
-            TypeInner::Struct { ref members, .. } => &members[access.index as usize],
+            crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
             _ => unreachable!(),
         };
         let vec_ty = match module.types[member.ty].inner {
-            TypeInner::Matrix { rows, scalar, .. } => TypeInner::Vector { size: rows, scalar },
+            crate::TypeInner::Matrix { rows, scalar, .. } => {
+                crate::TypeInner::Vector { size: rows, scalar }
+            }
             _ => unreachable!(),
         };
         self.write_value_type(module, &vec_ty)?;
@@ -768,7 +770,7 @@ impl<W: Write> super::Writer<'_, W> {
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
 
         match module.types[member.ty].inner {
-            TypeInner::Matrix { columns, .. } => {
+            crate::TypeInner::Matrix { columns, .. } => {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
@@ -821,11 +823,11 @@ impl<W: Write> super::Writer<'_, W> {
         let struct_name = &self.names[&NameKey::Type(access.ty)];
         write!(self.out, "{struct_name} {STRUCT_ARGUMENT_VARIABLE_NAME}, ")?;
         let member = match module.types[access.ty].inner {
-            TypeInner::Struct { ref members, .. } => &members[access.index as usize],
+            crate::TypeInner::Struct { ref members, .. } => &members[access.index as usize],
             _ => unreachable!(),
         };
         let scalar_ty = match module.types[member.ty].inner {
-            TypeInner::Matrix { scalar, .. } => TypeInner::Scalar(scalar),
+            crate::TypeInner::Matrix { scalar, .. } => crate::TypeInner::Scalar(scalar),
             _ => unreachable!(),
         };
         self.write_value_type(module, &scalar_ty)?;
@@ -845,7 +847,7 @@ impl<W: Write> super::Writer<'_, W> {
         let field_name = &self.names[&NameKey::StructMember(access.ty, access.index)];
 
         match module.types[member.ty].inner {
-            TypeInner::Matrix { columns, .. } => {
+            crate::TypeInner::Matrix { columns, .. } => {
                 for i in 0..columns as u8 {
                     writeln!(
                         self.out,
@@ -933,7 +935,7 @@ impl<W: Write> super::Writer<'_, W> {
             match expressions[handle] {
                 crate::Expression::Compose { ty, .. } => {
                     match module.types[ty].inner {
-                        TypeInner::Struct { .. } | TypeInner::Array { .. } => {
+                        crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
                             let constructor = WrappedConstructor { ty };
                             if self.wrapped.constructors.insert(constructor) {
                                 self.write_wrapped_constructor_function(module, constructor)?;
@@ -945,7 +947,7 @@ impl<W: Write> super::Writer<'_, W> {
                 crate::Expression::ImageLoad { image, .. } => {
                     // This can only happen in a function as this is not a valid const expression
                     match *context.as_ref().unwrap().resolve_type(image, &module.types) {
-                        TypeInner::Image {
+                        crate::TypeInner::Image {
                             class: crate::ImageClass::Storage { format, .. },
                             ..
                         } => {
@@ -1395,7 +1397,7 @@ impl<W: Write> super::Writer<'_, W> {
                 }
                 crate::Expression::ImageQuery { image, query } => {
                     let wiq = match *func_ctx.resolve_type(image, &module.types) {
-                        TypeInner::Image {
+                        crate::TypeInner::Image {
                             dim,
                             arrayed,
                             class,
@@ -1431,7 +1433,7 @@ impl<W: Write> super::Writer<'_, W> {
                         module: &crate::Module,
                     ) -> BackendResult {
                         match module.types[ty].inner {
-                            TypeInner::Struct { ref members, .. } => {
+                            crate::TypeInner::Struct { ref members, .. } => {
                                 for member in members {
                                     write_wrapped_constructor(writer, member.ty, module)?;
                                 }
@@ -1442,7 +1444,7 @@ impl<W: Write> super::Writer<'_, W> {
                                         .write_wrapped_constructor_function(module, constructor)?;
                                 }
                             }
-                            TypeInner::Array { base, .. } => {
+                            crate::TypeInner::Array { base, .. } => {
                                 write_wrapped_constructor(writer, base, module)?;
 
                                 let constructor = WrappedConstructor { ty };
@@ -1465,17 +1467,17 @@ impl<W: Write> super::Writer<'_, W> {
                     let base_ty_res = &func_ctx.info[base].ty;
                     let mut resolved = base_ty_res.inner_with(&module.types);
                     let base_ty_handle = match *resolved {
-                        TypeInner::Pointer { base, .. } => {
+                        crate::TypeInner::Pointer { base, .. } => {
                             resolved = &module.types[base].inner;
                             Some(base)
                         }
                         _ => base_ty_res.handle(),
                     };
-                    if let TypeInner::Struct { ref members, .. } = *resolved {
+                    if let crate::TypeInner::Struct { ref members, .. } = *resolved {
                         let member = &members[index as usize];
 
                         match module.types[member.ty].inner {
-                            TypeInner::Matrix {
+                            crate::TypeInner::Matrix {
                                 rows: crate::VectorSize::Bi,
                                 ..
                             } if member.binding.is_none() => {
@@ -1598,8 +1600,8 @@ impl<W: Write> super::Writer<'_, W> {
             self.write_expr(module, coordinate, func_ctx)?;
         } else {
             let num_coords = match *func_ctx.resolve_type(coordinate, &module.types) {
-                TypeInner::Scalar { .. } => 1,
-                TypeInner::Vector { size, .. } => size as usize,
+                crate::TypeInner::Scalar { .. } => 1,
+                crate::TypeInner::Vector { size, .. } => size as usize,
                 _ => unreachable!(),
             };
             write!(self.out, "{}{}(", kind, num_coords + extra)?;
@@ -1612,7 +1614,7 @@ impl<W: Write> super::Writer<'_, W> {
                 // Explicit cast if needed
                 let cast_to_int = matches!(
                     *func_ctx.resolve_type(expr, &module.types),
-                    TypeInner::Scalar(crate::Scalar {
+                    crate::TypeInner::Scalar(crate::Scalar {
                         kind: ScalarKind::Uint,
                         ..
                     })
@@ -1719,9 +1721,9 @@ impl<W: Write> super::Writer<'_, W> {
         }
 
         for (_, ty) in module.types.iter() {
-            if let TypeInner::Struct { ref members, .. } = ty.inner {
+            if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
                 for member in members.iter() {
-                    if let TypeInner::Array { .. } = module.types[member.ty].inner {
+                    if let crate::TypeInner::Array { .. } = module.types[member.ty].inner {
                         if let Some(super::writer::MatrixType {
                             columns,
                             rows: crate::VectorSize::Bi,
@@ -1746,7 +1748,7 @@ impl<W: Write> super::Writer<'_, W> {
         module: &crate::Module,
         zero_value: WrappedZeroValue,
     ) -> BackendResult {
-        let name = TypeInner::hlsl_type_id(zero_value.ty, module.to_ctx(), &self.names)?;
+        let name = crate::TypeInner::hlsl_type_id(zero_value.ty, module.to_ctx(), &self.names)?;
         write!(self.out, "ZeroValue{name}")?;
         Ok(())
     }
@@ -1776,7 +1778,7 @@ impl<W: Write> super::Writer<'_, W> {
         const RETURN_VARIABLE_NAME: &str = "ret";
 
         // Write function return type and name
-        if let TypeInner::Array { base, size, .. } = module.types[zero_value.ty].inner {
+        if let crate::TypeInner::Array { base, size, .. } = module.types[zero_value.ty].inner {
             write!(self.out, "typedef ")?;
             self.write_type(module, zero_value.ty)?;
             write!(self.out, " ret_")?;
