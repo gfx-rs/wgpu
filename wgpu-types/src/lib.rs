@@ -4900,74 +4900,96 @@ impl<T> Default for CommandEncoderDescriptor<Option<T>> {
     }
 }
 
-/// Behavior of the presentation engine based on frame rate.
+/// Timing and queueing with which frames are actually displayed to the user.
+///
+/// Use this as part of a [`SurfaceConfiguration`] to control the behavior of
+/// [`SurfaceTexture::present()`].
+///
+/// Some modes are only supported by some backends.
+/// You can use one of the `Auto*` modes, [`Fifo`](Self::Fifo),
+/// or choose one of the supported modes from [`SurfaceCapabilities::present_modes`].
+///
+/// [presented]: ../wgpu/struct.SurfaceTexture.html#method.present
+/// [`SurfaceTexture::present()`]: ../wgpu/struct.SurfaceTexture.html#method.present
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PresentMode {
-    /// Chooses `FifoRelaxed` -> `Fifo` based on availability.
+    /// Chooses the first supported mode out of:
     ///
-    /// Because of the fallback behavior, it is supported everywhere.
+    /// 1. [`FifoRelaxed`](Self::FifoRelaxed)
+    /// 2. [`Fifo`](Self::Fifo)
+    ///
+    /// Because of the fallback behavior, this is supported everywhere.
     AutoVsync = 0,
-    /// Chooses `Immediate` -> `Mailbox` -> `Fifo` (on web) based on availability.
+
+    /// Chooses the first supported mode out of:
     ///
-    /// Because of the fallback behavior, it is supported everywhere.
+    /// 1. [`Immediate`](Self::Immediate)
+    /// 2. [`Mailbox`](Self::Mailbox)
+    /// 3. [`Fifo`](Self::Fifo)
+    ///
+    /// Because of the fallback behavior, this is supported everywhere.
     AutoNoVsync = 1,
+
     /// Presentation frames are kept in a First-In-First-Out queue approximately 3 frames
     /// long. Every vertical blanking period, the presentation engine will pop a frame
     /// off the queue to display. If there is no frame to display, it will present the same
     /// frame again until the next vblank.
     ///
-    /// When a present command is executed on the gpu, the presented image is added on the queue.
+    /// When a present command is executed on the GPU, the presented image is added on the queue.
     ///
-    /// No tearing will be observed.
+    /// Calls to [`Surface::get_current_texture()`] will block until there is a spot in the queue.
     ///
-    /// Calls to `Surface::get_current_texture` will block until there is a spot in the queue.
+    /// * **Tearing:** No tearing will be observed.
+    /// * **Supported on**: All platforms.
+    /// * **Also known as**: "Vsync On"
     ///
-    /// Supported on all platforms.
+    /// This is the [default](Self::default) value for `PresentMode`.
+    /// If you don't know what mode to choose, choose this mode.
     ///
-    /// If you don't know what mode to choose, choose this mode. This is traditionally called "Vsync On".
+    /// [`Surface::get_current_texture()`]: ../wgpu/struct.Surface.html#method.get_current_texture
     #[default]
     Fifo = 2,
+
     /// Presentation frames are kept in a First-In-First-Out queue approximately 3 frames
     /// long. Every vertical blanking period, the presentation engine will pop a frame
     /// off the queue to display. If there is no frame to display, it will present the
     /// same frame until there is a frame in the queue. The moment there is a frame in the
     /// queue, it will immediately pop the frame off the queue.
     ///
-    /// When a present command is executed on the gpu, the presented image is added on the queue.
+    /// When a present command is executed on the GPU, the presented image is added on the queue.
     ///
-    /// Tearing will be observed if frames last more than one vblank as the front buffer.
+    /// Calls to [`Surface::get_current_texture()`] will block until there is a spot in the queue.
     ///
-    /// Calls to `Surface::get_current_texture` will block until there is a spot in the queue.
+    /// * **Tearing**:
+    ///   Tearing will be observed if frames last more than one vblank as the front buffer.
+    /// * **Supported on**: AMD on Vulkan.
+    /// * **Also known as**: "Adaptive Vsync"
     ///
-    /// Supported on AMD on Vulkan.
-    ///
-    /// This is traditionally called "Adaptive Vsync"
+    /// [`Surface::get_current_texture()`]: ../wgpu/struct.Surface.html#method.get_current_texture
     FifoRelaxed = 3,
+
     /// Presentation frames are not queued at all. The moment a present command
     /// is executed on the GPU, the presented image is swapped onto the front buffer
     /// immediately.
     ///
-    /// Tearing can be observed.
-    ///
-    /// Supported on most platforms except older DX12 and Wayland.
-    ///
-    /// This is traditionally called "Vsync Off".
+    /// * **Tearing**: Tearing can be observed.
+    /// * **Supported on**: Most platforms except older DX12 and Wayland.
+    /// * **Also known as**: "Vsync Off"
     Immediate = 4,
+
     /// Presentation frames are kept in a single-frame queue. Every vertical blanking period,
     /// the presentation engine will pop a frame from the queue. If there is no frame to display,
     /// it will present the same frame again until the next vblank.
     ///
-    /// When a present command is executed on the gpu, the frame will be put into the queue.
+    /// When a present command is executed on the GPU, the frame will be put into the queue.
     /// If there was already a frame in the queue, the new frame will _replace_ the old frame
     /// on the queue.
     ///
-    /// No tearing will be observed.
-    ///
-    /// Supported on DX12 on Windows 10, NVidia on Vulkan and Wayland on Vulkan.
-    ///
-    /// This is traditionally called "Fast Vsync"
+    /// * **Tearing**: No tearing will be observed.
+    /// * **Supported on**: DX12 on Windows 10, NVidia on Vulkan and Wayland on Vulkan.
+    /// * **Also known as**: "Fast Vsync"
     Mailbox = 5,
 }
 
