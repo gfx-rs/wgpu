@@ -1,0 +1,10 @@
+god_mode = true
+targets = "SPIRV | METAL | WGSL"
+
+[msl]
+fake_missing_bindings = true
+lang_version = [3, 0]
+zero_initialize_workgroup_memory = false
+
+[spv]
+version = [1, 1]

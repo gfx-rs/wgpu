@@ -1,0 +1,14 @@
+god_mode = true
+targets = "GLSL | HLSL"
+
+[hlsl]
+fake_missing_bindings = true
+push_constants_target = { register = 0, space = 0 }
+restrict_indexing = true
+special_constants_binding = { register = 0, space = 1 }
+zero_initialize_workgroup_memory = true
+
+[glsl]
+version.Embedded = { is_webgl = false, version = 320 }
+writer_flags = ""
+zero_initialize_workgroup_memory = true

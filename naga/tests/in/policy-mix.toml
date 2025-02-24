@@ -1,0 +1,10 @@
+targets = "SPIRV | METAL"
+
+[bounds_check_policies]
+index = "Restrict"
+buffer = "Unchecked"
+image_load = "ReadZeroSkipWrite"
+
+[spv]
+debug = true
+version = [1, 1]

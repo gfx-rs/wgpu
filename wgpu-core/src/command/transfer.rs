@@ -145,6 +145,13 @@ pub enum TransferError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("Source texture sample count must be 1, got {sample_count}")]
     InvalidSampleCount { sample_count: u32 },
+    #[error(
+        "Source sample count ({src_sample_count:?}) and destination sample count ({dst_sample_count:?}) are not equal"
+    )]
+    SampleCountNotEqual {
+        src_sample_count: u32,
+        dst_sample_count: u32,
+    },
     #[error("Requested mip level {requested} does no exist (count: {count})")]
     InvalidMipLevel { requested: u32, count: u32 },
 }
@@ -1099,6 +1106,14 @@ impl Global {
         }
         if dst_tex_base.aspect != dst_texture_aspects {
             return Err(TransferError::CopyDstMissingAspects.into());
+        }
+
+        if src_texture.desc.sample_count != dst_texture.desc.sample_count {
+            return Err(TransferError::SampleCountNotEqual {
+                src_sample_count: src_texture.desc.sample_count,
+                dst_sample_count: dst_texture.desc.sample_count,
+            }
+            .into());
         }
 
         // Handle texture init *before* dealing with barrier transitions so we

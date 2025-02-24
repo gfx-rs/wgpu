@@ -62,6 +62,28 @@ pub struct BindTarget {
     pub mutable: bool,
 }
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct BindingMapSerialization {
+    resource_binding: crate::ResourceBinding,
+    bind_target: BindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_binding_map<'de, D>(deserializer: D) -> Result<BindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<BindingMapSerialization>::deserialize(deserializer)?;
+    let mut map = BindingMap::default();
+    for item in vec {
+        map.insert(item.resource_binding, item.bind_target);
+    }
+    Ok(map)
+}
+
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
@@ -70,6 +92,10 @@ pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTar
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
 pub struct EntryPointResources {
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_binding_map")
+    )]
     pub resources: BindingMap,
 
     pub push_constant_buffer: Option<Slot>,

@@ -51,6 +51,12 @@ also allows more easily creating these structures inline.
 
 By @cwfitzgerald in [#7133](https://github.com/gfx-rs/wgpu/pull/7133)
 
+#### All Backends Now Have Features
+
+Previously, the `vulkan` and `gles` backends were non-optional on windows, linux, and android and there was no way to disable them. We have now figured out how to properly make them disablable! Additionally, if you turn on the `webgl` feature, you will only get the GLES backend on WebAssembly, it won't leak into native builds, like previously it might have.
+
+By @cwfitzgerald in [#7076](https://github.com/gfx-rs/wgpu/pull/7076).
+
 #### `device.poll` Api Reworked
 
 This release reworked the poll api significantly to allow polling to return errors when polling hits internal timeout limits.

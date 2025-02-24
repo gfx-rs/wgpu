@@ -1,8 +1,0 @@
-(
-	spv: (
-		version: (1, 0),
-		debug: true,
-		adjust_coordinate_space: true,
-	),
-	targets: "SPIRV | METAL | GLSL | HLSL | WGSL",
-)

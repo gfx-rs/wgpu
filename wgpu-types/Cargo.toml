@@ -40,7 +40,7 @@ default = ["std"]
 std = ["js-sys/std", "web-sys/std", "thiserror/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
-serde = ["dep:serde"]
+serde = ["dep:serde", "bitflags/serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
 
