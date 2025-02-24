@@ -155,6 +155,22 @@ pub fn check_feature_dependencies(shell: Shell, arguments: Arguments) -> anyhow:
             default_features: false,
             search_terms: &[Search::Positive("glow")],
         },
+        Requirement {
+            human_readable_name: "x86-64 does not depend on portable-atomic",
+            target: "x86_64-unknown-linux-gnu",
+            packages: &["wgpu"],
+            features: &[],
+            default_features: false,
+            search_terms: &[Search::Negative("portable-atomic")],
+        },
+        Requirement {
+            human_readable_name: "ppc32 does depend on portable-atomic",
+            target: "powerpc-unknown-linux-gnu",
+            packages: &["wgpu"],
+            features: &[],
+            default_features: false,
+            search_terms: &[Search::Positive("portable-atomic")],
+        },
     ];
 
     let mut any_failures = false;

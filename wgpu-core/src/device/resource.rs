@@ -9,7 +9,7 @@ use core::{
     fmt,
     mem::{self, ManuallyDrop},
     num::NonZeroU32,
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, Ordering},
 };
 use std::sync::OnceLock;
 
@@ -56,6 +56,11 @@ use super::{
     queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures,
     ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
 };
+
+#[cfg(supports_64bit_atomics)]
+use core::sync::atomic::AtomicU64;
+#[cfg(not(supports_64bit_atomics))]
+use portable_atomic::AtomicU64;
 
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.

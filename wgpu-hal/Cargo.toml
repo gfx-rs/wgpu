@@ -155,6 +155,7 @@ renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
+portable-atomic = ["dep:portable-atomic"]
 
 ###################################
 ### Internal Debugging Features ###
@@ -299,6 +300,9 @@ khronos-egl = { workspace = true, optional = true, features = [
 ] }
 # Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
 libloading = { workspace = true, optional = true }
+
+[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
+portable-atomic = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true

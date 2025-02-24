@@ -181,6 +181,14 @@ jobs:
             tier: 2
             kind: no_std
 
+          # 32-bit PowerPC Linux
+          # Included to test support for `portable-atomic`
+          - name: Linux ppc32
+            os: ubuntu-22.04
+            target: powerpc-unknown-linux-gnu
+            tier: 2
+            kind: wgpu-only
+
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
