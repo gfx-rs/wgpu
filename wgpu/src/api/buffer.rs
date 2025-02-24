@@ -803,7 +803,7 @@ fn check_buffer_bounds(
     if let Some(size) = size {
         // Detect integer overflow.
         let end = offset.checked_add(size.get());
-        if end.map_or(true, |end| end > buffer_size) {
+        if end.is_none_or(|end| end > buffer_size) {
             panic!(
                 "slice offset {} size {} is out of range for buffer of size {}",
                 offset, size, buffer_size

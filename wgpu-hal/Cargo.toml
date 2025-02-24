@@ -35,7 +35,9 @@ targets = [
 ignored = ["cfg_aliases"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(web_sys_unstable_apis)', # web-sys uses this
+] }
 
 [lib]
 
@@ -172,6 +174,14 @@ device_lost_panic = []
 #
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
+
+###################
+### Workarounds ###
+###################
+
+# objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
+# You shouldn't ever enable this feature.
+cargo-clippy = []
 
 [[example]]
 name = "halmark"

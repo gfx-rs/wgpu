@@ -2,8 +2,14 @@
 name = "xtask"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.83"
+rust-version = "1.85"
 publish = false
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    # Added by xshell
+    'cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)',
+] }
 
 [dependencies]
 # The dependencies in this config have no transitive dependencies.

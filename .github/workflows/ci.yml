@@ -36,7 +36,7 @@ env:
   CI_BINARY_BUILD: "build20"
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.83"
+  REPO_MSRV: "1.85"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
   CORE_MSRV: "1.76"
@@ -164,20 +164,9 @@ jobs:
             tier: 2
             kind: wgpu-only
 
-          # TODO: Uncomment once web-sys updates past 0.3.76
-          # See https://github.com/rustwasm/wasm-bindgen/pull/4378 for details
-          # - name: WebAssembly Core 1.0
-          #   os: ubuntu-22.04
-          #   target: wasm32v1-none
-          #   tier: 2
-          #   kind: no_std
-
-          # Bare-metal x86-64
-          # TODO: Remove once web-sys updates past 0.3.76
-          # Included while wasm32v1-none is failing to ensure `no_std` does not regress
-          - name: no_std x86_64
+          - name: WebAssembly Core 1.0
             os: ubuntu-22.04
-            target: x86_64-unknown-none
+            target: wasm32v1-none
             tier: 2
             kind: no_std
 

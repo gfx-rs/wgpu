@@ -3,14 +3,14 @@ name: Docs
 on:
   pull_request:
     paths:
-      - '.github/workflows/docs.yml'
+      - ".github/workflows/docs.yml"
   push:
     branches:
       - trunk
 
 env:
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.83"
+  REPO_MSRV: "1.85"
 
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always

@@ -108,7 +108,7 @@ impl Instruction {
     }
 
     pub(super) fn to_words(&self, sink: &mut impl Extend<Word>) {
-        sink.extend(Some(self.wc << 16 | self.op as u32));
+        sink.extend(Some((self.wc << 16) | self.op as u32));
         sink.extend(self.type_id);
         sink.extend(self.result_id);
         sink.extend(self.operands.iter().cloned());
