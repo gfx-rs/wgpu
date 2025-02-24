@@ -72,6 +72,12 @@ where
 
 #[derive(Default, serde::Deserialize)]
 #[serde(default)]
+struct SpirvInParameters {
+    adjust_coordinate_space: bool,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct SpirvOutParameters {
     version: SpvOutVersion,
     capabilities: naga::FastHashSet<spirv::Capability>,
@@ -103,6 +109,10 @@ struct Parameters {
     // -- GOD MODE --
     god_mode: bool,
 
+    // -- spirv-in options --
+    #[serde(rename = "spv-in")]
+    spv_in: SpirvInParameters,
+
     // -- SPIR-V options --
     spv: SpirvOutParameters,
 
@@ -125,7 +135,6 @@ struct Parameters {
     // -- HLSL options --
     #[cfg(all(feature = "deserialize", hlsl_out))]
     hlsl: naga::back::hlsl::Options,
-    hlsl_module_path: Option<String>,
 
     // -- WGSL options --
     wgsl: WgslOutParameters,
@@ -775,72 +784,52 @@ fn convert_snapshots_wgsl() {
 }
 
 #[cfg(feature = "spv-in")]
-fn convert_spv(name: &str, adjust_coordinate_space: bool) {
+#[test]
+fn convert_snapshots_spv() {
     use std::process::Command;
 
     let _ = env_logger::try_init();
 
-    let input = Input::new(Some("spv"), name, "spvasm");
+    for input in Input::files_in_dir(Some("spv"), &["spvasm"]) {
+        println!("Assembling '{}'", input.file_name.display());
 
-    println!("Assembling '{}'", input.file_name.display());
-
-    let command = Command::new("spirv-as")
-        .arg(input.input_path())
-        .arg("-o")
-        .arg("-")
-        .output()
-        .expect(
-            "Failed to execute spirv-as. It can be installed \
+        let command = Command::new("spirv-as")
+            .arg(input.input_path())
+            .arg("-o")
+            .arg("-")
+            .output()
+            .expect(
+                "Failed to execute spirv-as. It can be installed \
             by installing the Vulkan SDK and adding it to your path.",
-        );
+            );
 
-    println!("Processing '{}'", input.file_name.display());
+        println!("Processing '{}'", input.file_name.display());
 
-    if !command.status.success() {
-        panic!(
-            "spirv-as failed: {}\n{}",
-            String::from_utf8_lossy(&command.stdout),
-            String::from_utf8_lossy(&command.stderr)
-        );
-    }
+        if !command.status.success() {
+            panic!(
+                "spirv-as failed: {}\n{}",
+                String::from_utf8_lossy(&command.stdout),
+                String::from_utf8_lossy(&command.stderr)
+            );
+        }
 
-    let mut module = naga::front::spv::parse_u8_slice(
-        &command.stdout,
-        &naga::front::spv::Options {
+        let params = input.read_parameters();
+        let SpirvInParameters {
             adjust_coordinate_space,
-            strict_capabilities: false,
-            block_ctx_dump_prefix: None,
-        },
-    )
-    .unwrap();
+        } = params.spv_in;
 
-    check_targets(&input, &mut module, None);
-}
+        let mut module = naga::front::spv::parse_u8_slice(
+            &command.stdout,
+            &naga::front::spv::Options {
+                adjust_coordinate_space,
+                strict_capabilities: false,
+                block_ctx_dump_prefix: None,
+            },
+        )
+        .unwrap();
 
-#[cfg(feature = "spv-in")]
-#[test]
-fn convert_snapshots_spv() {
-    convert_spv("quad-vert", false);
-    convert_spv("shadow", true);
-    convert_spv("inv-hyperbolic-trig-functions", true);
-    convert_spv("empty-global-name", true);
-    convert_spv("degrees", false);
-    convert_spv("binding-arrays.dynamic", true);
-    convert_spv("binding-arrays.static", true);
-    convert_spv("do-while", true);
-    convert_spv("unnamed-gl-per-vertex", true);
-    convert_spv("builtin-accessed-outside-entrypoint", true);
-    convert_spv("spec-constants", true);
-    convert_spv("spec-constants-issue-5598", true);
-    convert_spv("subgroup-operations-s", false);
-    convert_spv("atomic_i_increment", false);
-    convert_spv("atomic_load_and_store", false);
-    convert_spv("atomic_exchange", false);
-    convert_spv("atomic_compare_exchange", false);
-    convert_spv("atomic_i_decrement", false);
-    convert_spv("atomic_i_add_sub", false);
-    convert_spv("atomic_global_struct_field_vertex", false);
-    convert_spv("fetch_depth", false);
+        check_targets(&input, &mut module, None);
+    }
 }
 
 #[cfg(feature = "glsl-in")]
