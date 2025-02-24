@@ -151,7 +151,6 @@ By @jamienicol in [#6929](https://github.com/gfx-rs/wgpu/pull/6929) and [#7080](
 - Support @must_use attribute on function declarations. By @turbocrime in [#6801](https://github.com/gfx-rs/wgpu/pull/6801).
 - Support for generating the candidate intersections from AABB geometry, and confirming the hits. By @kvark in [#7047](https://github.com/gfx-rs/wgpu/pull/7047).
 - Make naga::back::spv::Function::to_words write the OpFunctionEnd instruction in itself, instead of making another call after it. By @junjunjd in [#7156](https://github.com/gfx-rs/wgpu/pull/7156).
-- Use take method for Arena to avoid unnecessary cloning. By @junjunjd in [#7176](https://github.com/gfx-rs/wgpu/pull/7176).
 
 ### Changes
 
