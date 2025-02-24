@@ -141,7 +141,7 @@ fn blas_compaction(ctx: TestingContext) {
 
     ctx.queue.submit([encoder.finish()]);
 
-    // Prepare
+    // Prepare the BLAS to be compacted.
     let (send, recv) = std::sync::mpsc::channel();
     as_ctx.blas.prepare_compaction_async(move |res| {
         res.unwrap();
@@ -152,6 +152,8 @@ fn blas_compaction(ctx: TestingContext) {
     ctx.device.poll(Maintain::Wait);
     // Check that the callback actually gets called (this test will timeout if it doesn't).
     recv.recv().unwrap();
+    // This should return true because the callback has been called, and we haven't rebuilt the BLAS
+    assert!(as_ctx.blas.ready_for_compaction());
 
     let compacted = ctx.queue.compact_blas(&as_ctx.blas);
 
@@ -162,6 +164,7 @@ fn blas_compaction(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
+    // Try to build the compacted BLAS, this should fail.
     let mut build_entry = as_ctx.blas_build_entry();
     build_entry.blas = &compacted;
 
