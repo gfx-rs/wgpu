@@ -18,6 +18,11 @@ path = "compile-tests/root.rs"
 harness = true
 
 [[test]]
+name = "wgpu-dependency-test"
+path = "dependency-tests/root.rs"
+harness = true
+
+[[test]]
 name = "wgpu-gpu-test"
 path = "gpu-tests/root.rs"
 harness = false

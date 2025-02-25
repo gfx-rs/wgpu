@@ -809,22 +809,3 @@ jobs:
           command: check bans licenses sources
           arguments: --all-features --workspace
           rust-version: ${{ env.REPO_MSRV }}
-
-  check-feature-dependencies:
-    # runtime is normally 1 minute
-    timeout-minutes: 5
-
-    name: "Feature Dependencies"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Install repo MSRV toolchain
-        run: |
-          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
-          rustup override set ${{ env.REPO_MSRV }}
-          cargo -V
-
-      - name: Run `cargo feature-dependencies`
-        run: cargo xtask check-feature-dependencies
