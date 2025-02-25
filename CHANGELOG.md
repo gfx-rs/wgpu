@@ -48,6 +48,7 @@ Bottom level categories:
 * Implement `Clone` on `ShaderModule`. By @a1phyr in [#6937](https://github.com/gfx-rs/wgpu/pull/6937).
 - Fix `CopyExternalImageDestInfo` not exported on `wgpu`. By @wumpf in [#6962](https://github.com/gfx-rs/wgpu/pull/6962).
 - Reduce downlevel `max_color_attachments` limit from 8 to 4 for better GLES compatibility. By @adrian17 in [#6994](https://github.com/gfx-rs/wgpu/pull/6994).
+- Decrement max_storage_buffer_binding_size by 1 to match max_buffer_size. By @minus1ms in [#7217](https://github.com/gfx-rs/wgpu/pull/7217)
 
 ## v24.0.0 (2025-01-15)
 
