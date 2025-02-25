@@ -1057,13 +1057,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         group_count_y: u32,
         group_count_z: u32,
     ) {
-        match self.device.extension_fns.mesh_shading {
-            Some(ref t) => {
-                unsafe {
-                    t.cmd_draw_mesh_tasks(self.active, group_count_x, group_count_y, group_count_z);
-                };
-            }
-            None => panic!("Feature `MESH_SHADING` not enabled"),
+        if let Some(ref t) = self.device.extension_fns.mesh_shading {
+            unsafe {
+                t.cmd_draw_mesh_tasks(self.active, group_count_x, group_count_y, group_count_z);
+            };
+        } else {
+            panic!("Feature `MESH_SHADING` not enabled");
         }
     }
     unsafe fn draw_indirect(
@@ -1104,19 +1103,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        match self.device.extension_fns.mesh_shading {
-            Some(ref t) => {
-                unsafe {
-                    t.cmd_draw_mesh_tasks_indirect(
-                        self.active,
-                        buffer.raw,
-                        offset,
-                        draw_count,
-                        size_of::<wgt::DispatchIndirectArgs>() as u32,
-                    );
-                };
-            }
-            None => panic!("Feature `MESH_SHADING` not enabled"),
+        if let Some(ref t) = self.device.extension_fns.mesh_shading {
+            unsafe {
+                t.cmd_draw_mesh_tasks_indirect(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    draw_count,
+                    size_of::<wgt::DispatchIndirectArgs>() as u32,
+                );
+            };
+        } else {
+            panic!("Feature `MESH_SHADING` not enabled");
         }
     }
     unsafe fn draw_indirect_count(
@@ -1182,21 +1180,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
         if self.device.extension_fns.draw_indirect_count.is_none() {
             panic!("Feature `DRAW_INDIRECT_COUNT` not enabled");
         }
-        match self.device.extension_fns.mesh_shading {
-            Some(ref t) => {
-                unsafe {
-                    t.cmd_draw_mesh_tasks_indirect_count(
-                        self.active,
-                        buffer.raw,
-                        offset,
-                        count_buffer.raw,
-                        count_offset,
-                        max_count,
-                        size_of::<wgt::DispatchIndirectArgs>() as u32,
-                    );
-                };
-            }
-            None => panic!("Feature `MESH_SHADING` not enabled"),
+        if let Some(ref t) = self.device.extension_fns.mesh_shading {
+            unsafe {
+                t.cmd_draw_mesh_tasks_indirect_count(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    count_buffer.raw,
+                    count_offset,
+                    max_count,
+                    size_of::<wgt::DispatchIndirectArgs>() as u32,
+                );
+            };
+        } else {
+            panic!("Feature `MESH_SHADING` not enabled");
         }
     }
 
