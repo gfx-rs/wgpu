@@ -69,7 +69,7 @@ fn check_feature_dependency(requirement: Requirement) {
 
     println!("{output}");
 
-    for (i, search_term) in requirement.search_terms.into_iter().enumerate() {
+    for (i, search_term) in requirement.search_terms.iter().enumerate() {
         // Add a space and after to make sure we're getting a full match
         let found = match search_term {
             Search::Positive(search_term) => output.contains(&format!(" {search_term} ")),
