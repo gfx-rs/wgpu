@@ -168,7 +168,11 @@ fn blas_compaction(ctx: TestingContext) {
     let mut build_entry = as_ctx.blas_build_entry();
     build_entry.blas = &compacted;
 
-    fail(&ctx.device, || fail_encoder.build_acceleration_structures([&build_entry], []), None);
+    fail(
+        &ctx.device,
+        || fail_encoder.build_acceleration_structures([&build_entry], []),
+        None,
+    );
 }
 
 #[gpu_test]
