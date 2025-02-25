@@ -1029,6 +1029,15 @@ impl SubgroupGather {
     }
 }
 
+/// Whether a declaration accepts abstract types, or concretizes.
+enum AbstractRule {
+    /// This declaration concretizes its initialization expression.
+    Concretize,
+
+    /// This declaration can accept initializers with abstract types.
+    Allow,
+}
+
 pub struct Lowerer<'source, 'temp> {
     index: &'temp Index<'source>,
 }
@@ -1076,7 +1085,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         v.name,
                         v.init,
                         explicit_ty,
-                        false,
+                        AbstractRule::Concretize,
                         &mut ctx.as_override(),
                     )?;
 
@@ -1110,8 +1119,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx))
                             .transpose()?;
 
-                    let (ty, init) =
-                        self.type_and_init(c.name, Some(c.init), explicit_ty, true, &mut ectx)?;
+                    let (ty, init) = self.type_and_init(
+                        c.name,
+                        Some(c.init),
+                        explicit_ty,
+                        AbstractRule::Allow,
+                        &mut ectx,
+                    )?;
                     let init = init.expect("Global const must have init");
 
                     let handle = ctx.module.constants.append(
@@ -1133,8 +1147,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let mut ectx = ctx.as_override();
 
-                    let (ty, init) =
-                        self.type_and_init(o.name, o.init, explicit_ty, false, &mut ectx)?;
+                    let (ty, init) = self.type_and_init(
+                        o.name,
+                        o.init,
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ectx,
+                    )?;
 
                     let id =
                         o.id.map(|id| self.const_u32(id, &mut ctx.as_const()))
@@ -1207,7 +1226,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         name: ast::Ident<'source>,
         init: Option<Handle<ast::Expression<'source>>>,
         explicit_ty: Option<Handle<crate::Type>>,
-        allow_abstract: bool,
+        abstract_rule: AbstractRule,
         ectx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<(Handle<crate::Type>, Option<Handle<crate::Expression>>), Error<'source>> {
         let ty;
@@ -1242,7 +1261,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             (Some(init), None) => {
                 let mut init = self.expression_for_abstract(init, ectx)?;
-                if !allow_abstract {
+                if let AbstractRule::Concretize = abstract_rule {
                     init = ectx.concretize(init)?;
                 }
                 ty = ectx.register_type(init)?;
@@ -1490,8 +1509,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .transpose()?;
 
                     let mut ectx = ctx.as_expression(block, &mut emitter);
-                    let (ty, initializer) =
-                        self.type_and_init(v.name, v.init, explicit_ty, false, &mut ectx)?;
+                    let (ty, initializer) = self.type_and_init(
+                        v.name,
+                        v.init,
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ectx,
+                    )?;
 
                     let (const_initializer, initializer) = {
                         match initializer {
@@ -1554,7 +1578,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         c.name,
                         Some(c.init),
                         explicit_ty,
-                        false,
+                        AbstractRule::Concretize,
                         &mut ectx.as_const(),
                     )?;
                     let init = init.expect("Local const must have init");
