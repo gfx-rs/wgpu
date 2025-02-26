@@ -30,6 +30,7 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod drm;
 mod instance;
 mod sampler;
 
