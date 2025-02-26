@@ -119,6 +119,8 @@ By @cwfitzgerald in [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
 
 ### New Features
 
+- Added mesh shader support to `wgpu_hal`. By @SupaMaggie70Incorporated in [#7089](https://github.com/gfx-rs/wgpu/pull/7089)
+
 #### General
 
 - It is now possible to create a dummy `wgpu` device even when no GPU is available. This may be useful for testing of code which manages graphics resources. Currently, it supports reading and writing buffers, and other resource types can be created but do nothing.
