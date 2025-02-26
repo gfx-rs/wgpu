@@ -751,7 +751,7 @@ By @MarijnS95 in [#6006](https://github.com/gfx-rs/wgpu/pull/6006).
 
 #### General
 
-- Added an example that splits up large data across multiple buffers and accesses them as a single contiguous array in the shader, demonstrating the naga/wgsl only `binding_array`, and some of the, less documented `wgpu::Features`. By @alphastrata in [#6138](https://github.com/gfx-rs/wgpu/pull/6138)
+- Added an example that shows how to handle datasets too large to fit in a single `GPUBuffer` by distributing it across many buffers, and then having the shader receive them as a `binding_array` of storage buffers.  By @alphastrata in [#6138](https://github.com/gfx-rs/wgpu/pull/6138)
 - If GL context creation fails retry with GLES. By @Rapdorian in [#5996](https://github.com/gfx-rs/wgpu/pull/5996).
 - Bump MSRV for `d3d12`/`naga`/`wgpu-core`/`wgpu-hal`/`wgpu-types`' to 1.76. By @wumpf in [#6003](https://github.com/gfx-rs/wgpu/pull/6003).
 - Print requested and supported usages on `UnsupportedUsage` error. By @VladasZ in [#6007](https://github.com/gfx-rs/wgpu/pull/6007).
