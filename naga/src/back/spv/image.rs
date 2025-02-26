@@ -996,7 +996,7 @@ impl BlockContext<'_> {
         };
 
         if let Some(offset_const) = offset {
-            let offset_id = self.writer.constant_ids[offset_const];
+            let offset_id = self.cached[offset_const];
             main_instruction.add_operand(offset_id);
         }
 

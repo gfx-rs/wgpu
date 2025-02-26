@@ -621,7 +621,6 @@ impl super::Validator {
         ep: &crate::EntryPoint,
         module: &crate::Module,
         mod_info: &ModuleInfo,
-        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<FunctionInfo, WithSpan<EntryPointError>> {
         if ep.early_depth_test.is_some() {
             let required = Capabilities::EARLY_DEPTH_TEST;
@@ -650,7 +649,7 @@ impl super::Validator {
         }
 
         let mut info = self
-            .validate_function(&ep.function, module, mod_info, true, global_expr_kind)
+            .validate_function(&ep.function, module, mod_info, true)
             .map_err(WithSpan::into_other)?;
 
         {

@@ -713,7 +713,7 @@ impl Validator {
         }
 
         for (handle, fun) in module.functions.iter() {
-            match self.validate_function(fun, module, &mod_info, false, &global_expr_kind) {
+            match self.validate_function(fun, module, &mod_info, false) {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {
@@ -739,7 +739,7 @@ impl Validator {
                 .with_span()); // TODO: keep some EP span information?
             }
 
-            match self.validate_entry_point(ep, module, &mod_info, &global_expr_kind) {
+            match self.validate_entry_point(ep, module, &mod_info) {
                 Ok(info) => mod_info.entry_points.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {

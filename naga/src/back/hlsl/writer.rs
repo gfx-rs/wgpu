@@ -1002,7 +1002,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             if global.space == crate::AddressSpace::Private {
                 write!(self.out, " = ")?;
                 if let Some(init) = global.init {
-                    self.write_const_expression(module, init)?;
+                    self.write_const_expression(module, init, &module.global_expressions)?;
                 } else {
                     self.write_default_init(module, global.ty)?;
                 }
@@ -1112,7 +1112,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             self.write_array_size(module, base, size)?;
         }
         write!(self.out, " = ")?;
-        self.write_const_expression(module, constant.init)?;
+        self.write_const_expression(module, constant.init, &module.global_expressions)?;
         writeln!(self.out, ";")?;
         Ok(())
     }
@@ -2609,13 +2609,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         module: &Module,
         expr: Handle<crate::Expression>,
+        arena: &crate::Arena<crate::Expression>,
     ) -> BackendResult {
-        self.write_possibly_const_expression(
-            module,
-            expr,
-            &module.global_expressions,
-            |writer, expr| writer.write_const_expression(module, expr),
-        )
+        self.write_possibly_const_expression(module, expr, arena, |writer, expr| {
+            writer.write_const_expression(module, expr, arena)
+        })
     }
 
     fn write_possibly_const_expression<E>(
@@ -2655,7 +2653,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if constant.name.is_some() {
                     write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
                 } else {
-                    self.write_const_expression(module, constant.init)?;
+                    self.write_const_expression(module, constant.init, &module.global_expressions)?;
                 }
             }
             Expression::ZeroValue(ty) => {
@@ -3178,7 +3176,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
                     write!(self.out, "int2(")?; // work around https://github.com/microsoft/DirectXShaderCompiler/issues/5082#issuecomment-1540147807
-                    self.write_const_expression(module, offset)?;
+                    self.write_const_expression(module, offset, func_ctx.expressions)?;
                     write!(self.out, ")")?;
                 }
 

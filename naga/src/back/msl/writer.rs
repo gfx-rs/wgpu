@@ -1429,15 +1429,16 @@ impl<W: Write> Writer<W> {
         expr_handle: Handle<crate::Expression>,
         module: &crate::Module,
         mod_info: &valid::ModuleInfo,
+        arena: &crate::Arena<crate::Expression>,
     ) -> BackendResult {
         self.put_possibly_const_expression(
             expr_handle,
-            &module.global_expressions,
+            arena,
             module,
             mod_info,
             &(module, mod_info),
             |&(_, mod_info), expr| &mod_info[expr],
-            |writer, &(module, _), expr| writer.put_const_expression(expr, module, mod_info),
+            |writer, &(module, _), expr| writer.put_const_expression(expr, module, mod_info, arena),
         )
     }
 
@@ -1498,7 +1499,12 @@ impl<W: Write> Writer<W> {
                 if constant.name.is_some() {
                     write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
                 } else {
-                    self.put_const_expression(constant.init, module, mod_info)?;
+                    self.put_const_expression(
+                        constant.init,
+                        module,
+                        mod_info,
+                        &module.global_expressions,
+                    )?;
                 }
             }
             crate::Expression::ZeroValue(ty) => {
@@ -1723,7 +1729,7 @@ impl<W: Write> Writer<W> {
 
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
-                    self.put_const_expression(offset, context.module, context.mod_info)?;
+                    self.put_expression(offset, context, true)?;
                 }
 
                 match gather {
@@ -4178,7 +4184,7 @@ template <typename A>
             };
             let name = &self.names[&NameKey::Constant(handle)];
             write!(self.out, "constant {ty_name} {name} = ")?;
-            self.put_const_expression(constant.init, module, mod_info)?;
+            self.put_const_expression(constant.init, module, mod_info, &module.global_expressions)?;
             writeln!(self.out, ";")?;
         }
 
@@ -6149,7 +6155,7 @@ template <typename A>
                 }
                 if let Some(value) = var.init {
                     write!(self.out, " = ")?;
-                    self.put_const_expression(value, module, mod_info)?;
+                    self.put_const_expression(value, module, mod_info, &module.global_expressions)?;
                 }
                 writeln!(self.out)?;
             }
@@ -6354,7 +6360,12 @@ template <typename A>
                     match var.init {
                         Some(value) => {
                             write!(self.out, " = ")?;
-                            self.put_const_expression(value, module, mod_info)?;
+                            self.put_const_expression(
+                                value,
+                                module,
+                                mod_info,
+                                &module.global_expressions,
+                            )?;
                             writeln!(self.out, ";")?;
                         }
                         None => {
