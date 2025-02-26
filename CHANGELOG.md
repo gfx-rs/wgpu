@@ -235,6 +235,8 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
 - Replace `unicode-xid` with `unicode-ident`. By @CrazyboyQCD in [#7135](https://github.com/gfx-rs/wgpu/pull/7135)
 
+- Add fast path of decimal integer parsing. By @CrazyboyQCD in [#7229](https://github.com/gfx-rs/wgpu/pull/7229)
+
 ### Documentation
 
 - Improved documentation around pipeline caches and `TextureBlitter`. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978) and [#7003](https://github.com/gfx-rs/wgpu/pull/7003).
