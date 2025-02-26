@@ -1,16 +1,17 @@
-use std::{borrow::Cow, num::NonZeroU32, sync::Arc};
-use wgpu::{util::DeviceExt, Features};
+use std::{borrow::Cow, num::NonZeroU32};
+use wgpu::{util::DeviceExt, BufferSlice, Features};
 
 // These are set by the minimum required defaults for webgpu.
 const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
 const MAX_DISPATCH_SIZE: u32 = (1 << 16) - 1;
 
-pub async fn execute_gpu(numbers: &[f32]) -> Option<Vec<f32>> {
+pub async fn execute_gpu(numbers: &[f32]) -> Vec<f32> {
     let instance = wgpu::Instance::default();
 
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions::default())
-        .await?;
+        .await
+        .unwrap();
 
     let (device, queue) = adapter
         .request_device(
@@ -33,7 +34,7 @@ pub async fn execute_gpu(numbers: &[f32]) -> Option<Vec<f32>> {
         .await
         .unwrap();
 
-    execute_gpu_inner(&device, &queue, numbers).await
+    execute_gpu_inner(&device, &queue, numbers).await.unwrap()
 }
 
 pub async fn execute_gpu_inner(
@@ -56,57 +57,53 @@ pub async fn execute_gpu_inner(
         cpass.dispatch_workgroups(MAX_DISPATCH_SIZE.min(numbers.len() as u32), 1, 1);
     }
 
-    storage_buffers.iter().zip(staging_buffers.iter()).for_each(
-        |(storage_buffer, staging_buffer)| {
-            let stg_size = staging_buffer.size();
+    for (storage_buffer, staging_buffer) in storage_buffers.iter().zip(staging_buffers.iter()) {
+        let stg_size = staging_buffer.size();
 
-            encoder.copy_buffer_to_buffer(
-                storage_buffer, // Source buffer
-                0,
-                staging_buffer, // Destination buffer
-                0,
-                stg_size,
-            );
-        },
-    );
+        encoder.copy_buffer_to_buffer(
+            storage_buffer, // Source buffer
+            0,
+            staging_buffer, // Destination buffer
+            0,
+            stg_size,
+        );
+    }
 
     queue.submit(Some(encoder.finish()));
 
-    let mut buffer_slices = Vec::new();
-    staging_buffers.iter().for_each(|sb| {
-        buffer_slices.push(sb.slice(..));
-    });
+    let buffer_slices: Vec<BufferSlice> = staging_buffers.iter().map(|sb| sb.slice(..)).collect();
 
     let (sender, receiver) = flume::bounded(buffer_slices.len());
-    let sender = Arc::new(sender);
 
-    buffer_slices.iter().for_each(|bs| {
+    for bs in buffer_slices.iter() {
         let sender = sender.clone();
         bs.map_async(wgpu::MapMode::Read, move |v| {
             sender.send(v).unwrap();
         })
-    });
+    }
 
     device.poll(wgpu::Maintain::wait());
 
-    if let Ok(Ok(())) = receiver.recv_async().await {
-        let data: Vec<f32> = buffer_slices
-            .iter()
-            .flat_map(|bs| {
-                let data = bs.get_mapped_range();
-                let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
-                drop(data); // Drop to free buffer before unmap
-                result
-            })
-            .collect();
-
-        staging_buffers.iter().for_each(|sb| sb.unmap());
-
-        Some(data)
-    } else {
+    let Ok(Ok(())) = receiver.recv_async().await else {
         log::error!("Failed to run compute on GPU!");
-        None
+        return None;
+    };
+
+    let data: Vec<f32> = buffer_slices
+        .iter()
+        .flat_map(|bs| {
+            let data = bs.get_mapped_range();
+            let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
+            drop(data); // Drop to free buffer before unmap
+            result
+        })
+        .collect();
+
+    for sb in staging_buffers.iter() {
+        sb.unmap()
     }
+
+    Some(data)
 }
 
 fn setup(
@@ -124,9 +121,8 @@ fn setup(
     });
 
     // Gets the size in bytes of the input.
-    let input_size = std::mem::size_of_val(numbers) as wgpu::BufferAddress;
     let staging_buffers = create_staging_buffers(device, numbers);
-    let storage_buffers = create_storage_buffers(device, numbers, input_size);
+    let storage_buffers = create_storage_buffers(device, numbers);
 
     let (bind_group_layout, bind_group) = setup_binds(&storage_buffers, device);
 
@@ -196,6 +192,7 @@ fn setup_binds(
         layout: &bind_group_layout,
         entries: &bind_group_entries,
     });
+
     (bind_group_layout, bind_group)
 }
 
@@ -204,38 +201,22 @@ fn calculate_chunks(numbers: &[f32], max_buffer_size: u64) -> Vec<&[f32]> {
     numbers.chunks(max_elements_per_chunk).collect()
 }
 
-fn create_storage_buffers(
-    device: &wgpu::Device,
-    numbers: &[f32],
-    input_size: u64, // bytes..
-) -> Vec<wgpu::Buffer> {
-    if input_size > MAX_BUFFER_SIZE {
-        let chunks = calculate_chunks(numbers, MAX_BUFFER_SIZE);
+fn create_storage_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::Buffer> {
+    let chunks = calculate_chunks(numbers, MAX_BUFFER_SIZE);
 
-        chunks
-            .iter()
-            .enumerate()
-            .map(|(e, seg)| {
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some(&format!("Storage Buffer-{}", e)),
-                    contents: bytemuck::cast_slice(seg),
-                    usage: wgpu::BufferUsages::STORAGE
-                        | wgpu::BufferUsages::COPY_DST
-                        | wgpu::BufferUsages::COPY_SRC,
-                })
-            })
-            .collect()
-    } else {
-        vec![
+    chunks
+        .iter()
+        .enumerate()
+        .map(|(e, seg)| {
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Storage Buffer-0"),
-                contents: bytemuck::cast_slice(numbers),
+                label: Some(&format!("Storage Buffer-{}", e)),
+                contents: bytemuck::cast_slice(seg),
                 usage: wgpu::BufferUsages::STORAGE
                     | wgpu::BufferUsages::COPY_DST
                     | wgpu::BufferUsages::COPY_SRC,
-            }),
-        ]
-    }
+            })
+        })
+        .collect()
 }
 
 fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::Buffer> {
@@ -268,7 +249,7 @@ async fn run() {
     log::info!("All 0.0s");
 
     let t1 = std::time::Instant::now();
-    let results = execute_gpu(&numbers).await.unwrap();
+    let results = execute_gpu(&numbers).await;
     log::info!("GPU RUNTIME: {}ms", t1.elapsed().as_millis());
 
     assert_eq!(numbers.len(), results.len());
