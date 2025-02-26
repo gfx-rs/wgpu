@@ -1,6 +1,7 @@
 //! RenderDoc integration - <https://renderdoc.org/>
 #![cfg_attr(not(any(feature = "gles", feature = "vulkan")), allow(dead_code))]
 
+use alloc::format;
 use alloc::string::String;
 use core::{ffi, ptr};
 

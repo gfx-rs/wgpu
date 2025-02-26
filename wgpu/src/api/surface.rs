@@ -1,6 +1,5 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
-use core::fmt;
-use std::error; // TODO(https://github.com/gfx-rs/wgpu/issues/6826): use core::error after MSRV bump
+use core::{error, fmt};
 
 use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
