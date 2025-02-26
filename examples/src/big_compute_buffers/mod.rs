@@ -238,11 +238,9 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
 
 async fn run() {
     let numbers = {
-        let bytes_per_gb = 1024 * 1024 * 1024;
-        let bytes_per_f32 = std::mem::size_of::<f32>();
-        let total_bytes = (0.25 * bytes_per_gb as f32) as usize;
-        let elements = total_bytes / bytes_per_f32;
-
+        const BYTES_PER_GB: usize = 1024 * 1024 * 1024;
+        // 4 bytes per f32
+        let elements = (BYTES_PER_GB as f32 / 4.0) as usize;
         vec![0.0; elements]
     };
     assert!(numbers.iter().all(|n| *n == 0.0));
