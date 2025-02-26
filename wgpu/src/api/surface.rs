@@ -289,6 +289,30 @@ pub enum SurfaceTargetUnsafe {
         raw_window_handle: raw_window_handle::RawWindowHandle,
     },
 
+    /// Surface from a DRM device.
+    ///
+    /// If the specified DRM configuration is not supported by any of the backends, then the surface
+    /// will not be supported by any adapters.
+    ///
+    /// # Safety
+    ///
+    /// - All parameters must point to valid DRM values and remain valid for as long as the resulting [`Surface`] exists.
+    /// - The file descriptor (`fd`), plane, connector, and mode configuration must be valid and compatible.
+    Drm {
+        /// The file descriptor of the DRM device.
+        fd: i32,
+        /// The plane index on which to create the surface.
+        plane: u32,
+        /// The ID of the connector associated with the selected mode.
+        connector_id: u32,
+        /// The display width of the selected mode.
+        width: u32,
+        /// The display height of the selected mode.
+        height: u32,
+        /// The display refresh rate of the selected mode multiplied by 1000 (e.g., 60Hz → 60000).
+        refresh_rate: u32,
+    },
+
     /// Surface from `CoreAnimationLayer`.
     ///
     /// # Safety

@@ -2,6 +2,7 @@ use std::{
     borrow::ToOwned as _,
     boxed::Box,
     ffi::{c_void, CStr, CString},
+    mem::MaybeUninit,
     slice,
     str::FromStr,
     string::{String, ToString as _},
@@ -256,6 +257,12 @@ impl super::Instance {
 
         // VK_KHR_surface
         extensions.push(khr::surface::NAME);
+
+        // Extensions needed for drm support
+        extensions.push(khr::display::NAME);
+        extensions.push(ext::physical_device_drm::NAME);
+        extensions.push(khr::get_display_properties2::NAME);
+        extensions.push(ext::acquire_drm_display::NAME);
 
         // Platform-specific WSI extensions
         if cfg!(all(
@@ -517,6 +524,133 @@ impl super::Instance {
                     .expect("Unable to create Win32 surface")
             }
         };
+
+        Ok(self.create_surface_from_vk_surface_khr(surface))
+    }
+
+    pub fn create_surface_from_drm(
+        &self,
+        fd: i32,
+        plane: u32,
+        connector_id: u32,
+        width: u32,
+        height: u32,
+        refresh_rate: u32,
+    ) -> Result<super::Surface, crate::InstanceError> {
+        if !self.shared.extensions.contains(&khr::display::NAME) {
+            return Err(crate::InstanceError::new(String::from(
+                "Vulkan driver does not support VK_KHR_display",
+            )));
+        }
+
+        let drm_stat = {
+            let mut stat = MaybeUninit::<libc::stat>::uninit();
+
+            if unsafe { libc::fstat(fd, stat.as_mut_ptr()) } != 0 {
+                return Err(crate::InstanceError::new(
+                    "Unable to fstat drm device".to_string(),
+                ));
+            }
+
+            unsafe { stat.assume_init() }
+        };
+
+        let raw_devices = match unsafe { self.shared.raw.enumerate_physical_devices() } {
+            Ok(devices) => devices,
+            Err(err) => {
+                log::error!("enumerate_adapters: {}", err);
+                Vec::new()
+            }
+        };
+
+        let mut physical_device = None;
+
+        for device in raw_devices {
+            let properties2 = vk::PhysicalDeviceProperties2KHR::default();
+
+            let mut drm_props = vk::PhysicalDeviceDrmPropertiesEXT::default();
+            let mut properties2 = properties2.push_next(&mut drm_props);
+
+            unsafe {
+                self.shared
+                    .raw
+                    .get_physical_device_properties2(device, &mut properties2)
+            };
+
+            let primary_devid =
+                libc::makedev(drm_props.primary_major as _, drm_props.primary_minor as _);
+            let render_devid =
+                libc::makedev(drm_props.render_major as _, drm_props.render_minor as _);
+
+            if primary_devid == drm_stat.st_rdev || render_devid == drm_stat.st_rdev {
+                physical_device = Some(device)
+            }
+        }
+
+        let physical_device = physical_device.ok_or(crate::InstanceError::new(
+            "Failed to find suitable drm device".to_string(),
+        ))?;
+
+        // FIXME: consider implementing this strategy on working vulkan drivers
+        // let displays = unsafe {
+        //     display_instance
+        //         .get_physical_device_display_properties(physical_device)
+        //         .expect("Failed to get displays")
+        // };
+
+        let acquire_drm_display_instance =
+            ext::acquire_drm_display::Instance::new(&self.shared.entry, &self.shared.raw);
+
+        let display = unsafe {
+            acquire_drm_display_instance
+                .get_drm_display(physical_device, fd, connector_id)
+                .expect("Failed to get drm display")
+        };
+
+        unsafe {
+            acquire_drm_display_instance
+                .acquire_drm_display(physical_device, fd, display)
+                .expect("Failed to acquire drm display")
+        }
+
+        let display_instance = khr::display::Instance::new(&self.shared.entry, &self.shared.raw);
+
+        let modes = unsafe {
+            display_instance
+                .get_display_mode_properties(physical_device, display)
+                .expect("Failed to get display modes")
+        };
+
+        let mut mode = None;
+
+        for current_mode in modes {
+            log::trace!(
+                "Comparing mode {}x{}@{} with {width}x{height}@{refresh_rate}",
+                current_mode.parameters.visible_region.width,
+                current_mode.parameters.visible_region.height,
+                current_mode.parameters.refresh_rate
+            );
+            if current_mode.parameters.refresh_rate == refresh_rate
+                && current_mode.parameters.visible_region.width == width
+                && current_mode.parameters.visible_region.height == height
+            {
+                mode = Some(current_mode)
+            }
+        }
+
+        let mode = mode.ok_or(crate::InstanceError::new(
+            "Failed to find suitable display mode".to_string(),
+        ))?;
+
+        let create_info = vk::DisplaySurfaceCreateInfoKHR::default()
+            .display_mode(mode.display_mode)
+            .image_extent(mode.parameters.visible_region)
+            .transform(vk::SurfaceTransformFlagsKHR::IDENTITY)
+            .alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::OPAQUE)
+            .plane_index(plane);
+
+        let surface = unsafe { display_instance.create_display_plane_surface(&create_info, None) }
+            .expect("Failed to create DRM surface");
 
         Ok(self.create_surface_from_vk_surface_khr(surface))
     }
