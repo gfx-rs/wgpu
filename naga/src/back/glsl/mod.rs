@@ -2203,8 +2203,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             self.write_stmt(sta, ctx, l2.next())?;
                         }
 
-                        if !case.fall_through
-                            && case.body.last().map_or(true, |s| !s.is_terminator())
+                        if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator())
                         {
                             writeln!(self.out, "{}break;", l2.next())?;
                         }
