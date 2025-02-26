@@ -138,12 +138,15 @@ fn main() {
                     println!("Hooking up to wgpu-hal");
                     exposed.get_or_insert_with(|| {
                         unsafe {
-                            <hal::api::Gles as hal::Api>::Adapter::new_external(|name| {
-                                // XXX: On WGL this should only be called after the context was made current
-                                gl_config
-                                    .display()
-                                    .get_proc_address(&CString::new(name).expect(name))
-                            })
+                            <hal::api::Gles as hal::Api>::Adapter::new_external(
+                                |name| {
+                                    // XXX: On WGL this should only be called after the context was made current
+                                    gl_config
+                                        .display()
+                                        .get_proc_address(&CString::new(name).expect(name))
+                                },
+                                wgpu_types::GlBackendOptions::default(),
+                            )
                         }
                         .expect("GL adapter can't be initialized")
                     });
@@ -273,14 +276,14 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
 
     let od = unsafe {
         exposed.adapter.open(
-            wgt::Features::empty(),
-            &wgt::Limits::downlevel_defaults(),
-            &wgt::MemoryHints::default(),
+            wgpu_types::Features::empty(),
+            &wgpu_types::Limits::downlevel_defaults(),
+            &wgpu_types::MemoryHints::default(),
         )
     }
     .unwrap();
 
-    let format = wgt::TextureFormat::Rgba8UnormSrgb;
+    let format = wgpu_types::TextureFormat::Rgba8UnormSrgb;
     let texture = <hal::api::Gles as hal::Api>::Texture::default_framebuffer(format);
     let view = unsafe {
         od.device
@@ -289,9 +292,9 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
                 &hal::TextureViewDescriptor {
                     label: None,
                     format,
-                    dimension: wgt::TextureViewDimension::D2,
-                    usage: hal::TextureUses::COLOR_TARGET,
-                    range: wgt::ImageSubresourceRange::default(),
+                    dimension: wgpu_types::TextureViewDimension::D2,
+                    usage: wgpu_types::TextureUses::COLOR_TARGET,
+                    range: wgpu_types::ImageSubresourceRange::default(),
                 },
             )
             .unwrap()
@@ -309,7 +312,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
     let mut fence = unsafe { od.device.create_fence().unwrap() };
     let rp_desc = hal::RenderPassDescriptor {
         label: None,
-        extent: wgt::Extent3d {
+        extent: wgpu_types::Extent3d {
             width,
             height,
             depth_or_array_layers: 1,
@@ -318,11 +321,11 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
         color_attachments: &[Some(hal::ColorAttachment {
             target: hal::Attachment {
                 view: &view,
-                usage: hal::TextureUses::COLOR_TARGET,
+                usage: wgpu_types::TextureUses::COLOR_TARGET,
             },
             resolve_target: None,
             ops: hal::AttachmentOps::STORE,
-            clear_value: wgt::Color::BLUE,
+            clear_value: wgpu_types::Color::BLUE,
         })],
         depth_stencil_attachment: None,
         multiview: None,

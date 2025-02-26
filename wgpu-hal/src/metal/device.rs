@@ -1,9 +1,8 @@
+use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
+use core::{ptr::NonNull, sync::atomic};
+use std::{thread, time};
+
 use parking_lot::Mutex;
-use std::{
-    ptr::NonNull,
-    sync::{atomic, Arc},
-    thread, time,
-};
 
 use super::conv;
 use crate::auxil::map_naga_stage;
@@ -157,7 +156,7 @@ impl super::Device {
             spirv_cross_compatibility: false,
             fake_missing_bindings: false,
             per_entry_point_map: naga::back::msl::EntryPointResourceMap::from([(
-                stage.entry_point.to_string(),
+                stage.entry_point.to_owned(),
                 ep_resources.clone(),
             )]),
             bounds_check_policies: naga::proc::BoundsCheckPolicies {
@@ -244,7 +243,7 @@ impl super::Device {
                 }
                 naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
                     let br = match var.binding {
-                        Some(ref br) => br.clone(),
+                        Some(br) => br,
                         None => continue,
                     };
                     let storage_access_store = match var.space {
@@ -340,8 +339,8 @@ impl crate::Device for super::Device {
     type A = super::Api;
 
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<super::Buffer> {
-        let map_read = desc.usage.contains(crate::BufferUses::MAP_READ);
-        let map_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
+        let map_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
+        let map_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
         let mut options = metal::MTLResourceOptions::empty();
         options |= if map_read || map_write {

@@ -1,6 +1,6 @@
+use std::{ffi::CStr, path::PathBuf, string::String, vec::Vec};
+
 use crate::auxil::dxgi::result::HResult;
-use std::ffi::CStr;
-use std::path::PathBuf;
 use thiserror::Error;
 use windows::{
     core::{Interface, PCSTR, PCWSTR},
@@ -135,6 +135,7 @@ unsafe fn dxc_create_instance<T: DxcObj>(
 
 // Destructor order should be fine since _dxil and _dxc don't rely on each other.
 pub(super) struct DxcContainer {
+    pub(super) max_shader_model: wgt::DxcShaderModel,
     compiler: Dxc::IDxcCompiler3,
     utils: Dxc::IDxcUtils,
     validator: Option<Dxc::IDxcValidator>,
@@ -157,6 +158,7 @@ pub(super) enum GetDynamicDXCContainerError {
 pub(super) fn get_dynamic_dxc_container(
     dxc_path: PathBuf,
     dxil_path: PathBuf,
+    max_shader_model: wgt::DxcShaderModel,
 ) -> Result<DxcContainer, GetDynamicDXCContainerError> {
     let dxc = DxcLib::new_dynamic(dxc_path)
         .map_err(|e| GetDynamicDXCContainerError::FailedToLoad("dxcompiler.dll", e))?;
@@ -169,6 +171,7 @@ pub(super) fn get_dynamic_dxc_container(
     let validator = dxil.create_instance::<Dxc::IDxcValidator>()?;
 
     Ok(DxcContainer {
+        max_shader_model,
         compiler,
         utils,
         validator: Some(validator),
@@ -198,6 +201,7 @@ pub(super) fn get_static_dxc_container() -> Result<DxcContainer, crate::DeviceEr
             })?;
 
             Ok(DxcContainer {
+                max_shader_model: wgt::DxcShaderModel::V6_7,
                 compiler,
                 utils,
                 validator: None,

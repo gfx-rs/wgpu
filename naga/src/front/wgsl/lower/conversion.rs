@@ -32,6 +32,15 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         let expr_inner = expr_resolution.inner_with(types);
         let goal_inner = goal_ty.inner_with(types);
 
+        // We can only convert abstract types, so if `expr` is not abstract do not even
+        // attempt conversion. This allows the validator to catch type errors correctly
+        // rather than them being misreported as type conversion errors.
+        // If the type is an array (of an array, etc) then we must check whether the
+        // type of the innermost array's base type is abstract.
+        if !expr_inner.is_abstract(types) {
+            return Ok(expr);
+        }
+
         // If `expr` already has the requested type, we're done.
         if expr_inner.equivalent(goal_inner, types) {
             return Ok(expr);

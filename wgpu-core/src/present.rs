@@ -9,7 +9,8 @@ When this texture is presented, we remove it from the device tracker as well as
 extract it from the hub.
 !*/
 
-use std::{mem::ManuallyDrop, sync::Arc};
+use alloc::{sync::Arc, vec::Vec};
+use core::mem::ManuallyDrop;
 
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
@@ -62,6 +63,8 @@ pub enum ConfigureSurfaceError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("`SurfaceOutput` must be dropped before a new `Surface` is made")]
     PreviousOutputExists,
+    #[error("Failed to wait for GPU to come idle before reconfiguring the Surface")]
+    GpuWaitTimeout,
     #[error("Both `Surface` width and height must be non-zero. Wait to recreate the `Surface` until the window has non-zero area.")]
     ZeroArea,
     #[error("`Surface` width and height must be within the maximum supported texture size. Requested was ({width}, {height}), maximum extent for either dimension is {max_texture_dimension_2d}.")]
@@ -89,8 +92,8 @@ pub enum ConfigureSurfaceError {
     },
     #[error("Requested usage {requested:?} is not in the list of supported usages: {available:?}")]
     UnsupportedUsage {
-        requested: hal::TextureUses,
-        available: hal::TextureUses,
+        requested: wgt::TextureUses,
+        available: wgt::TextureUses,
     },
 }
 
@@ -99,21 +102,18 @@ impl From<WaitIdleError> for ConfigureSurfaceError {
         match e {
             WaitIdleError::Device(d) => ConfigureSurfaceError::Device(d),
             WaitIdleError::WrongSubmissionIndex(..) => unreachable!(),
+            WaitIdleError::Timeout => ConfigureSurfaceError::GpuWaitTimeout,
         }
     }
 }
 
-#[derive(Debug)]
-pub struct ResolvedSurfaceOutput {
-    pub status: Status,
-    pub texture: Option<Arc<resource::Texture>>,
-}
+pub type ResolvedSurfaceOutput = SurfaceOutput<Arc<resource::Texture>>;
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct SurfaceOutput {
+pub struct SurfaceOutput<T = id::TextureId> {
     pub status: Status,
-    pub texture_id: Option<id::TextureId>,
+    pub texture: Option<T>,
 }
 
 impl Surface {
@@ -132,7 +132,7 @@ impl Surface {
         let suf = self.raw(device.backend()).unwrap();
         let (texture, status) = match unsafe {
             suf.acquire_texture(
-                Some(std::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
+                Some(core::time::Duration::from_millis(FRAME_TIMEOUT_MS as u64)),
                 fence.as_ref(),
             )
         } {
@@ -140,7 +140,7 @@ impl Surface {
                 drop(fence);
 
                 let texture_desc = wgt::TextureDescriptor {
-                    label: Some(std::borrow::Cow::Borrowed("<Surface Texture>")),
+                    label: Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
                     size: wgt::Extent3d {
                         width: config.width,
                         height: config.height,
@@ -170,7 +170,7 @@ impl Surface {
                     ),
                     format: config.format,
                     dimension: wgt::TextureViewDimension::D2,
-                    usage: hal::TextureUses::COLOR_TARGET,
+                    usage: wgt::TextureUses::COLOR_TARGET,
                     range: wgt::ImageSubresourceRange::default(),
                 };
                 let clear_view = unsafe {
@@ -200,7 +200,7 @@ impl Surface {
                     .trackers
                     .lock()
                     .textures
-                    .insert_single(&texture, hal::TextureUses::UNINITIALIZED);
+                    .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
 
                 if present.acquired_texture.is_some() {
                     return Err(SurfaceError::AlreadyAcquired);
@@ -337,7 +337,10 @@ impl Global {
             .texture
             .map(|texture| fid.assign(resource::Fallible::Valid(texture)));
 
-        Ok(SurfaceOutput { status, texture_id })
+        Ok(SurfaceOutput {
+            status,
+            texture: texture_id,
+        })
     }
 
     pub fn surface_present(&self, surface_id: id::SurfaceId) -> Result<Status, SurfaceError> {

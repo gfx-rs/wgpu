@@ -1,19 +1,21 @@
-use super::{conv, RawTlasInstance};
-
-use arrayvec::ArrayVec;
-use ash::{khr, vk};
-use parking_lot::Mutex;
-
-use crate::TlasInstance;
 use std::{
-    borrow::Cow,
-    collections::{hash_map::Entry, BTreeMap},
+    borrow::{Cow, ToOwned as _},
+    collections::BTreeMap,
     ffi::{CStr, CString},
     mem::{self, size_of, MaybeUninit},
     num::NonZeroU32,
     ptr, slice,
     sync::Arc,
+    vec::Vec,
 };
+
+use arrayvec::ArrayVec;
+use ash::{khr, vk};
+use hashbrown::hash_map::Entry;
+use parking_lot::Mutex;
+
+use super::{conv, RawTlasInstance};
+use crate::TlasInstance;
 
 impl super::DeviceShared {
     /// Set the name of `object` to `name`.
@@ -902,10 +904,11 @@ impl super::Device {
                 runtime_checks,
             } => {
                 let pipeline_options = naga::back::spv::PipelineOptions {
-                    entry_point: stage.entry_point.to_string(),
+                    entry_point: stage.entry_point.to_owned(),
                     shader_stage: naga_stage,
                 };
                 let needs_temp_options = !runtime_checks.bounds_checks
+                    || !runtime_checks.force_loop_bounding
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory;
@@ -919,6 +922,9 @@ impl super::Device {
                             image_load: naga::proc::BoundsCheckPolicy::Unchecked,
                             binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                         };
+                    }
+                    if !runtime_checks.force_loop_bounding {
+                        temp_options.force_loop_bounding = false;
                     }
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
@@ -1039,17 +1045,17 @@ impl crate::Device for super::Device {
 
         let mut alloc_usage = if desc
             .usage
-            .intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE)
+            .intersects(wgt::BufferUses::MAP_READ | wgt::BufferUses::MAP_WRITE)
         {
             let mut flags = gpu_alloc::UsageFlags::HOST_ACCESS;
             //TODO: find a way to use `crate::MemoryFlags::PREFER_COHERENT`
             flags.set(
                 gpu_alloc::UsageFlags::DOWNLOAD,
-                desc.usage.contains(crate::BufferUses::MAP_READ),
+                desc.usage.contains(wgt::BufferUses::MAP_READ),
             );
             flags.set(
                 gpu_alloc::UsageFlags::UPLOAD,
-                desc.usage.contains(crate::BufferUses::MAP_WRITE),
+                desc.usage.contains(wgt::BufferUses::MAP_WRITE),
             );
             flags
         } else {
@@ -1460,44 +1466,47 @@ impl crate::Device for super::Device {
             })
             .collect::<Vec<_>>();
 
-        let vk_info = vk::DescriptorSetLayoutCreateInfo::default().bindings(&vk_bindings);
-
-        let binding_arrays = desc
+        let binding_arrays: Vec<_> = desc
             .entries
             .iter()
             .enumerate()
             .filter_map(|(idx, entry)| entry.count.map(|count| (idx as u32, count)))
             .collect();
 
-        let mut binding_flag_info;
-        let binding_flag_vec;
+        let vk_info = vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(&vk_bindings)
+            .flags(if !binding_arrays.is_empty() {
+                vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL
+            } else {
+                vk::DescriptorSetLayoutCreateFlags::empty()
+            });
 
         let partially_bound = desc
             .flags
             .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
 
-        let vk_info = if partially_bound {
-            binding_flag_vec = desc
-                .entries
-                .iter()
-                .map(|entry| {
-                    let mut flags = vk::DescriptorBindingFlags::empty();
+        let binding_flag_vec = desc
+            .entries
+            .iter()
+            .map(|entry| {
+                let mut flags = vk::DescriptorBindingFlags::empty();
 
-                    if partially_bound && entry.count.is_some() {
-                        flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
-                    }
+                if partially_bound && entry.count.is_some() {
+                    flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
+                }
 
-                    flags
-                })
-                .collect::<Vec<_>>();
+                if entry.count.is_some() {
+                    flags |= vk::DescriptorBindingFlags::UPDATE_AFTER_BIND;
+                }
 
-            binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
-                .binding_flags(&binding_flag_vec);
+                flags
+            })
+            .collect::<Vec<_>>();
 
-            vk_info.push_next(&mut binding_flag_info)
-        } else {
-            vk_info
-        };
+        let mut binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
+            .binding_flags(&binding_flag_vec);
+
+        let vk_info = vk_info.push_next(&mut binding_flag_info);
 
         let raw = unsafe {
             self.shared
@@ -1610,11 +1619,19 @@ impl crate::Device for super::Device {
             super::AccelerationStructure,
         >,
     ) -> Result<super::BindGroup, crate::DeviceError> {
+        let contains_binding_arrays = !desc.layout.binding_arrays.is_empty();
+
+        let desc_set_layout_flags = if contains_binding_arrays {
+            gpu_descriptor::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND
+        } else {
+            gpu_descriptor::DescriptorSetLayoutCreateFlags::empty()
+        };
+
         let mut vk_sets = unsafe {
             self.desc_allocator.lock().allocate(
                 &*self.shared,
                 &desc.layout.raw,
-                gpu_descriptor::DescriptorSetLayoutCreateFlags::empty(),
+                desc_set_layout_flags,
                 &desc.layout.desc_count,
                 1,
             )?
@@ -2051,10 +2068,7 @@ impl crate::Device for super::Device {
         let vk_dynamic_state =
             vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-        let raw_pass = self
-            .shared
-            .make_render_pass(compatible_rp_key)
-            .map_err(crate::DeviceError::from)?;
+        let raw_pass = self.shared.make_render_pass(compatible_rp_key)?;
 
         let vk_infos = [{
             vk::GraphicsPipelineCreateInfo::default()
@@ -2364,7 +2378,39 @@ impl crate::Device for super::Device {
                             .index_type(vk::IndexType::NONE_KHR)
                             .vertex_format(conv::map_vertex_format(triangles.vertex_format))
                             .max_vertex(triangles.vertex_count)
-                            .vertex_stride(triangles.vertex_stride);
+                            .vertex_stride(triangles.vertex_stride)
+                            // The vulkan spec suggests we could pass a non-zero invalid address here if fetching
+                            // the real address has significant overhead, but we pass the real one to be on the
+                            // safe side for now.
+                            // from https://registry.khronos.org/vulkan/specs/latest/man/html/vkGetAccelerationStructureBuildSizesKHR.html
+                            // > The srcAccelerationStructure, dstAccelerationStructure, and mode members
+                            // > of pBuildInfo are ignored. Any VkDeviceOrHostAddressKHR or VkDeviceOrHostAddressConstKHR
+                            // > members of pBuildInfo are ignored by this command, except that the hostAddress
+                            // > member of VkAccelerationStructureGeometryTrianglesDataKHR::transformData will
+                            // > be examined to check if it is NULL.
+                            .transform_data(vk::DeviceOrHostAddressConstKHR {
+                                device_address: if desc
+                                    .flags
+                                    .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                                {
+                                    unsafe {
+                                        ray_tracing_functions
+                                            .buffer_device_address
+                                            .get_buffer_device_address(
+                                                &vk::BufferDeviceAddressInfo::default().buffer(
+                                                    triangles
+                                                        .transform
+                                                        .as_ref()
+                                                        .unwrap()
+                                                        .buffer
+                                                        .raw,
+                                                ),
+                                            )
+                                    }
+                                } else {
+                                    0
+                                },
+                            });
 
                     let pritive_count = if let Some(ref indices) = triangles.indices {
                         triangle_data =
@@ -2524,10 +2570,26 @@ impl crate::Device for super::Device {
                     .set_object_name(raw_acceleration_structure, label);
             }
 
+            let pool = if desc.allow_compaction {
+                let vk_info = vk::QueryPoolCreateInfo::default()
+                    .query_type(vk::QueryType::ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR)
+                    .query_count(1);
+
+                let raw = self
+                    .shared
+                    .raw
+                    .create_query_pool(&vk_info, None)
+                    .map_err(super::map_host_oom_and_ioca_err)?;
+                Some(raw)
+            } else {
+                None
+            };
+
             Ok(super::AccelerationStructure {
                 raw: raw_acceleration_structure,
                 buffer: raw_buffer,
                 block: Mutex::new(block),
+                compacted_size_query: pool,
             })
         }
     }
@@ -2553,6 +2615,9 @@ impl crate::Device for super::Device {
             self.mem_allocator
                 .lock()
                 .dealloc(&*self.shared, acceleration_structure.block.into_inner());
+            if let Some(query) = acceleration_structure.compacted_size_query {
+                self.shared.raw.destroy_query_pool(query, None)
+            }
         }
     }
 
@@ -2568,7 +2633,7 @@ impl crate::Device for super::Device {
         const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
         let temp = RawTlasInstance {
             transform: instance.transform,
-            custom_index_and_mask: (instance.custom_index & MAX_U24)
+            custom_data_and_mask: (instance.custom_data & MAX_U24)
                 | (u32::from(instance.mask) << 24),
             shader_binding_table_record_offset_and_flags: 0,
             acceleration_structure_reference: instance.blas_address,

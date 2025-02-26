@@ -4,7 +4,8 @@ Implementations for `BlockContext` methods.
 
 use super::{
     index::BoundsCheckResult, selection::Selection, Block, BlockContext, Dimension, Error,
-    Instruction, LocalType, LookupType, NumericType, ResultMember, Writer, WriterFlags,
+    Instruction, LocalType, LookupType, NumericType, ResultMember, WrappedFunction, Writer,
+    WriterFlags,
 };
 use crate::{arena::Handle, proc::index::GuardedIndex, Statement};
 use spirv::Word;
@@ -260,6 +261,155 @@ impl Writer {
 }
 
 impl BlockContext<'_> {
+    /// Generates code to ensure that a loop is bounded. Should be called immediately
+    /// after adding the OpLoopMerge instruction to `block`. This function will
+    /// [`consume()`](crate::back::spv::Function::consume) `block` and append its
+    /// instructions to a new [`Block`], which will be returned to the caller for it to
+    /// consumed prior to writing the loop body.
+    ///
+    /// Additionally this function will populate [`force_loop_bounding_vars`](crate::back::spv::Function::force_loop_bounding_vars),
+    /// ensuring that [`Function::to_words()`](crate::back::spv::Function::to_words) will
+    /// declare the required variables.
+    ///
+    /// See [`crate::back::msl::Writer::gen_force_bounded_loop_statements`] for details
+    /// of why this is required.
+    fn write_force_bounded_loop_instructions(&mut self, mut block: Block, merge_id: Word) -> Block {
+        let uint_type_id = self.writer.get_uint_type_id();
+        let uint2_type_id = self.writer.get_uint2_type_id();
+        let uint2_ptr_type_id = self
+            .writer
+            .get_uint2_pointer_type_id(spirv::StorageClass::Function);
+        let bool_type_id = self.writer.get_bool_type_id();
+        let bool2_type_id = self.writer.get_bool2_type_id();
+        let zero_uint_const_id = self.writer.get_constant_scalar(crate::Literal::U32(0));
+        let zero_uint2_const_id = self.writer.get_constant_composite(
+            LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                size: crate::VectorSize::Bi,
+                scalar: crate::Scalar::U32,
+            })),
+            &[zero_uint_const_id, zero_uint_const_id],
+        );
+        let one_uint_const_id = self.writer.get_constant_scalar(crate::Literal::U32(1));
+        let max_uint_const_id = self
+            .writer
+            .get_constant_scalar(crate::Literal::U32(u32::MAX));
+        let max_uint2_const_id = self.writer.get_constant_composite(
+            LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                size: crate::VectorSize::Bi,
+                scalar: crate::Scalar::U32,
+            })),
+            &[max_uint_const_id, max_uint_const_id],
+        );
+
+        let loop_counter_var_id = self.gen_id();
+        if self.writer.flags.contains(WriterFlags::DEBUG) {
+            self.writer
+                .debugs
+                .push(Instruction::name(loop_counter_var_id, "loop_bound"));
+        }
+        let var = super::LocalVariable {
+            id: loop_counter_var_id,
+            instruction: Instruction::variable(
+                uint2_ptr_type_id,
+                loop_counter_var_id,
+                spirv::StorageClass::Function,
+                Some(zero_uint2_const_id),
+            ),
+        };
+        self.function.force_loop_bounding_vars.push(var);
+
+        let break_if_block = self.gen_id();
+
+        self.function
+            .consume(block, Instruction::branch(break_if_block));
+        block = Block::new(break_if_block);
+
+        // Load the current loop counter value from its variable. We use a vec2<u32> to
+        // simulate a 64-bit counter.
+        let load_id = self.gen_id();
+        block.body.push(Instruction::load(
+            uint2_type_id,
+            load_id,
+            loop_counter_var_id,
+            None,
+        ));
+
+        // If both the high and low u32s have reached u32::MAX then break. ie
+        // if (all(eq(loop_counter, vec2(u32::MAX)))) { break; }
+        let eq_id = self.gen_id();
+        block.body.push(Instruction::binary(
+            spirv::Op::IEqual,
+            bool2_type_id,
+            eq_id,
+            max_uint2_const_id,
+            load_id,
+        ));
+        let all_eq_id = self.gen_id();
+        block.body.push(Instruction::relational(
+            spirv::Op::All,
+            bool_type_id,
+            all_eq_id,
+            eq_id,
+        ));
+
+        let inc_counter_block_id = self.gen_id();
+        block.body.push(Instruction::selection_merge(
+            inc_counter_block_id,
+            spirv::SelectionControl::empty(),
+        ));
+        self.function.consume(
+            block,
+            Instruction::branch_conditional(all_eq_id, merge_id, inc_counter_block_id),
+        );
+        block = Block::new(inc_counter_block_id);
+
+        // To simulate a 64-bit counter we always increment the low u32, and increment
+        // the high u32 when the low u32 overflows. ie
+        // counter += vec2(select(0u, 1u, counter.y == u32::MAX), 1u);
+        let low_id = self.gen_id();
+        block.body.push(Instruction::composite_extract(
+            uint_type_id,
+            low_id,
+            load_id,
+            &[1],
+        ));
+        let low_overflow_id = self.gen_id();
+        block.body.push(Instruction::binary(
+            spirv::Op::IEqual,
+            bool_type_id,
+            low_overflow_id,
+            low_id,
+            max_uint_const_id,
+        ));
+        let carry_bit_id = self.gen_id();
+        block.body.push(Instruction::select(
+            uint_type_id,
+            carry_bit_id,
+            low_overflow_id,
+            one_uint_const_id,
+            zero_uint_const_id,
+        ));
+        let increment_id = self.gen_id();
+        block.body.push(Instruction::composite_construct(
+            uint2_type_id,
+            increment_id,
+            &[carry_bit_id, one_uint_const_id],
+        ));
+        let result_id = self.gen_id();
+        block.body.push(Instruction::binary(
+            spirv::Op::IAdd,
+            uint2_type_id,
+            result_id,
+            load_id,
+            increment_id,
+        ));
+        block
+            .body
+            .push(Instruction::store(loop_counter_var_id, result_id, None));
+
+        block
+    }
+
     /// Cache an expression for a value.
     pub(super) fn cache_expression_value(
         &mut self,
@@ -578,201 +728,227 @@ impl BlockContext<'_> {
                 let id = self.gen_id();
                 let left_id = self.cached[left];
                 let right_id = self.cached[right];
+                let left_type_id = self.get_expression_type_id(&self.fun_info[left].ty);
+                let right_type_id = self.get_expression_type_id(&self.fun_info[right].ty);
 
-                let left_ty_inner = self.fun_info[left].ty.inner_with(&self.ir_module.types);
-                let right_ty_inner = self.fun_info[right].ty.inner_with(&self.ir_module.types);
+                if let Some(function_id) =
+                    self.writer
+                        .wrapped_functions
+                        .get(&WrappedFunction::BinaryOp {
+                            op,
+                            left_type_id,
+                            right_type_id,
+                        })
+                {
+                    block.body.push(Instruction::function_call(
+                        result_type_id,
+                        id,
+                        *function_id,
+                        &[left_id, right_id],
+                    ));
+                } else {
+                    let left_ty_inner = self.fun_info[left].ty.inner_with(&self.ir_module.types);
+                    let right_ty_inner = self.fun_info[right].ty.inner_with(&self.ir_module.types);
 
-                let left_dimension = get_dimension(left_ty_inner);
-                let right_dimension = get_dimension(right_ty_inner);
+                    let left_dimension = get_dimension(left_ty_inner);
+                    let right_dimension = get_dimension(right_ty_inner);
 
-                let mut reverse_operands = false;
+                    let mut reverse_operands = false;
 
-                let spirv_op = match op {
-                    crate::BinaryOperator::Add => match *left_ty_inner {
-                        crate::TypeInner::Scalar(scalar)
-                        | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
-                            crate::ScalarKind::Float => spirv::Op::FAdd,
-                            _ => spirv::Op::IAdd,
-                        },
-                        crate::TypeInner::Matrix {
-                            columns,
-                            rows,
-                            scalar,
-                        } => {
-                            self.write_matrix_matrix_column_op(
-                                block,
-                                id,
-                                result_type_id,
-                                left_id,
-                                right_id,
+                    let spirv_op = match op {
+                        crate::BinaryOperator::Add => match *left_ty_inner {
+                            crate::TypeInner::Scalar(scalar)
+                            | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
+                                crate::ScalarKind::Float => spirv::Op::FAdd,
+                                _ => spirv::Op::IAdd,
+                            },
+                            crate::TypeInner::Matrix {
                                 columns,
                                 rows,
-                                scalar.width,
-                                spirv::Op::FAdd,
-                            );
+                                scalar,
+                            } => {
+                                self.write_matrix_matrix_column_op(
+                                    block,
+                                    id,
+                                    result_type_id,
+                                    left_id,
+                                    right_id,
+                                    columns,
+                                    rows,
+                                    scalar.width,
+                                    spirv::Op::FAdd,
+                                );
 
-                            self.cached[expr_handle] = id;
-                            return Ok(());
-                        }
-                        _ => unimplemented!(),
-                    },
-                    crate::BinaryOperator::Subtract => match *left_ty_inner {
-                        crate::TypeInner::Scalar(scalar)
-                        | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
-                            crate::ScalarKind::Float => spirv::Op::FSub,
-                            _ => spirv::Op::ISub,
+                                self.cached[expr_handle] = id;
+                                return Ok(());
+                            }
+                            _ => unimplemented!(),
                         },
-                        crate::TypeInner::Matrix {
-                            columns,
-                            rows,
-                            scalar,
-                        } => {
-                            self.write_matrix_matrix_column_op(
-                                block,
-                                id,
-                                result_type_id,
-                                left_id,
-                                right_id,
+                        crate::BinaryOperator::Subtract => match *left_ty_inner {
+                            crate::TypeInner::Scalar(scalar)
+                            | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
+                                crate::ScalarKind::Float => spirv::Op::FSub,
+                                _ => spirv::Op::ISub,
+                            },
+                            crate::TypeInner::Matrix {
                                 columns,
                                 rows,
-                                scalar.width,
-                                spirv::Op::FSub,
-                            );
+                                scalar,
+                            } => {
+                                self.write_matrix_matrix_column_op(
+                                    block,
+                                    id,
+                                    result_type_id,
+                                    left_id,
+                                    right_id,
+                                    columns,
+                                    rows,
+                                    scalar.width,
+                                    spirv::Op::FSub,
+                                );
 
-                            self.cached[expr_handle] = id;
-                            return Ok(());
-                        }
-                        _ => unimplemented!(),
-                    },
-                    crate::BinaryOperator::Multiply => match (left_dimension, right_dimension) {
-                        (Dimension::Scalar, Dimension::Vector) => {
-                            self.write_vector_scalar_mult(
-                                block,
-                                id,
-                                result_type_id,
-                                right_id,
-                                left_id,
-                                right_ty_inner,
-                            );
+                                self.cached[expr_handle] = id;
+                                return Ok(());
+                            }
+                            _ => unimplemented!(),
+                        },
+                        crate::BinaryOperator::Multiply => {
+                            match (left_dimension, right_dimension) {
+                                (Dimension::Scalar, Dimension::Vector) => {
+                                    self.write_vector_scalar_mult(
+                                        block,
+                                        id,
+                                        result_type_id,
+                                        right_id,
+                                        left_id,
+                                        right_ty_inner,
+                                    );
 
-                            self.cached[expr_handle] = id;
-                            return Ok(());
-                        }
-                        (Dimension::Vector, Dimension::Scalar) => {
-                            self.write_vector_scalar_mult(
-                                block,
-                                id,
-                                result_type_id,
-                                left_id,
-                                right_id,
-                                left_ty_inner,
-                            );
+                                    self.cached[expr_handle] = id;
+                                    return Ok(());
+                                }
+                                (Dimension::Vector, Dimension::Scalar) => {
+                                    self.write_vector_scalar_mult(
+                                        block,
+                                        id,
+                                        result_type_id,
+                                        left_id,
+                                        right_id,
+                                        left_ty_inner,
+                                    );
 
-                            self.cached[expr_handle] = id;
-                            return Ok(());
+                                    self.cached[expr_handle] = id;
+                                    return Ok(());
+                                }
+                                (Dimension::Vector, Dimension::Matrix) => {
+                                    spirv::Op::VectorTimesMatrix
+                                }
+                                (Dimension::Matrix, Dimension::Scalar) => {
+                                    spirv::Op::MatrixTimesScalar
+                                }
+                                (Dimension::Scalar, Dimension::Matrix) => {
+                                    reverse_operands = true;
+                                    spirv::Op::MatrixTimesScalar
+                                }
+                                (Dimension::Matrix, Dimension::Vector) => {
+                                    spirv::Op::MatrixTimesVector
+                                }
+                                (Dimension::Matrix, Dimension::Matrix) => {
+                                    spirv::Op::MatrixTimesMatrix
+                                }
+                                (Dimension::Vector, Dimension::Vector)
+                                | (Dimension::Scalar, Dimension::Scalar)
+                                    if left_ty_inner.scalar_kind()
+                                        == Some(crate::ScalarKind::Float) =>
+                                {
+                                    spirv::Op::FMul
+                                }
+                                (Dimension::Vector, Dimension::Vector)
+                                | (Dimension::Scalar, Dimension::Scalar) => spirv::Op::IMul,
+                            }
                         }
-                        (Dimension::Vector, Dimension::Matrix) => spirv::Op::VectorTimesMatrix,
-                        (Dimension::Matrix, Dimension::Scalar) => spirv::Op::MatrixTimesScalar,
-                        (Dimension::Scalar, Dimension::Matrix) => {
-                            reverse_operands = true;
-                            spirv::Op::MatrixTimesScalar
-                        }
-                        (Dimension::Matrix, Dimension::Vector) => spirv::Op::MatrixTimesVector,
-                        (Dimension::Matrix, Dimension::Matrix) => spirv::Op::MatrixTimesMatrix,
-                        (Dimension::Vector, Dimension::Vector)
-                        | (Dimension::Scalar, Dimension::Scalar)
-                            if left_ty_inner.scalar_kind() == Some(crate::ScalarKind::Float) =>
-                        {
-                            spirv::Op::FMul
-                        }
-                        (Dimension::Vector, Dimension::Vector)
-                        | (Dimension::Scalar, Dimension::Scalar) => spirv::Op::IMul,
-                    },
-                    crate::BinaryOperator::Divide => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) => spirv::Op::SDiv,
-                        Some(crate::ScalarKind::Uint) => spirv::Op::UDiv,
-                        Some(crate::ScalarKind::Float) => spirv::Op::FDiv,
-                        _ => unimplemented!(),
-                    },
-                    crate::BinaryOperator::Modulo => match left_ty_inner.scalar_kind() {
-                        // TODO: handle undefined behavior
-                        // if right == 0 return 0
-                        // if left == min(type_of(left)) && right == -1 return 0
-                        Some(crate::ScalarKind::Sint) => spirv::Op::SRem,
-                        // TODO: handle undefined behavior
-                        // if right == 0 return 0
-                        Some(crate::ScalarKind::Uint) => spirv::Op::UMod,
-                        // TODO: handle undefined behavior
-                        // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
-                        Some(crate::ScalarKind::Float) => spirv::Op::FRem,
-                        _ => unimplemented!(),
-                    },
-                    crate::BinaryOperator::Equal => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) => {
-                            spirv::Op::IEqual
-                        }
-                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdEqual,
-                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalEqual,
-                        _ => unimplemented!(),
-                    },
-                    crate::BinaryOperator::NotEqual => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) => {
-                            spirv::Op::INotEqual
-                        }
-                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdNotEqual,
-                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalNotEqual,
-                        _ => unimplemented!(),
-                    },
-                    crate::BinaryOperator::Less => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) => spirv::Op::SLessThan,
-                        Some(crate::ScalarKind::Uint) => spirv::Op::ULessThan,
-                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdLessThan,
-                        _ => unimplemented!(),
-                    },
-                    crate::BinaryOperator::LessEqual => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) => spirv::Op::SLessThanEqual,
-                        Some(crate::ScalarKind::Uint) => spirv::Op::ULessThanEqual,
-                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdLessThanEqual,
-                        _ => unimplemented!(),
-                    },
-                    crate::BinaryOperator::Greater => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) => spirv::Op::SGreaterThan,
-                        Some(crate::ScalarKind::Uint) => spirv::Op::UGreaterThan,
-                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdGreaterThan,
-                        _ => unimplemented!(),
-                    },
-                    crate::BinaryOperator::GreaterEqual => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) => spirv::Op::SGreaterThanEqual,
-                        Some(crate::ScalarKind::Uint) => spirv::Op::UGreaterThanEqual,
-                        Some(crate::ScalarKind::Float) => spirv::Op::FOrdGreaterThanEqual,
-                        _ => unimplemented!(),
-                    },
-                    crate::BinaryOperator::And => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalAnd,
-                        _ => spirv::Op::BitwiseAnd,
-                    },
-                    crate::BinaryOperator::ExclusiveOr => spirv::Op::BitwiseXor,
-                    crate::BinaryOperator::InclusiveOr => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Bool) => spirv::Op::LogicalOr,
-                        _ => spirv::Op::BitwiseOr,
-                    },
-                    crate::BinaryOperator::LogicalAnd => spirv::Op::LogicalAnd,
-                    crate::BinaryOperator::LogicalOr => spirv::Op::LogicalOr,
-                    crate::BinaryOperator::ShiftLeft => spirv::Op::ShiftLeftLogical,
-                    crate::BinaryOperator::ShiftRight => match left_ty_inner.scalar_kind() {
-                        Some(crate::ScalarKind::Sint) => spirv::Op::ShiftRightArithmetic,
-                        Some(crate::ScalarKind::Uint) => spirv::Op::ShiftRightLogical,
-                        _ => unimplemented!(),
-                    },
-                };
+                        crate::BinaryOperator::Divide => match left_ty_inner.scalar_kind() {
+                            Some(crate::ScalarKind::Sint) => spirv::Op::SDiv,
+                            Some(crate::ScalarKind::Uint) => spirv::Op::UDiv,
+                            Some(crate::ScalarKind::Float) => spirv::Op::FDiv,
+                            _ => unimplemented!(),
+                        },
+                        crate::BinaryOperator::Modulo => match left_ty_inner.scalar_kind() {
+                            // TODO: handle undefined behavior
+                            // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
+                            Some(crate::ScalarKind::Float) => spirv::Op::FRem,
+                            Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) => {
+                                unreachable!("Should have been handled by wrapped function")
+                            }
+                            _ => unimplemented!(),
+                        },
+                        crate::BinaryOperator::Equal => match left_ty_inner.scalar_kind() {
+                            Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) => {
+                                spirv::Op::IEqual
+                            }
+                            Some(crate::ScalarKind::Float) => spirv::Op::FOrdEqual,
+                            Some(crate::ScalarKind::Bool) => spirv::Op::LogicalEqual,
+                            _ => unimplemented!(),
+                        },
+                        crate::BinaryOperator::NotEqual => match left_ty_inner.scalar_kind() {
+                            Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint) => {
+                                spirv::Op::INotEqual
+                            }
+                            Some(crate::ScalarKind::Float) => spirv::Op::FOrdNotEqual,
+                            Some(crate::ScalarKind::Bool) => spirv::Op::LogicalNotEqual,
+                            _ => unimplemented!(),
+                        },
+                        crate::BinaryOperator::Less => match left_ty_inner.scalar_kind() {
+                            Some(crate::ScalarKind::Sint) => spirv::Op::SLessThan,
+                            Some(crate::ScalarKind::Uint) => spirv::Op::ULessThan,
+                            Some(crate::ScalarKind::Float) => spirv::Op::FOrdLessThan,
+                            _ => unimplemented!(),
+                        },
+                        crate::BinaryOperator::LessEqual => match left_ty_inner.scalar_kind() {
+                            Some(crate::ScalarKind::Sint) => spirv::Op::SLessThanEqual,
+                            Some(crate::ScalarKind::Uint) => spirv::Op::ULessThanEqual,
+                            Some(crate::ScalarKind::Float) => spirv::Op::FOrdLessThanEqual,
+                            _ => unimplemented!(),
+                        },
+                        crate::BinaryOperator::Greater => match left_ty_inner.scalar_kind() {
+                            Some(crate::ScalarKind::Sint) => spirv::Op::SGreaterThan,
+                            Some(crate::ScalarKind::Uint) => spirv::Op::UGreaterThan,
+                            Some(crate::ScalarKind::Float) => spirv::Op::FOrdGreaterThan,
+                            _ => unimplemented!(),
+                        },
+                        crate::BinaryOperator::GreaterEqual => match left_ty_inner.scalar_kind() {
+                            Some(crate::ScalarKind::Sint) => spirv::Op::SGreaterThanEqual,
+                            Some(crate::ScalarKind::Uint) => spirv::Op::UGreaterThanEqual,
+                            Some(crate::ScalarKind::Float) => spirv::Op::FOrdGreaterThanEqual,
+                            _ => unimplemented!(),
+                        },
+                        crate::BinaryOperator::And => match left_ty_inner.scalar_kind() {
+                            Some(crate::ScalarKind::Bool) => spirv::Op::LogicalAnd,
+                            _ => spirv::Op::BitwiseAnd,
+                        },
+                        crate::BinaryOperator::ExclusiveOr => spirv::Op::BitwiseXor,
+                        crate::BinaryOperator::InclusiveOr => match left_ty_inner.scalar_kind() {
+                            Some(crate::ScalarKind::Bool) => spirv::Op::LogicalOr,
+                            _ => spirv::Op::BitwiseOr,
+                        },
+                        crate::BinaryOperator::LogicalAnd => spirv::Op::LogicalAnd,
+                        crate::BinaryOperator::LogicalOr => spirv::Op::LogicalOr,
+                        crate::BinaryOperator::ShiftLeft => spirv::Op::ShiftLeftLogical,
+                        crate::BinaryOperator::ShiftRight => match left_ty_inner.scalar_kind() {
+                            Some(crate::ScalarKind::Sint) => spirv::Op::ShiftRightArithmetic,
+                            Some(crate::ScalarKind::Uint) => spirv::Op::ShiftRightLogical,
+                            _ => unimplemented!(),
+                        },
+                    };
 
-                block.body.push(Instruction::binary(
-                    spirv_op,
-                    result_type_id,
-                    id,
-                    if reverse_operands { right_id } else { left_id },
-                    if reverse_operands { left_id } else { right_id },
-                ));
+                    block.body.push(Instruction::binary(
+                        spirv_op,
+                        result_type_id,
+                        id,
+                        if reverse_operands { right_id } else { left_id },
+                        if reverse_operands { left_id } else { right_id },
+                    ));
+                }
                 id
             }
             crate::Expression::Math {
@@ -1736,7 +1912,20 @@ impl BlockContext<'_> {
             }
             crate::Expression::ArrayLength(expr) => self.write_runtime_array_length(expr, block)?,
             crate::Expression::RayQueryGetIntersection { query, committed } => {
-                self.write_ray_query_get_intersection(query, block, committed)
+                let query_id = self.cached[query];
+                let func_id = self
+                    .writer
+                    .write_ray_query_get_intersection_function(committed, self.ir_module);
+                let ray_intersection = self.ir_module.special_types.ray_intersection.unwrap();
+                let intersection_type_id = self.get_type_id(LookupType::Handle(ray_intersection));
+                let id = self.gen_id();
+                block.body.push(Instruction::function_call(
+                    intersection_type_id,
+                    id,
+                    func_id,
+                    &[query_id],
+                ));
+                id
             }
         };
 
@@ -2518,6 +2707,10 @@ impl BlockContext<'_> {
                         continuing_id,
                         spirv::SelectionControl::NONE,
                     ));
+
+                    if self.force_loop_bounding {
+                        block = self.write_force_bounded_loop_instructions(block, merge_id);
+                    }
                     self.function.consume(block, Instruction::branch(body_id));
 
                     // We can ignore the `BlockExitDisposition` returned here because,

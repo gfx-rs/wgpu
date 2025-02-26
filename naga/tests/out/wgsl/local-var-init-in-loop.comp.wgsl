@@ -4,19 +4,19 @@ fn main_1() {
     var a: vec4<f32>;
 
     loop {
-        let _e6 = i;
-        if !((_e6 < 4i)) {
+        let _e5 = i;
+        if !((_e5 < 4i)) {
             break;
         }
         {
             a = vec4(1f);
-            let _e17 = sum;
-            let _e18 = a;
-            sum = (_e17 + _e18);
+            let _e15 = sum;
+            let _e16 = a;
+            sum = (_e15 + _e16);
         }
         continuing {
-            let _e10 = i;
-            i = (_e10 + 1i);
+            let _e9 = i;
+            i = (_e9 + 1i);
         }
     }
     return;

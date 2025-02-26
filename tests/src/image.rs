@@ -151,7 +151,7 @@ impl ComparisonType {
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn compare_image_output(
     path: impl AsRef<Path> + AsRef<OsStr>,
-    adapter_info: &wgt::AdapterInfo,
+    adapter_info: &wgpu::AdapterInfo,
     width: u32,
     height: u32,
     test_with_alpha: &[u8],
@@ -253,7 +253,7 @@ pub async fn compare_image_output(
 #[cfg(target_arch = "wasm32")]
 pub async fn compare_image_output(
     path: impl AsRef<Path> + AsRef<OsStr>,
-    adapter_info: &wgt::AdapterInfo,
+    adapter_info: &wgpu::AdapterInfo,
     width: u32,
     height: u32,
     test_with_alpha: &[u8],
@@ -574,7 +574,7 @@ impl ReadbackBuffers {
     ) -> Vec<u8> {
         let buffer_slice = buffer.slice(..);
         buffer_slice.map_async(MapMode::Read, |_| ());
-        ctx.async_poll(Maintain::wait()).await.panic_on_timeout();
+        ctx.async_poll(PollType::wait()).await.unwrap();
         let (block_width, block_height) = self.texture_format.block_dimensions();
         let expected_bytes_per_row = (self.texture_width / block_width)
             * self.texture_format.block_copy_size(aspect).unwrap_or(4);

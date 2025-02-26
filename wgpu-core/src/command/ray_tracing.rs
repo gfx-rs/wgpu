@@ -1,4 +1,15 @@
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::{
+    cmp::max,
+    num::NonZeroU64,
+    ops::{Deref, Range},
+    sync::atomic::Ordering,
+};
+
+use wgt::{math::align_to, BufferUsages, BufferUses, Features};
+
 use crate::{
+    command::CommandBufferMutable,
     device::queue::TempResource,
     global::Global,
     hub::Hub,
@@ -15,17 +26,6 @@ use crate::{
     snatch::SnatchGuard,
     track::PendingTransition,
     FastHashSet,
-};
-
-use wgt::{math::align_to, BufferUsages, Features};
-
-use super::CommandBufferMutable;
-use hal::BufferUses;
-use std::{
-    cmp::max,
-    num::NonZeroU64,
-    ops::{Deref, Range},
-    sync::{atomic::Ordering, Arc},
 };
 
 struct TriangleBufferStore<'a> {
@@ -261,8 +261,7 @@ impl Global {
                 Some(size) => size,
             };
 
-        let scratch_buffer =
-            ScratchBuffer::new(device, scratch_size).map_err(crate::device::DeviceError::from)?;
+        let scratch_buffer = ScratchBuffer::new(device, scratch_size)?;
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
@@ -397,7 +396,7 @@ impl Global {
                         instance.map(|instance| TraceTlasInstance {
                             blas_id: instance.blas_id,
                             transform: *instance.transform,
-                            custom_index: instance.custom_index,
+                            custom_data: instance.custom_data,
                             mask: instance.mask,
                         })
                     })
@@ -445,7 +444,7 @@ impl Global {
                 instance.as_ref().map(|instance| TlasInstance {
                     blas_id: instance.blas_id,
                     transform: &instance.transform,
-                    custom_index: instance.custom_index,
+                    custom_data: instance.custom_data,
                     mask: instance.mask,
                 })
             });
@@ -513,7 +512,7 @@ impl Global {
 
             let mut instance_count = 0;
             for instance in package.instances.flatten() {
-                if instance.custom_index >= (1u32 << 24u32) {
+                if instance.custom_data >= (1u32 << 24u32) {
                     return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
                         tlas.error_ident(),
                     ));
@@ -525,7 +524,7 @@ impl Global {
                 instance_buffer_staging_source.extend(device.raw().tlas_instance_to_bytes(
                     hal::TlasInstance {
                         transform: *instance.transform,
-                        custom_index: instance.custom_index,
+                        custom_data: instance.custom_data,
                         mask: instance.mask,
                         blas_address: blas.handle,
                     },
@@ -583,8 +582,7 @@ impl Global {
                 Some(size) => size,
             };
 
-        let scratch_buffer =
-            ScratchBuffer::new(device, scratch_size).map_err(crate::device::DeviceError::from)?;
+        let scratch_buffer = ScratchBuffer::new(device, scratch_size)?;
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
@@ -645,8 +643,7 @@ impl Global {
                 let mut staging_buffer = StagingBuffer::new(
                     device,
                     wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap(),
-                )
-                .map_err(crate::device::DeviceError::from)?;
+                )?;
                 staging_buffer.write(&instance_buffer_staging_source);
                 let flushed = staging_buffer.flush();
                 Some(flushed)
@@ -923,6 +920,14 @@ fn iter_blas<'a>(
                         None
                     };
                     let transform_data = if let Some(transform_id) = mesh.transform_buffer {
+                        if !blas
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            return Err(BuildAccelerationStructureError::UseTransformMissing(
+                                blas.error_ident(),
+                            ));
+                        }
                         let transform_buffer = hub.buffers.get(transform_id).get()?;
                         if mesh.transform_buffer_offset.is_none() {
                             return Err(BuildAccelerationStructureError::MissingAssociatedData(
@@ -935,6 +940,14 @@ fn iter_blas<'a>(
                         );
                         Some((transform_buffer, data))
                     } else {
+                        if blas
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            return Err(BuildAccelerationStructureError::TransformMissing(
+                                blas.error_ident(),
+                            ));
+                        }
                         None
                     };
                     temp_buffer.push(TriangleBufferStore {

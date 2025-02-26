@@ -1,59 +1,76 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 34
+; Bound: 35
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Fragment %28 "main" %26
-OpExecutionMode %28 OriginUpperLeft
-OpName %8 "Texture"
-OpName %10 "Sampler"
-OpName %13 "Passed_Texture"
-OpName %15 "Passed_Sampler"
-OpName %17 "test"
-OpName %28 "main"
-OpDecorate %8 DescriptorSet 0
-OpDecorate %8 Binding 0
-OpDecorate %10 DescriptorSet 0
-OpDecorate %10 Binding 1
-OpDecorate %26 Location 0
+OpEntryPoint Fragment %29 "main" %27
+OpExecutionMode %29 OriginUpperLeft
+%3 = OpString "texture-arg.wgsl"
+OpSource Unknown 0 %3 "@group(0) @binding(0)
+var Texture: texture_2d<f32>;
+@group(0) @binding(1)
+var Sampler: sampler;
+
+fn test(Passed_Texture: texture_2d<f32>, Passed_Sampler: sampler) -> vec4<f32> {
+    return textureSample(Passed_Texture, Passed_Sampler, vec2<f32>(0.0, 0.0));
+}
+
+@fragment
+fn main() -> @location(0) vec4<f32> {
+    return test(Texture, Sampler);
+}
+"
+OpName %9 "Texture"
+OpName %11 "Sampler"
+OpName %14 "Passed_Texture"
+OpName %16 "Passed_Sampler"
+OpName %18 "test"
+OpName %29 "main"
+OpDecorate %9 DescriptorSet 0
+OpDecorate %9 Binding 0
+OpDecorate %11 DescriptorSet 0
+OpDecorate %11 Binding 1
+OpDecorate %27 Location 0
 %2 = OpTypeVoid
-%4 = OpTypeFloat 32
-%3 = OpTypeImage %4 2D 0 0 0 1 Unknown
-%5 = OpTypeSampler
-%6 = OpTypeVector %4 4
-%7 = OpTypeVector %4 2
-%9 = OpTypePointer UniformConstant %3
-%8 = OpVariable  %9  UniformConstant
-%11 = OpTypePointer UniformConstant %5
-%10 = OpVariable  %11  UniformConstant
-%18 = OpTypeFunction %6 %9 %11
-%19 = OpConstant  %4  0.0
-%20 = OpConstantComposite  %7  %19 %19
-%22 = OpTypeSampledImage %3
-%27 = OpTypePointer Output %6
-%26 = OpVariable  %27  Output
-%29 = OpTypeFunction %2
-%17 = OpFunction  %6  None %18
-%13 = OpFunctionParameter  %9
-%15 = OpFunctionParameter  %11
-%12 = OpLabel
-%14 = OpLoad  %3  %13
-%16 = OpLoad  %5  %15
-OpBranch %21
-%21 = OpLabel
-%23 = OpSampledImage  %22  %14 %16
-%24 = OpImageSampleImplicitLod  %6  %23 %20
-OpReturnValue %24
+%5 = OpTypeFloat 32
+%4 = OpTypeImage %5 2D 0 0 0 1 Unknown
+%6 = OpTypeSampler
+%7 = OpTypeVector %5 4
+%8 = OpTypeVector %5 2
+%10 = OpTypePointer UniformConstant %4
+%9 = OpVariable  %10  UniformConstant
+%12 = OpTypePointer UniformConstant %6
+%11 = OpVariable  %12  UniformConstant
+%19 = OpTypeFunction %7 %10 %12
+%20 = OpConstant  %5  0.0
+%21 = OpConstantComposite  %8  %20 %20
+%23 = OpTypeSampledImage %4
+%28 = OpTypePointer Output %7
+%27 = OpVariable  %28  Output
+%30 = OpTypeFunction %2
+%18 = OpFunction  %7  None %19
+%14 = OpFunctionParameter  %10
+%16 = OpFunctionParameter  %12
+%13 = OpLabel
+%15 = OpLoad  %4  %14
+%17 = OpLoad  %6  %16
+OpBranch %22
+%22 = OpLabel
+OpLine %3 7 12
+%24 = OpSampledImage  %23  %15 %17
+%25 = OpImageSampleImplicitLod  %7  %24 %21
+OpReturnValue %25
 OpFunctionEnd
-%28 = OpFunction  %2  None %29
-%25 = OpLabel
-%30 = OpLoad  %3  %8
-%31 = OpLoad  %5  %10
-OpBranch %32
-%32 = OpLabel
-%33 = OpFunctionCall  %6  %17 %8 %10
-OpStore %26 %33
+%29 = OpFunction  %2  None %30
+%26 = OpLabel
+%31 = OpLoad  %4  %9
+%32 = OpLoad  %6  %11
+OpBranch %33
+%33 = OpLabel
+OpLine %3 12 12
+%34 = OpFunctionCall  %7  %18 %9 %11
+OpStore %27 %34
 OpReturn
 OpFunctionEnd

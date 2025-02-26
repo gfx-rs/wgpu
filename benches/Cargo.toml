@@ -8,11 +8,12 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+rust-version.workspace = true
 autobenches = false
 publish = false
 
 [[bench]]
-name = "root"
+name = "wgpu-benchmark"
 harness = false
 path = "benches/root.rs"
 

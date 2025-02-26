@@ -1,0 +1,6 @@
+targets = "GLSL"
+
+[glsl]
+version.Embedded = { is_webgl = false, version = 320 }
+writer_flags = "TEXTURE_SHADOW_LOD"
+zero_initialize_workgroup_memory = true

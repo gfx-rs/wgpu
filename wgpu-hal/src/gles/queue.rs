@@ -1,16 +1,13 @@
 use super::{conv::is_layered_target, Command as C, PrivateCapabilities};
+use alloc::sync::Arc;
 use arrayvec::ArrayVec;
+use core::{mem::size_of, slice, sync::atomic::Ordering};
 use glow::HasContext;
-use std::{
-    mem::size_of,
-    slice,
-    sync::{atomic::Ordering, Arc},
-};
 
 const DEBUG_ID: u32 = 0;
 
-fn extract_marker<'a>(data: &'a [u8], range: &std::ops::Range<u32>) -> &'a str {
-    std::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
+fn extract_marker<'a>(data: &'a [u8], range: &core::ops::Range<u32>) -> &'a str {
+    core::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
 
 fn get_2d_target(target: u32, array_layer: u32) -> u32 {
@@ -1078,8 +1075,8 @@ impl super::Queue {
                             0,
                         )
                     };
-                    for i in 0..crate::MAX_COLOR_ATTACHMENTS {
-                        let target = glow::COLOR_ATTACHMENT0 + i as u32;
+                    for i in 0..self.shared.limits.max_color_attachments {
+                        let target = glow::COLOR_ATTACHMENT0 + i;
                         unsafe {
                             gl.framebuffer_texture_2d(
                                 glow::DRAW_FRAMEBUFFER,
@@ -1197,35 +1194,35 @@ impl super::Queue {
             }
             C::BufferBarrier(raw, usage) => {
                 let mut flags = 0;
-                if usage.contains(crate::BufferUses::VERTEX) {
+                if usage.contains(wgt::BufferUses::VERTEX) {
                     flags |= glow::VERTEX_ATTRIB_ARRAY_BARRIER_BIT;
                     unsafe { gl.bind_buffer(glow::ARRAY_BUFFER, Some(raw)) };
                     unsafe { gl.vertex_attrib_pointer_f32(0, 1, glow::BYTE, true, 0, 0) };
                 }
-                if usage.contains(crate::BufferUses::INDEX) {
+                if usage.contains(wgt::BufferUses::INDEX) {
                     flags |= glow::ELEMENT_ARRAY_BARRIER_BIT;
                     unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(raw)) };
                 }
-                if usage.contains(crate::BufferUses::UNIFORM) {
+                if usage.contains(wgt::BufferUses::UNIFORM) {
                     flags |= glow::UNIFORM_BARRIER_BIT;
                 }
-                if usage.contains(crate::BufferUses::INDIRECT) {
+                if usage.contains(wgt::BufferUses::INDIRECT) {
                     flags |= glow::COMMAND_BARRIER_BIT;
                     unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(raw)) };
                 }
-                if usage.contains(crate::BufferUses::COPY_SRC) {
+                if usage.contains(wgt::BufferUses::COPY_SRC) {
                     flags |= glow::PIXEL_BUFFER_BARRIER_BIT;
                     unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(raw)) };
                 }
-                if usage.contains(crate::BufferUses::COPY_DST) {
+                if usage.contains(wgt::BufferUses::COPY_DST) {
                     flags |= glow::PIXEL_BUFFER_BARRIER_BIT;
                     unsafe { gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(raw)) };
                 }
-                if usage.intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE) {
+                if usage.intersects(wgt::BufferUses::MAP_READ | wgt::BufferUses::MAP_WRITE) {
                     flags |= glow::BUFFER_UPDATE_BARRIER_BIT;
                 }
                 if usage.intersects(
-                    crate::BufferUses::STORAGE_READ_ONLY | crate::BufferUses::STORAGE_READ_WRITE,
+                    wgt::BufferUses::STORAGE_READ_ONLY | wgt::BufferUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_STORAGE_BARRIER_BIT;
                 }
@@ -1233,23 +1230,23 @@ impl super::Queue {
             }
             C::TextureBarrier(usage) => {
                 let mut flags = 0;
-                if usage.contains(crate::TextureUses::RESOURCE) {
+                if usage.contains(wgt::TextureUses::RESOURCE) {
                     flags |= glow::TEXTURE_FETCH_BARRIER_BIT;
                 }
                 if usage.intersects(
-                    crate::TextureUses::STORAGE_READ_ONLY
-                        | crate::TextureUses::STORAGE_WRITE_ONLY
-                        | crate::TextureUses::STORAGE_READ_WRITE,
+                    wgt::TextureUses::STORAGE_READ_ONLY
+                        | wgt::TextureUses::STORAGE_WRITE_ONLY
+                        | wgt::TextureUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_IMAGE_ACCESS_BARRIER_BIT;
                 }
-                if usage.contains(crate::TextureUses::COPY_DST) {
+                if usage.contains(wgt::TextureUses::COPY_DST) {
                     flags |= glow::TEXTURE_UPDATE_BARRIER_BIT;
                 }
                 if usage.intersects(
-                    crate::TextureUses::COLOR_TARGET
-                        | crate::TextureUses::DEPTH_STENCIL_READ
-                        | crate::TextureUses::DEPTH_STENCIL_WRITE,
+                    wgt::TextureUses::COLOR_TARGET
+                        | wgt::TextureUses::DEPTH_STENCIL_READ
+                        | wgt::TextureUses::DEPTH_STENCIL_WRITE,
                 ) {
                     flags |= glow::FRAMEBUFFER_BARRIER_BIT;
                 }
@@ -1856,9 +1853,12 @@ impl crate::Queue for super::Queue {
         }
 
         signal_fence.maintain(gl);
-        let sync = unsafe { gl.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0) }
-            .map_err(|_| crate::DeviceError::OutOfMemory)?;
-        signal_fence.pending.push((signal_value, sync));
+        signal_fence.signal(gl, signal_value)?;
+
+        // This is extremely important. If we don't flush, the above fences may never
+        // be signaled, particularly in headless contexts. Headed contexts will
+        // often flush every so often, but headless contexts may not.
+        unsafe { gl.flush() };
 
         Ok(())
     }

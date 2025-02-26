@@ -7,6 +7,8 @@ layout(local_size_x = 2, local_size_y = 3, local_size_z = 1) in;
 
 const uint TWO = 2u;
 const int THREE = 3;
+const bool TRUE = true;
+const bool FALSE = false;
 const int FOUR = 4;
 const int FOUR_ALIAS = 4;
 const int TEST_CONSTANT_ADDITION = 8;
@@ -23,14 +25,17 @@ const bvec2 compare_vec = bvec2(true, false);
 
 void swizzle_of_compose() {
     ivec4 out_ = ivec4(4, 3, 2, 1);
+    return;
 }
 
 void index_of_compose() {
     int out_1 = 2;
+    return;
 }
 
 void compose_three_deep() {
     int out_2 = 6;
+    return;
 }
 
 void non_constant_initializers() {
@@ -53,14 +58,22 @@ void non_constant_initializers() {
 
 void splat_of_constant() {
     ivec4 out_4 = ivec4(-4, -4, -4, -4);
+    return;
 }
 
 void compose_of_constant() {
     ivec4 out_5 = ivec4(-4, -4, -4, -4);
+    return;
 }
 
 void compose_of_splat() {
     vec4 x_1 = vec4(2.0, 1.0, 1.0, 1.0);
+    return;
+}
+
+void test_local_const() {
+    float arr[2] = float[2](0.0, 0.0);
+    return;
 }
 
 uint map_texture_kind(int texture_kind) {
@@ -80,6 +93,25 @@ uint map_texture_kind(int texture_kind) {
     }
 }
 
+void compose_vector_zero_val_binop() {
+    ivec3 a = ivec3(1, 1, 1);
+    ivec3 b = ivec3(0, 1, 2);
+    ivec3 c = ivec3(1, 0, 2);
+    return;
+}
+
+void relational() {
+    bool scalar_any_false = false;
+    bool scalar_any_true = true;
+    bool scalar_all_false = false;
+    bool scalar_all_true = true;
+    bool vec_any_false = false;
+    bool vec_any_true = true;
+    bool vec_all_false = false;
+    bool vec_all_true = true;
+    return;
+}
+
 void main() {
     swizzle_of_compose();
     index_of_compose();
@@ -88,6 +120,7 @@ void main() {
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
+    test_local_const();
     return;
 }
 

@@ -55,7 +55,7 @@ impl std::fmt::Display for Baked {
 /// the key must be the constant's identifier name.
 ///
 /// The value may represent any of WGSL's concrete scalar types.
-pub type PipelineConstants = std::collections::HashMap<String, f64>;
+pub type PipelineConstants = hashbrown::HashMap<String, f64>;
 
 /// Indentation level.
 #[derive(Clone, Copy)]
@@ -263,7 +263,7 @@ impl crate::TypeInner {
         match *self {
             crate::TypeInner::Image { .. }
             | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure { .. } => true,
+            | crate::TypeInner::AccelerationStructure => true,
             _ => false,
         }
     }

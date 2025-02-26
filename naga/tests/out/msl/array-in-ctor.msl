@@ -15,4 +15,5 @@ kernel void cs_main(
   device Ah const& ah [[user(fake0)]]
 ) {
     Ah ah_1 = ah;
+    return;
 }

@@ -1,0 +1,7 @@
+bounds_check_policies = []
+targets = "SPIRV | WGSL"
+
+[spv]
+adjust_coordinate_space = false
+debug = true
+version = [1, 2]

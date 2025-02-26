@@ -7,18 +7,21 @@
 // - partial instance buffer uploads (api surface already designed with this in mind)
 // - ([non performance] extract function in build (rust function extraction with guards is a pain))
 
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::num::NonZeroU64;
+
+use thiserror::Error;
+use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
+
 use crate::{
     command::CommandEncoderError,
     device::{DeviceError, MissingFeatures},
     id::{BlasId, BufferId, TlasId},
-    resource::{DestroyedResourceError, InvalidResourceError, MissingBufferUsageError},
+    resource::{
+        Blas, DestroyedResourceError, InvalidResourceError, MissingBufferUsageError,
+        ResourceErrorIdent, Tlas,
+    },
 };
-use std::num::NonZeroU64;
-use std::sync::Arc;
-
-use crate::resource::{Blas, ResourceErrorIdent, Tlas};
-use thiserror::Error;
-use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBlasError {
@@ -40,6 +43,8 @@ pub enum CreateTlasError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+    #[error("Flag {0:?} is not allowed on a TLAS")]
+    DisallowedFlag(wgt::AccelerationStructureFlags),
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.
@@ -119,6 +124,12 @@ pub enum BuildAccelerationStructureError {
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
     )]
     TlasInstanceCountExceeded(ResourceErrorIdent, u32, u32),
+
+    #[error("Blas {0:?} has flag USE_TRANSFORM but the transform buffer is missing")]
+    TransformMissing(ResourceErrorIdent),
+
+    #[error("Blas {0:?} is missing the flag USE_TRANSFORM but the transform buffer is set")]
+    UseTransformMissing(ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -175,7 +186,7 @@ pub struct TlasBuildEntry {
 pub struct TlasInstance<'a> {
     pub blas_id: BlasId,
     pub transform: &'a [f32; 12],
-    pub custom_index: u32,
+    pub custom_data: u32,
     pub mask: u8,
 }
 
@@ -243,7 +254,7 @@ pub struct TraceBlasBuildEntry {
 pub struct TraceTlasInstance {
     pub blas_id: BlasId,
     pub transform: [f32; 12],
-    pub custom_index: u32,
+    pub custom_data: u32,
     pub mask: u8,
 }
 

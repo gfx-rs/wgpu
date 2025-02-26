@@ -1,6 +1,8 @@
 //! RenderDoc integration - <https://renderdoc.org/>
+#![cfg_attr(not(any(feature = "gles", feature = "vulkan")), allow(dead_code))]
 
-use std::{ffi, os, ptr};
+use alloc::string::String;
+use core::{ffi, ptr};
 
 /// The dynamically loaded RenderDoc API function table
 #[repr(C)]
@@ -109,7 +111,7 @@ impl Default for RenderDoc {
     }
 }
 /// An implementation specific handle
-pub type Handle = *mut os::raw::c_void;
+pub type Handle = *mut ffi::c_void;
 
 impl RenderDoc {
     /// Start a RenderDoc frame capture

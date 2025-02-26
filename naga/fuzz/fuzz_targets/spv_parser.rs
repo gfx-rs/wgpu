@@ -1,6 +1,6 @@
-#![cfg_attr(enable_fuzzing, no_main)]
+#![cfg_attr(all(fuzzable_platform, fuzzing), no_main)]
 
-#[cfg(enable_fuzzing)]
+#[cfg(all(fuzzable_platform, fuzzing))]
 mod fuzz {
     use libfuzzer_sys::fuzz_target;
     use naga::front::spv::{Frontend, Options};
@@ -12,5 +12,5 @@ mod fuzz {
     });
 }
 
-#[cfg(not(enable_fuzzing))]
+#[cfg(not(all(fuzzable_platform, fuzzing)))]
 fn main() {}

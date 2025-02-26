@@ -51,6 +51,7 @@ use crate::{
     valid, Handle, ShaderStage, TypeInner,
 };
 use features::FeaturesManager;
+use hashbrown::hash_map;
 use std::{
     cmp::Ordering,
     fmt::{self, Error as FmtError, Write},
@@ -77,6 +78,28 @@ pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
 // Must match code in glsl_built_in
 pub const FIRST_INSTANCE_BINDING: &str = "naga_vs_first_instance";
+
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct BindingMapSerialization {
+    resource_binding: crate::ResourceBinding,
+    bind_target: u8,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_binding_map<'de, D>(deserializer: D) -> Result<BindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<BindingMapSerialization>::deserialize(deserializer)?;
+    let mut map = BindingMap::default();
+    for item in vec {
+        map.insert(item.resource_binding, item.bind_target);
+    }
+    Ok(map)
+}
 
 /// Mapping between resources and bindings.
 pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
@@ -265,6 +288,10 @@ pub struct Options {
     /// Configuration flags for the [`Writer`].
     pub writer_flags: WriterFlags,
     /// Map of resources association to binding locations.
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_binding_map")
+    )]
     pub binding_map: BindingMap,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: bool,
@@ -4422,10 +4449,28 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ") - 1)")?;
             }
         } else if let Some(sample_or_level) = sample.or(level) {
+            // GLSL only support SInt on this field while WGSL support also UInt
+            let cast_to_int = matches!(
+                *ctx.resolve_type(sample_or_level, &self.module.types),
+                TypeInner::Scalar(crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..
+                })
+            );
+
             // If no bounds checking is need just add the sample or level argument
             // after the coordinates
             write!(self.out, ", ")?;
+
+            if cast_to_int {
+                write!(self.out, "int(")?;
+            }
+
             self.write_expr(sample_or_level, ctx)?;
+
+            if cast_to_int {
+                write!(self.out, ")")?;
+            }
         }
 
         // Close the image load function.
@@ -4608,7 +4653,6 @@ impl<'a, W: Write> Writer<'a, W> {
 
     /// Helper method used to produce the reflection info that's returned to the user
     fn collect_reflection_info(&mut self) -> Result<ReflectionInfo, Error> {
-        use std::collections::hash_map::Entry;
         let info = self.info.get_entry_point(self.entry_point_idx as usize);
         let mut texture_mapping = crate::FastHashMap::default();
         let mut uniforms = crate::FastHashMap::default();
@@ -4617,13 +4661,13 @@ impl<'a, W: Write> Writer<'a, W> {
             let tex_name = self.reflection_names_globals[&sampling.image].clone();
 
             match texture_mapping.entry(tex_name) {
-                Entry::Vacant(v) => {
+                hash_map::Entry::Vacant(v) => {
                     v.insert(TextureMapping {
                         texture: sampling.image,
                         sampler: Some(sampling.sampler),
                     });
                 }
-                Entry::Occupied(e) => {
+                hash_map::Entry::Occupied(e) => {
                     if e.get().sampler != Some(sampling.sampler) {
                         log::error!("Conflicting samplers for {}", e.key());
                         return Err(Error::ImageMultipleSamplers);
@@ -4641,13 +4685,13 @@ impl<'a, W: Write> Writer<'a, W> {
                 TypeInner::Image { .. } => {
                     let tex_name = self.reflection_names_globals[&handle].clone();
                     match texture_mapping.entry(tex_name) {
-                        Entry::Vacant(v) => {
+                        hash_map::Entry::Vacant(v) => {
                             v.insert(TextureMapping {
                                 texture: handle,
                                 sampler: None,
                             });
                         }
-                        Entry::Occupied(_) => {
+                        hash_map::Entry::Occupied(_) => {
                             // already used with a sampler, do nothing
                         }
                     }

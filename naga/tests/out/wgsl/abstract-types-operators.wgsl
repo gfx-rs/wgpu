@@ -28,7 +28,6 @@ const shr_iai_u: i32 = 0i;
 const shr_uaiai: u32 = 0u;
 const shr_uai_u: u32 = 0u;
 const wgpu_4492_: i32 = i32(-2147483648);
-const wgpu_4492_2_: i32 = i32(-2147483648);
 
 var<workgroup> a: array<u32, 64>;
 
@@ -88,5 +87,6 @@ fn wgpu_4445_() {
 
 fn wgpu_4435_() {
     let y = a[(1i - 1i)];
+    return;
 }
 

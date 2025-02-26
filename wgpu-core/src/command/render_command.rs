@@ -1,14 +1,14 @@
+use alloc::sync::Arc;
+
+use wgt::{BufferAddress, BufferSize, Color};
+
+use super::{Rect, RenderBundle};
 use crate::{
     binding_model::BindGroup,
     id,
     pipeline::RenderPipeline,
     resource::{Buffer, QuerySet},
 };
-use wgt::{BufferAddress, BufferSize, Color};
-
-use std::sync::Arc;
-
-use super::{Rect, RenderBundle};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
@@ -127,8 +127,9 @@ impl RenderCommand {
     pub fn resolve_render_command_ids(
         hub: &crate::hub::Hub,
         commands: &[RenderCommand],
-    ) -> Result<Vec<ArcRenderCommand>, super::RenderPassError> {
+    ) -> Result<alloc::vec::Vec<ArcRenderCommand>, super::RenderPassError> {
         use super::{DrawKind, PassErrorScope, RenderPassError};
+        use alloc::vec::Vec;
 
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
@@ -473,13 +474,13 @@ pub enum ArcRenderCommand {
         indexed: bool,
     },
     PushDebugGroup {
-        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+        #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },
     PopDebugGroup,
     InsertDebugMarker {
-        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+        #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },

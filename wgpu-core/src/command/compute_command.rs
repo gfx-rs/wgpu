@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 use crate::{
     binding_model::BindGroup,
@@ -73,8 +73,9 @@ impl ComputeCommand {
     pub fn resolve_compute_command_ids(
         hub: &crate::hub::Hub,
         commands: &[ComputeCommand],
-    ) -> Result<Vec<ArcComputeCommand>, super::ComputePassError> {
+    ) -> Result<alloc::vec::Vec<ArcComputeCommand>, super::ComputePassError> {
         use super::{ComputePassError, PassErrorScope};
+        use alloc::vec::Vec;
 
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
@@ -228,7 +229,7 @@ pub enum ArcComputeCommand {
     },
 
     PushDebugGroup {
-        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+        #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },
@@ -236,7 +237,7 @@ pub enum ArcComputeCommand {
     PopDebugGroup,
 
     InsertDebugMarker {
-        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+        #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },

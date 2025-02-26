@@ -8,8 +8,8 @@ fn CalcShadowPCF1_(T_P_t_TextureDepth: texture_depth_2d, S_P_t_TextureDepth: sam
     let _e8 = _e7.xyz;
     let _e11 = textureSampleCompare(T_P_t_TextureDepth, S_P_t_TextureDepth, _e8.xy, _e8.z);
     t_Res = (_e6 + (_e11 * 0.2f));
-    let _e17 = t_Res;
-    return _e17;
+    let _e15 = t_Res;
+    return _e15;
 }
 
 fn CalcShadowPCF(T_P_t_TextureDepth_1: texture_depth_2d, S_P_t_TextureDepth_1: sampler_comparison, t_ProjCoord_2: vec3<f32>, t_Bias: f32) -> f32 {

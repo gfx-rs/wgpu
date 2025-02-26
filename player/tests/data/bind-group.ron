@@ -27,7 +27,7 @@
                 (
                     binding: 0,
                     resource: Buffer((
-                        buffer_id: Id(0, 1),
+                        buffer: Id(0, 1),
                         offset: 0,
                         size: None,
                     )),

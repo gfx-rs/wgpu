@@ -1,10 +1,14 @@
-use glow::HasContext;
-use once_cell::sync::Lazy;
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
+#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
 
 use std::{
-    collections::HashMap, ffi, mem::ManuallyDrop, os::raw, ptr, rc::Rc, sync::Arc, time::Duration,
+    ffi, mem::ManuallyDrop, os::raw, ptr, rc::Rc, string::String, sync::Arc, time::Duration,
+    vec::Vec,
 };
+
+use glow::HasContext;
+use hashbrown::HashMap;
+use once_cell::sync::Lazy;
+use parking_lot::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
 
 /// The amount of time to wait while trying to obtain a lock to the adapter context
 const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 1;
@@ -260,11 +264,12 @@ fn choose_config(
                     log::warn!("EGL says it can present to the window but not natively",);
                 }
                 // Android emulator can't natively present either.
-                let tier_threshold = if cfg!(target_os = "android") || cfg!(windows) {
-                    1
-                } else {
-                    2
-                };
+                let tier_threshold =
+                    if cfg!(target_os = "android") || cfg!(windows) || cfg!(target_env = "ohos") {
+                        1
+                    } else {
+                        2
+                    };
                 return Ok((config, tier_max >= tier_threshold));
             }
             Ok(None) => {
@@ -738,6 +743,7 @@ struct WindowSystemInterface {
 pub struct Instance {
     wsi: WindowSystemInterface,
     flags: wgt::InstanceFlags,
+    options: wgt::GlBackendOptions,
     inner: Mutex<Inner>,
 }
 
@@ -922,7 +928,12 @@ impl crate::Instance for Instance {
             unsafe { (function)(Some(egl_debug_proc), attributes.as_ptr()) };
         }
 
-        let inner = Inner::create(desc.flags, egl, display, desc.gles_minor_version)?;
+        let inner = Inner::create(
+            desc.flags,
+            egl,
+            display,
+            desc.backend_options.gl.gles_minor_version,
+        )?;
 
         Ok(Instance {
             wsi: WindowSystemInterface {
@@ -930,6 +941,7 @@ impl crate::Instance for Instance {
                 kind: wsi_kind,
             },
             flags: desc.flags,
+            options: desc.backend_options.gl.clone(),
             inner: Mutex::new(inner),
         })
     }
@@ -950,6 +962,7 @@ impl crate::Instance for Instance {
             (Rwh::Xcb(_), _) => {}
             (Rwh::Win32(_), _) => {}
             (Rwh::AppKit(_), _) => {}
+            (Rwh::OhosNdk(_), _) => {}
             #[cfg(target_os = "android")]
             (Rwh::AndroidNdk(handle), _) => {
                 let format = inner
@@ -1089,10 +1102,13 @@ impl crate::Instance for Instance {
         inner.egl.unmake_current();
 
         unsafe {
-            super::Adapter::expose(AdapterContext {
-                glow: Mutex::new(gl),
-                egl: Some(inner.egl.clone()),
-            })
+            super::Adapter::expose(
+                AdapterContext {
+                    glow: Mutex::new(gl),
+                    egl: Some(inner.egl.clone()),
+                },
+                self.options.clone(),
+            )
         }
         .into_iter()
         .collect()
@@ -1111,13 +1127,17 @@ impl super::Adapter {
     ///   dropping any objects returned from this adapter.
     pub unsafe fn new_external(
         fun: impl FnMut(&str) -> *const ffi::c_void,
+        options: wgt::GlBackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         let context = unsafe { glow::Context::from_loader_function(fun) };
         unsafe {
-            Self::expose(AdapterContext {
-                glow: Mutex::new(ManuallyDrop::new(context)),
-                egl: None,
-            })
+            Self::expose(
+                AdapterContext {
+                    glow: Mutex::new(ManuallyDrop::new(context)),
+                    egl: None,
+                },
+                options,
+            )
         }
     }
 
@@ -1293,6 +1313,7 @@ impl crate::Surface for Surface {
                     (WindowKind::Unknown, Rwh::AndroidNdk(handle)) => {
                         handle.a_native_window.as_ptr()
                     }
+                    (WindowKind::Unknown, Rwh::OhosNdk(handle)) => handle.native_window.as_ptr(),
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
                         let library = &self.wsi.display_owner.as_ref().unwrap().library;
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
@@ -1336,8 +1357,11 @@ impl crate::Surface for Surface {
                     // We don't want any of the buffering done by the driver, because we
                     // manage a swapchain on our side.
                     // Some drivers just fail on surface creation seeing `EGL_SINGLE_BUFFER`.
-                    if cfg!(any(target_os = "android", target_os = "macos"))
-                        || cfg!(windows)
+                    if cfg!(any(
+                        target_os = "android",
+                        target_os = "macos",
+                        target_env = "ohos"
+                    )) || cfg!(windows)
                         || self.wsi.kind == WindowKind::AngleX11
                     {
                         khronos_egl::BACK_BUFFER

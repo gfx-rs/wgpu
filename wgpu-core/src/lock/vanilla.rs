@@ -3,6 +3,8 @@
 //! These definitions are used when no particular lock instrumentation
 //! Cargo feature is selected.
 
+use core::{fmt, ops};
+
 /// A plain wrapper around [`parking_lot::Mutex`].
 ///
 /// This is just like [`parking_lot::Mutex`], except that our [`new`]
@@ -30,7 +32,7 @@ impl<T> Mutex<T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for MutexGuard<'a, T> {
+impl<'a, T> ops::Deref for MutexGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -38,14 +40,14 @@ impl<'a, T> std::ops::Deref for MutexGuard<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::DerefMut for MutexGuard<'a, T> {
+impl<'a, T> ops::DerefMut for MutexGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0.deref_mut()
     }
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for Mutex<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: fmt::Debug> fmt::Debug for Mutex<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
@@ -92,13 +94,13 @@ impl<'a, T> RwLockWriteGuard<'a, T> {
     }
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for RwLock<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<T: fmt::Debug> fmt::Debug for RwLock<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
-impl<'a, T> std::ops::Deref for RwLockReadGuard<'a, T> {
+impl<'a, T> ops::Deref for RwLockReadGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -106,7 +108,7 @@ impl<'a, T> std::ops::Deref for RwLockReadGuard<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for RwLockWriteGuard<'a, T> {
+impl<'a, T> ops::Deref for RwLockWriteGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -114,7 +116,7 @@ impl<'a, T> std::ops::Deref for RwLockWriteGuard<'a, T> {
     }
 }
 
-impl<'a, T> std::ops::DerefMut for RwLockWriteGuard<'a, T> {
+impl<'a, T> ops::DerefMut for RwLockWriteGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0.deref_mut()
     }

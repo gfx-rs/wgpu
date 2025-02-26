@@ -92,6 +92,15 @@ float3x2 GetMatmOnBaz(Baz obj) {
 We also emit an analogous `Set` function, as well as functions for
 accessing individual columns by dynamic index.
 
+## Sampler Handling
+
+Due to limitations in how sampler heaps work in D3D12, we need to access samplers
+through a layer of indirection. Instead of directly binding samplers, we bind the entire
+sampler heap as both a standard and a comparison sampler heap. We then use a sampler
+index buffer for each bind group. This buffer is accessed in the shader to get the actual
+sampler index within the heap. See the wgpu_hal dx12 backend documentation for more
+information.
+
 [hlsl]: https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl
 [ilov]: https://gpuweb.github.io/gpuweb/wgsl/#internal-value-layout
 [16bb]: https://github.com/microsoft/DirectXShaderCompiler/wiki/Buffer-Packing#constant-buffer-packing
@@ -110,14 +119,56 @@ use thiserror::Error;
 
 use crate::{back, proc};
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindTarget {
     pub space: u8,
+    /// For regular bindings this is the register number.
+    ///
+    /// For sampler bindings, this is the index to use into the bind group's sampler index buffer.
     pub register: u32,
     /// If the binding is an unsized binding array, this overrides the size.
     pub binding_array_size: Option<u32>,
+    /// This is the index in the buffer at [`Options::dynamic_storage_buffer_offsets_targets`].
+    pub dynamic_storage_buffer_offsets_index: Option<u32>,
+    /// This is a hint that we need to restrict indexing of vectors, matrices and arrays.
+    ///
+    /// If [`Options::restrict_indexing`] is also `true`, we will restrict indexing.
+    #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
+    pub restrict_indexing: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+/// BindTarget for dynamic storage buffer offsets
+pub struct OffsetsBindTarget {
+    pub space: u8,
+    pub register: u32,
+    pub size: u32,
+}
+
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct BindingMapSerialization {
+    resource_binding: crate::ResourceBinding,
+    bind_target: BindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_binding_map<'de, D>(deserializer: D) -> Result<BindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<BindingMapSerialization>::deserialize(deserializer)?;
+    let mut map = BindingMap::default();
+    for item in vec {
+        map.insert(item.resource_binding, item.bind_target);
+    }
+    Ok(map)
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
@@ -179,6 +230,100 @@ impl crate::ImageDimension {
     }
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct SamplerIndexBufferKey {
+    pub group: u32,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
+pub struct SamplerHeapBindTargets {
+    pub standard_samplers: BindTarget,
+    pub comparison_samplers: BindTarget,
+}
+
+impl Default for SamplerHeapBindTargets {
+    fn default() -> Self {
+        Self {
+            standard_samplers: BindTarget {
+                space: 0,
+                register: 0,
+                binding_array_size: None,
+                dynamic_storage_buffer_offsets_index: None,
+                restrict_indexing: false,
+            },
+            comparison_samplers: BindTarget {
+                space: 1,
+                register: 0,
+                binding_array_size: None,
+                dynamic_storage_buffer_offsets_index: None,
+                restrict_indexing: false,
+            },
+        }
+    }
+}
+
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct SamplerIndexBufferBindingSerialization {
+    group: u32,
+    bind_target: BindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_sampler_index_buffer_bindings<'de, D>(
+    deserializer: D,
+) -> Result<SamplerIndexBufferBindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<SamplerIndexBufferBindingSerialization>::deserialize(deserializer)?;
+    let mut map = SamplerIndexBufferBindingMap::default();
+    for item in vec {
+        map.insert(
+            SamplerIndexBufferKey { group: item.group },
+            item.bind_target,
+        );
+    }
+    Ok(map)
+}
+
+// We use a BTreeMap here so that we can hash it.
+pub type SamplerIndexBufferBindingMap =
+    std::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
+
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct DynamicStorageBufferOffsetTargetSerialization {
+    index: u32,
+    bind_target: OffsetsBindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_storage_buffer_offsets<'de, D>(
+    deserializer: D,
+) -> Result<DynamicStorageBufferOffsetsTargets, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<DynamicStorageBufferOffsetTargetSerialization>::deserialize(deserializer)?;
+    let mut map = DynamicStorageBufferOffsetsTargets::default();
+    for item in vec {
+        map.insert(item.index, item.bind_target);
+    }
+    Ok(map)
+}
+
+pub type DynamicStorageBufferOffsetsTargets = std::collections::BTreeMap<u32, OffsetsBindTarget>;
+
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
 
@@ -199,6 +344,10 @@ pub struct Options {
     /// The hlsl shader model to be used
     pub shader_model: ShaderModel,
     /// Map of resources association to binding locations.
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_binding_map")
+    )]
     pub binding_map: BindingMap,
     /// Don't panic on missing bindings, instead generate any HLSL.
     pub fake_missing_bindings: bool,
@@ -207,10 +356,27 @@ pub struct Options {
     pub special_constants_binding: Option<BindTarget>,
     /// Bind target of the push constant buffer
     pub push_constants_target: Option<BindTarget>,
+    /// Bind target of the sampler heap and comparison sampler heap.
+    pub sampler_heap_target: SamplerHeapBindTargets,
+    /// Mapping of each bind group's sampler index buffer to a bind target.
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_sampler_index_buffer_bindings")
+    )]
+    pub sampler_buffer_binding_map: SamplerIndexBufferBindingMap,
+    /// Bind target for dynamic storage buffer offsets
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_storage_buffer_offsets")
+    )]
+    pub dynamic_storage_buffer_offsets_targets: DynamicStorageBufferOffsetsTargets,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: bool,
     /// Should we restrict indexing of vectors, matrices and arrays?
     pub restrict_indexing: bool,
+    /// If set, loops will have code injected into them, forcing the compiler
+    /// to think the number of iterations is bounded.
+    pub force_loop_bounding: bool,
 }
 
 impl Default for Options {
@@ -220,9 +386,13 @@ impl Default for Options {
             binding_map: BindingMap::default(),
             fake_missing_bindings: true,
             special_constants_binding: None,
+            sampler_heap_target: SamplerHeapBindTargets::default(),
+            sampler_buffer_binding_map: std::collections::BTreeMap::default(),
             push_constants_target: None,
+            dynamic_storage_buffer_offsets_targets: std::collections::BTreeMap::new(),
             zero_initialize_workgroup_memory: true,
             restrict_indexing: true,
+            force_loop_bounding: true,
         }
     }
 }
@@ -233,13 +403,15 @@ impl Options {
         res_binding: &crate::ResourceBinding,
     ) -> Result<BindTarget, EntryPointError> {
         match self.binding_map.get(res_binding) {
-            Some(target) => Ok(target.clone()),
+            Some(target) => Ok(*target),
             None if self.fake_missing_bindings => Ok(BindTarget {
                 space: res_binding.group as u8,
                 register: res_binding.binding,
                 binding_array_size: None,
+                dynamic_storage_buffer_offsets_index: None,
+                restrict_indexing: false,
             }),
-            None => Err(EntryPointError::MissingBinding(res_binding.clone())),
+            None => Err(EntryPointError::MissingBinding(*res_binding)),
         }
     }
 }
@@ -275,10 +447,17 @@ struct Wrapped {
     zero_values: crate::FastHashSet<help::WrappedZeroValue>,
     array_lengths: crate::FastHashSet<help::WrappedArrayLength>,
     image_queries: crate::FastHashSet<help::WrappedImageQuery>,
+    image_load_scalars: crate::FastHashSet<crate::Scalar>,
     constructors: crate::FastHashSet<help::WrappedConstructor>,
     struct_matrix_access: crate::FastHashSet<help::WrappedStructMatrixAccess>,
     mat_cx2s: crate::FastHashSet<help::WrappedMatCx2>,
     math: crate::FastHashSet<help::WrappedMath>,
+    unary_op: crate::FastHashSet<help::WrappedUnaryOp>,
+    binary_op: crate::FastHashSet<help::WrappedBinaryOp>,
+    /// If true, the sampler heaps have been written out.
+    sampler_heaps: bool,
+    // Mapping from SamplerIndexBufferKey to the name the namer returned.
+    sampler_index_buffers: crate::FastHashMap<SamplerIndexBufferKey, String>,
 }
 
 impl Wrapped {
@@ -289,6 +468,8 @@ impl Wrapped {
         self.struct_matrix_access.clear();
         self.mat_cx2s.clear();
         self.math.clear();
+        self.unary_op.clear();
+        self.binary_op.clear();
     }
 }
 

@@ -12,30 +12,30 @@ fn collatz_iterations(n: u32) -> u32 {
 
     n_1 = n;
     loop {
-        let _e7 = n_1;
-        if !((_e7 != 1u)) {
+        let _e4 = n_1;
+        if !((_e4 != 1u)) {
             break;
         }
         {
-            let _e12 = n_1;
-            let _e14 = f32(_e12);
-            if ((_e14 - (floor((_e14 / 2f)) * 2f)) == 0f) {
+            let _e8 = n_1;
+            let _e9 = f32(_e8);
+            if ((_e9 - (floor((_e9 / 2f)) * 2f)) == 0f) {
                 {
-                    let _e23 = n_1;
-                    n_1 = (_e23 / 2u);
+                    let _e17 = n_1;
+                    n_1 = (_e17 / 2u);
                 }
             } else {
                 {
-                    let _e28 = n_1;
-                    n_1 = ((3u * _e28) + 1u);
+                    let _e20 = n_1;
+                    n_1 = ((3u * _e20) + 1u);
                 }
             }
-            let _e34 = i;
-            i = (_e34 + 1u);
+            let _e25 = i;
+            i = (_e25 + 1u);
         }
     }
-    let _e37 = i;
-    return _e37;
+    let _e28 = i;
+    return _e28;
 }
 
 fn main_1() {

@@ -1,3 +1,5 @@
+use alloc::{boxed::Box, vec::Vec};
+
 use crate::{
     DeviceError, DynCommandBuffer, DynFence, DynResource, DynSurface, DynSurfaceTexture,
     FenceValue, Queue, SurfaceError,

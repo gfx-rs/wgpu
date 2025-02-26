@@ -85,11 +85,11 @@ pub type Label<'a> = Option<&'a str>;
 /// with the type to be used until the Drop impl is ran. This prevents
 /// lifetimes from being shortened.
 #[derive(Debug)]
-pub(crate) struct PhantomDrop<T>(std::marker::PhantomData<T>);
+pub(crate) struct PhantomDrop<T>(core::marker::PhantomData<T>);
 
 impl<T> Default for PhantomDrop<T> {
     fn default() -> Self {
-        Self(std::marker::PhantomData)
+        Self(core::marker::PhantomData)
     }
 }
 

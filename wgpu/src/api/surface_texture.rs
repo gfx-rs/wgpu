@@ -1,4 +1,6 @@
-use std::{error, fmt, thread};
+use core::fmt;
+use std::error; // TODO(https://github.com/gfx-rs/wgpu/issues/6826): use core::error after MSRV bump
+use std::thread;
 
 use crate::*;
 

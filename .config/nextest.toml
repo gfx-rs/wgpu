@@ -2,6 +2,8 @@
 # terminate them to prevent infinite run-on.
 [profile.default]
 slow-timeout = { period = "45s", terminate-after = 2 }
+fail-fast = false
+retries = 0
 
 # Use two threads for tests with "2 threads" in their name
 [[profile.default.overrides]]
@@ -17,3 +19,13 @@ threads-required = 4
 [[profile.default.overrides]]
 filter = 'test(~8_threads) | test(~8 threads)'
 threads-required = 8
+
+#
+# Workarounds for flaky tests
+#
+
+# https://github.com/gfx-rs/wgpu/issues/7200
+[[profile.default.overrides]]
+filter = 'test(wgpu_gpu_test::image_atomics::image_32_atomics)'
+platform = 'cfg(target_vendor = "apple")'
+retries = 1
