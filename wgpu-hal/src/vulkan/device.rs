@@ -2295,8 +2295,7 @@ impl crate::Device for super::Device {
 
         let raw_pass = self
             .shared
-            .make_render_pass(compatible_rp_key)
-            .map_err(crate::DeviceError::from)?;
+            .make_render_pass(compatible_rp_key)?;
 
         let vk_infos = [{
             vk::GraphicsPipelineCreateInfo::default()
