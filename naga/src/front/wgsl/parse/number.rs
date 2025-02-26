@@ -408,6 +408,10 @@ fn parse_dec_float(input: &str, kind: Option<FloatKind>) -> Result<Number, Numbe
 }
 
 fn parse_int(input: &str, kind: Option<IntKind>, radix: u32) -> Result<Number, NumberError> {
+    // fast path for decimal integer parsing.
+    if radix == 10 {
+        return parse_decimal_integer_fast(input, kind);
+    }
     fn map_err(e: core::num::ParseIntError) -> NumberError {
         match *e.kind() {
             core::num::IntErrorKind::PosOverflow | core::num::IntErrorKind::NegOverflow => {
@@ -434,6 +438,41 @@ fn parse_int(input: &str, kind: Option<IntKind>, radix: u32) -> Result<Number, N
             Err(e) => Err(map_err(e)),
         },
         Some(IntKind::U64) => match u64::from_str_radix(input, radix) {
+            Ok(num) => Ok(Number::U64(num)),
+            Err(e) => Err(map_err(e)),
+        },
+    }
+}
+
+fn parse_decimal_integer_fast(input: &str, kind: Option<IntKind>) -> Result<Number, NumberError> {
+    // As leading signs are handled as unary operators, we only need to parse positive number here.
+    use atoi_simd::{parse_pos, AtoiSimdError};
+    fn map_err(e: AtoiSimdError) -> NumberError {
+        if let AtoiSimdError::Overflow(_) = e {
+            NumberError::NotRepresentable
+        } else {
+            unreachable!()
+        }
+    }
+    let input = input.as_bytes();
+    match kind {
+        None => match parse_pos::<i64>(input) {
+            Ok(num) => Ok(Number::AbstractInt(num)),
+            Err(e) => Err(map_err(e)),
+        },
+        Some(IntKind::I32) => match parse_pos::<i32>(input) {
+            Ok(num) => Ok(Number::I32(num)),
+            Err(e) => Err(map_err(e)),
+        },
+        Some(IntKind::U32) => match parse_pos::<u32>(input) {
+            Ok(num) => Ok(Number::U32(num)),
+            Err(e) => Err(map_err(e)),
+        },
+        Some(IntKind::I64) => match parse_pos::<i64>(input) {
+            Ok(num) => Ok(Number::I64(num)),
+            Err(e) => Err(map_err(e)),
+        },
+        Some(IntKind::U64) => match parse_pos::<u64>(input) {
             Ok(num) => Ok(Number::U64(num)),
             Err(e) => Err(map_err(e)),
         },

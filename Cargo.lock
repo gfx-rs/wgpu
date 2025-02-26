@@ -278,6 +278,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "atoi_simd"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4790f9e8961209112beb783d85449b508673cf4a6a419c8449b210743ac4dbe9"
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2331,6 +2337,7 @@ version = "24.0.0"
 dependencies = [
  "arbitrary",
  "arrayvec",
+ "atoi_simd",
  "bit-set 0.8.0",
  "bitflags 2.8.0",
  "cfg_aliases 0.2.1",

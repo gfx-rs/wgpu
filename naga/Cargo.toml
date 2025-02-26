@@ -52,6 +52,7 @@ arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
 spv-in = ["dep:petgraph", "dep:spirv"]
 spv-out = ["dep:spirv"]
 wgsl-in = [
+    "dep:atoi_simd",
     "dep:hexf-parse",
     "dep:strum",
     "dep:unicode-ident",
@@ -76,6 +77,7 @@ compact = []
 [dependencies]
 arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
+atoi_simd = { version = "0.16", optional = true, default-features = false }
 bitflags.workspace = true
 bit-set.workspace = true
 termcolor = { version = "1.4.1" }
