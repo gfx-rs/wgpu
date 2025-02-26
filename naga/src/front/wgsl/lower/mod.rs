@@ -244,6 +244,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         }
     }
 
+    #[allow(dead_code)]
     fn as_global(&mut self) -> GlobalContext<'a, '_, '_> {
         GlobalContext {
             ast_expressions: self.ast_expressions,
@@ -468,29 +469,28 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             .map_err(|e| Error::ConstantEvaluatorError(e.into(), span))
     }
 
-    fn const_access(&self, handle: Handle<crate::Expression>) -> Option<u32> {
+    fn const_eval_expr_to_u32(
+        &self,
+        handle: Handle<crate::Expression>,
+    ) -> Result<u32, crate::proc::U32EvalError> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => {
                 if !ctx.local_expression_kind_tracker.is_const(handle) {
-                    return None;
+                    return Err(crate::proc::U32EvalError::NonConst);
                 }
 
                 self.module
                     .to_ctx()
                     .eval_expr_to_u32_from(handle, &ctx.function.expressions)
-                    .ok()
             }
             ExpressionContextType::Constant(Some(ref ctx)) => {
                 assert!(ctx.local_expression_kind_tracker.is_const(handle));
                 self.module
                     .to_ctx()
                     .eval_expr_to_u32_from(handle, &ctx.function.expressions)
-                    .ok()
             }
-            ExpressionContextType::Constant(None) => {
-                self.module.to_ctx().eval_expr_to_u32(handle).ok()
-            }
-            ExpressionContextType::Override => None,
+            ExpressionContextType::Constant(None) => self.module.to_ctx().eval_expr_to_u32(handle),
+            ExpressionContextType::Override => Err(crate::proc::U32EvalError::NonConst),
         }
     }
 
@@ -1029,6 +1029,15 @@ impl SubgroupGather {
     }
 }
 
+/// Whether a declaration accepts abstract types, or concretizes.
+enum AbstractRule {
+    /// This declaration concretizes its initialization expression.
+    Concretize,
+
+    /// This declaration can accept initializers with abstract types.
+    Allow,
+}
+
 pub struct Lowerer<'source, 'temp> {
     index: &'temp Index<'source>,
 }
@@ -1040,10 +1049,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
     pub fn lower(
         &mut self,
-        tu: &'temp ast::TranslationUnit<'source>,
+        tu: ast::TranslationUnit<'source>,
     ) -> Result<crate::Module, Error<'source>> {
         let mut module = crate::Module {
-            diagnostic_filters: tu.diagnostic_filters.clone(),
+            diagnostic_filters: tu.diagnostic_filters,
             diagnostic_filter_leaf: tu.diagnostic_filter_leaf,
             ..Default::default()
         };
@@ -1069,11 +1078,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
                     let explicit_ty =
-                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx))
+                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
                             .transpose()?;
 
-                    let (ty, initializer) =
-                        self.type_and_init(v.name, v.init, explicit_ty, &mut ctx.as_override())?;
+                    let (ty, initializer) = self.type_and_init(
+                        v.name,
+                        v.init,
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ctx.as_override(),
+                    )?;
 
                     let binding = if let Some(ref binding) = v.binding {
                         Some(crate::ResourceBinding {
@@ -1102,11 +1116,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let mut ectx = ctx.as_const();
 
                     let explicit_ty =
-                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_global()))
+                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx))
                             .transpose()?;
 
-                    let (ty, init) =
-                        self.type_and_init(c.name, Some(c.init), explicit_ty, &mut ectx)?;
+                    let (ty, init) = self.type_and_init(
+                        c.name,
+                        Some(c.init),
+                        explicit_ty,
+                        AbstractRule::Allow,
+                        &mut ectx,
+                    )?;
                     let init = init.expect("Global const must have init");
 
                     let handle = ctx.module.constants.append(
@@ -1123,12 +1142,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
                 ast::GlobalDeclKind::Override(ref o) => {
                     let explicit_ty =
-                        o.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx))
+                        o.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
                             .transpose()?;
 
                     let mut ectx = ctx.as_override();
 
-                    let (ty, init) = self.type_and_init(o.name, o.init, explicit_ty, &mut ectx)?;
+                    let (ty, init) = self.type_and_init(
+                        o.name,
+                        o.init,
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ectx,
+                    )?;
 
                     let id =
                         o.id.map(|id| self.const_u32(id, &mut ctx.as_const()))
@@ -1165,7 +1190,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let ty = self.resolve_named_ast_type(
                         alias.ty,
                         Some(alias.name.name.to_string()),
-                        &mut ctx,
+                        &mut ctx.as_const(),
                     )?;
                     ctx.globals
                         .insert(alias.name.name, LoweredGlobalDecl::Type(ty));
@@ -1201,6 +1226,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         name: ast::Ident<'source>,
         init: Option<Handle<ast::Expression<'source>>>,
         explicit_ty: Option<Handle<crate::Type>>,
+        abstract_rule: AbstractRule,
         ectx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<(Handle<crate::Type>, Option<Handle<crate::Expression>>), Error<'source>> {
         let ty;
@@ -1234,9 +1260,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 initializer = Some(init);
             }
             (Some(init), None) => {
-                let concretized = self.expression(init, ectx)?;
-                ty = ectx.register_type(concretized)?;
-                initializer = Some(concretized);
+                let mut init = self.expression_for_abstract(init, ectx)?;
+                if let AbstractRule::Concretize = abstract_rule {
+                    init = ectx.concretize(init)?;
+                }
+                ty = ectx.register_type(init)?;
+                initializer = Some(init);
             }
             (None, Some(explicit_ty)) => {
                 ty = explicit_ty;
@@ -1263,7 +1292,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .iter()
             .enumerate()
             .map(|(i, arg)| -> Result<_, Error<'_>> {
-                let ty = self.resolve_ast_type(arg.ty, ctx)?;
+                let ty = self.resolve_ast_type(arg.ty, &mut ctx.as_const())?;
                 let expr = expressions
                     .append(crate::Expression::FunctionArgument(i as u32), arg.name.span);
                 local_table.insert(arg.handle, Declared::Runtime(Typed::Plain(expr)));
@@ -1282,7 +1311,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .result
             .as_ref()
             .map(|res| -> Result<_, Error<'_>> {
-                let ty = self.resolve_ast_type(res.ty, ctx)?;
+                let ty = self.resolve_ast_type(res.ty, &mut ctx.as_const())?;
                 Ok(crate::FunctionResult {
                     ty,
                     binding: self.binding(&res.binding, ty, ctx)?,
@@ -1440,9 +1469,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // optimization.
                     ctx.local_expression_kind_tracker.force_non_const(value);
 
-                    let explicit_ty =
-                        l.ty.map(|ty| self.resolve_ast_type(ty, &mut ctx.as_global()))
-                            .transpose()?;
+                    let explicit_ty = l
+                        .ty
+                        .map(|ty| self.resolve_ast_type(ty, &mut ctx.as_const(block, &mut emitter)))
+                        .transpose()?;
 
                     if let Some(ty) = explicit_ty {
                         let mut ctx = ctx.as_expression(block, &mut emitter);
@@ -1469,15 +1499,23 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     return Ok(());
                 }
                 ast::LocalDecl::Var(ref v) => {
-                    let explicit_ty =
-                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_global()))
-                            .transpose()?;
-
                     let mut emitter = Emitter::default();
                     emitter.start(&ctx.function.expressions);
+
+                    let explicit_ty =
+                        v.ty.map(|ast| {
+                            self.resolve_ast_type(ast, &mut ctx.as_const(block, &mut emitter))
+                        })
+                        .transpose()?;
+
                     let mut ectx = ctx.as_expression(block, &mut emitter);
-                    let (ty, initializer) =
-                        self.type_and_init(v.name, v.init, explicit_ty, &mut ectx)?;
+                    let (ty, initializer) = self.type_and_init(
+                        v.name,
+                        v.init,
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ectx,
+                    )?;
 
                     let (const_initializer, initializer) = {
                         match initializer {
@@ -1533,11 +1571,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let ectx = &mut ctx.as_const(block, &mut emitter);
 
                     let explicit_ty =
-                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_global()))
+                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_const()))
                             .transpose()?;
 
-                    let (_ty, init) =
-                        self.type_and_init(c.name, Some(c.init), explicit_ty, ectx)?;
+                    let (_ty, init) = self.type_and_init(
+                        c.name,
+                        Some(c.init),
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ectx.as_const(),
+                    )?;
                     let init = init.expect("Local const must have init");
 
                     block.extend(emitter.finish(&ctx.function.expressions));
@@ -1992,7 +2035,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                 }
 
-                lowered_base.map(|base| match ctx.const_access(index) {
+                lowered_base.map(|base| match ctx.const_eval_expr_to_u32(index).ok() {
                     Some(index) => crate::Expression::AccessIndex { base, index },
                     None => crate::Expression::Access { base, index },
                 })
@@ -2069,7 +2112,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::Expression::Bitcast { expr, to, ty_span } => {
                 let expr = self.expression(expr, ctx)?;
-                let to_resolved = self.resolve_ast_type(to, &mut ctx.as_global())?;
+                let to_resolved = self.resolve_ast_type(to, &mut ctx.as_const())?;
 
                 let element_scalar = match ctx.module.types[to_resolved].inner {
                     crate::TypeInner::Scalar(scalar) => scalar,
@@ -3051,7 +3094,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut members = Vec::with_capacity(s.members.len());
 
         for member in s.members.iter() {
-            let ty = self.resolve_ast_type(member.ty, ctx)?;
+            let ty = self.resolve_ast_type(member.ty, &mut ctx.as_const())?;
 
             ctx.layouter.update(ctx.module.to_ctx()).unwrap();
 
@@ -3138,7 +3181,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn array_size(
         &mut self,
         size: ast::ArraySize<'source>,
-        ctx: &mut GlobalContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<crate::ArraySize, Error<'source>> {
         Ok(match size {
             ast::ArraySize::Constant(expr) => {
@@ -3146,17 +3189,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let const_expr = self.expression(expr, &mut ctx.as_const());
                 match const_expr {
                     Ok(value) => {
-                        let len =
-                            ctx.module.to_ctx().eval_expr_to_u32(value).map_err(
-                                |err| match err {
-                                    crate::proc::U32EvalError::NonConst => {
-                                        Error::ExpectedConstExprConcreteIntegerScalar(span)
-                                    }
-                                    crate::proc::U32EvalError::Negative => {
-                                        Error::ExpectedPositiveArrayLength(span)
-                                    }
-                                },
-                            )?;
+                        let len = ctx.const_eval_expr_to_u32(value).map_err(|err| match err {
+                            crate::proc::U32EvalError::NonConst => {
+                                Error::ExpectedConstExprConcreteIntegerScalar(span)
+                            }
+                            crate::proc::U32EvalError::Negative => {
+                                Error::ExpectedPositiveArrayLength(span)
+                            }
+                        })?;
                         let size =
                             NonZeroU32::new(len).ok_or(Error::ExpectedPositiveArrayLength(span))?;
                         crate::ArraySize::Constant(size)
@@ -3167,7 +3207,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 crate::proc::ConstantEvaluatorError::OverrideExpr => {
                                     crate::ArraySize::Pending(self.array_size_override(
                                         expr,
-                                        &mut ctx.as_override(),
+                                        &mut ctx.as_global().as_override(),
                                         span,
                                     )?)
                                 }
@@ -3219,7 +3259,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         handle: Handle<ast::Type<'source>>,
         name: Option<String>,
-        ctx: &mut GlobalContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         let inner = match ctx.types[handle] {
             ast::Type::Scalar(scalar) => scalar.to_inner_scalar(),
@@ -3257,7 +3297,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 crate::TypeInner::Pointer { base, space }
             }
             ast::Type::Array { base, size } => {
-                let base = self.resolve_ast_type(base, ctx)?;
+                let base = self.resolve_ast_type(base, &mut ctx.as_const())?;
                 let size = self.array_size(size, ctx)?;
 
                 ctx.layouter.update(ctx.module.to_ctx()).unwrap();
@@ -3297,14 +3337,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
         };
 
-        Ok(ctx.ensure_type_exists(name, inner))
+        Ok(ctx.as_global().ensure_type_exists(name, inner))
     }
 
     /// Return a Naga `Handle<Type>` representing the front-end type `handle`.
     fn resolve_ast_type(
         &mut self,
         handle: Handle<ast::Type<'source>>,
-        ctx: &mut GlobalContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         self.resolve_named_ast_type(handle, None, ctx)
     }

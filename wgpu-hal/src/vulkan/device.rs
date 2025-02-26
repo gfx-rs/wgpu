@@ -908,6 +908,7 @@ impl super::Device {
                     shader_stage: naga_stage,
                 };
                 let needs_temp_options = !runtime_checks.bounds_checks
+                    || !runtime_checks.force_loop_bounding
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory;
@@ -921,6 +922,9 @@ impl super::Device {
                             image_load: naga::proc::BoundsCheckPolicy::Unchecked,
                             binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                         };
+                    }
+                    if !runtime_checks.force_loop_bounding {
+                        temp_options.force_loop_bounding = false;
                     }
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
@@ -2064,10 +2068,7 @@ impl crate::Device for super::Device {
         let vk_dynamic_state =
             vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-        let raw_pass = self
-            .shared
-            .make_render_pass(compatible_rp_key)
-            .map_err(crate::DeviceError::from)?;
+        let raw_pass = self.shared.make_render_pass(compatible_rp_key)?;
 
         let vk_infos = [{
             vk::GraphicsPipelineCreateInfo::default()

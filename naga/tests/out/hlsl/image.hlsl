@@ -42,6 +42,7 @@ void main(uint3 local_id : SV_GroupThreadID)
     uint2 dim = NagaRWDimensions2D(image_storage_src);
     int2 itc = naga_mod(int2((dim * local_id.xy)), int2(int(10), int(20)));
     uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(local_id.z)));
+    uint4 value1_2_ = image_mipmapped_src.Load(int3(itc, int(uint(local_id.z))));
     uint4 value2_ = image_multisampled_src.Load(itc, int(local_id.z));
     uint4 value4_ = image_storage_src.Load(itc);
     uint4 value5_ = image_array_src.Load(int4(itc, local_id.z, asint(asuint(int(local_id.z)) + asuint(int(1)))));

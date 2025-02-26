@@ -9,7 +9,6 @@ struct Foo {
     vec4 a;
     int b;
 };
-const vec3 const2_ = vec3(0.0, 1.0, 2.0);
 const mat2x2 const3_ = mat2x2(vec2(0.0, 1.0), vec2(2.0, 3.0));
 const mat2x2 const4_[1] = mat2x2[1](mat2x2(vec2(0.0, 1.0), vec2(2.0, 3.0)));
 const bool cz0_ = false;
@@ -20,7 +19,6 @@ const uvec2 cz4_ = uvec2(0u);
 const mat2x2 cz5_ = mat2x2(0.0);
 const Foo cz6_[3] = Foo[3](Foo(vec4(0.0), 0), Foo(vec4(0.0), 0), Foo(vec4(0.0), 0));
 const Foo cz7_ = Foo(vec4(0.0), 0);
-const int cp3_[4] = int[4](0, 1, 2, 3);
 
 
 void main() {

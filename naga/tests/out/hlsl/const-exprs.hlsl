@@ -77,6 +77,13 @@ void compose_of_splat()
     return;
 }
 
+void test_local_const()
+{
+    float arr[2] = (float[2])0;
+
+    return;
+}
+
 uint map_texture_kind(int texture_kind)
 {
     switch(texture_kind) {
@@ -128,5 +135,6 @@ void main()
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
+    test_local_const();
     return;
 }

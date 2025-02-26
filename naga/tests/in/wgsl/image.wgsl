@@ -21,6 +21,8 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let itc = vec2<i32>(dim * local_id.xy) % vec2<i32>(10, 20);
     // loads with ivec2 coords.
     let value1 = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
+    // doing the same thing as the line above, but with u32, as textureLoad must also support unsigned integers.
+    let value1_2 = textureLoad(image_mipmapped_src, itc, u32(local_id.z));
     let value2 = textureLoad(image_multisampled_src, itc, i32(local_id.z));
     let value4 = textureLoad(image_storage_src, itc);
     let value5 = textureLoad(image_array_src, itc, local_id.z, i32(local_id.z) + 1);

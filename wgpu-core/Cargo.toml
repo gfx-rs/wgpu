@@ -114,6 +114,9 @@ fragile-send-sync-non-atomic-wasm = [
 ## Enable using the `mach-dxcompiler-rs` crate to compile DX12 shaders.
 static-dxc = ["wgpu-hal/static-dxc"]
 
+## Enable portable atomics on platforms that do not support 64bit atomics.
+portable-atomic = ["dep:portable-atomic", "wgpu-hal/portable-atomic"]
+
 #! ### Target Conditional Features
 # --------------------------------------------------------------------
 # Look to wgpu-hal's Cargo.toml for explaination how these features and the wgpu-core
@@ -178,6 +181,9 @@ rustc-hash.workspace = true
 serde = { workspace = true, features = ["default", "derive"], optional = true }
 smallvec.workspace = true
 thiserror.workspace = true
+
+[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
+portable-atomic = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true

@@ -37,14 +37,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         // rather than them being misreported as type conversion errors.
         // If the type is an array (of an array, etc) then we must check whether the
         // type of the innermost array's base type is abstract.
-        let mut base_inner = expr_inner;
-        while let crate::TypeInner::Array { base, .. } = *base_inner {
-            base_inner = &types[base].inner;
-        }
-        if !base_inner
-            .scalar()
-            .is_some_and(|scalar| scalar.is_abstract())
-        {
+        if !expr_inner.is_abstract(types) {
             return Ok(expr);
         }
 

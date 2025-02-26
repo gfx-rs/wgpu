@@ -5572,7 +5572,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     8 => {
                         inst.expect(5)?;
                         let high = self.next()?;
-                        crate::Literal::U64(u64::from(high) << 32 | u64::from(low))
+                        crate::Literal::U64((u64::from(high) << 32) | u64::from(low))
                     }
                     _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 }
@@ -5587,7 +5587,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     8 => {
                         inst.expect(5)?;
                         let high = self.next()?;
-                        crate::Literal::I64((u64::from(high) << 32 | u64::from(low)) as i64)
+                        crate::Literal::I64(((u64::from(high) << 32) | u64::from(low)) as i64)
                     }
                     _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 }

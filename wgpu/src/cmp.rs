@@ -4,10 +4,12 @@
 //!
 //! For types (like WebGPU) that don't have such a property, we generate an identifier and use that.
 
-use core::{
-    num::NonZeroU64,
-    sync::atomic::{AtomicU64, Ordering},
-};
+#[cfg(supports_64bit_atomics)]
+pub use core::sync::atomic::AtomicU64;
+#[cfg(not(supports_64bit_atomics))]
+pub use portable_atomic::AtomicU64;
+
+use core::{num::NonZeroU64, sync::atomic::Ordering};
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 

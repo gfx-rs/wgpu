@@ -261,8 +261,7 @@ impl Global {
                 Some(size) => size,
             };
 
-        let scratch_buffer =
-            ScratchBuffer::new(device, scratch_size).map_err(crate::device::DeviceError::from)?;
+        let scratch_buffer = ScratchBuffer::new(device, scratch_size)?;
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
@@ -583,8 +582,7 @@ impl Global {
                 Some(size) => size,
             };
 
-        let scratch_buffer =
-            ScratchBuffer::new(device, scratch_size).map_err(crate::device::DeviceError::from)?;
+        let scratch_buffer = ScratchBuffer::new(device, scratch_size)?;
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
@@ -645,8 +643,7 @@ impl Global {
                 let mut staging_buffer = StagingBuffer::new(
                     device,
                     wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap(),
-                )
-                .map_err(crate::device::DeviceError::from)?;
+                )?;
                 staging_buffer.write(&instance_buffer_staging_source);
                 let flushed = staging_buffer.flush();
                 Some(flushed)

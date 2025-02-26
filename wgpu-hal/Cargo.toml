@@ -35,7 +35,9 @@ targets = [
 ignored = ["cfg_aliases"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(web_sys_unstable_apis)', # web-sys uses this
+] }
 
 [lib]
 
@@ -155,6 +157,7 @@ renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
+portable-atomic = ["dep:portable-atomic"]
 
 ###################################
 ### Internal Debugging Features ###
@@ -172,6 +175,14 @@ device_lost_panic = []
 #
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
+
+###################
+### Workarounds ###
+###################
+
+# objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
+# You shouldn't ever enable this feature.
+cargo-clippy = []
 
 [[example]]
 name = "halmark"
@@ -299,6 +310,9 @@ khronos-egl = { workspace = true, optional = true, features = [
 ] }
 # Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
 libloading = { workspace = true, optional = true }
+
+[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
+portable-atomic = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true

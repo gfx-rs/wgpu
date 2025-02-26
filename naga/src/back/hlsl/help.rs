@@ -1611,8 +1611,26 @@ impl<W: Write> super::Writer<'_, W> {
                 self.write_expr(module, expr, func_ctx)?;
             }
             if let Some(expr) = mip_level {
+                // Explicit cast if needed
+                let cast_to_int = matches!(
+                    *func_ctx.resolve_type(expr, &module.types),
+                    crate::TypeInner::Scalar(crate::Scalar {
+                        kind: ScalarKind::Uint,
+                        ..
+                    })
+                );
+
                 write!(self.out, ", ")?;
+
+                if cast_to_int {
+                    write!(self.out, "int(")?;
+                }
+
                 self.write_expr(module, expr, func_ctx)?;
+
+                if cast_to_int {
+                    write!(self.out, ")")?;
+                }
             }
             write!(self.out, ")")?;
         }
