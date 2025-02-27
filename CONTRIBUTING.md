@@ -92,9 +92,10 @@ review.
 
 We use the following components in a WGPU development environment:
 
-- [The version of the Rust toolchain with the `cargo` command][install-rust],
-  pointed to by `rust-toolchain.toml` at the root of the repository, to compile
-  WGPU's code.
+- [A Rust toolchain][install-rust] matching the version specified in
+  [`rust-toolchain.toml`](./rust-toolchain.toml), to compile WGPU's code. If you
+  use `rustup`, this will be automatically installed when you first run a
+  `cargo` command in the repository.
 - [Taplo](https://taplo.tamasfe.dev/) to keep TOML files formatted.
 - [Vulkan SDK](https://vulkan.lunarg.com/) to provide Vulkan validation layers
   and other Vulkan/SPIR-V tools for testing.
