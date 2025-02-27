@@ -112,7 +112,9 @@ fn load_model(scene: &mut RawSceneComponents, path: &str) {
                 for end_index in 2..poly.0.len() {
                     for &index in &[0, end_index - 1, end_index] {
                         let obj::IndexTuple(position_id, texture_id, normal_id) = poly.0[index];
-                        let uv = texture_id.map(|texture_id| data.texture[texture_id]).unwrap_or_default();
+                        let uv = texture_id
+                            .map(|texture_id| data.texture[texture_id])
+                            .unwrap_or_default();
                         let normal_id = normal_id.expect("normals required");
 
                         let index = *mapping

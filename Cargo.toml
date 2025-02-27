@@ -64,6 +64,8 @@ naga = { version = "24.0.0", path = "./naga" }
 wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features = [
     "serde",
     "wgsl",
+    "vulkan",
+    "gles",
     "dx12",
     "metal",
     "static-dxc",
