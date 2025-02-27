@@ -243,7 +243,7 @@ impl BlockContext<'_> {
         };
         let length_id = self.gen_id();
         block.body.push(Instruction::array_length(
-            self.writer.get_uint_type_id(),
+            self.writer.get_u32_type_id(),
             length_id,
             structure_id,
             last_member_index,
@@ -314,7 +314,7 @@ impl BlockContext<'_> {
                 let max_index_id = self.gen_id();
                 block.body.push(Instruction::binary(
                     spirv::Op::ISub,
-                    self.writer.get_uint_type_id(),
+                    self.writer.get_u32_type_id(),
                     max_index_id,
                     length_id,
                     const_one_id,
@@ -371,7 +371,7 @@ impl BlockContext<'_> {
         block.body.push(Instruction::ext_inst(
             self.writer.gl450_ext_inst_id,
             spirv::GLOp::UMin,
-            self.writer.get_uint_type_id(),
+            self.writer.get_u32_type_id(),
             restricted_index_id,
             &[index_id, max_index_id],
         ));

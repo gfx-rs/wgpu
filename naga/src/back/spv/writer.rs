@@ -293,17 +293,17 @@ impl Writer {
         }
     }
 
-    pub(super) fn get_uint_type_id(&mut self) -> Word {
+    pub(super) fn get_u32_type_id(&mut self) -> Word {
         let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::U32));
         self.get_type_id(local_type.into())
     }
 
-    pub(super) fn get_float_type_id(&mut self) -> Word {
+    pub(super) fn get_f32_type_id(&mut self) -> Word {
         let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::F32));
         self.get_type_id(local_type.into())
     }
 
-    pub(super) fn get_uint2_type_id(&mut self) -> Word {
+    pub(super) fn get_vec2u_type_id(&mut self) -> Word {
         let local_type = LocalType::Numeric(NumericType::Vector {
             size: crate::VectorSize::Bi,
             scalar: crate::Scalar::U32,
@@ -311,7 +311,7 @@ impl Writer {
         self.get_type_id(local_type.into())
     }
 
-    pub(super) fn get_uint3_type_id(&mut self) -> Word {
+    pub(super) fn get_vec3u_type_id(&mut self) -> Word {
         let local_type = LocalType::Numeric(NumericType::Vector {
             size: crate::VectorSize::Tri,
             scalar: crate::Scalar::U32,
@@ -319,7 +319,7 @@ impl Writer {
         self.get_type_id(local_type.into())
     }
 
-    pub(super) fn get_float_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
+    pub(super) fn get_f32_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
         let local_type = LocalType::LocalPointer {
             base: NumericType::Scalar(crate::Scalar::F32),
             class,
@@ -327,7 +327,7 @@ impl Writer {
         self.get_type_id(local_type.into())
     }
 
-    pub(super) fn get_uint2_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
+    pub(super) fn get_vec2u_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
         let local_type = LocalType::LocalPointer {
             base: NumericType::Vector {
                 size: crate::VectorSize::Bi,
@@ -338,7 +338,7 @@ impl Writer {
         self.get_type_id(local_type.into())
     }
 
-    pub(super) fn get_uint3_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
+    pub(super) fn get_vec3u_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
         let local_type = LocalType::LocalPointer {
             base: NumericType::Vector {
                 size: crate::VectorSize::Tri,
@@ -354,7 +354,7 @@ impl Writer {
         self.get_type_id(local_type.into())
     }
 
-    pub(super) fn get_bool2_type_id(&mut self) -> Word {
+    pub(super) fn get_vec2_bool_type_id(&mut self) -> Word {
         let local_type = LocalType::Numeric(NumericType::Vector {
             size: crate::VectorSize::Bi,
             scalar: crate::Scalar::BOOL,
@@ -362,7 +362,7 @@ impl Writer {
         self.get_type_id(local_type.into())
     }
 
-    pub(super) fn get_bool3_type_id(&mut self) -> Word {
+    pub(super) fn get_vec3_bool_type_id(&mut self) -> Word {
         let local_type = LocalType::Numeric(NumericType::Vector {
             size: crate::VectorSize::Tri,
             scalar: crate::Scalar::BOOL,
@@ -787,7 +787,7 @@ impl Writer {
                     {
                         // add point size artificially
                         let varying_id = self.id_gen.next();
-                        let pointer_type_id = self.get_float_pointer_type_id(class);
+                        let pointer_type_id = self.get_f32_pointer_type_id(class);
                         Instruction::variable(pointer_type_id, varying_id, class, None)
                             .to_words(&mut self.logical_layout.declarations);
                         self.decorate(
@@ -1650,7 +1650,7 @@ impl Writer {
             return None;
         }
 
-        let uint3_type_id = self.get_uint3_type_id();
+        let uint3_type_id = self.get_vec3u_type_id();
 
         let mut pre_if_block = Block::new(entry_id);
 
@@ -1659,7 +1659,7 @@ impl Writer {
         } else {
             let varying_id = self.id_gen.next();
             let class = spirv::StorageClass::Input;
-            let pointer_type_id = self.get_uint3_pointer_type_id(class);
+            let pointer_type_id = self.get_vec3u_pointer_type_id(class);
 
             Instruction::variable(pointer_type_id, varying_id, class, None)
                 .to_words(&mut self.logical_layout.declarations);
@@ -1680,7 +1680,7 @@ impl Writer {
         };
 
         let zero_id = self.get_constant_null(uint3_type_id);
-        let bool3_type_id = self.get_bool3_type_id();
+        let bool3_type_id = self.get_vec3_bool_type_id();
 
         let eq_id = self.id_gen.next();
         pre_if_block.body.push(Instruction::binary(

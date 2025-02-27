@@ -277,13 +277,13 @@ impl BlockContext<'_> {
     /// See [`crate::back::msl::Writer::gen_force_bounded_loop_statements`] for details
     /// of why this is required.
     fn write_force_bounded_loop_instructions(&mut self, mut block: Block, merge_id: Word) -> Block {
-        let uint_type_id = self.writer.get_uint_type_id();
-        let uint2_type_id = self.writer.get_uint2_type_id();
+        let uint_type_id = self.writer.get_u32_type_id();
+        let uint2_type_id = self.writer.get_vec2u_type_id();
         let uint2_ptr_type_id = self
             .writer
-            .get_uint2_pointer_type_id(spirv::StorageClass::Function);
+            .get_vec2u_pointer_type_id(spirv::StorageClass::Function);
         let bool_type_id = self.writer.get_bool_type_id();
-        let bool2_type_id = self.writer.get_bool2_type_id();
+        let bool2_type_id = self.writer.get_vec2_bool_type_id();
         let zero_uint_const_id = self.writer.get_constant_scalar(crate::Literal::U32(0));
         let zero_uint2_const_id = self.writer.get_constant_composite(
             LookupType::Local(LocalType::Numeric(NumericType::Vector {
