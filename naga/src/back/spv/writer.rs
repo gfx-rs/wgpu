@@ -240,7 +240,7 @@ impl Writer {
         self.get_type_id(LookupType::Local(local))
     }
 
-    pub(super) fn get_pointer_id(
+    pub(super) fn get_pointer_type_id(
         &mut self,
         handle: Handle<crate::Type>,
         class: spirv::StorageClass,
@@ -285,7 +285,7 @@ impl Writer {
         class: spirv::StorageClass,
     ) -> Word {
         match *resolution {
-            TypeResolution::Handle(handle) => self.get_pointer_id(handle, class),
+            TypeResolution::Handle(handle) => self.get_pointer_type_id(handle, class),
             TypeResolution::Value(ref inner) => {
                 let base = NumericType::from_inner(inner).unwrap();
                 self.get_type_id(LookupType::Local(LocalType::LocalPointer { base, class }))
@@ -638,7 +638,7 @@ impl Writer {
             let class = spirv::StorageClass::Input;
             let handle_ty = ir_module.types[argument.ty].inner.is_handle();
             let argument_type_id = match handle_ty {
-                true => self.get_pointer_id(argument.ty, spirv::StorageClass::UniformConstant),
+                true => self.get_pointer_type_id(argument.ty, spirv::StorageClass::UniformConstant),
                 false => self.get_type_id(LookupType::Handle(argument.ty)),
             };
 
@@ -869,7 +869,7 @@ impl Writer {
                         gv.handle_id = id;
                     } else if global_needs_wrapper(ir_module, var) {
                         let class = map_storage_class(var.space);
-                        let pointer_type_id = self.get_pointer_id(var.ty, class);
+                        let pointer_type_id = self.get_pointer_type_id(var.ty, class);
                         let index_id = self.get_index_constant(0);
                         let id = self.id_gen.next();
                         prelude.body.push(Instruction::access_chain(
@@ -931,7 +931,7 @@ impl Writer {
             let init_word = variable.init.map(|constant| context.cached[constant]);
             let pointer_type_id = context
                 .writer
-                .get_pointer_id(variable.ty, spirv::StorageClass::Function);
+                .get_pointer_type_id(variable.ty, spirv::StorageClass::Function);
             let instruction = Instruction::variable(
                 pointer_type_id,
                 id,
@@ -1756,7 +1756,7 @@ impl Writer {
         binding: &crate::Binding,
     ) -> Result<Word, Error> {
         let id = self.id_gen.next();
-        let pointer_type_id = self.get_pointer_id(ty, class);
+        let pointer_type_id = self.get_pointer_type_id(ty, class);
         Instruction::variable(pointer_type_id, id, class, None)
             .to_words(&mut self.logical_layout.declarations);
 
@@ -2089,7 +2089,7 @@ impl Writer {
             if substitute_inner_type_lookup.is_some() {
                 inner_type_id
             } else {
-                self.get_pointer_id(global_variable.ty, class)
+                self.get_pointer_type_id(global_variable.ty, class)
             }
         };
 
