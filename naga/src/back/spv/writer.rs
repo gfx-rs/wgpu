@@ -1230,8 +1230,8 @@ impl Writer {
                 let class = map_storage_class(space);
                 Instruction::type_pointer(id, class, inner_ty)
             }
-            LocalType::AccelerationStructure { .. } => Instruction::type_acceleration_structure(id),
-            LocalType::RayQuery { .. } => Instruction::type_ray_query(id),
+            LocalType::AccelerationStructure => Instruction::type_acceleration_structure(id),
+            LocalType::RayQuery => Instruction::type_ray_query(id),
         };
 
         instruction.to_words(&mut self.logical_layout.declarations);

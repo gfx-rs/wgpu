@@ -405,12 +405,8 @@ enum LocalType {
         base: Handle<crate::Type>,
         size: u32,
     },
-    AccelerationStructure {
-        vertex_return: bool,
-    },
-    RayQuery {
-        vertex_return: bool,
-    },
+    AccelerationStructure,
+    RayQuery,
 }
 
 /// A type encountered during SPIR-V generation.
@@ -490,10 +486,8 @@ impl LocalType {
                 class,
             } => LocalType::Image(LocalImageType::from_inner(dim, arrayed, class)),
             crate::TypeInner::Sampler { comparison: _ } => LocalType::Sampler,
-            crate::TypeInner::AccelerationStructure { vertex_return } => {
-                LocalType::AccelerationStructure { vertex_return }
-            }
-            crate::TypeInner::RayQuery { vertex_return } => LocalType::RayQuery { vertex_return },
+            crate::TypeInner::AccelerationStructure { .. } => LocalType::AccelerationStructure,
+            crate::TypeInner::RayQuery { .. } => LocalType::RayQuery,
             crate::TypeInner::Array { .. }
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::BindingArray { .. } => return None,
