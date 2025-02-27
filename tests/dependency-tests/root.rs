@@ -84,14 +84,12 @@ fn get_all_wgpu_features() -> Vec<String> {
     metadata
         .packages
         .iter()
-        .find_map(|p| {
-            if p.name == "wgpu" {
-                Some(p.features.keys().cloned().collect())
-            } else {
-                None
-            }
-        })
+        .find(|p| p.name == "wgpu")
         .unwrap()
+        .features
+        .keys()
+        .cloned()
+        .collect()
 }
 
 #[test]
@@ -105,8 +103,6 @@ fn wasm32_without_webgl_or_noop_does_not_depend_on_wgpu_core() {
         .map(String::as_str)
         .filter(|&feature| !removed_features.contains(&feature))
         .collect();
-
-    dbg!(&features_no_webgl);
 
     check_feature_dependency(Requirement {
         human_readable_name:
