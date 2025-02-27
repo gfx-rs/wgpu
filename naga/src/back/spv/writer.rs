@@ -297,30 +297,30 @@ impl Writer {
         }
     }
 
+    pub(super) fn get_numeric_type_id(&mut self, numeric: NumericType) -> Word {
+        self.get_type_id(LocalType::Numeric(numeric).into())
+    }
+
     pub(super) fn get_u32_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::U32));
-        self.get_type_id(local_type.into())
+        self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32))
     }
 
     pub(super) fn get_f32_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::F32));
-        self.get_type_id(local_type.into())
+        self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::F32))
     }
 
     pub(super) fn get_vec2u_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Vector {
+        self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Bi,
             scalar: crate::Scalar::U32,
-        });
-        self.get_type_id(local_type.into())
+        })
     }
 
     pub(super) fn get_vec3u_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Vector {
+        self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Tri,
             scalar: crate::Scalar::U32,
-        });
-        self.get_type_id(local_type.into())
+        })
     }
 
     pub(super) fn get_f32_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
@@ -354,24 +354,21 @@ impl Writer {
     }
 
     pub(super) fn get_bool_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::BOOL));
-        self.get_type_id(local_type.into())
+        self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::BOOL))
     }
 
     pub(super) fn get_vec2_bool_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Vector {
+        self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Bi,
             scalar: crate::Scalar::BOOL,
-        });
-        self.get_type_id(local_type.into())
+        })
     }
 
     pub(super) fn get_vec3_bool_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Vector {
+        self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Tri,
             scalar: crate::Scalar::BOOL,
-        });
-        self.get_type_id(local_type.into())
+        })
     }
 
     pub(super) fn decorate(&mut self, id: Word, decoration: spirv::Decoration, operands: &[Word]) {
@@ -506,7 +503,7 @@ impl Writer {
         let mut block = Block::new(label_id);
 
         let bool_type = return_type.with_scalar(crate::Scalar::BOOL);
-        let bool_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(bool_type)));
+        let bool_type_id = self.get_numeric_type_id(bool_type);
 
         let maybe_splat_const = |writer: &mut Self, const_id| match return_type {
             NumericType::Scalar(_) => const_id,
@@ -1195,9 +1192,7 @@ impl Writer {
             match numeric {
                 NumericType::Scalar(scalar) => self.make_scalar(id, scalar),
                 NumericType::Vector { size, scalar } => {
-                    let scalar_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-                        NumericType::Scalar(scalar),
-                    )));
+                    let scalar_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
                     Instruction::type_vector(id, scalar_id, size)
                 }
                 NumericType::Matrix {
@@ -1205,9 +1200,7 @@ impl Writer {
                     rows,
                     scalar,
                 } => {
-                    let column_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-                        NumericType::Vector { size: rows, scalar },
-                    )));
+                    let column_id = self.get_numeric_type_id(NumericType::Vector { size: rows, scalar });
                     Instruction::type_matrix(id, column_id, columns)
                 }
             };
@@ -1469,9 +1462,7 @@ impl Writer {
                 self.debugs.push(Instruction::name(id, name));
             }
         }
-        let type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Scalar(
-            value.scalar(),
-        ))));
+        let type_id = self.get_numeric_type_id(NumericType::Scalar(value.scalar()));
         let instruction = match *value {
             crate::Literal::F64(value) => {
                 let bits = value.to_bits();

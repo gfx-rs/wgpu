@@ -37,11 +37,11 @@ impl Writer {
             self.get_pointer_type_id(flag_type, spirv::StorageClass::Function);
 
         let transform_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Matrix {
+            self.get_numeric_type_id(NumericType::Matrix {
                 columns: crate::VectorSize::Quad,
                 rows: crate::VectorSize::Tri,
                 scalar: crate::Scalar::F32,
-            })));
+            });
         let transform_type = ir_module
             .types
             .get(&Type {
@@ -57,10 +57,10 @@ impl Writer {
             self.get_pointer_type_id(transform_type, spirv::StorageClass::Function);
 
         let barycentrics_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+            self.get_numeric_type_id(NumericType::Vector {
                 size: crate::VectorSize::Bi,
                 scalar: crate::Scalar::F32,
-            })));
+            });
         let barycentrics_type = ir_module
             .types
             .get(&Type {
