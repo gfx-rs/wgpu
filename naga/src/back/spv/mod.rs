@@ -748,6 +748,10 @@ impl BlockContext<'_> {
         self.writer.get_type_id(lookup_type)
     }
 
+    fn get_handle_type_id(&mut self, handle: Handle<crate::Type>) -> Word {
+        self.writer.get_handle_type_id(handle)
+    }
+
     fn get_expression_type_id(&mut self, tr: &TypeResolution) -> Word {
         self.writer.get_expression_type_id(tr)
     }

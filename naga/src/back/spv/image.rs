@@ -845,7 +845,7 @@ impl BlockContext<'_> {
         };
 
         // OpTypeSampledImage
-        let image_type_id = self.get_type_id(LookupType::Handle(image_type));
+        let image_type_id = self.get_handle_type_id(image_type);
         let sampled_image_type_id =
             self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }));
 

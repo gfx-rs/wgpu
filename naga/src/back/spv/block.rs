@@ -575,7 +575,7 @@ impl BlockContext<'_> {
                             }
                         };
 
-                        let binding_type_id = self.get_type_id(LookupType::Handle(binding_type));
+                        let binding_type_id = self.get_handle_type_id(binding_type);
 
                         let load_id = self.gen_id();
                         block.body.push(Instruction::load(
@@ -666,7 +666,7 @@ impl BlockContext<'_> {
                             }
                         };
 
-                        let binding_type_id = self.get_type_id(LookupType::Handle(binding_type));
+                        let binding_type_id = self.get_handle_type_id(binding_type);
 
                         let load_id = self.gen_id();
                         block.body.push(Instruction::load(
@@ -1920,7 +1920,7 @@ impl BlockContext<'_> {
                     .writer
                     .write_ray_query_get_intersection_function(committed, self.ir_module);
                 let ray_intersection = self.ir_module.special_types.ray_intersection.unwrap();
-                let intersection_type_id = self.get_type_id(LookupType::Handle(ray_intersection));
+                let intersection_type_id = self.get_handle_type_id(ray_intersection);
                 let id = self.gen_id();
                 block.body.push(Instruction::function_call(
                     intersection_type_id,
@@ -3250,7 +3250,7 @@ impl BlockContext<'_> {
             // need to end it with some kind of return instruction.
             BlockExit::Return => match self.ir_function.result {
                 Some(ref result) if self.function.entry_point_context.is_none() => {
-                    let type_id = self.get_type_id(LookupType::Handle(result.ty));
+                    let type_id = self.get_handle_type_id(result.ty);
                     let null_id = self.writer.get_constant_null(type_id);
                     Instruction::return_value(null_id)
                 }

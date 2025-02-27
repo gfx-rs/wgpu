@@ -21,7 +21,7 @@ impl Writer {
             return func_id;
         }
         let ray_intersection = ir_module.special_types.ray_intersection.unwrap();
-        let intersection_type_id = self.get_type_id(LookupType::Handle(ray_intersection));
+        let intersection_type_id = self.get_handle_type_id(ray_intersection);
         let intersection_pointer_type_id =
             self.get_type_id(LookupType::Local(LocalType::Pointer {
                 base: ray_intersection,
