@@ -157,10 +157,7 @@ impl Writer {
         position_id: Word,
         body: &mut Vec<Instruction>,
     ) -> Result<(), Error> {
-        let float_ptr_type_id = self.get_type_id(LookupType::Local(LocalType::LocalPointer {
-            base: NumericType::Scalar(crate::Scalar::F32),
-            class: spirv::StorageClass::Output,
-        }));
+        let float_ptr_type_id = self.get_f32_pointer_type_id(spirv::StorageClass::Output);
         let index_y_id = self.get_index_constant(1);
         let access_id = self.id_gen.next();
         body.push(Instruction::access_chain(
@@ -170,9 +167,7 @@ impl Writer {
             &[index_y_id],
         ));
 
-        let float_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-            NumericType::Scalar(crate::Scalar::F32),
-        )));
+        let float_type_id = self.get_f32_type_id();
         let load_id = self.id_gen.next();
         body.push(Instruction::load(float_type_id, load_id, access_id, None));
 
@@ -194,9 +189,7 @@ impl Writer {
         frag_depth_id: Word,
         body: &mut Vec<Instruction>,
     ) -> Result<(), Error> {
-        let float_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-            NumericType::Scalar(crate::Scalar::F32),
-        )));
+        let float_type_id = self.get_f32_type_id();
         let zero_scalar_id = self.get_constant_scalar(crate::Literal::F32(0.0));
         let one_scalar_id = self.get_constant_scalar(crate::Literal::F32(1.0));
 

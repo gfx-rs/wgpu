@@ -765,7 +765,11 @@ impl BlockContext<'_> {
             .get_constant_scalar(crate::Literal::I32(scope as _))
     }
 
-    fn get_pointer_type_id(&mut self, handle: Handle<crate::Type>, class: spirv::StorageClass) -> Word {
+    fn get_pointer_type_id(
+        &mut self,
+        handle: Handle<crate::Type>,
+        class: spirv::StorageClass,
+    ) -> Word {
         self.writer.get_pointer_type_id(handle, class)
     }
 }
