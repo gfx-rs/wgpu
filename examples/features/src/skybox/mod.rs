@@ -104,7 +104,7 @@ impl crate::framework::Example for Example {
     ) -> Self {
         let mut entities = Vec::new();
         {
-            let source = include_bytes!("models/teslacyberv3.0.obj");
+            let source = include_bytes!("models/rustacean-3d.obj");
             let data = obj::ObjData::load_buf(&source[..]).unwrap();
             let mut vertices = Vec::new();
             for object in data.objects {
@@ -115,8 +115,9 @@ impl crate::framework::Example for Example {
                             for &index in &[0, end_index - 1, end_index] {
                                 let obj::IndexTuple(position_id, _texture_id, normal_id) =
                                     poly.0[index];
+                                let [x, y, z] = data.position[position_id];
                                 vertices.push(Vertex {
-                                    pos: data.position[position_id],
+                                    pos: [y, z, x], // model is rotated to face down, so need to rotate it
                                     normal: data.normal[normal_id.unwrap()],
                                 })
                             }
