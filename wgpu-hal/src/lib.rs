@@ -240,8 +240,9 @@
 
 extern crate alloc;
 extern crate wgpu_types as wgt;
-// TODO(https://github.com/gfx-rs/wgpu/issues/6826): disable std except on noop and gles-WebGL.
-// Requires Rust 1.81 for core::error::Error.
+// Each of these backends needs `std` in some fashion; usually `std::thread` functions.
+// TODO(https://github.com/gfx-rs/wgpu/issues/6826): gles-WebGL backend should be made no-std
+#[cfg(any(dx12, gles, metal, vulkan))]
 #[macro_use]
 extern crate std;
 
@@ -290,12 +291,12 @@ use alloc::boxed::Box;
 use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
 use core::{
     borrow::Borrow,
+    error::Error,
     fmt,
     num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
 };
-use std::error::Error; // TODO(https://github.com/gfx-rs/wgpu/issues/6826): use core::error after MSRV bump
 
 use bitflags::bitflags;
 use parking_lot::Mutex;
@@ -317,7 +318,10 @@ pub const QUERY_SIZE: wgt::BufferAddress = 8;
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
+#[cfg(supports_64bit_atomics)]
 pub type AtomicFenceValue = core::sync::atomic::AtomicU64;
+#[cfg(not(supports_64bit_atomics))]
+pub type AtomicFenceValue = portable_atomic::AtomicU64;
 
 /// A callback to signal that wgpu is no longer using a resource.
 #[cfg(any(gles, vulkan))]

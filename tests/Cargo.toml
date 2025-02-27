@@ -18,6 +18,11 @@ path = "compile-tests/root.rs"
 harness = true
 
 [[test]]
+name = "wgpu-dependency-test"
+path = "dependency-tests/root.rs"
+harness = true
+
+[[test]]
 name = "wgpu-gpu-test"
 path = "gpu-tests/root.rs"
 harness = false
@@ -39,6 +44,7 @@ arrayvec.workspace = true
 approx.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
+cargo_metadata.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true

@@ -45,13 +45,12 @@ default-members = [
 ]
 
 [workspace.lints.clippy]
-manual_c_str_literals = "allow"
 ref_as_ptr = "warn"
 # NOTE: disallowed-types is configured in other file: clippy.toml
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.83"
+rust-version = "1.85"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -64,6 +63,8 @@ naga = { version = "24.0.0", path = "./naga" }
 wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features = [
     "serde",
     "wgsl",
+    "vulkan",
+    "gles",
     "dx12",
     "metal",
     "static-dxc",
@@ -94,6 +95,7 @@ bytemuck = { version = "1.21", features = [
     "extern_crate_alloc",
     "min_const_generics",
 ] }
+cargo_metadata = "0.19"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.5"
@@ -135,6 +137,7 @@ pico-args = { version = "0.5.0", features = [
 ] }
 png = "0.17.16"
 pollster = "0.4"
+portable-atomic = "1"
 profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.6", default-features = false }
 rayon = "1"

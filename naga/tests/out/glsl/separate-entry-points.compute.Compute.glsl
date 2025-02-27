@@ -11,6 +11,8 @@ void barriers() {
     barrier();
     memoryBarrierShared();
     barrier();
+    memoryBarrierImage();
+    barrier();
     return;
 }
 

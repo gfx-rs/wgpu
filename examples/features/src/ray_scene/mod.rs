@@ -101,7 +101,7 @@ fn load_model(scene: &mut RawSceneComponents, path: &str) {
     let start_vertex_index = scene.vertices.len();
     let start_geometry_index = scene.geometries.len();
 
-    let mut mapping = std::collections::HashMap::<(usize, usize, usize), usize>::new();
+    let mut mapping = std::collections::HashMap::<(usize, Option<usize>, usize), usize>::new();
 
     let mut next_index = 0;
 
@@ -112,7 +112,9 @@ fn load_model(scene: &mut RawSceneComponents, path: &str) {
                 for end_index in 2..poly.0.len() {
                     for &index in &[0, end_index - 1, end_index] {
                         let obj::IndexTuple(position_id, texture_id, normal_id) = poly.0[index];
-                        let texture_id = texture_id.expect("uvs required");
+                        let uv = texture_id
+                            .map(|texture_id| data.texture[texture_id])
+                            .unwrap_or_default();
                         let normal_id = normal_id.expect("normals required");
 
                         let index = *mapping
@@ -123,7 +125,7 @@ fn load_model(scene: &mut RawSceneComponents, path: &str) {
 
                             scene.vertices.push(Vertex {
                                 pos: data.position[position_id],
-                                uv: data.texture[texture_id],
+                                uv,
                                 normal: data.normal[normal_id],
                                 ..Default::default()
                             })
@@ -296,7 +298,7 @@ fn upload_scene_components(
 fn load_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> SceneComponents {
     let mut scene = RawSceneComponents::default();
 
-    load_model(&mut scene, "/skybox/models/teslacyberv3.0.obj");
+    load_model(&mut scene, "/skybox/models/rustacean-3d.obj");
     load_model(&mut scene, "/ray_scene/cube.obj");
 
     upload_scene_components(device, queue, &scene)

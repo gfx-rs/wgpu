@@ -144,13 +144,20 @@ struct Function {
     signature: Option<Instruction>,
     parameters: Vec<FunctionArgument>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
+    /// List of local variables used as a counters to ensure that all loops are bounded.
+    force_loop_bounding_vars: Vec<LocalVariable>,
 
-    /// A map taking an expression that yields a composite value (array, matrix)
-    /// to the temporary variables we have spilled it to, if any. Spilling
-    /// allows us to render an arbitrary chain of [`Access`] and [`AccessIndex`]
-    /// expressions as an `OpAccessChain` and an `OpLoad` (plus bounds checks).
-    /// This supports dynamic indexing of by-value arrays and matrices, which
-    /// SPIR-V does not.
+    /// A map from a Naga expression to the temporary SPIR-V variable we have
+    /// spilled its value to, if any.
+    ///
+    /// Naga IR lets us apply [`Access`] expressions to expressions whose value
+    /// is an array or matrix---not a pointer to such---but SPIR-V doesn't have
+    /// instructions that can do the same. So when we encounter such code, we
+    /// spill the expression's value to a generated temporary variable. That, we
+    /// can obtain a pointer to, and then use an `OpAccessChain` instruction to
+    /// do whatever series of [`Access`] and [`AccessIndex`] operations we need
+    /// (with bounds checks). Finally, we generate an `OpLoad` to get the final
+    /// value.
     ///
     /// [`Access`]: crate::Expression::Access
     /// [`AccessIndex`]: crate::Expression::AccessIndex
@@ -732,6 +739,8 @@ struct BlockContext<'w> {
 
     /// Tracks the constness of `Expression`s residing in `self.ir_function.expressions`
     expression_constness: ExpressionConstnessTracker,
+
+    force_loop_bounding: bool,
 }
 
 impl BlockContext<'_> {
@@ -785,6 +794,7 @@ pub struct Writer {
     flags: WriterFlags,
     bounds_check_policies: BoundsCheckPolicies,
     zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
+    force_loop_bounding: bool,
     void_type: Word,
     //TODO: convert most of these into vectors, addressable by handle indices
     lookup_type: crate::FastHashMap<LookupType, Word>,
@@ -888,6 +898,10 @@ pub struct Options<'a> {
     /// Dictates the way workgroup variables should be zero initialized
     pub zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode,
 
+    /// If set, loops will have code injected into them, forcing the compiler
+    /// to think the number of iterations is bounded.
+    pub force_loop_bounding: bool,
+
     pub debug_info: Option<DebugInfo<'a>>,
 }
 
@@ -906,6 +920,7 @@ impl Default for Options<'_> {
             capabilities: None,
             bounds_check_policies: BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
+            force_loop_bounding: true,
             debug_info: None,
         }
     }

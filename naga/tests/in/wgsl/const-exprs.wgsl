@@ -12,6 +12,7 @@ fn main() {
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
+    test_local_const();
 }
 
 // Swizzle the value of nested Compose expressions.
@@ -108,4 +109,9 @@ fn relational() {
     var vec_any_true     = any(vec4(bool(), true, vec2(FALSE)));
     var vec_all_false    = all(vec4(vec3(vec2<bool>(), TRUE), false));
     var vec_all_true     = all(vec4(true));
+}
+
+fn test_local_const() {
+    const local_const = 2;
+	var arr: array<f32, local_const>;
 }

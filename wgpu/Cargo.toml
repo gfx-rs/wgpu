@@ -179,6 +179,7 @@ wgpu-core = { workspace = true, features = [
     "raw-window-handle",
     "renderdoc",
     "indirect-validation",
+    "portable-atomic",
 ] }
 wgpu-hal.workspace = true
 
@@ -215,6 +216,9 @@ wgpu-core = { workspace = true, features = ["raw-window-handle"] }
 wgpu-hal.workspace = true
 
 smallvec.workspace = true
+
+[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
+portable-atomic.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true

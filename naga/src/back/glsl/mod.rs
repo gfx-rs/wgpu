@@ -2203,8 +2203,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             self.write_stmt(sta, ctx, l2.next())?;
                         }
 
-                        if !case.fall_through
-                            && case.body.last().map_or(true, |s| !s.is_terminator())
+                        if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator())
                         {
                             writeln!(self.out, "{}break;", l2.next())?;
                         }
@@ -4450,10 +4449,28 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ") - 1)")?;
             }
         } else if let Some(sample_or_level) = sample.or(level) {
+            // GLSL only support SInt on this field while WGSL support also UInt
+            let cast_to_int = matches!(
+                *ctx.resolve_type(sample_or_level, &self.module.types),
+                TypeInner::Scalar(crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..
+                })
+            );
+
             // If no bounds checking is need just add the sample or level argument
             // after the coordinates
             write!(self.out, ", ")?;
+
+            if cast_to_int {
+                write!(self.out, "int(")?;
+            }
+
             self.write_expr(sample_or_level, ctx)?;
+
+            if cast_to_int {
+                write!(self.out, ")")?;
+            }
         }
 
         // Close the image load function.
@@ -4611,6 +4628,9 @@ impl<'a, W: Write> Writer<'a, W> {
         }
         if flags.contains(crate::Barrier::SUB_GROUP) {
             writeln!(self.out, "{level}subgroupMemoryBarrier();")?;
+        }
+        if flags.contains(crate::Barrier::TEXTURE) {
+            writeln!(self.out, "{level}memoryBarrierImage();")?;
         }
         writeln!(self.out, "{level}barrier();")?;
         Ok(())

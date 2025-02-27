@@ -303,7 +303,7 @@ impl fmt::Display for DeviceMismatch {
     }
 }
 
-impl std::error::Error for DeviceMismatch {}
+impl core::error::Error for DeviceMismatch {}
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

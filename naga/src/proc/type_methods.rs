@@ -281,4 +281,26 @@ impl crate::TypeInner {
             | crate::TypeInner::BindingArray { .. } => None,
         }
     }
+
+    /// Return true if `self` is an abstract type.
+    ///
+    /// Use `types` to look up type handles. This is necessary to
+    /// recognize abstract arrays.
+    pub fn is_abstract(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
+        match *self {
+            crate::TypeInner::Scalar(scalar)
+            | crate::TypeInner::Vector { scalar, .. }
+            | crate::TypeInner::Matrix { scalar, .. }
+            | crate::TypeInner::Atomic(scalar) => scalar.is_abstract(),
+            crate::TypeInner::Array { base, .. } => types[base].inner.is_abstract(types),
+            crate::TypeInner::ValuePointer { .. }
+            | crate::TypeInner::Pointer { .. }
+            | crate::TypeInner::Struct { .. }
+            | crate::TypeInner::Image { .. }
+            | crate::TypeInner::Sampler { .. }
+            | crate::TypeInner::AccelerationStructure
+            | crate::TypeInner::RayQuery
+            | crate::TypeInner::BindingArray { .. } => false,
+        }
+    }
 }

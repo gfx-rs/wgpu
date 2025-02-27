@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 94
+; Bound: 111
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -60,6 +60,7 @@ OpName %49 "fs_main"
 OpName %55 "color"
 OpName %57 "i"
 OpName %59 "ii"
+OpName %75 "loop_bound"
 OpMemberDecorate %6 0 Offset 0
 OpMemberDecorate %6 1 Offset 16
 OpMemberDecorate %8 0 Offset 0
@@ -107,8 +108,14 @@ OpDecorate %48 Location 0
 %58 = OpTypePointer Function %9
 %60 = OpTypePointer Function %4
 %61 = OpConstantNull  %4
-%69 = OpTypeBool
-%77 = OpTypePointer Function %4
+%68 = OpTypeVector %31 2
+%69 = OpTypePointer Function %68
+%70 = OpTypeBool
+%71 = OpTypeVector %70 2
+%72 = OpConstantComposite  %68  %36 %36
+%73 = OpConstant  %31  4294967295
+%74 = OpConstantComposite  %68  %73 %73
+%94 = OpTypePointer Function %4
 %21 = OpFunction  %2  None %22
 %10 = OpLabel
 %24 = OpVariable  %25  Function %26
@@ -142,6 +149,7 @@ OpFunctionEnd
 %55 = OpVariable  %28  Function %56
 %57 = OpVariable  %58  Function %50
 %59 = OpVariable  %60  Function %61
+%75 = OpVariable  %69  Function %72
 %45 = OpLoad  %7  %43
 %47 = OpLoad  %5  %46
 %42 = OpCompositeConstruct  %8  %45 %47
@@ -155,60 +163,74 @@ OpBranch %64
 %64 = OpLabel
 OpLine %3 26 5
 OpLoopMerge %65 %67 None
+OpBranch %76
+%76 = OpLabel
+%77 = OpLoad  %68  %75
+%78 = OpIEqual  %71  %74 %77
+%79 = OpAll  %70  %78
+OpSelectionMerge %80 None
+OpBranchConditional %79 %65 %80
+%80 = OpLabel
+%81 = OpCompositeExtract  %31  %77 1
+%82 = OpIEqual  %70  %81 %73
+%83 = OpSelect  %31  %82 %30 %36
+%84 = OpCompositeConstruct  %68  %83 %30
+%85 = OpIAdd  %68  %77 %84
+OpStore %75 %85
 OpBranch %66
 %66 = OpLabel
 OpLine %3 1 1
-%68 = OpLoad  %9  %57
+%86 = OpLoad  %9  %57
 OpLine %3 26 21
-%70 = OpSLessThan  %69  %68 %51
+%87 = OpSLessThan  %70  %86 %51
 OpLine %3 26 20
-OpSelectionMerge %71 None
-OpBranchConditional %70 %71 %72
-%72 = OpLabel
+OpSelectionMerge %88 None
+OpBranchConditional %87 %88 %89
+%89 = OpLabel
 OpBranch %65
-%71 = OpLabel
-OpBranch %73
-%73 = OpLabel
+%88 = OpLabel
+OpBranch %90
+%90 = OpLabel
 OpLine %3 27 18
-%75 = OpLoad  %9  %57
-%76 = OpConvertSToF  %4  %75
+%92 = OpLoad  %9  %57
+%93 = OpConvertSToF  %4  %92
 OpLine %3 27 9
-OpStore %59 %76
+OpStore %59 %93
 OpLine %3 28 9
-%78 = OpLoad  %4  %59
+%95 = OpLoad  %4  %59
 OpLine %3 28 9
-%79 = OpFMul  %4  %78 %52
-%80 = OpAccessChain  %77  %55 %36
-%81 = OpLoad  %4  %80
-%82 = OpFAdd  %4  %81 %79
+%96 = OpFMul  %4  %95 %52
+%97 = OpAccessChain  %94  %55 %36
+%98 = OpLoad  %4  %97
+%99 = OpFAdd  %4  %98 %96
 OpLine %3 28 9
-%83 = OpAccessChain  %77  %55 %36
-OpStore %83 %82
+%100 = OpAccessChain  %94  %55 %36
+OpStore %100 %99
 OpLine %3 29 9
-%84 = OpLoad  %4  %59
+%101 = OpLoad  %4  %59
 OpLine %3 29 9
-%85 = OpFMul  %4  %84 %53
-%86 = OpAccessChain  %77  %55 %30
-%87 = OpLoad  %4  %86
-%88 = OpFAdd  %4  %87 %85
+%102 = OpFMul  %4  %101 %53
+%103 = OpAccessChain  %94  %55 %30
+%104 = OpLoad  %4  %103
+%105 = OpFAdd  %4  %104 %102
 OpLine %3 29 9
-%89 = OpAccessChain  %77  %55 %30
-OpStore %89 %88
-OpBranch %74
-%74 = OpLabel
+%106 = OpAccessChain  %94  %55 %30
+OpStore %106 %105
+OpBranch %91
+%91 = OpLabel
 OpBranch %67
 %67 = OpLabel
 OpLine %3 26 29
-%90 = OpLoad  %9  %57
-%91 = OpIAdd  %9  %90 %54
+%107 = OpLoad  %9  %57
+%108 = OpIAdd  %9  %107 %54
 OpLine %3 26 29
-OpStore %57 %91
+OpStore %57 %108
 OpBranch %64
 %65 = OpLabel
 OpLine %3 1 1
-%92 = OpLoad  %5  %55
+%109 = OpLoad  %5  %55
 OpLine %3 32 12
-%93 = OpCompositeConstruct  %7  %92 %23
-OpStore %48 %93
+%110 = OpCompositeConstruct  %7  %109 %23
+OpStore %48 %110
 OpReturn
 OpFunctionEnd

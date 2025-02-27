@@ -352,6 +352,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub(in crate::front::wgsl) fn end_of_generic_arguments(&mut self) -> bool {
+        self.skip(Token::Separator(',')) && self.peek().0 != Token::Paren('>')
+    }
+
     /// If the next token matches it is skipped and true is returned
     pub(in crate::front::wgsl) fn skip(&mut self, what: Token<'_>) -> bool {
         let (peeked_token, rest) = self.peek_token_and_rest();

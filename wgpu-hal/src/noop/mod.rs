@@ -1,11 +1,12 @@
 #![allow(unused_variables)]
 
 use alloc::{string::String, vec, vec::Vec};
-use core::{
-    ptr,
-    sync::atomic::{AtomicU64, Ordering},
-    time::Duration,
-};
+use core::{ptr, sync::atomic::Ordering, time::Duration};
+
+#[cfg(supports_64bit_atomics)]
+use core::sync::atomic::AtomicU64;
+#[cfg(not(supports_64bit_atomics))]
+use portable_atomic::AtomicU64;
 
 use crate::TlasInstance;
 

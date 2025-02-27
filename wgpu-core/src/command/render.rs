@@ -1,5 +1,5 @@
 use alloc::{borrow::Cow, sync::Arc, vec::Vec};
-use core::{fmt, mem::size_of, num::NonZeroU32, ops::Range, str};
+use core::{fmt, num::NonZeroU32, ops::Range, str};
 
 use arrayvec::ArrayVec;
 use thiserror::Error;

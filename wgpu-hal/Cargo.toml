@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.82.0"
 
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
@@ -35,7 +35,9 @@ targets = [
 ignored = ["cfg_aliases"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(web_sys_unstable_apis)', # web-sys uses this
+] }
 
 [lib]
 
@@ -113,7 +115,6 @@ gles = [
     "dep:profiling",
     "dep:wasm-bindgen",
     "dep:web-sys",
-    "once_cell/std",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_System_LibraryLoader",
@@ -155,6 +156,7 @@ renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
+portable-atomic = ["dep:portable-atomic"]
 
 ###################################
 ### Internal Debugging Features ###
@@ -172,6 +174,14 @@ device_lost_panic = []
 #
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
+
+###################
+### Workarounds ###
+###################
+
+# objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
+# You shouldn't ever enable this feature.
+cargo-clippy = []
 
 [[example]]
 name = "halmark"
@@ -299,6 +309,9 @@ khronos-egl = { workspace = true, optional = true, features = [
 ] }
 # Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
 libloading = { workspace = true, optional = true }
+
+[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
+portable-atomic = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true

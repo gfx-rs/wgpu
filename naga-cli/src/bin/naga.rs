@@ -446,6 +446,10 @@ fn run() -> anyhow::Result<()> {
         naga::back::spv::WriterFlags::ADJUST_COORDINATE_SPACE,
         !params.keep_coordinate_space,
     );
+    params.glsl.writer_flags.set(
+        naga::back::glsl::WriterFlags::ADJUST_COORDINATE_SPACE,
+        !params.keep_coordinate_space,
+    );
 
     if args.bulk_validate {
         return bulk_validate(args, &params);

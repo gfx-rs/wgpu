@@ -24,3 +24,8 @@ fn return_vec2f32_ai() -> vec2<f32> {
 fn return_arrf32_ai() -> array<f32, 4> {
     return array(1, 1, 1, 1);
 }
+
+const one = 1;
+fn return_const_f32_const_ai() -> f32 {
+    return one;
+}
