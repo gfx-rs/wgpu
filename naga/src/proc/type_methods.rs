@@ -298,8 +298,8 @@ impl crate::TypeInner {
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::Image { .. }
             | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure
-            | crate::TypeInner::RayQuery
+            | crate::TypeInner::AccelerationStructure { .. }
+            | crate::TypeInner::RayQuery { .. }
             | crate::TypeInner::BindingArray { .. } => false,
         }
     }
