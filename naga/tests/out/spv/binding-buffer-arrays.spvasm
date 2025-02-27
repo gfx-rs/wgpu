@@ -36,10 +36,10 @@ OpDecorate %55 NonUniform
 %9 = OpConstant  %3  1
 %8 = OpTypeArray %7 %9
 %10 = OpTypeStruct %3
-%14 = OpConstant  %3  10
-%13 = OpTypeArray %7 %14
-%12 = OpTypePointer StorageBuffer %13
-%11 = OpVariable  %12  StorageBuffer
+%13 = OpConstant  %3  10
+%12 = OpTypeArray %7 %13
+%14 = OpTypePointer StorageBuffer %12
+%11 = OpVariable  %14  StorageBuffer
 %16 = OpTypeStruct %4
 %17 = OpTypePointer Uniform %16
 %15 = OpVariable  %17  Uniform

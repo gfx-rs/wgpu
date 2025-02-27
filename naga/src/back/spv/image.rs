@@ -1236,10 +1236,8 @@ impl BlockContext<'_> {
             return Err(Error::Validation("Invalid image class"));
         };
         let scalar = format.into();
-        let pointer_type_id = self.get_type_id(LookupType::Local(LocalType::LocalPointer {
-            base: NumericType::Scalar(scalar),
-            class: spirv::StorageClass::Image,
-        }));
+        let scalar_type_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
+        let pointer_type_id = self.get_pointer_type_id(scalar_type_id, spirv::StorageClass::Image);
         let signed = scalar.kind == crate::ScalarKind::Sint;
         if scalar.width == 8 {
             self.writer

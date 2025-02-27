@@ -9,7 +9,6 @@ use super::{
     Writer,
 };
 use crate::arena::Handle;
-use crate::{Type, TypeInner};
 
 impl Writer {
     pub(super) fn write_ray_query_get_intersection_function(
@@ -23,65 +22,30 @@ impl Writer {
         let ray_intersection = ir_module.special_types.ray_intersection.unwrap();
         let intersection_type_id = self.get_handle_type_id(ray_intersection);
         let intersection_pointer_type_id =
-            self.get_pointer_type_id(ray_intersection, spirv::StorageClass::Function);
+            self.get_pointer_type_id(intersection_type_id, spirv::StorageClass::Function);
 
         let flag_type_id = self.get_u32_type_id();
-        let flag_type = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::Scalar(crate::Scalar::U32),
-            })
-            .unwrap();
         let flag_pointer_type_id =
-            self.get_pointer_type_id(flag_type, spirv::StorageClass::Function);
+            self.get_pointer_type_id(flag_type_id, spirv::StorageClass::Function);
 
         let transform_type_id = self.get_numeric_type_id(NumericType::Matrix {
             columns: crate::VectorSize::Quad,
             rows: crate::VectorSize::Tri,
             scalar: crate::Scalar::F32,
         });
-        let transform_type = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::Matrix {
-                    columns: crate::VectorSize::Quad,
-                    rows: crate::VectorSize::Tri,
-                    scalar: crate::Scalar::F32,
-                },
-            })
-            .unwrap();
         let transform_pointer_type_id =
-            self.get_pointer_type_id(transform_type, spirv::StorageClass::Function);
+            self.get_pointer_type_id(transform_type_id, spirv::StorageClass::Function);
 
         let barycentrics_type_id = self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Bi,
             scalar: crate::Scalar::F32,
         });
-        let barycentrics_type = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::Vector {
-                    size: crate::VectorSize::Bi,
-                    scalar: crate::Scalar::F32,
-                },
-            })
-            .unwrap();
         let barycentrics_pointer_type_id =
-            self.get_pointer_type_id(barycentrics_type, spirv::StorageClass::Function);
+            self.get_pointer_type_id(barycentrics_type_id, spirv::StorageClass::Function);
 
         let bool_type_id = self.get_bool_type_id();
-        let bool_type = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::Scalar(crate::Scalar::BOOL),
-            })
-            .unwrap();
         let bool_pointer_type_id =
-            self.get_pointer_type_id(bool_type, spirv::StorageClass::Function);
+            self.get_pointer_type_id(bool_type_id, spirv::StorageClass::Function);
 
         let scalar_type_id = self.get_f32_type_id();
         let float_pointer_type_id = self.get_f32_pointer_type_id(spirv::StorageClass::Function);
