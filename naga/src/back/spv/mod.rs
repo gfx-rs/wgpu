@@ -772,6 +772,10 @@ impl BlockContext<'_> {
     ) -> Word {
         self.writer.get_pointer_type_id(handle, class)
     }
+
+    fn get_numeric_type_id(&mut self, numeric: NumericType) -> Word {
+        self.writer.get_numeric_type_id(numeric)
+    }
 }
 
 pub struct Writer {

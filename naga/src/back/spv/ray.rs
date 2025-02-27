@@ -5,8 +5,8 @@ Generating SPIR-V for ray query operations.
 use alloc::vec;
 
 use super::{
-    Block, BlockContext, Function, FunctionArgument, Instruction, LocalType, LookupFunctionType,
-    LookupType, NumericType, Writer,
+    Block, BlockContext, Function, FunctionArgument, Instruction, LookupFunctionType, NumericType,
+    Writer,
 };
 use crate::arena::Handle;
 use crate::{Type, TypeInner};
@@ -36,12 +36,11 @@ impl Writer {
         let flag_pointer_type_id =
             self.get_pointer_type_id(flag_type, spirv::StorageClass::Function);
 
-        let transform_type_id =
-            self.get_numeric_type_id(NumericType::Matrix {
-                columns: crate::VectorSize::Quad,
-                rows: crate::VectorSize::Tri,
-                scalar: crate::Scalar::F32,
-            });
+        let transform_type_id = self.get_numeric_type_id(NumericType::Matrix {
+            columns: crate::VectorSize::Quad,
+            rows: crate::VectorSize::Tri,
+            scalar: crate::Scalar::F32,
+        });
         let transform_type = ir_module
             .types
             .get(&Type {
@@ -56,11 +55,10 @@ impl Writer {
         let transform_pointer_type_id =
             self.get_pointer_type_id(transform_type, spirv::StorageClass::Function);
 
-        let barycentrics_type_id =
-            self.get_numeric_type_id(NumericType::Vector {
-                size: crate::VectorSize::Bi,
-                scalar: crate::Scalar::F32,
-            });
+        let barycentrics_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::F32,
+        });
         let barycentrics_type = ir_module
             .types
             .get(&Type {
@@ -497,9 +495,8 @@ impl BlockContext<'_> {
                 let desc_id = self.cached[descriptor];
                 let acc_struct_id = self.get_handle_id(acceleration_structure);
 
-                let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-                    NumericType::Scalar(crate::Scalar::U32),
-                )));
+                let flag_type_id =
+                    self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
                 let ray_flags_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     flag_type_id,
@@ -515,9 +512,8 @@ impl BlockContext<'_> {
                     &[1],
                 ));
 
-                let scalar_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-                    NumericType::Scalar(crate::Scalar::F32),
-                )));
+                let scalar_type_id =
+                    self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::F32));
                 let tmin_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     scalar_type_id,
@@ -533,11 +529,10 @@ impl BlockContext<'_> {
                     &[3],
                 ));
 
-                let vector_type_id =
-                    self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
-                        size: crate::VectorSize::Tri,
-                        scalar: crate::Scalar::F32,
-                    })));
+                let vector_type_id = self.get_numeric_type_id(NumericType::Vector {
+                    size: crate::VectorSize::Tri,
+                    scalar: crate::Scalar::F32,
+                });
                 let ray_origin_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     vector_type_id,

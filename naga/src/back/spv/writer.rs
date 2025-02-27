@@ -1188,22 +1188,22 @@ impl Writer {
     }
 
     fn write_numeric_type_declaration_local(&mut self, id: Word, numeric: NumericType) {
-        let instruction =
-            match numeric {
-                NumericType::Scalar(scalar) => self.make_scalar(id, scalar),
-                NumericType::Vector { size, scalar } => {
-                    let scalar_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
-                    Instruction::type_vector(id, scalar_id, size)
-                }
-                NumericType::Matrix {
-                    columns,
-                    rows,
-                    scalar,
-                } => {
-                    let column_id = self.get_numeric_type_id(NumericType::Vector { size: rows, scalar });
-                    Instruction::type_matrix(id, column_id, columns)
-                }
-            };
+        let instruction = match numeric {
+            NumericType::Scalar(scalar) => self.make_scalar(id, scalar),
+            NumericType::Vector { size, scalar } => {
+                let scalar_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
+                Instruction::type_vector(id, scalar_id, size)
+            }
+            NumericType::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => {
+                let column_id =
+                    self.get_numeric_type_id(NumericType::Vector { size: rows, scalar });
+                Instruction::type_matrix(id, column_id, columns)
+            }
+        };
 
         instruction.to_words(&mut self.logical_layout.declarations);
     }
