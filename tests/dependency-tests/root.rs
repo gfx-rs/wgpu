@@ -16,27 +16,6 @@ struct Requirement<'a> {
     search_terms: &'a [Search<'a>],
 }
 
-const ALL_WGPU_FEATURES: &[&str] = &[
-    "vulkan",
-    "gles",
-    "dx12",
-    "metal",
-    "webgpu",
-    "angle",
-    "vulkan-portability",
-    "webgl",
-    "noop",
-    "spirv",
-    "glsl",
-    "wgsl",
-    "naga-ir",
-    "strict_asserts",
-    "serde",
-    "static-dxc",
-    "counters",
-    "fragile-send-sync-non-atomic-wasm",
-];
-
 fn check_feature_dependency(requirement: Requirement) {
     println!("Checking: {}", requirement.human_readable_name);
 
@@ -67,6 +46,7 @@ fn check_feature_dependency(requirement: Requirement) {
         .stdout;
     let output = String::from_utf8(output).expect("Output is not valid UTF-8");
 
+    let mut any_failed = false;
     println!("{output}");
 
     for (i, search_term) in requirement.search_terms.iter().enumerate() {
@@ -88,20 +68,49 @@ fn check_feature_dependency(requirement: Requirement) {
                 i + 1,
                 requirement.search_terms.len()
             );
+            any_failed = true;
         }
     }
+
+    assert!(!any_failed);
+}
+
+fn get_all_wgpu_features() -> Vec<String> {
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .no_deps()
+        .exec()
+        .unwrap();
+
+    metadata
+        .packages
+        .iter()
+        .find_map(|p| {
+            if p.name == "wgpu" {
+                Some(p.features.keys().cloned().collect())
+            } else {
+                None
+            }
+        })
+        .unwrap()
 }
 
 #[test]
-fn wasm32_without_webgl_does_not_depend_on_wgpu_core() {
-    let features_no_webgl: Vec<&str> = ALL_WGPU_FEATURES
+fn wasm32_without_webgl_or_noop_does_not_depend_on_wgpu_core() {
+    let all_features = get_all_wgpu_features();
+
+    let removed_features = ["webgl", "noop", "wgpu-core"];
+
+    let features_no_webgl: Vec<&str> = all_features
         .iter()
-        .copied()
-        .filter(|feature| *feature != "webgl")
+        .map(String::as_str)
+        .filter(|&feature| !removed_features.contains(&feature))
         .collect();
 
+    dbg!(&features_no_webgl);
+
     check_feature_dependency(Requirement {
-        human_readable_name: "wasm32 without `webgl` feature does not depend on `wgpu-core`",
+        human_readable_name:
+            "wasm32 without `webgl` or `noop` feature does not depend on `wgpu-core`",
         target: "wasm32-unknown-unknown",
         packages: &["wgpu"],
         features: &features_no_webgl,

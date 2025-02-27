@@ -44,6 +44,7 @@ arrayvec.workspace = true
 approx.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
+cargo_metadata.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true
