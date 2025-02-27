@@ -96,10 +96,15 @@ We use the following components in a WGPU development environment:
   pointed to by `rust-toolchain.toml` at the root of the repository, to compile
   WGPU's code.
 - [Taplo](https://taplo.tamasfe.dev/) to keep TOML files formatted.
+- [Vulkan SDK](https://vulkan.lunarg.com/) to provide Vulkan validation layers
+  and other Vulkan/SPIR-V tools for testing.
 
 Once these are done, you should be ready to hack on WGPU! Drop into your
 favorite editor, make some changes to the repository's code, and test that WGPU
-has been changed the way you expect. We recommend
+has been changed the way you expect. Take a look at [`docs/testing.md`] for more
+info on testing.
+
+When testing your own code against your patch, we recommend
 [using a `path` dependency][path-deps] in Cargo for local testing of changes,
 and a [`git` dependency][git-deps] pointing to your own fork to share changes
 with other contributors.
