@@ -2732,7 +2732,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             crate::Expression::RayQueryVertexPositions {
                                 query,
-                                committed: true,
+                                committed: false,
                             }
                         }
                         "rayQueryProceed" => {
