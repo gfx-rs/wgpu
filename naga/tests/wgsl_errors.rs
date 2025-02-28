@@ -1905,18 +1905,16 @@ fn switch_signed_unsigned_mismatch() {
     check(
         "
         fn x(y: u32) {
-	        switch y {
-		        case 1: {}
-	        }
+            switch y {
+                case 1i: {}
+            }
         }
         ",
-        r###"error: invalid switch value
-  ┌─ wgsl:4:16
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
   │
-4 │                 case 1: {}
-  │                      ^ expected unsigned integer
-  │
-  = note: suffix the integer with a `u`: `1u`
+4 │                 case 1i: {}
+  │                      ^^ `switch` case selector must have the same type as the `switch` selector expression
 
 "###,
     );
@@ -1924,18 +1922,90 @@ fn switch_signed_unsigned_mismatch() {
     check(
         "
         fn x(y: i32) {
-	        switch y {
-		        case 1u: {}
-	        }
+            switch y {
+                case 1u: {}
+            }
         }
         ",
-        r###"error: invalid switch value
-  ┌─ wgsl:4:16
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
   │
 4 │                 case 1u: {}
-  │                      ^^ expected signed integer
+  │                      ^^ `switch` case selector must have the same type as the `switch` selector expression
+
+"###,
+    );
+}
+
+#[test]
+fn switch_invalid_type() {
+    check(
+        "
+        fn x(y: f32) {
+            switch y {
+                case 1: {}
+            }
+        }
+        ",
+        r###"error: invalid `switch` selector
+  ┌─ wgsl:3:20
   │
-  = note: remove the `u` suffix: `1`
+3 │             switch y {
+  │                    ^ `switch` selector must be a scalar integer
+
+"###,
+    );
+
+    check(
+        "
+        fn x(y: vec2<i32>) {
+            switch y {
+                case 1: {}
+            }
+        }
+        ",
+        r###"error: invalid `switch` selector
+  ┌─ wgsl:3:20
+  │
+3 │             switch y {
+  │                    ^ `switch` selector must be a scalar integer
+
+"###,
+    );
+
+    check(
+        "
+        fn x() {
+            switch 0 {
+                case 1.0: {}
+            }
+        }
+    ",
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
+  │
+4 │                 case 1.0: {}
+  │                      ^^^ `switch` case selector must be a scalar integer const expression
+
+"###,
+    );
+}
+
+#[test]
+fn switch_non_const_case() {
+    check(
+        "
+        fn x(y: i32) {
+            switch 0 {
+                case y: {}
+            }
+        }
+    ",
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
+  │
+4 │                 case y: {}
+  │                      ^ `switch` case selector must be a scalar integer const expression
 
 "###,
     );

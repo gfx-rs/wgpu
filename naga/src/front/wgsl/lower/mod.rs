@@ -1630,11 +1630,52 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 emitter.start(&ctx.function.expressions);
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
-                let selector = self.expression(selector, &mut ectx)?;
 
-                let uint =
-                    resolve_inner!(ectx, selector).scalar_kind() == Some(crate::ScalarKind::Uint);
+                // Determine the scalar type of the selector and case expressions, find the
+                // consensus type for automatic conversion, then convert them.
+                let (mut exprs, spans) = core::iter::once(selector)
+                    .chain(cases.iter().filter_map(|case| match case.value {
+                        ast::SwitchValue::Expr(expr) => Some(expr),
+                        ast::SwitchValue::Default => None,
+                    }))
+                    .enumerate()
+                    .map(|(i, expr)| {
+                        let span = ectx.ast_expressions.get_span(expr);
+                        let expr = self.expression_for_abstract(expr, &mut ectx)?;
+                        let ty = resolve_inner!(ectx, expr);
+                        match *ty {
+                            crate::TypeInner::Scalar(
+                                crate::Scalar::I32
+                                | crate::Scalar::U32
+                                | crate::Scalar::ABSTRACT_INT,
+                            ) => Ok((expr, span)),
+                            _ => match i {
+                                0 => Err(Error::InvalidSwitchSelector { span }),
+                                _ => Err(Error::InvalidSwitchCase { span }),
+                            },
+                        }
+                    })
+                    .collect::<Result<(Vec<_>, Vec<_>), _>>()?;
+
+                let mut consensus =
+                    ectx.automatic_conversion_consensus(&exprs)
+                        .map_err(|span_idx| Error::SwitchCaseTypeMismatch {
+                            span: spans[span_idx],
+                        })?;
+                // Concretize to I32 if the selector and all cases were abstract
+                if consensus == crate::Scalar::ABSTRACT_INT {
+                    consensus = crate::Scalar::I32;
+                }
+                for expr in &mut exprs {
+                    ectx.convert_to_leaf_scalar(expr, consensus)?;
+                }
+
                 block.extend(emitter.finish(&ctx.function.expressions));
+
+                let mut exprs = exprs.into_iter();
+                let selector = exprs
+                    .next()
+                    .expect("First element should be selector expression");
 
                 let cases = cases
                     .iter()
@@ -1643,17 +1684,22 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             value: match case.value {
                                 ast::SwitchValue::Expr(expr) => {
                                     let span = ctx.ast_expressions.get_span(expr);
-                                    let expr =
-                                        self.expression(expr, &mut ctx.as_global().as_const())?;
-                                    match ctx.module.to_ctx().eval_expr_to_literal(expr) {
-                                        Some(crate::Literal::I32(value)) if !uint => {
+                                    let expr = exprs.next().expect(
+                                        "Should yield expression for each SwitchValue::Expr case",
+                                    );
+                                    match ctx
+                                        .module
+                                        .to_ctx()
+                                        .eval_expr_to_literal_from(expr, &ctx.function.expressions)
+                                    {
+                                        Some(crate::Literal::I32(value)) => {
                                             crate::SwitchValue::I32(value)
                                         }
-                                        Some(crate::Literal::U32(value)) if uint => {
+                                        Some(crate::Literal::U32(value)) => {
                                             crate::SwitchValue::U32(value)
                                         }
                                         _ => {
-                                            return Err(Error::InvalidSwitchValue { uint, span });
+                                            return Err(Error::InvalidSwitchCase { span });
                                         }
                                     }
                                 }
