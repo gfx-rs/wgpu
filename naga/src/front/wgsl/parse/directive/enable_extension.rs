@@ -92,13 +92,13 @@ pub enum UnimplementedEnableExtension {
     ///
     /// In the WGSL standard, this corresponds to [`enable clip_distances;`].
     ///
-    /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-f16
+    /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-clip_distances
     ClipDistances,
     /// Enables the `blend_src` attribute in WGSL.
     ///
     /// In the WGSL standard, this corresponds to [`enable dual_source_blending;`].
     ///
-    /// [`enable dual_source_blending;`]: https://www.w3.org/TR/WGSL/#extension-f16
+    /// [`enable dual_source_blending;`]: https://www.w3.org/TR/WGSL/#extension-dual_source_blending
     DualSourceBlending,
 }
 
