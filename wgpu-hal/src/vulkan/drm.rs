@@ -4,7 +4,12 @@ use std::{string::ToString, vec::Vec};
 use ash::{ext, khr, vk};
 
 impl super::Instance {
-    pub fn create_surface_from_drm(
+    /// Creates a new surface from the given drm configuration.
+    ///
+    /// # Safety
+    ///
+    /// - All parameters must point to valid DRM values.
+    pub unsafe fn create_surface_from_drm(
         &self,
         fd: i32,
         plane: u32,

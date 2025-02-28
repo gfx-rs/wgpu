@@ -794,6 +794,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     .instance_create_surface(raw_display_handle, raw_window_handle, None)
             },
 
+            #[cfg(all(unix, not(target_vendor = "apple")))]
             SurfaceTargetUnsafe::Drm {
                 fd,
                 plane,

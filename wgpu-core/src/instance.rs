@@ -202,6 +202,18 @@ impl Instance {
         }
     }
 
+    /// Creates a new surface from the given drm configuration.
+    ///
+    /// # Safety
+    ///
+    /// - All parameters must point to valid DRM values.
+    ///
+    /// # Platform Support
+    ///
+    /// This function is only available on Unix-like platforms (Linux, FreeBSD) and
+    /// currently only works with the Vulkan backend.
+    #[cfg(all(unix, not(target_vendor = "apple")))]
+    #[cfg_attr(not(vulkan), allow(unused_variables))]
     pub unsafe fn create_surface_from_drm(
         &self,
         fd: i32,
@@ -217,16 +229,28 @@ impl Instance {
         let mut surface_per_backend: HashMap<Backend, Box<dyn hal::DynSurface>> =
             HashMap::default();
 
-        let instance = unsafe { self.as_hal::<hal::api::Vulkan>() }
-            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Vulkan))?;
-
-        match instance.create_surface_from_drm(fd, plane, connector_id, width, height, refresh_rate)
+        #[cfg(vulkan)]
         {
-            Ok(surface) => {
-                surface_per_backend.insert(Backend::Vulkan, Box::new(surface));
-            }
-            Err(err) => {
-                errors.insert(Backend::Vulkan, err);
+            let instance = unsafe { self.as_hal::<hal::api::Vulkan>() }
+                .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Vulkan))?;
+
+            // Safety must be upheld by the caller
+            match unsafe {
+                instance.create_surface_from_drm(
+                    fd,
+                    plane,
+                    connector_id,
+                    width,
+                    height,
+                    refresh_rate,
+                )
+            } {
+                Ok(surface) => {
+                    surface_per_backend.insert(Backend::Vulkan, Box::new(surface));
+                }
+                Err(err) => {
+                    errors.insert(Backend::Vulkan, err);
+                }
             }
         }
 
@@ -814,6 +838,17 @@ impl Global {
         Ok(id)
     }
 
+    /// Creates a new surface from the given drm configuration.
+    ///
+    /// # Safety
+    ///
+    /// - All parameters must point to valid DRM values.
+    ///
+    /// # Platform Support
+    ///
+    /// This function is only available on Unix-like platforms (Linux, FreeBSD) and
+    /// currently only works with the Vulkan backend.
+    #[cfg(all(unix, not(target_vendor = "apple")))]
     pub unsafe fn instance_create_surface_from_drm(
         &self,
         fd: i32,
