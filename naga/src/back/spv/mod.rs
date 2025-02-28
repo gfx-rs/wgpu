@@ -858,7 +858,7 @@ pub struct BindingInfo {
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZeroInitializeWorkgroupMemoryMode {

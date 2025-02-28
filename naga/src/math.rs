@@ -76,6 +76,9 @@ pub(crate) trait Math: Sized {
 
     /// Returns the smallest integer greater than or equal to `x`.
     fn ceil(x: Self) -> Self;
+
+    /// Returns the fractional part of `x`.
+    fn fract(x: Self) -> Self;
 }
 
 #[cfg(feature = "libm")]
@@ -195,6 +198,11 @@ impl Math for f32 {
     fn ceil(x: f32) -> f32 {
         libm::ceilf(x)
     }
+
+    #[inline(always)]
+    fn fract(x: f32) -> f32 {
+        libm::modff(x).0
+    }
 }
 
 #[cfg(all(not(feature = "libm"), feature = "std"))]
@@ -312,6 +320,11 @@ impl Math for f32 {
     #[inline(always)]
     fn ceil(x: f32) -> f32 {
         f32::ceil(x)
+    }
+
+    #[inline(always)]
+    fn fract(x: f32) -> f32 {
+        f32::fract(x)
     }
 }
 
@@ -432,6 +445,11 @@ impl Math for f64 {
     fn ceil(x: f64) -> f64 {
         libm::ceil(x)
     }
+
+    #[inline(always)]
+    fn fract(x: f64) -> f64 {
+        libm::modf(x).0
+    }
 }
 
 #[cfg(all(not(feature = "libm"), feature = "std"))]
@@ -549,5 +567,10 @@ impl Math for f64 {
     #[inline(always)]
     fn ceil(x: f64) -> f64 {
         f64::ceil(x)
+    }
+
+    #[inline(always)]
+    fn fract(x: f64) -> f64 {
+        f64::fract(x)
     }
 }

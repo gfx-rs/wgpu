@@ -89,7 +89,7 @@ where
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -110,7 +110,7 @@ pub struct EntryPointResources {
     pub sizes_buffer: Option<Slot>,
 }
 
-pub type EntryPointResourceMap = std::collections::BTreeMap<String, EntryPointResources>;
+pub type EntryPointResourceMap = alloc::collections::BTreeMap<String, EntryPointResources>;
 
 enum ResolvedBinding {
     BuiltIn(crate::BuiltIn),

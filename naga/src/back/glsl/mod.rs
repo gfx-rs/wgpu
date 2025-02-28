@@ -108,7 +108,7 @@ where
 }
 
 /// Mapping between resources and bindings.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, u8>;
 
 impl crate::AtomicFunction {
     const fn to_glsl(self) -> &'static str {

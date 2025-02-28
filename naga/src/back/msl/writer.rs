@@ -2,6 +2,7 @@ use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, Transl
 use crate::{
     arena::{Handle, HandleSet},
     back::{self, Baked},
+    math::Math,
     proc::{self, index, ExpressionKindTracker, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
 };
@@ -1459,7 +1460,11 @@ impl<W: Write> Writer<W> {
                     } else if value.is_nan() {
                         write!(self.out, "NAN")?;
                     } else {
-                        let suffix = if value.fract() == 0.0 { ".0" } else { "" };
+                        let suffix = if <_ as Math>::fract(value) == 0.0 {
+                            ".0"
+                        } else {
+                            ""
+                        };
                         write!(self.out, "{value}{suffix}")?;
                     }
                 }

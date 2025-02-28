@@ -1,6 +1,7 @@
 use super::PipelineConstants;
 use crate::{
     arena::HandleVec,
+    math::Math,
     proc::{ConstantEvaluator, ConstantEvaluatorError, Emitter},
     valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator},
     Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
@@ -942,7 +943,7 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
                 return Err(PipelineConstantError::SrcNeedsToBeFinite);
             }
 
-            let value = value.trunc();
+            let value = <_ as Math>::trunc(value);
             if value < f64::from(i32::MIN) || value > f64::from(i32::MAX) {
                 return Err(PipelineConstantError::DstRangeTooSmall);
             }
@@ -956,7 +957,7 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
                 return Err(PipelineConstantError::SrcNeedsToBeFinite);
             }
 
-            let value = value.trunc();
+            let value = <_ as Math>::trunc(value);
             if value < f64::from(u32::MIN) || value > f64::from(u32::MAX) {
                 return Err(PipelineConstantError::DstRangeTooSmall);
             }
