@@ -21,8 +21,8 @@ pub use spirv::{Capability, SourceLanguage};
 use crate::arena::{Handle, HandleVec};
 use crate::proc::{BoundsCheckPolicies, TypeResolution};
 
+use core::ops;
 use spirv::Word;
-use std::ops;
 use thiserror::Error;
 
 #[derive(Clone)]

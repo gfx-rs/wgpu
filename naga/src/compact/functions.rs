@@ -101,7 +101,7 @@ impl FunctionMap {
             self.expressions.adjust(&mut handle);
             reuse.insert(handle, name);
         }
-        std::mem::swap(&mut function.named_expressions, reuse);
+        core::mem::swap(&mut function.named_expressions, reuse);
         assert!(reuse.is_empty());
 
         // Adjust statements.

@@ -1,5 +1,6 @@
 use crate::arena::{Arena, UniqueArena};
 use crate::arena::{Handle, HandleSet};
+use alloc::{format, string::String};
 
 use super::validate_atomic_compare_exchange_struct;
 

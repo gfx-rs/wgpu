@@ -1,9 +1,16 @@
-use std::iter;
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::iter;
 
 use arrayvec::ArrayVec;
 
 use crate::{
     arena::{Arena, Handle, HandleVec, UniqueArena},
+    math::Math,
     ArraySize, BinaryOperator, Constant, Expression, Literal, Override, RelationalFunction,
     ScalarKind, Span, Type, TypeInner, UnaryOperator,
 };
@@ -1140,40 +1147,40 @@ impl<'a> ConstantEvaluator<'a> {
 
             // trigonometry
             crate::MathFunction::Cos => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.cos()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::cos(e)]) })
             }
             crate::MathFunction::Cosh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.cosh()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::cosh(e)]) })
             }
             crate::MathFunction::Sin => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.sin()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::sin(e)]) })
             }
             crate::MathFunction::Sinh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.sinh()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::sinh(e)]) })
             }
             crate::MathFunction::Tan => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.tan()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::tan(e)]) })
             }
             crate::MathFunction::Tanh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.tanh()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::tanh(e)]) })
             }
             crate::MathFunction::Acos => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.acos()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::acos(e)]) })
             }
             crate::MathFunction::Asin => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.asin()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::asin(e)]) })
             }
             crate::MathFunction::Atan => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.atan()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::atan(e)]) })
             }
             crate::MathFunction::Asinh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.asinh()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::asinh(e)]) })
             }
             crate::MathFunction::Acosh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.acosh()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::acosh(e)]) })
             }
             crate::MathFunction::Atanh => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.atanh()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::atanh(e)]) })
             }
             crate::MathFunction::Radians => {
                 component_wise_float!(self, span, [arg], |e1| { Ok([e1.to_radians()]) })
@@ -1184,10 +1191,10 @@ impl<'a> ConstantEvaluator<'a> {
 
             // decomposition
             crate::MathFunction::Ceil => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.ceil()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::ceil(e)]) })
             }
             crate::MathFunction::Floor => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::floor(e)]) })
             }
             crate::MathFunction::Round => {
                 // TODO: this hit stable on 1.77, but MSRV hasn't caught up yet
@@ -1207,7 +1214,7 @@ impl<'a> ConstantEvaluator<'a> {
                             (x.abs() - 0.5).copysign(x)
                         }
                     } else {
-                        x.round()
+                        <_ as Math>::round(x)
                     }
                 }
                 component_wise_float(self, span, [arg], |e| match e {
@@ -1219,29 +1226,29 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_float!(self, span, [arg], |e| {
                     // N.B., Rust's definition of `fract` is `e - e.trunc()`, so we can't use that
                     // here.
-                    Ok([e - e.floor()])
+                    Ok([e - <_ as Math>::floor(e)])
                 })
             }
             crate::MathFunction::Trunc => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.trunc()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::trunc(e)]) })
             }
 
             // exponent
             crate::MathFunction::Exp => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.exp()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::exp(e)]) })
             }
             crate::MathFunction::Exp2 => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.exp2()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::exp2(e)]) })
             }
             crate::MathFunction::Log => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.ln()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::ln(e)]) })
             }
             crate::MathFunction::Log2 => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.log2()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::log2(e)]) })
             }
             crate::MathFunction::Pow => {
                 component_wise_float!(self, span, [arg, arg1.unwrap()], |e1, e2| {
-                    Ok([e1.powf(e2)])
+                    Ok([<_ as Math>::powf(e1, e2)])
                 })
             }
 
@@ -1254,7 +1261,7 @@ impl<'a> ConstantEvaluator<'a> {
                     self,
                     span,
                     [arg, arg1.unwrap(), arg2.unwrap()],
-                    |e1, e2, e3| { Ok([e1.mul_add(e2, e3)]) }
+                    |e1, e2, e3| { Ok([<_ as Math>::mul_add(e1, e2, e3)]) }
                 )
             }
             crate::MathFunction::Step => {
@@ -1263,10 +1270,10 @@ impl<'a> ConstantEvaluator<'a> {
                 })
             }
             crate::MathFunction::Sqrt => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.sqrt()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([<_ as Math>::sqrt(e)]) })
             }
             crate::MathFunction::InverseSqrt => {
-                component_wise_float!(self, span, [arg], |e| { Ok([1. / e.sqrt()]) })
+                component_wise_float!(self, span, [arg], |e| { Ok([1. / <_ as Math>::sqrt(e)]) })
             }
 
             // bits
@@ -1744,7 +1751,7 @@ impl<'a> ConstantEvaluator<'a> {
                 self.types.insert(Type { name: None, inner }, span)
             }
         };
-        let mut layouter = std::mem::take(self.layouter);
+        let mut layouter = core::mem::take(self.layouter);
         layouter.update(self.to_ctx()).unwrap();
         *self.layouter = layouter;
 
@@ -2536,7 +2543,7 @@ impl TryFromAbstract<f64> for u64 {
 
 #[cfg(test)]
 mod tests {
-    use std::vec;
+    use alloc::vec;
 
     use crate::{
         Arena, Constant, Expression, Literal, ScalarKind, Type, TypeInner, UnaryOperator,

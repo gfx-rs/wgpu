@@ -3,6 +3,7 @@ Type generators.
 */
 
 use crate::{arena::Handle, span::Span};
+use alloc::{format, string::ToString, vec};
 
 impl crate::Module {
     /// Populate this module's [`SpecialTypes::ray_desc`] type.
@@ -251,7 +252,7 @@ impl crate::Module {
         &mut self,
         special_type: crate::PredeclaredType,
     ) -> Handle<crate::Type> {
-        use std::fmt::Write;
+        use core::fmt::Write;
 
         if let Some(value) = self.special_types.predeclared_types.get(&special_type) {
             return *value;

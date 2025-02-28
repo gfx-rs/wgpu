@@ -1,4 +1,5 @@
 use crate::arena::{Arena, Handle, UniqueArena};
+use alloc::{format, string::String};
 
 use thiserror::Error;
 

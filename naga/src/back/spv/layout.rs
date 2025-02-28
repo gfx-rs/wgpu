@@ -1,6 +1,6 @@
 use super::{Instruction, LogicalLayout, PhysicalLayout};
+use core::iter;
 use spirv::{Op, Word, MAGIC_NUMBER};
-use std::iter;
 
 // https://github.com/KhronosGroup/SPIRV-Headers/pull/195
 const GENERATOR: Word = 28;

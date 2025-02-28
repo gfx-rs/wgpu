@@ -1,6 +1,6 @@
 use crate::back::hlsl::BackendResult;
 use crate::{RayQueryIntersection, TypeInner};
-use std::fmt::Write;
+use core::fmt::Write;
 
 impl<W: Write> super::Writer<'_, W> {
     // constructs hlsl RayDesc from wgsl RayDesc

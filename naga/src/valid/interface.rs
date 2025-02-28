@@ -3,6 +3,7 @@ use super::{
     Capabilities, Disalignment, FunctionError, ModuleInfo,
 };
 use crate::arena::{Handle, UniqueArena};
+use alloc::vec::Vec;
 
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
 use bit_set::BitSet;

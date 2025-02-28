@@ -35,7 +35,7 @@ use super::{
     BackendResult,
 };
 use crate::{arena::Handle, proc::NameKey, ScalarKind};
-use std::fmt::Write;
+use core::fmt::Write;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedArrayLength {

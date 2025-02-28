@@ -12,7 +12,7 @@ use crate::{
     valid::{FunctionInfo, ModuleInfo},
 };
 
-use std::{
+use core::{
     borrow::Cow,
     fmt::{Error as FmtError, Write as _},
 };
@@ -412,26 +412,26 @@ const COLORS: &[&str] = &[
 
 struct Prefixed<T>(Handle<T>);
 
-impl std::fmt::Display for Prefixed<crate::Expression> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::Expression> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "e")
     }
 }
 
-impl std::fmt::Display for Prefixed<crate::LocalVariable> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::LocalVariable> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "l")
     }
 }
 
-impl std::fmt::Display for Prefixed<crate::GlobalVariable> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::GlobalVariable> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "g")
     }
 }
 
-impl std::fmt::Display for Prefixed<crate::Function> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::Function> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "f")
     }
 }
@@ -793,7 +793,7 @@ pub fn write(
     mod_info: Option<&ModuleInfo>,
     options: Options,
 ) -> Result<String, FmtError> {
-    use std::fmt::Write as _;
+    use core::fmt::Write as _;
 
     let mut output = String::new();
     output += "digraph Module {\n";

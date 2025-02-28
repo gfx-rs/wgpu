@@ -201,7 +201,7 @@ impl crate::StorageFormat {
 mod tests {
     #[test]
     fn to_wgsl() {
-        use std::num::NonZeroU32;
+        use core::num::NonZeroU32;
 
         let mut types = crate::UniqueArena::new();
 

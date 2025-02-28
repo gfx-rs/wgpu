@@ -32,7 +32,7 @@ holding the result.
 */
 
 use crate::{arena::Handle, proc::index, valid::ModuleInfo};
-use std::fmt::{Error as FmtError, Write};
+use core::fmt::{Error as FmtError, Write};
 
 mod keywords;
 pub mod sampler;

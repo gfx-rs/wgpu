@@ -61,7 +61,7 @@ use crate::{
     Handle,
 };
 
-use std::{fmt, mem};
+use core::{fmt, mem};
 
 const STORE_TEMP_NAME: &str = "_value";
 

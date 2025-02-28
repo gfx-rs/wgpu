@@ -6,8 +6,8 @@ use crate::{
     Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
     Span, Statement, TypeInner, WithSpan,
 };
+use core::{borrow::Cow, mem};
 use hashbrown::HashSet;
-use std::{borrow::Cow, mem};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
@@ -243,7 +243,7 @@ fn process_pending(
                                 ),
                         ))
                     } else {
-                        Ok(std::num::NonZeroU32::new(n).unwrap())
+                        Ok(core::num::NonZeroU32::new(n).unwrap())
                     }
                 })
                 .map_err(|_| {

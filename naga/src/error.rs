@@ -1,4 +1,8 @@
-use std::{error::Error, fmt};
+use alloc::{boxed::Box, string::String};
+use core::{error::Error, fmt};
+
+#[cfg(feature = "codespan-reporting")]
+use alloc::vec::Vec;
 
 #[derive(Clone, Debug)]
 pub struct ShaderError<E> {
@@ -32,6 +36,7 @@ impl fmt::Display for ShaderError<crate::front::spv::Error> {
         write!(f, "\nShader '{label}' parsing {string}")
     }
 }
+#[cfg(feature = "codespan-reporting")]
 impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use codespan_reporting::{files::SimpleFile, term};

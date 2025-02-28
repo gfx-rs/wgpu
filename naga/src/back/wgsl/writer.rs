@@ -5,7 +5,7 @@ use crate::{
     proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, Module, ShaderStage, TypeInner,
 };
-use std::fmt::Write;
+use core::fmt::Write;
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;

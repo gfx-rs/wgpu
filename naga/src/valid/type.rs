@@ -1,5 +1,6 @@
 use super::Capabilities;
 use crate::{arena::Handle, proc::Alignment};
+use alloc::string::String;
 
 bitflags::bitflags! {
     /// Flags associated with [`Type`]s by [`Validator`].

@@ -344,7 +344,7 @@ impl<'module> ModuleTracer<'module> {
         let mut max_dep = Vec::with_capacity(self.module.types.len());
         let mut previous = None;
         for (_handle, ty) in self.module.types.iter() {
-            previous = std::cmp::max(
+            previous = core::cmp::max(
                 previous,
                 match ty.inner {
                     crate::TypeInner::Array { size, .. }

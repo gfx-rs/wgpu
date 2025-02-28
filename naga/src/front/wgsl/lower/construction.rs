@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use core::num::NonZeroU32;
 
 use crate::front::wgsl::parse::ast;
 use crate::{Handle, Span};
@@ -300,7 +300,7 @@ impl<'source> Lowerer<'source, '_> {
                 Constructor::Type((_, &crate::TypeInner::Vector { size, scalar })),
             ) => {
                 ctx.convert_slice_to_common_leaf_scalar(
-                    std::slice::from_mut(&mut component),
+                    core::slice::from_mut(&mut component),
                     scalar,
                 )?;
                 expr = crate::Expression::Splat {

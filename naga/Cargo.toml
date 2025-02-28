@@ -25,7 +25,7 @@ path = "tests/root.rs"
 all-features = true
 
 [features]
-default = []
+default = ["std"]
 dot-out = []
 glsl-in = ["dep:pp-rs"]
 glsl-out = []
@@ -73,16 +73,25 @@ hlsl-out-if-target-windows = []
 
 compact = []
 
+## Provide rich error messages using codespan-reporting
+codespan-reporting = ["dep:codespan-reporting", "dep:termcolor"]
+
+## Include the standard library
+std = []
+
+## Use `libm` for floating point operations instead of `std`
+libm = ["dep:libm"]
+
 [dependencies]
 arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
-termcolor = { version = "1.4.1" }
+termcolor = { version = "1.4.1", optional = true }
 # remove termcolor dep when updating to the next version of codespan-reporting
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
-codespan-reporting = { version = "0.11.0" }
+codespan-reporting = { version = "0.11.0", optional = true }
 hashbrown.workspace = true
 rustc-hash.workspace = true
 indexmap.workspace = true
@@ -98,6 +107,7 @@ petgraph = { version = "0.7", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-ident = { version = "1.0", optional = true }
+libm = { version = "0.2", optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true

@@ -14,7 +14,7 @@ pub use writer::{Writer, WriterFlags};
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    FmtError(#[from] std::fmt::Error),
+    FmtError(#[from] core::fmt::Error),
     #[error("{0}")]
     Custom(String),
     #[error("{0}")]

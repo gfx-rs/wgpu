@@ -12,7 +12,7 @@ pub struct HandleMap<T> {
     new_index: Vec<Option<Index>>,
 
     /// This type is indexed by values of type `T`.
-    as_keys: std::marker::PhantomData<T>,
+    as_keys: core::marker::PhantomData<T>,
 }
 
 impl<T: 'static> HandleMap<T> {
@@ -34,7 +34,7 @@ impl<T: 'static> HandleMap<T> {
                     }
                 })
                 .collect(),
-            as_keys: std::marker::PhantomData,
+            as_keys: core::marker::PhantomData,
         }
     }
 
@@ -50,7 +50,7 @@ impl<T: 'static> HandleMap<T> {
     pub fn try_adjust(&self, old: Handle<T>) -> Option<Handle<T>> {
         log::trace!(
             "adjusting {} handle [{}] -> [{:?}]",
-            std::any::type_name::<T>(),
+            core::any::type_name::<T>(),
             old.index(),
             self.new_index[old.index()]
         );

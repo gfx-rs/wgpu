@@ -1579,7 +1579,7 @@ impl BlockContext<'_> {
 
                         const VEC_LENGTH: u8 = 4;
                         let parts: [_; VEC_LENGTH as usize] =
-                            std::array::from_fn(|_| self.gen_id());
+                            core::array::from_fn(|_| self.gen_id());
                         for (i, part_id) in parts.into_iter().enumerate() {
                             let index = self
                                 .writer

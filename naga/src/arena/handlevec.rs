@@ -2,8 +2,9 @@
 
 use super::handle::Handle;
 
-use std::marker::PhantomData;
-use std::ops;
+use alloc::{vec, vec::Vec};
+use core::marker::PhantomData;
+use core::ops;
 
 /// A [`Vec`] indexed by [`Handle`]s.
 ///

@@ -114,7 +114,7 @@ mod ray;
 mod storage;
 mod writer;
 
-use std::fmt::Error as FmtError;
+use core::fmt::Error as FmtError;
 use thiserror::Error;
 
 use crate::{back, proc};

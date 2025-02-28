@@ -249,6 +249,12 @@ An override expression can be evaluated at pipeline creation time.
         clippy::todo
     )
 )]
+#![no_std]
+
+#[cfg(feature = "std")]
+extern crate std;
+
+extern crate alloc;
 
 mod arena;
 pub mod back;
@@ -260,10 +266,13 @@ pub mod diagnostic_filter;
 pub mod error;
 pub mod front;
 pub mod keywords;
+mod math;
 mod non_max_u32;
 pub mod proc;
 mod span;
 pub mod valid;
+
+use alloc::{string::String, vec::Vec};
 
 pub use crate::arena::{Arena, Handle, Range, UniqueArena};
 
@@ -286,22 +295,22 @@ pub const ABSTRACT_WIDTH: Bytes = 8;
 /// (Similar to rustc_hash::FxHashMap but using hashbrown::HashMap instead of std::collections::HashMap.)
 /// To construct a new instance: `FastHashMap::default()`
 pub type FastHashMap<K, T> =
-    hashbrown::HashMap<K, T, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+    hashbrown::HashMap<K, T, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Hash set that is faster but not resilient to DoS attacks.
 /// (Similar to rustc_hash::FxHashSet but using hashbrown::HashSet instead of std::collections::HashMap.)
 pub type FastHashSet<K> =
-    hashbrown::HashSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+    hashbrown::HashSet<K, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Insertion-order-preserving hash set (`IndexSet<K>`), but with the same
 /// hasher as `FastHashSet<K>` (faster but not resilient to DoS attacks).
 pub type FastIndexSet<K> =
-    indexmap::IndexSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+    indexmap::IndexSet<K, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Insertion-order-preserving hash map (`IndexMap<K, V>`), but with the same
 /// hasher as `FastHashMap<K, V>` (faster but not resilient to DoS attacks).
 pub type FastIndexMap<K, V> =
-    indexmap::IndexMap<K, V, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+    indexmap::IndexMap<K, V, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Map of expressions that have associated variable names
 pub(crate) type NamedExpressions = FastIndexMap<Handle<Expression>, String>;
@@ -511,7 +520,7 @@ pub enum PendingArraySize {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum ArraySize {
     /// The array size is constant.
-    Constant(std::num::NonZeroU32),
+    Constant(core::num::NonZeroU32),
     /// The array size is an override-expression.
     Pending(PendingArraySize),
     /// The array size can change at runtime.

@@ -15,8 +15,9 @@ use crate::{
     proc::{ExpressionKindTracker, LayoutError, Layouter, TypeResolution},
     FastHashSet,
 };
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
 use bit_set::BitSet;
-use std::ops;
+use core::ops;
 
 //TODO: analyze the model at the same time as we validate it,
 // merge the corresponding matches over expressions and statements.

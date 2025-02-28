@@ -6,8 +6,8 @@ use crate::{
     valid, FastHashMap, FastHashSet,
 };
 #[cfg(test)]
-use std::ptr;
-use std::{
+use core::ptr;
+use core::{
     fmt::{Display, Error as FmtError, Formatter, Write},
     iter,
 };
@@ -102,13 +102,13 @@ const CLAMPED_LOD_LOAD_PREFIX: &str = "clamped_lod_e";
 
 /// Wrapper for identifier names for clamped level-of-detail values
 ///
-/// Values of this type implement [`std::fmt::Display`], formatting as
+/// Values of this type implement [`core::fmt::Display`], formatting as
 /// the name of the variable used to hold the cached clamped
 /// level-of-detail value for an `ImageLoad` expression.
 struct ClampedLod(Handle<crate::Expression>);
 
 impl Display for ClampedLod {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, CLAMPED_LOD_LOAD_PREFIX)
     }
 }
@@ -123,14 +123,14 @@ impl Display for ClampedLod {
 ///
 /// If `global` is a [`Handle`] for a [`GlobalVariable`] that contains a
 /// runtime-sized array, then the value `ArraySize(global)` implements
-/// [`std::fmt::Display`], formatting as the name of the struct member carrying
+/// [`core::fmt::Display`], formatting as the name of the struct member carrying
 /// the number of elements in that runtime-sized array.
 ///
 /// [`GlobalVariable`]: crate::GlobalVariable
 struct ArraySizeMember(Handle<crate::GlobalVariable>);
 
 impl Display for ArraySizeMember {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "size")
     }
 }

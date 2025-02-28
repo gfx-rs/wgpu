@@ -1,5 +1,13 @@
 use crate::{Arena, Handle, UniqueArena};
-use std::{error::Error, fmt, ops::Range};
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{error::Error, fmt, ops::Range};
+
+#[cfg(feature = "codespan-reporting")]
+use alloc::borrow::ToOwned;
 
 /// A source code span, used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -94,7 +102,7 @@ impl From<Range<usize>> for Span {
     }
 }
 
-impl std::ops::Index<Span> for str {
+impl core::ops::Index<Span> for str {
     type Output = str;
 
     #[inline]
@@ -239,6 +247,7 @@ impl<E> WithSpan<E> {
         Some(self.spans[0].0.location(source))
     }
 
+    #[cfg(feature = "codespan-reporting")]
     pub(crate) fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()>
     where
         E: Error,
@@ -266,6 +275,7 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "codespan-reporting")]
     pub fn emit_to_stderr(&self, source: &str)
     where
         E: Error,
@@ -274,6 +284,7 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "codespan-reporting")]
     pub fn emit_to_stderr_with_path(&self, source: &str, path: &str)
     where
         E: Error,
@@ -289,6 +300,7 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to a string.
+    #[cfg(feature = "codespan-reporting")]
     pub fn emit_to_string(&self, source: &str) -> String
     where
         E: Error,
@@ -297,6 +309,7 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to a string.
+    #[cfg(feature = "codespan-reporting")]
     pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String
     where
         E: Error,
@@ -359,7 +372,7 @@ pub(crate) trait SpanProvider<T> {
             x if !x.is_defined() => (Default::default(), "".to_string()),
             known => (
                 known,
-                format!("{} {:?}", std::any::type_name::<T>(), handle),
+                format!("{} {:?}", core::any::type_name::<T>(), handle),
             ),
         }
     }

@@ -50,13 +50,13 @@ use crate::{
     proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, ShaderStage, TypeInner,
 };
-use features::FeaturesManager;
-use hashbrown::hash_map;
-use std::{
+use core::{
     cmp::Ordering,
     fmt::{self, Error as FmtError, Write},
     mem,
 };
+use features::FeaturesManager;
+use hashbrown::hash_map;
 use thiserror::Error;
 
 /// Contains the features related code and the features querying method
@@ -320,7 +320,7 @@ pub struct PipelineOptions {
     /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
     pub entry_point: String,
     /// How many views to render to, if doing multiview rendering.
-    pub multiview: Option<std::num::NonZeroU32>,
+    pub multiview: Option<core::num::NonZeroU32>,
 }
 
 #[derive(Debug)]
@@ -582,7 +582,7 @@ pub struct Writer<'a, W> {
     /// transformed to `do {} while(false);` loops.
     continue_ctx: back::continue_forward::ContinueCtx,
     /// How many views to render to, if doing multiview rendering.
-    multiview: Option<std::num::NonZeroU32>,
+    multiview: Option<core::num::NonZeroU32>,
     /// Mapping of varying variables to their location. Needed for reflections.
     varying: crate::FastHashMap<String, VaryingLocation>,
 }

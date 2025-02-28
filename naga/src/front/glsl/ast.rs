@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt};
+use core::{borrow::Cow, fmt};
 
 use super::{builtins::MacroCall, Span};
 use crate::{

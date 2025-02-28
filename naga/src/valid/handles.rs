@@ -11,7 +11,7 @@ use crate::{Arena, UniqueArena};
 
 use super::ValidationError;
 
-use std::{convert::TryInto, hash::Hash};
+use core::{convert::TryInto, hash::Hash};
 
 impl super::Validator {
     /// Validates that all handles within `module` are:
@@ -838,9 +838,9 @@ impl<T> Handle<T> {
             };
             Err(FwdDepError {
                 subject: erase_handle_type(self),
-                subject_kind: std::any::type_name::<T>(),
+                subject_kind: core::any::type_name::<T>(),
                 depends_on: erase_handle_type(depends_on),
-                depends_on_kind: std::any::type_name::<T>(),
+                depends_on_kind: core::any::type_name::<T>(),
             })
         }
     }

@@ -60,7 +60,7 @@
 //! [`SwitchCase`]: crate::SwitchCase
 
 use crate::proc::Namer;
-use std::rc::Rc;
+use core::rc::Rc;
 
 /// A summary of the code surrounding a statement.
 enum Nesting {

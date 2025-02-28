@@ -43,8 +43,8 @@ use crate::{
     FastHashMap, FastHashSet, FastIndexMap,
 };
 
+use core::{convert::TryInto, mem, num::NonZeroU32, path::PathBuf};
 use petgraph::graphmap::GraphMap;
-use std::{convert::TryInto, mem, num::NonZeroU32, path::PathBuf};
 
 use super::atomic_upgrade::Upgrades;
 
@@ -702,7 +702,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 break;
             }
         }
-        std::str::from_utf8(&self.temp_bytes)
+        core::str::from_utf8(&self.temp_bytes)
             .map(|s| (s.to_owned(), count))
             .map_err(|_| Error::BadString)
     }
