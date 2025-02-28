@@ -41,7 +41,13 @@ msl-out = []
 ## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
 msl-out-if-target-apple = []
 
-serialize = ["std", "dep:serde", "bitflags/serde", "hashbrown/serde", "indexmap/serde"]
+serialize = [
+    "std",
+    "dep:serde",
+    "bitflags/serde",
+    "hashbrown/serde",
+    "indexmap/serde",
+]
 deserialize = [
     "std",
     "dep:serde",
