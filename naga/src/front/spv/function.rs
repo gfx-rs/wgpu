@@ -1,10 +1,12 @@
+use super::{Error, Instruction, LookupExpression, LookupHelper as _};
+use crate::proc::Emitter;
 use crate::{
     arena::{Arena, Handle},
     front::spv::{BlockContext, BodyIndex},
 };
-
-use super::{Error, Instruction, LookupExpression, LookupHelper as _};
-use crate::proc::Emitter;
+use alloc::format;
+use alloc::vec;
+use alloc::vec::Vec;
 
 pub type BlockId = u32;
 
@@ -170,7 +172,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             };
             let dest = prefix.join(dump_suffix);
             let dump = format!("{block_ctx:#?}");
-            if let Err(e) = core::fs::write(&dest, dump) {
+            if let Err(e) = std::fs::write(&dest, dump) {
                 log::error!("Unable to dump the block context into {:?}: {}", dest, e);
             }
         }

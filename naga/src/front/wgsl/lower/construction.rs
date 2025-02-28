@@ -6,6 +6,12 @@ use crate::{Handle, Span};
 use crate::front::wgsl::error::Error;
 use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
 
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
+
 /// A cooked form of `ast::ConstructorType` that uses Naga types whenever
 /// possible.
 enum Constructor<T> {

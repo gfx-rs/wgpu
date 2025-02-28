@@ -9,6 +9,9 @@ use crate::{
     LocalVariable, ResourceBinding, Scalar, ScalarKind, ShaderStage, SwizzleComponent, Type,
     TypeInner, VectorSize,
 };
+use alloc::format;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 pub struct VarDeclaration<'a, 'key> {
     pub qualifiers: &'a mut TypeQualifiers<'key>,

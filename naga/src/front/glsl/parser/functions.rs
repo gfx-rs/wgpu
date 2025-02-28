@@ -12,6 +12,8 @@ use crate::{
     },
     Block, Expression, Statement, SwitchCase, UnaryOperator,
 };
+use alloc::vec;
+use alloc::vec::Vec;
 
 impl ParsingContext<'_> {
     pub fn peek_parameter_qualifier(&mut self, frontend: &mut Frontend) -> bool {

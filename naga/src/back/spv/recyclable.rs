@@ -2,6 +2,8 @@
 Reusing collections' previous allocations.
 */
 
+use alloc::vec::Vec;
+
 /// A value that can be reset to its initial state, retaining its current allocations.
 ///
 /// Naga attempts to lower the cost of SPIR-V generation by allowing clients to

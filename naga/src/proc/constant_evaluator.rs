@@ -1,19 +1,16 @@
-use alloc::{
-    format,
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
-use core::iter;
-
-use arrayvec::ArrayVec;
-
 use crate::{
     arena::{Arena, Handle, HandleVec, UniqueArena},
     math::Math,
     ArraySize, BinaryOperator, Constant, Expression, Literal, Override, RelationalFunction,
     ScalarKind, Span, Type, TypeInner, UnaryOperator,
 };
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
+use arrayvec::ArrayVec;
+use core::iter;
 
 /// A macro that allows dollar signs (`$`) to be emitted by other macros. Useful for generating
 /// `macro_rules!` items that, in turn, emit their own `macro_rules!` items.
@@ -2543,14 +2540,14 @@ impl TryFromAbstract<f64> for u64 {
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec;
-
+    use super::{Behavior, ConstantEvaluator, ExpressionKindTracker, WgslRestrictions};
     use crate::{
         Arena, Constant, Expression, Literal, ScalarKind, Type, TypeInner, UnaryOperator,
         UniqueArena, VectorSize,
     };
 
-    use super::{Behavior, ConstantEvaluator, ExpressionKindTracker, WgslRestrictions};
+    use alloc::vec;
+    use alloc::vec::Vec;
 
     #[test]
     fn unary_op() {

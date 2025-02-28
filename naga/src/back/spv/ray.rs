@@ -8,6 +8,7 @@ use super::{
 };
 use crate::arena::Handle;
 use crate::{Type, TypeInner};
+use alloc::vec;
 
 impl Writer {
     pub(super) fn write_ray_query_get_intersection_function(

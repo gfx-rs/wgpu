@@ -1,7 +1,8 @@
-pub use pp_rs::token::{Float, Integer, Location, Token as PPToken};
-
 use super::ast::Precision;
 use crate::{Interpolation, Sampling, Span, Type};
+use alloc::string::String;
+use alloc::vec::Vec;
+pub use pp_rs::token::{Float, Integer, Location, Token as PPToken};
 
 impl From<Location> for Span {
     fn from(loc: Location) -> Self {

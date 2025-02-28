@@ -5,12 +5,18 @@ use crate::{
     proc::{self, index, ExpressionKindTracker, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
 };
-#[cfg(test)]
-use core::ptr;
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
 use core::{
     fmt::{Display, Error as FmtError, Formatter, Write},
     iter,
 };
+
+#[cfg(test)]
+use core::ptr;
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;

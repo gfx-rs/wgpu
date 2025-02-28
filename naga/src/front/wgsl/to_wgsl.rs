@@ -2,6 +2,9 @@
 
 use crate::proc::GlobalCtx;
 use crate::Handle;
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
 
 impl crate::proc::TypeResolution {
     pub fn to_wgsl(&self, gctx: &GlobalCtx) -> String {
@@ -198,7 +201,11 @@ impl crate::StorageFormat {
     }
 }
 
+#[cfg(test)]
 mod tests {
+    use alloc::string::ToString;
+    use alloc::vec;
+
     #[test]
     fn to_wgsl() {
         use core::num::NonZeroU32;

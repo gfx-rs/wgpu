@@ -12,13 +12,14 @@ To begin, take a look at the documentation for the [`Frontend`].
 [glsl]: https://www.khronos.org/registry/OpenGL/index_gl.php
 */
 
+use crate::{proc::Layouter, FastHashMap, FastHashSet, Handle, Module, ShaderStage, Span, Type};
+use alloc::string::String;
+use alloc::vec::Vec;
+use ast::{EntryArg, FunctionDeclaration, GlobalLookup};
 pub use ast::{Precision, Profile};
 pub use error::{Error, ErrorKind, ExpectedToken, ParseErrors};
-pub use token::TokenValue;
-
-use crate::{proc::Layouter, FastHashMap, FastHashSet, Handle, Module, ShaderStage, Span, Type};
-use ast::{EntryArg, FunctionDeclaration, GlobalLookup};
 use parser::ParsingContext;
+pub use token::TokenValue;
 
 mod ast;
 mod builtins;

@@ -58,6 +58,8 @@ code in the selection's body, call the `Selection::block` method.
 */
 
 use super::{Block, BlockContext, Instruction};
+use alloc::vec;
+use alloc::vec::Vec;
 use spirv::Word;
 
 /// A private struct recording what we know about the selection construct so far.

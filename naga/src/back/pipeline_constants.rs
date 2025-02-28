@@ -6,7 +6,10 @@ use crate::{
     Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
     Span, Statement, TypeInner, WithSpan,
 };
-use core::{borrow::Cow, mem};
+use alloc::borrow::Cow;
+use alloc::string::String;
+use alloc::string::ToString;
+use core::mem;
 use hashbrown::HashSet;
 use thiserror::Error;
 

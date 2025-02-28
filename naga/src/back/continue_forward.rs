@@ -60,7 +60,9 @@
 //! [`SwitchCase`]: crate::SwitchCase
 
 use crate::proc::Namer;
-use core::rc::Rc;
+use alloc::rc::Rc;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 /// A summary of the code surrounding a statement.
 enum Nesting {

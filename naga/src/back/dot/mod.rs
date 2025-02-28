@@ -11,11 +11,12 @@ use crate::{
     arena::Handle,
     valid::{FunctionInfo, ModuleInfo},
 };
-
-use core::{
-    borrow::Cow,
-    fmt::{Error as FmtError, Write as _},
-};
+use alloc::borrow::Cow;
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
+use core::fmt::{Error as FmtError, Write as _};
 
 /// Configuration options for the dot backend
 #[derive(Clone, Default)]

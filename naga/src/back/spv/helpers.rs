@@ -1,4 +1,6 @@
 use crate::{Handle, UniqueArena};
+use alloc::vec;
+use alloc::vec::Vec;
 use spirv::Word;
 
 pub(super) fn bytes_to_words(bytes: &[u8]) -> Vec<Word> {

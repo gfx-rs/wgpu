@@ -8,6 +8,7 @@ use super::{
     WriterFlags,
 };
 use crate::{arena::Handle, proc::index::GuardedIndex, Statement};
+use alloc::vec::Vec;
 use spirv::Word;
 
 fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {

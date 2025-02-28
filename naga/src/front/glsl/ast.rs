@@ -1,10 +1,12 @@
-use core::{borrow::Cow, fmt};
-
 use super::{builtins::MacroCall, Span};
 use crate::{
     AddressSpace, BinaryOperator, Binding, Constant, Expression, Function, GlobalVariable, Handle,
     Interpolation, Literal, Sampling, StorageAccess, Type, UnaryOperator,
 };
+use alloc::borrow::Cow;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::fmt;
 
 #[derive(Debug, Clone, Copy)]
 pub enum GlobalLookupKind {

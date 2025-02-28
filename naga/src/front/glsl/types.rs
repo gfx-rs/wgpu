@@ -3,6 +3,7 @@ use crate::{
     proc::ResolveContext, Expression, Handle, ImageClass, ImageDimension, Scalar, ScalarKind, Type,
     TypeInner, VectorSize,
 };
+use alloc::format;
 
 pub fn parse_type(type_name: &str) -> Option<Type> {
     match type_name {

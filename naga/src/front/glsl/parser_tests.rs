@@ -6,7 +6,12 @@ use super::{
     Frontend, Options, Span,
 };
 use crate::ShaderStage;
+use alloc::borrow::ToOwned;
+use alloc::vec;
 use pp_rs::token::PreprocessorError;
+
+#[cfg(test)]
+use std::println;
 
 #[test]
 fn version() {

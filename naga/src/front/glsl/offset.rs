@@ -17,6 +17,7 @@ use super::{
     Span,
 };
 use crate::{proc::Alignment, Handle, Scalar, Type, TypeInner, UniqueArena};
+use alloc::vec::Vec;
 
 /// Struct with information needed for defining a struct member.
 ///

@@ -1,17 +1,17 @@
 //! Implementation of `Validator::validate_module_handles`.
 
+use super::ValidationError;
+use crate::non_max_u32::NonMaxU32;
 use crate::{
     arena::{BadHandle, BadRangeError},
     diagnostic_filter::DiagnosticFilterNode,
     Handle,
 };
-
-use crate::non_max_u32::NonMaxU32;
 use crate::{Arena, UniqueArena};
-
-use super::ValidationError;
-
 use core::{convert::TryInto, hash::Hash};
+
+#[cfg(test)]
+use alloc::string::ToString;
 
 impl super::Validator {
     /// Validates that all handles within `module` are:

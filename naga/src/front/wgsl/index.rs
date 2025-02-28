@@ -1,6 +1,8 @@
 use super::Error;
 use crate::front::wgsl::parse::ast;
 use crate::{FastHashMap, Handle, Span};
+use alloc::vec;
+use alloc::vec::Vec;
 
 /// A `GlobalDecl` list in which each definition occurs before all its uses.
 pub struct Index<'a> {

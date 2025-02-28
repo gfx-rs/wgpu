@@ -32,6 +32,10 @@ holding the result.
 */
 
 use crate::{arena::Handle, proc::index, valid::ModuleInfo};
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use core::fmt::{Error as FmtError, Write};
 
 mod keywords;

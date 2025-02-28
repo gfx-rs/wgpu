@@ -1,10 +1,14 @@
 use super::token::TokenValue;
 use crate::SourceLocation;
 use crate::{proc::ConstantEvaluatorError, Span};
+use alloc::borrow::Cow;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
-use core::borrow::Cow;
 use pp_rs::token::PreprocessorError;
 use termcolor::{NoColor, WriteColor};
 use thiserror::Error;

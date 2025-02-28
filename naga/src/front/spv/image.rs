@@ -1,9 +1,9 @@
+use super::{Error, LookupExpression, LookupHelper as _};
 use crate::{
     arena::{Handle, UniqueArena},
     Scalar,
 };
-
-use super::{Error, LookupExpression, LookupHelper as _};
+use alloc::vec::Vec;
 
 #[derive(Clone, Debug)]
 pub(super) struct LookupSampledImage {

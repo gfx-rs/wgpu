@@ -1,5 +1,3 @@
-use core::num::NonZeroU32;
-
 use crate::{
     front::glsl::{
         ast::{FunctionCall, FunctionCallKind, HirExpr, HirExprKind},
@@ -11,6 +9,9 @@ use crate::{
     },
     ArraySize, BinaryOperator, Handle, Literal, Type, TypeInner, UnaryOperator,
 };
+use alloc::vec;
+use alloc::vec::Vec;
+use core::num::NonZeroU32;
 
 impl ParsingContext<'_> {
     pub fn parse_primary(

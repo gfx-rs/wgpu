@@ -1,5 +1,6 @@
 use super::Error;
 use crate::arena::{Arena, Handle};
+use alloc::vec;
 
 /// Create a default value for an output built-in.
 pub fn generate_default_built_in(

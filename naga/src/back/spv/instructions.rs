@@ -1,4 +1,6 @@
 use super::{block::DebugInfoInner, helpers};
+use alloc::vec;
+use alloc::vec::Vec;
 use spirv::{Op, Word};
 
 pub(super) enum Signedness {

@@ -50,6 +50,12 @@ use crate::{
     proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, ShaderStage, TypeInner,
 };
+use alloc::borrow::ToOwned;
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
 use core::{
     cmp::Ordering,
     fmt::{self, Error as FmtError, Write},

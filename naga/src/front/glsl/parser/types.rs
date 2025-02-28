@@ -1,5 +1,3 @@
-use core::num::NonZeroU32;
-
 use crate::{
     front::glsl::{
         ast::{QualifierKey, QualifierValue, StorageQualifier, StructLayout, TypeQualifiers},
@@ -11,6 +9,9 @@ use crate::{
     },
     AddressSpace, ArraySize, Handle, Span, Type, TypeInner,
 };
+use alloc::vec;
+use alloc::vec::Vec;
+use core::num::NonZeroU32;
 
 impl ParsingContext<'_> {
     /// Parses an optional array_specifier returning whether or not it's present

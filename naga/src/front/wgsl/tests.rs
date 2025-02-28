@@ -1,4 +1,5 @@
 use super::parse_str;
+use alloc::format;
 
 #[test]
 fn parse_comment() {

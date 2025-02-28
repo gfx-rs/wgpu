@@ -13,6 +13,8 @@ use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::Scalar;
 use crate::front::SymbolTable;
 use crate::{Arena, FastHashSet, FastIndexSet, Handle, ShaderStage, Span};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 
 pub mod ast;
 pub mod conv;

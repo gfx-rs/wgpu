@@ -60,7 +60,7 @@ use crate::{
     proc::{Alignment, NameKey, TypeResolution},
     Handle,
 };
-
+use alloc::format;
 use core::{fmt, mem};
 
 const STORE_TEMP_NAME: &str = "_value";

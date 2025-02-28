@@ -1,6 +1,8 @@
 use super::functions::FunctionTracer;
 use super::FunctionMap;
 use crate::arena::Handle;
+use alloc::vec;
+use alloc::vec::Vec;
 
 impl FunctionTracer<'_> {
     pub fn trace_block(&mut self, block: &[crate::Statement]) {

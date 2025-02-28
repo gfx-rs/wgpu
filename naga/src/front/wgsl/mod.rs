@@ -13,16 +13,17 @@ mod tests;
 mod to_wgsl;
 
 use crate::front::wgsl::error::Error;
-use crate::front::wgsl::parse::Parser;
-use thiserror::Error;
-
 pub use crate::front::wgsl::error::ParseError;
 use crate::front::wgsl::lower::Lowerer;
-use crate::Scalar;
-
 pub use crate::front::wgsl::parse::directive::language_extension::{
     ImplementedLanguageExtension, LanguageExtension, UnimplementedLanguageExtension,
 };
+use crate::front::wgsl::parse::Parser;
+use crate::Scalar;
+use thiserror::Error;
+
+#[cfg(test)]
+use std::println;
 
 pub struct Frontend {
     parser: Parser,

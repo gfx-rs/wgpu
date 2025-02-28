@@ -4,6 +4,7 @@ use super::{
     types::parse_type,
 };
 use crate::{FastHashMap, Span, StorageAccess};
+use alloc::string::String;
 use pp_rs::{
     pp::Preprocessor,
     token::{PreprocessorError, Punct, TokenValue as PPTokenValue},
@@ -200,13 +201,14 @@ impl Iterator for Lexer<'_> {
 
 #[cfg(test)]
 mod tests {
-    use pp_rs::token::{Integer, Location, Token as PPToken, TokenValue as PPTokenValue};
-
     use super::{
         super::token::{Directive, DirectiveKind, Token, TokenValue},
         Lexer, LexerResult, LexerResultKind,
     };
     use crate::Span;
+    use pp_rs::token::{Integer, Location, Token as PPToken, TokenValue as PPTokenValue};
+
+    use alloc::vec;
 
     #[test]
     fn lex_tokens() {

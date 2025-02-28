@@ -114,6 +114,8 @@ mod ray;
 mod storage;
 mod writer;
 
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::fmt::Error as FmtError;
 use thiserror::Error;
 

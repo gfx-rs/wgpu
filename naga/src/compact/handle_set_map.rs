@@ -1,4 +1,5 @@
 use crate::arena::{Arena, Handle, HandleSet, Range};
+use alloc::vec::Vec;
 
 type Index = crate::non_max_u32::NonMaxU32;
 

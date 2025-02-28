@@ -12,6 +12,9 @@ use crate::{
     Expression, FastHashMap, FunctionArgument, Handle, Literal, LocalVariable, RelationalFunction,
     Scalar, Span, Statement, Type, TypeInner, VectorSize,
 };
+use alloc::format;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::ops::Index;
 
 /// The position at which an expression is, used while lowering

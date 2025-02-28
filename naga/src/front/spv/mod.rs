@@ -42,9 +42,14 @@ use crate::{
     proc::{Alignment, Layouter},
     FastHashMap, FastHashSet, FastIndexMap,
 };
-
-use core::{convert::TryInto, mem, num::NonZeroU32, path::PathBuf};
+use alloc::borrow::ToOwned;
+use alloc::format;
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
+use core::{convert::TryInto, mem, num::NonZeroU32};
 use petgraph::graphmap::GraphMap;
+use std::path::PathBuf;
 
 use super::atomic_upgrade::Upgrades;
 
@@ -6066,6 +6071,9 @@ fn is_parent(mut child: usize, parent: usize, block_ctx: &BlockContext) -> bool 
 
 #[cfg(test)]
 mod test {
+
+    use alloc::vec;
+
     #[test]
     fn parse() {
         let bin = vec![

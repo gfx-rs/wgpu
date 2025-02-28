@@ -6,7 +6,11 @@ mod types;
 
 use crate::arena::HandleSet;
 use crate::{arena, compact::functions::FunctionTracer};
+use alloc::vec::Vec;
 use handle_set_map::HandleMap;
+
+#[cfg(test)]
+use alloc::{format, string::ToString};
 
 /// Remove unused types, expressions, and constants from `module`.
 ///

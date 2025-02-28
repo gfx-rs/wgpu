@@ -30,9 +30,10 @@
 //! [`Struct`]: TypeInner::Struct
 //! [`Load`]: crate::Expression::Load
 //! [`Store`]: crate::Statement::Store
-use core::sync::{atomic::AtomicUsize, Arc};
-
 use crate::{GlobalVariable, Handle, Module, Type, TypeInner};
+use alloc::format;
+use alloc::sync::Arc;
+use core::sync::atomic::AtomicUsize;
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {

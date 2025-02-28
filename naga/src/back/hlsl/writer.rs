@@ -12,6 +12,10 @@ use crate::{
     proc::{self, index, ExpressionKindTracker, NameKey},
     valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use core::{fmt, mem};
 
 const LOCATION_SEMANTIC: &str = "LOC";

@@ -7,8 +7,8 @@ Backend for [WGSL][wgsl] (WebGPU Shading Language).
 mod polyfill;
 mod writer;
 
+use alloc::string::String;
 use thiserror::Error;
-
 pub use writer::{Writer, WriterFlags};
 
 #[derive(Error, Debug)]

@@ -1,8 +1,8 @@
-use core::borrow::Cow;
-
-use crate::proc::Alignment;
-
 use super::Error;
+use crate::proc::Alignment;
+use alloc::borrow::Cow;
+use alloc::format;
+use alloc::string::String;
 
 impl crate::ScalarKind {
     pub(super) fn to_hlsl_cast(self) -> &'static str {

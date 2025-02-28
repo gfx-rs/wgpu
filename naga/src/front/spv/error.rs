@@ -1,5 +1,9 @@
 use super::ModuleState;
 use crate::{arena::Handle, front::atomic_upgrade};
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;

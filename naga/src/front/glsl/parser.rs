@@ -10,6 +10,8 @@ use super::{
     Frontend, Result,
 };
 use crate::{arena::Handle, proc::U32EvalError, Expression, Module, Span, Type};
+use alloc::string::String;
+use alloc::vec;
 use core::iter::Peekable;
 use pp_rs::token::{PreprocessorError, Token as PPToken, TokenValue as PPTokenValue};
 

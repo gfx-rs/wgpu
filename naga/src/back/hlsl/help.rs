@@ -35,6 +35,7 @@ use super::{
     BackendResult,
 };
 use crate::{arena::Handle, proc::NameKey, ScalarKind};
+use alloc::format;
 use core::fmt::Write;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]

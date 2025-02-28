@@ -20,7 +20,8 @@ pub use spirv::{Capability, SourceLanguage};
 
 use crate::arena::{Handle, HandleVec};
 use crate::proc::{BoundsCheckPolicies, TypeResolution};
-
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::ops;
 use spirv::Word;
 use thiserror::Error;

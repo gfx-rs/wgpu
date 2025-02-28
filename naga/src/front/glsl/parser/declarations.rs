@@ -16,6 +16,9 @@ use crate::{
     AddressSpace, Expression, FunctionResult, Handle, Scalar, ScalarKind, Statement, StructMember,
     Type, TypeInner,
 };
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
 
 use super::{DeclarationContext, ParsingContext, Result};
 

@@ -4,6 +4,9 @@ use crate::front::wgsl::error::{
     AutoConversionError, AutoConversionLeafScalarError, ConcretizationFailedError,
 };
 use crate::{Handle, Span};
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 impl<'source> super::ExpressionContext<'source, '_, '_> {
     /// Try to use WGSL's automatic conversions to convert `expr` to `goal_ty`.

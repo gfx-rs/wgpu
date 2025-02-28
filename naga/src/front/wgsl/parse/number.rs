@@ -1,5 +1,6 @@
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::lexer::Token;
+use alloc::format;
 
 /// When using this type assume no Abstract Int/Float for now
 #[derive(Copy, Clone, Debug, PartialEq)]

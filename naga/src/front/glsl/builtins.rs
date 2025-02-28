@@ -11,6 +11,8 @@ use crate::{
     ImageClass, ImageDimension as Dim, ImageQuery, MathFunction, Module, RelationalFunction,
     SampleLevel, Scalar, ScalarKind as Sk, Span, Type, TypeInner, UnaryOperator, VectorSize,
 };
+use alloc::vec;
+use alloc::vec::Vec;
 
 impl crate::ScalarKind {
     const fn dummy_storage_format(&self) -> crate::StorageFormat {

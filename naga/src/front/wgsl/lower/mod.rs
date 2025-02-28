@@ -1,5 +1,3 @@
-use core::num::NonZeroU32;
-
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
@@ -9,6 +7,11 @@ use crate::proc::{
     ensure_block_returns, Alignment, ConstantEvaluator, Emitter, Layouter, ResolveContext,
 };
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
+use alloc::borrow::ToOwned;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec::Vec;
+use core::num::NonZeroU32;
 
 mod construction;
 mod conversion;

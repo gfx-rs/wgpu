@@ -5,6 +5,11 @@ use crate::{
     proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, Module, ShaderStage, TypeInner,
 };
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
 use core::fmt::Write;
 
 /// Shorthand result used internally by the backend
