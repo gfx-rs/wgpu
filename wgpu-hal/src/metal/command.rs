@@ -1256,8 +1256,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .zip(pipeline.work_group_memory_sizes.iter())
             .enumerate()
         {
-            const ALIGN_MASK: u32 = 0xF; // must be a multiple of 16 bytes
-            let size = ((*pipeline_size - 1) | ALIGN_MASK) + 1;
+            let size = pipeline_size.next_multiple_of(16);
             if *cur_size != size {
                 *cur_size = size;
                 encoder.set_threadgroup_memory_length(index as _, size as _);
