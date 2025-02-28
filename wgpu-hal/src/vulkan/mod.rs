@@ -33,7 +33,7 @@ mod device;
 mod instance;
 mod sampler;
 
-#[cfg(all(unix, not(target_vendor = "apple")))]
+#[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
 mod drm;
 
 use std::{
