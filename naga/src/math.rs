@@ -78,6 +78,10 @@ pub(crate) trait Math: Sized {
     fn ceil(x: Self) -> Self;
 
     /// Returns the fractional part of `x`.
+    #[cfg_attr(
+        not(any(msl_out, all(test, feature = "wgsl-in"))),
+        expect(dead_code, reason = "function only used with certain features")
+    )]
     fn fract(x: Self) -> Self;
 }
 
