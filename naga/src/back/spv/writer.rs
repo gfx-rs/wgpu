@@ -1131,27 +1131,11 @@ impl Writer {
                     _ => {}
                 }
             }
-            crate::TypeInner::AccelerationStructure { vertex_return } => {
-                let caps = if vertex_return {
-                    vec![
-                        spirv::Capability::RayQueryKHR,
-                        spirv::Capability::RayTracingPositionFetchKHR,
-                    ]
-                } else {
-                    vec![spirv::Capability::RayQueryKHR]
-                };
-                self.require_any("Acceleration Structure", &caps)?;
+            crate::TypeInner::AccelerationStructure { .. } => {
+                self.require_any("Acceleration Structure", &[spirv::Capability::RayQueryKHR])?;
             }
-            crate::TypeInner::RayQuery { vertex_return } => {
-                let caps = if vertex_return {
-                    vec![
-                        spirv::Capability::RayQueryKHR,
-                        spirv::Capability::RayTracingPositionFetchKHR,
-                    ]
-                } else {
-                    vec![spirv::Capability::RayQueryKHR]
-                };
-                self.require_any("Ray Query", &caps)?;
+            crate::TypeInner::RayQuery { .. } => {
+                self.require_any("Ray Query", &[spirv::Capability::RayQueryKHR])?;
             }
             crate::TypeInner::Atomic(crate::Scalar { width: 8, kind: _ }) => {
                 self.require_any("64 bit integer atomics", &[spirv::Capability::Int64Atomics])?;
