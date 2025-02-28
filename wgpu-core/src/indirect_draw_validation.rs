@@ -751,7 +751,7 @@ impl IndirectDrawValidationResources {
         }
     }
 
-    fn get_dst_buffer(&self, index: usize) -> &dyn hal::DynBuffer {
+    pub(crate) fn get_dst_buffer(&self, index: usize) -> &dyn hal::DynBuffer {
         self.dst_entries.get(index).unwrap().buffer.as_ref()
     }
 
@@ -933,17 +933,18 @@ impl IndirectDrawValidationBatcher {
 
     /// Add an indirect draw to be validated.
     ///
-    /// Returns an indirect buffer and offset to be used for the draw.
+    /// Returns the index of the indirect buffer in `indirect_draw_validation_resources`
+    /// and the offset to be used for the draw.
     pub(crate) fn add<'a>(
         &mut self,
         indirect_draw_validation_resources: &'a mut IndirectDrawValidationResources,
         device: &Device,
-        src_buffer: Arc<crate::resource::Buffer>,
+        src_buffer: &Arc<crate::resource::Buffer>,
         offset: u64,
         indexed: bool,
         vertex_or_index_limit: u64,
         instance_limit: u64,
-    ) -> Result<(&'a dyn hal::DynBuffer, u64), DeviceError> {
+    ) -> Result<(usize, u64), DeviceError> {
         let stride = crate::command::get_stride_of_indirect_args(indexed);
 
         let (dst_resource_index, dst_offset) = indirect_draw_validation_resources
@@ -973,7 +974,7 @@ impl IndirectDrawValidationBatcher {
             }
             hashbrown::hash_map::Entry::Vacant(vacant_entry) => {
                 vacant_entry.insert(DrawIndirectValidationBatch {
-                    src_buffer,
+                    src_buffer: src_buffer.clone(),
                     src_dynamic_offset,
                     dst_resource_index,
                     entries: vec![entry],
@@ -987,8 +988,6 @@ impl IndirectDrawValidationBatcher {
             }
         }
 
-        let dst_buffer = indirect_draw_validation_resources.get_dst_buffer(dst_resource_index);
-
-        Ok((dst_buffer, dst_offset))
+        Ok((dst_resource_index, dst_offset))
     }
 }

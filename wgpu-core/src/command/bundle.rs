@@ -1051,15 +1051,19 @@ impl RenderBundle {
                     instance_limit,
                 } => {
                     let (buffer, offset) = if self.device.indirect_draw_validation.is_some() {
-                        indirect_draw_validation_batcher.add(
+                        let (dst_resource_index, offset) = indirect_draw_validation_batcher.add(
                             indirect_draw_validation_resources,
                             &self.device,
-                            buffer.clone(),
+                            buffer,
                             *offset,
                             *indexed,
                             *vertex_or_index_limit,
                             *instance_limit,
-                        )?
+                        )?;
+
+                        let dst_buffer =
+                            indirect_draw_validation_resources.get_dst_buffer(dst_resource_index);
+                        (dst_buffer, offset)
                     } else {
                         (buffer.try_raw(snatch_guard)?, *offset)
                     };

@@ -2546,26 +2546,115 @@ fn multi_draw_indirect(
         ),
     );
 
-    let (indirect_raw, offset) = if count == 1 && state.device.indirect_draw_validation.is_some() {
+    fn draw(
+        raw_encoder: &mut dyn hal::DynCommandEncoder,
+        indexed: bool,
+        indirect_buffer: &dyn hal::DynBuffer,
+        offset: u64,
+        count: u32,
+    ) {
+        match indexed {
+            false => unsafe {
+                raw_encoder.draw_indirect(indirect_buffer, offset, count);
+            },
+            true => unsafe {
+                raw_encoder.draw_indexed_indirect(indirect_buffer, offset, count);
+            },
+        }
+    }
+
+    if state.device.indirect_draw_validation.is_some() {
         state
             .info
             .usage_scope
             .buffers
             .merge_single(&indirect_buffer, wgt::BufferUses::STORAGE_READ_ONLY)?;
 
-        indirect_draw_validation_batcher.add(
+        struct DrawData {
+            buffer_index: usize,
+            offset: u64,
+            count: u32,
+        }
+
+        struct DrawContext<'a> {
+            raw_encoder: &'a mut dyn hal::DynCommandEncoder,
+            device: &'a Device,
+
+            indirect_draw_validation_resources:
+                &'a mut crate::indirect_draw_validation::IndirectDrawValidationResources,
+            indirect_draw_validation_batcher:
+                &'a mut crate::indirect_draw_validation::IndirectDrawValidationBatcher,
+
+            indirect_buffer: Arc<crate::resource::Buffer>,
+            indexed: bool,
+            vertex_or_index_limit: u64,
+            instance_limit: u64,
+        }
+
+        impl<'a> DrawContext<'a> {
+            fn add(&mut self, offset: u64) -> Result<DrawData, DeviceError> {
+                let (dst_resource_index, dst_offset) = self.indirect_draw_validation_batcher.add(
+                    self.indirect_draw_validation_resources,
+                    self.device,
+                    &self.indirect_buffer,
+                    offset,
+                    self.indexed,
+                    self.vertex_or_index_limit,
+                    self.instance_limit,
+                )?;
+                Ok(DrawData {
+                    buffer_index: dst_resource_index,
+                    offset: dst_offset,
+                    count: 1,
+                })
+            }
+            fn draw(&mut self, draw_data: DrawData) {
+                let dst_buffer = self
+                    .indirect_draw_validation_resources
+                    .get_dst_buffer(draw_data.buffer_index);
+                draw(
+                    self.raw_encoder,
+                    self.indexed,
+                    dst_buffer,
+                    draw_data.offset,
+                    draw_data.count,
+                );
+            }
+        }
+
+        let mut draw_ctx = DrawContext {
+            raw_encoder: state.raw_encoder,
+            device: state.device,
             indirect_draw_validation_resources,
-            state.device,
+            indirect_draw_validation_batcher,
             indirect_buffer,
-            offset,
             indexed,
-            if indexed {
+            vertex_or_index_limit: if indexed {
                 state.index.limit
             } else {
                 state.vertex.limits.vertex_limit
             },
-            state.vertex.limits.instance_limit,
-        )?
+            instance_limit: state.vertex.limits.instance_limit,
+        };
+
+        let mut current_draw_data = draw_ctx.add(offset)?;
+
+        for i in 1..count {
+            let draw_data = draw_ctx.add(offset + stride * i as u64)?;
+
+            if draw_data.buffer_index == current_draw_data.buffer_index {
+                debug_assert_eq!(
+                    draw_data.offset,
+                    current_draw_data.offset + stride * current_draw_data.count as u64
+                );
+                current_draw_data.count += 1;
+            } else {
+                draw_ctx.draw(current_draw_data);
+                current_draw_data = draw_data;
+            }
+        }
+
+        draw_ctx.draw(current_draw_data);
     } else {
         state
             .info
@@ -2573,19 +2662,15 @@ fn multi_draw_indirect(
             .buffers
             .merge_single(&indirect_buffer, wgt::BufferUses::INDIRECT)?;
 
-        (indirect_buffer.try_raw(state.snatch_guard)?, offset)
+        draw(
+            state.raw_encoder,
+            indexed,
+            indirect_buffer.try_raw(state.snatch_guard)?,
+            offset,
+            count,
+        );
     };
 
-    match indexed {
-        false => unsafe {
-            state.raw_encoder.draw_indirect(indirect_raw, offset, count);
-        },
-        true => unsafe {
-            state
-                .raw_encoder
-                .draw_indexed_indirect(indirect_raw, offset, count);
-        },
-    }
     Ok(())
 }
 
