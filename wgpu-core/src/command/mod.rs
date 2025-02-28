@@ -436,8 +436,7 @@ pub(crate) struct BakedCommands {
     pub(crate) encoder: CommandEncoder,
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
-    pub(crate) indirect_draw_validation_resources:
-        crate::indirect_draw_validation::IndirectDrawValidationResources,
+    pub(crate) indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_actions: CommandBufferTextureMemoryActions,
 }
@@ -468,8 +467,7 @@ pub struct CommandBufferMutable {
     tlas_actions: Vec<TlasAction>,
     temp_resources: Vec<TempResource>,
 
-    indirect_draw_validation_resources:
-        crate::indirect_draw_validation::IndirectDrawValidationResources,
+    indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
 
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
@@ -559,9 +557,7 @@ impl CommandBuffer {
                     tlas_actions: Default::default(),
                     temp_resources: Default::default(),
                     indirect_draw_validation_resources:
-                        crate::indirect_draw_validation::IndirectDrawValidationResources::new(
-                            device.clone(),
-                        ),
+                        crate::indirect_validation::DrawResources::new(device.clone()),
                     #[cfg(feature = "trace")]
                     commands: if device.trace.lock().is_some() {
                         Some(Vec::new())

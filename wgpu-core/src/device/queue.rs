@@ -268,8 +268,7 @@ pub(crate) struct EncoderInFlight {
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
     /// We only need to keep these resources alive.
-    _indirect_draw_validation_resources:
-        crate::indirect_draw_validation::IndirectDrawValidationResources,
+    _indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
 
     /// These are the buffers that have been tracked by `PendingWrites`.
     pub(crate) pending_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
@@ -380,10 +379,9 @@ impl PendingWrites {
                 },
                 trackers: Tracker::new(),
                 temp_resources: mem::take(&mut self.temp_resources),
-                _indirect_draw_validation_resources:
-                    crate::indirect_draw_validation::IndirectDrawValidationResources::new(
-                        device.clone(),
-                    ),
+                _indirect_draw_validation_resources: crate::indirect_validation::DrawResources::new(
+                    device.clone(),
+                ),
                 pending_buffers,
                 pending_textures,
             };

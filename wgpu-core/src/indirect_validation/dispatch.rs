@@ -1,23 +1,10 @@
-use alloc::{boxed::Box, format, string::ToString as _};
-use core::num::NonZeroU64;
-
-use thiserror::Error;
-
+use super::CreateIndirectValidationPipelineError;
 use crate::{
     device::DeviceError,
     pipeline::{CreateComputePipelineError, CreateShaderModuleError},
 };
-
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
-pub enum CreateDispatchIndirectValidationPipelineError {
-    #[error(transparent)]
-    DeviceError(#[from] DeviceError),
-    #[error(transparent)]
-    ShaderModule(#[from] CreateShaderModuleError),
-    #[error(transparent)]
-    ComputePipeline(#[from] CreateComputePipelineError),
-}
+use alloc::{boxed::Box, format, string::ToString as _};
+use core::num::NonZeroU64;
 
 /// This machinery requires the following limits:
 ///
@@ -31,7 +18,7 @@ pub enum CreateDispatchIndirectValidationPipelineError {
 /// These are all indirectly satisfied by `DownlevelFlags::INDIRECT_EXECUTION`, which is also
 /// required for this module's functionality to work.
 #[derive(Debug)]
-pub struct IndirectValidation {
+pub(crate) struct Dispatch {
     module: Box<dyn hal::DynShaderModule>,
     dst_bind_group_layout: Box<dyn hal::DynBindGroupLayout>,
     src_bind_group_layout: Box<dyn hal::DynBindGroupLayout>,
@@ -50,11 +37,11 @@ pub struct Params<'a> {
     pub offset_remainder: u64,
 }
 
-impl IndirectValidation {
-    pub fn new(
+impl Dispatch {
+    pub(super) fn new(
         device: &dyn hal::DynDevice,
         limits: &wgt::Limits,
-    ) -> Result<Self, CreateDispatchIndirectValidationPipelineError> {
+    ) -> Result<Self, CreateIndirectValidationPipelineError> {
         let max_compute_workgroups_per_dimension = limits.max_compute_workgroups_per_dimension;
 
         let src = format!(
@@ -272,7 +259,7 @@ impl IndirectValidation {
     }
 
     /// `Ok(None)` will only be returned if `buffer_size` is `0`.
-    pub fn create_src_bind_group(
+    pub(super) fn create_src_bind_group(
         &self,
         device: &dyn hal::DynDevice,
         limits: &wgt::Limits,
@@ -341,8 +328,8 @@ impl IndirectValidation {
         }
     }
 
-    pub fn dispose(self, device: &dyn hal::DynDevice) {
-        let IndirectValidation {
+    pub(super) fn dispose(self, device: &dyn hal::DynDevice) {
+        let Dispatch {
             module,
             dst_bind_group_layout,
             src_bind_group_layout,

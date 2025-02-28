@@ -892,7 +892,9 @@ fn dispatch_indirect(
         ));
 
     if let Some(ref indirect_validation) = state.device.indirect_validation {
-        let params = indirect_validation.params(&state.device.limits, offset, buffer.size);
+        let params = indirect_validation
+            .dispatch
+            .params(&state.device.limits, offset, buffer.size);
 
         unsafe {
             state.raw_encoder.set_compute_pipeline(params.pipeline);
@@ -921,9 +923,10 @@ fn dispatch_indirect(
                 1,
                 Some(
                     buffer
-                        .raw_indirect_validation_bind_group
+                        .indirect_validation_bind_groups
                         .get(&state.snatch_guard)
                         .unwrap()
+                        .dispatch
                         .as_ref(),
                 ),
                 &[params.aligned_offset as u32],

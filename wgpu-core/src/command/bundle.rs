@@ -810,7 +810,7 @@ fn multi_draw_indirect(
     };
     let instance_limit = vertex_limits.instance_limit;
 
-    let buffer_uses = if state.device.indirect_draw_validation.is_some() {
+    let buffer_uses = if state.device.indirect_validation.is_some() {
         wgt::BufferUses::STORAGE_READ_ONLY
     } else {
         wgt::BufferUses::INDIRECT
@@ -901,8 +901,8 @@ impl RenderBundle {
     pub(super) unsafe fn execute(
         &self,
         raw: &mut dyn hal::DynCommandEncoder,
-        indirect_draw_validation_resources: &mut crate::indirect_draw_validation::IndirectDrawValidationResources,
-        indirect_draw_validation_batcher: &mut crate::indirect_draw_validation::IndirectDrawValidationBatcher,
+        indirect_draw_validation_resources: &mut crate::indirect_validation::DrawResources,
+        indirect_draw_validation_batcher: &mut crate::indirect_validation::DrawBatcher,
         snatch_guard: &SnatchGuard,
     ) -> Result<(), ExecutionError> {
         let mut offsets = self.base.dynamic_offsets.as_slice();
@@ -1050,7 +1050,7 @@ impl RenderBundle {
                     vertex_or_index_limit,
                     instance_limit,
                 } => {
-                    let (buffer, offset) = if self.device.indirect_draw_validation.is_some() {
+                    let (buffer, offset) = if self.device.indirect_validation.is_some() {
                         let (dst_resource_index, offset) = indirect_draw_validation_batcher.add(
                             indirect_draw_validation_resources,
                             &self.device,

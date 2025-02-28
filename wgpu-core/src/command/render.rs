@@ -1631,8 +1631,7 @@ impl Global {
         let device = &cmd_buf.device;
         let snatch_guard = &device.snatchable_lock.read();
 
-        let mut indirect_draw_validation_batcher =
-            crate::indirect_draw_validation::IndirectDrawValidationBatcher::new();
+        let mut indirect_draw_validation_batcher = crate::indirect_validation::DrawBatcher::new();
 
         let (scope, pending_discard_init_fixups) = {
             device.check_is_valid().map_pass_err(pass_scope)?;
@@ -1997,8 +1996,9 @@ impl Global {
 
             CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope, snatch_guard);
 
-            if let Some(ref indirect_draw_validation) = device.indirect_draw_validation {
-                indirect_draw_validation
+            if let Some(ref indirect_validation) = device.indirect_validation {
+                indirect_validation
+                    .draw
                     .inject_validation_pass(
                         device,
                         snatch_guard,
@@ -2494,8 +2494,8 @@ fn draw_indexed(
 
 fn multi_draw_indirect(
     state: &mut State,
-    indirect_draw_validation_resources: &mut crate::indirect_draw_validation::IndirectDrawValidationResources,
-    indirect_draw_validation_batcher: &mut crate::indirect_draw_validation::IndirectDrawValidationBatcher,
+    indirect_draw_validation_resources: &mut crate::indirect_validation::DrawResources,
+    indirect_draw_validation_batcher: &mut crate::indirect_validation::DrawBatcher,
     cmd_buf: &Arc<CommandBuffer>,
     indirect_buffer: Arc<crate::resource::Buffer>,
     offset: u64,
@@ -2563,7 +2563,7 @@ fn multi_draw_indirect(
         }
     }
 
-    if state.device.indirect_draw_validation.is_some() {
+    if state.device.indirect_validation.is_some() {
         state
             .info
             .usage_scope
@@ -2580,10 +2580,8 @@ fn multi_draw_indirect(
             raw_encoder: &'a mut dyn hal::DynCommandEncoder,
             device: &'a Device,
 
-            indirect_draw_validation_resources:
-                &'a mut crate::indirect_draw_validation::IndirectDrawValidationResources,
-            indirect_draw_validation_batcher:
-                &'a mut crate::indirect_draw_validation::IndirectDrawValidationBatcher,
+            indirect_draw_validation_resources: &'a mut crate::indirect_validation::DrawResources,
+            indirect_draw_validation_batcher: &'a mut crate::indirect_validation::DrawBatcher,
 
             indirect_buffer: Arc<crate::resource::Buffer>,
             indexed: bool,
@@ -2866,8 +2864,8 @@ fn write_timestamp(
 
 fn execute_bundle(
     state: &mut State,
-    indirect_draw_validation_resources: &mut crate::indirect_draw_validation::IndirectDrawValidationResources,
-    indirect_draw_validation_batcher: &mut crate::indirect_draw_validation::IndirectDrawValidationBatcher,
+    indirect_draw_validation_resources: &mut crate::indirect_validation::DrawResources,
+    indirect_draw_validation_batcher: &mut crate::indirect_validation::DrawBatcher,
     cmd_buf: &Arc<CommandBuffer>,
     bundle: Arc<super::RenderBundle>,
 ) -> Result<(), RenderPassErrorInner> {

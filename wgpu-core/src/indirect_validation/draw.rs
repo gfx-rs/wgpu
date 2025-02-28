@@ -1,3 +1,4 @@
+use super::CreateIndirectValidationPipelineError;
 use crate::{
     device::{queue::TempResource, Device, DeviceError},
     lock::{rank, Mutex},
@@ -12,7 +13,6 @@ use core::{
     mem::{size_of, size_of_val},
     num::NonZeroU64,
 };
-use thiserror::Error;
 use wgt::Limits;
 
 /// Note: This needs to be under:
@@ -31,17 +31,6 @@ use wgt::Limits;
 /// - 52428 [`wgt::DrawIndexedIndirectArgs`]
 const BUFFER_SIZE: wgt::BufferSize = unsafe { wgt::BufferSize::new_unchecked(1_048_560) };
 
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
-pub enum CreateDrawIndirectValidationPipelineError {
-    #[error(transparent)]
-    DeviceError(#[from] DeviceError),
-    #[error(transparent)]
-    ShaderModule(#[from] CreateShaderModuleError),
-    #[error(transparent)]
-    ComputePipeline(#[from] CreateComputePipelineError),
-}
-
 /// Holds all device-level resources that are needed to validate indirect draws.
 ///
 /// This machinery requires the following limits:
@@ -54,7 +43,7 @@ pub enum CreateDrawIndirectValidationPipelineError {
 /// These are all indirectly satisfied by `DownlevelFlags::INDIRECT_EXECUTION`, which is also
 /// required for this module's functionality to work.
 #[derive(Debug)]
-pub struct IndirectDrawValidation {
+pub(crate) struct Draw {
     module: Box<dyn hal::DynShaderModule>,
     metadata_bind_group_layout: Box<dyn hal::DynBindGroupLayout>,
     src_bind_group_layout: Box<dyn hal::DynBindGroupLayout>,
@@ -66,11 +55,11 @@ pub struct IndirectDrawValidation {
     free_metadata_entries: Mutex<Vec<BufferPoolEntry>>,
 }
 
-impl IndirectDrawValidation {
-    pub fn new(
+impl Draw {
+    pub(super) fn new(
         device: &dyn hal::DynDevice,
         required_features: &wgt::Features,
-    ) -> Result<Self, CreateDrawIndirectValidationPipelineError> {
+    ) -> Result<Self, CreateIndirectValidationPipelineError> {
         let module = create_validation_module(device)?;
 
         let metadata_bind_group_layout =
@@ -121,7 +110,7 @@ impl IndirectDrawValidation {
     }
 
     /// `Ok(None)` will only be returned if `buffer_size` is `0`.
-    pub fn create_src_bind_group(
+    pub(super) fn create_src_bind_group(
         &self,
         device: &dyn hal::DynDevice,
         limits: &Limits,
@@ -202,10 +191,10 @@ impl IndirectDrawValidation {
         &self,
         device: &Arc<Device>,
         snatch_guard: &SnatchGuard,
-        resources: &mut IndirectDrawValidationResources,
+        resources: &mut DrawResources,
         temp_resources: &mut Vec<TempResource>,
         encoder: &mut dyn hal::DynCommandEncoder,
-        batcher: IndirectDrawValidationBatcher,
+        batcher: DrawBatcher,
     ) -> Result<(), DeviceError> {
         let mut batches = batcher.batches;
 
@@ -403,9 +392,10 @@ impl IndirectDrawValidation {
 
             let src_bind_group = batch
                 .src_buffer
-                .raw_indirect_draw_validation_bind_group
+                .indirect_validation_bind_groups
                 .get(snatch_guard)
                 .unwrap()
+                .draw
                 .as_ref();
             unsafe {
                 encoder.set_bind_group(
@@ -459,8 +449,8 @@ impl IndirectDrawValidation {
         Ok(())
     }
 
-    pub fn dispose(self, device: &dyn hal::DynDevice) {
-        let IndirectDrawValidation {
+    pub(super) fn dispose(self, device: &dyn hal::DynDevice) {
+        let Draw {
             module,
             metadata_bind_group_layout,
             src_bind_group_layout,
@@ -499,8 +489,8 @@ impl IndirectDrawValidation {
 
 fn create_validation_module(
     device: &dyn hal::DynDevice,
-) -> Result<Box<dyn hal::DynShaderModule>, CreateDrawIndirectValidationPipelineError> {
-    let src = include_str!("./indirect_draw_validation.wgsl");
+) -> Result<Box<dyn hal::DynShaderModule>, CreateIndirectValidationPipelineError> {
+    let src = include_str!("./validate_draw.wgsl");
 
     #[cfg(feature = "wgsl")]
     let module = naga::front::wgsl::parse_str(src).map_err(|inner| {
@@ -556,7 +546,7 @@ fn create_validation_pipeline(
     module: &dyn hal::DynShaderModule,
     pipeline_layout: &dyn hal::DynPipelineLayout,
     supports_indirect_first_instance: bool,
-) -> Result<Box<dyn hal::DynComputePipeline>, CreateDrawIndirectValidationPipelineError> {
+) -> Result<Box<dyn hal::DynComputePipeline>, CreateIndirectValidationPipelineError> {
     let pipeline_desc = hal::ComputePipelineDescriptor {
         label: None,
         layout: pipeline_layout,
@@ -593,7 +583,7 @@ fn create_bind_group_layout(
     read_only: bool,
     has_dynamic_offset: bool,
     min_binding_size: wgt::BufferSize,
-) -> Result<Box<dyn hal::DynBindGroupLayout>, CreateDrawIndirectValidationPipelineError> {
+) -> Result<Box<dyn hal::DynBindGroupLayout>, CreateIndirectValidationPipelineError> {
     let bind_group_layout_desc = hal::BindGroupLayoutDescriptor {
         label: None,
         flags: hal::BindGroupLayoutFlags::empty(),
@@ -727,24 +717,25 @@ struct CurrentEntry {
 }
 
 /// Holds all command buffer-level resources that are needed to validate indirect draws.
-pub(crate) struct IndirectDrawValidationResources {
+pub(crate) struct DrawResources {
     device: Arc<Device>,
     dst_entries: Vec<BufferPoolEntry>,
     metadata_entries: Vec<BufferPoolEntry>,
 }
 
-impl Drop for IndirectDrawValidationResources {
+impl Drop for DrawResources {
     fn drop(&mut self) {
-        if let Some(ref indirect_draw_validation) = self.device.indirect_draw_validation {
+        if let Some(ref indirect_validation) = self.device.indirect_validation {
+            let indirect_draw_validation = &indirect_validation.draw;
             indirect_draw_validation.release_dst_entries(self.dst_entries.drain(..));
             indirect_draw_validation.release_metadata_entries(self.metadata_entries.drain(..));
         }
     }
 }
 
-impl IndirectDrawValidationResources {
+impl DrawResources {
     pub(crate) fn new(device: Arc<Device>) -> Self {
-        IndirectDrawValidationResources {
+        DrawResources {
             device,
             dst_entries: Vec::new(),
             metadata_entries: Vec::new(),
@@ -776,7 +767,7 @@ impl IndirectDrawValidationResources {
         size: u64,
         current_entry: &mut Option<CurrentEntry>,
     ) -> Result<(usize, u64), DeviceError> {
-        let indirect_draw_validation = self.device.indirect_draw_validation.as_ref().unwrap();
+        let indirect_draw_validation = &self.device.indirect_validation.as_ref().unwrap().draw;
         let ensure_entry = |index: usize| {
             if self.dst_entries.len() <= index {
                 let entry = indirect_draw_validation.acquire_dst_entry(self.device.raw())?;
@@ -793,7 +784,7 @@ impl IndirectDrawValidationResources {
         size: u64,
         current_entry: &mut Option<CurrentEntry>,
     ) -> Result<(usize, u64), DeviceError> {
-        let indirect_draw_validation = self.device.indirect_draw_validation.as_ref().unwrap();
+        let indirect_draw_validation = &self.device.indirect_validation.as_ref().unwrap().draw;
         let ensure_entry = |index: usize| {
             if self.metadata_entries.len() <= index {
                 let entry = indirect_draw_validation.acquire_metadata_entry(self.device.raw())?;
@@ -918,12 +909,12 @@ impl DrawIndirectValidationBatch {
 }
 
 /// Accumulates all needed data needed to validate indirect draws.
-pub(crate) struct IndirectDrawValidationBatcher {
+pub(crate) struct DrawBatcher {
     batches: FastHashMap<(TrackerIndex, u64, usize), DrawIndirectValidationBatch>,
     current_dst_entry: Option<CurrentEntry>,
 }
 
-impl IndirectDrawValidationBatcher {
+impl DrawBatcher {
     pub(crate) fn new() -> Self {
         Self {
             batches: FastHashMap::default(),
@@ -937,7 +928,7 @@ impl IndirectDrawValidationBatcher {
     /// and the offset to be used for the draw.
     pub(crate) fn add<'a>(
         &mut self,
-        indirect_draw_validation_resources: &'a mut IndirectDrawValidationResources,
+        indirect_draw_validation_resources: &'a mut DrawResources,
         device: &Device,
         src_buffer: &Arc<crate::resource::Buffer>,
         offset: u64,

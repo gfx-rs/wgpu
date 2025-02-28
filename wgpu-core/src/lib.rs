@@ -76,7 +76,6 @@ mod hash_utils;
 pub mod hub;
 pub mod id;
 pub mod identity;
-mod indirect_draw_validation;
 mod indirect_validation;
 mod init_tracker;
 pub mod instance;
