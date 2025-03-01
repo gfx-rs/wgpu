@@ -30,11 +30,9 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod drm;
 mod instance;
 mod sampler;
-
-#[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
-mod drm;
 
 use std::{
     borrow::Borrow,

@@ -1,3 +1,5 @@
+#![cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+
 use core::mem::MaybeUninit;
 use std::{string::ToString, vec::Vec};
 
