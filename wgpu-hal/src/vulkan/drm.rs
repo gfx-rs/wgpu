@@ -80,13 +80,6 @@ impl super::Instance {
             "Failed to find suitable drm device".to_string(),
         ))?;
 
-        // FIXME: consider implementing this strategy on working vulkan drivers
-        // let displays = unsafe {
-        //     display_instance
-        //         .get_physical_device_display_properties(physical_device)
-        //         .expect("Failed to get displays")
-        // };
-
         let acquire_drm_display_instance =
             ext::acquire_drm_display::Instance::new(&self.shared.entry, &self.shared.raw);
 
