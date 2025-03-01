@@ -180,6 +180,10 @@ Refactored some functions to handle the internal trace path as a string to avoid
 
 By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
+#### Naga
+
+- Refactored `use` statements to simplify future `no_std` support. By @bushrat011899 in [#7256](https://github.com/gfx-rs/wgpu/pull/7256)
+
 #### Vulkan
 
 ##### HAL queue callback support
