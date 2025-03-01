@@ -1,5 +1,6 @@
+use core::convert::TryInto;
+
 use super::error::Error;
-use std::convert::TryInto;
 
 pub(super) const fn map_binary_operator(word: spirv::Op) -> Result<crate::BinaryOperator, Error> {
     use crate::BinaryOperator;

@@ -12,7 +12,7 @@ pub struct HandleSet<T> {
     members: bit_set::BitSet,
 
     /// This type is indexed by values of type `T`.
-    as_keys: std::marker::PhantomData<T>,
+    as_keys: core::marker::PhantomData<T>,
 }
 
 impl<T> HandleSet<T> {
@@ -21,7 +21,7 @@ impl<T> HandleSet<T> {
         Self {
             len: 0,
             members: bit_set::BitSet::new(),
-            as_keys: std::marker::PhantomData,
+            as_keys: core::marker::PhantomData,
         }
     }
 
@@ -35,7 +35,7 @@ impl<T> HandleSet<T> {
         Self {
             len,
             members: bit_set::BitSet::with_capacity(len),
-            as_keys: std::marker::PhantomData,
+            as_keys: core::marker::PhantomData,
         }
     }
 
@@ -103,7 +103,7 @@ impl<T> ArenaType<T> for Arena<T> {
     }
 }
 
-impl<T: std::hash::Hash + Eq> ArenaType<T> for UniqueArena<T> {
+impl<T: core::hash::Hash + Eq> ArenaType<T> for UniqueArena<T> {
     fn len(&self) -> usize {
         self.len()
     }

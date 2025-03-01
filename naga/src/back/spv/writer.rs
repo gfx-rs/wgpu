@@ -1,3 +1,12 @@
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+
+use hashbrown::hash_map::Entry;
+use spirv::Word;
+
 use super::{
     block::DebugInfoInner,
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
@@ -12,8 +21,6 @@ use crate::{
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
-use hashbrown::hash_map::Entry;
-use spirv::Word;
 
 struct FunctionInterface<'a> {
     varying_ids: &'a mut Vec<Word>,
@@ -97,12 +104,12 @@ impl Writer {
     /// `Recyclable::recycle` requires ownership of the value, not just
     /// `&mut`; see the trait documentation. But we need to use this method
     /// from functions like `Writer::write`, which only have `&mut Writer`.
-    /// Workarounds include unsafe code (`std::ptr::read`, then `write`, ugh)
+    /// Workarounds include unsafe code (`core::ptr::read`, then `write`, ugh)
     /// or something like a `Default` impl that returns an oddly-initialized
     /// `Writer`, which is worse.
     fn reset(&mut self) {
         use super::recyclable::Recyclable;
-        use std::mem::take;
+        use core::mem::take;
 
         let mut id_gen = IdGenerator::default();
         let gl450_ext_inst_id = id_gen.next();
@@ -867,10 +874,10 @@ impl Writer {
             fun_info: info,
             function: &mut function,
             // Re-use the cached expression table from prior functions.
-            cached: std::mem::take(&mut self.saved_cached),
+            cached: core::mem::take(&mut self.saved_cached),
 
             // Steal the Writer's temp list for a bit.
-            temp_list: std::mem::take(&mut self.temp_list),
+            temp_list: core::mem::take(&mut self.temp_list),
             force_loop_bounding: self.force_loop_bounding,
             writer: self,
             expression_constness: super::ExpressionConstnessTracker::from_arena(

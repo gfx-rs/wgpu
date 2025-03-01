@@ -1,3 +1,11 @@
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt::Write;
+
 use super::Error;
 use crate::back::wgsl::polyfill::InversePolyfill;
 use crate::{
@@ -5,7 +13,6 @@ use crate::{
     proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, Module, ShaderStage, TypeInner,
 };
-use std::fmt::Write;
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;

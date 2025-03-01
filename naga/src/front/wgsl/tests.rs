@@ -1,3 +1,5 @@
+use alloc::format;
+
 use super::parse_str;
 
 #[test]

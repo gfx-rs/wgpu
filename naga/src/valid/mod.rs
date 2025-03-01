@@ -10,13 +10,16 @@ mod handles;
 mod interface;
 mod r#type;
 
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use core::ops;
+
+use bit_set::BitSet;
+
 use crate::{
     arena::{Handle, HandleSet},
     proc::{ExpressionKindTracker, LayoutError, Layouter, TypeResolution},
     FastHashSet,
 };
-use bit_set::BitSet;
-use std::ops;
 
 //TODO: analyze the model at the same time as we validate it,
 // merge the corresponding matches over expressions and statements.

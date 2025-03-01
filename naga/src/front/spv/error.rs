@@ -1,9 +1,16 @@
-use super::ModuleState;
-use crate::{arena::Handle, front::atomic_upgrade};
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use termcolor::{NoColor, WriteColor};
+
+use super::ModuleState;
+use crate::{arena::Handle, front::atomic_upgrade};
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {

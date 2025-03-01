@@ -45,19 +45,28 @@ to output a [`Module`](crate::Module) into glsl
 
 pub use features::Features;
 
+use alloc::{
+    borrow::ToOwned,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::{
+    cmp::Ordering,
+    fmt::{self, Error as FmtError, Write},
+    mem,
+};
+
+use hashbrown::hash_map;
+use thiserror::Error;
+
 use crate::{
     back::{self, Baked},
     proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, ShaderStage, TypeInner,
 };
 use features::FeaturesManager;
-use hashbrown::hash_map;
-use std::{
-    cmp::Ordering,
-    fmt::{self, Error as FmtError, Write},
-    mem,
-};
-use thiserror::Error;
 
 /// Contains the features related code and the features querying method
 mod features;
@@ -102,7 +111,7 @@ where
 }
 
 /// Mapping between resources and bindings.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, u8>;
 
 impl crate::AtomicFunction {
     const fn to_glsl(self) -> &'static str {
@@ -320,7 +329,7 @@ pub struct PipelineOptions {
     /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
     pub entry_point: String,
     /// How many views to render to, if doing multiview rendering.
-    pub multiview: Option<std::num::NonZeroU32>,
+    pub multiview: Option<core::num::NonZeroU32>,
 }
 
 #[derive(Debug)]
@@ -582,7 +591,7 @@ pub struct Writer<'a, W> {
     /// transformed to `do {} while(false);` loops.
     continue_ctx: back::continue_forward::ContinueCtx,
     /// How many views to render to, if doing multiview rendering.
-    multiview: Option<std::num::NonZeroU32>,
+    multiview: Option<core::num::NonZeroU32>,
     /// Mapping of varying variables to their location. Needed for reflections.
     varying: crate::FastHashMap<String, VaryingLocation>,
 }
