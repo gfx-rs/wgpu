@@ -26,7 +26,8 @@
     rust_2018_idioms,
     unsafe_op_in_unsafe_fn
 )]
-#![allow(clippy::arc_with_non_send_sync)]
+// NOTE: Keep this in sync with `wgpu-core`.
+#![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
 #![cfg_attr(not(any(wgpu_core, webgpu)), allow(unused))]
 
 extern crate alloc;

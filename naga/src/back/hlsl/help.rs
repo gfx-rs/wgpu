@@ -32,7 +32,7 @@ use super::{
         ABS_FUNCTION, DIV_FUNCTION, EXTRACT_BITS_FUNCTION, INSERT_BITS_FUNCTION, MOD_FUNCTION,
         NEG_FUNCTION,
     },
-    BackendResult,
+    BackendResult, WrappedType,
 };
 use crate::{arena::Handle, proc::NameKey, ScalarKind};
 use std::fmt::Write;
@@ -937,7 +937,7 @@ impl<W: Write> super::Writer<'_, W> {
                     match module.types[ty].inner {
                         crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
                             let constructor = WrappedConstructor { ty };
-                            if self.wrapped.constructors.insert(constructor) {
+                            if self.wrapped.insert(WrappedType::Constructor(constructor)) {
                                 self.write_wrapped_constructor_function(module, constructor)?;
                             }
                         }
@@ -953,7 +953,7 @@ impl<W: Write> super::Writer<'_, W> {
                         } => {
                             if format.single_component() {
                                 let scalar: crate::Scalar = format.into();
-                                if self.wrapped.image_load_scalars.insert(scalar) {
+                                if self.wrapped.insert(WrappedType::ImageLoadScalar(scalar)) {
                                     self.write_loaded_scalar_to_storage_loaded_value(scalar)?;
                                 }
                             }
@@ -989,7 +989,7 @@ impl<W: Write> super::Writer<'_, W> {
         for (handle, _) in expressions.iter() {
             if let crate::Expression::ZeroValue(ty) = expressions[handle] {
                 let zero_value = WrappedZeroValue { ty };
-                if self.wrapped.zero_values.insert(zero_value) {
+                if self.wrapped.insert(WrappedType::ZeroValue(zero_value)) {
                     self.write_wrapped_zero_value_function(module, zero_value)?;
                 }
             }
@@ -1036,7 +1036,7 @@ impl<W: Write> super::Writer<'_, W> {
                             components,
                         };
 
-                        if !self.wrapped.math.insert(wrapped) {
+                        if !self.wrapped.insert(WrappedType::Math(wrapped)) {
                             continue;
                         }
 
@@ -1078,7 +1078,7 @@ impl<W: Write> super::Writer<'_, W> {
                             components,
                         };
 
-                        if !self.wrapped.math.insert(wrapped) {
+                        if !self.wrapped.insert(WrappedType::Math(wrapped)) {
                             continue;
                         }
 
@@ -1147,7 +1147,7 @@ impl<W: Write> super::Writer<'_, W> {
                             components,
                         };
 
-                        if !self.wrapped.math.insert(wrapped) {
+                        if !self.wrapped.insert(WrappedType::Math(wrapped)) {
                             continue;
                         }
 
@@ -1198,7 +1198,7 @@ impl<W: Write> super::Writer<'_, W> {
                 // find another solution for different bit-widths.
                 match (op, scalar) {
                     (crate::UnaryOperator::Negate, crate::Scalar::I32) => {
-                        if !self.wrapped.unary_op.insert(wrapped) {
+                        if !self.wrapped.insert(WrappedType::UnaryOp(wrapped)) {
                             continue;
                         }
 
@@ -1259,7 +1259,7 @@ impl<W: Write> super::Writer<'_, W> {
                             left_ty: left_wrapped_ty,
                             right_ty: right_wrapped_ty,
                         };
-                        if !self.wrapped.binary_op.insert(wrapped) {
+                        if !self.wrapped.insert(WrappedType::BinaryOp(wrapped)) {
                             continue;
                         }
 
@@ -1315,7 +1315,7 @@ impl<W: Write> super::Writer<'_, W> {
                             left_ty: left_wrapped_ty,
                             right_ty: right_wrapped_ty,
                         };
-                        if !self.wrapped.binary_op.insert(wrapped) {
+                        if !self.wrapped.insert(WrappedType::BinaryOp(wrapped)) {
                             continue;
                         }
 
@@ -1391,7 +1391,7 @@ impl<W: Write> super::Writer<'_, W> {
                         writable: storage_access.contains(crate::StorageAccess::STORE),
                     };
 
-                    if self.wrapped.array_lengths.insert(wal) {
+                    if self.wrapped.insert(WrappedType::ArrayLength(wal)) {
                         self.write_wrapped_array_length_function(wal)?;
                     }
                 }
@@ -1410,7 +1410,7 @@ impl<W: Write> super::Writer<'_, W> {
                         _ => unreachable!("we only query images"),
                     };
 
-                    if self.wrapped.image_queries.insert(wiq) {
+                    if self.wrapped.insert(WrappedType::ImageQuery(wiq)) {
                         self.write_wrapped_image_query_function(module, wiq, handle, func_ctx)?;
                     }
                 }
@@ -1439,7 +1439,7 @@ impl<W: Write> super::Writer<'_, W> {
                                 }
 
                                 let constructor = WrappedConstructor { ty };
-                                if writer.wrapped.constructors.insert(constructor) {
+                                if writer.wrapped.insert(WrappedType::Constructor(constructor)) {
                                     writer
                                         .write_wrapped_constructor_function(module, constructor)?;
                                 }
@@ -1448,7 +1448,7 @@ impl<W: Write> super::Writer<'_, W> {
                                 write_wrapped_constructor(writer, base, module)?;
 
                                 let constructor = WrappedConstructor { ty };
-                                if writer.wrapped.constructors.insert(constructor) {
+                                if writer.wrapped.insert(WrappedType::Constructor(constructor)) {
                                     writer
                                         .write_wrapped_constructor_function(module, constructor)?;
                                 }
@@ -1484,7 +1484,7 @@ impl<W: Write> super::Writer<'_, W> {
                                 let ty = base_ty_handle.unwrap();
                                 let access = WrappedStructMatrixAccess { ty, index };
 
-                                if self.wrapped.struct_matrix_access.insert(access) {
+                                if self.wrapped.insert(WrappedType::StructMatrixAccess(access)) {
                                     self.write_wrapped_struct_matrix_get_function(module, access)?;
                                     self.write_wrapped_struct_matrix_set_function(module, access)?;
                                     self.write_wrapped_struct_matrix_set_vec_function(
@@ -1713,7 +1713,7 @@ impl<W: Write> super::Writer<'_, W> {
                 }) = super::writer::get_inner_matrix_data(module, global.ty)
                 {
                     let entry = WrappedMatCx2 { columns };
-                    if self.wrapped.mat_cx2s.insert(entry) {
+                    if self.wrapped.insert(WrappedType::MatCx2(entry)) {
                         self.write_mat_cx2_typedef_and_functions(entry)?;
                     }
                 }
@@ -1731,7 +1731,7 @@ impl<W: Write> super::Writer<'_, W> {
                         }) = super::writer::get_inner_matrix_data(module, member.ty)
                         {
                             let entry = WrappedMatCx2 { columns };
-                            if self.wrapped.mat_cx2s.insert(entry) {
+                            if self.wrapped.insert(WrappedType::MatCx2(entry)) {
                                 self.write_mat_cx2_typedef_and_functions(entry)?;
                             }
                         }

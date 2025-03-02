@@ -107,14 +107,14 @@ pub enum PollError {
 
 > [!WARNING]
 > As part of this change, WebGL's default behavior has changed. Previously `device.poll(Wait)` appeared as though it functioned correctly. This was a quirk caused by the bug that these PRs fixed. Now it will always return `Timeout` if the submission has not already completed. As many people rely on this behavior on WebGL, there is a new options in `BackendOptions`. If you want the old behavior, set the following on instance creation:
-> 
+>
 > ```rust
 > instance_desc.backend_options.gl.fence_behavior = wgpu::GlFenceBehavior::AutoFinish;
 > ```
-> 
+>
 > You will lose the ability to know exactly when a submission has completed, but `device.poll(Wait)` will behave the same as it does on native.
 
-By @cwfitzgerald in [#6942](https://github.com/gfx-rs/wgpu/pull/6942).  
+By @cwfitzgerald in [#6942](https://github.com/gfx-rs/wgpu/pull/6942).
 By @cwfitzgerald in [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
 
 #### Naga
@@ -144,6 +144,7 @@ By @jamienicol in [#6929](https://github.com/gfx-rs/wgpu/pull/6929) and [#7080](
 
 - Add `util::StagingBelt::allocate()` so the staging belt can be used to write textures. By @kpreid in [#6900](https://github.com/gfx-rs/wgpu/pull/6900).
 - Added `CommandEncoder::transition_resources()` for native API interop, and allowing users to slightly optimize barriers. By @JMS55 in [#6678](https://github.com/gfx-rs/wgpu/pull/6678).
+- Add `wgpu_hal::vulkan::Adapter::texture_format_as_raw` for native API interop. By @JMS55 in [#7228](https://github.com/gfx-rs/wgpu/pull/7228).
 
 - Support getting vertices of the hit triangle when raytracing. By @Vecvec in [#7183](https://github.com/gfx-rs/wgpu/pull/7183) .
 
