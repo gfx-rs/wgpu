@@ -2,7 +2,6 @@ use super::{conv, AsNative, TimestampQuerySupport};
 use crate::CommandEncoder as _;
 use std::{
     borrow::{Cow, ToOwned as _},
-    mem::size_of,
     ops::Range,
     vec::Vec,
 };

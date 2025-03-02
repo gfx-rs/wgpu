@@ -1,6 +1,7 @@
 //! RenderDoc integration - <https://renderdoc.org/>
 #![cfg_attr(not(any(feature = "gles", feature = "vulkan")), allow(dead_code))]
 
+use alloc::format;
 use alloc::string::String;
 use core::{ffi, ptr};
 
@@ -71,7 +72,7 @@ impl RenderDoc {
         };
 
         let get_api: libloading::Symbol<GetApiFn> =
-            match unsafe { renderdoc_lib.get(b"RENDERDOC_GetAPI\0") } {
+            match unsafe { renderdoc_lib.get(c"RENDERDOC_GetAPI".to_bytes()) } {
                 Ok(api) => api,
                 Err(e) => {
                     return RenderDoc::NotAvailable {

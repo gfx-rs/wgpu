@@ -2170,6 +2170,10 @@ impl super::Adapter {
 
         Ok(crate::OpenDevice { device, queue })
     }
+
+    pub fn texture_format_as_raw(&self, texture_format: wgt::TextureFormat) -> vk::Format {
+        self.private_caps.map_texture_format(texture_format)
+    }
 }
 
 impl crate::Adapter for super::Adapter {

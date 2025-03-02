@@ -17,7 +17,6 @@ extern crate alloc;
 use alloc::{string::String, vec, vec::Vec};
 use core::{
     hash::{Hash, Hasher},
-    mem::size_of,
     num::NonZeroU32,
     ops::Range,
 };

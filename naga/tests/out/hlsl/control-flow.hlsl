@@ -193,6 +193,7 @@ void main(uint3 global_id : SV_DispatchThreadID)
 
     DeviceMemoryBarrierWithGroupSync();
     GroupMemoryBarrierWithGroupSync();
+    DeviceMemoryBarrierWithGroupSync();
     do {
         pos = int(1);
     } while(false);

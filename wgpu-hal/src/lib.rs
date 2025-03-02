@@ -240,8 +240,9 @@
 
 extern crate alloc;
 extern crate wgpu_types as wgt;
-// TODO(https://github.com/gfx-rs/wgpu/issues/6826): disable std except on noop and gles-WebGL.
-// Requires Rust 1.81 for core::error::Error.
+// Each of these backends needs `std` in some fashion; usually `std::thread` functions.
+// TODO(https://github.com/gfx-rs/wgpu/issues/6826): gles-WebGL backend should be made no-std
+#[cfg(any(dx12, gles, metal, vulkan))]
 #[macro_use]
 extern crate std;
 
@@ -290,12 +291,12 @@ use alloc::boxed::Box;
 use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
 use core::{
     borrow::Borrow,
+    error::Error,
     fmt,
     num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
 };
-use std::error::Error; // TODO(https://github.com/gfx-rs/wgpu/issues/6826): use core::error after MSRV bump
 
 use bitflags::bitflags;
 use parking_lot::Mutex;

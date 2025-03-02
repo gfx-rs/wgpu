@@ -23,8 +23,8 @@ const NSKeyValueObservingOptionNew: usize = 0x01;
 #[allow(non_upper_case_globals)]
 const NSKeyValueObservingOptionInitial: usize = 0x04;
 
-const CONTENTS_SCALE: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b"contentsScale\0") };
-const BOUNDS: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b"bounds\0") };
+const CONTENTS_SCALE: &CStr = c"contentsScale";
+const BOUNDS: &CStr = c"bounds";
 
 /// Create a new custom layer that tracks parameters from the given super layer.
 ///

@@ -1,9 +1,5 @@
 use alloc::string::String;
-use core::{
-    mem::{self, size_of, size_of_val},
-    ops::Range,
-    slice,
-};
+use core::{mem, ops::Range, slice};
 
 use arrayvec::ArrayVec;
 

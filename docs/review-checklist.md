@@ -34,6 +34,9 @@ satisfying way to address in a more robust way.
 - [ ] If your change iterates over a collection, did you ensure the
       order of iteration was deterministic? Using `HashMap` and
       `HashSet` is fine, as long as you don't iterate over it.
+- [ ] If you insert elements into a set or map that you expect are not
+      already present, did you make an assertion about `insert`'s
+      return value?
 
 ### WGSL Extensions
 

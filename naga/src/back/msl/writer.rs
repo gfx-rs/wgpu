@@ -3223,8 +3223,7 @@ impl<W: Write> Writer<W> {
                         }
 
                         self.put_block(lcase.next(), &case.body, context)?;
-                        if !case.fall_through
-                            && case.body.last().map_or(true, |s| !s.is_terminator())
+                        if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator())
                         {
                             writeln!(self.out, "{}break;", lcase.next())?;
                         }
@@ -6512,6 +6511,12 @@ template <typename A>
             writeln!(
                 self.out,
                 "{level}{NAMESPACE}::simdgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
+            )?;
+        }
+        if flags.contains(crate::Barrier::TEXTURE) {
+            writeln!(
+                self.out,
+                "{level}{NAMESPACE}::threadgroup_barrier({NAMESPACE}::mem_flags::mem_texture);",
             )?;
         }
         Ok(())

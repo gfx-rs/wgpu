@@ -9,6 +9,7 @@ fn derivatives() {
 fn barriers() {
     storageBarrier();
     workgroupBarrier();
+    textureBarrier();
 }
 
 @fragment

@@ -2,7 +2,7 @@ use std::{
     borrow::{Cow, ToOwned as _},
     collections::BTreeMap,
     ffi::{CStr, CString},
-    mem::{self, size_of, MaybeUninit},
+    mem::{self, MaybeUninit},
     num::NonZeroU32,
     ptr, slice,
     sync::Arc,

@@ -92,14 +92,20 @@ review.
 
 We use the following components in a WGPU development environment:
 
-- [The version of the Rust toolchain with the `cargo` command][install-rust],
-  pointed to by `rust-toolchain.toml` at the root of the repository, to compile
-  WGPU's code.
+- [A Rust toolchain][install-rust] matching the version specified in
+  [`rust-toolchain.toml`](./rust-toolchain.toml), to compile WGPU's code. If you
+  use `rustup`, this will be automatically installed when you first run a
+  `cargo` command in the repository.
 - [Taplo](https://taplo.tamasfe.dev/) to keep TOML files formatted.
+- [Vulkan SDK](https://vulkan.lunarg.com/) to provide Vulkan validation layers
+  and other Vulkan/SPIR-V tools for testing.
 
 Once these are done, you should be ready to hack on WGPU! Drop into your
 favorite editor, make some changes to the repository's code, and test that WGPU
-has been changed the way you expect. We recommend
+has been changed the way you expect. Take a look at [`docs/testing.md`] for more
+info on testing.
+
+When testing your own code against your patch, we recommend
 [using a `path` dependency][path-deps] in Cargo for local testing of changes,
 and a [`git` dependency][git-deps] pointing to your own fork to share changes
 with other contributors.

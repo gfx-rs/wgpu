@@ -2203,8 +2203,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             self.write_stmt(sta, ctx, l2.next())?;
                         }
 
-                        if !case.fall_through
-                            && case.body.last().map_or(true, |s| !s.is_terminator())
+                        if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator())
                         {
                             writeln!(self.out, "{}break;", l2.next())?;
                         }
@@ -4628,6 +4627,9 @@ impl<'a, W: Write> Writer<'a, W> {
         }
         if flags.contains(crate::Barrier::SUB_GROUP) {
             writeln!(self.out, "{level}subgroupMemoryBarrier();")?;
+        }
+        if flags.contains(crate::Barrier::TEXTURE) {
+            writeln!(self.out, "{level}memoryBarrierImage();")?;
         }
         writeln!(self.out, "{level}barrier();")?;
         Ok(())
