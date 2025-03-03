@@ -1,3 +1,6 @@
+use alloc::boxed::Box;
+use core::time::Duration;
+
 use crate::{
     DynDevice, DynFence, DynResource, DynSurfaceTexture, Surface, SurfaceConfiguration,
     SurfaceError,
@@ -25,7 +28,7 @@ pub trait DynSurface: DynResource {
 
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<Duration>,
         fence: &dyn DynFence,
     ) -> Result<Option<DynAcquiredSurfaceTexture>, SurfaceError>;
 
@@ -49,7 +52,7 @@ impl<S: Surface + DynResource> DynSurface for S {
 
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<Duration>,
         fence: &dyn DynFence,
     ) -> Result<Option<DynAcquiredSurfaceTexture>, SurfaceError> {
         let fence = fence.expect_downcast_ref();

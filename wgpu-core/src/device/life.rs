@@ -1,3 +1,8 @@
+use alloc::{sync::Arc, vec::Vec};
+
+use smallvec::SmallVec;
+use thiserror::Error;
+
 use crate::{
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
@@ -7,10 +12,6 @@ use crate::{
     snatch::SnatchGuard,
     SubmissionIndex,
 };
-use smallvec::SmallVec;
-
-use std::sync::Arc;
-use thiserror::Error;
 
 /// A command submitted to the GPU for execution.
 ///

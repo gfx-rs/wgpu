@@ -3,14 +3,14 @@ name: Docs
 on:
   pull_request:
     paths:
-      - '.github/workflows/docs.yml'
+      - ".github/workflows/docs.yml"
   push:
     branches:
       - trunk
 
 env:
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.83"
+  REPO_MSRV: "1.85"
 
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout the code
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -31,7 +31,7 @@ jobs:
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
           rustup override set ${{ env.REPO_MSRV }}
 
-      - name: disable debug symbols
+      - name: Disable debug symbols
         shell: bash
         run: |
           mkdir -p .cargo
@@ -41,7 +41,7 @@ jobs:
             debug = false
           EOF
 
-      - name: caching
+      - name: Caching
         uses: Swatinem/rust-cache@v2
         with:
           key: doc-build
@@ -54,7 +54,7 @@ jobs:
           RUSTC_BOOTSTRAP: 1
 
       - name: Deploy the docs
-        uses: JamesIves/github-pages-deploy-action@v4.7.2
+        uses: JamesIves/github-pages-deploy-action@v4.7.3
         if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}

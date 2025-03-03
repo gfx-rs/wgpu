@@ -1,11 +1,12 @@
 use std::{
     borrow::Cow,
-    ffi,
-    mem::{self, size_of, size_of_val},
+    ffi, mem,
     num::NonZeroU32,
     ptr, slice,
+    string::{String, ToString as _},
     sync::Arc,
     time::{Duration, Instant},
+    vec::Vec,
 };
 
 use parking_lot::Mutex;
@@ -29,7 +30,7 @@ use crate::{
 };
 
 // this has to match Naga's HLSL backend, and also needs to be null-terminated
-const NAGA_LOCATION_SEMANTIC: &[u8] = b"LOC\0";
+const NAGA_LOCATION_SEMANTIC: &[u8] = c"LOC".to_bytes();
 
 impl super::Device {
     pub(super) fn new(
@@ -675,10 +676,11 @@ impl crate::Device for super::Device {
             None => Direct3D12::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
         };
         let mut filter = Direct3D12::D3D12_FILTER(
-            conv::map_filter_mode(desc.min_filter).0 << Direct3D12::D3D12_MIN_FILTER_SHIFT
-                | conv::map_filter_mode(desc.mag_filter).0 << Direct3D12::D3D12_MAG_FILTER_SHIFT
-                | conv::map_filter_mode(desc.mipmap_filter).0 << Direct3D12::D3D12_MIP_FILTER_SHIFT
-                | reduction.0 << Direct3D12::D3D12_FILTER_REDUCTION_TYPE_SHIFT,
+            (conv::map_filter_mode(desc.min_filter).0 << Direct3D12::D3D12_MIN_FILTER_SHIFT)
+                | (conv::map_filter_mode(desc.mag_filter).0 << Direct3D12::D3D12_MAG_FILTER_SHIFT)
+                | (conv::map_filter_mode(desc.mipmap_filter).0
+                    << Direct3D12::D3D12_MIP_FILTER_SHIFT)
+                | (reduction.0 << Direct3D12::D3D12_FILTER_REDUCTION_TYPE_SHIFT),
         );
 
         if desc.anisotropy_clamp != 1 {

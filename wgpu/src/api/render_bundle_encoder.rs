@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, num::NonZeroU32, ops::Range};
+use core::{marker::PhantomData, num::NonZeroU32, ops::Range};
 
 use crate::dispatch::RenderBundleEncoderInterface;
 use crate::*;

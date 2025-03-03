@@ -1,3 +1,21 @@
+use alloc::{
+    borrow::{Cow, ToOwned},
+    boxed::Box,
+    string::String,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
+use core::{fmt, mem::ManuallyDrop, ops::Range};
+use std::sync::OnceLock;
+
+use arrayvec::ArrayVec;
+use thiserror::Error;
+
+#[cfg(feature = "serde")]
+use serde::Deserialize;
+#[cfg(feature = "serde")]
+use serde::Serialize;
+
 use crate::{
     device::{
         bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
@@ -7,30 +25,13 @@ use crate::{
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
         Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        MissingTextureUsageError, ResourceErrorIdent, Sampler, TextureView, TrackingData,
+        MissingTextureUsageError, ResourceErrorIdent, Sampler, TextureView, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
     track::{BindGroupStates, ResourceUsageCompatibilityError},
     Label,
 };
-
-use arrayvec::ArrayVec;
-
-#[cfg(feature = "serde")]
-use serde::Deserialize;
-#[cfg(feature = "serde")]
-use serde::Serialize;
-
-use std::{
-    borrow::Cow,
-    mem::ManuallyDrop,
-    ops::Range,
-    sync::{Arc, OnceLock, Weak},
-};
-
-use crate::resource::Tlas;
-use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -477,9 +478,9 @@ where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
-    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
-    <[S] as ToOwned>::Owned: std::fmt::Debug,
-    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+    <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
+    <[S] as ToOwned>::Owned: fmt::Debug,
+    <[TV] as ToOwned>::Owned: fmt::Debug,
 {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
@@ -510,11 +511,11 @@ pub struct BindGroupDescriptor<
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
-    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
-    <[S] as ToOwned>::Owned: std::fmt::Debug,
-    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+    <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
+    <[S] as ToOwned>::Owned: fmt::Debug,
+    <[TV] as ToOwned>::Owned: fmt::Debug,
     [BindGroupEntry<'a, B, S, TV, TLAS>]: ToOwned,
-    <[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: std::fmt::Debug,
+    <[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: fmt::Debug,
 {
     /// Debug label of the bind group.
     ///
@@ -564,8 +565,8 @@ pub(crate) enum ExclusivePipeline {
     Compute(Weak<ComputePipeline>),
 }
 
-impl std::fmt::Display for ExclusivePipeline {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ExclusivePipeline {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ExclusivePipeline::None => f.write_str("None"),
             ExclusivePipeline::Render(p) => {
@@ -703,7 +704,7 @@ pub enum PushConstantUploadError {
 pub struct PipelineLayoutDescriptor<'a, BGL = BindGroupLayoutId>
 where
     [BGL]: ToOwned,
-    <[BGL] as ToOwned>::Owned: std::fmt::Debug,
+    <[BGL] as ToOwned>::Owned: fmt::Debug,
 {
     /// Debug label of the pipeline layout.
     ///
@@ -866,9 +867,9 @@ where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
-    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
-    <[S] as ToOwned>::Owned: std::fmt::Debug,
-    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+    <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
+    <[S] as ToOwned>::Owned: fmt::Debug,
+    <[TV] as ToOwned>::Owned: fmt::Debug,
 {
     Buffer(BufferBinding<B>),
     #[cfg_attr(

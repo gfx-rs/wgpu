@@ -1,9 +1,9 @@
-use super::conv;
+use std::{borrow::ToOwned as _, collections::BTreeMap, ffi::CStr, sync::Arc, vec::Vec};
 
 use ash::{amd, ext, google, khr, vk};
 use parking_lot::Mutex;
 
-use std::{collections::BTreeMap, ffi::CStr, sync::Arc};
+use super::conv;
 
 fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
     vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
@@ -1914,6 +1914,7 @@ impl super::Adapter {
                 } else {
                     spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
+                force_loop_bounding: true,
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,
@@ -2081,6 +2082,10 @@ impl super::Adapter {
         };
 
         Ok(crate::OpenDevice { device, queue })
+    }
+
+    pub fn texture_format_as_raw(&self, texture_format: wgt::TextureFormat) -> vk::Format {
+        self.private_caps.map_texture_format(texture_format)
     }
 }
 

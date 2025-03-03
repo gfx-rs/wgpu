@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::*;
 
 /// Handle to a pipeline cache, which is used to accelerate
@@ -67,7 +69,7 @@ use crate::*;
 /// [renaming]: std::fs::rename
 #[derive(Debug, Clone)]
 pub struct PipelineCache {
-    pub(crate) inner: dispatch::DispatchPipelineCache,
+    pub(crate) inner: crate::dispatch::DispatchPipelineCache,
 }
 
 #[cfg(send_sync)]

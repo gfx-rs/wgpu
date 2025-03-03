@@ -1,7 +1,7 @@
-use std::{
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::{
     error, fmt,
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
-    sync::Arc,
 };
 
 use parking_lot::Mutex;
@@ -701,7 +701,7 @@ pub struct BufferView<'a> {
     inner: dispatch::DispatchBufferMappedRange,
 }
 
-impl std::ops::Deref for BufferView<'_> {
+impl core::ops::Deref for BufferView<'_> {
     type Target = [u8];
 
     #[inline]
@@ -803,7 +803,7 @@ fn check_buffer_bounds(
     if let Some(size) = size {
         // Detect integer overflow.
         let end = offset.checked_add(size.get());
-        if end.map_or(true, |end| end > buffer_size) {
+        if end.is_none_or(|end| end > buffer_size) {
             panic!(
                 "slice offset {} size {} is out of range for buffer of size {}",
                 offset, size, buffer_size

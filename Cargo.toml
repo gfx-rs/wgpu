@@ -16,6 +16,7 @@ members = [
     "player",
     "tests",
     "wgpu-core",
+    "wgpu-core/platform-deps/*",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
@@ -35,6 +36,7 @@ default-members = [
     "player",
     "tests",
     "wgpu-core",
+    "wgpu-core/platform-deps/*",
     "wgpu-hal",
     "wgpu-info",
     "wgpu-macros",
@@ -43,13 +45,12 @@ default-members = [
 ]
 
 [workspace.lints.clippy]
-manual_c_str_literals = "allow"
 ref_as_ptr = "warn"
 # NOTE: disallowed-types is configured in other file: clippy.toml
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.83"
+rust-version = "1.85"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -62,6 +63,8 @@ naga = { version = "24.0.0", path = "./naga" }
 wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features = [
     "serde",
     "wgsl",
+    "vulkan",
+    "gles",
     "dx12",
     "metal",
     "static-dxc",
@@ -74,15 +77,25 @@ wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "24.0.0", path = "./tests" }
 wgpu-types = { version = "24.0.0", path = "./wgpu-types" }
 
-anyhow = { version = "1.0.95", default-features = false }
+wgpu-core-deps-windows-linux-android = { version = "24.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
+wgpu-core-deps-apple = { version = "24.0.0", path = "./wgpu-core/platform-deps/apple" }
+wgpu-core-deps-wasm = { version = "24.0.0", path = "./wgpu-core/platform-deps/wasm" }
+wgpu-core-deps-emscripten = { version = "24.0.0", path = "./wgpu-core/platform-deps/emscripten" }
+
+anyhow = { version = "1.0.96", default-features = false }
 approx = "0.5"
 argh = "0.1.13"
 arrayvec = { version = "0.7.6", default-features = false }
 bincode = "1"
 bit-set = { version = "0.8", default-features = false }
 bit-vec = { version = "0.8", default-features = false }
-bitflags = "2.7"
-bytemuck = { version = "1.21", features = ["derive", "min_const_generics"] }
+bitflags = "2.9"
+bytemuck = { version = "1.21", features = [
+    "derive",
+    "extern_crate_alloc",
+    "min_const_generics",
+] }
+cargo_metadata = "0.19"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.5"
@@ -94,7 +107,6 @@ env_logger = "0.11"
 fern = "0.7"
 flume = "0.11"
 futures-lite = "2"
-getrandom = "0.2"
 glam = "0.29"
 hashbrown = { version = "0.14.5", default-features = false, features = [
     "ahash",
@@ -125,6 +137,7 @@ pico-args = { version = "0.5.0", features = [
 ] }
 png = "0.17.16"
 pollster = "0.4"
+portable-atomic = "1"
 profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.6", default-features = false }
 rayon = "1"
@@ -134,7 +147,7 @@ ron = "0.8"
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1", default-features = false }
-serde_json = "1.0.138"
+serde_json = "1.0.139"
 serde = { version = "1", default-features = false }
 smallvec = "1"
 static_assertions = "1.1.0"
@@ -142,6 +155,7 @@ strum = { version = "0.26.3", default-features = false, features = ["derive"] }
 trybuild = "1"
 tracy-client = "0.17"
 thiserror = { version = "2", default-features = false }
+walkdir = "2"
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies

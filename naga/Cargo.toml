@@ -15,7 +15,7 @@ autotests = false
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.82.0"
 
 [[test]]
 name = "naga-test"
@@ -90,7 +90,7 @@ log = "0.4"
 strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.217", features = [
+serde = { version = "1.0.218", features = [
     "default",
     "derive",
 ], optional = true }
@@ -118,3 +118,5 @@ ron = "0.8.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 serde = { workspace = true, features = ["default", "derive"] }
 spirv = { version = "0.3", features = ["deserialize"] }
+toml = "0.8"
+walkdir.workspace = true

@@ -72,6 +72,8 @@ Otherwise, we pass a range corresponding only to the current bind group.
 
 !*/
 
+#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
+
 mod adapter;
 mod command;
 mod conv;
@@ -84,7 +86,7 @@ mod suballocation;
 mod types;
 mod view;
 
-use std::{ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc};
+use std::{borrow::ToOwned as _, ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc, vec::Vec};
 
 use arrayvec::ArrayVec;
 use parking_lot::{Mutex, RwLock};
@@ -156,7 +158,8 @@ impl D3D12Lib {
             riid: *const windows_core::GUID,
             ppdevice: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"D3D12CreateDevice\0") }?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"D3D12CreateDevice".to_bytes()) }?;
 
         let mut result__: Option<Direct3D12::ID3D12Device> = None;
 
@@ -197,7 +200,7 @@ impl D3D12Lib {
             pperrorblob: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(b"D3D12SerializeRootSignature\0") }?;
+            unsafe { self.lib.get(c"D3D12SerializeRootSignature".to_bytes()) }?;
 
         let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
@@ -236,7 +239,8 @@ impl D3D12Lib {
             riid: *const windows_core::GUID,
             ppvdebug: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"D3D12GetDebugInterface\0") }?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"D3D12GetDebugInterface".to_bytes()) }?;
 
         let mut result__ = None;
 
@@ -273,7 +277,8 @@ impl DxgiLib {
             riid: *const windows_core::GUID,
             pdebug: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"DXGIGetDebugInterface1\0") }?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"DXGIGetDebugInterface1".to_bytes()) }?;
 
         let mut result__ = None;
 
@@ -302,7 +307,8 @@ impl DxgiLib {
             riid: *const windows_core::GUID,
             ppfactory: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"CreateDXGIFactory2\0") }?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"CreateDXGIFactory2".to_bytes()) }?;
 
         let mut result__ = None;
 
@@ -324,7 +330,8 @@ impl DxgiLib {
             riid: *const windows_core::GUID,
             ppfactory: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"CreateDXGIFactory1\0") }?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"CreateDXGIFactory1".to_bytes()) }?;
 
         let mut result__ = None;
 

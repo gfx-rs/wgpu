@@ -1,0 +1,6 @@
+pipeline_constants = { 0 = nan, 1300 = 1.1, depth = 2.3 }
+targets = "IR | ANALYSIS | SPIRV | METAL | HLSL | GLSL"
+
+[spv]
+separate_entry_points = true
+version = [1, 0]

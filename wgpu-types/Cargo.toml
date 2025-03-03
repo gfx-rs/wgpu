@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.82.0"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -40,7 +40,7 @@ default = ["std"]
 std = ["js-sys/std", "web-sys/std", "thiserror/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
-serde = ["dep:serde"]
+serde = ["dep:serde", "bitflags/serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
 

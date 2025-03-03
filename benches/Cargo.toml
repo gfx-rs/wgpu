@@ -13,7 +13,7 @@ autobenches = false
 publish = false
 
 [[bench]]
-name = "root"
+name = "wgpu-benchmark"
 harness = false
 path = "benches/root.rs"
 

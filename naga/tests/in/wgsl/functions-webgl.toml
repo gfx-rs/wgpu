@@ -1,0 +1,5 @@
+targets = "GLSL"
+
+[glsl]
+version.Embedded = { is_webgl = false, version = 320 }
+zero_initialize_workgroup_memory = true

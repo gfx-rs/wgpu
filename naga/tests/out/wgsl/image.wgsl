@@ -48,6 +48,7 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let dim = textureDimensions(image_storage_src);
     let itc = (vec2<i32>((dim * local_id.xy)) % vec2<i32>(10i, 20i));
     let value1_ = textureLoad(image_mipmapped_src, itc, i32(local_id.z));
+    let value1_2_ = textureLoad(image_mipmapped_src, itc, u32(local_id.z));
     let value2_ = textureLoad(image_multisampled_src, itc, i32(local_id.z));
     let value4_ = textureLoad(image_storage_src, itc);
     let value5_ = textureLoad(image_array_src, itc, local_id.z, (i32(local_id.z) + 1i));

@@ -1,5 +1,5 @@
-use std::mem::ManuallyDrop;
-use std::sync::Arc;
+use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use core::mem::ManuallyDrop;
 
 use crate::api_log;
 #[cfg(feature = "trace")]

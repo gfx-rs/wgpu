@@ -1717,6 +1717,8 @@ impl<'a> ConstantEvaluator<'a> {
         target: crate::Scalar,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let expr = self.check_and_get(expr)?;
+
         let Expression::Compose { ty, ref components } = self.expressions[expr] else {
             return self.cast(expr, target, span);
         };

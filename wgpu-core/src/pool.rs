@@ -1,7 +1,5 @@
-use std::{
-    hash::Hash,
-    sync::{Arc, Weak},
-};
+use alloc::sync::{Arc, Weak};
+use core::hash::Hash;
 
 use hashbrown::{hash_map::Entry, HashMap};
 use once_cell::sync::OnceCell;
@@ -107,10 +105,11 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        atomic::{AtomicU32, Ordering},
-        Barrier,
+    use core::{
+        sync::atomic::{AtomicU32, Ordering},
+        time::Duration,
     };
+    use std::{eprintln, sync::Barrier, thread};
 
     use super::*;
 
@@ -202,7 +201,7 @@ mod tests {
                     eprintln!("{idx}: init");
 
                     // Simulate long running constructor, ensuring that both threads will be in get_or_init.
-                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    thread::sleep(Duration::from_millis(250));
 
                     resources.counter.fetch_add(1, Ordering::SeqCst);
 
@@ -215,7 +214,7 @@ mod tests {
             ret
         }
 
-        let thread1 = std::thread::spawn({
+        let thread1 = thread::spawn({
             let resource_clone = Arc::clone(&resources);
             move || thread_inner(1, &resource_clone)
         });
@@ -290,7 +289,7 @@ mod tests {
 
             eprintln!("1: postwait");
             // We wait a little bit, making sure that thread0_inner has started spinning.
-            std::thread::sleep(std::time::Duration::from_millis(250));
+            thread::sleep(Duration::from_millis(250));
             eprintln!("1: postsleep");
 
             // We remove the entry from the pool, allowing thread0_inner to re-create.
@@ -298,7 +297,7 @@ mod tests {
             eprintln!("1: removal");
         }
 
-        let thread1 = std::thread::spawn({
+        let thread1 = thread::spawn({
             let resource_clone = Arc::clone(&resources);
             move || thread1_inner(&resource_clone)
         });

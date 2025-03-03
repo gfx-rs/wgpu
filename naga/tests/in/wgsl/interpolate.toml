@@ -1,0 +1,11 @@
+targets = "SPIRV | METAL | HLSL | WGSL"
+
+[glsl]
+version.Desktop = 400
+zero_initialize_workgroup_memory = true
+
+[spv]
+adjust_coordinate_space = true
+debug = true
+force_point_size = true
+version = [1, 0]

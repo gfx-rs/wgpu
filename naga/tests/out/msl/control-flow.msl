@@ -1,4 +1,4 @@
-// language: metal1.0
+// language: metal1.2
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -178,6 +178,7 @@ kernel void main_(
     int pos = {};
     metal::threadgroup_barrier(metal::mem_flags::mem_device);
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    metal::threadgroup_barrier(metal::mem_flags::mem_texture);
     switch(1) {
         default: {
             pos = 1;

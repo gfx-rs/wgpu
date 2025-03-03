@@ -5,16 +5,24 @@ mod ext_bindings;
 #[allow(clippy::allow_attributes)]
 mod webgpu_sys;
 
-use js_sys::Promise;
-use std::{
+use alloc::{
+    boxed::Box,
+    format,
+    rc::Rc,
+    string::{String, ToString as _},
+    vec,
+    vec::Vec,
+};
+use core::{
     cell::RefCell,
     fmt,
     future::Future,
     ops::Range,
     pin::Pin,
-    rc::Rc,
     task::{self, Poll},
 };
+
+use js_sys::Promise;
 use wasm_bindgen::{prelude::*, JsCast};
 
 use crate::{dispatch, SurfaceTargetUnsafe};
@@ -54,7 +62,7 @@ impl fmt::Debug for ContextWebGpu {
 
 impl crate::Error {
     fn from_js(js_error: js_sys::Object) -> Self {
-        let source = Box::<dyn std::error::Error + Send + Sync>::from("<WebGPU Error>");
+        let source = Box::<dyn core::error::Error + Send + Sync>::from("<WebGPU Error>");
         if let Some(js_error) = js_error.dyn_ref::<webgpu_sys::GpuValidationError>() {
             crate::Error::Validation {
                 source,
@@ -967,7 +975,7 @@ fn future_compilation_info(
                 .collect()
         }
         Err(_v) => base_messages
-            .chain(std::iter::once(crate::CompilationMessage {
+            .chain(core::iter::once(crate::CompilationMessage {
                 message: "Getting compilation info failed".to_string(),
                 message_type: crate::CompilationMessageType::Error,
                 location: None,

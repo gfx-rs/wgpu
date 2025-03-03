@@ -1,5 +1,7 @@
 //! The `ResourceMetadata` type.
 
+use alloc::vec::Vec;
+
 use bit_vec::BitVec;
 use wgt::strict_assert;
 

@@ -1715,14 +1715,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
 
                     let last_case = &cases[end_case_idx];
-                    if last_case.body.last().map_or(true, |s| !s.is_terminator()) {
+                    if last_case.body.last().is_none_or(|s| !s.is_terminator()) {
                         writeln!(self.out, "{indent_level_2}break;")?;
                     }
                 } else {
                     for sta in case.body.iter() {
                         self.write_stmt(module, sta, func_ctx, indent_level_2)?;
                     }
-                    if !case.fall_through && case.body.last().map_or(true, |s| !s.is_terminator()) {
+                    if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator()) {
                         writeln!(self.out, "{indent_level_2}break;")?;
                     }
                 }
@@ -3213,57 +3213,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 array_index,
                 sample,
                 level,
-            } => {
-                let mut wrapping_type = None;
-                match *func_ctx.resolve_type(image, &module.types) {
-                    TypeInner::Image {
-                        class: crate::ImageClass::Storage { format, .. },
-                        ..
-                    } => {
-                        if format.single_component() {
-                            wrapping_type = Some(Scalar::from(format));
-                        }
-                    }
-                    _ => {}
-                }
-                if let Some(scalar) = wrapping_type {
-                    write!(
-                        self.out,
-                        "{}{}(",
-                        help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
-                        scalar.to_hlsl_str()?
-                    )?;
-                }
-                // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
-                self.write_expr(module, image, func_ctx)?;
-                write!(self.out, ".Load(")?;
-
-                self.write_texture_coordinates(
-                    "int",
-                    coordinate,
-                    array_index,
-                    level,
-                    module,
-                    func_ctx,
-                )?;
-
-                if let Some(sample) = sample {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, sample, func_ctx)?;
-                }
-
-                // close bracket for Load function
-                write!(self.out, ")")?;
-
-                if wrapping_type.is_some() {
-                    write!(self.out, ")")?;
-                }
-
-                // return x component if return type is scalar
-                if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
-                    write!(self.out, ".x")?;
-                }
-            }
+            } => self.write_image_load(
+                &module,
+                expr,
+                func_ctx,
+                image,
+                coordinate,
+                array_index,
+                sample,
+                level,
+            )?,
             Expression::GlobalVariable(handle) => {
                 let global_variable = &module.global_variables[handle];
                 let ty = &module.types[global_variable.ty].inner;
@@ -4003,6 +3962,63 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn write_image_load(
+        &mut self,
+        module: &&Module,
+        expr: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
+        coordinate: Handle<crate::Expression>,
+        array_index: Option<Handle<crate::Expression>>,
+        sample: Option<Handle<crate::Expression>>,
+        level: Option<Handle<crate::Expression>>,
+    ) -> Result<(), Error> {
+        let mut wrapping_type = None;
+        match *func_ctx.resolve_type(image, &module.types) {
+            TypeInner::Image {
+                class: crate::ImageClass::Storage { format, .. },
+                ..
+            } => {
+                if format.single_component() {
+                    wrapping_type = Some(Scalar::from(format));
+                }
+            }
+            _ => {}
+        }
+        if let Some(scalar) = wrapping_type {
+            write!(
+                self.out,
+                "{}{}(",
+                help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
+                scalar.to_hlsl_str()?
+            )?;
+        }
+        // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
+        self.write_expr(module, image, func_ctx)?;
+        write!(self.out, ".Load(")?;
+
+        self.write_texture_coordinates("int", coordinate, array_index, level, module, func_ctx)?;
+
+        if let Some(sample) = sample {
+            write!(self.out, ", ")?;
+            self.write_expr(module, sample, func_ctx)?;
+        }
+
+        // close bracket for Load function
+        write!(self.out, ")")?;
+
+        if wrapping_type.is_some() {
+            write!(self.out, ")")?;
+        }
+
+        // return x component if return type is scalar
+        if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
+            write!(self.out, ".x")?;
+        }
+        Ok(())
+    }
+
     /// Find the [`BindingArraySamplerInfo`] from an expression so that such an access
     /// can be generated later.
     fn sampler_binding_array_info_from_expression(
@@ -4113,6 +4129,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
         if barrier.contains(crate::Barrier::SUB_GROUP) {
             // Does not exist in DirectX
+        }
+        if barrier.contains(crate::Barrier::TEXTURE) {
+            writeln!(self.out, "{level}DeviceMemoryBarrierWithGroupSync();")?;
         }
         Ok(())
     }

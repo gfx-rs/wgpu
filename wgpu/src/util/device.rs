@@ -1,3 +1,5 @@
+use alloc::borrow::ToOwned as _;
+
 use wgt::TextureDataOrder;
 
 /// Describes a [Buffer](crate::Buffer) when allocating.

@@ -98,8 +98,6 @@ mod device;
 mod fence;
 mod queue;
 
-use crate::{CopyExtent, TextureDescriptor};
-
 pub use fence::Fence;
 
 #[cfg(not(any(windows, webgl)))]
@@ -117,14 +115,19 @@ use self::wgl::AdapterContext;
 #[cfg(windows)]
 use self::wgl::{Instance, Surface};
 
-use arrayvec::ArrayVec;
-
-use glow::HasContext;
-
-use naga::FastHashMap;
+use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
+use core::{
+    fmt,
+    ops::Range,
+    sync::atomic::{AtomicU32, AtomicU8},
+};
 use parking_lot::Mutex;
-use std::sync::atomic::{AtomicU32, AtomicU8};
-use std::{fmt, ops::Range, sync::Arc};
+
+use arrayvec::ArrayVec;
+use glow::HasContext;
+use naga::FastHashMap;
+
+use crate::{CopyExtent, TextureDescriptor};
 
 #[derive(Clone, Debug)]
 pub struct Api;
@@ -403,7 +406,7 @@ pub struct Texture {
 impl crate::DynTexture for Texture {}
 impl crate::DynSurfaceTexture for Texture {}
 
-impl std::borrow::Borrow<dyn crate::DynTexture> for Texture {
+impl core::borrow::Borrow<dyn crate::DynTexture> for Texture {
     fn borrow(&self) -> &dyn crate::DynTexture {
         self
     }

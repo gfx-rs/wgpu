@@ -39,52 +39,27 @@
     ),
     constants: [
         (
-            name: Some("ga"),
+            name: Some("gb"),
             ty: 0,
             init: 0,
         ),
         (
-            name: Some("gb"),
-            ty: 0,
-            init: 1,
-        ),
-        (
             name: Some("gc"),
             ty: 1,
-            init: 2,
+            init: 1,
         ),
         (
             name: Some("gd"),
             ty: 2,
-            init: 3,
-        ),
-        (
-            name: Some("ge"),
-            ty: 3,
-            init: 4,
-        ),
-        (
-            name: Some("gf"),
-            ty: 2,
-            init: 5,
+            init: 2,
         ),
     ],
     overrides: [],
     global_variables: [],
     global_expressions: [
         Literal(I32(4)),
-        Literal(I32(4)),
         Literal(U32(4)),
         Literal(F32(4.0)),
-        Compose(
-            ty: 3,
-            components: [
-                0,
-                0,
-                0,
-            ],
-        ),
-        Literal(F32(2.0)),
     ],
     functions: [
         (
@@ -106,12 +81,22 @@
                     ],
                 ),
                 Literal(F32(2.0)),
+                Literal(I32(4)),
                 Constant(0),
                 Constant(1),
                 Constant(2),
-                Constant(3),
-                Constant(4),
-                Constant(5),
+                Literal(I32(4)),
+                Literal(I32(4)),
+                Literal(I32(4)),
+                Compose(
+                    ty: 3,
+                    components: [
+                        10,
+                        11,
+                        12,
+                    ],
+                ),
+                Literal(F32(2.0)),
             ],
             named_expressions: {
                 0: "a",
@@ -124,13 +109,21 @@
                 7: "bg",
                 8: "cg",
                 9: "dg",
-                10: "eg",
-                11: "fg",
+                13: "eg",
+                14: "fg",
             },
             body: [
                 Emit((
                     start: 4,
                     end: 5,
+                )),
+                Emit((
+                    start: 0,
+                    end: 0,
+                )),
+                Emit((
+                    start: 13,
+                    end: 14,
                 )),
                 Return(
                     value: None,

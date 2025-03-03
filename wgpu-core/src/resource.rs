@@ -1,3 +1,17 @@
+use alloc::{borrow::Cow, borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::{
+    borrow::Borrow,
+    fmt,
+    mem::{self, ManuallyDrop},
+    num::NonZeroU64,
+    ops::Range,
+    ptr::NonNull,
+};
+
+use smallvec::SmallVec;
+use thiserror::Error;
+use wgt::TextureSelector;
+
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
@@ -19,21 +33,6 @@ use crate::{
     track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
     Label, LabelHelpers, SubmissionIndex,
-};
-
-use wgt::TextureSelector;
-
-use smallvec::SmallVec;
-use thiserror::Error;
-
-use std::num::NonZeroU64;
-use std::{
-    borrow::{Borrow, Cow},
-    fmt::Debug,
-    mem::{self, ManuallyDrop},
-    ops::Range,
-    ptr::NonNull,
-    sync::Arc,
 };
 
 /// Information about the wgpu-core resource.
@@ -87,8 +86,8 @@ pub struct ResourceErrorIdent {
     label: String,
 }
 
-impl std::fmt::Display for ResourceErrorIdent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl fmt::Display for ResourceErrorIdent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{} with '{}' label", self.r#type, self.label)
     }
 }
@@ -114,7 +113,7 @@ pub trait ParentDevice: Labeled {
     }
 
     fn same_device(&self, device: &Device) -> Result<(), DeviceError> {
-        if std::ptr::eq(&**self.device(), device) {
+        if core::ptr::eq(&**self.device(), device) {
             Ok(())
         } else {
             Err(DeviceError::DeviceMismatch(Box::new(DeviceMismatch {
@@ -224,8 +223,8 @@ pub struct BufferMapOperation {
     pub callback: Option<BufferMapCallback>,
 }
 
-impl Debug for BufferMapOperation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for BufferMapOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("BufferMapOperation")
             .field("host", &self.host)
             .field("callback", &self.callback.as_ref().map(|_| "?"))
@@ -683,7 +682,7 @@ impl Buffer {
                     if let Some(ref mut trace) = *device.trace.lock() {
                         let size = range.end - range.start;
                         let data = trace.make_binary("bin", unsafe {
-                            std::slice::from_raw_parts(mapping.ptr.as_ptr(), size as usize)
+                            core::slice::from_raw_parts(mapping.ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
                             id: buffer_id,
@@ -793,7 +792,7 @@ pub struct DestroyedBuffer {
 }
 
 impl DestroyedBuffer {
-    pub fn label(&self) -> &dyn Debug {
+    pub fn label(&self) -> &dyn fmt::Debug {
         &self.label
     }
 }
@@ -889,7 +888,7 @@ impl StagingBuffer {
 
     #[cfg(feature = "trace")]
     pub(crate) fn get_data(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.size.get() as usize) }
+        unsafe { core::slice::from_raw_parts(self.ptr.as_ptr(), self.size.get() as usize) }
     }
 
     pub(crate) fn write_zeros(&mut self) {
@@ -1421,7 +1420,7 @@ pub struct DestroyedTexture {
 }
 
 impl DestroyedTexture {
-    pub fn label(&self) -> &dyn Debug {
+    pub fn label(&self) -> &dyn fmt::Debug {
         &self.label
     }
 }
@@ -1808,8 +1807,8 @@ pub enum SamplerFilterErrorType {
     MipmapFilter,
 }
 
-impl Debug for SamplerFilterErrorType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for SamplerFilterErrorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             SamplerFilterErrorType::MagFilter => write!(f, "magFilter"),
             SamplerFilterErrorType::MinFilter => write!(f, "minFilter"),
