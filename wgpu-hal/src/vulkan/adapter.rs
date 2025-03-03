@@ -488,6 +488,7 @@ impl PhysicalDeviceFeatures {
                     vk::PhysicalDeviceMeshShaderFeaturesEXT::default()
                         .mesh_shader(needed)
                         .task_shader(needed)
+                        // Multiview needs some special work https://github.com/gfx-rs/wgpu/issues/7262
                         .multiview_mesh_shader(false),
                 )
             } else {
