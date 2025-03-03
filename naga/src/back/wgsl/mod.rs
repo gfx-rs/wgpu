@@ -14,6 +14,8 @@ use thiserror::Error;
 
 pub use writer::{Writer, WriterFlags};
 
+use crate::common::wgsl;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -43,6 +45,20 @@ impl Error {
             kind,
             value: format!("{value:?}"),
         }
+    }
+}
+
+trait ToWgslIfImplemented {
+    fn to_wgsl_if_implemented(self) -> Result<&'static str, Error>;
+}
+
+impl<T> ToWgslIfImplemented for T
+where
+    T: wgsl::TryToWgsl + core::fmt::Debug + Copy,
+{
+    fn to_wgsl_if_implemented(self) -> Result<&'static str, Error> {
+        self.try_to_wgsl()
+            .ok_or_else(|| Error::unsupported(T::DESCRIPTION, self))
     }
 }
 
