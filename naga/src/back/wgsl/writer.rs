@@ -1784,9 +1784,9 @@ impl<W: Write> Writer<W> {
                     Mf::Unpack4xI8 => Function::Regular("unpack4xI8"),
                     Mf::Unpack4xU8 => Function::Regular("unpack4xU8"),
                     Mf::Inverse => {
-                        let typ = func_ctx.resolve_type(arg, &module.types);
+                        let ty = func_ctx.resolve_type(arg, &module.types);
 
-                        let Some(overload) = InversePolyfill::find_overload(typ) else {
+                        let Some(overload) = InversePolyfill::find_overload(ty) else {
                             return Err(Error::UnsupportedMathFunction(fun));
                         };
 
