@@ -560,7 +560,9 @@ impl Resource {
                 }
             }
             ResourceType::AccelerationStructure { vertex_return } => match entry.ty {
-                BindingType::AccelerationStructure { vertex_return: entry_vertex_return } if vertex_return == entry_vertex_return => (),
+                BindingType::AccelerationStructure {
+                    vertex_return: entry_vertex_return,
+                } if vertex_return == entry_vertex_return => (),
                 _ => {
                     return Err(BindingError::WrongType {
                         binding: (&entry.ty).into(),

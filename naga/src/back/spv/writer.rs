@@ -244,10 +244,7 @@ impl Writer {
         }))
     }
 
-    pub(super) fn get_ray_query_pointer_id(
-        &mut self,
-        module: &crate::Module
-    ) -> Word {
+    pub(super) fn get_ray_query_pointer_id(&mut self, module: &crate::Module) -> Word {
         let rq_ty = module
             .types
             .get(&crate::Type {
