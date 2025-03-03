@@ -767,6 +767,12 @@ pub struct Queue {
     signal_semaphores: Mutex<(Vec<vk::Semaphore>, Vec<u64>)>,
 }
 
+impl Queue {
+    pub fn as_raw(&self) -> vk::Queue {
+        self.raw
+    }
+}
+
 impl Drop for Queue {
     fn drop(&mut self) {
         unsafe { self.relay_semaphores.lock().destroy(&self.device.raw) };

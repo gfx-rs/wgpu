@@ -357,8 +357,8 @@ impl Queue {
         }
     }
 
-    pub fn as_raw(&self) -> parking_lot::MutexGuard<'_, metal::CommandQueue> {
-        self.raw.lock()
+    pub fn as_raw(&self) -> Arc<Mutex<metal::CommandQueue>> {
+        self.raw
     }
 }
 
