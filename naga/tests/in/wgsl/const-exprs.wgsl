@@ -115,3 +115,18 @@ fn test_local_const() {
     const local_const = 2;
 	var arr: array<f32, local_const>;
 }
+
+const ABSTRACT_ARRAY = array(1, 2, 3, 4, 5, 6, 7, 8, 9);
+const ABSTRACT_VECTOR = vec4(1, 2, 3, 4);
+
+fn abstract_access(i: u32) {
+    // Constant indexing of abstract types is allowed, therefore we can assign
+    // to f32 or u32 vars just fine.
+    var a: f32 = ABSTRACT_ARRAY[0];
+    var b: u32 = ABSTRACT_VECTOR.x;
+
+    // For non constant indices the base type is concretized prior to indexing,
+    // therefore we can only assign to i32 in this case.
+    var c: i32 = ABSTRACT_ARRAY[i];
+    var d: i32 = ABSTRACT_VECTOR[i];
+}
