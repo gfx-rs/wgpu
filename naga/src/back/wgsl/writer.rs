@@ -1765,12 +1765,12 @@ impl<W: Write> Writer<W> {
                         let ty = func_ctx.resolve_type(arg, &module.types);
 
                         let Some(overload) = InversePolyfill::find_overload(ty) else {
-                            return Err(Error::UnsupportedMathFunction(fun));
+                            return Err(Error::unsupported("math function", fun));
                         };
 
                         Function::InversePolyfill(overload)
                     }
-                    Mf::Outer => return Err(Error::UnsupportedMathFunction(fun)),
+                    Mf::Outer => return Err(Error::unsupported("math function", fun)),
                 };
 
                 match function {
@@ -1981,7 +1981,7 @@ fn builtin_str(built_in: crate::BuiltIn) -> Result<&'static str, Error> {
         | Bi::PointSize
         | Bi::PointCoord
         | Bi::WorkGroupSize
-        | Bi::DrawID => return Err(Error::Custom(format!("Unsupported builtin {built_in:?}"))),
+        | Bi::DrawID => return Err(Error::unsupported("builtin", built_in)),
     })
 }
 

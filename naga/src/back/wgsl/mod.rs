@@ -7,6 +7,7 @@ Backend for [WGSL][wgsl] (WebGPU Shading Language).
 mod polyfill;
 mod writer;
 
+use alloc::format;
 use alloc::string::String;
 
 use thiserror::Error;
@@ -21,10 +22,28 @@ pub enum Error {
     Custom(String),
     #[error("{0}")]
     Unimplemented(String), // TODO: Error used only during development
-    #[error("Unsupported math function: {0:?}")]
-    UnsupportedMathFunction(crate::MathFunction),
     #[error("Unsupported relational function: {0:?}")]
     UnsupportedRelationalFunction(crate::RelationalFunction),
+    #[error("Unsupported {kind}: {value}")]
+    Unsupported {
+        /// What kind of unsupported thing this is: interpolation, builtin, etc.
+        kind: &'static str,
+
+        /// The debug form of the Naga IR value that this backend can't express.
+        value: String,
+    },
+}
+
+impl Error {
+    /// Produce an [`Unsupported`] error for `value`.
+    ///
+    /// [`Unsupported`]: Error::Unsupported
+    fn unsupported<T: core::fmt::Debug>(kind: &'static str, value: T) -> Error {
+        Error::Unsupported {
+            kind,
+            value: format!("{value:?}"),
+        }
+    }
 }
 
 pub fn write_string(
