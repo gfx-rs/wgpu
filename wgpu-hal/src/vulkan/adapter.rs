@@ -489,15 +489,6 @@ impl PhysicalDeviceFeatures {
                         .mesh_shader(needed)
                         .task_shader(needed)
                         .multiview_mesh_shader(false),
-                    /*
-                    let multiview = requested_features.contains(wgt::Features::MULTIVIEW);
-
-                    .multiview_mesh_shader(
-                        needed
-                            && multiview
-                            && phd_features.mesh_shader.unwrap().multiview_mesh_shader == 1,
-                    )
-                    */
                 )
             } else {
                 None
