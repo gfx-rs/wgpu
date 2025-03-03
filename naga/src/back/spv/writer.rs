@@ -244,6 +244,33 @@ impl Writer {
         }))
     }
 
+    pub(super) fn get_ray_query_pointer_id(
+        &mut self,
+        module: &crate::Module
+    ) -> Word {
+        let rq_ty = module
+            .types
+            .get(&crate::Type {
+                name: None,
+                inner: crate::TypeInner::RayQuery {
+                    vertex_return: false,
+                },
+            })
+            .or_else(|| {
+                module.types.get(&crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::RayQuery {
+                        vertex_return: true,
+                    },
+                })
+            })
+            .expect("ray_query type should have been populated by the variable passed into this!");
+        self.get_type_id(LookupType::Local(LocalType::Pointer {
+            base: rq_ty,
+            class: spirv::StorageClass::Function,
+        }))
+    }
+
     /// Return a SPIR-V type for a pointer to `resolution`.
     ///
     /// The given `resolution` must be one that we can represent
@@ -2195,7 +2222,7 @@ impl Writer {
         let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
 
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
-            // spirv does not about whether these have vertex return - that is done by us
+            // spirv does not know whether these have vertex return - that is done by us
             if let &crate::TypeInner::AccelerationStructure { .. }
             | &crate::TypeInner::RayQuery { .. } = inner
             {

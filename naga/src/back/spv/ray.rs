@@ -114,27 +114,8 @@ impl Writer {
             class: spirv::StorageClass::Function,
         }));
 
-        let rq_ty = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::RayQuery {
-                    vertex_return: false,
-                },
-            })
-            .or_else(|| {
-                ir_module.types.get(&Type {
-                    name: None,
-                    inner: TypeInner::RayQuery {
-                        vertex_return: true,
-                    },
-                })
-            })
-            .expect("ray_query type should have been populated by the variable passed into this!");
-        let argument_type_id = self.get_type_id(LookupType::Local(LocalType::Pointer {
-            base: rq_ty,
-            class: spirv::StorageClass::Function,
-        }));
+        let argument_type_id = self.get_ray_query_pointer_id(ir_module);
+
         let func_ty = self.get_function_type(LookupFunctionType {
             parameter_type_ids: vec![argument_type_id],
             return_type_id: intersection_type_id,

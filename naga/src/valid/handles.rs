@@ -245,6 +245,9 @@ impl super::Validator {
         if let Some(ty) = special_types.ray_intersection {
             validate_type(ty)?;
         }
+        if let Some(ty) = special_types.ray_vertex_return {
+            validate_type(ty)?;
+        }
 
         for (handle, _node) in diagnostic_filters.iter() {
             let DiagnosticFilterNode { inner: _, parent } = diagnostic_filters[handle];
