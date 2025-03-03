@@ -363,8 +363,8 @@ impl Queue {
         }
     }
 
-    pub fn as_raw(&self) -> Arc<Mutex<metal::CommandQueue>> {
-        self.raw
+    pub fn as_raw(&self) -> &Arc<Mutex<metal::CommandQueue>> {
+        &self.raw
     }
 }
 
