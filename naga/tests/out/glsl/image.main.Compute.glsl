@@ -20,6 +20,7 @@ void main() {
     uvec2 dim = uvec2(imageSize(_group_0_binding_1_cs).xy);
     ivec2 itc = (ivec2((dim * local_id.xy)) % ivec2(10, 20));
     uvec4 value1_ = texelFetch(_group_0_binding_0_cs, itc, int(local_id.z));
+    uvec4 value1_2_ = texelFetch(_group_0_binding_0_cs, itc, int(uint(local_id.z)));
     uvec4 value2_ = texelFetch(_group_0_binding_3_cs, itc, int(local_id.z));
     uvec4 value4_ = imageLoad(_group_0_binding_1_cs, itc);
     uvec4 value5_ = texelFetch(_group_0_binding_5_cs, ivec3(itc, local_id.z), (int(local_id.z) + 1));

@@ -13,18 +13,23 @@ autotests = false
 publish = false
 
 [[test]]
-name = "wgpu-test"
-path = "tests/root.rs"
-harness = false
-
-[[test]]
 name = "wgpu-compile-test"
-path = "compile_tests/root.rs"
+path = "compile-tests/root.rs"
 harness = true
 
 [[test]]
+name = "wgpu-dependency-test"
+path = "dependency-tests/root.rs"
+harness = true
+
+[[test]]
+name = "wgpu-gpu-test"
+path = "gpu-tests/root.rs"
+harness = false
+
+[[test]]
 name = "wgpu-validation-test"
-path = "validation_tests/root.rs"
+path = "validation-tests/root.rs"
 harness = true
 
 [features]
@@ -39,6 +44,7 @@ arrayvec.workspace = true
 approx.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
+cargo_metadata.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true

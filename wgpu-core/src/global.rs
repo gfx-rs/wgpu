@@ -1,4 +1,5 @@
-use std::{fmt, sync::Arc};
+use alloc::{borrow::ToOwned as _, boxed::Box, sync::Arc};
+use core::{fmt, iter};
 
 use crate::{
     hal_api::HalApi,
@@ -50,7 +51,7 @@ impl Global {
         Self {
             instance: Instance {
                 name: name.to_owned(),
-                instance_per_backend: std::iter::once((A::VARIANT, dyn_instance)).collect(),
+                instance_per_backend: iter::once((A::VARIANT, dyn_instance)).collect(),
                 ..Default::default()
             },
             surfaces: Registry::new(),

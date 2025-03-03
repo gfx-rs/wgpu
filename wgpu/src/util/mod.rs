@@ -9,8 +9,8 @@ mod encoder;
 mod init;
 mod texture_blitter;
 
-use std::sync::Arc;
-use std::{borrow::Cow, ptr::copy_nonoverlapping};
+use alloc::{borrow::Cow, format, string::String, sync::Arc, vec};
+use core::ptr::copy_nonoverlapping;
 
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
@@ -134,7 +134,7 @@ impl DownloadBuffer {
     }
 }
 
-impl std::ops::Deref for DownloadBuffer {
+impl core::ops::Deref for DownloadBuffer {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         self.mapped_range.slice()

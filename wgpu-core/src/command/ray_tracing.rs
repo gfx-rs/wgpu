@@ -1,4 +1,15 @@
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::{
+    cmp::max,
+    num::NonZeroU64,
+    ops::{Deref, Range},
+    sync::atomic::Ordering,
+};
+
+use wgt::{math::align_to, BufferUsages, BufferUses, Features};
+
 use crate::{
+    command::CommandBufferMutable,
     device::queue::TempResource,
     global::Global,
     hub::Hub,
@@ -15,16 +26,6 @@ use crate::{
     snatch::SnatchGuard,
     track::PendingTransition,
     FastHashSet,
-};
-
-use wgt::{math::align_to, BufferUsages, BufferUses, Features};
-
-use super::CommandBufferMutable;
-use std::{
-    cmp::max,
-    num::NonZeroU64,
-    ops::{Deref, Range},
-    sync::{atomic::Ordering, Arc},
 };
 
 struct TriangleBufferStore<'a> {
@@ -260,8 +261,7 @@ impl Global {
                 Some(size) => size,
             };
 
-        let scratch_buffer =
-            ScratchBuffer::new(device, scratch_size).map_err(crate::device::DeviceError::from)?;
+        let scratch_buffer = ScratchBuffer::new(device, scratch_size)?;
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
@@ -582,8 +582,7 @@ impl Global {
                 Some(size) => size,
             };
 
-        let scratch_buffer =
-            ScratchBuffer::new(device, scratch_size).map_err(crate::device::DeviceError::from)?;
+        let scratch_buffer = ScratchBuffer::new(device, scratch_size)?;
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
@@ -644,8 +643,7 @@ impl Global {
                 let mut staging_buffer = StagingBuffer::new(
                     device,
                     wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap(),
-                )
-                .map_err(crate::device::DeviceError::from)?;
+                )?;
                 staging_buffer.write(&instance_buffer_staging_source);
                 let flushed = staging_buffer.flush();
                 Some(flushed)

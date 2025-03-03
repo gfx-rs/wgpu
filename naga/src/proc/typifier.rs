@@ -908,6 +908,5 @@ impl<'a> ResolveContext<'a> {
 
 #[test]
 fn test_error_size() {
-    use std::mem::size_of;
     assert_eq!(size_of::<ResolveError>(), 32);
 }

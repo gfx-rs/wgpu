@@ -4,10 +4,12 @@
 //!
 //! For types (like WebGPU) that don't have such a property, we generate an identifier and use that.
 
-use std::{
-    num::NonZeroU64,
-    sync::atomic::{AtomicU64, Ordering},
-};
+#[cfg(supports_64bit_atomics)]
+pub use core::sync::atomic::AtomicU64;
+#[cfg(not(supports_64bit_atomics))]
+pub use portable_atomic::AtomicU64;
+
+use core::{num::NonZeroU64, sync::atomic::Ordering};
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -41,19 +43,19 @@ macro_rules! impl_eq_ord_hash_proxy {
         impl Eq for $type {}
 
         impl PartialOrd for $type {
-            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
                 Some(self.cmp(other))
             }
         }
 
         impl Ord for $type {
-            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            fn cmp(&self, other: &Self) -> core::cmp::Ordering {
                 self $($access)*.cmp(&other $($access)*)
             }
         }
 
-        impl std::hash::Hash for $type {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        impl core::hash::Hash for $type {
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
                 self $($access)*.hash(state)
             }
         }
@@ -70,8 +72,8 @@ macro_rules! impl_eq_ord_hash_arc_address {
     ($type:ty => $($access:tt)*) => {
         impl PartialEq for $type {
             fn eq(&self, other: &Self) -> bool {
-                let address_left = std::sync::Arc::as_ptr(&self $($access)*);
-                let address_right = std::sync::Arc::as_ptr(&other $($access)*);
+                let address_left = alloc::sync::Arc::as_ptr(&self $($access)*);
+                let address_right = alloc::sync::Arc::as_ptr(&other $($access)*);
 
                 address_left == address_right
             }
@@ -80,23 +82,23 @@ macro_rules! impl_eq_ord_hash_arc_address {
         impl Eq for $type {}
 
         impl PartialOrd for $type {
-            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
                 Some(self.cmp(other))
             }
         }
 
         impl Ord for $type {
-            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                let address_left = std::sync::Arc::as_ptr(&self $($access)*);
-                let address_right = std::sync::Arc::as_ptr(&other $($access)*);
+            fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+                let address_left = alloc::sync::Arc::as_ptr(&self $($access)*);
+                let address_right = alloc::sync::Arc::as_ptr(&other $($access)*);
 
                 address_left.cmp(&address_right)
             }
         }
 
-        impl std::hash::Hash for $type {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                let address = std::sync::Arc::as_ptr(&self $($access)*);
+        impl core::hash::Hash for $type {
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                let address = alloc::sync::Arc::as_ptr(&self $($access)*);
                 address.hash(state)
             }
         }

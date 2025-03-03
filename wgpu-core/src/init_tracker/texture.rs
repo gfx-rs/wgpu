@@ -1,7 +1,8 @@
 use super::{InitTracker, MemoryInitKind};
 use crate::resource::Texture;
+use alloc::{sync::Arc, vec::Vec};
 use arrayvec::ArrayVec;
-use std::{ops::Range, sync::Arc};
+use core::ops::Range;
 use wgt::TextureSelector;
 
 #[derive(Debug, Clone)]
@@ -52,7 +53,7 @@ pub(crate) struct TextureInitTracker {
 impl TextureInitTracker {
     pub(crate) fn new(mip_level_count: u32, depth_or_array_layers: u32) -> Self {
         TextureInitTracker {
-            mips: std::iter::repeat(TextureLayerInitTracker::new(depth_or_array_layers))
+            mips: core::iter::repeat(TextureLayerInitTracker::new(depth_or_array_layers))
                 .take(mip_level_count as usize)
                 .collect(),
         }

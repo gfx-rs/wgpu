@@ -1,4 +1,5 @@
-use std::{error, fmt, thread};
+use core::{error, fmt};
+use std::thread;
 
 use crate::*;
 

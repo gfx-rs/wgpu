@@ -579,7 +579,7 @@ impl<'source> Lowerer<'source, '_> {
             }
             ast::ConstructorType::PartialVector { size } => Constructor::PartialVector { size },
             ast::ConstructorType::Vector { size, ty, ty_span } => {
-                let ty = self.resolve_ast_type(ty, &mut ctx.as_global())?;
+                let ty = self.resolve_ast_type(ty, &mut ctx.as_const())?;
                 let scalar = match ctx.module.types[ty].inner {
                     crate::TypeInner::Scalar(sc) => sc,
                     _ => return Err(Error::UnknownScalarType(ty_span)),
@@ -596,7 +596,7 @@ impl<'source> Lowerer<'source, '_> {
                 ty,
                 ty_span,
             } => {
-                let ty = self.resolve_ast_type(ty, &mut ctx.as_global())?;
+                let ty = self.resolve_ast_type(ty, &mut ctx.as_const())?;
                 let scalar = match ctx.module.types[ty].inner {
                     crate::TypeInner::Scalar(sc) => sc,
                     _ => return Err(Error::UnknownScalarType(ty_span)),
@@ -613,8 +613,8 @@ impl<'source> Lowerer<'source, '_> {
             }
             ast::ConstructorType::PartialArray => Constructor::PartialArray,
             ast::ConstructorType::Array { base, size } => {
-                let base = self.resolve_ast_type(base, &mut ctx.as_global())?;
-                let size = self.array_size(size, &mut ctx.as_global())?;
+                let base = self.resolve_ast_type(base, &mut ctx.as_const())?;
+                let size = self.array_size(size, &mut ctx.as_const())?;
 
                 ctx.layouter.update(ctx.module.to_ctx()).unwrap();
                 let stride = ctx.layouter[base].to_stride();

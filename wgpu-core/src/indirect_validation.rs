@@ -1,5 +1,5 @@
-use std::mem::size_of;
-use std::num::NonZeroU64;
+use alloc::{boxed::Box, format, string::ToString as _};
+use core::num::NonZeroU64;
 
 use thiserror::Error;
 
@@ -117,7 +117,7 @@ impl IndirectValidation {
             })
         })?;
         let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
-            module: std::borrow::Cow::Owned(module),
+            module: alloc::borrow::Cow::Owned(module),
             info,
             debug_source: None,
         });

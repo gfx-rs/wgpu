@@ -4,6 +4,12 @@
 
 using metal::uint;
 
+struct type_6 {
+    float inner[2];
+};
+struct type_10 {
+    int inner[9];
+};
 constant uint TWO = 2u;
 constant int THREE = 3;
 constant bool TRUE = true;
@@ -76,6 +82,12 @@ void compose_of_splat(
     return;
 }
 
+void test_local_const(
+) {
+    type_6 arr = {};
+    return;
+}
+
 uint map_texture_kind(
     int texture_kind
 ) {
@@ -116,6 +128,18 @@ void relational(
     return;
 }
 
+void abstract_access(
+    uint i
+) {
+    float a_1 = 1.0;
+    uint b_1 = 1u;
+    int c_1 = {};
+    int d = {};
+    c_1 = type_10 {1, 2, 3, 4, 5, 6, 7, 8, 9}.inner[i];
+    d = metal::int4(1, 2, 3, 4)[i];
+    return;
+}
+
 kernel void main_(
 ) {
     swizzle_of_compose();
@@ -125,5 +149,6 @@ kernel void main_(
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
+    test_local_const();
     return;
 }

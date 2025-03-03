@@ -13,7 +13,7 @@ env:
   #
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.83"
+  REPO_MSRV: "1.85"
   RUSTFLAGS: -D warnings
 
 jobs:
@@ -36,13 +36,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Repo MSRV toolchain
+      # We can't rely on an override here, as that would only set
+      # the toolchain for the current directory, not the newly generated project.
+      - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
-          rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: disable debug symbols
+      - name: Disable debug symbols
         shell: bash
         run: |
           mkdir -p .cargo
@@ -52,26 +53,26 @@ jobs:
             debug = false
           EOF
 
-      - name: caching
+      - name: Caching
         uses: Swatinem/rust-cache@v2
         with:
           key: cargo-generate-${{ matrix.name }}
 
-      - name: "Install cargo-generate"
+      - name: Install `cargo-generate`
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-generate
 
-      - name: "Run cargo-generate"
+      - name: Run `cargo-generate`
         run: |
           cd ..
           cargo generate --path wgpu --name ${{ matrix.name }} ${{ matrix.path }}
 
-      - name: "Check generated files"
+      - name: Check generated files
         run: |
           cd ../${{ matrix.name }}/
           cat <<EOF >> Cargo.toml
             [patch.crates-io]
             wgpu = { path = "../wgpu/wgpu" }
           EOF
-          cargo check
+          cargo +${{ env.REPO_MSRV }} check

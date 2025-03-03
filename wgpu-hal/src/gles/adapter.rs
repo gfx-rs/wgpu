@@ -1,6 +1,8 @@
+use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::Vec};
+use core::sync::atomic::AtomicU8;
+
 use glow::HasContext;
 use parking_lot::Mutex;
-use std::sync::{atomic::AtomicU8, Arc};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -79,7 +81,7 @@ impl super::Adapter {
     /// resulting in an `Err`.
     pub(super) fn parse_full_version(src: &str) -> Result<(u8, u8), crate::InstanceError> {
         let (version, _vendor_info) = match src.find(' ') {
-            Some(i) => (&src[..i], src[i + 1..].to_string()),
+            Some(i) => (&src[..i], src[i + 1..].to_owned()),
             None => (src, String::new()),
         };
 
@@ -201,7 +203,9 @@ impl super::Adapter {
             // emscripten doesn't enable "WEBGL_debug_renderer_info" extension by default. so, we do it manually.
             // See https://github.com/gfx-rs/wgpu/issues/3245 for context
             #[cfg(Emscripten)]
-            if unsafe { super::emscripten::enable_extension("WEBGL_debug_renderer_info\0") } {
+            if unsafe {
+                super::emscripten::enable_extension(c"WEBGL_debug_renderer_info".to_str().unwrap())
+            } {
                 (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
             } else {
                 (glow::VENDOR, glow::RENDERER)
@@ -1247,7 +1251,9 @@ impl super::AdapterShared {
             let buffer_mapping =
                 unsafe { gl.map_buffer_range(target, offset, length as _, glow::MAP_READ_BIT) };
 
-            unsafe { std::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length) };
+            unsafe {
+                core::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length)
+            };
 
             unsafe { gl.unmap_buffer(target) };
         }

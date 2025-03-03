@@ -1,0 +1,13 @@
+god_mode = true
+pipeline_constants = { o = 2.0 }
+targets = "IR | SPIRV | METAL"
+
+[msl]
+fake_missing_bindings = true
+lang_version = [2, 4]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = false
+
+[spv]
+separate_entry_points = true
+version = [1, 4]

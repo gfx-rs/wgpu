@@ -1,0 +1,194 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 0,
+                size: Constant(1),
+                stride: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 0,
+                size: Dynamic,
+                stride: 4,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("sized_comma"),
+            space: WorkGroup,
+            binding: None,
+            ty: 1,
+            init: None,
+        ),
+        (
+            name: Some("sized_no_comma"),
+            space: WorkGroup,
+            binding: None,
+            ty: 1,
+            init: None,
+        ),
+        (
+            name: Some("unsized_comma"),
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("unsized_no_comma"),
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 1,
+            )),
+            ty: 2,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [],
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("main"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 0,
+                        index: 0,
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 2,
+                        index: 0,
+                    ),
+                    Load(
+                        pointer: 3,
+                    ),
+                    GlobalVariable(1),
+                    AccessIndex(
+                        base: 5,
+                        index: 0,
+                    ),
+                    GlobalVariable(3),
+                    AccessIndex(
+                        base: 7,
+                        index: 0,
+                    ),
+                    Load(
+                        pointer: 8,
+                    ),
+                    GlobalVariable(3),
+                    AccessIndex(
+                        base: 10,
+                        index: 0,
+                    ),
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 12,
+                        index: 0,
+                    ),
+                    Load(
+                        pointer: 13,
+                    ),
+                    GlobalVariable(1),
+                    AccessIndex(
+                        base: 15,
+                        index: 0,
+                    ),
+                    Load(
+                        pointer: 16,
+                    ),
+                    Binary(
+                        op: Add,
+                        left: 14,
+                        right: 17,
+                    ),
+                ],
+                named_expressions: {},
+                body: [
+                    Emit((
+                        start: 1,
+                        end: 2,
+                    )),
+                    Emit((
+                        start: 3,
+                        end: 5,
+                    )),
+                    Store(
+                        pointer: 1,
+                        value: 4,
+                    ),
+                    Emit((
+                        start: 6,
+                        end: 7,
+                    )),
+                    Emit((
+                        start: 8,
+                        end: 10,
+                    )),
+                    Store(
+                        pointer: 6,
+                        value: 9,
+                    ),
+                    Emit((
+                        start: 11,
+                        end: 12,
+                    )),
+                    Emit((
+                        start: 13,
+                        end: 15,
+                    )),
+                    Emit((
+                        start: 16,
+                        end: 19,
+                    )),
+                    Store(
+                        pointer: 11,
+                        value: 18,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+)

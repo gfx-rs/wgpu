@@ -71,6 +71,11 @@ void compose_of_splat() {
     return;
 }
 
+void test_local_const() {
+    float arr[2] = float[2](0.0, 0.0);
+    return;
+}
+
 uint map_texture_kind(int texture_kind) {
     switch(texture_kind) {
         case 0: {
@@ -107,6 +112,16 @@ void relational() {
     return;
 }
 
+void abstract_access(uint i) {
+    float a_1 = 1.0;
+    uint b_1 = 1u;
+    int c_1 = 0;
+    int d = 0;
+    c_1 = int[9](1, 2, 3, 4, 5, 6, 7, 8, 9)[i];
+    d = ivec4(1, 2, 3, 4)[i];
+    return;
+}
+
 void main() {
     swizzle_of_compose();
     index_of_compose();
@@ -115,6 +130,7 @@ void main() {
     splat_of_constant();
     compose_of_constant();
     compose_of_splat();
+    test_local_const();
     return;
 }
 

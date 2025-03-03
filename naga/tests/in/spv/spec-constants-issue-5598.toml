@@ -1,0 +1,4 @@
+targets = "GLSL"
+
+[spv-in]
+adjust_coordinate_space = true

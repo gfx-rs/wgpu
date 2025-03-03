@@ -1,4 +1,4 @@
-use std::{ffi::OsString, os::windows::ffi::OsStringExt};
+use std::{ffi::OsString, os::windows::ffi::OsStringExt, string::String};
 
 use windows::Win32::Graphics::Dxgi;
 

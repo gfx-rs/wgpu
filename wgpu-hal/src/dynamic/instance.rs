@@ -1,3 +1,5 @@
+use alloc::{boxed::Box, vec::Vec};
+
 use crate::{Api, Capabilities, ExposedAdapter, Instance, InstanceError};
 
 use super::{DynAdapter, DynResource, DynResourceExt as _, DynSurface};
