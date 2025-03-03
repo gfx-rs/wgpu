@@ -2035,10 +2035,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                 }
 
-                lowered_base.map(|base| match ctx.const_eval_expr_to_u32(index).ok() {
-                    Some(index) => crate::Expression::AccessIndex { base, index },
-                    None => crate::Expression::Access { base, index },
-                })
+                lowered_base.try_map(|base| match ctx.const_eval_expr_to_u32(index).ok() {
+                    Some(index) => Ok::<_, Error>(crate::Expression::AccessIndex { base, index }),
+                    None => {
+                        // When an abstract array value e is indexed by an expression
+                        // that is not a const-expression, then the array is concretized
+                        // before the index is applied.
+                        // https://www.w3.org/TR/WGSL/#array-access-expr
+                        // Also applies to vectors and matrices.
+                        let base = ctx.concretize(base)?;
+                        Ok(crate::Expression::Access { base, index })
+                    }
+                })?
             }
             ast::Expression::Member { base, ref field } => {
                 let mut lowered_base = self.expression_for_reference(base, ctx)?;
