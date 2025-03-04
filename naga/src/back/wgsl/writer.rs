@@ -429,7 +429,9 @@ impl<W: Write> Writer<W> {
 
         Ok(())
     }
+}
 
+impl<W: Write> Writer<W> {
     /// Write the type `ty` as it would appear in a value's declaration.
     ///
     /// Write the type referred to by `ty` in `module` as it would appear in
@@ -650,6 +652,9 @@ impl<W: Write> Writer<W> {
 
         Ok(())
     }
+}
+
+impl<W: Write> Writer<W> {
     /// Helper method used to write statements
     ///
     /// # Notes
