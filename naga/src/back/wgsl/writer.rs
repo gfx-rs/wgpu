@@ -440,17 +440,23 @@ impl<W: Write> Writer<W> {
             TypeInner::Struct { .. } => {
                 write!(self.out, "{}", self.names[&NameKey::Type(ty)])?;
             }
-            ref other => self.write_value_type(module, other)?,
+            ref other => self.write_type_inner(module, other)?,
         }
 
         Ok(())
     }
 
-    /// Helper method used to write value types
+    /// Write the [`TypeInner`] `inner` as it would appear in a value's declaration.
     ///
-    /// # Notes
-    /// Adds no trailing or leading whitespace
-    fn write_value_type(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
+    /// Write `inner` as it would appear in a `var`, `let`, etc.
+    /// declaration, or in a function's argument list.
+    ///
+    /// Note that this cannot handle writing [`Struct`] types: those
+    /// must be referred to by name, but the name isn't available in
+    /// [`TypeInner`].
+    ///
+    /// [`Struct`]: TypeInner::Struct
+    fn write_type_inner(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
         match *inner {
             TypeInner::Vector { size, scalar } => write!(
                 self.out,
@@ -638,7 +644,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "acceleration_structure{}", caps)?
             }
             _ => {
-                return Err(Error::Unimplemented(format!("write_value_type {inner:?}")));
+                return Err(Error::Unimplemented(format!("write_type_inner {inner:?}")));
             }
         }
 
@@ -1194,7 +1200,7 @@ impl<W: Write> Writer<W> {
                     self.write_type(module, handle)?;
                 }
                 proc::TypeResolution::Value(ref inner) => {
-                    self.write_value_type(module, inner)?;
+                    self.write_type_inner(module, inner)?;
                 }
             }
         }
