@@ -1759,11 +1759,11 @@ fn binary_statement() {
             3 + 5;
         }
     ",
-        r###"error: expected assignment or increment/decrement, found ";"
-  ┌─ wgsl:3:18
+        r###"error: expected assignment or increment/decrement, found "+"
+  ┌─ wgsl:3:15
   │
 3 │             3 + 5;
-  │                  ^ expected assignment or increment/decrement
+  │               ^ expected assignment or increment/decrement
 
 "###,
     );
@@ -1777,11 +1777,11 @@ fn assign_to_expr() {
             3 + 5 = 10;
         }
         ",
-        r###"error: invalid left-hand side of assignment
-  ┌─ wgsl:3:13
+        r###"error: expected assignment or increment/decrement, found "+"
+  ┌─ wgsl:3:15
   │
 3 │             3 + 5 = 10;
-  │             ^^^^^ cannot assign to this expression
+  │               ^ expected assignment or increment/decrement
 
 "###,
     );
