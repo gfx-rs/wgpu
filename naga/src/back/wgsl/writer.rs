@@ -393,9 +393,15 @@ impl<W: Write> Writer<W> {
     }
 
     /// Helper method used to write structs
+    /// Write the full declaration of a struct type.
     ///
-    /// # Notes
-    /// Ends in a newline
+    /// Write out a definition of the struct type referred to by
+    /// `handle` in `module`. The output will be an instance of the
+    /// `struct_decl` production in the WGSL grammar.
+    ///
+    /// Use `members` as the list of `handle`'s members. (This
+    /// function is usually called after matching a `TypeInner`, so
+    /// the callers already have the members at hand.)
     fn write_struct(
         &mut self,
         module: &Module,
@@ -419,17 +425,15 @@ impl<W: Write> Writer<W> {
             writeln!(self.out)?;
         }
 
-        write!(self.out, "}}")?;
-
-        writeln!(self.out)?;
+        writeln!(self.out, "}}")?;
 
         Ok(())
     }
 
-    /// Helper method used to write non image/sampler types
+    /// Write the type `ty` as it would appear in a value's declaration.
     ///
-    /// # Notes
-    /// Adds no trailing or leading whitespace
+    /// Write the type referred to by `ty` in `module` as it would appear in
+    /// a `var`, `let`, etc. declaration, or in a function's argument list.
     fn write_type(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
         let inner = &module.types[ty].inner;
         match *inner {
