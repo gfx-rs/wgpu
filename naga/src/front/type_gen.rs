@@ -124,7 +124,7 @@ impl crate::Module {
                 name: None,
                 inner: crate::TypeInner::Array {
                     base: ty_vec3f,
-                    size: crate::ArraySize::Constant(std::num::NonZeroU32::new(3).unwrap()),
+                    size: crate::ArraySize::Constant(core::num::NonZeroU32::new(3).unwrap()),
                     stride: 16,
                 },
             },
