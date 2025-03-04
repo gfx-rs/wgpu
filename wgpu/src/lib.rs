@@ -63,12 +63,15 @@ pub mod util;
 //
 //
 
+#[cfg(custom)]
+pub use backend::custom;
+
 pub use api::*;
 pub use wgt::{
-    AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, BackendOptions, Backends,
-    BindGroupLayoutEntry, BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState,
-    BufferAddress, BufferBindingType, BufferSize, BufferTransition, BufferUsages, BufferUses,
-    Color, ColorTargetState, ColorWrites, CommandBufferDescriptor, CompareFunction,
+    AdapterInfo, AddressMode, AllocatorReport, AstcBlock, AstcChannel, Backend, BackendOptions,
+    Backends, BindGroupLayoutEntry, BindingType, BlendComponent, BlendFactor, BlendOperation,
+    BlendState, BufferAddress, BufferBindingType, BufferSize, BufferTransition, BufferUsages,
+    BufferUses, Color, ColorTargetState, ColorWrites, CommandBufferDescriptor, CompareFunction,
     CompositeAlphaMode, CopyExternalImageDestInfo, CoreCounters, DepthBiasState, DepthStencilState,
     DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags, DownlevelLimits,
     Dx12BackendOptions, Dx12Compiler, DxcShaderModel, DynamicOffset, Extent3d, Face, Features,

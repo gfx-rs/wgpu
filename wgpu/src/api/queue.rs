@@ -90,6 +90,14 @@ impl Drop for QueueWriteBufferView<'_> {
 }
 
 impl Queue {
+    #[cfg(custom)]
+    /// Creates Queue from custom implementation
+    pub fn from_custom<T: custom::QueueInterface>(queue: T) -> Self {
+        Self {
+            inner: dispatch::DispatchQueue::custom(queue),
+        }
+    }
+
     /// Schedule a data write into `buffer` starting at `offset`.
     ///
     /// This method fails if `data` overruns the size of `buffer` starting at `offset`.

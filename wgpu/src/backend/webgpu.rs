@@ -45,7 +45,7 @@ macro_rules! impl_send_sync {
     };
 }
 
-pub(crate) struct ContextWebGpu {
+pub struct ContextWebGpu {
     /// `None` if browser does not advertise support for WebGPU.
     gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
     /// Unique identifier for this context.
@@ -1266,13 +1266,13 @@ pub struct WebTexture {
 }
 
 #[derive(Debug)]
-pub(crate) struct WebBlas {
+pub struct WebBlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
 }
 
 #[derive(Debug)]
-pub(crate) struct WebTlas {
+pub struct WebTlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
 }
@@ -1306,7 +1306,7 @@ pub struct WebComputePipeline {
 }
 
 #[derive(Debug)]
-pub(crate) struct WebPipelineCache {
+pub struct WebPipelineCache {
     /// Unique identifier for this PipelineCache.
     ident: crate::cmp::Identifier,
 }
@@ -1363,7 +1363,7 @@ pub struct WebSurface {
 }
 
 #[derive(Debug)]
-pub(crate) struct WebSurfaceOutputDetail {
+pub struct WebSurfaceOutputDetail {
     /// Unique identifier for this SurfaceOutputDetail.
     ident: crate::cmp::Identifier,
 }
@@ -1444,37 +1444,6 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebSurface => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebSurfaceOutputDetail => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebQueueWriteBuffer => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBufferMappedRange => .ident);
-
-impl dispatch::InterfaceTypes for ContextWebGpu {
-    type Instance = ContextWebGpu;
-    type Adapter = WebAdapter;
-    type Device = WebDevice;
-    type Queue = WebQueue;
-    type ShaderModule = WebShaderModule;
-    type BindGroupLayout = WebBindGroupLayout;
-    type BindGroup = WebBindGroup;
-    type TextureView = WebTextureView;
-    type Sampler = WebSampler;
-    type Buffer = WebBuffer;
-    type Texture = WebTexture;
-    type Blas = WebBlas;
-    type Tlas = WebTlas;
-    type QuerySet = WebQuerySet;
-    type PipelineLayout = WebPipelineLayout;
-    type RenderPipeline = WebRenderPipeline;
-    type ComputePipeline = WebComputePipeline;
-    type PipelineCache = WebPipelineCache;
-    type CommandEncoder = WebCommandEncoder;
-    type ComputePass = WebComputePassEncoder;
-    type RenderPass = WebRenderPassEncoder;
-    type CommandBuffer = WebCommandBuffer;
-    type RenderBundleEncoder = WebRenderBundleEncoder;
-    type RenderBundle = WebRenderBundle;
-    type Surface = WebSurface;
-    type SurfaceOutputDetail = WebSurfaceOutputDetail;
-    type QueueWriteBuffer = WebQueueWriteBuffer;
-    type BufferMappedRange = WebBufferMappedRange;
-}
 
 impl dispatch::InstanceInterface for ContextWebGpu {
     fn new(_desc: &crate::InstanceDescriptor) -> Self

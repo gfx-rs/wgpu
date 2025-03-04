@@ -34,6 +34,14 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 
 impl Device {
+    #[cfg(custom)]
+    /// Creates Device from custom implementation
+    pub fn from_custom<T: custom::DeviceInterface>(device: T) -> Self {
+        Self {
+            inner: dispatch::DispatchDevice::custom(device),
+        }
+    }
+
     /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue

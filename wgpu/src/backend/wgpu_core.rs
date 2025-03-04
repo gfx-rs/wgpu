@@ -17,7 +17,7 @@ use wgt::WasmNotSendSync;
 
 use crate::{
     api,
-    dispatch::{self, BufferMappedRangeInterface, InterfaceTypes},
+    dispatch::{self, BufferMappedRangeInterface},
     BindingResource, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor,
@@ -741,37 +741,6 @@ crate::cmp::impl_eq_ord_hash_proxy!(CoreSurface => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreSurfaceOutputDetail => .surface_id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreQueueWriteBuffer => .mapping.ptr);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreBufferMappedRange => .ptr);
-
-impl InterfaceTypes for ContextWgpuCore {
-    type Instance = ContextWgpuCore;
-    type Adapter = CoreAdapter;
-    type Device = CoreDevice;
-    type Queue = CoreQueue;
-    type ShaderModule = CoreShaderModule;
-    type BindGroupLayout = CoreBindGroupLayout;
-    type BindGroup = CoreBindGroup;
-    type TextureView = CoreTextureView;
-    type Sampler = CoreSampler;
-    type Buffer = CoreBuffer;
-    type Texture = CoreTexture;
-    type Blas = CoreBlas;
-    type Tlas = CoreTlas;
-    type QuerySet = CoreQuerySet;
-    type PipelineLayout = CorePipelineLayout;
-    type RenderPipeline = CoreRenderPipeline;
-    type ComputePipeline = CoreComputePipeline;
-    type PipelineCache = CorePipelineCache;
-    type CommandEncoder = CoreCommandEncoder;
-    type ComputePass = CoreComputePass;
-    type RenderPass = CoreRenderPass;
-    type CommandBuffer = CoreCommandBuffer;
-    type RenderBundleEncoder = CoreRenderBundleEncoder;
-    type RenderBundle = CoreRenderBundle;
-    type Surface = CoreSurface;
-    type SurfaceOutputDetail = CoreSurfaceOutputDetail;
-    type QueueWriteBuffer = CoreQueueWriteBuffer;
-    type BufferMappedRange = CoreBufferMappedRange;
-}
 
 impl dispatch::InstanceInterface for ContextWgpuCore {
     fn new(desc: &wgt::InstanceDescriptor) -> Self
