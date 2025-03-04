@@ -1,6 +1,6 @@
 //! Code shared between the WGSL front and back ends.
 
-use std::fmt::{self, Display, Formatter};
+use core::fmt::{self, Display, Formatter};
 
 use crate::diagnostic_filter::{
     FilterableTriggeringRule, Severity, StandardFilterableTriggeringRule,

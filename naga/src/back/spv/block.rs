@@ -2,13 +2,16 @@
 Implementations for `BlockContext` methods.
 */
 
+use alloc::vec::Vec;
+
+use spirv::Word;
+
 use super::{
     index::BoundsCheckResult, selection::Selection, Block, BlockContext, Dimension, Error,
     Instruction, LocalType, LookupType, NumericType, ResultMember, WrappedFunction, Writer,
     WriterFlags,
 };
 use crate::{arena::Handle, proc::index::GuardedIndex, Statement};
-use spirv::Word;
 
 fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
     match *type_inner {
@@ -1579,7 +1582,7 @@ impl BlockContext<'_> {
 
                         const VEC_LENGTH: u8 = 4;
                         let parts: [_; VEC_LENGTH as usize] =
-                            std::array::from_fn(|_| self.gen_id());
+                            core::array::from_fn(|_| self.gen_id());
                         for (i, part_id) in parts.into_iter().enumerate() {
                             let index = self
                                 .writer

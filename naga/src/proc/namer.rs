@@ -1,6 +1,12 @@
+use alloc::{
+    borrow::Cow,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::hash::{Hash, Hasher};
+
 use crate::{arena::Handle, FastHashMap, FastHashSet};
-use std::borrow::Cow;
-use std::hash::{Hash, Hasher};
 
 pub type EntryPointIndex = u16;
 const SEPARATOR: char = '_';
@@ -92,7 +98,7 @@ impl Namer {
     /// Guarantee uniqueness by applying a numeric suffix when necessary. If `label_raw`
     /// itself ends with digits, separate them from the suffix with an underscore.
     pub fn call(&mut self, label_raw: &str) -> String {
-        use std::fmt::Write as _; // for write!-ing to Strings
+        use core::fmt::Write as _; // for write!-ing to Strings
 
         let base = self.sanitize(label_raw);
         debug_assert!(!base.is_empty() && !base.ends_with(SEPARATOR));
@@ -143,7 +149,7 @@ impl Namer {
     /// context for the duration of the call to `body`.
     fn namespace(&mut self, capacity: usize, body: impl FnOnce(&mut Self)) {
         let fresh = FastHashMap::with_capacity_and_hasher(capacity, Default::default());
-        let outer = std::mem::replace(&mut self.unique, fresh);
+        let outer = core::mem::replace(&mut self.unique, fresh);
         body(self);
         self.unique = outer;
     }
@@ -230,7 +236,7 @@ impl Namer {
             let label = match constant.name {
                 Some(ref name) => name,
                 None => {
-                    use std::fmt::Write;
+                    use core::fmt::Write;
                     // Try to be more descriptive about the constant values
                     temp.clear();
                     write!(temp, "const_{}", output[&NameKey::Type(constant.ty)]).unwrap();

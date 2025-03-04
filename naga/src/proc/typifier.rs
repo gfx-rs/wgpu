@@ -1,6 +1,8 @@
-use crate::arena::{Arena, Handle, UniqueArena};
+use alloc::{format, string::String};
 
 use thiserror::Error;
+
+use crate::arena::{Arena, Handle, UniqueArena};
 
 /// The result of computing an expression's type.
 ///

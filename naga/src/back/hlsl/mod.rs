@@ -114,7 +114,9 @@ mod ray;
 mod storage;
 mod writer;
 
-use std::fmt::Error as FmtError;
+use alloc::{string::String, vec::Vec};
+use core::fmt::Error as FmtError;
+
 use thiserror::Error;
 
 use crate::{back, proc};
@@ -172,7 +174,7 @@ where
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
 /// A HLSL shader model version.
 #[allow(non_snake_case, non_camel_case_types)]
@@ -296,7 +298,7 @@ where
 
 // We use a BTreeMap here so that we can hash it.
 pub type SamplerIndexBufferBindingMap =
-    std::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
+    alloc::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -322,7 +324,7 @@ where
     Ok(map)
 }
 
-pub type DynamicStorageBufferOffsetsTargets = std::collections::BTreeMap<u32, OffsetsBindTarget>;
+pub type DynamicStorageBufferOffsetsTargets = alloc::collections::BTreeMap<u32, OffsetsBindTarget>;
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
@@ -387,9 +389,9 @@ impl Default for Options {
             fake_missing_bindings: true,
             special_constants_binding: None,
             sampler_heap_target: SamplerHeapBindTargets::default(),
-            sampler_buffer_binding_map: std::collections::BTreeMap::default(),
+            sampler_buffer_binding_map: alloc::collections::BTreeMap::default(),
             push_constants_target: None,
-            dynamic_storage_buffer_offsets_targets: std::collections::BTreeMap::new(),
+            dynamic_storage_buffer_offsets_targets: alloc::collections::BTreeMap::new(),
             zero_initialize_workgroup_memory: true,
             restrict_indexing: true,
             force_loop_bounding: true,

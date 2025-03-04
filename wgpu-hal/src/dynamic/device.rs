@@ -4,10 +4,10 @@ use crate::{
     AccelerationStructureBuildSizes, AccelerationStructureDescriptor, Api, BindGroupDescriptor,
     BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping, CommandEncoderDescriptor,
     ComputePipelineDescriptor, Device, DeviceError, FenceValue,
-    GetAccelerationStructureBuildSizesDescriptor, Label, MemoryRange, PipelineCacheDescriptor,
-    PipelineCacheError, PipelineError, PipelineLayoutDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor, TextureDescriptor,
-    TextureViewDescriptor, TlasInstance,
+    GetAccelerationStructureBuildSizesDescriptor, Label, MemoryRange, MeshPipelineDescriptor,
+    PipelineCacheDescriptor, PipelineCacheError, PipelineError, PipelineLayoutDescriptor,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor,
+    TextureDescriptor, TextureViewDescriptor, TlasInstance,
 };
 
 use super::{
@@ -95,6 +95,14 @@ pub trait DynDevice: DynResource {
     unsafe fn create_render_pipeline(
         &self,
         desc: &RenderPipelineDescriptor<
+            dyn DynPipelineLayout,
+            dyn DynShaderModule,
+            dyn DynPipelineCache,
+        >,
+    ) -> Result<Box<dyn DynRenderPipeline>, PipelineError>;
+    unsafe fn create_mesh_pipeline(
+        &self,
+        desc: &MeshPipelineDescriptor<
             dyn DynPipelineLayout,
             dyn DynShaderModule,
             dyn DynPipelineCache,
@@ -390,6 +398,32 @@ impl<D: Device + DynResource> DynDevice for D {
         };
 
         unsafe { D::create_render_pipeline(self, &desc) }
+            .map(|b| -> Box<dyn DynRenderPipeline> { Box::new(b) })
+    }
+
+    unsafe fn create_mesh_pipeline(
+        &self,
+        desc: &MeshPipelineDescriptor<
+            dyn DynPipelineLayout,
+            dyn DynShaderModule,
+            dyn DynPipelineCache,
+        >,
+    ) -> Result<Box<dyn DynRenderPipeline>, PipelineError> {
+        let desc = MeshPipelineDescriptor {
+            label: desc.label,
+            layout: desc.layout.expect_downcast_ref(),
+            task_stage: desc.task_stage.clone().map(|f| f.expect_downcast()),
+            mesh_stage: desc.mesh_stage.clone().expect_downcast(),
+            primitive: desc.primitive,
+            depth_stencil: desc.depth_stencil.clone(),
+            multisample: desc.multisample,
+            fragment_stage: desc.fragment_stage.clone().map(|f| f.expect_downcast()),
+            color_targets: desc.color_targets,
+            multiview: desc.multiview,
+            cache: desc.cache.map(|c| c.expect_downcast_ref()),
+        };
+
+        unsafe { D::create_mesh_pipeline(self, &desc) }
             .map(|b| -> Box<dyn DynRenderPipeline> { Box::new(b) })
     }
 

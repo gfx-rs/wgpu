@@ -523,7 +523,7 @@ impl BindingArrayFixture {
                 name: Some("array<u32, 10>".into()),
                 inner: naga::TypeInner::Array {
                     base: ty_u32,
-                    size: naga::ArraySize::Constant(std::num::NonZeroU32::new(10).unwrap()),
+                    size: naga::ArraySize::Constant(core::num::NonZeroU32::new(10).unwrap()),
                     stride: 4,
                 },
             },

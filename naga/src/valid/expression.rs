@@ -1,6 +1,5 @@
 use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
-
 use crate::{
     arena::Handle,
     proc::{IndexableLengthError, ResolveError},
@@ -177,7 +176,7 @@ struct ExpressionTypeResolver<'a> {
     info: &'a FunctionInfo,
 }
 
-impl std::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'_> {
+impl core::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'_> {
     type Output = crate::TypeInner;
 
     #[allow(clippy::panic)]

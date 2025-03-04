@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 use super::Capabilities;
 use crate::{arena::Handle, proc::Alignment};
 

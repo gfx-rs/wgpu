@@ -2,6 +2,8 @@
 Type generators.
 */
 
+use alloc::{format, string::ToString, vec};
+
 use crate::{arena::Handle, span::Span};
 
 impl crate::Module {
@@ -281,7 +283,7 @@ impl crate::Module {
         &mut self,
         special_type: crate::PredeclaredType,
     ) -> Handle<crate::Type> {
-        use std::fmt::Write;
+        use core::fmt::Write;
 
         if let Some(value) = self.special_types.predeclared_types.get(&special_type) {
             return *value;

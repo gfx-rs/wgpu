@@ -1,4 +1,9 @@
-use std::num::NonZeroU32;
+use alloc::{
+    borrow::ToOwned,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::num::NonZeroU32;
 
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
@@ -782,7 +787,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
 }
 
 struct ArgumentContext<'ctx, 'source> {
-    args: std::slice::Iter<'ctx, Handle<ast::Expression<'source>>>,
+    args: core::slice::Iter<'ctx, Handle<ast::Expression<'source>>>,
     min_args: u32,
     args_used: u32,
     total_args: u32,

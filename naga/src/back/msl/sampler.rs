@@ -1,8 +1,9 @@
+use core::{num::NonZeroU32, ops::Range};
+
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
 use serde::Serialize;
-use std::{num::NonZeroU32, ops::Range};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -158,8 +159,8 @@ impl Eq for InlineSampler {}
 
 #[allow(renamed_and_removed_lints)]
 #[allow(clippy::derive_hash_xor_eq)]
-impl std::hash::Hash for InlineSampler {
-    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+impl core::hash::Hash for InlineSampler {
+    fn hash<H: core::hash::Hasher>(&self, hasher: &mut H) {
         self.coord.hash(hasher);
         self.address.hash(hasher);
         self.border_color.hash(hasher);

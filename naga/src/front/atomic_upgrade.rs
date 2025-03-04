@@ -30,7 +30,9 @@
 //! [`Struct`]: TypeInner::Struct
 //! [`Load`]: crate::Expression::Load
 //! [`Store`]: crate::Statement::Store
-use std::sync::{atomic::AtomicUsize, Arc};
+
+use alloc::{format, sync::Arc};
+use core::sync::atomic::AtomicUsize;
 
 use crate::{GlobalVariable, Handle, Module, Type, TypeInner};
 
@@ -51,9 +53,9 @@ pub enum Error {
 #[derive(Clone, Default)]
 struct Padding(Arc<AtomicUsize>);
 
-impl std::fmt::Display for Padding {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for _ in 0..self.0.load(std::sync::atomic::Ordering::Relaxed) {
+impl core::fmt::Display for Padding {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        for _ in 0..self.0.load(core::sync::atomic::Ordering::Relaxed) {
             f.write_str("  ")?;
         }
         Ok(())
@@ -62,25 +64,25 @@ impl std::fmt::Display for Padding {
 
 impl Drop for Padding {
     fn drop(&mut self) {
-        let _ = self.0.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        let _ = self.0.fetch_sub(1, core::sync::atomic::Ordering::Relaxed);
     }
 }
 
 impl Padding {
-    fn trace(&self, msg: impl std::fmt::Display, t: impl std::fmt::Debug) {
+    fn trace(&self, msg: impl core::fmt::Display, t: impl core::fmt::Debug) {
         format!("{msg} {t:#?}")
             .split('\n')
             .for_each(|ln| log::trace!("{self}{ln}"));
     }
 
-    fn debug(&self, msg: impl std::fmt::Display, t: impl std::fmt::Debug) {
+    fn debug(&self, msg: impl core::fmt::Display, t: impl core::fmt::Debug) {
         format!("{msg} {t:#?}")
             .split('\n')
             .for_each(|ln| log::debug!("{self}{ln}"));
     }
 
     fn inc_padding(&self) -> Padding {
-        let _ = self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _ = self.0.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         self.clone()
     }
 }

@@ -1415,6 +1415,16 @@ impl crate::Device for super::Device {
             alpha_to_coverage_enabled: desc.multisample.alpha_to_coverage_enabled,
         })
     }
+    unsafe fn create_mesh_pipeline(
+        &self,
+        _desc: &crate::MeshPipelineDescriptor<
+            <Self::A as crate::Api>::PipelineLayout,
+            <Self::A as crate::Api>::ShaderModule,
+            <Self::A as crate::Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
+        unreachable!()
+    }
 
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
         // If the pipeline only has 2 strong references remaining, they're `pipeline` and `program_cache`

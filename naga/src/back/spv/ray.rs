@@ -2,6 +2,8 @@
 Generating SPIR-V for ray query operations.
 */
 
+use alloc::vec;
+
 use super::{
     Block, BlockContext, Function, FunctionArgument, Instruction, LocalType, LookupFunctionType,
     LookupType, NumericType, Writer,

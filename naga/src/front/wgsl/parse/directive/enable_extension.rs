@@ -1,6 +1,7 @@
 //! `enable …;` extensions in WGSL.
 //!
 //! The focal point of this module is the [`EnableExtension`] API.
+
 use crate::{front::wgsl::error::Error, Span};
 
 /// Tracks the status of every enable-extension known to Naga.

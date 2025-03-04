@@ -1,6 +1,5 @@
-use crate::proc::TypeResolution;
-
 use crate::arena::Handle;
+use crate::proc::TypeResolution;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]

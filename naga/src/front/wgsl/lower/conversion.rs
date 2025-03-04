@@ -1,5 +1,7 @@
 //! WGSL's automatic conversions for abstract types.
 
+use alloc::{boxed::Box, string::String, vec::Vec};
+
 use crate::front::wgsl::error::{
     AutoConversionError, AutoConversionLeafScalarError, ConcretizationFailedError,
 };
