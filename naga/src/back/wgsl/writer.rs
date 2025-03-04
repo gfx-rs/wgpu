@@ -431,18 +431,43 @@ impl<W: Write> Writer<W> {
     }
 }
 
-impl<W: Write> Writer<W> {
+/// A context for printing Naga IR types as WGSL.
+///
+/// This trait's default methods [`write_type`] and
+/// [`write_type_inner`] do the work of formatting types as WGSL.
+/// Implementors must provide the remaining methods, to customize
+/// behavior for the context at hand.
+///
+/// For example, the WGSL backend would provide an implementation of
+/// [`type_name`] that handles hygienic renaming, whereas the WGSL
+/// front end would simply show the name that was given in the source.
+///
+/// [`write_type`]: TypeContext::write_type
+/// [`write_type_inner`]: TypeContext::write_type_inner
+/// [`type_name`]: TypeContext::type_name
+trait TypeContext<W: Write> {
+    /// Return the [`Type`] referred to by `handle`.
+    ///
+    /// [`Type`]: crate::Type
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type;
+
+    /// Return the name to be used for the type referred to by
+    /// `handle`.
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str;
+
+    /// Write the WGSL form of `override` to `out`.
+    fn write_override(&self, r#override: Handle<crate::Override>, out: &mut W)
+        -> core::fmt::Result;
+
     /// Write the type `ty` as it would appear in a value's declaration.
     ///
     /// Write the type referred to by `ty` in `module` as it would appear in
     /// a `var`, `let`, etc. declaration, or in a function's argument list.
-    fn write_type(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
-        let inner = &module.types[ty].inner;
-        match *inner {
-            TypeInner::Struct { .. } => {
-                write!(self.out, "{}", self.names[&NameKey::Type(ty)])?;
-            }
-            ref other => self.write_type_inner(module, other)?,
+    fn write_type(&self, handle: Handle<crate::Type>, out: &mut W) -> core::fmt::Result {
+        let ty = self.lookup_type(handle);
+        match ty.inner {
+            TypeInner::Struct { .. } => out.write_str(self.type_name(handle))?,
+            ref other => self.write_type_inner(other, out)?,
         }
 
         Ok(())
@@ -458,19 +483,28 @@ impl<W: Write> Writer<W> {
     /// [`TypeInner`].
     ///
     /// [`Struct`]: TypeInner::Struct
-    fn write_type_inner(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
+    fn write_type_inner(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result {
+        fn unwrap_to_wgsl<T: TryToWgsl + Copy + core::fmt::Debug>(value: T) -> &'static str {
+            value.try_to_wgsl().unwrap_or_else(|| {
+                unreachable!(
+                    "validation should have forbidden {}: {value:?}",
+                    T::DESCRIPTION
+                );
+            })
+        }
+
         match *inner {
             TypeInner::Vector { size, scalar } => write!(
-                self.out,
+                out,
                 "vec{}<{}>",
                 common::vector_size_str(size),
-                scalar.to_wgsl_if_implemented()?,
+                unwrap_to_wgsl(scalar),
             )?,
             TypeInner::Sampler { comparison: false } => {
-                write!(self.out, "sampler")?;
+                write!(out, "sampler")?;
             }
             TypeInner::Sampler { comparison: true } => {
-                write!(self.out, "sampler_comparison")?;
+                write!(out, "sampler_comparison")?;
             }
             TypeInner::Image {
                 dim,
@@ -486,7 +520,7 @@ impl<W: Write> Writer<W> {
                     Ic::Sampled { kind, multi } => (
                         "",
                         if multi { "multisampled_" } else { "" },
-                        crate::Scalar { kind, width: 4 }.to_wgsl_if_implemented()?,
+                        unwrap_to_wgsl(crate::Scalar { kind, width: 4 }),
                         "",
                     ),
                     Ic::Depth { multi } => {
@@ -510,19 +544,19 @@ impl<W: Write> Writer<W> {
                     ),
                 };
                 write!(
-                    self.out,
+                    out,
                     "texture_{class_str}{multisampled_str}{dim_str}{arrayed_str}"
                 )?;
 
                 if !format_str.is_empty() {
-                    write!(self.out, "<{format_str}{storage_str}>")?;
+                    write!(out, "<{format_str}{storage_str}>")?;
                 }
             }
             TypeInner::Scalar(scalar) => {
-                write!(self.out, "{}", scalar.to_wgsl_if_implemented()?)?;
+                write!(out, "{}", unwrap_to_wgsl(scalar))?;
             }
             TypeInner::Atomic(scalar) => {
-                write!(self.out, "atomic<{}>", scalar.to_wgsl_if_implemented()?)?;
+                write!(out, "atomic<{}>", unwrap_to_wgsl(scalar))?;
             }
             TypeInner::Array {
                 base,
@@ -532,37 +566,37 @@ impl<W: Write> Writer<W> {
                 // More info https://gpuweb.github.io/gpuweb/wgsl/#array-types
                 // array<A, 3> -- Constant array
                 // array<A> -- Dynamic array
-                write!(self.out, "array<")?;
+                write!(out, "array<")?;
                 match size {
                     crate::ArraySize::Constant(len) => {
-                        self.write_type(module, base)?;
-                        write!(self.out, ", {len}")?;
+                        self.write_type(base, out)?;
+                        write!(out, ", {len}")?;
                     }
-                    crate::ArraySize::Pending(_) => {
-                        unreachable!();
+                    crate::ArraySize::Pending(r#override) => {
+                        self.write_override(r#override, out)?;
                     }
                     crate::ArraySize::Dynamic => {
-                        self.write_type(module, base)?;
+                        self.write_type(base, out)?;
                     }
                 }
-                write!(self.out, ">")?;
+                write!(out, ">")?;
             }
             TypeInner::BindingArray { base, size } => {
                 // More info https://github.com/gpuweb/gpuweb/issues/2105
-                write!(self.out, "binding_array<")?;
+                write!(out, "binding_array<")?;
                 match size {
                     crate::ArraySize::Constant(len) => {
-                        self.write_type(module, base)?;
-                        write!(self.out, ", {len}")?;
+                        self.write_type(base, out)?;
+                        write!(out, ", {len}")?;
                     }
-                    crate::ArraySize::Pending(_) => {
-                        unreachable!();
+                    crate::ArraySize::Pending(r#override) => {
+                        self.write_override(r#override, out)?;
                     }
                     crate::ArraySize::Dynamic => {
-                        self.write_type(module, base)?;
+                        self.write_type(base, out)?;
                     }
                 }
-                write!(self.out, ">")?;
+                write!(out, ">")?;
             }
             TypeInner::Matrix {
                 columns,
@@ -570,11 +604,11 @@ impl<W: Write> Writer<W> {
                 scalar,
             } => {
                 write!(
-                    self.out,
+                    out,
                     "mat{}x{}<{}>",
                     common::vector_size_str(columns),
                     common::vector_size_str(rows),
-                    scalar.to_wgsl_if_implemented()?
+                    unwrap_to_wgsl(scalar)
                 )?;
             }
             TypeInner::Pointer { base, space } => {
@@ -583,14 +617,14 @@ impl<W: Write> Writer<W> {
                 // Naga IR never produces pointers to handles, so it doesn't matter much
                 // how we write such a type. Just write it as the base type alone.
                 if let Some(space) = address {
-                    write!(self.out, "ptr<{space}, ")?;
+                    write!(out, "ptr<{space}, ")?;
                 }
-                self.write_type(module, base)?;
+                self.write_type(base, out)?;
                 if address.is_some() {
                     if let Some(access) = maybe_access {
-                        write!(self.out, ", {access}")?;
+                        write!(out, ", {access}")?;
                     }
-                    write!(self.out, ">")?;
+                    write!(out, ">")?;
                 }
             }
             TypeInner::ValuePointer {
@@ -600,20 +634,13 @@ impl<W: Write> Writer<W> {
             } => {
                 let (address, maybe_access) = address_space_str(space);
                 if let Some(space) = address {
-                    write!(
-                        self.out,
-                        "ptr<{}, {}",
-                        space,
-                        scalar.to_wgsl_if_implemented()?
-                    )?;
+                    write!(out, "ptr<{}, {}", space, unwrap_to_wgsl(scalar))?;
                     if let Some(access) = maybe_access {
-                        write!(self.out, ", {access}")?;
+                        write!(out, ", {access}")?;
                     }
-                    write!(self.out, ">")?;
+                    write!(out, ">")?;
                 } else {
-                    return Err(Error::Unimplemented(format!(
-                        "ValuePointer to AddressSpace::Handle {inner:?}"
-                    )));
+                    unreachable!("ValuePointer to AddressSpace::Handle {inner:?}");
                 }
             }
             TypeInner::ValuePointer {
@@ -624,37 +651,78 @@ impl<W: Write> Writer<W> {
                 let (address, maybe_access) = address_space_str(space);
                 if let Some(space) = address {
                     write!(
-                        self.out,
+                        out,
                         "ptr<{}, vec{}<{}>",
                         space,
                         common::vector_size_str(size),
-                        scalar.to_wgsl_if_implemented()?
+                        unwrap_to_wgsl(scalar)
                     )?;
                     if let Some(access) = maybe_access {
-                        write!(self.out, ", {access}")?;
+                        write!(out, ", {access}")?;
                     }
-                    write!(self.out, ">")?;
+                    write!(out, ">")?;
                 } else {
-                    return Err(Error::Unimplemented(format!(
-                        "ValuePointer to AddressSpace::Handle {inner:?}"
-                    )));
+                    unreachable!("ValuePointer to AddressSpace::Handle {inner:?}");
                 }
-                write!(self.out, ">")?;
+                write!(out, ">")?;
             }
             TypeInner::AccelerationStructure { vertex_return } => {
                 let caps = if vertex_return { "<vertex_return>" } else { "" };
-                write!(self.out, "acceleration_structure{}", caps)?
+                write!(out, "acceleration_structure{}", caps)?
             }
-            _ => {
-                return Err(Error::Unimplemented(format!("write_type_inner {inner:?}")));
-            }
+            _ => unreachable!("invalid TypeInner"),
         }
 
         Ok(())
     }
 }
 
+struct WriterTypeContext<'m> {
+    module: &'m Module,
+    names: &'m crate::FastHashMap<NameKey, String>,
+}
+
+impl<W: Write> TypeContext<W> for WriterTypeContext<'_> {
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
+        &self.module.types[handle]
+    }
+
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
+        self.names[&NameKey::Type(handle)].as_str()
+    }
+
+    fn write_override(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
+        unreachable!("overrides should be validated out");
+    }
+}
+
 impl<W: Write> Writer<W> {
+    fn write_type(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
+        // This actually can't be factored out into a nice constructor method,
+        // because the borrow checker needs to be able to see that the borrows
+        // of `self.names` and `self.out` are disjoint.
+        let type_context = WriterTypeContext {
+            module,
+            names: &self.names,
+        };
+        type_context.write_type(ty, &mut self.out)?;
+
+        Ok(())
+    }
+
+    fn write_type_inner(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
+        // This actually can't be factored out into a nice constructor method,
+        // because the borrow checker needs to be able to see that the borrows
+        // of `self.names` and `self.out` are disjoint.
+        let type_context = WriterTypeContext {
+            module,
+            names: &self.names,
+        };
+        type_context.write_type_inner(inner, &mut self.out)?;
+
+        Ok(())
+    }
+
     /// Helper method used to write statements
     ///
     /// # Notes
