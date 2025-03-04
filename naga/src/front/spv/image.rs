@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::{
     arena::{Handle, UniqueArena},
     Scalar,

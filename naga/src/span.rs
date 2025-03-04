@@ -1,5 +1,12 @@
+use alloc::{
+    borrow::ToOwned,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{error::Error, fmt, ops::Range};
+
 use crate::{Arena, Handle, UniqueArena};
-use std::{error::Error, fmt, ops::Range};
 
 /// A source code span, used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -94,7 +101,7 @@ impl From<Range<usize>> for Span {
     }
 }
 
-impl std::ops::Index<Span> for str {
+impl core::ops::Index<Span> for str {
     type Output = str;
 
     #[inline]
@@ -359,7 +366,7 @@ pub(crate) trait SpanProvider<T> {
             x if !x.is_defined() => (Default::default(), "".to_string()),
             known => (
                 known,
-                format!("{} {:?}", std::any::type_name::<T>(), handle),
+                format!("{} {:?}", core::any::type_name::<T>(), handle),
             ),
         }
     }

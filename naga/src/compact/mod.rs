@@ -4,9 +4,14 @@ mod handle_set_map;
 mod statements;
 mod types;
 
+use alloc::vec::Vec;
+
 use crate::arena::HandleSet;
 use crate::{arena, compact::functions::FunctionTracer};
 use handle_set_map::HandleMap;
+
+#[cfg(test)]
+use alloc::{format, string::ToString};
 
 /// Remove unused types, expressions, and constants from `module`.
 ///
@@ -344,7 +349,7 @@ impl<'module> ModuleTracer<'module> {
         let mut max_dep = Vec::with_capacity(self.module.types.len());
         let mut previous = None;
         for (_handle, ty) in self.module.types.iter() {
-            previous = std::cmp::max(
+            previous = core::cmp::max(
                 previous,
                 match ty.inner {
                     crate::TypeInner::Array { size, .. }

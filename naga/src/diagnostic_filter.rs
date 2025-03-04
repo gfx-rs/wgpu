@@ -1,8 +1,11 @@
 //! [`DiagnosticFilter`]s and supporting functionality.
 
+use alloc::boxed::Box;
+
+use crate::{Arena, Handle};
+
 #[cfg(feature = "wgsl-in")]
 use crate::Span;
-use crate::{Arena, Handle};
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
 #[cfg(feature = "wgsl-in")]

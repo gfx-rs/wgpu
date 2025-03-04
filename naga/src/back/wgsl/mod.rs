@@ -7,6 +7,8 @@ Backend for [WGSL][wgsl] (WebGPU Shading Language).
 mod polyfill;
 mod writer;
 
+use alloc::string::String;
+
 use thiserror::Error;
 
 pub use writer::{Writer, WriterFlags};
@@ -14,7 +16,7 @@ pub use writer::{Writer, WriterFlags};
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
-    FmtError(#[from] std::fmt::Error),
+    FmtError(#[from] core::fmt::Error),
     #[error("{0}")]
     Custom(String),
     #[error("{0}")]

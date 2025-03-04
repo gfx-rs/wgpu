@@ -18,12 +18,14 @@ mod writer;
 
 pub use spirv::{Capability, SourceLanguage};
 
-use crate::arena::{Handle, HandleVec};
-use crate::proc::{BoundsCheckPolicies, TypeResolution};
+use alloc::{string::String, vec::Vec};
+use core::ops;
 
 use spirv::Word;
-use std::ops;
 use thiserror::Error;
+
+use crate::arena::{Handle, HandleVec};
+use crate::proc::{BoundsCheckPolicies, TypeResolution};
 
 #[derive(Clone)]
 struct PhysicalLayout {
@@ -857,7 +859,7 @@ pub struct BindingInfo {
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZeroInitializeWorkgroupMemoryMode {

@@ -1,10 +1,11 @@
+use alloc::{format, vec, vec::Vec};
+
+use super::{Error, Instruction, LookupExpression, LookupHelper as _};
+use crate::proc::Emitter;
 use crate::{
     arena::{Arena, Handle},
     front::spv::{BlockContext, BodyIndex},
 };
-
-use super::{Error, Instruction, LookupExpression, LookupHelper as _};
-use crate::proc::Emitter;
 
 pub type BlockId = u32;
 

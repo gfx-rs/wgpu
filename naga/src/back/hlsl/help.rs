@@ -26,6 +26,9 @@ int dim_1d = NagaDimensions1D(image_1d);
 ```
 */
 
+use alloc::format;
+use core::fmt::Write;
+
 use super::{
     super::FunctionCtx,
     writer::{
@@ -35,7 +38,6 @@ use super::{
     BackendResult, WrappedType,
 };
 use crate::{arena::Handle, proc::NameKey, ScalarKind};
-use std::fmt::Write;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedArrayLength {

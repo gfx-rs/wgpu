@@ -1,5 +1,10 @@
 //! Producing the WGSL forms of types, for use in error messages.
 
+use alloc::{
+    format,
+    string::{String, ToString},
+};
+
 use crate::proc::GlobalCtx;
 use crate::Handle;
 
@@ -198,10 +203,13 @@ impl crate::StorageFormat {
     }
 }
 
+#[cfg(test)]
 mod tests {
+    use alloc::{string::ToString, vec};
+
     #[test]
     fn to_wgsl() {
-        use std::num::NonZeroU32;
+        use core::num::NonZeroU32;
 
         let mut types = crate::UniqueArena::new();
 
