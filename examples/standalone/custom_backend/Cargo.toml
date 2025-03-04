@@ -1,5 +1,5 @@
 [package]
-name = "custom-backend"
+name = "wgpu-example-custom-backend"
 edition = "2021"
 rust-version = "1.85"
 publish = false

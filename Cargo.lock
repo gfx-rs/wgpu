@@ -964,14 +964,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 
 [[package]]
-name = "custom-backend"
-version = "24.0.0"
-dependencies = [
- "pollster",
- "wgpu",
-]
-
-[[package]]
 name = "data-encoding"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4717,6 +4709,14 @@ dependencies = [
  "pollster",
  "wgpu",
  "winit 0.30.8",
+]
+
+[[package]]
+name = "wgpu-example-custom-backend"
+version = "0.0.0"
+dependencies = [
+ "pollster",
+ "wgpu",
 ]
 
 [[package]]
