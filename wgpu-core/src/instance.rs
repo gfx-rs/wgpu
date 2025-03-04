@@ -210,7 +210,7 @@ impl Instance {
     ///
     /// # Platform Support
     ///
-    /// This function is only available on Unix-like platforms (Linux, FreeBSD) and
+    /// This function is only available on non-apple Unix-like platforms (Linux, FreeBSD) and
     /// currently only works with the Vulkan backend.
     #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
     #[cfg_attr(not(vulkan), expect(unused_variables))]
@@ -846,7 +846,7 @@ impl Global {
     ///
     /// # Platform Support
     ///
-    /// This function is only available on Unix-like platforms (Linux, FreeBSD) and
+    /// This function is only available on non-apple Unix-like platforms (Linux, FreeBSD) and
     /// currently only works with the Vulkan backend.
     #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
     pub unsafe fn instance_create_surface_from_drm(
