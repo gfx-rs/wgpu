@@ -112,6 +112,7 @@ gles = [
     "dep:libloading",
     "dep:log",
     "dep:ndk-sys",
+    "dep:objc",
     "dep:profiling",
     "dep:wasm-bindgen",
     "dep:web-sys",
