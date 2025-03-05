@@ -346,8 +346,8 @@ pub struct Buffer {
     target: BindTarget,
     size: wgt::BufferAddress,
     map_flags: u32,
-    data: Option<Arc<std::sync::Mutex<Vec<u8>>>>,
-    offset_of_current_mapping: Arc<std::sync::Mutex<wgt::BufferAddress>>,
+    data: Option<Arc<MaybeMutex<Vec<u8>>>>,
+    offset_of_current_mapping: Arc<MaybeMutex<wgt::BufferAddress>>,
 }
 
 #[cfg(send_sync)]
@@ -1091,5 +1091,28 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
     if cfg!(debug_assertions) && log_severity == log::Level::Error {
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());
+    }
+}
+
+// If we are using `std`, then use `Mutex` to provide `Send` and `Sync`
+cfg_if::cfg_if! {
+    if #[cfg(gles_with_std)] {
+        type MaybeMutex<T> = std::sync::Mutex<T>;
+
+        fn lock<T>(mutex: &MaybeMutex<T>) -> std::sync::MutexGuard<'_, T> {
+            mutex.lock().unwrap()
+        }
+    } else {
+        // It should be impossible for any build configuration to trigger this error
+        // It is intended only as a guard against changes elsewhere causing the use of
+        // `RefCell` here to become unsound.
+        #[cfg(all(send_sync, not(feature = "fragile-send-sync-non-atomic-wasm")))]
+        compile_error!("cannot provide non-fragile Send+Sync without std");
+
+        type MaybeMutex<T> = core::cell::RefCell<T>;
+
+        fn lock<T>(mutex: &MaybeMutex<T>) -> core::cell::RefMut<'_, T> {
+            mutex.borrow_mut()
+        }
     }
 }

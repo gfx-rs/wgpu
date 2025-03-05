@@ -104,6 +104,7 @@ gles = [
     "naga/glsl-out",
     "dep:arrayvec",
     "dep:bytemuck",
+    "dep:cfg-if",
     "dep:glow",
     "dep:glutin_wgl_sys",
     "dep:hashbrown",
@@ -216,6 +217,7 @@ rustc-hash = { workspace = true, optional = true }
 # Backend: GLES
 bytemuck = { workspace = true, optional = true }
 glow = { workspace = true, optional = true }
+cfg-if = { workspace = true, optional = true }
 
 ########################
 ### Platform: Native ###

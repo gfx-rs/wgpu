@@ -241,8 +241,7 @@
 extern crate alloc;
 extern crate wgpu_types as wgt;
 // Each of these backends needs `std` in some fashion; usually `std::thread` functions.
-// TODO(https://github.com/gfx-rs/wgpu/issues/6826): gles-WebGL backend should be made no-std
-#[cfg(any(dx12, gles, metal, vulkan))]
+#[cfg(any(dx12, gles_with_std, metal, vulkan))]
 #[macro_use]
 extern crate std;
 
