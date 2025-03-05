@@ -2170,13 +2170,37 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         // Apply automatic conversions.
         match op {
-            // Shift operators require the right operand to be `u32` or
-            // `vecN<u32>`. We can let the validator sort out vector length
-            // issues, but the right operand must be, or convert to, a u32 leaf
-            // scalar.
             crate::BinaryOperator::ShiftLeft | crate::BinaryOperator::ShiftRight => {
+                // Shift operators require the right operand to be `u32` or
+                // `vecN<u32>`. We can let the validator sort out vector length
+                // issues, but the right operand must be, or convert to, a u32 leaf
+                // scalar.
                 right =
                     ctx.try_automatic_conversion_for_leaf_scalar(right, crate::Scalar::U32, span)?;
+
+                // Additionally, we must concretize the left operand if the right operand
+                // is not a const-expression.
+                // See https://www.w3.org/TR/WGSL/#overload-resolution-section.
+                //
+                // 2. Eliminate any candidate where one of its subexpressions resolves to
+                // an abstract type after feasible automatic conversions, but another of
+                // the candidate’s subexpressions is not a const-expression.
+                //
+                // We only have to explicitly do so for shifts as their operands may be
+                // of different types - for other binary ops this is achieved by finding
+                // the conversion consensus for both operands.
+                let expr_kind_tracker = match ctx.expr_type {
+                    ExpressionContextType::Runtime(ref ctx)
+                    | ExpressionContextType::Constant(Some(ref ctx)) => {
+                        &ctx.local_expression_kind_tracker
+                    }
+                    ExpressionContextType::Constant(None) | ExpressionContextType::Override => {
+                        &ctx.global_expression_kind_tracker
+                    }
+                };
+                if !expr_kind_tracker.is_const(right) {
+                    left = ctx.concretize(left)?;
+                }
             }
 
             // All other operators follow the same pattern: reconcile the
