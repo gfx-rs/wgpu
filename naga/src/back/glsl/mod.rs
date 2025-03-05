@@ -45,19 +45,28 @@ to output a [`Module`](crate::Module) into glsl
 
 pub use features::Features;
 
+use alloc::{
+    borrow::ToOwned,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::{
+    cmp::Ordering,
+    fmt::{self, Error as FmtError, Write},
+    mem,
+};
+
+use hashbrown::hash_map;
+use thiserror::Error;
+
 use crate::{
     back::{self, Baked},
     proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, ShaderStage, TypeInner,
 };
 use features::FeaturesManager;
-use hashbrown::hash_map;
-use std::{
-    cmp::Ordering,
-    fmt::{self, Error as FmtError, Write},
-    mem,
-};
-use thiserror::Error;
 
 /// Contains the features related code and the features querying method
 mod features;
@@ -79,8 +88,30 @@ pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 // Must match code in glsl_built_in
 pub const FIRST_INSTANCE_BINDING: &str = "naga_vs_first_instance";
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct BindingMapSerialization {
+    resource_binding: crate::ResourceBinding,
+    bind_target: u8,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_binding_map<'de, D>(deserializer: D) -> Result<BindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<BindingMapSerialization>::deserialize(deserializer)?;
+    let mut map = BindingMap::default();
+    for item in vec {
+        map.insert(item.resource_binding, item.bind_target);
+    }
+    Ok(map)
+}
+
 /// Mapping between resources and bindings.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, u8>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, u8>;
 
 impl crate::AtomicFunction {
     const fn to_glsl(self) -> &'static str {
@@ -266,6 +297,10 @@ pub struct Options {
     /// Configuration flags for the [`Writer`].
     pub writer_flags: WriterFlags,
     /// Map of resources association to binding locations.
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_binding_map")
+    )]
     pub binding_map: BindingMap,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: bool,
@@ -294,7 +329,7 @@ pub struct PipelineOptions {
     /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
     pub entry_point: String,
     /// How many views to render to, if doing multiview rendering.
-    pub multiview: Option<std::num::NonZeroU32>,
+    pub multiview: Option<core::num::NonZeroU32>,
 }
 
 #[derive(Debug)]
@@ -556,7 +591,7 @@ pub struct Writer<'a, W> {
     /// transformed to `do {} while(false);` loops.
     continue_ctx: back::continue_forward::ContinueCtx,
     /// How many views to render to, if doing multiview rendering.
-    multiview: Option<std::num::NonZeroU32>,
+    multiview: Option<core::num::NonZeroU32>,
     /// Mapping of varying variables to their location. Needed for reflections.
     varying: crate::FastHashMap<String, VaryingLocation>,
 }
@@ -1047,8 +1082,8 @@ impl<'a, W: Write> Writer<'a, W> {
             | TypeInner::Struct { .. }
             | TypeInner::Image { .. }
             | TypeInner::Sampler { .. }
-            | TypeInner::AccelerationStructure
-            | TypeInner::RayQuery
+            | TypeInner::AccelerationStructure { .. }
+            | TypeInner::RayQuery { .. }
             | TypeInner::BindingArray { .. } => {
                 return Err(Error::Custom(format!("Unable to write type {inner:?}")))
             }
@@ -2177,8 +2212,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             self.write_stmt(sta, ctx, l2.next())?;
                         }
 
-                        if !case.fall_through
-                            && case.body.last().map_or(true, |s| !s.is_terminator())
+                        if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator())
                         {
                             writeln!(self.out, "{}break;", l2.next())?;
                         }
@@ -3983,7 +4017,8 @@ impl<'a, W: Write> Writer<'a, W> {
                 write!(self.out, ".length())")?
             }
             // not supported yet
-            Expression::RayQueryGetIntersection { .. } => unreachable!(),
+            Expression::RayQueryGetIntersection { .. }
+            | Expression::RayQueryVertexPositions { .. } => unreachable!(),
         }
 
         Ok(())
@@ -4423,10 +4458,28 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ") - 1)")?;
             }
         } else if let Some(sample_or_level) = sample.or(level) {
+            // GLSL only support SInt on this field while WGSL support also UInt
+            let cast_to_int = matches!(
+                *ctx.resolve_type(sample_or_level, &self.module.types),
+                TypeInner::Scalar(crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..
+                })
+            );
+
             // If no bounds checking is need just add the sample or level argument
             // after the coordinates
             write!(self.out, ", ")?;
+
+            if cast_to_int {
+                write!(self.out, "int(")?;
+            }
+
             self.write_expr(sample_or_level, ctx)?;
+
+            if cast_to_int {
+                write!(self.out, ")")?;
+            }
         }
 
         // Close the image load function.
@@ -4584,6 +4637,9 @@ impl<'a, W: Write> Writer<'a, W> {
         }
         if flags.contains(crate::Barrier::SUB_GROUP) {
             writeln!(self.out, "{level}subgroupMemoryBarrier();")?;
+        }
+        if flags.contains(crate::Barrier::TEXTURE) {
+            writeln!(self.out, "{level}memoryBarrierImage();")?;
         }
         writeln!(self.out, "{level}barrier();")?;
         Ok(())

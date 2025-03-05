@@ -1,20 +1,21 @@
-use super::{conv, RawTlasInstance};
+use std::{
+    borrow::{Cow, ToOwned as _},
+    collections::BTreeMap,
+    ffi::{CStr, CString},
+    mem::{self, MaybeUninit},
+    num::NonZeroU32,
+    ptr, slice,
+    sync::Arc,
+    vec::Vec,
+};
 
 use arrayvec::ArrayVec;
 use ash::{khr, vk};
 use hashbrown::hash_map::Entry;
 use parking_lot::Mutex;
 
+use super::{conv, RawTlasInstance};
 use crate::TlasInstance;
-use std::{
-    borrow::Cow,
-    collections::BTreeMap,
-    ffi::{CStr, CString},
-    mem::{self, size_of, MaybeUninit},
-    num::NonZeroU32,
-    ptr, slice,
-    sync::Arc,
-};
 
 impl super::DeviceShared {
     /// Set the name of `object` to `name`.
@@ -903,10 +904,11 @@ impl super::Device {
                 runtime_checks,
             } => {
                 let pipeline_options = naga::back::spv::PipelineOptions {
-                    entry_point: stage.entry_point.to_string(),
+                    entry_point: stage.entry_point.to_owned(),
                     shader_stage: naga_stage,
                 };
                 let needs_temp_options = !runtime_checks.bounds_checks
+                    || !runtime_checks.force_loop_bounding
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory;
@@ -920,6 +922,9 @@ impl super::Device {
                             image_load: naga::proc::BoundsCheckPolicy::Unchecked,
                             binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                         };
+                    }
+                    if !runtime_checks.force_loop_bounding {
+                        temp_options.force_loop_bounding = false;
                     }
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
@@ -1441,7 +1446,7 @@ impl crate::Device for super::Device {
                 wgt::BindingType::StorageTexture { .. } => {
                     desc_count.storage_image += count;
                 }
-                wgt::BindingType::AccelerationStructure => {
+                wgt::BindingType::AccelerationStructure { .. } => {
                     desc_count.acceleration_structure += count;
                 }
             }
@@ -1461,44 +1466,47 @@ impl crate::Device for super::Device {
             })
             .collect::<Vec<_>>();
 
-        let vk_info = vk::DescriptorSetLayoutCreateInfo::default().bindings(&vk_bindings);
-
-        let binding_arrays = desc
+        let binding_arrays: Vec<_> = desc
             .entries
             .iter()
             .enumerate()
             .filter_map(|(idx, entry)| entry.count.map(|count| (idx as u32, count)))
             .collect();
 
-        let mut binding_flag_info;
-        let binding_flag_vec;
+        let vk_info = vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(&vk_bindings)
+            .flags(if !binding_arrays.is_empty() {
+                vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL
+            } else {
+                vk::DescriptorSetLayoutCreateFlags::empty()
+            });
 
         let partially_bound = desc
             .flags
             .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
 
-        let vk_info = if partially_bound {
-            binding_flag_vec = desc
-                .entries
-                .iter()
-                .map(|entry| {
-                    let mut flags = vk::DescriptorBindingFlags::empty();
+        let binding_flag_vec = desc
+            .entries
+            .iter()
+            .map(|entry| {
+                let mut flags = vk::DescriptorBindingFlags::empty();
 
-                    if partially_bound && entry.count.is_some() {
-                        flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
-                    }
+                if partially_bound && entry.count.is_some() {
+                    flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
+                }
 
-                    flags
-                })
-                .collect::<Vec<_>>();
+                if entry.count.is_some() {
+                    flags |= vk::DescriptorBindingFlags::UPDATE_AFTER_BIND;
+                }
 
-            binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
-                .binding_flags(&binding_flag_vec);
+                flags
+            })
+            .collect::<Vec<_>>();
 
-            vk_info.push_next(&mut binding_flag_info)
-        } else {
-            vk_info
-        };
+        let mut binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
+            .binding_flags(&binding_flag_vec);
+
+        let vk_info = vk_info.push_next(&mut binding_flag_info);
 
         let raw = unsafe {
             self.shared
@@ -1611,11 +1619,19 @@ impl crate::Device for super::Device {
             super::AccelerationStructure,
         >,
     ) -> Result<super::BindGroup, crate::DeviceError> {
+        let contains_binding_arrays = !desc.layout.binding_arrays.is_empty();
+
+        let desc_set_layout_flags = if contains_binding_arrays {
+            gpu_descriptor::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND
+        } else {
+            gpu_descriptor::DescriptorSetLayoutCreateFlags::empty()
+        };
+
         let mut vk_sets = unsafe {
             self.desc_allocator.lock().allocate(
                 &*self.shared,
                 &desc.layout.raw,
-                gpu_descriptor::DescriptorSetLayoutCreateFlags::empty(),
+                desc_set_layout_flags,
                 &desc.layout.desc_count,
                 1,
             )?
@@ -2052,10 +2068,7 @@ impl crate::Device for super::Device {
         let vk_dynamic_state =
             vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-        let raw_pass = self
-            .shared
-            .make_render_pass(compatible_rp_key)
-            .map_err(crate::DeviceError::from)?;
+        let raw_pass = self.shared.make_render_pass(compatible_rp_key)?;
 
         let vk_infos = [{
             vk::GraphicsPipelineCreateInfo::default()
@@ -2093,6 +2106,237 @@ impl crate::Device for super::Device {
         }
 
         if let Some(raw_module) = compiled_vs.temp_raw_module {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+        if let Some(CompiledStage {
+            temp_raw_module: Some(raw_module),
+            ..
+        }) = compiled_fs
+        {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
+        self.counters.render_pipelines.add(1);
+
+        Ok(super::RenderPipeline { raw })
+    }
+    unsafe fn create_mesh_pipeline(
+        &self,
+        desc: &crate::MeshPipelineDescriptor<
+            <Self::A as crate::Api>::PipelineLayout,
+            <Self::A as crate::Api>::ShaderModule,
+            <Self::A as crate::Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
+        let dynamic_states = [
+            vk::DynamicState::VIEWPORT,
+            vk::DynamicState::SCISSOR,
+            vk::DynamicState::BLEND_CONSTANTS,
+            vk::DynamicState::STENCIL_REFERENCE,
+        ];
+        let mut compatible_rp_key = super::RenderPassKey {
+            sample_count: desc.multisample.count,
+            multiview: desc.multiview,
+            ..Default::default()
+        };
+        let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
+
+        let vk_input_assembly = vk::PipelineInputAssemblyStateCreateInfo::default()
+            .topology(conv::map_topology(desc.primitive.topology))
+            .primitive_restart_enable(desc.primitive.strip_index_format.is_some());
+
+        let compiled_ts = match desc.task_stage {
+            Some(ref stage) => {
+                // TODO: add proper naga stages
+                let mut compiled = self.compile_stage(
+                    stage,
+                    naga::ShaderStage::Compute,
+                    &desc.layout.binding_arrays,
+                )?;
+                compiled.create_info.stage = vk::ShaderStageFlags::TASK_EXT;
+                stages.push(compiled.create_info);
+                Some(compiled)
+            }
+            None => None,
+        };
+
+        // TODO: add proper naga stages
+        let mut compiled_ms = self.compile_stage(
+            &desc.mesh_stage,
+            naga::ShaderStage::Compute,
+            &desc.layout.binding_arrays,
+        )?;
+        compiled_ms.create_info.stage = vk::ShaderStageFlags::MESH_EXT;
+        stages.push(compiled_ms.create_info);
+        let compiled_fs = match desc.fragment_stage {
+            Some(ref stage) => {
+                let compiled = self.compile_stage(
+                    stage,
+                    naga::ShaderStage::Fragment,
+                    &desc.layout.binding_arrays,
+                )?;
+                stages.push(compiled.create_info);
+                Some(compiled)
+            }
+            None => None,
+        };
+
+        let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::default()
+            .polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode))
+            .front_face(conv::map_front_face(desc.primitive.front_face))
+            .line_width(1.0)
+            .depth_clamp_enable(desc.primitive.unclipped_depth);
+        if let Some(face) = desc.primitive.cull_mode {
+            vk_rasterization = vk_rasterization.cull_mode(conv::map_cull_face(face))
+        }
+        let mut vk_rasterization_conservative_state =
+            vk::PipelineRasterizationConservativeStateCreateInfoEXT::default()
+                .conservative_rasterization_mode(
+                    vk::ConservativeRasterizationModeEXT::OVERESTIMATE,
+                );
+        if desc.primitive.conservative {
+            vk_rasterization = vk_rasterization.push_next(&mut vk_rasterization_conservative_state);
+        }
+
+        let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::default();
+        if let Some(ref ds) = desc.depth_stencil {
+            let vk_format = self.shared.private_caps.map_texture_format(ds.format);
+            let vk_layout = if ds.is_read_only(desc.primitive.cull_mode) {
+                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
+            } else {
+                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            };
+            compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
+                base: super::AttachmentKey::compatible(vk_format, vk_layout),
+                stencil_ops: crate::AttachmentOps::all(),
+            });
+
+            if ds.is_depth_enabled() {
+                vk_depth_stencil = vk_depth_stencil
+                    .depth_test_enable(true)
+                    .depth_write_enable(ds.depth_write_enabled)
+                    .depth_compare_op(conv::map_comparison(ds.depth_compare));
+            }
+            if ds.stencil.is_enabled() {
+                let s = &ds.stencil;
+                let front = conv::map_stencil_face(&s.front, s.read_mask, s.write_mask);
+                let back = conv::map_stencil_face(&s.back, s.read_mask, s.write_mask);
+                vk_depth_stencil = vk_depth_stencil
+                    .stencil_test_enable(true)
+                    .front(front)
+                    .back(back);
+            }
+
+            if ds.bias.is_enabled() {
+                vk_rasterization = vk_rasterization
+                    .depth_bias_enable(true)
+                    .depth_bias_constant_factor(ds.bias.constant as f32)
+                    .depth_bias_clamp(ds.bias.clamp)
+                    .depth_bias_slope_factor(ds.bias.slope_scale);
+            }
+        }
+
+        let vk_viewport = vk::PipelineViewportStateCreateInfo::default()
+            .flags(vk::PipelineViewportStateCreateFlags::empty())
+            .scissor_count(1)
+            .viewport_count(1);
+
+        let vk_sample_mask = [
+            desc.multisample.mask as u32,
+            (desc.multisample.mask >> 32) as u32,
+        ];
+        let vk_multisample = vk::PipelineMultisampleStateCreateInfo::default()
+            .rasterization_samples(vk::SampleCountFlags::from_raw(desc.multisample.count))
+            .alpha_to_coverage_enable(desc.multisample.alpha_to_coverage_enabled)
+            .sample_mask(&vk_sample_mask);
+
+        let mut vk_attachments = Vec::with_capacity(desc.color_targets.len());
+        for cat in desc.color_targets {
+            let (key, attarchment) = if let Some(cat) = cat.as_ref() {
+                let mut vk_attachment = vk::PipelineColorBlendAttachmentState::default()
+                    .color_write_mask(vk::ColorComponentFlags::from_raw(cat.write_mask.bits()));
+                if let Some(ref blend) = cat.blend {
+                    let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
+                    let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
+                    vk_attachment = vk_attachment
+                        .blend_enable(true)
+                        .color_blend_op(color_op)
+                        .src_color_blend_factor(color_src)
+                        .dst_color_blend_factor(color_dst)
+                        .alpha_blend_op(alpha_op)
+                        .src_alpha_blend_factor(alpha_src)
+                        .dst_alpha_blend_factor(alpha_dst);
+                }
+
+                let vk_format = self.shared.private_caps.map_texture_format(cat.format);
+                (
+                    Some(super::ColorAttachmentKey {
+                        base: super::AttachmentKey::compatible(
+                            vk_format,
+                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                        ),
+                        resolve: None,
+                    }),
+                    vk_attachment,
+                )
+            } else {
+                (None, vk::PipelineColorBlendAttachmentState::default())
+            };
+
+            compatible_rp_key.colors.push(key);
+            vk_attachments.push(attarchment);
+        }
+
+        let vk_color_blend =
+            vk::PipelineColorBlendStateCreateInfo::default().attachments(&vk_attachments);
+
+        let vk_dynamic_state =
+            vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
+
+        let raw_pass = self.shared.make_render_pass(compatible_rp_key)?;
+
+        let vk_infos = [{
+            vk::GraphicsPipelineCreateInfo::default()
+                .layout(desc.layout.raw)
+                .stages(&stages)
+                .input_assembly_state(&vk_input_assembly)
+                .rasterization_state(&vk_rasterization)
+                .viewport_state(&vk_viewport)
+                .multisample_state(&vk_multisample)
+                .depth_stencil_state(&vk_depth_stencil)
+                .color_blend_state(&vk_color_blend)
+                .dynamic_state(&vk_dynamic_state)
+                .render_pass(raw_pass)
+        }];
+
+        let pipeline_cache = desc
+            .cache
+            .map(|it| it.raw)
+            .unwrap_or(vk::PipelineCache::null());
+
+        let mut raw_vec = {
+            profiling::scope!("vkCreateGraphicsPipelines");
+            unsafe {
+                self.shared
+                    .raw
+                    .create_graphics_pipelines(pipeline_cache, &vk_infos, None)
+                    .map_err(|(_, e)| super::map_pipeline_err(e))
+            }?
+        };
+
+        let raw = raw_vec.pop().unwrap();
+        if let Some(label) = desc.label {
+            unsafe { self.shared.set_object_name(raw, label) };
+        }
+        // NOTE: this could leak shaders in case of an error.
+        if let Some(CompiledStage {
+            temp_raw_module: Some(raw_module),
+            ..
+        }) = compiled_ts
+        {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+        if let Some(raw_module) = compiled_ms.temp_raw_module {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
         if let Some(CompiledStage {
@@ -2365,7 +2609,39 @@ impl crate::Device for super::Device {
                             .index_type(vk::IndexType::NONE_KHR)
                             .vertex_format(conv::map_vertex_format(triangles.vertex_format))
                             .max_vertex(triangles.vertex_count)
-                            .vertex_stride(triangles.vertex_stride);
+                            .vertex_stride(triangles.vertex_stride)
+                            // The vulkan spec suggests we could pass a non-zero invalid address here if fetching
+                            // the real address has significant overhead, but we pass the real one to be on the
+                            // safe side for now.
+                            // from https://registry.khronos.org/vulkan/specs/latest/man/html/vkGetAccelerationStructureBuildSizesKHR.html
+                            // > The srcAccelerationStructure, dstAccelerationStructure, and mode members
+                            // > of pBuildInfo are ignored. Any VkDeviceOrHostAddressKHR or VkDeviceOrHostAddressConstKHR
+                            // > members of pBuildInfo are ignored by this command, except that the hostAddress
+                            // > member of VkAccelerationStructureGeometryTrianglesDataKHR::transformData will
+                            // > be examined to check if it is NULL.
+                            .transform_data(vk::DeviceOrHostAddressConstKHR {
+                                device_address: if desc
+                                    .flags
+                                    .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                                {
+                                    unsafe {
+                                        ray_tracing_functions
+                                            .buffer_device_address
+                                            .get_buffer_device_address(
+                                                &vk::BufferDeviceAddressInfo::default().buffer(
+                                                    triangles
+                                                        .transform
+                                                        .as_ref()
+                                                        .unwrap()
+                                                        .buffer
+                                                        .raw,
+                                                ),
+                                            )
+                                    }
+                                } else {
+                                    0
+                                },
+                            });
 
                     let pritive_count = if let Some(ref indices) = triangles.indices {
                         triangle_data =

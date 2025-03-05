@@ -14,9 +14,7 @@ use winit::{
 
 use std::{
     borrow::{Borrow, Cow},
-    iter,
-    mem::size_of,
-    ptr,
+    iter, ptr,
     time::Instant,
 };
 
@@ -815,7 +813,7 @@ cfg_if::cfg_if! {
     }
     // Fallback
     else {
-        type Api = hal::api::Empty;
+        type Api = hal::api::Noop;
     }
 }
 

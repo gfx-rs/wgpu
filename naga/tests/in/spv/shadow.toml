@@ -1,0 +1,4 @@
+targets = "IR | ANALYSIS"
+
+[spv-in]
+adjust_coordinate_space = true

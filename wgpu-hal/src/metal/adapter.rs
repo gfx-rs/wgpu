@@ -592,6 +592,8 @@ impl super::PrivateCapabilities {
             // `TimestampQuerySupport::INSIDE_WGPU_PASSES` emerges from the other flags.
         }
 
+        let argument_buffers = device.argument_buffers_support();
+
         Self {
             family_check,
             msl_version: if os_is_xr || version.at_least((14, 0), (17, 0), os_is_mac) {
@@ -626,7 +628,7 @@ impl super::PrivateCapabilities {
             },
             msaa_apple7: family_check && device.supports_family(MTLGPUFamily::Apple7),
             resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
-            argument_buffers: device.argument_buffers_support(),
+            argument_buffers,
             shared_textures: !os_is_mac,
             mutable_comparison_samplers: Self::supports_any(
                 device,
@@ -725,6 +727,28 @@ impl super::PrivateCapabilities {
                 31
             },
             max_samplers_per_stage: 16,
+            max_binding_array_elements: if argument_buffers == metal::MTLArgumentBuffersTier::Tier2
+            {
+                1_000_000
+            } else if family_check && device.supports_family(MTLGPUFamily::Apple4) {
+                96
+            } else {
+                31
+            },
+            max_sampler_binding_array_elements: if family_check
+                && device.supports_family(MTLGPUFamily::Apple9)
+            {
+                500_000
+            } else if family_check
+                && (device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2))
+            {
+                1000
+            } else if family_check && device.supports_family(MTLGPUFamily::Apple6) {
+                128
+            } else {
+                16
+            },
             buffer_alignment: if os_is_mac || os_is_xr { 256 } else { 64 },
             max_buffer_size: if version.at_least((10, 14), (12, 0), os_is_mac) {
                 // maxBufferLength available on macOS 10.14+ and iOS 12.0+
@@ -925,7 +949,7 @@ impl super::PrivateCapabilities {
         features.set(
             F::TEXTURE_BINDING_ARRAY
                 | F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                | F::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                | F::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                 | F::PARTIALLY_BOUND_BINDING_ARRAY,
             self.msl_version >= MTLLanguageVersion::V3_0
                 && self.supports_arrays_of_textures
@@ -1013,6 +1037,9 @@ impl super::PrivateCapabilities {
                 max_storage_buffers_per_shader_stage: self.max_buffers_per_stage,
                 max_storage_textures_per_shader_stage: self.max_textures_per_stage,
                 max_uniform_buffers_per_shader_stage: self.max_buffers_per_stage,
+                max_binding_array_elements_per_shader_stage: self.max_binding_array_elements,
+                max_binding_array_sampler_elements_per_shader_stage: self
+                    .max_sampler_binding_array_elements,
                 max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
                 max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
                 max_vertex_buffers: self.max_vertex_buffers,

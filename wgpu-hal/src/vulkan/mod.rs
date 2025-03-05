@@ -24,20 +24,25 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 !*/
 
+#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
+
 mod adapter;
 mod command;
 mod conv;
 mod device;
+mod drm;
 mod instance;
 mod sampler;
 
 use std::{
     borrow::Borrow,
+    boxed::Box,
     ffi::{CStr, CString},
     fmt, mem,
     num::NonZeroU32,
     ops::DerefMut,
     sync::Arc,
+    vec::Vec,
 };
 
 use arrayvec::ArrayVec;
@@ -460,7 +465,7 @@ pub struct Adapter {
     //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
     phd_capabilities: adapter::PhysicalDeviceProperties,
-    //phd_features: adapter::PhysicalDeviceFeatures,
+    phd_features: adapter::PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
@@ -479,6 +484,7 @@ struct DeviceExtensionFunctions {
     draw_indirect_count: Option<khr::draw_indirect_count::Device>,
     timeline_semaphore: Option<ExtensionFn<khr::timeline_semaphore::Device>>,
     ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
+    mesh_shading: Option<ext::mesh_shader::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
@@ -765,6 +771,12 @@ pub struct Queue {
     family_index: u32,
     relay_semaphores: Mutex<RelaySemaphores>,
     signal_semaphores: Mutex<(Vec<vk::Semaphore>, Vec<u64>)>,
+}
+
+impl Queue {
+    pub fn as_raw(&self) -> vk::Queue {
+        self.raw
+    }
 }
 
 impl Drop for Queue {

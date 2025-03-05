@@ -1,11 +1,12 @@
 use std::{
     borrow::Cow,
-    ffi,
-    mem::{self, size_of, size_of_val},
+    ffi, mem,
     num::NonZeroU32,
     ptr, slice,
+    string::{String, ToString as _},
     sync::Arc,
     time::{Duration, Instant},
+    vec::Vec,
 };
 
 use parking_lot::Mutex;
@@ -29,7 +30,7 @@ use crate::{
 };
 
 // this has to match Naga's HLSL backend, and also needs to be null-terminated
-const NAGA_LOCATION_SEMANTIC: &[u8] = b"LOC\0";
+const NAGA_LOCATION_SEMANTIC: &[u8] = c"LOC".to_bytes();
 
 impl super::Device {
     pub(super) fn new(
@@ -675,10 +676,11 @@ impl crate::Device for super::Device {
             None => Direct3D12::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
         };
         let mut filter = Direct3D12::D3D12_FILTER(
-            conv::map_filter_mode(desc.min_filter).0 << Direct3D12::D3D12_MIN_FILTER_SHIFT
-                | conv::map_filter_mode(desc.mag_filter).0 << Direct3D12::D3D12_MAG_FILTER_SHIFT
-                | conv::map_filter_mode(desc.mipmap_filter).0 << Direct3D12::D3D12_MIP_FILTER_SHIFT
-                | reduction.0 << Direct3D12::D3D12_FILTER_REDUCTION_TYPE_SHIFT,
+            (conv::map_filter_mode(desc.min_filter).0 << Direct3D12::D3D12_MIN_FILTER_SHIFT)
+                | (conv::map_filter_mode(desc.mag_filter).0 << Direct3D12::D3D12_MAG_FILTER_SHIFT)
+                | (conv::map_filter_mode(desc.mipmap_filter).0
+                    << Direct3D12::D3D12_MIP_FILTER_SHIFT)
+                | (reduction.0 << Direct3D12::D3D12_FILTER_REDUCTION_TYPE_SHIFT),
         );
 
         if desc.anisotropy_clamp != 1 {
@@ -771,7 +773,7 @@ impl crate::Device for super::Device {
                 wgt::BindingType::Buffer { .. }
                 | wgt::BindingType::Texture { .. }
                 | wgt::BindingType::StorageTexture { .. }
-                | wgt::BindingType::AccelerationStructure => num_views += count,
+                | wgt::BindingType::AccelerationStructure { .. } => num_views += count,
                 wgt::BindingType::Sampler { .. } => has_sampler_in_group = true,
             }
         }
@@ -1512,7 +1514,7 @@ impl crate::Device for super::Device {
                         sampler_indexes.push(data.index);
                     }
                 }
-                wgt::BindingType::AccelerationStructure => {
+                wgt::BindingType::AccelerationStructure { .. } => {
                     let start = entry.resource_index as usize;
                     let end = start + entry.count as usize;
                     for data in &desc.acceleration_structures[start..end] {
@@ -1881,6 +1883,18 @@ impl crate::Device for super::Device {
             vertex_strides,
         })
     }
+
+    unsafe fn create_mesh_pipeline(
+        &self,
+        _desc: &crate::MeshPipelineDescriptor<
+            <Self::A as crate::Api>::PipelineLayout,
+            <Self::A as crate::Api>::ShaderModule,
+            <Self::A as crate::Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
+        unreachable!()
+    }
+
     unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {
         self.counters.render_pipelines.sub(1);
     }
@@ -2142,7 +2156,31 @@ impl crate::Device for super::Device {
                     let index_count = triangle.indices.as_ref().map_or(0, |indices| indices.count);
 
                     let triangle_desc = Direct3D12::D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC {
-                        Transform3x4: 0,
+                        // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device5-getraytracingaccelerationstructureprebuildinfo
+                        // It may not inspect/dereference any GPU virtual addresses, other than
+                        // to check to see if a pointer is NULL or not, such as the optional
+                        // transform in D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC, without
+                        // dereferencing it.
+                        //
+                        // This suggests we could pass a non-zero invalid address here if fetching the
+                        // real address has significant overhead, but we pass the real one to be on the
+                        // safe side for now.
+                        Transform3x4: if desc
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            unsafe {
+                                triangle
+                                    .transform
+                                    .as_ref()
+                                    .unwrap()
+                                    .buffer
+                                    .resource
+                                    .GetGPUVirtualAddress()
+                            }
+                        } else {
+                            0
+                        },
                         IndexFormat: index_format,
                         VertexFormat: auxil::dxgi::conv::map_vertex_format(triangle.vertex_format),
                         IndexCount: index_count,

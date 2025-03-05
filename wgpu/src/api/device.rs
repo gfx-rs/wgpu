@@ -1,4 +1,5 @@
-use std::{error, fmt, future::Future, sync::Arc};
+use alloc::{boxed::Box, string::String, sync::Arc};
+use core::{error, fmt, future::Future};
 
 use parking_lot::Mutex;
 
@@ -33,7 +34,15 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 
 impl Device {
-    /// Check for resource cleanups and mapping callbacks. Will block if [`Maintain::Wait`] is passed.
+    #[cfg(custom)]
+    /// Creates Device from custom implementation
+    pub fn from_custom<T: custom::DeviceInterface>(device: T) -> Self {
+        Self {
+            inner: dispatch::DispatchDevice::custom(device),
+        }
+    }
+
+    /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue
     /// submissions still in flight. (Note that, unless access to the [`Queue`] is
@@ -42,8 +51,8 @@ impl Device {
     /// other threads could submit new work at any time.)
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
-    pub fn poll(&self, maintain: Maintain) -> MaintainResult {
-        self.inner.poll(maintain)
+    pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
+        self.inner.poll(poll_type)
     }
 
     /// The features which can be used on this device.
@@ -162,7 +171,7 @@ impl Device {
         let encoder = self.inner.create_render_bundle_encoder(desc);
         RenderBundleEncoder {
             inner: encoder,
-            _p: std::marker::PhantomData,
+            _p: core::marker::PhantomData,
         }
     }
 
@@ -530,15 +539,9 @@ pub(crate) enum RequestDeviceErrorKind {
     ///
     /// (This is currently never used by the webgl backend, but it could be.)
     #[cfg(webgpu)]
-    WebGpu(wasm_bindgen::JsValue),
+    WebGpu(String),
 }
 
-#[cfg(send_sync)]
-unsafe impl Send for RequestDeviceErrorKind {}
-#[cfg(send_sync)]
-unsafe impl Sync for RequestDeviceErrorKind {}
-
-#[cfg(send_sync)]
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
 impl fmt::Display for RequestDeviceError {
@@ -547,9 +550,8 @@ impl fmt::Display for RequestDeviceError {
             #[cfg(wgpu_core)]
             RequestDeviceErrorKind::Core(error) => error.fmt(_f),
             #[cfg(webgpu)]
-            RequestDeviceErrorKind::WebGpu(error_js_value) => {
-                // wasm-bindgen provides a reasonable error stringification via `Debug` impl
-                write!(_f, "{error_js_value:?}")
+            RequestDeviceErrorKind::WebGpu(error) => {
+                write!(_f, "{error}")
             }
             #[cfg(not(any(webgpu, wgpu_core)))]
             _ => unimplemented!("unknown `RequestDeviceErrorKind`"),

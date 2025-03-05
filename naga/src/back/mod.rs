@@ -3,6 +3,8 @@ Backend functions that export shader [`Module`](super::Module)s into binary and 
 */
 #![allow(dead_code)] // can be dead if none of the enabled backends need it
 
+use alloc::string::String;
+
 use crate::proc::ExpressionKindTracker;
 
 #[cfg(dot_out)]
@@ -35,15 +37,15 @@ pub type NeedBakeExpressions = crate::FastHashSet<crate::Handle<crate::Expressio
 /// A type for displaying expression handles as baking identifiers.
 ///
 /// Given an [`Expression`] [`Handle`] `h`, `Baked(h)` implements
-/// [`std::fmt::Display`], showing the handle's index prefixed by
+/// [`core::fmt::Display`], showing the handle's index prefixed by
 /// `_e`.
 ///
 /// [`Expression`]: crate::Expression
 /// [`Handle`]: crate::Handle
 struct Baked(crate::Handle<crate::Expression>);
 
-impl std::fmt::Display for Baked {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Baked {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "_e")
     }
 }
@@ -67,8 +69,8 @@ impl Level {
     }
 }
 
-impl std::fmt::Display for Level {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl core::fmt::Display for Level {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         (0..self.0).try_for_each(|_| formatter.write_str(INDENT))
     }
 }

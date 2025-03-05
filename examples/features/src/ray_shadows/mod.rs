@@ -192,7 +192,9 @@ impl crate::framework::Example for Example {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::AccelerationStructure,
+                    ty: wgpu::BindingType::AccelerationStructure {
+                        vertex_return: false,
+                    },
                     count: None,
                 },
             ],
@@ -355,7 +357,7 @@ impl crate::framework::Example for Example {
             rpass.draw_indexed(0..12, 0, 0..1);
         }
         queue.submit(Some(encoder.finish()));
-        device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::PollType::Wait).unwrap();
     }
 }
 

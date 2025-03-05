@@ -1,6 +1,5 @@
 use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
-
 use crate::{
     arena::Handle,
     proc::{IndexableLengthError, ResolveError},
@@ -177,7 +176,7 @@ struct ExpressionTypeResolver<'a> {
     info: &'a FunctionInfo,
 }
 
-impl std::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'_> {
+impl core::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'_> {
     type Output = crate::TypeInner;
 
     #[allow(clippy::panic)]
@@ -280,25 +279,26 @@ impl super::Validator {
                     }
                 }
 
-                // If we know both the length and the index, we can do the
-                // bounds check now.
-                if let crate::proc::IndexableLength::Known(known_length) =
-                    base_type.indexable_length(module)?
+                // If index is const we can do check for non-negative index
+                match module
+                    .to_ctx()
+                    .eval_expr_to_u32_from(index, &function.expressions)
                 {
-                    match module
-                        .to_ctx()
-                        .eval_expr_to_u32_from(index, &function.expressions)
-                    {
-                        Ok(value) => {
+                    Ok(value) => {
+                        // If we know both the length and the index, we can do the
+                        // bounds check now.
+                        if let crate::proc::IndexableLength::Known(known_length) =
+                            base_type.indexable_length(module)?
+                        {
                             if value >= known_length {
                                 return Err(ExpressionError::IndexOutOfBounds(base, value));
                             }
                         }
-                        Err(crate::proc::U32EvalError::Negative) => {
-                            return Err(ExpressionError::NegativeIndex(base))
-                        }
-                        Err(crate::proc::U32EvalError::NonConst) => {}
                     }
+                    Err(crate::proc::U32EvalError::Negative) => {
+                        return Err(ExpressionError::NegativeIndex(base))
+                    }
+                    Err(crate::proc::U32EvalError::NonConst) => {}
                 }
 
                 ShaderStages::all()
@@ -670,11 +670,15 @@ impl super::Validator {
 
                         match (level, class.is_mipmapped()) {
                             (None, false) => {}
-                            (Some(level), true) => {
-                                if resolver[level].scalar_kind() != Some(Sk::Sint) {
-                                    return Err(ExpressionError::InvalidImageOtherIndexType(level));
+                            (Some(level), true) => match resolver[level] {
+                                Ti::Scalar(Sc {
+                                    kind: Sk::Sint | Sk::Uint,
+                                    width: _,
+                                }) => {}
+                                _ => {
+                                    return Err(ExpressionError::InvalidImageArrayIndexType(level))
                                 }
-                            }
+                            },
                             _ => {
                                 return Err(ExpressionError::InvalidImageOtherIndex);
                             }
@@ -1722,7 +1726,28 @@ impl super::Validator {
                     base,
                     space: crate::AddressSpace::Function,
                 } => match resolver.types[base].inner {
-                    Ti::RayQuery => ShaderStages::all(),
+                    Ti::RayQuery { .. } => ShaderStages::all(),
+                    ref other => {
+                        log::error!("Intersection result of a pointer to {:?}", other);
+                        return Err(ExpressionError::InvalidRayQueryType(query));
+                    }
+                },
+                ref other => {
+                    log::error!("Intersection result of {:?}", other);
+                    return Err(ExpressionError::InvalidRayQueryType(query));
+                }
+            },
+            E::RayQueryVertexPositions {
+                query,
+                committed: _,
+            } => match resolver[query] {
+                Ti::Pointer {
+                    base,
+                    space: crate::AddressSpace::Function,
+                } => match resolver.types[base].inner {
+                    Ti::RayQuery {
+                        vertex_return: true,
+                    } => ShaderStages::all(),
                     ref other => {
                         log::error!("Intersection result of a pointer to {:?}", other);
                         return Err(ExpressionError::InvalidRayQueryType(query));

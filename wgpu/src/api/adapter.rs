@@ -1,4 +1,4 @@
-use std::future::Future;
+use core::future::Future;
 
 use crate::*;
 
@@ -133,6 +133,14 @@ impl Adapter {
             }
         } else {
             hal_adapter_callback(None)
+        }
+    }
+
+    #[cfg(custom)]
+    /// Creates Adapter from custom implementation
+    pub fn from_custom<T: custom::AdapterInterface>(adapter: T) -> Self {
+        Self {
+            inner: dispatch::DispatchAdapter::custom(adapter),
         }
     }
 

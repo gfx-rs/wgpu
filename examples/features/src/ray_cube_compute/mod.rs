@@ -390,7 +390,7 @@ impl crate::framework::Example for Example {
         }
         ````
          */
-        device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::PollType::Wait).unwrap();
 
         let compacted_blas = queue.compact_blas(&blas);
 

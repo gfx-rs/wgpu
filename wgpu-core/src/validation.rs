@@ -1,9 +1,16 @@
-use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString as _},
+    vec::Vec,
+};
+use core::fmt;
+
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
-use std::fmt;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
+
+use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
 
 #[derive(Debug)]
 enum ResourceType {
@@ -18,7 +25,9 @@ enum ResourceType {
     Sampler {
         comparison: bool,
     },
-    AccelerationStructure,
+    AccelerationStructure {
+        vertex_return: bool,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -550,8 +559,10 @@ impl Resource {
                     });
                 }
             }
-            ResourceType::AccelerationStructure => match entry.ty {
-                BindingType::AccelerationStructure => (),
+            ResourceType::AccelerationStructure { vertex_return } => match entry.ty {
+                BindingType::AccelerationStructure {
+                    vertex_return: entry_vertex_return,
+                } if vertex_return == entry_vertex_return => (),
                 _ => {
                     return Err(BindingError::WrongType {
                         binding: (&entry.ty).into(),
@@ -643,7 +654,9 @@ impl Resource {
                     },
                 }
             }
-            ResourceType::AccelerationStructure => BindingType::AccelerationStructure,
+            ResourceType::AccelerationStructure { vertex_return } => {
+                BindingType::AccelerationStructure { vertex_return }
+            }
         })
     }
 }
@@ -942,7 +955,9 @@ impl Interface {
                     class,
                 },
                 naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
-                naga::TypeInner::AccelerationStructure => ResourceType::AccelerationStructure,
+                naga::TypeInner::AccelerationStructure { vertex_return } => {
+                    ResourceType::AccelerationStructure { vertex_return }
+                }
                 ref other => ResourceType::Buffer {
                     size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
                 },

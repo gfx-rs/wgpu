@@ -1,4 +1,12 @@
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{fmt, mem};
+
 use super::{
+    help,
     help::{
         WrappedArrayLength, WrappedConstructor, WrappedImageQuery, WrappedStructMatrixAccess,
         WrappedZeroValue,
@@ -11,7 +19,6 @@ use crate::{
     proc::{self, index, ExpressionKindTracker, NameKey},
     valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
-use std::{fmt, mem};
 
 const LOCATION_SEMANTIC: &str = "LOC";
 const SPECIAL_CBUF_TYPE: &str = "NagaConstants";
@@ -26,6 +33,10 @@ pub(crate) const EXTRACT_BITS_FUNCTION: &str = "naga_extractBits";
 pub(crate) const INSERT_BITS_FUNCTION: &str = "naga_insertBits";
 pub(crate) const SAMPLER_HEAP_VAR: &str = "nagaSamplerHeap";
 pub(crate) const COMPARISON_SAMPLER_HEAP_VAR: &str = "nagaComparisonSamplerHeap";
+pub(crate) const ABS_FUNCTION: &str = "naga_abs";
+pub(crate) const DIV_FUNCTION: &str = "naga_div";
+pub(crate) const MOD_FUNCTION: &str = "naga_mod";
+pub(crate) const NEG_FUNCTION: &str = "naga_neg";
 
 struct EpStructMember {
     name: String,
@@ -341,7 +352,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.write_special_functions(module)?;
 
-        self.write_wrapped_compose_functions(module, &module.global_expressions)?;
+        self.write_wrapped_expression_functions(module, &module.global_expressions, None)?;
         self.write_wrapped_zero_value_functions(module, &module.global_expressions)?;
 
         // Write all named constants
@@ -1351,10 +1362,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             TypeInner::Array { base, size, .. } | TypeInner::BindingArray { base, size } => {
                 self.write_array_size(module, base, size)?;
             }
-            TypeInner::AccelerationStructure => {
+            TypeInner::AccelerationStructure { .. } => {
                 write!(self.out, "RaytracingAccelerationStructure")?;
             }
-            TypeInner::RayQuery => {
+            TypeInner::RayQuery { .. } => {
                 // these are constant flags, there are dynamic flags also but constant flags are not supported by naga
                 write!(self.out, "RayQuery<RAY_FLAG_NONE>")?;
             }
@@ -1529,7 +1540,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             match module.types[local.ty].inner {
                 // from https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#tracerayinline-example-1 it seems that ray queries shouldn't be zeroed
-                TypeInner::RayQuery => {}
+                TypeInner::RayQuery { .. } => {}
                 _ => {
                     write!(self.out, " = ")?;
                     // Write the local initializer if needed
@@ -1710,14 +1721,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
 
                     let last_case = &cases[end_case_idx];
-                    if last_case.body.last().map_or(true, |s| !s.is_terminator()) {
+                    if last_case.body.last().is_none_or(|s| !s.is_terminator()) {
                         writeln!(self.out, "{indent_level_2}break;")?;
                     }
                 } else {
                     for sta in case.body.iter() {
                         self.write_stmt(module, sta, func_ctx, indent_level_2)?;
                     }
-                    if !case.fall_through && case.body.last().map_or(true, |s| !s.is_terminator()) {
+                    if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator()) {
                         writeln!(self.out, "{indent_level_2}break;")?;
                     }
                 }
@@ -2452,7 +2463,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.write_expr(module, query, func_ctx)?;
                     writeln!(self.out, ".Proceed();")?;
                 }
+                RayQueryFunction::GenerateIntersection { hit_t } => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    write!(self.out, ".CommitProceduralPrimitiveHit(")?;
+                    self.write_expr(module, hit_t, func_ctx)?;
+                    writeln!(self.out, ");")?;
+                }
+                RayQueryFunction::ConfirmIntersection => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    writeln!(self.out, ".CommitNonOpaqueTriangleHit();")?;
+                }
                 RayQueryFunction::Terminate => {
+                    write!(self.out, "{level}")?;
                     self.write_expr(module, query, func_ctx)?;
                     writeln!(self.out, ".Abort();")?;
                 }
@@ -2617,7 +2641,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
                 crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
-                crate::Literal::I32(value) => write!(self.out, "{value}")?,
+                // HLSL has no suffix for explicit i32 literals, but not using any suffix
+                // makes the type ambiguous which prevents overload resolution from
+                // working. So we explicitly use the int() constructor syntax.
+                crate::Literal::I32(value) => write!(self.out, "int({value})")?,
                 crate::Literal::U64(value) => write!(self.out, "{value}uL")?,
                 crate::Literal::I64(value) => write!(self.out, "{value}L")?,
                 crate::Literal::Bool(value) => write!(self.out, "{value}")?,
@@ -2740,6 +2767,30 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 )?;
             }
             Expression::Override(_) => return Err(Error::Override),
+            // Avoid undefined behaviour for addition, subtraction, and
+            // multiplication of signed integers by casting operands to
+            // unsigned, performing the operation, then casting the result back
+            // to signed.
+            // TODO(#7109): This relies on the asint()/asuint() functions which only work
+            // for 32-bit types, so we must find another solution for different bit widths.
+            Expression::Binary {
+                op:
+                    op @ crate::BinaryOperator::Add
+                    | op @ crate::BinaryOperator::Subtract
+                    | op @ crate::BinaryOperator::Multiply,
+                left,
+                right,
+            } if matches!(
+                func_ctx.resolve_type(expr, &module.types).scalar(),
+                Some(Scalar::I32)
+            ) =>
+            {
+                write!(self.out, "asint(asuint(",)?;
+                self.write_expr(module, left, func_ctx)?;
+                write!(self.out, ") {} asuint(", back::binary_operation_str(op))?;
+                self.write_expr(module, right, func_ctx)?;
+                write!(self.out, "))")?;
+            }
             // All of the multiplication can be expressed as `mul`,
             // except vector * vector, which needs to use the "*" operator.
             Expression::Binary {
@@ -2757,18 +2808,48 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?;
             }
 
-            // TODO: handle undefined behavior of BinaryOperator::Modulo
+            // WGSL says that floating-point division by zero should return
+            // infinity. Microsoft's Direct3D 11 functional specification
+            // (https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm)
+            // says:
             //
-            // sint:
-            // if right == 0 return 0
-            // if left == min(type_of(left)) && right == -1 return 0
-            // if sign(left) != sign(right) return result as defined by WGSL
+            //     Divide by 0 produces +/- INF, except 0/0 which results in NaN.
             //
-            // uint:
-            // if right == 0 return 0
+            // which is what we want. The DXIL specification for the FDiv
+            // instruction corroborates this:
             //
-            // float:
-            // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
+            // https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/DXIL.rst#fdiv
+            Expression::Binary {
+                op: crate::BinaryOperator::Divide,
+                left,
+                right,
+            } if matches!(
+                func_ctx.resolve_type(expr, &module.types).scalar_kind(),
+                Some(ScalarKind::Sint | ScalarKind::Uint)
+            ) =>
+            {
+                write!(self.out, "{DIV_FUNCTION}(")?;
+                self.write_expr(module, left, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, right, func_ctx)?;
+                write!(self.out, ")")?;
+            }
+
+            Expression::Binary {
+                op: crate::BinaryOperator::Modulo,
+                left,
+                right,
+            } if matches!(
+                func_ctx.resolve_type(expr, &module.types).scalar_kind(),
+                Some(ScalarKind::Sint | ScalarKind::Uint)
+            ) =>
+            {
+                write!(self.out, "{MOD_FUNCTION}(")?;
+                self.write_expr(module, left, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, right, func_ctx)?;
+                write!(self.out, ")")?;
+            }
 
             // While HLSL supports float operands with the % operator it is only
             // defined in cases where both sides are either positive or negative.
@@ -3138,33 +3219,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 array_index,
                 sample,
                 level,
-            } => {
-                // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
-                self.write_expr(module, image, func_ctx)?;
-                write!(self.out, ".Load(")?;
-
-                self.write_texture_coordinates(
-                    "int",
-                    coordinate,
-                    array_index,
-                    level,
-                    module,
-                    func_ctx,
-                )?;
-
-                if let Some(sample) = sample {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, sample, func_ctx)?;
-                }
-
-                // close bracket for Load function
-                write!(self.out, ")")?;
-
-                // return x component if return type is scalar
-                if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
-                    write!(self.out, ".x")?;
-                }
-            }
+            } => self.write_image_load(
+                &module,
+                expr,
+                func_ctx,
+                image,
+                coordinate,
+                array_index,
+                sample,
+                level,
+            )?,
             Expression::GlobalVariable(handle) => {
                 let global_variable = &module.global_variables[handle];
                 let ty = &module.types[global_variable.ty].inner;
@@ -3245,7 +3309,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Expression::Unary { op, expr } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-operators#unary-operators
                 let op_str = match op {
-                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::Negate => {
+                        match func_ctx.resolve_type(expr, &module.types).scalar() {
+                            Some(Scalar::I32) => NEG_FUNCTION,
+                            _ => "-",
+                        }
+                    }
                     crate::UnaryOperator::LogicalNot => "!",
                     crate::UnaryOperator::BitwiseNot => "~",
                 };
@@ -3344,7 +3413,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 let fun = match fun {
                     // comparison
-                    Mf::Abs => Function::Regular("abs"),
+                    Mf::Abs => match func_ctx.resolve_type(arg, &module.types).scalar() {
+                        Some(Scalar::I32) => Function::Regular(ABS_FUNCTION),
+                        _ => Function::Regular("abs"),
+                    },
                     Mf::Min => Function::Regular("min"),
                     Mf::Max => Function::Regular("max"),
                     Mf::Clamp => Function::Regular("clamp"),
@@ -3630,11 +3702,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // as non-32bit types are DXC only.
                     Function::MissingIntOverload(fun_name) => {
                         let scalar_kind = func_ctx.resolve_type(arg, &module.types).scalar();
-                        if let Some(Scalar {
-                            kind: ScalarKind::Sint,
-                            width: 4,
-                        }) = scalar_kind
-                        {
+                        if let Some(Scalar::I32) = scalar_kind {
                             write!(self.out, "asint({fun_name}(asuint(")?;
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, ")))")?;
@@ -3648,11 +3716,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // as non-32bit types are DXC only.
                     Function::MissingIntReturnType(fun_name) => {
                         let scalar_kind = func_ctx.resolve_type(arg, &module.types).scalar();
-                        if let Some(Scalar {
-                            kind: ScalarKind::Sint,
-                            width: 4,
-                        }) = scalar_kind
-                        {
+                        if let Some(Scalar::I32) = scalar_kind {
                             write!(self.out, "asint({fun_name}(")?;
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, "))")?;
@@ -3889,6 +3953,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, ")")?;
                 }
             }
+            // Not supported yet
+            Expression::RayQueryVertexPositions { .. } => unreachable!(),
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
@@ -3900,6 +3966,63 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         if !closing_bracket.is_empty() {
             write!(self.out, "{closing_bracket}")?;
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn write_image_load(
+        &mut self,
+        module: &&Module,
+        expr: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
+        coordinate: Handle<crate::Expression>,
+        array_index: Option<Handle<crate::Expression>>,
+        sample: Option<Handle<crate::Expression>>,
+        level: Option<Handle<crate::Expression>>,
+    ) -> Result<(), Error> {
+        let mut wrapping_type = None;
+        match *func_ctx.resolve_type(image, &module.types) {
+            TypeInner::Image {
+                class: crate::ImageClass::Storage { format, .. },
+                ..
+            } => {
+                if format.single_component() {
+                    wrapping_type = Some(Scalar::from(format));
+                }
+            }
+            _ => {}
+        }
+        if let Some(scalar) = wrapping_type {
+            write!(
+                self.out,
+                "{}{}(",
+                help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
+                scalar.to_hlsl_str()?
+            )?;
+        }
+        // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
+        self.write_expr(module, image, func_ctx)?;
+        write!(self.out, ".Load(")?;
+
+        self.write_texture_coordinates("int", coordinate, array_index, level, module, func_ctx)?;
+
+        if let Some(sample) = sample {
+            write!(self.out, ", ")?;
+            self.write_expr(module, sample, func_ctx)?;
+        }
+
+        // close bracket for Load function
+        write!(self.out, ")")?;
+
+        if wrapping_type.is_some() {
+            write!(self.out, ")")?;
+        }
+
+        // return x component if return type is scalar
+        if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
+            write!(self.out, ".x")?;
         }
         Ok(())
     }
@@ -4014,6 +4137,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
         if barrier.contains(crate::Barrier::SUB_GROUP) {
             // Does not exist in DirectX
+        }
+        if barrier.contains(crate::Barrier::TEXTURE) {
+            writeln!(self.out, "{level}DeviceMemoryBarrierWithGroupSync();")?;
         }
         Ok(())
     }

@@ -2,7 +2,7 @@
 //TODO: consider getting rid of it.
 use smallvec::SmallVec;
 
-use std::{fmt::Debug, iter, ops::Range};
+use core::{fmt::Debug, iter, ops::Range};
 
 /// Structure that keeps track of a I -> T mapping,
 /// optimized for a case where keys of the same values
@@ -148,7 +148,7 @@ impl<I: Copy + Ord, T: Copy + PartialEq> RangedStates<I, T> {
 
     /// Helper method for isolation that checks the sanity of the results.
     #[cfg(test)]
-    pub fn sanely_isolated(&self, index: Range<I>, default: T) -> Vec<(Range<I>, T)> {
+    pub fn sanely_isolated(&self, index: Range<I>, default: T) -> alloc::vec::Vec<(Range<I>, T)> {
         let mut clone = self.clone();
         let result = clone.isolate(&index, default).to_vec();
         clone.check_sanity();

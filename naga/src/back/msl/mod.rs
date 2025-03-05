@@ -31,8 +31,14 @@ holding the result.
 
 */
 
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::fmt::{Error as FmtError, Write};
+
 use crate::{arena::Handle, proc::index, valid::ModuleInfo};
-use std::fmt::{Error as FmtError, Write};
 
 mod keywords;
 pub mod sampler;
@@ -62,14 +68,40 @@ pub struct BindTarget {
     pub mutable: bool,
 }
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct BindingMapSerialization {
+    resource_binding: crate::ResourceBinding,
+    bind_target: BindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_binding_map<'de, D>(deserializer: D) -> Result<BindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<BindingMapSerialization>::deserialize(deserializer)?;
+    let mut map = BindingMap::default();
+    for item in vec {
+        map.insert(item.resource_binding, item.bind_target);
+    }
+    Ok(map)
+}
+
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(any(feature = "serialize", feature = "deserialize"), serde(default))]
 pub struct EntryPointResources {
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_binding_map")
+    )]
     pub resources: BindingMap,
 
     pub push_constant_buffer: Option<Slot>,
@@ -80,7 +112,7 @@ pub struct EntryPointResources {
     pub sizes_buffer: Option<Slot>,
 }
 
-pub type EntryPointResourceMap = std::collections::BTreeMap<String, EntryPointResources>;
+pub type EntryPointResourceMap = alloc::collections::BTreeMap<String, EntryPointResources>;
 
 enum ResolvedBinding {
     BuiltIn(crate::BuiltIn),
@@ -697,6 +729,5 @@ pub fn write_string(
 
 #[test]
 fn test_error_size() {
-    use std::mem::size_of;
     assert_eq!(size_of::<Error>(), 32);
 }

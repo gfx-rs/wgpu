@@ -1,3 +1,11 @@
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::fmt::Write;
+
 use super::Error;
 use crate::back::wgsl::polyfill::InversePolyfill;
 use crate::{
@@ -5,7 +13,6 @@ use crate::{
     proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, Module, ShaderStage, TypeInner,
 };
-use std::fmt::Write;
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
@@ -68,7 +75,6 @@ pub struct Writer<W> {
     names: crate::FastHashMap<NameKey, String>,
     namer: proc::Namer,
     named_expressions: crate::NamedExpressions,
-    ep_results: Vec<(ShaderStage, Handle<crate::Type>)>,
     required_polyfills: crate::FastIndexSet<InversePolyfill>,
 }
 
@@ -80,7 +86,6 @@ impl<W: Write> Writer<W> {
             names: crate::FastHashMap::default(),
             namer: proc::Namer::default(),
             named_expressions: crate::NamedExpressions::default(),
-            ep_results: vec![],
             required_polyfills: crate::FastIndexSet::default(),
         }
     }
@@ -97,7 +102,6 @@ impl<W: Write> Writer<W> {
             &mut self.names,
         );
         self.named_expressions.clear();
-        self.ep_results.clear();
         self.required_polyfills.clear();
     }
 
@@ -117,13 +121,6 @@ impl<W: Write> Writer<W> {
         }
 
         self.reset(module);
-
-        // Save all ep result types
-        for ep in &module.entry_points {
-            if let Some(ref result) = ep.function.result {
-                self.ep_results.push((ep.stage, result.ty));
-            }
-        }
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
@@ -213,29 +210,6 @@ impl<W: Write> Writer<W> {
             write!(self.out, "{}", polyfill.source)?;
             writeln!(self.out)?;
         }
-
-        Ok(())
-    }
-
-    /// Helper method used to write struct name
-    ///
-    /// # Notes
-    /// Adds no trailing or leading whitespace
-    fn write_struct_name(&mut self, module: &Module, handle: Handle<crate::Type>) -> BackendResult {
-        if module.types[handle].name.is_none() {
-            if let Some(&(stage, _)) = self.ep_results.iter().find(|&&(_, ty)| ty == handle) {
-                let name = match stage {
-                    ShaderStage::Compute => "ComputeOutput",
-                    ShaderStage::Fragment => "FragmentOutput",
-                    ShaderStage::Vertex => "VertexOutput",
-                };
-
-                write!(self.out, "{name}")?;
-                return Ok(());
-            }
-        }
-
-        write!(self.out, "{}", self.names[&NameKey::Type(handle)])?;
 
         Ok(())
     }
@@ -400,8 +374,7 @@ impl<W: Write> Writer<W> {
         handle: Handle<crate::Type>,
         members: &[crate::StructMember],
     ) -> BackendResult {
-        write!(self.out, "struct ")?;
-        self.write_struct_name(module, handle)?;
+        write!(self.out, "struct {}", self.names[&NameKey::Type(handle)])?;
         write!(self.out, " {{")?;
         writeln!(self.out)?;
         for (index, member) in members.iter().enumerate() {
@@ -432,7 +405,9 @@ impl<W: Write> Writer<W> {
     fn write_type(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
         let inner = &module.types[ty].inner;
         match *inner {
-            TypeInner::Struct { .. } => self.write_struct_name(module, ty)?,
+            TypeInner::Struct { .. } => {
+                write!(self.out, "{}", self.names[&NameKey::Type(ty)])?;
+            }
             ref other => self.write_value_type(module, other)?,
         }
 
@@ -621,7 +596,10 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, ">")?;
             }
-            TypeInner::AccelerationStructure => write!(self.out, "acceleration_structure")?,
+            TypeInner::AccelerationStructure { vertex_return } => {
+                let caps = if vertex_return { "<vertex_return>" } else { "" };
+                write!(self.out, "acceleration_structure{}", caps)?
+            }
             _ => {
                 return Err(Error::Unimplemented(format!("write_value_type {inner:?}")));
             }
@@ -972,6 +950,10 @@ impl<W: Write> Writer<W> {
 
                 if barrier.contains(crate::Barrier::SUB_GROUP) {
                     writeln!(self.out, "{level}subgroupBarrier();")?;
+                }
+
+                if barrier.contains(crate::Barrier::TEXTURE) {
+                    writeln!(self.out, "{level}textureBarrier();")?;
                 }
             }
             Statement::RayQuery { .. } => unreachable!(),
@@ -1780,9 +1762,9 @@ impl<W: Write> Writer<W> {
                     Mf::Unpack4xI8 => Function::Regular("unpack4xI8"),
                     Mf::Unpack4xU8 => Function::Regular("unpack4xU8"),
                     Mf::Inverse => {
-                        let typ = func_ctx.resolve_type(arg, &module.types);
+                        let ty = func_ctx.resolve_type(arg, &module.types);
 
-                        let Some(overload) = InversePolyfill::find_overload(typ) else {
+                        let Some(overload) = InversePolyfill::find_overload(ty) else {
                             return Err(Error::UnsupportedMathFunction(fun));
                         };
 
@@ -1879,7 +1861,8 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?
             }
             // Not supported yet
-            Expression::RayQueryGetIntersection { .. } => unreachable!(),
+            Expression::RayQueryGetIntersection { .. }
+            | Expression::RayQueryVertexPositions { .. } => unreachable!(),
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }

@@ -1,5 +1,12 @@
+use super::{life::LifetimeTracker, Device};
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
+use crate::id::BlasId;
+use crate::lock::RwLock;
+use crate::ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError};
+use crate::resource::{AccelerationStructure, Blas, BlasCompactState, TrackingData};
+use crate::scratch::ScratchBuffer;
+use crate::snatch::Snatchable;
 use crate::{
     api_log,
     command::{
@@ -24,25 +31,17 @@ use crate::{
     track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };
-
-use smallvec::SmallVec;
-
-use super::{life::LifetimeTracker, Device};
-use crate::id::BlasId;
-use crate::lock::RwLock;
-use crate::ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError};
-use crate::resource::{AccelerationStructure, Blas, BlasCompactState, TrackingData};
-use crate::scratch::ScratchBuffer;
-use crate::snatch::Snatchable;
-use std::num::NonZeroU64;
-use std::{
+use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
+use core::num::NonZeroU64;
+use core::{
     iter,
     mem::{self, ManuallyDrop},
     ptr::NonNull,
-    sync::{atomic::Ordering, Arc},
+    sync::atomic::Ordering,
 };
+use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{AccelerationStructureFlags, Features};
+use wgt::AccelerationStructureFlags;
 
 pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
@@ -747,7 +746,7 @@ impl Queue {
             if has_copy_partial_init_tracker_coverage(size, destination.mip_level, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
-                    .collect::<Vec<std::ops::Range<u32>>>()
+                    .collect::<Vec<core::ops::Range<u32>>>()
                 {
                     let mut trackers = self.device.trackers.lock();
                     crate::command::clear_texture(
@@ -1000,7 +999,7 @@ impl Queue {
             if has_copy_partial_init_tracker_coverage(&size, destination.mip_level, &dst.desc) {
                 for layer_range in dst_initialization_status.mips[destination.mip_level as usize]
                     .drain(init_layer_range)
-                    .collect::<Vec<std::ops::Range<u32>>>()
+                    .collect::<Vec<core::ops::Range<u32>>>()
                 {
                     let mut trackers = self.device.trackers.lock();
                     crate::command::clear_texture(
@@ -1328,17 +1327,22 @@ impl Queue {
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
             let fence_guard = RwLockWriteGuard::downgrade(fence);
-            let (closures, _) =
-                match self
-                    .device
-                    .maintain(fence_guard, wgt::Maintain::Poll, snatch_guard)
-                {
-                    Ok(closures) => closures,
-                    Err(WaitIdleError::Device(err)) => {
-                        break 'error Err(QueueSubmitError::Queue(err))
-                    }
-                    Err(WaitIdleError::WrongSubmissionIndex(..)) => unreachable!(),
-                };
+            let (closures, result) =
+                self.device
+                    .maintain(fence_guard, wgt::PollType::Poll, snatch_guard);
+            match result {
+                Ok(status) => {
+                    debug_assert!(matches!(
+                        status,
+                        wgt::PollStatus::QueueEmpty | wgt::PollStatus::Poll
+                    ));
+                }
+                Err(WaitIdleError::Device(err)) => break 'error Err(QueueSubmitError::Queue(err)),
+                Err(WaitIdleError::WrongSubmissionIndex(..)) => {
+                    unreachable!("Cannot get WrongSubmissionIndex from Poll")
+                }
+                Err(WaitIdleError::Timeout) => unreachable!("Cannot get Timeout from Poll"),
+            };
 
             Ok(closures)
         };
@@ -1615,8 +1619,9 @@ impl Global {
         // TODO: Tracing
 
         let error = 'error: {
-            match device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-            {
+            match device.require_features(
+                wgpu_types::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+            ) {
                 Ok(_) => {}
                 Err(err) => break 'error err.into(),
             }

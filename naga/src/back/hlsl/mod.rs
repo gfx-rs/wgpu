@@ -114,7 +114,9 @@ mod ray;
 mod storage;
 mod writer;
 
-use std::fmt::Error as FmtError;
+use alloc::{string::String, vec::Vec};
+use core::fmt::Error as FmtError;
+
 use thiserror::Error;
 
 use crate::{back, proc};
@@ -149,8 +151,30 @@ pub struct OffsetsBindTarget {
     pub size: u32,
 }
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct BindingMapSerialization {
+    resource_binding: crate::ResourceBinding,
+    bind_target: BindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_binding_map<'de, D>(deserializer: D) -> Result<BindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<BindingMapSerialization>::deserialize(deserializer)?;
+    let mut map = BindingMap::default();
+    for item in vec {
+        map.insert(item.resource_binding, item.bind_target);
+    }
+    Ok(map)
+}
+
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
 /// A HLSL shader model version.
 #[allow(non_snake_case, non_camel_case_types)]
@@ -245,9 +269,62 @@ impl Default for SamplerHeapBindTargets {
     }
 }
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct SamplerIndexBufferBindingSerialization {
+    group: u32,
+    bind_target: BindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_sampler_index_buffer_bindings<'de, D>(
+    deserializer: D,
+) -> Result<SamplerIndexBufferBindingMap, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<SamplerIndexBufferBindingSerialization>::deserialize(deserializer)?;
+    let mut map = SamplerIndexBufferBindingMap::default();
+    for item in vec {
+        map.insert(
+            SamplerIndexBufferKey { group: item.group },
+            item.bind_target,
+        );
+    }
+    Ok(map)
+}
+
 // We use a BTreeMap here so that we can hash it.
 pub type SamplerIndexBufferBindingMap =
-    std::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
+    alloc::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
+
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+struct DynamicStorageBufferOffsetTargetSerialization {
+    index: u32,
+    bind_target: OffsetsBindTarget,
+}
+
+#[cfg(feature = "deserialize")]
+fn deserialize_storage_buffer_offsets<'de, D>(
+    deserializer: D,
+) -> Result<DynamicStorageBufferOffsetsTargets, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let vec = Vec::<DynamicStorageBufferOffsetTargetSerialization>::deserialize(deserializer)?;
+    let mut map = DynamicStorageBufferOffsetsTargets::default();
+    for item in vec {
+        map.insert(item.index, item.bind_target);
+    }
+    Ok(map)
+}
+
+pub type DynamicStorageBufferOffsetsTargets = alloc::collections::BTreeMap<u32, OffsetsBindTarget>;
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
@@ -269,6 +346,10 @@ pub struct Options {
     /// The hlsl shader model to be used
     pub shader_model: ShaderModel,
     /// Map of resources association to binding locations.
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_binding_map")
+    )]
     pub binding_map: BindingMap,
     /// Don't panic on missing bindings, instead generate any HLSL.
     pub fake_missing_bindings: bool,
@@ -280,9 +361,17 @@ pub struct Options {
     /// Bind target of the sampler heap and comparison sampler heap.
     pub sampler_heap_target: SamplerHeapBindTargets,
     /// Mapping of each bind group's sampler index buffer to a bind target.
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_sampler_index_buffer_bindings")
+    )]
     pub sampler_buffer_binding_map: SamplerIndexBufferBindingMap,
     /// Bind target for dynamic storage buffer offsets
-    pub dynamic_storage_buffer_offsets_targets: std::collections::BTreeMap<u32, OffsetsBindTarget>,
+    #[cfg_attr(
+        feature = "deserialize",
+        serde(deserialize_with = "deserialize_storage_buffer_offsets")
+    )]
+    pub dynamic_storage_buffer_offsets_targets: DynamicStorageBufferOffsetsTargets,
     /// Should workgroup variables be zero initialized (by polyfilling)?
     pub zero_initialize_workgroup_memory: bool,
     /// Should we restrict indexing of vectors, matrices and arrays?
@@ -300,9 +389,9 @@ impl Default for Options {
             fake_missing_bindings: true,
             special_constants_binding: None,
             sampler_heap_target: SamplerHeapBindTargets::default(),
-            sampler_buffer_binding_map: std::collections::BTreeMap::default(),
+            sampler_buffer_binding_map: alloc::collections::BTreeMap::default(),
             push_constants_target: None,
-            dynamic_storage_buffer_offsets_targets: std::collections::BTreeMap::new(),
+            dynamic_storage_buffer_offsets_targets: alloc::collections::BTreeMap::new(),
             zero_initialize_workgroup_memory: true,
             restrict_indexing: true,
             force_loop_bounding: true,
@@ -355,15 +444,23 @@ pub enum Error {
     Override,
 }
 
+#[derive(PartialEq, Eq, Hash)]
+enum WrappedType {
+    ZeroValue(help::WrappedZeroValue),
+    ArrayLength(help::WrappedArrayLength),
+    ImageQuery(help::WrappedImageQuery),
+    ImageLoadScalar(crate::Scalar),
+    Constructor(help::WrappedConstructor),
+    StructMatrixAccess(help::WrappedStructMatrixAccess),
+    MatCx2(help::WrappedMatCx2),
+    Math(help::WrappedMath),
+    UnaryOp(help::WrappedUnaryOp),
+    BinaryOp(help::WrappedBinaryOp),
+}
+
 #[derive(Default)]
 struct Wrapped {
-    zero_values: crate::FastHashSet<help::WrappedZeroValue>,
-    array_lengths: crate::FastHashSet<help::WrappedArrayLength>,
-    image_queries: crate::FastHashSet<help::WrappedImageQuery>,
-    constructors: crate::FastHashSet<help::WrappedConstructor>,
-    struct_matrix_access: crate::FastHashSet<help::WrappedStructMatrixAccess>,
-    mat_cx2s: crate::FastHashSet<help::WrappedMatCx2>,
-    math: crate::FastHashSet<help::WrappedMath>,
+    types: crate::FastHashSet<WrappedType>,
     /// If true, the sampler heaps have been written out.
     sampler_heaps: bool,
     // Mapping from SamplerIndexBufferKey to the name the namer returned.
@@ -371,13 +468,12 @@ struct Wrapped {
 }
 
 impl Wrapped {
+    fn insert(&mut self, r#type: WrappedType) -> bool {
+        self.types.insert(r#type)
+    }
+
     fn clear(&mut self) {
-        self.array_lengths.clear();
-        self.image_queries.clear();
-        self.constructors.clear();
-        self.struct_matrix_access.clear();
-        self.mat_cx2s.clear();
-        self.math.clear();
+        self.types.clear();
     }
 }
 

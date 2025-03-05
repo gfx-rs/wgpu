@@ -1,5 +1,8 @@
-use super::{block::DebugInfoInner, helpers};
+use alloc::{vec, vec::Vec};
+
 use spirv::{Op, Word};
+
+use super::{block::DebugInfoInner, helpers};
 
 pub(super) enum Signedness {
     Unsigned = 0,
@@ -776,6 +779,33 @@ impl super::Instruction {
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(query);
+        instruction
+    }
+
+    pub(super) fn ray_query_generate_intersection(query: Word, hit: Word) -> Self {
+        let mut instruction = Self::new(Op::RayQueryGenerateIntersectionKHR);
+        instruction.add_operand(query);
+        instruction.add_operand(hit);
+        instruction
+    }
+
+    pub(super) fn ray_query_confirm_intersection(query: Word) -> Self {
+        let mut instruction = Self::new(Op::RayQueryConfirmIntersectionKHR);
+        instruction.add_operand(query);
+        instruction
+    }
+
+    pub(super) fn ray_query_return_vertex_position(
+        result_type_id: Word,
+        id: Word,
+        query: Word,
+        intersection: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::RayQueryGetIntersectionTriangleVertexPositionsKHR);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(query);
+        instruction.add_operand(intersection);
         instruction
     }
 

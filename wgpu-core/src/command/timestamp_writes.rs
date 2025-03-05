@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 use crate::id;
 
@@ -14,4 +14,5 @@ pub struct PassTimestampWrites<QS = id::QuerySetId> {
     pub end_of_pass_write_index: Option<u32>,
 }
 
+/// cbindgen:ignore
 pub type ArcPassTimestampWrites = PassTimestampWrites<Arc<crate::resource::QuerySet>>;

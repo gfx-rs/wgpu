@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, num::NonZeroU32, ops::Range};
+use core::{marker::PhantomData, num::NonZeroU32, ops::Range};
 
 use crate::dispatch::RenderBundleEncoderInterface;
 use crate::*;
@@ -57,6 +57,8 @@ impl<'a> RenderBundleEncoder<'a> {
             dispatch::DispatchRenderBundleEncoder::Core(b) => b.finish(desc),
             #[cfg(webgpu)]
             dispatch::DispatchRenderBundleEncoder::WebGPU(b) => b.finish(desc),
+            #[cfg(custom)]
+            dispatch::DispatchRenderBundleEncoder::Custom(_) => unimplemented!(),
         };
 
         RenderBundle { inner: bundle }

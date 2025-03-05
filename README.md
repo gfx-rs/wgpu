@@ -1,6 +1,5 @@
-<img align="right" width="25%" src="logo.png">
-
 # wgpu
+<img align="right" width="20%" src="logo.png">
 
 [![Matrix Space](https://img.shields.io/static/v1?label=Space&message=%23Wgpu&color=blue&logo=matrix)](https://matrix.to/#/#Wgpu:matrix.org)
 [![Dev Matrix  ](https://img.shields.io/static/v1?label=devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org)
@@ -10,14 +9,26 @@
 
 `wgpu` is a cross-platform, safe, pure-rust graphics API. It runs natively on Vulkan, Metal, D3D12, and OpenGL; and on top of WebGL2 and WebGPU on wasm.
 
-The API is based on the [WebGPU standard](https://gpuweb.github.io/gpuweb/). It serves as the core of the WebGPU integration in Firefox, Servo, and Deno.
+The API is based on the [WebGPU standard][webgpu]. It serves as the core of the WebGPU integration in Firefox, Servo, and Deno.
+
+[webgpu]: https://gpuweb.github.io/gpuweb/
 
 ## Quick Links
 
-| Docs                                 | Examples                                                             | Changelog                                                                    |
-|:------------------------------------:|:--------------------------------------------------------------------:|:----------------------------------------------------------------------------:|
-| [v24](https://docs.rs/wgpu/)         | [v24](https://github.com/gfx-rs/wgpu/tree/v24/examples#readme)       | [v24](https://github.com/gfx-rs/wgpu/releases)                               |
-| [`trunk`](https://wgpu.rs/doc/wgpu/) | [`trunk`](https://github.com/gfx-rs/wgpu/tree/trunk/examples#readme) | [`trunk`](https://github.com/gfx-rs/wgpu/blob/trunk/CHANGELOG.md#unreleased) |
+| Docs                  | Examples                  | Changelog               |
+|:---------------------:|:-------------------------:|:-----------------------:|
+| [v24][rel-docs]       | [v24][rel-examples]       | [v24][rel-change]       |
+| [`trunk`][trunk-docs] | [`trunk`][trunk-examples] | [`trunk`][trunk-change] |
+
+Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
+
+[rel-docs]: https://docs.rs/wgpu/
+[rel-examples]: https://github.com/gfx-rs/wgpu/tree/v24/examples#readme
+[rel-change]: https://github.com/gfx-rs/wgpu/releases
+[trunk-docs]: https://wgpu.rs/doc/wgpu/
+[trunk-examples]: https://github.com/gfx-rs/wgpu/tree/trunk/examples#readme
+[trunk-change]: https://github.com/gfx-rs/wgpu/blob/trunk/CHANGELOG.md#unreleased
+[contrib]: CONTRIBUTING.md
 
 ## Repo Overview
 
@@ -37,17 +48,17 @@ The following binaries:
 - `cts_runner` - WebGPU Conformance Test Suite runner using `deno_webgpu`.
 - `player` - standalone application for replaying the API traces.
 
-For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./etc/big-picture.png).
+For an overview of all the components in the gfx-rs ecosystem, see [the big picture](./docs/big-picture.png).
 
 ## Getting Started
 
 ### Play with our Examples
 
-Go to [https://wgpu.rs/examples/] to play with our examples in your browser. Requires a browser supporting WebGPU for the WebGPU examples.
+Go to <https://wgpu.rs/examples/> to play with our examples in your browser. Requires a browser supporting WebGPU for the WebGPU examples.
 
 ### Rust
 
-Rust examples can be found at [wgpu/examples](examples). You can run the examples on native with `cargo run --bin wgpu-examples <example>`. See the [list of examples](examples).
+Rust examples can be found at [examples](examples). You can run the examples natively with `cargo run --bin wgpu-examples <example>`.
 
 If you are new to wgpu and graphics programming, we recommend starting with https://sotrh.github.io/learn-wgpu/.
 
@@ -87,7 +98,7 @@ For high-level documentation on how to use these extensions, see the individual 
 
 🧪EXPERIMENTAL🧪 APIs are subject to change and may allow undefined behavior if used incorrectly.
 
-- 🧪EXPERIMENTAL🧪 [Ray Tracing](./etc/specs/ray_tracing.md).
+- 🧪EXPERIMENTAL🧪 [Ray Tracing](./docs/api-specs/ray_tracing.md).
 
 ## Supported Platforms
 
@@ -137,8 +148,8 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
 Due to complex dependants, we have two MSRV policies:
 
-- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**, but may be lower than the rest of the workspace in the future.
-- The rest of the workspace has an MSRV of **1.83** as well right now, but may be higher than above listed crates.
+- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**.
+- The rest of the workspace has an MSRV of **1.85**.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.
@@ -264,4 +275,4 @@ wgpu uses the coordinate systems of D3D and Metal:
 
 | Render                                              | Texture                                               |
 | --------------------------------------------------- | ----------------------------------------------------- |
-| ![render_coordinates](./etc/render_coordinates.png) | ![texture_coordinates](./etc/texture_coordinates.png) |
+| ![render_coordinates](./docs/render_coordinates.png) | ![texture_coordinates](./docs/texture_coordinates.png) |

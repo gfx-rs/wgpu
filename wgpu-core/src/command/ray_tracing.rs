@@ -1,4 +1,15 @@
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::{
+    cmp::max,
+    num::NonZeroU64,
+    ops::{Deref, Range},
+    sync::atomic::Ordering,
+};
+
+use wgt::{math::align_to, BufferUsages, BufferUses, Features};
+
 use crate::{
+    command::CommandBufferMutable,
     device::queue::TempResource,
     global::Global,
     hub::Hub,
@@ -18,16 +29,6 @@ use crate::{
     snatch::SnatchGuard,
     track::PendingTransition,
     FastHashSet,
-};
-
-use wgt::{math::align_to, AccelerationStructureFlags, BufferUsages, BufferUses, Features};
-
-use super::CommandBufferMutable;
-use std::{
-    cmp::max,
-    num::NonZeroU64,
-    ops::{Deref, Range},
-    sync::{atomic::Ordering, Arc},
 };
 
 struct TriangleBufferStore<'a> {
@@ -263,8 +264,7 @@ impl Global {
                 Some(size) => size,
             };
 
-        let scratch_buffer =
-            ScratchBuffer::new(device, scratch_size).map_err(crate::device::DeviceError::from)?;
+        let scratch_buffer = ScratchBuffer::new(device, scratch_size)?;
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
@@ -540,6 +540,21 @@ impl Global {
                     },
                 ));
 
+                if tlas
+                    .flags
+                    .contains(wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
+                    && !blas.flags.contains(
+                        wgpu_types::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+                    )
+                {
+                    return Err(
+                        BuildAccelerationStructureError::TlasDependentMissingVertexReturn(
+                            tlas.error_ident(),
+                            blas.error_ident(),
+                        ),
+                    );
+                }
+
                 instance_count += 1;
 
                 dependencies.push(blas.clone());
@@ -592,8 +607,7 @@ impl Global {
                 Some(size) => size,
             };
 
-        let scratch_buffer =
-            ScratchBuffer::new(device, scratch_size).map_err(crate::device::DeviceError::from)?;
+        let scratch_buffer = ScratchBuffer::new(device, scratch_size)?;
 
         let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
             buffer: scratch_buffer.raw(),
@@ -661,8 +675,7 @@ impl Global {
                 let mut staging_buffer = StagingBuffer::new(
                     device,
                     wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap(),
-                )
-                .map_err(crate::device::DeviceError::from)?;
+                )?;
                 staging_buffer.write(&instance_buffer_staging_source);
                 let flushed = staging_buffer.flush();
                 Some(flushed)
@@ -948,6 +961,14 @@ fn iter_blas<'a>(
                         None
                     };
                     let transform_data = if let Some(transform_id) = mesh.transform_buffer {
+                        if !blas
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            return Err(BuildAccelerationStructureError::UseTransformMissing(
+                                blas.error_ident(),
+                            ));
+                        }
                         let transform_buffer = hub.buffers.get(transform_id).get()?;
                         if mesh.transform_buffer_offset.is_none() {
                             return Err(BuildAccelerationStructureError::MissingAssociatedData(
@@ -960,6 +981,14 @@ fn iter_blas<'a>(
                         );
                         Some((transform_buffer, data))
                     } else {
+                        if blas
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            return Err(BuildAccelerationStructureError::TransformMissing(
+                                blas.error_ident(),
+                            ));
+                        }
                         None
                     };
                     temp_buffer.push(TriangleBufferStore {
@@ -1194,7 +1223,7 @@ fn map_blas<'a>(
 
     if blas
         .flags
-        .contains(AccelerationStructureFlags::ALLOW_COMPACTION)
+        .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION)
     {
         blas_s_compactable.push((blas.compaction_buffer.as_ref().unwrap().as_ref(), raw));
     }

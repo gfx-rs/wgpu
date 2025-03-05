@@ -191,12 +191,12 @@ const fn is_blankspace(c: char) -> bool {
 
 /// Returns whether or not a char is a word start (Unicode XID_Start + '_')
 fn is_word_start(c: char) -> bool {
-    c == '_' || unicode_xid::UnicodeXID::is_xid_start(c)
+    c == '_' || unicode_ident::is_xid_start(c)
 }
 
 /// Returns whether or not a char is a word part (Unicode XID_Continue)
 fn is_word_part(c: char) -> bool {
-    unicode_xid::UnicodeXID::is_xid_continue(c)
+    unicode_ident::is_xid_continue(c)
 }
 
 #[derive(Clone)]
@@ -352,6 +352,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub(in crate::front::wgsl) fn end_of_generic_arguments(&mut self) -> bool {
+        self.skip(Token::Separator(',')) && self.peek().0 != Token::Paren('>')
+    }
+
     /// If the next token matches it is skipped and true is returned
     pub(in crate::front::wgsl) fn skip(&mut self, what: Token<'_>) -> bool {
         let (peeked_token, rest) = self.peek_token_and_rest();
@@ -460,6 +464,28 @@ impl<'a> Lexer<'a> {
         let access = self.next_storage_access()?;
         self.expect(Token::Paren('>'))?;
         Ok((format, access))
+    }
+
+    pub(in crate::front::wgsl) fn next_acceleration_structure_flags(
+        &mut self,
+    ) -> Result<bool, Error<'a>> {
+        Ok(if self.skip(Token::Paren('<')) {
+            if !self.skip(Token::Paren('>')) {
+                let (name, span) = self.next_ident_with_span()?;
+                let ret = if name == "vertex_return" {
+                    true
+                } else {
+                    return Err(Error::UnknownAttribute(span));
+                };
+                self.skip(Token::Separator(','));
+                self.expect(Token::Paren('>'))?;
+                ret
+            } else {
+                false
+            }
+        } else {
+            false
+        })
     }
 
     pub(in crate::front::wgsl) fn open_arguments(&mut self) -> Result<(), Error<'a>> {

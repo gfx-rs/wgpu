@@ -1,9 +1,9 @@
-use super::{conv, Command as C};
+use alloc::string::String;
+use core::{mem, ops::Range, slice};
+
 use arrayvec::ArrayVec;
-use std::{
-    mem::{self, size_of, size_of_val},
-    ops::Range,
-};
+
+use super::{conv, Command as C};
 
 #[derive(Clone, Copy, Debug, Default)]
 struct TextureSlotDesc {
@@ -84,8 +84,7 @@ impl super::CommandBuffer {
     }
 
     fn add_push_constant_data(&mut self, data: &[u32]) -> Range<u32> {
-        let data_raw =
-            unsafe { std::slice::from_raw_parts(data.as_ptr().cast(), size_of_val(data)) };
+        let data_raw = unsafe { slice::from_raw_parts(data.as_ptr().cast(), size_of_val(data)) };
         let start = self.data_bytes.len();
         assert!(start < u32::MAX as usize);
         self.data_bytes.extend_from_slice(data_raw);
@@ -262,7 +261,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         self.state = State::default();
-        self.cmd_buffer.label = label.map(str::to_string);
+        self.cmd_buffer.label = label.map(String::from);
         Ok(())
     }
     unsafe fn discard_encoding(&mut self) {
@@ -1074,6 +1073,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             first_instance_location: self.state.first_instance_location.clone(),
         });
     }
+    unsafe fn draw_mesh_tasks(
+        &mut self,
+        _group_count_x: u32,
+        _group_count_y: u32,
+        _group_count_z: u32,
+    ) {
+        unreachable!()
+    }
     unsafe fn draw_indirect(
         &mut self,
         buffer: &super::Buffer,
@@ -1117,6 +1124,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             });
         }
     }
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _draw_count: u32,
+    ) {
+        unreachable!()
+    }
     unsafe fn draw_indirect_count(
         &mut self,
         _buffer: &super::Buffer,
@@ -1132,6 +1147,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _buffer: &super::Buffer,
         _offset: wgt::BufferAddress,
         _count_buffer: &super::Buffer,
+        _count_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        unreachable!()
+    }
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _count_buffer: &<Self::A as crate::Api>::Buffer,
         _count_offset: wgt::BufferAddress,
         _max_count: u32,
     ) {

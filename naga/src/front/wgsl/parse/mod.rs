@@ -1,3 +1,5 @@
+use alloc::{boxed::Box, vec::Vec};
+
 use crate::diagnostic_filter::{
     self, DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, FilterableTriggeringRule,
     ShouldConflictOnFullDuplicate, StandardFilterableTriggeringRule,
@@ -12,7 +14,7 @@ use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::Scalar;
 use crate::front::SymbolTable;
-use crate::{Arena, FastIndexSet, Handle, ShaderStage, Span};
+use crate::{Arena, FastHashSet, FastIndexSet, Handle, ShaderStage, Span};
 
 pub mod ast;
 pub mod conv;
@@ -576,8 +578,9 @@ impl Parser {
             (Token::Paren('<'), ast::ConstructorType::PartialArray) => {
                 lexer.expect_generic_paren('<')?;
                 let base = self.type_decl(lexer, ctx)?;
-                let size = if lexer.skip(Token::Separator(',')) {
+                let size = if lexer.end_of_generic_arguments() {
                     let expr = self.const_generic_expression(lexer, ctx)?;
+                    lexer.skip(Token::Separator(','));
                     ast::ArraySize::Constant(expr)
                 } else {
                     ast::ArraySize::Dynamic
@@ -1171,6 +1174,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<Vec<ast::StructMember<'a>>, Error<'a>> {
         let mut members = Vec::new();
+        let mut member_names = FastHashSet::default();
 
         lexer.expect(Token::Paren('{'))?;
         let mut ready = true;
@@ -1217,6 +1221,17 @@ impl Parser {
                 size: size.value,
                 align: align.value,
             });
+
+            if !member_names.insert(name.name) {
+                return Err(Error::Redefinition {
+                    previous: members
+                        .iter()
+                        .find(|x| x.name.name == name.name)
+                        .map(|x| x.name.span)
+                        .unwrap(),
+                    current: name.span,
+                });
+            }
         }
 
         Ok(members)
@@ -1232,6 +1247,7 @@ impl Parser {
         let start = lexer.start_byte_offset();
         let ty = self.type_decl(lexer, ctx)?;
         let span = lexer.span_from(start);
+        lexer.skip(Token::Separator(','));
         lexer.expect_generic_paren('>')?;
         Ok((ty, span))
     }
@@ -1424,8 +1440,10 @@ impl Parser {
                 lexer.expect(Token::Separator(','))?;
                 let base = self.type_decl(lexer, ctx)?;
                 if let crate::AddressSpace::Storage { ref mut access } = space {
-                    *access = if lexer.skip(Token::Separator(',')) {
-                        lexer.next_storage_access()?
+                    *access = if lexer.end_of_generic_arguments() {
+                        let result = lexer.next_storage_access()?;
+                        lexer.skip(Token::Separator(','));
+                        result
                     } else {
                         crate::StorageAccess::LOAD
                     };
@@ -1436,8 +1454,9 @@ impl Parser {
             "array" => {
                 lexer.expect_generic_paren('<')?;
                 let base = self.type_decl(lexer, ctx)?;
-                let size = if lexer.skip(Token::Separator(',')) {
+                let size = if lexer.end_of_generic_arguments() {
                     let size = self.const_generic_expression(lexer, ctx)?;
+                    lexer.skip(Token::Separator(','));
                     ast::ArraySize::Constant(size)
                 } else {
                     ast::ArraySize::Dynamic
@@ -1449,8 +1468,9 @@ impl Parser {
             "binding_array" => {
                 lexer.expect_generic_paren('<')?;
                 let base = self.type_decl(lexer, ctx)?;
-                let size = if lexer.skip(Token::Separator(',')) {
+                let size = if lexer.end_of_generic_arguments() {
                     let size = self.unary_expression(lexer, ctx)?;
+                    lexer.skip(Token::Separator(','));
                     ast::ArraySize::Constant(size)
                 } else {
                     ast::ArraySize::Dynamic
@@ -1634,8 +1654,14 @@ impl Parser {
                     class: crate::ImageClass::Storage { format, access },
                 }
             }
-            "acceleration_structure" => ast::Type::AccelerationStructure,
-            "ray_query" => ast::Type::RayQuery,
+            "acceleration_structure" => {
+                let vertex_return = lexer.next_acceleration_structure_flags()?;
+                ast::Type::AccelerationStructure { vertex_return }
+            }
+            "ray_query" => {
+                let vertex_return = lexer.next_acceleration_structure_flags()?;
+                ast::Type::RayQuery { vertex_return }
+            }
             "RayDesc" => ast::Type::RayDesc,
             "RayIntersection" => ast::Type::RayIntersection,
             _ => return Ok(None),

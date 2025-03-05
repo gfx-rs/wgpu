@@ -1,11 +1,13 @@
+use alloc::vec::Vec;
+
+use bit_set::BitSet;
+
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
     Capabilities, Disalignment, FunctionError, ModuleInfo,
 };
 use crate::arena::{Handle, UniqueArena};
-
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
-use bit_set::BitSet;
 
 const MAX_WORKGROUP_SIZE: u32 = 0x4000;
 
@@ -549,8 +551,8 @@ impl super::Validator {
                         _ => {}
                     },
                     crate::TypeInner::Sampler { .. }
-                    | crate::TypeInner::AccelerationStructure
-                    | crate::TypeInner::RayQuery => {}
+                    | crate::TypeInner::AccelerationStructure { .. }
+                    | crate::TypeInner::RayQuery { .. } => {}
                     _ => {
                         return Err(GlobalVariableError::InvalidType(var.space));
                     }

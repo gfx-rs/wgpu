@@ -164,8 +164,8 @@ impl crate::TypeInner {
             Self::Struct { span, .. } => span,
             Self::Image { .. }
             | Self::Sampler { .. }
-            | Self::AccelerationStructure
-            | Self::RayQuery
+            | Self::AccelerationStructure { .. }
+            | Self::RayQuery { .. }
             | Self::BindingArray { .. } => 0,
         }
     }
@@ -258,5 +258,49 @@ impl crate::TypeInner {
             Self::Struct { ref members, .. } => TypeResolution::Handle(members[index].ty),
             _ => return None,
         })
+    }
+
+    /// If the type is a Vector or a Scalar return a tuple of the vector size (or None
+    /// for Scalars), and the scalar kind. Returns (None, None) for other types.
+    pub const fn vector_size_and_scalar(
+        &self,
+    ) -> Option<(Option<crate::VectorSize>, crate::Scalar)> {
+        match *self {
+            crate::TypeInner::Scalar(scalar) => Some((None, scalar)),
+            crate::TypeInner::Vector { size, scalar } => Some((Some(size), scalar)),
+            crate::TypeInner::Matrix { .. }
+            | crate::TypeInner::Atomic(_)
+            | crate::TypeInner::Pointer { .. }
+            | crate::TypeInner::ValuePointer { .. }
+            | crate::TypeInner::Array { .. }
+            | crate::TypeInner::Struct { .. }
+            | crate::TypeInner::Image { .. }
+            | crate::TypeInner::Sampler { .. }
+            | crate::TypeInner::AccelerationStructure { .. }
+            | crate::TypeInner::RayQuery { .. }
+            | crate::TypeInner::BindingArray { .. } => None,
+        }
+    }
+
+    /// Return true if `self` is an abstract type.
+    ///
+    /// Use `types` to look up type handles. This is necessary to
+    /// recognize abstract arrays.
+    pub fn is_abstract(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
+        match *self {
+            crate::TypeInner::Scalar(scalar)
+            | crate::TypeInner::Vector { scalar, .. }
+            | crate::TypeInner::Matrix { scalar, .. }
+            | crate::TypeInner::Atomic(scalar) => scalar.is_abstract(),
+            crate::TypeInner::Array { base, .. } => types[base].inner.is_abstract(types),
+            crate::TypeInner::ValuePointer { .. }
+            | crate::TypeInner::Pointer { .. }
+            | crate::TypeInner::Struct { .. }
+            | crate::TypeInner::Image { .. }
+            | crate::TypeInner::Sampler { .. }
+            | crate::TypeInner::AccelerationStructure { .. }
+            | crate::TypeInner::RayQuery { .. }
+            | crate::TypeInner::BindingArray { .. } => false,
+        }
     }
 }

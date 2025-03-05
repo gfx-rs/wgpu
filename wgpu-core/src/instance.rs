@@ -1,5 +1,10 @@
-use std::borrow::Cow;
-use std::sync::Arc;
+use alloc::{
+    borrow::{Cow, ToOwned as _},
+    boxed::Box,
+    string::String,
+    sync::Arc,
+    vec::Vec,
+};
 
 use hashbrown::HashMap;
 
@@ -107,9 +112,11 @@ impl Instance {
         init(hal::api::Dx12, instance_desc, &mut instance_per_backend);
         #[cfg(gles)]
         init(hal::api::Gles, instance_desc, &mut instance_per_backend);
+        #[cfg(feature = "noop")]
+        init(hal::api::Noop, instance_desc, &mut instance_per_backend);
 
         Self {
-            name: name.to_string(),
+            name: name.to_owned(),
             instance_per_backend,
             flags: instance_desc.flags,
         }
@@ -195,13 +202,79 @@ impl Instance {
         }
     }
 
+    /// Creates a new surface from the given drm configuration.
+    ///
+    /// # Safety
+    ///
+    /// - All parameters must point to valid DRM values.
+    ///
+    /// # Platform Support
+    ///
+    /// This function is only available on non-apple Unix-like platforms (Linux, FreeBSD) and
+    /// currently only works with the Vulkan backend.
+    #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+    #[cfg_attr(not(vulkan), expect(unused_variables))]
+    pub unsafe fn create_surface_from_drm(
+        &self,
+        fd: i32,
+        plane: u32,
+        connector_id: u32,
+        width: u32,
+        height: u32,
+        refresh_rate: u32,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::create_surface_from_drm");
+
+        let mut errors = HashMap::default();
+        let mut surface_per_backend: HashMap<Backend, Box<dyn hal::DynSurface>> =
+            HashMap::default();
+
+        #[cfg(vulkan)]
+        {
+            let instance = unsafe { self.as_hal::<hal::api::Vulkan>() }
+                .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Vulkan))?;
+
+            // Safety must be upheld by the caller
+            match unsafe {
+                instance.create_surface_from_drm(
+                    fd,
+                    plane,
+                    connector_id,
+                    width,
+                    height,
+                    refresh_rate,
+                )
+            } {
+                Ok(surface) => {
+                    surface_per_backend.insert(Backend::Vulkan, Box::new(surface));
+                }
+                Err(err) => {
+                    errors.insert(Backend::Vulkan, err);
+                }
+            }
+        }
+
+        if surface_per_backend.is_empty() {
+            Err(CreateSurfaceError::FailedToCreateSurfaceForAnyBackend(
+                errors,
+            ))
+        } else {
+            let surface = Surface {
+                presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+                surface_per_backend,
+            };
+
+            Ok(surface)
+        }
+    }
+
     /// # Safety
     ///
     /// `layer` must be a valid pointer.
     #[cfg(metal)]
     pub unsafe fn create_surface_metal(
         &self,
-        layer: *mut std::ffi::c_void,
+        layer: *mut core::ffi::c_void,
     ) -> Result<Surface, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface_metal");
 
@@ -226,7 +299,7 @@ impl Instance {
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            surface_per_backend: std::iter::once((Backend::Metal, raw_surface)).collect(),
+            surface_per_backend: core::iter::once((Backend::Metal, raw_surface)).collect(),
         };
 
         Ok(surface)
@@ -243,7 +316,7 @@ impl Instance {
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            surface_per_backend: std::iter::once((Backend::Dx12, surface)).collect(),
+            surface_per_backend: core::iter::once((Backend::Dx12, surface)).collect(),
         };
 
         Ok(surface)
@@ -255,7 +328,7 @@ impl Instance {
     /// The visual must be valid and able to be used to make a swapchain with.
     pub unsafe fn create_surface_from_visual(
         &self,
-        visual: *mut std::ffi::c_void,
+        visual: *mut core::ffi::c_void,
     ) -> Result<Surface, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_visual");
         self.create_surface_dx12(|inst| unsafe { inst.create_surface_from_visual(visual) })
@@ -267,7 +340,7 @@ impl Instance {
     /// The surface_handle must be valid and able to be used to make a swapchain with.
     pub unsafe fn create_surface_from_surface_handle(
         &self,
-        surface_handle: *mut std::ffi::c_void,
+        surface_handle: *mut core::ffi::c_void,
     ) -> Result<Surface, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_surface_handle");
         self.create_surface_dx12(|inst| unsafe {
@@ -281,7 +354,7 @@ impl Instance {
     /// The swap_chain_panel must be valid and able to be used to make a swapchain with.
     pub unsafe fn create_surface_from_swap_chain_panel(
         &self,
-        swap_chain_panel: *mut std::ffi::c_void,
+        swap_chain_panel: *mut core::ffi::c_void,
     ) -> Result<Surface, CreateSurfaceError> {
         profiling::scope!("Instance::instance_create_surface_from_swap_chain_panel");
         self.create_surface_dx12(|inst| unsafe {
@@ -765,13 +838,49 @@ impl Global {
         Ok(id)
     }
 
+    /// Creates a new surface from the given drm configuration.
+    ///
+    /// # Safety
+    ///
+    /// - All parameters must point to valid DRM values.
+    ///
+    /// # Platform Support
+    ///
+    /// This function is only available on non-apple Unix-like platforms (Linux, FreeBSD) and
+    /// currently only works with the Vulkan backend.
+    #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+    pub unsafe fn instance_create_surface_from_drm(
+        &self,
+        fd: i32,
+        plane: u32,
+        connector_id: u32,
+        width: u32,
+        height: u32,
+        refresh_rate: u32,
+        id_in: Option<SurfaceId>,
+    ) -> Result<SurfaceId, CreateSurfaceError> {
+        let surface = unsafe {
+            self.instance.create_surface_from_drm(
+                fd,
+                plane,
+                connector_id,
+                width,
+                height,
+                refresh_rate,
+            )
+        }?;
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+
+        Ok(id)
+    }
+
     /// # Safety
     ///
     /// `layer` must be a valid pointer.
     #[cfg(metal)]
     pub unsafe fn instance_create_surface_metal(
         &self,
-        layer: *mut std::ffi::c_void,
+        layer: *mut core::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = unsafe { self.instance.create_surface_metal(layer) }?;
@@ -785,7 +894,7 @@ impl Global {
     /// The visual must be valid and able to be used to make a swapchain with.
     pub unsafe fn instance_create_surface_from_visual(
         &self,
-        visual: *mut std::ffi::c_void,
+        visual: *mut core::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = unsafe { self.instance.create_surface_from_visual(visual) }?;
@@ -799,7 +908,7 @@ impl Global {
     /// The surface_handle must be valid and able to be used to make a swapchain with.
     pub unsafe fn instance_create_surface_from_surface_handle(
         &self,
-        surface_handle: *mut std::ffi::c_void,
+        surface_handle: *mut core::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = unsafe {
@@ -816,7 +925,7 @@ impl Global {
     /// The swap_chain_panel must be valid and able to be used to make a swapchain with.
     pub unsafe fn instance_create_surface_from_swap_chain_panel(
         &self,
-        swap_chain_panel: *mut std::ffi::c_void,
+        swap_chain_panel: *mut core::ffi::c_void,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = unsafe {

@@ -1,6 +1,12 @@
+use alloc::{
+    borrow::Cow,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::hash::{Hash, Hasher};
+
 use crate::{arena::Handle, FastHashMap, FastHashSet};
-use std::borrow::Cow;
-use std::hash::{Hash, Hasher};
 
 pub type EntryPointIndex = u16;
 const SEPARATOR: char = '_';
@@ -92,7 +98,7 @@ impl Namer {
     /// Guarantee uniqueness by applying a numeric suffix when necessary. If `label_raw`
     /// itself ends with digits, separate them from the suffix with an underscore.
     pub fn call(&mut self, label_raw: &str) -> String {
-        use std::fmt::Write as _; // for write!-ing to Strings
+        use core::fmt::Write as _; // for write!-ing to Strings
 
         let base = self.sanitize(label_raw);
         debug_assert!(!base.is_empty() && !base.ends_with(SEPARATOR));
@@ -143,7 +149,7 @@ impl Namer {
     /// context for the duration of the call to `body`.
     fn namespace(&mut self, capacity: usize, body: impl FnOnce(&mut Self)) {
         let fresh = FastHashMap::with_capacity_and_hasher(capacity, Default::default());
-        let outer = std::mem::replace(&mut self.unique, fresh);
+        let outer = core::mem::replace(&mut self.unique, fresh);
         body(self);
         self.unique = outer;
     }
@@ -175,10 +181,38 @@ impl Namer {
                 .map(|string| (AsciiUniCase(*string))),
         );
 
+        // Choose fallback names for anonymous entry point return types.
+        let mut entrypoint_type_fallbacks = FastHashMap::default();
+        for ep in &module.entry_points {
+            if let Some(ref result) = ep.function.result {
+                if let crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::Struct { .. },
+                } = module.types[result.ty]
+                {
+                    let label = match ep.stage {
+                        crate::ShaderStage::Vertex => "VertexOutput",
+                        crate::ShaderStage::Fragment => "FragmentOutput",
+                        crate::ShaderStage::Compute => "ComputeOutput",
+                    };
+                    entrypoint_type_fallbacks.insert(result.ty, label);
+                }
+            }
+        }
+
         let mut temp = String::new();
 
         for (ty_handle, ty) in module.types.iter() {
-            let ty_name = self.call_or(&ty.name, "type");
+            // If the type is anonymous, check `entrypoint_types` for
+            // something better than just `"type"`.
+            let raw_label = match ty.name {
+                Some(ref given_name) => given_name.as_str(),
+                None => entrypoint_type_fallbacks
+                    .get(&ty_handle)
+                    .cloned()
+                    .unwrap_or("type"),
+            };
+            let ty_name = self.call(raw_label);
             output.insert(NameKey::Type(ty_handle), ty_name);
 
             if let crate::TypeInner::Struct { ref members, .. } = ty.inner {
@@ -230,7 +264,7 @@ impl Namer {
             let label = match constant.name {
                 Some(ref name) => name,
                 None => {
-                    use std::fmt::Write;
+                    use core::fmt::Write;
                     // Try to be more descriptive about the constant values
                     temp.clear();
                     write!(temp, "const_{}", output[&NameKey::Type(constant.ty)]).unwrap();

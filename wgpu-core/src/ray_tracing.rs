@@ -8,20 +8,21 @@
 // - Batch BLAS read-backs (if it shows up in performance).
 // - ([non performance] extract function in build (rust function extraction with guards is a pain))
 
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::num::NonZeroU64;
+
+use thiserror::Error;
+use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
+
 use crate::{
     command::CommandEncoderError,
     device::{DeviceError, MissingFeatures},
     id::{BlasId, BufferId, TlasId},
-    resource::{DestroyedResourceError, InvalidResourceError, MissingBufferUsageError},
+    resource::{
+        Blas, BlasCompactCallback, BlasPrepareCompactResult, DestroyedResourceError,
+        InvalidResourceError, MissingBufferUsageError, ResourceErrorIdent, Tlas,
+    },
 };
-use std::num::NonZeroU64;
-use std::sync::Arc;
-
-use crate::resource::{
-    Blas, BlasCompactCallback, BlasPrepareCompactResult, ResourceErrorIdent, Tlas,
-};
-use thiserror::Error;
-use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBlasError {
@@ -43,6 +44,8 @@ pub enum CreateTlasError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+    #[error("Flag {0:?} is not allowed on a TLAS")]
+    DisallowedFlag(wgt::AccelerationStructureFlags),
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.
@@ -125,6 +128,16 @@ pub enum BuildAccelerationStructureError {
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
     )]
     TlasInstanceCountExceeded(ResourceErrorIdent, u32, u32),
+
+    #[error("Blas {0:?} has flag USE_TRANSFORM but the transform buffer is missing")]
+    TransformMissing(ResourceErrorIdent),
+
+    #[error("Blas {0:?} is missing the flag USE_TRANSFORM but the transform buffer is set")]
+    UseTransformMissing(ResourceErrorIdent),
+    #[error(
+        "Tlas {0:?} dependent {1:?} is missing AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN"
+    )]
+    TlasDependentMissingVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]

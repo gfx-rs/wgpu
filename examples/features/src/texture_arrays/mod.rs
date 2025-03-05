@@ -78,6 +78,13 @@ impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_BINDING_ARRAY
     }
+    fn required_limits() -> wgpu::Limits {
+        wgpu::Limits {
+            max_binding_array_elements_per_shader_stage: 6,
+            max_binding_array_sampler_elements_per_shader_stage: 2,
+            ..wgpu::Limits::downlevel_defaults()
+        }
+    }
     fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,

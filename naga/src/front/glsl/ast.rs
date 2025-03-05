@@ -1,4 +1,5 @@
-use std::{borrow::Cow, fmt};
+use alloc::{borrow::Cow, string::String, vec::Vec};
+use core::fmt;
 
 use super::{builtins::MacroCall, Span};
 use crate::{

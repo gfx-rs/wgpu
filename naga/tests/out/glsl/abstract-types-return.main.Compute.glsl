@@ -30,6 +30,10 @@ float[4] return_arrf32_ai() {
     return float[4](1.0, 1.0, 1.0, 1.0);
 }
 
+float return_const_f32_const_ai() {
+    return 1.0;
+}
+
 void main() {
     return;
 }

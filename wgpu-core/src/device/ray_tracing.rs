@@ -1,6 +1,5 @@
-use core::mem::size_of;
-use std::mem::ManuallyDrop;
-use std::sync::Arc;
+use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use core::mem::{size_of, ManuallyDrop};
 
 use crate::api_log;
 #[cfg(feature = "trace")]
@@ -30,6 +29,13 @@ impl Device {
     ) -> Result<Arc<resource::Blas>, CreateBlasError> {
         self.check_is_valid()?;
         self.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+
+        if blas_desc
+            .flags
+            .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
+        {
+            self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
+        }
 
         let size_info = match &sizes {
             wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => {
@@ -61,6 +67,19 @@ impl Device {
                             self.features.allowed_vertex_formats_for_blas(),
                         ));
                     }
+
+                    let mut transform = None;
+
+                    if blas_desc
+                        .flags
+                        .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                    {
+                        transform = Some(wgpu_hal::AccelerationStructureTriangleTransform {
+                            buffer: self.zero_buffer.as_ref(),
+                            offset: 0,
+                        })
+                    }
+
                     entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> {
                         vertex_buffer: None,
                         vertex_format: desc.vertex_format,
@@ -68,7 +87,7 @@ impl Device {
                         vertex_count: desc.vertex_count,
                         vertex_stride: 0,
                         indices,
-                        transform: None,
+                        transform,
                         flags: desc.flags,
                     });
                 }
@@ -142,6 +161,22 @@ impl Device {
     ) -> Result<Arc<resource::Tlas>, CreateTlasError> {
         self.check_is_valid()?;
         self.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+
+        if desc
+            .flags
+            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+        {
+            return Err(CreateTlasError::DisallowedFlag(
+                wgt::AccelerationStructureFlags::USE_TRANSFORM,
+            ));
+        }
+
+        if desc
+            .flags
+            .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
+        {
+            self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
+        }
 
         let size_info = unsafe {
             self.raw().get_acceleration_structure_build_sizes(
@@ -334,10 +369,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let blas = match hub.blas_s.get(blas_id).get() {
-            Ok(blas) => blas,
-            Err(e) => return Err(e),
-        };
+        let blas = hub.blas_s.get(blas_id).get()?;
 
         let lock = blas.compacted_state.lock();
 

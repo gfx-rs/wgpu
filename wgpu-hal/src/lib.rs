@@ -202,6 +202,7 @@
 //!
 //! [wiki-debug]: https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications
 
+#![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(
     // this happens on the GL backend, where it is both thread safe and non-thread safe in the same code.
@@ -226,7 +227,10 @@
     clippy::pattern_type_mismatch,
 )]
 #![warn(
+    clippy::alloc_instead_of_core,
     clippy::ptr_as_ptr,
+    clippy::std_instead_of_alloc,
+    clippy::std_instead_of_core,
     trivial_casts,
     trivial_numeric_casts,
     unsafe_op_in_unsafe_fn,
@@ -234,19 +238,26 @@
     unused_qualifications
 )]
 
+extern crate alloc;
 extern crate wgpu_types as wgt;
+// Each of these backends needs `std` in some fashion; usually `std::thread` functions.
+// TODO(https://github.com/gfx-rs/wgpu/issues/6826): gles-WebGL backend should be made no-std
+#[cfg(any(dx12, gles, metal, vulkan))]
+#[macro_use]
+extern crate std;
 
 /// DirectX12 API internals.
 #[cfg(dx12)]
 pub mod dx12;
-/// A dummy API implementation.
-pub mod empty;
 /// GLES API internals.
 #[cfg(gles)]
 pub mod gles;
 /// Metal API internals.
 #[cfg(metal)]
 pub mod metal;
+/// A dummy API implementation.
+// TODO(https://github.com/gfx-rs/wgpu/issues/7120): this should have a cfg
+pub mod noop;
 /// Vulkan API internals.
 #[cfg(vulkan)]
 pub mod vulkan;
@@ -255,11 +266,11 @@ pub mod auxil;
 pub mod api {
     #[cfg(dx12)]
     pub use super::dx12::Api as Dx12;
-    pub use super::empty::Api as Empty;
     #[cfg(gles)]
     pub use super::gles::Api as Gles;
     #[cfg(metal)]
     pub use super::metal::Api as Metal;
+    pub use super::noop::Api as Noop;
     #[cfg(vulkan)]
     pub use super::vulkan::Api as Vulkan;
 }
@@ -275,13 +286,16 @@ pub use dynamic::{
     DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture, DynTextureView,
 };
 
-use std::{
-    borrow::{Borrow, Cow},
+#[allow(unused)]
+use alloc::boxed::Box;
+use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
+use core::{
+    borrow::Borrow,
+    error::Error,
     fmt,
     num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
-    sync::Arc,
 };
 
 use bitflags::bitflags;
@@ -291,19 +305,24 @@ use wgt::WasmNotSendSync;
 
 // - Vertex + Fragment
 // - Compute
-pub const MAX_CONCURRENT_SHADER_STAGES: usize = 2;
+// Task + Mesh + Fragment
+pub const MAX_CONCURRENT_SHADER_STAGES: usize = 3;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const MAX_BIND_GROUPS: usize = 8;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
 pub const MAX_COLOR_ATTACHMENTS: usize = 8;
 pub const MAX_MIP_LEVELS: u32 = 16;
 /// Size of a single occlusion/timestamp query, when copied into a buffer, in bytes.
+/// cbindgen:ignore
 pub const QUERY_SIZE: wgt::BufferAddress = 8;
 
 pub type Label<'a> = Option<&'a str>;
 pub type MemoryRange = Range<wgt::BufferAddress>;
 pub type FenceValue = u64;
-pub type AtomicFenceValue = std::sync::atomic::AtomicU64;
+#[cfg(supports_64bit_atomics)]
+pub type AtomicFenceValue = core::sync::atomic::AtomicU64;
+#[cfg(not(supports_64bit_atomics))]
+pub type AtomicFenceValue = portable_atomic::AtomicU64;
 
 /// A callback to signal that wgpu is no longer using a resource.
 #[cfg(any(gles, vulkan))]
@@ -415,7 +434,7 @@ pub struct InstanceError {
 
     /// Underlying error value, if any is available.
     #[source]
-    source: Option<Arc<dyn std::error::Error + Send + Sync + 'static>>,
+    source: Option<Arc<dyn Error + Send + Sync + 'static>>,
 }
 
 impl InstanceError {
@@ -427,10 +446,7 @@ impl InstanceError {
         }
     }
     #[allow(dead_code)] // may be unused on some platforms
-    pub(crate) fn with_source(
-        message: String,
-        source: impl std::error::Error + Send + Sync + 'static,
-    ) -> Self {
+    pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
         Self {
             message,
             source: Some(Arc::new(source)),
@@ -583,13 +599,13 @@ pub trait Surface: WasmNotSendSync {
     ///
     /// [`texture`]: AcquiredSurfaceTexture::texture
     /// [`SurfaceTexture`]: Api::SurfaceTexture
-    /// [`borrow`]: std::borrow::Borrow::borrow
+    /// [`borrow`]: alloc::borrow::Borrow::borrow
     /// [`Texture`]: Api::Texture
     /// [`Fence`]: Api::Fence
     /// [`self.discard_texture`]: Surface::discard_texture
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<core::time::Duration>,
         fence: &<Self::A as Api>::Fence,
     ) -> Result<Option<AcquiredSurfaceTexture<Self::A>>, SurfaceError>;
 
@@ -886,6 +902,15 @@ pub trait Device: WasmNotSendSync {
             <Self::A as Api>::PipelineCache,
         >,
     ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
+    #[allow(clippy::type_complexity)]
+    unsafe fn create_mesh_pipeline(
+        &self,
+        desc: &MeshPipelineDescriptor<
+            <Self::A as Api>::PipelineLayout,
+            <Self::A as Api>::ShaderModule,
+            <Self::A as Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
     unsafe fn destroy_render_pipeline(&self, pipeline: <Self::A as Api>::RenderPipeline);
 
     #[allow(clippy::type_complexity)]
@@ -935,6 +960,8 @@ pub trait Device: WasmNotSendSync {
     ///
     /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
     /// returns immediately.
+    ///
+    /// Returns `Ok(true)` on success and `Ok(false)` on timeout.
     ///
     /// [`Fence`]: Api::Fence
     /// [`FencePool`]: vulkan/enum.Fence.html#variant.FencePool
@@ -1434,6 +1461,26 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         max_count: u32,
     );
     unsafe fn draw_indexed_indirect_count(
+        &mut self,
+        buffer: &<Self::A as Api>::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &<Self::A as Api>::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
+    );
+    unsafe fn draw_mesh_tasks(
+        &mut self,
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
+    );
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        buffer: &<Self::A as Api>::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    );
+    unsafe fn draw_mesh_tasks_indirect_count(
         &mut self,
         buffer: &<Self::A as Api>::Buffer,
         offset: wgt::BufferAddress,
@@ -1966,6 +2013,7 @@ impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
     }
 }
 
+/// cbindgen:ignore
 #[derive(Clone, Debug)]
 pub struct BindGroupEntry {
     pub binding: u32,
@@ -2124,6 +2172,33 @@ pub struct RenderPipelineDescriptor<
     pub vertex_buffers: &'a [VertexBufferLayout<'a>],
     /// The vertex stage for this pipeline.
     pub vertex_stage: ProgrammableStage<'a, M>,
+    /// The properties of the pipeline at the primitive assembly and rasterization level.
+    pub primitive: wgt::PrimitiveState,
+    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
+    pub depth_stencil: Option<wgt::DepthStencilState>,
+    /// The multi-sampling properties of the pipeline.
+    pub multisample: wgt::MultisampleState,
+    /// The fragment stage for this pipeline.
+    pub fragment_stage: Option<ProgrammableStage<'a, M>>,
+    /// The effect of draw calls on the color aspect of the output target.
+    pub color_targets: &'a [Option<wgt::ColorTargetState>],
+    /// If the pipeline will be used with a multiview render pass, this indicates how many array
+    /// layers the attachments will have.
+    pub multiview: Option<NonZeroU32>,
+    /// The cache which will be used and filled when compiling this pipeline
+    pub cache: Option<&'a Pc>,
+}
+pub struct MeshPipelineDescriptor<
+    'a,
+    Pl: DynPipelineLayout + ?Sized,
+    M: DynShaderModule + ?Sized,
+    Pc: DynPipelineCache + ?Sized,
+> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: &'a Pl,
+    pub task_stage: Option<ProgrammableStage<'a, M>>,
+    pub mesh_stage: ProgrammableStage<'a, M>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.

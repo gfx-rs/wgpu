@@ -33,20 +33,22 @@ mod function;
 mod image;
 mod null;
 
-use convert::*;
 pub use error::Error;
-use function::*;
 
+use alloc::{borrow::ToOwned, format, string::String, vec, vec::Vec};
+use core::{convert::TryInto, mem, num::NonZeroU32};
+use std::path::PathBuf;
+
+use petgraph::graphmap::GraphMap;
+
+use super::atomic_upgrade::Upgrades;
 use crate::{
     arena::{Arena, Handle, UniqueArena},
     proc::{Alignment, Layouter},
     FastHashMap, FastHashSet, FastIndexMap,
 };
-
-use petgraph::graphmap::GraphMap;
-use std::{convert::TryInto, mem, num::NonZeroU32, path::PathBuf};
-
-use super::atomic_upgrade::Upgrades;
+use convert::*;
+use function::*;
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
@@ -702,7 +704,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 break;
             }
         }
-        std::str::from_utf8(&self.temp_bytes)
+        core::str::from_utf8(&self.temp_bytes)
             .map(|s| (s.to_owned(), count))
             .map_err(|_| Error::BadString)
     }
@@ -3846,6 +3848,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                     .bits()
                                 != 0,
                         );
+                        flags.set(
+                            crate::Barrier::TEXTURE,
+                            semantics & spirv::MemorySemantics::IMAGE_MEMORY.bits() != 0,
+                        );
                         block.push(crate::Statement::Barrier(flags), span);
                     } else {
                         log::warn!("Unsupported barrier execution scope: {}", exec_scope);
@@ -5572,7 +5578,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     8 => {
                         inst.expect(5)?;
                         let high = self.next()?;
-                        crate::Literal::U64(u64::from(high) << 32 | u64::from(low))
+                        crate::Literal::U64((u64::from(high) << 32) | u64::from(low))
                     }
                     _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 }
@@ -5587,7 +5593,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     8 => {
                         inst.expect(5)?;
                         let high = self.next()?;
-                        crate::Literal::I64((u64::from(high) << 32 | u64::from(low)) as i64)
+                        crate::Literal::I64(((u64::from(high) << 32) | u64::from(low)) as i64)
                     }
                     _ => return Err(Error::InvalidTypeWidth(width as u32)),
                 }
@@ -6062,6 +6068,8 @@ fn is_parent(mut child: usize, parent: usize, block_ctx: &BlockContext) -> bool 
 
 #[cfg(test)]
 mod test {
+    use alloc::vec;
+
     #[test]
     fn parse() {
         let bin = vec![

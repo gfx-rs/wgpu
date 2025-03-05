@@ -12,6 +12,49 @@ use core::mem::size_of;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+pub use webgpu_impl::*;
+mod webgpu_impl {
+    //! Constant values for [`super::FeaturesWebGPU`], separated so they can be picked up by
+    //! `cbindgen` in `mozilla-central` (where Firefox is developed).
+    #![allow(missing_docs)]
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_DEPTH_CLIP_CONTROL: u64 = 1 << 0;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8: u64 = 1 << 1;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC: u64 = 1 << 2;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D: u64 = 1 << 3;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2: u64 = 1 << 4;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC: u64 = 1 << 5;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 6;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 7;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 8;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 9;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 10;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 11;
+}
+
 macro_rules! bitflags_array_impl {
     ($impl_name:ident $inner_name:ident $name:ident $op:tt $($struct_names:ident)*) => (
         impl core::ops::$impl_name for $name {
@@ -69,29 +112,38 @@ macro_rules! bitflags_independent_two_arg {
 /// in a u64, we can't use a u128 because of FFI, and the number of flags is increasing.
 macro_rules! bitflags_array {
     (
-    $(#[$outer:meta])* pub struct $name:ident: [$T:ty; $Len:expr];
-    $($(#[$bit_outer:meta])*
-    $vis:vis struct $inner_name:ident $lower_inner_name:ident {
+        $(#[$outer:meta])*
+        pub struct $name:ident: [$T:ty; $Len:expr];
+
         $(
-            $(#[$inner:ident $($args:tt)*])*
-            const $Flag:tt = $value:expr;
-        )*
-    })*
-    ) => {
-        $(
-        bitflags::bitflags! {
-            $(#[$bit_outer])*
-            $vis struct $inner_name: $T {
+            $(#[$bit_outer:meta])*
+            $vis:vis struct $inner_name:ident $lower_inner_name:ident {
                 $(
-                    $(#[$inner $($args)*])*
-                    const $Flag = $value;
+                    $(#[$inner:ident $($args:tt)*])*
+                    const $Flag:tt = $value:expr;
                 )*
             }
-        }
+        )*
+    ) => {
+        $(
+            bitflags::bitflags! {
+                $(#[$bit_outer])*
+                $vis struct $inner_name: $T {
+                    $(
+                        $(#[$inner $($args)*])*
+                        const $Flag = $value;
+                    )*
+                }
+            }
         )*
 
         $(#[$outer])*
-        pub struct $name{ $($lower_inner_name: $inner_name,)* }
+        pub struct $name {
+            $(
+                #[allow(missing_docs)]
+                $vis $lower_inner_name: $inner_name,
+            )*
+        }
 
         /// Bits from `Features` in array form
         #[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
@@ -116,7 +168,9 @@ macro_rules! bitflags_array {
         #[cfg(feature = "serde")]
         impl Serialize for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where S: serde::Serializer {
+            where
+                S: serde::Serializer,
+            {
                 bitflags::serde::serialize(self, serializer)
             }
         }
@@ -124,7 +178,9 @@ macro_rules! bitflags_array {
         #[cfg(feature = "serde")]
         impl<'de> Deserialize<'de> for $name {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where D: serde::Deserializer<'de> {
+            where
+                D: serde::Deserializer<'de>,
+            {
                 bitflags::serde::deserialize(deserializer)
             }
         }
@@ -165,61 +221,62 @@ macro_rules! bitflags_array {
 
         #[cfg(feature = "serde")]
         impl WriteHex for FeatureBits {
-             fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
-                 let [$($lower_inner_name,)*] = self.0;
-                 let mut wrote = false;
-                 let mut stager = alloc::string::String::with_capacity(size_of::<$T>() * 2);
-                 // we don't want to write it if it's just zero as there may be multiple zeros
-                 // resulting in something like "00" being written out. We do want to write it if
-                 // there has already been something written though.
-                 $(if ($lower_inner_name != 0) || wrote {
-                     // First we write to a staging string, then we add any zeros (e.g if #1
-                     // is f and a u8 and #2 is a then the two combined would be f0a which requires
-                     // a 0 inserted)
-                     $lower_inner_name.write_hex(&mut stager)?;
-                     if (stager.len() != size_of::<$T>() * 2) && wrote {
-                         let zeros_to_write = (size_of::<$T>() * 2) - stager.len();
-                         for _ in 0..zeros_to_write {
-                             writer.write_char('0')?
-                         }
-                     }
-                     writer.write_str(&stager)?;
-                     stager.clear();
-                     wrote = true;
-                 })*
-                 if !wrote {
-                     writer.write_str("0")?;
-                 }
-                 Ok(())
-             }
+            fn write_hex<W: fmt::Write>(&self, mut writer: W) -> fmt::Result {
+                let [$($lower_inner_name,)*] = self.0;
+                let mut wrote = false;
+                let mut stager = alloc::string::String::with_capacity(size_of::<$T>() * 2);
+                // we don't want to write it if it's just zero as there may be multiple zeros
+                // resulting in something like "00" being written out. We do want to write it if
+                // there has already been something written though.
+                $(if ($lower_inner_name != 0) || wrote {
+                    // First we write to a staging string, then we add any zeros (e.g if #1
+                    // is f and a u8 and #2 is a then the two combined would be f0a which requires
+                    // a 0 inserted)
+                    $lower_inner_name.write_hex(&mut stager)?;
+                    if (stager.len() != size_of::<$T>() * 2) && wrote {
+                        let zeros_to_write = (size_of::<$T>() * 2) - stager.len();
+                        for _ in 0..zeros_to_write {
+                            writer.write_char('0')?
+                        }
+                    }
+                    writer.write_str(&stager)?;
+                    stager.clear();
+                    wrote = true;
+                })*
+                if !wrote {
+                    writer.write_str("0")?;
+                }
+                Ok(())
+            }
         }
 
         #[cfg(feature = "serde")]
         impl ParseHex for FeatureBits {
-             fn parse_hex(input: &str) -> Result<Self, ParseError> {
+            fn parse_hex(input: &str) -> Result<Self, ParseError> {
 
-                 let mut unset = Self::EMPTY;
-                 let mut end = input.len();
-                 if end == 0 {
-                     return Err(ParseError::empty_flag())
-                 }
-                 // we iterate starting at the least significant places and going up
-                 for (idx, _) in [$(stringify!($lower_inner_name),)*].iter().enumerate().rev() {
-                     // A byte is two hex places - u8 (1 byte) = 0x00 (2 hex places).
-                     let checked_start = end.checked_sub(size_of::<$T>() * 2);
-                     let start = checked_start.unwrap_or(0);
+                let mut unset = Self::EMPTY;
+                let mut end = input.len();
+                if end == 0 {
+                    return Err(ParseError::empty_flag())
+                }
+                // we iterate starting at the least significant places and going up
+                for (idx, _) in [$(stringify!($lower_inner_name),)*].iter().enumerate().rev() {
+                    // A byte is two hex places - u8 (1 byte) = 0x00 (2 hex places).
+                    let checked_start = end.checked_sub(size_of::<$T>() * 2);
+                    let start = checked_start.unwrap_or(0);
 
-                     let cur_input = &input[start..end];
-                     unset.0[idx] = <$T>::from_str_radix(cur_input, 16).map_err(|_|ParseError::invalid_hex_flag(cur_input))?;
+                    let cur_input = &input[start..end];
+                    unset.0[idx] = <$T>::from_str_radix(cur_input, 16)
+                        .map_err(|_|ParseError::invalid_hex_flag(cur_input))?;
 
-                     end = start;
+                    end = start;
 
-                     if let None = checked_start {
-                         break;
-                     }
-                 }
-                 Ok(unset)
-             }
+                    if let None = checked_start {
+                        break;
+                    }
+                }
+                Ok(unset)
+            }
         }
 
         impl bitflags::Bits for FeatureBits {
@@ -234,12 +291,16 @@ macro_rules! bitflags_array {
             type Bits = FeatureBits;
 
             fn bits(&self) -> FeatureBits {
-                FeatureBits([$(self.$lower_inner_name.bits(),)*])
+                FeatureBits([
+                    $(self.$lower_inner_name.bits(),)*
+                ])
             }
 
-            fn from_bits_retain(bits:FeatureBits) -> Self {
+            fn from_bits_retain(bits: FeatureBits) -> Self {
                 let [$($lower_inner_name,)*] = bits.0;
-                Self { $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)* }
+                Self {
+                    $($lower_inner_name: $inner_name::from_bits_retain($lower_inner_name),)*
+                }
             }
 
             fn empty() -> Self {
@@ -252,21 +313,33 @@ macro_rules! bitflags_array {
         }
 
         impl $name {
-            pub(crate) const FLAGS: &'static [bitflags::Flag<Self>] = &[$($(bitflags::Flag::new(stringify!($Flag), $name::$Flag),)*)*];
+            pub(crate) const FLAGS: &'static [bitflags::Flag<Self>] = &[
+                $(
+                    $(
+                        bitflags::Flag::new(stringify!($Flag), $name::$Flag),
+                    )*
+                )*
+            ];
 
             /// Gets the set flags as a container holding an array of bits.
             pub const fn bits(&self) -> FeatureBits {
-                FeatureBits([$(self.$lower_inner_name.bits(),)*])
+                FeatureBits([
+                    $(self.$lower_inner_name.bits(),)*
+                ])
             }
 
             /// Returns self with no flags set.
             pub const fn empty() -> Self {
-                Self { $($lower_inner_name: $inner_name::empty(),)* }
+                Self {
+                    $($lower_inner_name: $inner_name::empty(),)*
+                }
             }
 
             /// Returns self with all flags set.
             pub const fn all() -> Self {
-                Self { $($lower_inner_name: $inner_name::all(),)* }
+                Self {
+                    $($lower_inner_name: $inner_name::all(),)*
+                }
             }
 
             /// Whether all the bits set in `other` are all set in `self`
@@ -312,10 +385,12 @@ macro_rules! bitflags_array {
 
             /// Bitwise not - `!self`
             pub const fn complement(self) -> Self {
-                Self { $($lower_inner_name: self.$lower_inner_name.complement(),)* }
+                Self {
+                    $($lower_inner_name: self.$lower_inner_name.complement(),)*
+                }
             }
 
-            /// Calls [Self::insert] if `set` is true and otherwise calls [Self::remove].
+            /// Calls [`Self::insert`] if `set` is true and otherwise calls [`Self::remove`].
             pub fn set(&mut self, other:Self, set: bool) {
                 $(self.$lower_inner_name.set(other.$lower_inner_name, set);)*
             }
@@ -340,11 +415,14 @@ macro_rules! bitflags_array {
             pub const fn from_bits(bits:FeatureBits) -> Option<Self> {
                 let [$($lower_inner_name,)*] = bits.0;
                 // The ? operator does not work in a const context.
-                Some(Self { $($lower_inner_name: if let Some($lower_inner_name) = $inner_name::from_bits($lower_inner_name) {
-                    $lower_inner_name
-                } else {
-                    return None
-                },)* })
+                Some(Self {
+                    $(
+                        $lower_inner_name: match $inner_name::from_bits($lower_inner_name) {
+                            Some(some) => some,
+                            None => return None,
+                        },
+                    )*
+                })
             }
 
             /// Takes in [`FeatureBits`] and returns Self with only valid bits (all other bits removed)
@@ -363,12 +441,14 @@ macro_rules! bitflags_array {
             /// Takes in a name and returns Self if it matches or none if the name does not match
             /// the name of any of the flags. Name is capitalisation dependent.
             pub fn from_name(name: &str) -> Option<Self> {
-                $($({
-                    if name == stringify!($Flag) {
-                        return Some(Self::$Flag);
-                    }
-                })*)*
-                None
+                match name {
+                    $(
+                        $(
+                            stringify!($Flag) => Some(Self::$Flag),
+                        )*
+                    )*
+                    _ => None,
+                }
             }
 
             /// Combines the features from the internal flags into the entire features struct
@@ -389,29 +469,29 @@ macro_rules! bitflags_array {
             }
 
             $(
-            $(
-            $(#[$inner $($args)*])*
-            // We need this for structs with only a member.
-            #[allow(clippy::needless_update)]
-            pub const $Flag: Self = Self {
-                $lower_inner_name: $inner_name::from_bits_truncate($value),
-                ..Self::empty()
-            };
-            )*
+                $(
+                    $(#[$inner $($args)*])*
+                    // We need this for structs with only a member.
+                    #[allow(clippy::needless_update)]
+                    pub const $Flag: Self = Self {
+                        $lower_inner_name: $inner_name::from_bits_truncate($value),
+                        ..Self::empty()
+                    };
+                )*
             )*
         }
 
         $(
-        impl From<$inner_name> for Features {
-            // We need this for structs with only a member.
-            #[allow(clippy::needless_update)]
-            fn from($lower_inner_name: $inner_name) -> Self {
-                Self {
-                    $lower_inner_name,
-                    ..Self::empty()
+            impl From<$inner_name> for Features {
+                // We need this for structs with only a member.
+                #[allow(clippy::needless_update)]
+                fn from($lower_inner_name: $inner_name) -> Self {
+                    Self {
+                        $lower_inner_name,
+                        ..Self::empty()
+                    }
                 }
             }
-        }
         )*
     };
 }
@@ -676,31 +756,17 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 11;
-        /// Allows shaders to index uniform buffer and storage texture resource arrays with dynamically non-uniform values:
+        /// Allows shaders to index storage texture resource arrays with dynamically non-uniform values:
         ///
         /// ex. `texture_array[vertex_data]`
-        ///
-        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
-        ///
-        /// `#extension GL_EXT_nonuniform_qualifier : require`
-        ///
-        /// and then used either as `nonuniformEXT` qualifier in variable declaration:
-        ///
-        /// ex. `layout(location = 0) nonuniformEXT flat in int vertex_data;`
-        ///
-        /// or as `nonuniformEXT` constructor:
-        ///
-        /// ex. `texture_array[nonuniformEXT(vertex_data)]`
-        ///
-        /// WGSL and HLSL do not need any extension.
         ///
         /// Supported platforms:
         /// - DX12
         /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderUniformBufferArrayNonUniformIndexing & shaderStorageTextureArrayNonUniformIndexing feature)
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderStorageTextureArrayNonUniformIndexing feature)
         ///
         /// This is a native only feature.
-        const UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 12;
+        const STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 12;
         /// Allows the user to create bind groups containing arrays with less bindings than the BindGroupLayout.
         ///
         /// Supported platforms:
@@ -1071,6 +1137,48 @@ bitflags_array! {
         /// This is a native only feature.
         const TEXTURE_INT64_ATOMIC = 1 << 45;
 
+        /// Allows uniform buffers to be bound as binding arrays.
+        ///
+        /// This allows:
+        /// - Shaders to contain `var<uniform> buffer: binding_array<UniformBuffer>;`
+        /// - The `count` field of `BindGroupLayoutEntry`s with `Uniform` buffers, to be set to `Some`.
+        ///
+        /// Supported platforms:
+        /// - None (<https://github.com/gfx-rs/wgpu/issues/7149>)
+        ///
+        /// Potential Platforms:
+        /// - DX12
+        /// - Metal
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s `shaderUniformBufferArrayNonUniformIndexing` feature)
+        ///
+        /// This is a native only feature.
+        const UNIFORM_BUFFER_BINDING_ARRAYS = 1 << 46;
+
+        /// Enables mesh shaders and task shaders in mesh shader pipelines.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html))
+        ///
+        /// Potential Platforms:
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const MESH_SHADER = 1 << 47;
+        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
+        /// major bugs in them and are expected to be subject to breaking changes, suggestions
+        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/6762)
+        ///
+        /// Allows for returning of the hit triangle's vertex position when tracing with an
+        /// acceleration structure marked with [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`].
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        ///
+        /// This is a native only feature
+        ///
+        /// [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`]: super::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN
+        const EXPERIMENTAL_RAY_HIT_VERTEX_RETURN = 1 << 48;
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1101,7 +1209,7 @@ bitflags_array! {
         /// - some mobile chips
         ///
         /// This is a web and native feature.
-        const DEPTH_CLIP_CONTROL = 1 << 0;
+        const DEPTH_CLIP_CONTROL = WEBGPU_FEATURE_DEPTH_CLIP_CONTROL;
 
         /// Allows for explicit creation of textures of format [`TextureFormat::Depth32FloatStencil8`]
         ///
@@ -1114,7 +1222,7 @@ bitflags_array! {
         /// This is a web and native feature.
         ///
         /// [`TextureFormat::Depth32FloatStencil8`]: super::TextureFormat::Depth32FloatStencil8
-        const DEPTH32FLOAT_STENCIL8 = 1 << 1;
+        const DEPTH32FLOAT_STENCIL8 = WEBGPU_FEATURE_DEPTH32FLOAT_STENCIL8;
 
         /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
         /// with 8 or 16 bytes per block.
@@ -1132,7 +1240,7 @@ bitflags_array! {
         /// - Mobile (All Apple9 and some Apple7 and Apple8 devices)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_BC = 1 << 2;
+        const TEXTURE_COMPRESSION_BC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC;
 
 
         /// Allows the 3d dimension for textures with BC compressed formats.
@@ -1145,7 +1253,7 @@ bitflags_array! {
         /// - Mobile (All Apple9 and some Apple7 and Apple8 devices)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_BC_SLICED_3D = 1 << 3;
+        const TEXTURE_COMPRESSION_BC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_BC_SLICED_3D;
 
         /// Enables ETC family of compressed textures. All ETC textures use 4x4 pixel blocks.
         /// ETC2 RGB and RGBA1 are 8 bytes per block. RTC2 RGBA8 and EAC are 16 bytes per block.
@@ -1161,7 +1269,7 @@ bitflags_array! {
         /// - Mobile (some)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_ETC2 = 1 << 4;
+        const TEXTURE_COMPRESSION_ETC2 = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ETC2;
 
         /// Enables ASTC family of compressed textures. ASTC textures use pixel blocks varying from 4x4 to 12x12.
         /// Blocks are always 16 bytes.
@@ -1177,7 +1285,7 @@ bitflags_array! {
         /// - Mobile (some)
         ///
         /// This is a web and native feature.
-        const TEXTURE_COMPRESSION_ASTC = 1 << 5;
+        const TEXTURE_COMPRESSION_ASTC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC;
 
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
         /// all work before the query is finished.
@@ -1206,7 +1314,7 @@ bitflags_array! {
         /// [`ComputePassDescriptor::timestamp_writes`]: https://docs.rs/wgpu/latest/wgpu/struct.ComputePassDescriptor.html#structfield.timestamp_writes
         /// [`CommandEncoder::resolve_query_set`]: https://docs.rs/wgpu/latest/wgpu/struct.CommandEncoder.html#method.resolve_query_set
         /// [`Queue::get_timestamp_period`]: https://docs.rs/wgpu/latest/wgpu/struct.Queue.html#method.get_timestamp_period
-        const TIMESTAMP_QUERY = 1 << 6;
+        const TIMESTAMP_QUERY = WEBGPU_FEATURE_TIMESTAMP_QUERY;
 
         /// Allows non-zero value for the `first_instance` member in indirect draw calls.
         ///
@@ -1225,7 +1333,7 @@ bitflags_array! {
         /// - OpenGL ES / WebGL
         ///
         /// This is a web and native feature.
-        const INDIRECT_FIRST_INSTANCE = 1 << 7;
+        const INDIRECT_FIRST_INSTANCE = WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE;
 
         /// Allows shaders to acquire the FP16 ability
         ///
@@ -1236,7 +1344,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a web and native feature.
-        const SHADER_F16 = 1 << 8;
+        const SHADER_F16 = WEBGPU_FEATURE_SHADER_F16;
 
 
         /// Allows for usage of textures of format [`TextureFormat::Rg11b10Ufloat`] as a render target
@@ -1249,7 +1357,7 @@ bitflags_array! {
         /// This is a web and native feature.
         ///
         /// [`TextureFormat::Rg11b10Ufloat`]: super::TextureFormat::Rg11b10Ufloat
-        const RG11B10UFLOAT_RENDERABLE = 1 << 9;
+        const RG11B10UFLOAT_RENDERABLE = WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE;
 
         /// Allows the [`TextureUsages::STORAGE_BINDING`] usage on textures with format [`TextureFormat::Bgra8Unorm`]
         ///
@@ -1262,7 +1370,7 @@ bitflags_array! {
         ///
         /// [`TextureFormat::Bgra8Unorm`]: super::TextureFormat::Bgra8Unorm
         /// [`TextureUsages::STORAGE_BINDING`]: super::TextureUsages::STORAGE_BINDING
-        const BGRA8UNORM_STORAGE = 1 << 10;
+        const BGRA8UNORM_STORAGE = WEBGPU_FEATURE_BGRA8UNORM_STORAGE;
 
 
         /// Allows textures with formats "r32float", "rg32float", and "rgba32float" to be filterable.
@@ -1274,7 +1382,7 @@ bitflags_array! {
         /// - GL with one of `GL_ARB_color_buffer_float`/`GL_EXT_color_buffer_float`/`OES_texture_float_linear`
         ///
         /// This is a web and native feature.
-        const FLOAT32_FILTERABLE = 1 << 11;
+        const FLOAT32_FILTERABLE = WEBGPU_FEATURE_FLOAT32_FILTERABLE;
     }
 }
 

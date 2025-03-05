@@ -1,3 +1,5 @@
+use alloc::{vec, vec::Vec};
+
 use super::{
     ast::{
         BuiltinVariations, FunctionDeclaration, FunctionKind, Overload, ParameterInfo,

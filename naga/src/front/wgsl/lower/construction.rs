@@ -1,10 +1,15 @@
-use std::num::NonZeroU32;
-
-use crate::front::wgsl::parse::ast;
-use crate::{Handle, Span};
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::num::NonZeroU32;
 
 use crate::front::wgsl::error::Error;
 use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
+use crate::front::wgsl::parse::ast;
+use crate::{Handle, Span};
 
 /// A cooked form of `ast::ConstructorType` that uses Naga types whenever
 /// possible.
@@ -300,7 +305,7 @@ impl<'source> Lowerer<'source, '_> {
                 Constructor::Type((_, &crate::TypeInner::Vector { size, scalar })),
             ) => {
                 ctx.convert_slice_to_common_leaf_scalar(
-                    std::slice::from_mut(&mut component),
+                    core::slice::from_mut(&mut component),
                     scalar,
                 )?;
                 expr = crate::Expression::Splat {
@@ -490,8 +495,8 @@ impl<'source> Lowerer<'source, '_> {
                         NonZeroU32::new(u32::try_from(components.len()).unwrap()).unwrap(),
                     ),
                     stride: {
-                        self.layouter.update(ctx.module.to_ctx()).unwrap();
-                        self.layouter[base].to_stride()
+                        ctx.layouter.update(ctx.module.to_ctx()).unwrap();
+                        ctx.layouter[base].to_stride()
                     },
                 };
                 let ty = ctx.ensure_type_exists(inner);
@@ -579,7 +584,7 @@ impl<'source> Lowerer<'source, '_> {
             }
             ast::ConstructorType::PartialVector { size } => Constructor::PartialVector { size },
             ast::ConstructorType::Vector { size, ty, ty_span } => {
-                let ty = self.resolve_ast_type(ty, &mut ctx.as_global())?;
+                let ty = self.resolve_ast_type(ty, &mut ctx.as_const())?;
                 let scalar = match ctx.module.types[ty].inner {
                     crate::TypeInner::Scalar(sc) => sc,
                     _ => return Err(Error::UnknownScalarType(ty_span)),
@@ -596,7 +601,7 @@ impl<'source> Lowerer<'source, '_> {
                 ty,
                 ty_span,
             } => {
-                let ty = self.resolve_ast_type(ty, &mut ctx.as_global())?;
+                let ty = self.resolve_ast_type(ty, &mut ctx.as_const())?;
                 let scalar = match ctx.module.types[ty].inner {
                     crate::TypeInner::Scalar(sc) => sc,
                     _ => return Err(Error::UnknownScalarType(ty_span)),
@@ -613,11 +618,11 @@ impl<'source> Lowerer<'source, '_> {
             }
             ast::ConstructorType::PartialArray => Constructor::PartialArray,
             ast::ConstructorType::Array { base, size } => {
-                let base = self.resolve_ast_type(base, &mut ctx.as_global())?;
-                let size = self.array_size(size, &mut ctx.as_global())?;
+                let base = self.resolve_ast_type(base, &mut ctx.as_const())?;
+                let size = self.array_size(size, &mut ctx.as_const())?;
 
-                self.layouter.update(ctx.module.to_ctx()).unwrap();
-                let stride = self.layouter[base].to_stride();
+                ctx.layouter.update(ctx.module.to_ctx()).unwrap();
+                let stride = ctx.layouter[base].to_stride();
 
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Array { base, size, stride });
                 Constructor::Type(ty)

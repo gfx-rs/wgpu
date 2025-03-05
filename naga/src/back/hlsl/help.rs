@@ -26,13 +26,18 @@ int dim_1d = NagaDimensions1D(image_1d);
 ```
 */
 
+use alloc::format;
+use core::fmt::Write;
+
 use super::{
     super::FunctionCtx,
-    writer::{EXTRACT_BITS_FUNCTION, INSERT_BITS_FUNCTION},
-    BackendResult,
+    writer::{
+        ABS_FUNCTION, DIV_FUNCTION, EXTRACT_BITS_FUNCTION, INSERT_BITS_FUNCTION, MOD_FUNCTION,
+        NEG_FUNCTION,
+    },
+    BackendResult, WrappedType,
 };
-use crate::{arena::Handle, proc::NameKey};
-use std::fmt::Write;
+use crate::{arena::Handle, proc::NameKey, ScalarKind};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedArrayLength {
@@ -73,6 +78,23 @@ pub(super) struct WrappedMath {
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedZeroValue {
     pub(super) ty: Handle<crate::Type>,
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedUnaryOp {
+    pub(super) op: crate::UnaryOperator,
+    // This can only represent scalar or vector types. If we ever need to wrap
+    // unary ops with other types, we'll need a better representation.
+    pub(super) ty: (Option<crate::VectorSize>, crate::Scalar),
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedBinaryOp {
+    pub(super) op: crate::BinaryOperator,
+    // This can only represent scalar or vector types. If we ever need to wrap
+    // binary ops with other types, we'll need a better representation.
+    pub(super) left_ty: (Option<crate::VectorSize>, crate::Scalar),
+    pub(super) right_ty: (Option<crate::VectorSize>, crate::Scalar),
 }
 
 /// HLSL backend requires its own `ImageQuery` enum.
@@ -127,6 +149,8 @@ impl From<crate::ImageQuery> for ImageQuery {
         }
     }
 }
+
+pub(super) const IMAGE_STORAGE_LOAD_SCALAR_WRAPPER: &str = "LoadedStorageValueFrom";
 
 impl<W: Write> super::Writer<'_, W> {
     pub(super) fn write_image_type(
@@ -513,6 +537,60 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
+    /// Writes the conversion from a single length storage texture load to a vec4 with the loaded
+    /// scalar in its `x` component, 1 in its `a` component and 0 everywhere else.
+    fn write_loaded_scalar_to_storage_loaded_value(
+        &mut self,
+        scalar_type: crate::Scalar,
+    ) -> BackendResult {
+        const ARGUMENT_VARIABLE_NAME: &str = "arg";
+        const RETURN_VARIABLE_NAME: &str = "ret";
+
+        let zero;
+        let one;
+        match scalar_type.kind {
+            ScalarKind::Sint => {
+                assert_eq!(
+                    scalar_type.width, 4,
+                    "Scalar {scalar_type:?} is not a result from any storage format"
+                );
+                zero = "0";
+                one = "1";
+            }
+            ScalarKind::Uint => match scalar_type.width {
+                4 => {
+                    zero = "0u";
+                    one = "1u";
+                }
+                8 => {
+                    zero = "0uL";
+                    one = "1uL"
+                }
+                _ => unreachable!("Scalar {scalar_type:?} is not a result from any storage format"),
+            },
+            ScalarKind::Float => {
+                assert_eq!(
+                    scalar_type.width, 4,
+                    "Scalar {scalar_type:?} is not a result from any storage format"
+                );
+                zero = "0.0";
+                one = "1.0";
+            }
+            _ => unreachable!("Scalar {scalar_type:?} is not a result from any storage format"),
+        }
+
+        let ty = scalar_type.to_hlsl_str()?;
+        writeln!(
+            self.out,
+            "{ty}4 {IMAGE_STORAGE_LOAD_SCALAR_WRAPPER}{ty}({ty} {ARGUMENT_VARIABLE_NAME}) {{\
+    {ty}4 {RETURN_VARIABLE_NAME} = {ty}4({ARGUMENT_VARIABLE_NAME}, {zero}, {zero}, {one});\
+    return {RETURN_VARIABLE_NAME};\
+}}"
+        )?;
+
+        Ok(())
+    }
+
     pub(super) fn write_wrapped_struct_matrix_get_function_name(
         &mut self,
         access: WrappedStructMatrixAccess,
@@ -848,11 +926,12 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
-    /// Helper function that writes compose wrapped functions
-    pub(super) fn write_wrapped_compose_functions(
+    /// Helper function that writes wrapped functions for expressions in a function
+    pub(super) fn write_wrapped_expression_functions(
         &mut self,
         module: &crate::Module,
         expressions: &crate::Arena<crate::Expression>,
+        context: Option<&FunctionCtx>,
     ) -> BackendResult {
         for (handle, _) in expressions.iter() {
             match expressions[handle] {
@@ -860,12 +939,29 @@ impl<W: Write> super::Writer<'_, W> {
                     match module.types[ty].inner {
                         crate::TypeInner::Struct { .. } | crate::TypeInner::Array { .. } => {
                             let constructor = WrappedConstructor { ty };
-                            if self.wrapped.constructors.insert(constructor) {
+                            if self.wrapped.insert(WrappedType::Constructor(constructor)) {
                                 self.write_wrapped_constructor_function(module, constructor)?;
                             }
                         }
                         _ => {}
                     };
+                }
+                crate::Expression::ImageLoad { image, .. } => {
+                    // This can only happen in a function as this is not a valid const expression
+                    match *context.as_ref().unwrap().resolve_type(image, &module.types) {
+                        crate::TypeInner::Image {
+                            class: crate::ImageClass::Storage { format, .. },
+                            ..
+                        } => {
+                            if format.single_component() {
+                                let scalar: crate::Scalar = format.into();
+                                if self.wrapped.insert(WrappedType::ImageLoadScalar(scalar)) {
+                                    self.write_loaded_scalar_to_storage_loaded_value(scalar)?;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                 }
                 crate::Expression::RayQueryGetIntersection { committed, .. } => {
                     if committed {
@@ -884,7 +980,7 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
-    // TODO: we could merge this with iteration in write_wrapped_compose_functions...
+    // TODO: we could merge this with iteration in write_wrapped_expression_functions...
     //
     /// Helper function that writes zero value wrapped functions
     pub(super) fn write_wrapped_zero_value_functions(
@@ -895,7 +991,7 @@ impl<W: Write> super::Writer<'_, W> {
         for (handle, _) in expressions.iter() {
             if let crate::Expression::ZeroValue(ty) = expressions[handle] {
                 let zero_value = WrappedZeroValue { ty };
-                if self.wrapped.zero_values.insert(zero_value) {
+                if self.wrapped.insert(WrappedType::ZeroValue(zero_value)) {
                     self.write_wrapped_zero_value_function(module, zero_value)?;
                 }
             }
@@ -917,6 +1013,8 @@ impl<W: Write> super::Writer<'_, W> {
                 arg3: _arg3,
             } = *expression
             {
+                let arg_ty = func_ctx.resolve_type(arg, &module.types);
+
                 match fun {
                     crate::MathFunction::ExtractBits => {
                         // The behavior of our extractBits polyfill is undefined if offset + count > bit_width. We need
@@ -931,7 +1029,6 @@ impl<W: Write> super::Writer<'_, W> {
                         // c = min(count, w - o)
                         //
                         // bitfieldExtract(x, o, c)
-                        let arg_ty = func_ctx.resolve_type(arg, &module.types);
                         let scalar = arg_ty.scalar().unwrap();
                         let components = arg_ty.components();
 
@@ -941,7 +1038,7 @@ impl<W: Write> super::Writer<'_, W> {
                             components,
                         };
 
-                        if !self.wrapped.math.insert(wrapped) {
+                        if !self.wrapped.insert(WrappedType::Math(wrapped)) {
                             continue;
                         }
 
@@ -974,7 +1071,6 @@ impl<W: Write> super::Writer<'_, W> {
                     crate::MathFunction::InsertBits => {
                         // The behavior of our insertBits polyfill has the same constraints as the extractBits polyfill.
 
-                        let arg_ty = func_ctx.resolve_type(arg, &module.types);
                         let scalar = arg_ty.scalar().unwrap();
                         let components = arg_ty.components();
 
@@ -984,7 +1080,7 @@ impl<W: Write> super::Writer<'_, W> {
                             components,
                         };
 
-                        if !self.wrapped.math.insert(wrapped) {
+                        if !self.wrapped.insert(WrappedType::Math(wrapped)) {
                             continue;
                         }
 
@@ -1031,6 +1127,226 @@ impl<W: Write> super::Writer<'_, W> {
                         // End of function body
                         writeln!(self.out, "}}")?;
                     }
+                    // Taking the absolute value of the minimum value of a two's
+                    // complement signed integer type causes overflow, which is
+                    // undefined behaviour in HLSL. To avoid this, when the value is
+                    // negative we bitcast the value to unsigned and negate it, then
+                    // bitcast back to signed.
+                    // This adheres to the WGSL spec in that the absolute of the type's
+                    // minimum value should equal to the minimum value.
+                    //
+                    // TODO(#7109): asint()/asuint() only support 32-bit integers, so we
+                    // must find another solution for different bit-widths.
+                    crate::MathFunction::Abs
+                        if matches!(arg_ty.scalar(), Some(crate::Scalar::I32)) =>
+                    {
+                        let scalar = arg_ty.scalar().unwrap();
+                        let components = arg_ty.components();
+
+                        let wrapped = WrappedMath {
+                            fun,
+                            scalar,
+                            components,
+                        };
+
+                        if !self.wrapped.insert(WrappedType::Math(wrapped)) {
+                            continue;
+                        }
+
+                        self.write_value_type(module, arg_ty)?;
+                        write!(self.out, " {ABS_FUNCTION}(")?;
+                        self.write_value_type(module, arg_ty)?;
+                        writeln!(self.out, " val) {{")?;
+
+                        let level = crate::back::Level(1);
+                        writeln!(
+                            self.out,
+                            "{level}return val >= 0 ? val : asint(-asuint(val));"
+                        )?;
+                        writeln!(self.out, "}}")?;
+                        writeln!(self.out)?;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_unary_ops(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &FunctionCtx,
+    ) -> BackendResult {
+        for (_, expression) in func_ctx.expressions.iter() {
+            if let crate::Expression::Unary { op, expr } = *expression {
+                let expr_ty = func_ctx.resolve_type(expr, &module.types);
+                let Some((vector_size, scalar)) = expr_ty.vector_size_and_scalar() else {
+                    continue;
+                };
+                let wrapped = WrappedUnaryOp {
+                    op,
+                    ty: (vector_size, scalar),
+                };
+
+                // Negating the minimum value of a two's complement signed integer type
+                // causes overflow, which is undefined behaviour in HLSL. To avoid this
+                // we bitcast the value to unsigned and negate it, then bitcast back to
+                // signed. This adheres to the WGSL spec in that the negative of the
+                // type's minimum value should equal to the minimum value.
+                //
+                // TODO(#7109): asint()/asuint() only support 32-bit integers, so we must
+                // find another solution for different bit-widths.
+                match (op, scalar) {
+                    (crate::UnaryOperator::Negate, crate::Scalar::I32) => {
+                        if !self.wrapped.insert(WrappedType::UnaryOp(wrapped)) {
+                            continue;
+                        }
+
+                        self.write_value_type(module, expr_ty)?;
+                        write!(self.out, " {NEG_FUNCTION}(")?;
+                        self.write_value_type(module, expr_ty)?;
+                        writeln!(self.out, " val) {{")?;
+
+                        let level = crate::back::Level(1);
+                        writeln!(self.out, "{level}return asint(-asuint(val));",)?;
+                        writeln!(self.out, "}}")?;
+                        writeln!(self.out)?;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_binary_ops(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &FunctionCtx,
+    ) -> BackendResult {
+        for (expr_handle, expression) in func_ctx.expressions.iter() {
+            if let crate::Expression::Binary { op, left, right } = *expression {
+                let expr_ty = func_ctx.resolve_type(expr_handle, &module.types);
+                let left_ty = func_ctx.resolve_type(left, &module.types);
+                let right_ty = func_ctx.resolve_type(right, &module.types);
+
+                match (op, expr_ty.scalar()) {
+                    // Signed integer division of the type's minimum representable value
+                    // divided by -1, or signed or unsigned division by zero, is
+                    // undefined behaviour in HLSL. We override the divisor to 1 in these
+                    // cases.
+                    // This adheres to the WGSL spec in that:
+                    // * TYPE_MIN / -1 == TYPE_MIN
+                    // * x / 0 == x
+                    (
+                        crate::BinaryOperator::Divide,
+                        Some(
+                            scalar @ crate::Scalar {
+                                kind: ScalarKind::Sint | ScalarKind::Uint,
+                                ..
+                            },
+                        ),
+                    ) => {
+                        let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
+                            continue;
+                        };
+                        let Some(right_wrapped_ty) = right_ty.vector_size_and_scalar() else {
+                            continue;
+                        };
+                        let wrapped = WrappedBinaryOp {
+                            op,
+                            left_ty: left_wrapped_ty,
+                            right_ty: right_wrapped_ty,
+                        };
+                        if !self.wrapped.insert(WrappedType::BinaryOp(wrapped)) {
+                            continue;
+                        }
+
+                        self.write_value_type(module, expr_ty)?;
+                        write!(self.out, " {DIV_FUNCTION}(")?;
+                        self.write_value_type(module, left_ty)?;
+                        write!(self.out, " lhs, ")?;
+                        self.write_value_type(module, right_ty)?;
+                        writeln!(self.out, " rhs) {{")?;
+                        let level = crate::back::Level(1);
+                        match scalar.kind {
+                            ScalarKind::Sint => {
+                                let min = -1i64 << (scalar.width as u32 * 8 - 1);
+                                writeln!(self.out, "{level}return lhs / (((lhs == {min} & rhs == -1) | (rhs == 0)) ? 1 : rhs);")?
+                            }
+                            ScalarKind::Uint => {
+                                writeln!(self.out, "{level}return lhs / (rhs == 0u ? 1u : rhs);")?
+                            }
+                            _ => unreachable!(),
+                        }
+                        writeln!(self.out, "}}")?;
+                        writeln!(self.out)?;
+                    }
+                    // The modulus operator is only defined for integers in HLSL when
+                    // either both sides are positive or both sides are negative. To
+                    // avoid this undefined behaviour we use the following equation:
+                    //
+                    // dividend - (dividend / divisor) * divisor
+                    //
+                    // overriding the divisor to 1 if either it is 0, or it is -1
+                    // and the dividend is the minimum representable value.
+                    //
+                    // This adheres to the WGSL spec in that:
+                    // * min_value % -1 == 0
+                    // * x % 0 == 0
+                    (
+                        crate::BinaryOperator::Modulo,
+                        Some(
+                            scalar @ crate::Scalar {
+                                kind: ScalarKind::Sint | ScalarKind::Uint,
+                                ..
+                            },
+                        ),
+                    ) => {
+                        let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
+                            continue;
+                        };
+                        let Some(right_wrapped_ty) = right_ty.vector_size_and_scalar() else {
+                            continue;
+                        };
+                        let wrapped = WrappedBinaryOp {
+                            op,
+                            left_ty: left_wrapped_ty,
+                            right_ty: right_wrapped_ty,
+                        };
+                        if !self.wrapped.insert(WrappedType::BinaryOp(wrapped)) {
+                            continue;
+                        }
+
+                        self.write_value_type(module, expr_ty)?;
+                        write!(self.out, " {MOD_FUNCTION}(")?;
+                        self.write_value_type(module, left_ty)?;
+                        write!(self.out, " lhs, ")?;
+                        self.write_value_type(module, right_ty)?;
+                        writeln!(self.out, " rhs) {{")?;
+                        let level = crate::back::Level(1);
+                        match scalar.kind {
+                            ScalarKind::Sint => {
+                                let min = -1i64 << (scalar.width as u32 * 8 - 1);
+                                write!(self.out, "{level}")?;
+                                self.write_value_type(module, right_ty)?;
+                                writeln!(self.out, " divisor = ((lhs == {min} & rhs == -1) | (rhs == 0)) ? 1 : rhs;")?;
+                                writeln!(
+                                    self.out,
+                                    "{level}return lhs - (lhs / divisor) * divisor;"
+                                )?
+                            }
+                            ScalarKind::Uint => {
+                                writeln!(self.out, "{level}return lhs % (rhs == 0u ? 1u : rhs);")?
+                            }
+                            _ => unreachable!(),
+                        }
+                        writeln!(self.out, "}}")?;
+                        writeln!(self.out)?;
+                    }
                     _ => {}
                 }
             }
@@ -1046,7 +1362,9 @@ impl<W: Write> super::Writer<'_, W> {
         func_ctx: &FunctionCtx,
     ) -> BackendResult {
         self.write_wrapped_math_functions(module, func_ctx)?;
-        self.write_wrapped_compose_functions(module, func_ctx.expressions)?;
+        self.write_wrapped_unary_ops(module, func_ctx)?;
+        self.write_wrapped_binary_ops(module, func_ctx)?;
+        self.write_wrapped_expression_functions(module, func_ctx.expressions, Some(func_ctx))?;
         self.write_wrapped_zero_value_functions(module, func_ctx.expressions)?;
 
         for (handle, _) in func_ctx.expressions.iter() {
@@ -1075,7 +1393,7 @@ impl<W: Write> super::Writer<'_, W> {
                         writable: storage_access.contains(crate::StorageAccess::STORE),
                     };
 
-                    if self.wrapped.array_lengths.insert(wal) {
+                    if self.wrapped.insert(WrappedType::ArrayLength(wal)) {
                         self.write_wrapped_array_length_function(wal)?;
                     }
                 }
@@ -1094,7 +1412,7 @@ impl<W: Write> super::Writer<'_, W> {
                         _ => unreachable!("we only query images"),
                     };
 
-                    if self.wrapped.image_queries.insert(wiq) {
+                    if self.wrapped.insert(WrappedType::ImageQuery(wiq)) {
                         self.write_wrapped_image_query_function(module, wiq, handle, func_ctx)?;
                     }
                 }
@@ -1123,7 +1441,7 @@ impl<W: Write> super::Writer<'_, W> {
                                 }
 
                                 let constructor = WrappedConstructor { ty };
-                                if writer.wrapped.constructors.insert(constructor) {
+                                if writer.wrapped.insert(WrappedType::Constructor(constructor)) {
                                     writer
                                         .write_wrapped_constructor_function(module, constructor)?;
                                 }
@@ -1132,7 +1450,7 @@ impl<W: Write> super::Writer<'_, W> {
                                 write_wrapped_constructor(writer, base, module)?;
 
                                 let constructor = WrappedConstructor { ty };
-                                if writer.wrapped.constructors.insert(constructor) {
+                                if writer.wrapped.insert(WrappedType::Constructor(constructor)) {
                                     writer
                                         .write_wrapped_constructor_function(module, constructor)?;
                                 }
@@ -1168,7 +1486,7 @@ impl<W: Write> super::Writer<'_, W> {
                                 let ty = base_ty_handle.unwrap();
                                 let access = WrappedStructMatrixAccess { ty, index };
 
-                                if self.wrapped.struct_matrix_access.insert(access) {
+                                if self.wrapped.insert(WrappedType::StructMatrixAccess(access)) {
                                     self.write_wrapped_struct_matrix_get_function(module, access)?;
                                     self.write_wrapped_struct_matrix_set_function(module, access)?;
                                     self.write_wrapped_struct_matrix_set_vec_function(
@@ -1295,8 +1613,26 @@ impl<W: Write> super::Writer<'_, W> {
                 self.write_expr(module, expr, func_ctx)?;
             }
             if let Some(expr) = mip_level {
+                // Explicit cast if needed
+                let cast_to_int = matches!(
+                    *func_ctx.resolve_type(expr, &module.types),
+                    crate::TypeInner::Scalar(crate::Scalar {
+                        kind: ScalarKind::Uint,
+                        ..
+                    })
+                );
+
                 write!(self.out, ", ")?;
+
+                if cast_to_int {
+                    write!(self.out, "int(")?;
+                }
+
                 self.write_expr(module, expr, func_ctx)?;
+
+                if cast_to_int {
+                    write!(self.out, ")")?;
+                }
             }
             write!(self.out, ")")?;
         }
@@ -1379,7 +1715,7 @@ impl<W: Write> super::Writer<'_, W> {
                 }) = super::writer::get_inner_matrix_data(module, global.ty)
                 {
                     let entry = WrappedMatCx2 { columns };
-                    if self.wrapped.mat_cx2s.insert(entry) {
+                    if self.wrapped.insert(WrappedType::MatCx2(entry)) {
                         self.write_mat_cx2_typedef_and_functions(entry)?;
                     }
                 }
@@ -1397,7 +1733,7 @@ impl<W: Write> super::Writer<'_, W> {
                         }) = super::writer::get_inner_matrix_data(module, member.ty)
                         {
                             let entry = WrappedMatCx2 { columns };
-                            if self.wrapped.mat_cx2s.insert(entry) {
+                            if self.wrapped.insert(WrappedType::MatCx2(entry)) {
                                 self.write_mat_cx2_typedef_and_functions(entry)?;
                             }
                         }
@@ -1474,5 +1810,27 @@ impl<W: Write> super::Writer<'_, W> {
         writeln!(self.out)?;
 
         Ok(())
+    }
+}
+
+impl crate::StorageFormat {
+    /// Returns `true` if there is just one component, otherwise `false`
+    pub(super) const fn single_component(&self) -> bool {
+        match *self {
+            crate::StorageFormat::R16Float
+            | crate::StorageFormat::R32Float
+            | crate::StorageFormat::R8Unorm
+            | crate::StorageFormat::R16Unorm
+            | crate::StorageFormat::R8Snorm
+            | crate::StorageFormat::R16Snorm
+            | crate::StorageFormat::R8Uint
+            | crate::StorageFormat::R16Uint
+            | crate::StorageFormat::R32Uint
+            | crate::StorageFormat::R8Sint
+            | crate::StorageFormat::R16Sint
+            | crate::StorageFormat::R32Sint
+            | crate::StorageFormat::R64Uint => true,
+            _ => false,
+        }
     }
 }

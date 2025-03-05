@@ -1,4 +1,5 @@
-use std::{error, fmt};
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use core::{error, fmt};
 
 use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -74,6 +75,13 @@ impl Surface<'_> {
     }
 
     /// Initializes [`Surface`] for presentation.
+    ///
+    /// If the surface is already configured, this will wait for the GPU to come idle
+    /// before recreating the swapchain to prevent race conditions.
+    ///
+    /// # Validation Errors
+    /// - Submissions that happen _during_ the configure may cause the
+    ///   internal wait-for-idle to fail, raising a validation error.
     ///
     /// # Panics
     ///
@@ -272,7 +280,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - `raw_window_handle` & `raw_display_handle` must be valid objects to create a surface upon.
     /// - `raw_window_handle` & `raw_display_handle` must remain valid until after the returned
-    ///    [`Surface`] is  dropped.
+    ///   [`Surface`] is  dropped.
     RawHandle {
         /// Raw display handle, underlying display must outlive the surface created from this.
         raw_display_handle: raw_window_handle::RawDisplayHandle,
@@ -281,13 +289,38 @@ pub enum SurfaceTargetUnsafe {
         raw_window_handle: raw_window_handle::RawWindowHandle,
     },
 
+    /// Surface from a DRM device.
+    ///
+    /// If the specified DRM configuration is not supported by any of the backends, then the surface
+    /// will not be supported by any adapters.
+    ///
+    /// # Safety
+    ///
+    /// - All parameters must point to valid DRM values and remain valid for as long as the resulting [`Surface`] exists.
+    /// - The file descriptor (`fd`), plane, connector, and mode configuration must be valid and compatible.
+    #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+    Drm {
+        /// The file descriptor of the DRM device.
+        fd: i32,
+        /// The plane index on which to create the surface.
+        plane: u32,
+        /// The ID of the connector associated with the selected mode.
+        connector_id: u32,
+        /// The display width of the selected mode.
+        width: u32,
+        /// The display height of the selected mode.
+        height: u32,
+        /// The display refresh rate of the selected mode multiplied by 1000 (e.g., 60Hz → 60000).
+        refresh_rate: u32,
+    },
+
     /// Surface from `CoreAnimationLayer`.
     ///
     /// # Safety
     ///
     /// - layer must be a valid object to create a surface upon.
     #[cfg(metal)]
-    CoreAnimationLayer(*mut std::ffi::c_void),
+    CoreAnimationLayer(*mut core::ffi::c_void),
 
     /// Surface from `IDCompositionVisual`.
     ///
@@ -295,7 +328,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - visual must be a valid `IDCompositionVisual` to create a surface upon.  Its refcount will be incremented internally and kept live as long as the resulting [`Surface`] is live.
     #[cfg(dx12)]
-    CompositionVisual(*mut std::ffi::c_void),
+    CompositionVisual(*mut core::ffi::c_void),
 
     /// Surface from DX12 `DirectComposition` handle.
     ///
@@ -306,7 +339,7 @@ pub enum SurfaceTargetUnsafe {
     /// - surface_handle must be a valid `DirectComposition` handle to create a surface upon.   Its lifetime **will not** be internally managed: this handle **should not** be freed before
     ///   the resulting [`Surface`] is destroyed.
     #[cfg(dx12)]
-    SurfaceHandle(*mut std::ffi::c_void),
+    SurfaceHandle(*mut core::ffi::c_void),
 
     /// Surface from DX12 `SwapChainPanel`.
     ///
@@ -314,7 +347,7 @@ pub enum SurfaceTargetUnsafe {
     ///
     /// - visual must be a valid SwapChainPanel to create a surface upon.  Its refcount will be incremented internally and kept live as long as the resulting [`Surface`] is live.
     #[cfg(dx12)]
-    SwapChainPanel(*mut std::ffi::c_void),
+    SwapChainPanel(*mut core::ffi::c_void),
 }
 
 impl SurfaceTargetUnsafe {
