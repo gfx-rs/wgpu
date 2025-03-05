@@ -53,7 +53,11 @@ static UNBUILT_BLAS_COMPACTION: GpuTestConfiguration = GpuTestConfiguration::new
     .run_sync(unbuilt_blas_compaction);
 
 fn unbuilt_blas_compaction(ctx: TestingContext) {
-    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::ALLOW_COMPACTION);
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::ALLOW_COMPACTION,
+        AccelerationStructureFlags::empty(),
+    );
 
     fail(
         &ctx.device,
@@ -77,7 +81,11 @@ static BLAS_COMPACTION_WITHOUT_FLAGS: GpuTestConfiguration = GpuTestConfiguratio
     .run_sync(blas_compaction_without_flags);
 
 fn blas_compaction_without_flags(ctx: TestingContext) {
-    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::empty());
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
 
     let mut encoder = ctx
         .device
@@ -109,7 +117,11 @@ static UNPREPARED_BLAS_COMPACTION: GpuTestConfiguration = GpuTestConfiguration::
     .run_sync(unprepared_blas_compaction);
 
 fn unprepared_blas_compaction(ctx: TestingContext) {
-    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::ALLOW_COMPACTION);
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::ALLOW_COMPACTION,
+        AccelerationStructureFlags::empty(),
+    );
 
     let mut encoder = ctx
         .device
@@ -134,7 +146,11 @@ static BLAS_COMPACTION: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(blas_compaction);
 
 fn blas_compaction(ctx: TestingContext) {
-    let as_ctx = AsBuildContext::new(&ctx, AccelerationStructureFlags::ALLOW_COMPACTION);
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::ALLOW_COMPACTION,
+        AccelerationStructureFlags::empty(),
+    );
 
     let mut encoder = ctx
         .device
@@ -153,7 +169,7 @@ fn blas_compaction(ctx: TestingContext) {
     });
 
     // On native this will trigger the callback.
-    ctx.device.poll(Maintain::Wait);
+    ctx.device.poll(PollType::Wait).unwrap();
     // Check that the callback actually gets called (this test will timeout if it doesn't).
     recv.recv().unwrap();
     // This should return true because the callback has been called, and we haven't rebuilt the BLAS
