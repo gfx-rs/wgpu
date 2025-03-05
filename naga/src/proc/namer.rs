@@ -181,10 +181,38 @@ impl Namer {
                 .map(|string| (AsciiUniCase(*string))),
         );
 
+        // Choose fallback names for anonymous entry point return types.
+        let mut entrypoint_type_fallbacks = FastHashMap::default();
+        for ep in &module.entry_points {
+            if let Some(ref result) = ep.function.result {
+                if let crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::Struct { .. },
+                } = module.types[result.ty]
+                {
+                    let label = match ep.stage {
+                        crate::ShaderStage::Vertex => "VertexOutput",
+                        crate::ShaderStage::Fragment => "FragmentOutput",
+                        crate::ShaderStage::Compute => "ComputeOutput",
+                    };
+                    entrypoint_type_fallbacks.insert(result.ty, label);
+                }
+            }
+        }
+
         let mut temp = String::new();
 
         for (ty_handle, ty) in module.types.iter() {
-            let ty_name = self.call_or(&ty.name, "type");
+            // If the type is anonymous, check `entrypoint_types` for
+            // something better than just `"type"`.
+            let raw_label = match ty.name {
+                Some(ref given_name) => given_name.as_str(),
+                None => entrypoint_type_fallbacks
+                    .get(&ty_handle)
+                    .cloned()
+                    .unwrap_or("type"),
+            };
+            let ty_name = self.call(raw_label);
             output.insert(NameKey::Type(ty_handle), ty_name);
 
             if let crate::TypeInner::Struct { ref members, .. } = ty.inner {

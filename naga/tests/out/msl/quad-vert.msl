@@ -13,7 +13,7 @@ struct gl_PerVertex {
     type_3 gl_ClipDistance;
     type_3 gl_CullDistance;
 };
-struct type_4 {
+struct VertexOutput {
     metal::float2 member;
     metal::float4 gl_Position;
 };
@@ -53,6 +53,6 @@ vertex main_Output main_(
     main_1(v_uv, a_uv_1, unnamed, a_pos_1);
     metal::float2 _e7 = v_uv;
     metal::float4 _e8 = unnamed.gl_Position;
-    const auto _tmp = type_4 {_e7, _e8};
+    const auto _tmp = VertexOutput {_e7, _e8};
     return main_Output { _tmp.member, _tmp.gl_Position };
 }
