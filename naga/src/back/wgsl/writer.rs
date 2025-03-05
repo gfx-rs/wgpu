@@ -423,7 +423,7 @@ impl<W: Write> Writer<W> {
                 self.out,
                 "vec{}<{}>",
                 common::vector_size_str(size),
-                scalar_kind_str(scalar),
+                scalar.to_wgsl_if_implemented()?,
             )?,
             TypeInner::Sampler { comparison: false } => {
                 write!(self.out, "sampler")?;
@@ -445,7 +445,7 @@ impl<W: Write> Writer<W> {
                     Ic::Sampled { kind, multi } => (
                         "",
                         if multi { "multisampled_" } else { "" },
-                        scalar_kind_str(crate::Scalar { kind, width: 4 }),
+                        crate::Scalar { kind, width: 4 }.to_wgsl_if_implemented()?,
                         "",
                     ),
                     Ic::Depth { multi } => {
@@ -478,10 +478,10 @@ impl<W: Write> Writer<W> {
                 }
             }
             TypeInner::Scalar(scalar) => {
-                write!(self.out, "{}", scalar_kind_str(scalar))?;
+                write!(self.out, "{}", scalar.to_wgsl_if_implemented()?)?;
             }
             TypeInner::Atomic(scalar) => {
-                write!(self.out, "atomic<{}>", scalar_kind_str(scalar))?;
+                write!(self.out, "atomic<{}>", scalar.to_wgsl_if_implemented()?)?;
             }
             TypeInner::Array {
                 base,
@@ -533,7 +533,7 @@ impl<W: Write> Writer<W> {
                     "mat{}x{}<{}>",
                     common::vector_size_str(columns),
                     common::vector_size_str(rows),
-                    scalar_kind_str(scalar)
+                    scalar.to_wgsl_if_implemented()?
                 )?;
             }
             TypeInner::Pointer { base, space } => {
@@ -559,7 +559,12 @@ impl<W: Write> Writer<W> {
             } => {
                 let (address, maybe_access) = address_space_str(space);
                 if let Some(space) = address {
-                    write!(self.out, "ptr<{}, {}", space, scalar_kind_str(scalar))?;
+                    write!(
+                        self.out,
+                        "ptr<{}, {}",
+                        space,
+                        scalar.to_wgsl_if_implemented()?
+                    )?;
                     if let Some(access) = maybe_access {
                         write!(self.out, ", {access}")?;
                     }
@@ -582,7 +587,7 @@ impl<W: Write> Writer<W> {
                         "ptr<{}, vec{}<{}>",
                         space,
                         common::vector_size_str(size),
-                        scalar_kind_str(scalar)
+                        scalar.to_wgsl_if_implemented()?
                     )?;
                     if let Some(access) = maybe_access {
                         write!(self.out, ", {access}")?;
@@ -1590,7 +1595,7 @@ impl<W: Write> Writer<W> {
                             kind,
                             width: convert.unwrap_or(scalar.width),
                         };
-                        let scalar_kind_str = scalar_kind_str(scalar);
+                        let scalar_kind_str = scalar.to_wgsl_if_implemented()?;
                         write!(
                             self.out,
                             "mat{}x{}<{}>",
@@ -1608,7 +1613,7 @@ impl<W: Write> Writer<W> {
                             width: convert.unwrap_or(width),
                         };
                         let vector_size_str = common::vector_size_str(size);
-                        let scalar_kind_str = scalar_kind_str(scalar);
+                        let scalar_kind_str = scalar.to_wgsl_if_implemented()?;
                         if convert.is_some() {
                             write!(self.out, "vec{vector_size_str}<{scalar_kind_str}>")?;
                         } else {
@@ -1620,7 +1625,7 @@ impl<W: Write> Writer<W> {
                             kind,
                             width: convert.unwrap_or(width),
                         };
-                        let scalar_kind_str = scalar_kind_str(scalar);
+                        let scalar_kind_str = scalar.to_wgsl_if_implemented()?;
                         if convert.is_some() {
                             write!(self.out, "{scalar_kind_str}")?
                         } else {
@@ -1880,43 +1885,6 @@ const fn image_dimension_str(dim: crate::ImageDimension) -> &'static str {
         IDim::D2 => "2d",
         IDim::D3 => "3d",
         IDim::Cube => "cube",
-    }
-}
-
-const fn scalar_kind_str(scalar: crate::Scalar) -> &'static str {
-    use crate::Scalar;
-    use crate::ScalarKind as Sk;
-
-    match scalar {
-        Scalar {
-            kind: Sk::Float,
-            width: 8,
-        } => "f64",
-        Scalar {
-            kind: Sk::Float,
-            width: 4,
-        } => "f32",
-        Scalar {
-            kind: Sk::Sint,
-            width: 4,
-        } => "i32",
-        Scalar {
-            kind: Sk::Uint,
-            width: 4,
-        } => "u32",
-        Scalar {
-            kind: Sk::Sint,
-            width: 8,
-        } => "i64",
-        Scalar {
-            kind: Sk::Uint,
-            width: 8,
-        } => "u64",
-        Scalar {
-            kind: Sk::Bool,
-            width: 1,
-        } => "bool",
-        _ => unreachable!(),
     }
 }
 

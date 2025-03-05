@@ -305,3 +305,22 @@ impl ToWgsl for crate::StorageFormat {
         }
     }
 }
+
+impl TryToWgsl for crate::Scalar {
+    const DESCRIPTION: &'static str = "scalar type";
+
+    fn try_to_wgsl(self) -> Option<&'static str> {
+        use crate::Scalar;
+
+        Some(match self {
+            Scalar::F64 => "f64",
+            Scalar::F32 => "f32",
+            Scalar::I32 => "i32",
+            Scalar::U32 => "u32",
+            Scalar::I64 => "i64",
+            Scalar::U64 => "u64",
+            Scalar::BOOL => "bool",
+            _ => return None,
+        })
+    }
+}
