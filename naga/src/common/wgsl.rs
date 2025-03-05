@@ -337,3 +337,48 @@ impl ToWgsl for crate::ImageDimension {
         }
     }
 }
+
+/// Return the WGSL address space and access mode strings for `space`.
+///
+/// Why don't we implement [`ToWgsl`] for [`AddressSpace`]?
+///
+/// In WGSL, the full form of a pointer type is `ptr<AS, T, AM>`, where:
+/// - `AS` is the address space,
+/// - `T` is the store type, and
+/// - `AM` is the access mode.
+///
+/// Since the type `T` intervenes between the address space and the
+/// access mode, there isn't really any individual WGSL grammar
+/// production that corresponds to an [`AddressSpace`], so [`ToWgsl`]
+/// is too simple-minded for this case.
+///
+/// Furthermore, we want to write `var<AS[, AM]>` for most address
+/// spaces, but we want to just write `var foo: T` for handle types.
+///
+/// [`AddressSpace`]: crate::AddressSpace
+pub const fn address_space_str(
+    space: crate::AddressSpace,
+) -> (Option<&'static str>, Option<&'static str>) {
+    use crate::AddressSpace as As;
+
+    (
+        Some(match space {
+            As::Private => "private",
+            As::Uniform => "uniform",
+            As::Storage { access } => {
+                if access.contains(crate::StorageAccess::ATOMIC) {
+                    return (Some("storage"), Some("atomic"));
+                } else if access.contains(crate::StorageAccess::STORE) {
+                    return (Some("storage"), Some("read_write"));
+                } else {
+                    "storage"
+                }
+            }
+            As::PushConstant => "push_constant",
+            As::WorkGroup => "workgroup",
+            As::Handle => return (None, None),
+            As::Function => "function",
+        }),
+        None,
+    )
+}

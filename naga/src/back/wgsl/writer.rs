@@ -13,7 +13,7 @@ use crate::{
     back::{self, Baked},
     common::{
         self,
-        wgsl::{ToWgsl, TryToWgsl},
+        wgsl::{address_space_str, ToWgsl, TryToWgsl},
     },
     proc::{self, ExpressionKindTracker, NameKey},
     valid, Handle, Module, ShaderStage, TypeInner,
@@ -1875,33 +1875,6 @@ impl<W: Write> Writer<W> {
     pub fn finish(self) -> W {
         self.out
     }
-}
-
-const fn address_space_str(
-    space: crate::AddressSpace,
-) -> (Option<&'static str>, Option<&'static str>) {
-    use crate::AddressSpace as As;
-
-    (
-        Some(match space {
-            As::Private => "private",
-            As::Uniform => "uniform",
-            As::Storage { access } => {
-                if access.contains(crate::StorageAccess::ATOMIC) {
-                    return (Some("storage"), Some("atomic"));
-                } else if access.contains(crate::StorageAccess::STORE) {
-                    return (Some("storage"), Some("read_write"));
-                } else {
-                    "storage"
-                }
-            }
-            As::PushConstant => "push_constant",
-            As::WorkGroup => "workgroup",
-            As::Handle => return (None, None),
-            As::Function => "function",
-        }),
-        None,
-    )
 }
 
 fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
