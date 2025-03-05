@@ -324,3 +324,16 @@ impl TryToWgsl for crate::Scalar {
         })
     }
 }
+
+impl ToWgsl for crate::ImageDimension {
+    fn to_wgsl(self) -> &'static str {
+        use crate::ImageDimension as IDim;
+
+        match self {
+            IDim::D1 => "1d",
+            IDim::D2 => "2d",
+            IDim::D3 => "3d",
+            IDim::Cube => "cube",
+        }
+    }
+}

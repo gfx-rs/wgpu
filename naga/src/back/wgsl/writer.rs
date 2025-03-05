@@ -439,7 +439,7 @@ impl<W: Write> Writer<W> {
                 // More about texture types: https://gpuweb.github.io/gpuweb/wgsl/#sampled-texture-type
                 use crate::ImageClass as Ic;
 
-                let dim_str = image_dimension_str(dim);
+                let dim_str = dim.to_wgsl();
                 let arrayed_str = if arrayed { "_array" } else { "" };
                 let (class_str, multisampled_str, format_str, storage_str) = match class {
                     Ic::Sampled { kind, multi } => (
@@ -1874,17 +1874,6 @@ impl<W: Write> Writer<W> {
     #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> W {
         self.out
-    }
-}
-
-const fn image_dimension_str(dim: crate::ImageDimension) -> &'static str {
-    use crate::ImageDimension as IDim;
-
-    match dim {
-        IDim::D1 => "1d",
-        IDim::D2 => "2d",
-        IDim::D3 => "3d",
-        IDim::Cube => "cube",
     }
 }
 
