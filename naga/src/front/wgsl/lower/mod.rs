@@ -548,6 +548,16 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
+    fn get(&self, handle: Handle<crate::Expression>) -> &crate::Expression {
+        match self.expr_type {
+            ExpressionContextType::Runtime(ref ctx)
+            | ExpressionContextType::Constant(Some(ref ctx)) => &ctx.function.expressions[handle],
+            ExpressionContextType::Constant(None) | ExpressionContextType::Override => {
+                &self.module.global_expressions[handle]
+            }
+        }
+    }
+
     fn local(
         &mut self,
         local: &Handle<ast::Local>,
@@ -2077,6 +2087,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 // reference is required, the Load Rule is not applied.
                 match self.expression_for_reference(expr, ctx)? {
                     Typed::Reference(handle) => {
+                        if let &crate::Expression::Access { base, .. }
+                        | &crate::Expression::AccessIndex { base, .. } = ctx.get(handle)
+                        {
+                            if let Some(ty) = resolve_inner!(ctx, base).pointer_base_type() {
+                                if matches!(
+                                    *ty.inner_with(&ctx.module.types),
+                                    crate::TypeInner::Matrix { .. }
+                                        | crate::TypeInner::Vector { .. },
+                                ) {
+                                    return Err(Box::new(Error::InvalidAddrOfOperand(
+                                        ctx.get_expression_span(handle),
+                                    )));
+                                }
+                            }
+                        }
                         // No code is generated. We just declare the reference a pointer now.
                         return Ok(Typed::Plain(handle));
                     }
@@ -2152,27 +2177,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let temp_inner;
                 let composite_type: &crate::TypeInner = match lowered_base {
                     Typed::Reference(handle) => {
-                        let inner = resolve_inner!(ctx, handle);
-                        match *inner {
-                            crate::TypeInner::Pointer { base, .. } => &ctx.module.types[base].inner,
-                            crate::TypeInner::ValuePointer {
-                                size: None, scalar, ..
-                            } => {
-                                temp_inner = crate::TypeInner::Scalar(scalar);
-                                &temp_inner
-                            }
-                            crate::TypeInner::ValuePointer {
-                                size: Some(size),
-                                scalar,
-                                ..
-                            } => {
-                                temp_inner = crate::TypeInner::Vector { size, scalar };
-                                &temp_inner
-                            }
-                            _ => unreachable!(
-                                "In Typed::Reference(handle), handle must be a Naga pointer"
-                            ),
-                        }
+                        temp_inner = resolve_inner!(ctx, handle)
+                            .pointer_base_type()
+                            .expect("In Typed::Reference(handle), handle must be a Naga pointer");
+                        temp_inner.inner_with(&ctx.module.types)
                     }
 
                     Typed::Plain(handle) => {

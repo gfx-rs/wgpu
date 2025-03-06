@@ -7,6 +7,7 @@ use super::{
 };
 use crate::arena::{Arena, UniqueArena};
 use crate::arena::{Handle, HandleSet};
+use crate::proc::TypeResolution;
 use crate::span::WithSpan;
 use crate::span::{AddSpan as _, MapErrWithSpan as _};
 
@@ -298,6 +299,10 @@ impl<'a> BlockContext<'a> {
 
     fn resolve_pointer_type(&self, handle: Handle<crate::Expression>) -> &crate::TypeInner {
         self.info[handle].ty.inner_with(self.types)
+    }
+
+    fn inner_type<'t>(&'t self, ty: &'t TypeResolution) -> &'t crate::TypeInner {
+        ty.inner_with(self.types)
     }
 }
 
@@ -1039,23 +1044,15 @@ impl super::Validator {
                     }
 
                     let pointer_ty = context.resolve_pointer_type(pointer);
-
-                    let good = match *pointer_ty {
-                        Ti::Pointer { base, space: _ } => match context.types[base].inner {
-                            Ti::Atomic(scalar) => *value_ty == Ti::Scalar(scalar),
-                            ref other => value_ty == other,
-                        },
-                        Ti::ValuePointer {
-                            size: Some(size),
-                            scalar,
-                            space: _,
-                        } => *value_ty == Ti::Vector { size, scalar },
-                        Ti::ValuePointer {
-                            size: None,
-                            scalar,
-                            space: _,
-                        } => *value_ty == Ti::Scalar(scalar),
-                        _ => false,
+                    let good = match pointer_ty
+                        .pointer_base_type()
+                        .as_ref()
+                        .map(|ty| context.inner_type(ty))
+                    {
+                        // The Naga IR allows storing a scalar to an atomic.
+                        Some(&Ti::Atomic(ref scalar)) => *value_ty == Ti::Scalar(*scalar),
+                        Some(other) => *value_ty == *other,
+                        None => false,
                     };
                     if !good {
                         return Err(FunctionError::InvalidStoreTypes { pointer, value }

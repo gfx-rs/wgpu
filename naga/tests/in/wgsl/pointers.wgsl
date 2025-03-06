@@ -1,9 +1,3 @@
-fn f() {
-   var v: vec2<i32>;
-   let px = &v.x;
-   *px = 10;
-}
-
 struct DynamicArray {
     arr: array<u32>
 }

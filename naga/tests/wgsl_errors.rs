@@ -1354,24 +1354,6 @@ fn invalid_functions() {
 }
 
 #[test]
-fn pointer_type_equivalence() {
-    check_validation! {
-        r#"
-            fn f(pv: ptr<function, vec2<f32>>, pf: ptr<function, f32>) { }
-
-            fn g() {
-               var m: mat2x2<f32>;
-               let pv: ptr<function, vec2<f32>> = &m[0];
-               let pf: ptr<function, f32> = &m[0].x;
-
-               f(pv, pf);
-            }
-        "#:
-        Ok(_)
-    }
-}
-
-#[test]
 fn missing_bindings() {
     check_validation! {
         "
@@ -3045,6 +3027,51 @@ fn reject_utf8_bom() {
   │
 1 │ ﻿fn main() {}
   │  expected global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) or the end of the file
+
+"#,
+    );
+}
+
+#[test]
+fn matrix_vector_pointers() {
+    check(
+        "fn foo() {
+            var v: vec2<f32>;
+            let p = &v[0];
+        }",
+        r#"error: cannot take the address of a matrix or vector component
+  ┌─ wgsl:3:22
+  │
+3 │             let p = &v[0];
+  │                      ^^^^ invalid operand for address-of
+
+"#,
+    );
+
+    check(
+        "fn foo() {
+            var v: vec2<f32>;
+            let p = &v.x;
+        }",
+        r#"error: cannot take the address of a matrix or vector component
+  ┌─ wgsl:3:22
+  │
+3 │             let p = &v.x;
+  │                      ^^^ invalid operand for address-of
+
+"#,
+    );
+
+    check(
+        "fn foo() {
+            var m: mat2x2<f32>;
+            let p = &m[0];
+        }",
+        r#"error: cannot take the address of a matrix or vector component
+  ┌─ wgsl:3:22
+  │
+3 │             let p = &m[0];
+  │                      ^^^^ invalid operand for address-of
 
 "#,
     );
