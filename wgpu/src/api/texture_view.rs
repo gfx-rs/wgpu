@@ -19,12 +19,12 @@ static_assertions::assert_impl_all!(TextureView: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(TextureView => .inner);
 
 impl TextureView {
-    /// Returns the inner hal TextureView using a callback. The hal texture will be `None` if the
+    /// Returns the inner hal `TextureView` using a callback. The hal texture will be `None` if the
     /// backend type argument does not match with this wgpu Texture
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal TextureView must not be manually destroyed
+    /// - The raw handle obtained from the hal `TextureView` must not be manually destroyed
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
         &self,

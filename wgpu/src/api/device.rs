@@ -478,15 +478,15 @@ impl Device {
     /// # Validation
     /// If any of the following is not satisfied a validation error is generated
     ///
-    /// The device ***must*** have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled.
-    /// if `sizes` is [BlasGeometrySizeDescriptors::Triangles] then the following must be satisfied
+    /// The device ***must*** have [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] enabled.
+    /// if `sizes` is [`BlasGeometrySizeDescriptors::Triangles`] then the following must be satisfied
     /// - For every geometry descriptor (for the purposes this is called `geo_desc`) of `sizes.descriptors` the following must be satisfied:
     ///     - `geo_desc.vertex_format` must be within allowed formats (allowed formats for a given feature set
-    ///       may be queried with [Features::allowed_vertex_formats_for_blas]).
+    ///       may be queried with [`Features::allowed_vertex_formats_for_blas`]).
     ///     - Both or neither of `geo_desc.index_format` and `geo_desc.index_count` must be provided.
     ///
-    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-    /// [Features::allowed_vertex_formats_for_blas]: wgt::Features::allowed_vertex_formats_for_blas
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::allowed_vertex_formats_for_blas`]: wgt::Features::allowed_vertex_formats_for_blas
     #[must_use]
     pub fn create_blas(
         &self,
@@ -507,9 +507,9 @@ impl Device {
     /// # Validation
     /// If any of the following is not satisfied a validation error is generated
     ///
-    /// The device ***must*** have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled.
+    /// The device ***must*** have [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] enabled.
     ///
-    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     #[must_use]
     pub fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas {
         let tlas = self.inner.create_tlas(desc);

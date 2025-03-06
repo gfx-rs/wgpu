@@ -4085,7 +4085,7 @@ pub enum PollStatus {
 }
 
 impl PollStatus {
-    /// Returns true if the result is [`Self::QueueEmpty`]`.
+    /// Returns true if the result is [`Self::QueueEmpty`].
     #[must_use]
     pub fn is_queue_empty(&self) -> bool {
         matches!(self, Self::QueueEmpty)
