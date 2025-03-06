@@ -1784,7 +1784,11 @@ pub enum AstcChannel {
 /// * `Unorm` formats linearly scale the integer range of the storage format to a floating-point
 ///   range of 0 to 1, inclusive.
 /// * `Snorm` formats linearly scale the integer range of the storage format to a floating-point
-///   range of &minus;1 to 1, inclusive.
+///   range of &minus;1 to 1, inclusive, except that the most negative value
+///   (&minus;128 for 8-bit, &minus;32768 for 16-bit) is excluded; on conversion,
+///   it is treated as identical to the second most negative
+///   (&minus;127 for 8-bit, &minus;32767 for 16-bit),
+///   so that the positive and negative ranges are symmetric.
 /// * `UnormSrgb` formats apply the [sRGB transfer function] so that the storage is sRGB encoded
 ///   while the shader works with linear intensity values.
 /// * `Uint`, `Sint`, and `Float` formats perform no conversion.
@@ -1799,7 +1803,7 @@ pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     R8Unorm,
-    /// Red channel only. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red channel only. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     R8Snorm,
     /// Red channel only. 8 bit integer per channel. Unsigned in shader.
     R8Uint,
@@ -1815,7 +1819,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     R16Unorm,
-    /// Red channel only. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red channel only. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     R16Snorm,
@@ -1823,7 +1827,7 @@ pub enum TextureFormat {
     R16Float,
     /// Red and green channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     Rg8Unorm,
-    /// Red and green channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red and green channels. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     Rg8Snorm,
     /// Red and green channels. 8 bit integer per channel. Unsigned in shader.
     Rg8Uint,
@@ -1845,7 +1849,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rg16Unorm,
-    /// Red and green channels. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red and green channels. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rg16Snorm,
@@ -1855,7 +1859,7 @@ pub enum TextureFormat {
     Rgba8Unorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     Rgba8UnormSrgb,
-    /// Red, green, blue, and alpha channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red, green, blue, and alpha channels. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     Rgba8Snorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Unsigned in shader.
     Rgba8Uint,
@@ -1895,7 +1899,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rgba16Unorm,
-    /// Red, green, blue, and alpha. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red, green, blue, and alpha. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rgba16Snorm,
@@ -1999,7 +2003,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_BC_SLICED_3D`] must be enabled to use this texture format with 3D dimension.
     Bc4RUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// Also known as RGTC1.
     ///
@@ -2015,7 +2019,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_BC_SLICED_3D`] must be enabled to use this texture format with 3D dimension.
     Bc5RgUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// Also known as RGTC2.
     ///
@@ -2088,7 +2092,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacR11Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 11 bit integer R.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacR11Snorm,
@@ -2098,7 +2102,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacRg11Unorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 11 bit integer R + 11 bit integer G.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacRg11Snorm,
@@ -4650,11 +4654,11 @@ pub enum VertexFormat {
     Unorm8x2 = 7,
     /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm8x4 = 8,
-    /// One signed byte (i8). [-127, 127] converted to float [-1, 1] `f32` in shaders.
+    /// One signed byte (i8). [&minus;127, 127] converted to float [&minus;1, 1] `f32` in shaders.
     Snorm8 = 9,
-    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2<f32>` in shaders.
+    /// Two signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec2<f32>` in shaders.
     Snorm8x2 = 10,
-    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4<f32>` in shaders.
+    /// Four signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec4<f32>` in shaders.
     Snorm8x4 = 11,
     /// One unsigned short (u16). `u32` in shaders.
     Uint16 = 12,
@@ -4674,11 +4678,11 @@ pub enum VertexFormat {
     Unorm16x2 = 19,
     /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm16x4 = 20,
-    /// One signed short (i16). [-32767, 32767] converted to float [-1, 1] `f32` in shaders.
+    /// One signed short (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `f32` in shaders.
     Snorm16 = 21,
-    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2<f32>` in shaders.
+    /// Two signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec2<f32>` in shaders.
     Snorm16x2 = 22,
-    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4<f32>` in shaders.
+    /// Four signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec4<f32>` in shaders.
     Snorm16x4 = 23,
     /// One half-precision float (no Rust equiv). `f32` in shaders.
     Float16 = 24,
