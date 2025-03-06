@@ -7,6 +7,7 @@ use thiserror::Error;
 
 mod dispatch;
 mod draw;
+mod utils;
 
 pub(crate) use dispatch::Dispatch;
 pub(crate) use draw::{Draw, DrawBatcher, DrawResources};

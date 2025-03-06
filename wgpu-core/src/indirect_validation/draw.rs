@@ -1,4 +1,7 @@
-use super::CreateIndirectValidationPipelineError;
+use super::{
+    utils::{BufferBarrierScratch, BufferBarriers, UniqueIndexExt as _, UniqueIndexScratch},
+    CreateIndirectValidationPipelineError,
+};
 use crate::{
     device::{queue::TempResource, Device, DeviceError},
     lock::{rank, Mutex},
@@ -256,47 +259,37 @@ impl Draw {
             batch.metadata_buffer_offset = metadata_buffer_offset;
         }
 
-        let mut buffer_barriers = Vec::new();
-        let mut buffer_index_set = bit_set::BitSet::new();
+        let buffer_barrier_scratch = &mut BufferBarrierScratch::new();
+        let unique_index_scratch = &mut UniqueIndexScratch::new();
 
-        for index in batches
-            .values()
-            .map(|batch| batch.staging_buffer_index)
-            .filter(|index| buffer_index_set.insert(*index))
-        {
-            let staging_buffer = &staging_buffers[index];
-
-            buffer_barriers.push(hal::BufferBarrier {
-                buffer: staging_buffer.raw(),
-                usage: hal::StateTransition {
-                    from: wgt::BufferUses::MAP_WRITE,
-                    to: wgt::BufferUses::COPY_SRC,
-                },
-            });
-        }
-        buffer_index_set.clear();
-
-        for index in batches
-            .values()
-            .map(|batch| batch.metadata_resource_index)
-            .filter(|index| buffer_index_set.insert(*index))
-        {
-            let metadata_buffer = resources.get_metadata_buffer(index);
-
-            buffer_barriers.push(hal::BufferBarrier {
-                buffer: metadata_buffer,
-                usage: hal::StateTransition {
-                    from: wgt::BufferUses::STORAGE_READ_ONLY,
-                    to: wgt::BufferUses::COPY_DST,
-                },
-            });
-        }
-        buffer_index_set.clear();
-
-        unsafe {
-            encoder.transition_buffers(&buffer_barriers);
-        }
-        buffer_barriers.clear();
+        BufferBarriers::new(buffer_barrier_scratch)
+            .extend(
+                batches
+                    .values()
+                    .map(|batch| batch.staging_buffer_index)
+                    .unique(unique_index_scratch)
+                    .map(|index| hal::BufferBarrier {
+                        buffer: staging_buffers[index].raw(),
+                        usage: hal::StateTransition {
+                            from: wgt::BufferUses::MAP_WRITE,
+                            to: wgt::BufferUses::COPY_SRC,
+                        },
+                    }),
+            )
+            .extend(
+                batches
+                    .values()
+                    .map(|batch| batch.metadata_resource_index)
+                    .unique(unique_index_scratch)
+                    .map(|index| hal::BufferBarrier {
+                        buffer: resources.get_metadata_buffer(index),
+                        usage: hal::StateTransition {
+                            from: wgt::BufferUses::STORAGE_READ_ONLY,
+                            to: wgt::BufferUses::COPY_DST,
+                        },
+                    }),
+            )
+            .encode(encoder);
 
         for batch in batches.values() {
             let data = batch.metadata();
@@ -319,44 +312,38 @@ impl Draw {
             }
         }
 
-        for index in batches
-            .values()
-            .map(|batch| batch.metadata_resource_index)
-            .filter(|index| buffer_index_set.insert(*index))
-        {
-            let metadata_buffer = resources.get_metadata_buffer(index);
-
-            buffer_barriers.push(hal::BufferBarrier {
-                buffer: metadata_buffer,
-                usage: hal::StateTransition {
-                    from: wgt::BufferUses::COPY_DST,
-                    to: wgt::BufferUses::STORAGE_READ_ONLY,
-                },
-            });
+        for staging_buffer in staging_buffers {
+            temp_resources.push(TempResource::StagingBuffer(staging_buffer));
         }
-        buffer_index_set.clear();
 
-        for index in batches
-            .values()
-            .map(|batch| batch.dst_resource_index)
-            .filter(|index| buffer_index_set.insert(*index))
-        {
-            let dst_buffer = resources.get_dst_buffer(index);
-
-            buffer_barriers.push(hal::BufferBarrier {
-                buffer: dst_buffer,
-                usage: hal::StateTransition {
-                    from: wgt::BufferUses::INDIRECT,
-                    to: wgt::BufferUses::STORAGE_READ_WRITE,
-                },
-            });
-        }
-        buffer_index_set.clear();
-
-        unsafe {
-            encoder.transition_buffers(&buffer_barriers);
-        }
-        buffer_barriers.clear();
+        BufferBarriers::new(buffer_barrier_scratch)
+            .extend(
+                batches
+                    .values()
+                    .map(|batch| batch.metadata_resource_index)
+                    .unique(unique_index_scratch)
+                    .map(|index| hal::BufferBarrier {
+                        buffer: resources.get_metadata_buffer(index),
+                        usage: hal::StateTransition {
+                            from: wgt::BufferUses::COPY_DST,
+                            to: wgt::BufferUses::STORAGE_READ_ONLY,
+                        },
+                    }),
+            )
+            .extend(
+                batches
+                    .values()
+                    .map(|batch| batch.dst_resource_index)
+                    .unique(unique_index_scratch)
+                    .map(|index| hal::BufferBarrier {
+                        buffer: resources.get_dst_buffer(index),
+                        usage: hal::StateTransition {
+                            from: wgt::BufferUses::INDIRECT,
+                            to: wgt::BufferUses::STORAGE_READ_WRITE,
+                        },
+                    }),
+            )
+            .encode(encoder);
 
         let desc = hal::ComputePassDescriptor {
             label: None,
@@ -420,31 +407,21 @@ impl Draw {
             encoder.end_compute_pass();
         }
 
-        for index in batches
-            .values()
-            .map(|batch| batch.dst_resource_index)
-            .filter(|index| buffer_index_set.insert(*index))
-        {
-            let dst_buffer = resources.get_dst_buffer(index);
-
-            buffer_barriers.push(hal::BufferBarrier {
-                buffer: dst_buffer,
-                usage: hal::StateTransition {
-                    from: wgt::BufferUses::STORAGE_READ_WRITE,
-                    to: wgt::BufferUses::INDIRECT,
-                },
-            });
-        }
-        buffer_index_set.clear();
-
-        unsafe {
-            encoder.transition_buffers(&buffer_barriers);
-        }
-        buffer_barriers.clear();
-
-        for staging_buffer in staging_buffers {
-            temp_resources.push(TempResource::StagingBuffer(staging_buffer));
-        }
+        BufferBarriers::new(buffer_barrier_scratch)
+            .extend(
+                batches
+                    .values()
+                    .map(|batch| batch.dst_resource_index)
+                    .unique(unique_index_scratch)
+                    .map(|index| hal::BufferBarrier {
+                        buffer: resources.get_dst_buffer(index),
+                        usage: hal::StateTransition {
+                            from: wgt::BufferUses::STORAGE_READ_WRITE,
+                            to: wgt::BufferUses::INDIRECT,
+                        },
+                    }),
+            )
+            .encode(encoder);
 
         Ok(())
     }
