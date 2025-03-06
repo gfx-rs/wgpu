@@ -128,7 +128,7 @@ impl<W: Write> Writer<W> {
         self.reset(module);
 
         // Write all needed directives.
-        self.write_directives(module)?;
+        self.write_enable_dual_source_blending_if_needed(module)?;
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
@@ -367,7 +367,7 @@ impl<W: Write> Writer<W> {
     }
 
     /// Writes all the necessary directives out
-    fn write_directives(&mut self, module: &Module) -> BackendResult {
+    fn write_enable_dual_source_blending_if_needed(&mut self, module: &Module) -> BackendResult {
         // Check for dual source blending.
         if module.types.iter().any(|(_handle, ty)| {
             if let TypeInner::Struct { ref members, .. } = ty.inner {
