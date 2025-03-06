@@ -34,6 +34,10 @@ float return_const_f32_const_ai() {
     return 1.0;
 }
 
+vec2 return_vec2f32_const_ai() {
+    return vec2(1.0);
+}
+
 void main() {
     return;
 }
