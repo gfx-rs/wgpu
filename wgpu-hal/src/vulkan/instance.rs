@@ -261,6 +261,7 @@ impl super::Instance {
         extensions.push(khr::display::NAME);
         extensions.push(ext::physical_device_drm::NAME);
         extensions.push(khr::get_display_properties2::NAME);
+        extensions.push(ext::direct_mode_display::NAME);
         extensions.push(ext::acquire_drm_display::NAME);
 
         // Platform-specific WSI extensions
