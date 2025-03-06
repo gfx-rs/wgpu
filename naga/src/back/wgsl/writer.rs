@@ -429,28 +429,7 @@ impl<W: Write> Writer<W> {
 
         Ok(())
     }
-}
 
-struct WriterTypeContext<'m> {
-    module: &'m Module,
-    names: &'m crate::FastHashMap<NameKey, String>,
-}
-
-impl<W: Write> TypeContext<W> for WriterTypeContext<'_> {
-    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
-        &self.module.types[handle]
-    }
-
-    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
-        self.names[&NameKey::Type(handle)].as_str()
-    }
-
-    fn write_override(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
-        unreachable!("overrides should be validated out");
-    }
-}
-
-impl<W: Write> Writer<W> {
     fn write_type(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
         // This actually can't be factored out into a nice constructor method,
         // because the borrow checker needs to be able to see that the borrows
@@ -1738,6 +1717,25 @@ impl<W: Write> Writer<W> {
     #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> W {
         self.out
+    }
+}
+
+struct WriterTypeContext<'m> {
+    module: &'m Module,
+    names: &'m crate::FastHashMap<NameKey, String>,
+}
+
+impl<W: Write> TypeContext<W> for WriterTypeContext<'_> {
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
+        &self.module.types[handle]
+    }
+
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
+        self.names[&NameKey::Type(handle)].as_str()
+    }
+
+    fn write_override(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
+        unreachable!("overrides should be validated out");
     }
 }
 
