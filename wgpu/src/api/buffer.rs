@@ -312,7 +312,7 @@ impl Buffer {
     /// `self`. See the documentation for [`BufferView`] for details.
     ///
     /// `bounds` may be less than the bounds passed to [`Self::map_async()`],
-    /// and multiple views may be obtained and used simultanously as long as they do not overlap.
+    /// and multiple views may be obtained and used simultaneously as long as they do not overlap.
     ///
     /// This can also be performed using [`BufferSlice::get_mapped_range()`].
     ///
@@ -339,7 +339,7 @@ impl Buffer {
     /// This is only available on WebGPU, on any other backends this will return `None`.
     ///
     /// `bounds` may be less than the bounds passed to [`Self::map_async()`],
-    /// and multiple views may be obtained and used simultanously as long as they do not overlap.
+    /// and multiple views may be obtained and used simultaneously as long as they do not overlap.
     ///
     /// This can also be performed using [`BufferSlice::get_mapped_range_as_array_buffer()`].
     ///
@@ -362,7 +362,7 @@ impl Buffer {
     /// `self`. See the documentation for [`BufferViewMut`] for more details.
     ///
     /// `bounds` may be less than the bounds passed to [`Self::map_async()`],
-    /// and multiple views may be obtained and used simultanously as long as they do not overlap.
+    /// and multiple views may be obtained and used simultaneously as long as they do not overlap.
     ///
     /// This can also be performed using [`BufferSlice::get_mapped_range_mut()`].
     ///
@@ -507,7 +507,7 @@ impl<'a> BufferSlice<'a> {
     /// Returns a [`BufferView`] referring to the buffer range represented by
     /// `self`. See the documentation for [`BufferView`] for details.
     ///
-    /// Multiple views may be obtained and used simultanously as long as they are from
+    /// Multiple views may be obtained and used simultaneously as long as they are from
     /// non-overlapping slices.
     ///
     /// This can also be performed using [`Buffer::get_mapped_range()`].
@@ -537,7 +537,7 @@ impl<'a> BufferSlice<'a> {
     ///
     /// This is only available on WebGPU, on any other backends this will return `None`.
     ///
-    /// Multiple views may be obtained and used simultanously as long as they are from
+    /// Multiple views may be obtained and used simultaneously as long as they are from
     /// non-overlapping slices.
     ///
     /// This can also be performed using [`Buffer::get_mapped_range_as_array_buffer()`].
@@ -559,7 +559,7 @@ impl<'a> BufferSlice<'a> {
     /// Returns a [`BufferViewMut`] referring to the buffer range represented by
     /// `self`. See the documentation for [`BufferViewMut`] for more details.
     ///
-    /// Multiple views may be obtained and used simultanously as long as they are from
+    /// Multiple views may be obtained and used simultaneously as long as they are from
     /// non-overlapping slices.
     ///
     /// This can also be performed using [`Buffer::get_mapped_range_mut()`].
