@@ -4712,6 +4712,7 @@ dependencies = [
  "web-time 1.1.0",
  "wgpu",
  "wgpu-test",
+ "wgpu-types",
  "winit 0.29.15",
 ]
 

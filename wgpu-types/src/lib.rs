@@ -1148,6 +1148,9 @@ pub struct DeviceDescriptor<L> {
     pub required_limits: Limits,
     /// Hints for memory allocation strategies.
     pub memory_hints: MemoryHints,
+    /// Whether API tracing for debugging is enabled,
+    /// and where the trace is written if so.
+    pub trace: Trace,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -1159,8 +1162,29 @@ impl<L> DeviceDescriptor<L> {
             required_features: self.required_features,
             required_limits: self.required_limits.clone(),
             memory_hints: self.memory_hints.clone(),
+            trace: self.trace.clone(),
         }
     }
+}
+
+/// Controls API call tracing and specifies where the trace is written.
+///
+/// **Note:** Tracing is currently unavailable.
+/// See [issue 5974](https://github.com/gfx-rs/wgpu/issues/5974) for updates.
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+// This enum must be non-exhaustive so that enabling the "trace" feature is not a semver break.
+#[non_exhaustive]
+pub enum Trace {
+    /// Tracing disabled.
+    #[default]
+    Off,
+
+    /// Tracing enabled.
+    #[cfg(feature = "trace")]
+    // This must be owned rather than `&'a Path`, because if it were that, then the lifetime
+    // parameter would be unused when the "trace" feature is disabled, which is prohibited.
+    Directory(std::path::PathBuf),
 }
 
 bitflags::bitflags! {

@@ -1593,10 +1593,9 @@ impl dispatch::AdapterInterface for WebAdapter {
     fn request_device(
         &self,
         desc: &crate::DeviceDescriptor<'_>,
-        trace_dir: Option<&std::path::Path>,
     ) -> Pin<Box<dyn dispatch::RequestDeviceFuture>> {
-        if trace_dir.is_some() {
-            //Error: Tracing isn't supported on the Web target
+        if !matches!(desc.trace, wgt::Trace::Off) {
+            log::warn!("The `trace` parameter is not supported on the WebGPU backend.");
         }
 
         let mapped_desc = webgpu_sys::GpuDeviceDescriptor::new();

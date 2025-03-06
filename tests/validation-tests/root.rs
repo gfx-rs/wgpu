@@ -24,5 +24,5 @@ fn request_noop_device_with_desc(desc: &wgpu::DeviceDescriptor) -> (wgpu::Device
             .expect("adapter");
     assert_eq!(adapter.get_info().backend, wgpu::Backend::Noop);
 
-    pollster::block_on(adapter.request_device(desc, None)).expect("device")
+    pollster::block_on(adapter.request_device(desc)).expect("device")
 }
