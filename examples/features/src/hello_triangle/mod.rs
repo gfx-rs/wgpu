@@ -38,16 +38,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         )
         .await
         .expect("Failed to create device");
-    println!(
-        "{} {} {}",
-        adapter
-            .features()
-            .contains(wgpu::Features::EXPERIMENTAL_MESH_SHADER),
-        adapter
-            .features()
-            .contains(wgpu::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW),
-        adapter.get_info().name
-    );
 
     // Load the shaders from disk
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
