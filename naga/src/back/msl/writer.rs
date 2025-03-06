@@ -13,6 +13,7 @@ use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, Transl
 use crate::{
     arena::{Handle, HandleSet},
     back::{self, Baked},
+    common,
     proc::{self, index, ExpressionKindTracker, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
 };
@@ -80,7 +81,7 @@ fn put_numeric_type(
                 "{}::{}{}",
                 NAMESPACE,
                 scalar.to_msl_name(),
-                back::vector_size_str(rows)
+                common::vector_size_str(rows)
             )
         }
         (scalar, &[rows, columns]) => {
@@ -89,8 +90,8 @@ fn put_numeric_type(
                 "{}::{}{}x{}",
                 NAMESPACE,
                 scalar.to_msl_name(),
-                back::vector_size_str(columns),
-                back::vector_size_str(rows)
+                common::vector_size_str(columns),
+                common::vector_size_str(rows)
             )
         }
         (_, _) => Ok(()), // not meaningful
@@ -1408,7 +1409,7 @@ impl<W: Write> Writer<W> {
             .to_msl_name();
         match context.resolve_type(arg) {
             &crate::TypeInner::Vector { size, .. } => {
-                let size = back::vector_size_str(size);
+                let size = common::vector_size_str(size);
                 write!(self.out, "{scalar}{size}(-1), {scalar}{size}(1)")?;
             }
             _ => {
@@ -2133,7 +2134,7 @@ impl<W: Write> Writer<W> {
                         // or metal will complain that select is ambiguous
                         match *inner {
                             crate::TypeInner::Vector { size, scalar } => {
-                                let size = back::vector_size_str(size);
+                                let size = common::vector_size_str(size);
                                 let name = scalar.to_msl_name();
                                 write!(self.out, "{name}{size}")?;
                             }
@@ -2261,7 +2262,7 @@ impl<W: Write> Writer<W> {
                             crate::TypeInner::Vector { size, .. } => write!(
                                 self.out,
                                 "{NAMESPACE}::float{size}({NAMESPACE}::half{size}(",
-                                size = back::vector_size_str(size),
+                                size = common::vector_size_str(size),
                             )?,
                             _ => unreachable!(
                                 "Correct TypeInner for QuantizeToF16 should be already validated"

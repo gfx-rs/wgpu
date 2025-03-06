@@ -1,3 +1,5 @@
+use crate::common;
+
 use alloc::{borrow::Cow, format, string::String};
 
 use super::Error;
@@ -88,7 +90,7 @@ impl crate::TypeInner {
             crate::TypeInner::Vector { size, scalar } => Cow::Owned(format!(
                 "{}{}",
                 scalar.to_hlsl_str()?,
-                crate::back::vector_size_str(size)
+                common::vector_size_str(size)
             )),
             crate::TypeInner::Matrix {
                 columns,
@@ -97,8 +99,8 @@ impl crate::TypeInner {
             } => Cow::Owned(format!(
                 "{}{}x{}",
                 scalar.to_hlsl_str()?,
-                crate::back::vector_size_str(columns),
-                crate::back::vector_size_str(rows),
+                common::vector_size_str(columns),
+                common::vector_size_str(rows),
             )),
             crate::TypeInner::Array {
                 base,

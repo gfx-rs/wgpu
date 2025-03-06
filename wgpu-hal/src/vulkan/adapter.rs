@@ -495,19 +495,20 @@ impl PhysicalDeviceFeatures {
                 None
             },
             mesh_shader: if enabled_extensions.contains(&ext::mesh_shader::NAME) {
-                let needed = requested_features.contains(wgt::Features::MESH_SHADER);
+                let needed = requested_features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER);
+                let multiview_needed =
+                    requested_features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW);
                 Some(
                     vk::PhysicalDeviceMeshShaderFeaturesEXT::default()
                         .mesh_shader(needed)
                         .task_shader(needed)
-                        // Multiview needs some special work https://github.com/gfx-rs/wgpu/issues/7262
-                        .multiview_mesh_shader(false),
+                        .multiview_mesh_shader(multiview_needed),
                 )
             } else {
                 None
             },
             maintenance4: if enabled_extensions.contains(&khr::maintenance4::NAME) {
-                let needed = requested_features.contains(wgt::Features::MESH_SHADER);
+                let needed = requested_features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER);
                 Some(vk::PhysicalDeviceMaintenance4FeaturesKHR::default().maintenance4(needed))
             } else {
                 None
@@ -836,9 +837,15 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(khr::external_memory_win32::NAME),
         );
         features.set(
-            F::MESH_SHADER,
+            F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
+        if let Some(ref mesh_shader) = self.mesh_shader {
+            features.set(
+                F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+                mesh_shader.multiview_mesh_shader != 0,
+            );
+        }
         (features, dl_flags)
     }
 }
@@ -1005,7 +1012,7 @@ impl PhysicalDeviceProperties {
                 }
             }
 
-            if requested_features.intersects(wgt::Features::MESH_SHADER) {
+            if requested_features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
                 extensions.push(khr::spirv_1_4::NAME);
             }
 
@@ -1024,7 +1031,7 @@ impl PhysicalDeviceProperties {
                 extensions.push(ext::subgroup_size_control::NAME);
             }
 
-            if requested_features.intersects(wgt::Features::MESH_SHADER) {
+            if requested_features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
                 extensions.push(khr::maintenance4::NAME);
             }
         }
@@ -1105,7 +1112,7 @@ impl PhysicalDeviceProperties {
             extensions.push(google::display_timing::NAME);
         }
 
-        if requested_features.contains(wgt::Features::MESH_SHADER) {
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
             extensions.push(ext::mesh_shader::NAME);
         }
 

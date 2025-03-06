@@ -5,11 +5,10 @@ Generating SPIR-V for ray query operations.
 use alloc::vec;
 
 use super::{
-    Block, BlockContext, Function, FunctionArgument, Instruction, LocalType, LookupFunctionType,
-    LookupType, NumericType, Writer,
+    Block, BlockContext, Function, FunctionArgument, Instruction, LookupFunctionType, NumericType,
+    Writer,
 };
 use crate::arena::Handle;
-use crate::{Type, TypeInner};
 
 impl Writer {
     pub(super) fn write_ray_query_get_intersection_function(
@@ -21,100 +20,35 @@ impl Writer {
             return func_id;
         }
         let ray_intersection = ir_module.special_types.ray_intersection.unwrap();
-        let intersection_type_id = self.get_type_id(LookupType::Handle(ray_intersection));
+        let intersection_type_id = self.get_handle_type_id(ray_intersection);
         let intersection_pointer_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Pointer {
-                base: ray_intersection,
-                class: spirv::StorageClass::Function,
-            }));
+            self.get_pointer_type_id(intersection_type_id, spirv::StorageClass::Function);
 
-        let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-            NumericType::Scalar(crate::Scalar::U32),
-        )));
-        let flag_type = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::Scalar(crate::Scalar::U32),
-            })
-            .unwrap();
-        let flag_pointer_type_id = self.get_type_id(LookupType::Local(LocalType::Pointer {
-            base: flag_type,
-            class: spirv::StorageClass::Function,
-        }));
+        let flag_type_id = self.get_u32_type_id();
+        let flag_pointer_type_id =
+            self.get_pointer_type_id(flag_type_id, spirv::StorageClass::Function);
 
-        let transform_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Matrix {
-                columns: crate::VectorSize::Quad,
-                rows: crate::VectorSize::Tri,
-                scalar: crate::Scalar::F32,
-            })));
-        let transform_type = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::Matrix {
-                    columns: crate::VectorSize::Quad,
-                    rows: crate::VectorSize::Tri,
-                    scalar: crate::Scalar::F32,
-                },
-            })
-            .unwrap();
-        let transform_pointer_type_id = self.get_type_id(LookupType::Local(LocalType::Pointer {
-            base: transform_type,
-            class: spirv::StorageClass::Function,
-        }));
+        let transform_type_id = self.get_numeric_type_id(NumericType::Matrix {
+            columns: crate::VectorSize::Quad,
+            rows: crate::VectorSize::Tri,
+            scalar: crate::Scalar::F32,
+        });
+        let transform_pointer_type_id =
+            self.get_pointer_type_id(transform_type_id, spirv::StorageClass::Function);
 
-        let barycentrics_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
-                size: crate::VectorSize::Bi,
-                scalar: crate::Scalar::F32,
-            })));
-        let barycentrics_type = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::Vector {
-                    size: crate::VectorSize::Bi,
-                    scalar: crate::Scalar::F32,
-                },
-            })
-            .unwrap();
+        let barycentrics_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::F32,
+        });
         let barycentrics_pointer_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Pointer {
-                base: barycentrics_type,
-                class: spirv::StorageClass::Function,
-            }));
+            self.get_pointer_type_id(barycentrics_type_id, spirv::StorageClass::Function);
 
-        let bool_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-            NumericType::Scalar(crate::Scalar::BOOL),
-        )));
-        let bool_type = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::Scalar(crate::Scalar::BOOL),
-            })
-            .unwrap();
-        let bool_pointer_type_id = self.get_type_id(LookupType::Local(LocalType::Pointer {
-            base: bool_type,
-            class: spirv::StorageClass::Function,
-        }));
+        let bool_type_id = self.get_bool_type_id();
+        let bool_pointer_type_id =
+            self.get_pointer_type_id(bool_type_id, spirv::StorageClass::Function);
 
-        let scalar_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-            NumericType::Scalar(crate::Scalar::F32),
-        )));
-        let float_type = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::Scalar(crate::Scalar::F32),
-            })
-            .unwrap();
-        let float_pointer_type_id = self.get_type_id(LookupType::Local(LocalType::Pointer {
-            base: float_type,
-            class: spirv::StorageClass::Function,
-        }));
+        let scalar_type_id = self.get_f32_type_id();
+        let float_pointer_type_id = self.get_f32_pointer_type_id(spirv::StorageClass::Function);
 
         let argument_type_id = self.get_ray_query_pointer_id(ir_module);
 
@@ -525,9 +459,8 @@ impl BlockContext<'_> {
                 let desc_id = self.cached[descriptor];
                 let acc_struct_id = self.get_handle_id(acceleration_structure);
 
-                let flag_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-                    NumericType::Scalar(crate::Scalar::U32),
-                )));
+                let flag_type_id =
+                    self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
                 let ray_flags_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     flag_type_id,
@@ -543,9 +476,8 @@ impl BlockContext<'_> {
                     &[1],
                 ));
 
-                let scalar_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-                    NumericType::Scalar(crate::Scalar::F32),
-                )));
+                let scalar_type_id =
+                    self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::F32));
                 let tmin_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     scalar_type_id,
@@ -561,11 +493,10 @@ impl BlockContext<'_> {
                     &[3],
                 ));
 
-                let vector_type_id =
-                    self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
-                        size: crate::VectorSize::Tri,
-                        scalar: crate::Scalar::F32,
-                    })));
+                let vector_type_id = self.get_numeric_type_id(NumericType::Vector {
+                    size: crate::VectorSize::Tri,
+                    scalar: crate::Scalar::F32,
+                });
                 let ray_origin_id = self.gen_id();
                 block.body.push(Instruction::composite_extract(
                     vector_type_id,
@@ -626,11 +557,12 @@ impl BlockContext<'_> {
     ) -> spirv::Word {
         let query_id = self.cached[query];
         let id = self.gen_id();
-        let result = self
+        let ray_vertex_return_ty = self
             .ir_module
             .special_types
             .ray_vertex_return
             .expect("type should have been populated");
+        let ray_vertex_return_ty_id = self.writer.get_handle_type_id(ray_vertex_return_ty);
         let intersection_id =
             self.writer
                 .get_constant_scalar(crate::Literal::U32(if is_committed {
@@ -641,11 +573,7 @@ impl BlockContext<'_> {
         block
             .body
             .push(Instruction::ray_query_return_vertex_position(
-                *self
-                    .writer
-                    .lookup_type
-                    .get(&LookupType::Handle(result))
-                    .expect("type should have been populated"),
+                ray_vertex_return_ty_id,
                 id,
                 query_id,
                 intersection_id,

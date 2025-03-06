@@ -39,8 +39,8 @@ pub fn make_spirv(data: &[u8]) -> super::ShaderSource<'_> {
     super::ShaderSource::SpirV(make_spirv_raw(data))
 }
 
-/// Version of make_spirv intended for use with [`Device::create_shader_module_spirv`].
-/// Returns raw slice instead of ShaderSource.
+/// Version of `make_spirv` intended for use with [`Device::create_shader_module_spirv`].
+/// Returns a raw slice instead of [`ShaderSource`](super::ShaderSource).
 ///
 /// [`Device::create_shader_module_spirv`]: crate::Device::create_shader_module_spirv
 pub fn make_spirv_raw(data: &[u8]) -> Cow<'_, [u32]> {

@@ -20,11 +20,11 @@ const bitflip_uai: u32 = 0u;
 const least_i32_: i32 = i32(-2147483648);
 const least_f32_: f32 = -340282350000000000000000000000000000000f;
 const shl_iaiai: i32 = 4i;
-const shl_iai_u: i32 = 4i;
+const shl_iai_u_1: i32 = 4i;
 const shl_uaiai: u32 = 4u;
 const shl_uai_u: u32 = 4u;
 const shr_iaiai: i32 = 0i;
-const shr_iai_u: i32 = 0i;
+const shr_iai_u_1: i32 = 0i;
 const shr_uaiai: u32 = 0u;
 const shr_uai_u: u32 = 0u;
 const wgpu_4492_: i32 = i32(-2147483648);
@@ -52,6 +52,8 @@ fn runtime_values() {
     var plus_uai_u: u32;
     var plus_u_uai: u32;
     var plus_u_u_u: u32;
+    var shl_iai_u: i32;
+    var shr_iai_u: i32;
 
     let _e8 = f;
     plus_faf_f = (1f + _e8);
@@ -78,6 +80,10 @@ fn runtime_values() {
     let _e52 = u;
     let _e53 = u;
     plus_u_u_u = (_e52 + _e53);
+    let _e56 = u;
+    shl_iai_u = (1i << _e56);
+    let _e60 = u;
+    shr_iai_u = (1i << _e60);
     return;
 }
 

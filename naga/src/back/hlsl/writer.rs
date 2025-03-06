@@ -16,6 +16,7 @@ use super::{
 };
 use crate::{
     back::{self, Baked},
+    common,
     proc::{self, index, ExpressionKindTracker, NameKey},
     valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
@@ -1321,7 +1322,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.out,
                     "{}{}",
                     scalar.to_hlsl_str()?,
-                    back::vector_size_str(size)
+                    common::vector_size_str(size)
                 )?;
             }
             TypeInner::Matrix {
@@ -1337,8 +1338,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.out,
                     "{}{}x{}",
                     scalar.to_hlsl_str()?,
-                    back::vector_size_str(columns),
-                    back::vector_size_str(rows),
+                    common::vector_size_str(columns),
+                    common::vector_size_str(rows),
                 )?;
             }
             TypeInner::Image {
@@ -3340,7 +3341,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.out,
                                     "{}{}(",
                                     scalar.to_hlsl_str()?,
-                                    back::vector_size_str(size)
+                                    common::vector_size_str(size)
                                 )?;
                             }
                             TypeInner::Scalar(_) => {
@@ -3351,8 +3352,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.out,
                                     "{}{}x{}(",
                                     scalar.to_hlsl_str()?,
-                                    back::vector_size_str(columns),
-                                    back::vector_size_str(rows)
+                                    common::vector_size_str(columns),
+                                    common::vector_size_str(rows)
                                 )?;
                             }
                             _ => {

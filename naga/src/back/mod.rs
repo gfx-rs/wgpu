@@ -250,15 +250,6 @@ pub const fn binary_operation_str(op: crate::BinaryOperator) -> &'static str {
     }
 }
 
-/// Helper function that returns the string corresponding to the [`VectorSize`](crate::VectorSize)
-const fn vector_size_str(size: crate::VectorSize) -> &'static str {
-    match size {
-        crate::VectorSize::Bi => "2",
-        crate::VectorSize::Tri => "3",
-        crate::VectorSize::Quad => "4",
-    }
-}
-
 impl crate::TypeInner {
     /// Returns true if this is a handle to a type rather than the type directly.
     pub const fn is_handle(&self) -> bool {

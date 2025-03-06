@@ -9,6 +9,18 @@ fn main() {
         Emscripten: { all(target_os = "emscripten", gles) },
         dx12: { all(target_os = "windows", feature = "dx12") },
         gles: { all(feature = "gles") },
+        // Within the GL ES backend, use `std` and be Send + Sync only if we are using a target
+        // that, among the ones where the GL ES backend is supported, has `std`.
+        gles_with_std: { all(
+            feature = "gles",
+            any(
+                not(target_arch = "wasm32"),
+                // Accept wasm32-unknown-unknown, which uniquely has a stub `std`
+                all(target_vendor = "unknown", target_os = "unknown"),
+                // Accept wasm32-unknown-emscripten and similar, which has a real `std`
+                target_os = "emscripten"
+            )
+        ) },
         metal: { all(target_vendor = "apple", feature = "metal") },
         vulkan: { all(not(target_arch = "wasm32"), feature = "vulkan") },
         // ⚠️ Keep in sync with target.cfg() definition in Cargo.toml and cfg_alias in `wgpu` crate ⚠️

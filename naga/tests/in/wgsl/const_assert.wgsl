@@ -13,4 +13,8 @@ fn foo() {
   const z = x + y - 2;
   const_assert z > 0; // valid in functions.
   const_assert(z > 0);
+
+  const_assert z == 1i;
+  const_assert z > 0u;
+  const_assert z < 2.0f;
 }

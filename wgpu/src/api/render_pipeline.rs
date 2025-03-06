@@ -38,7 +38,9 @@ impl RenderPipeline {
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexbufferlayout).
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct VertexBufferLayout<'a> {
-    /// The stride, in bytes, between elements of this buffer.
+    /// The stride, in bytes, between elements of this buffer (between vertices).
+    ///
+    /// This must be a multiple of [`VERTEX_STRIDE_ALIGNMENT`].
     pub array_stride: BufferAddress,
     /// How often this vertex buffer is "stepped" forward.
     pub step_mode: VertexStepMode,

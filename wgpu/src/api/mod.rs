@@ -80,9 +80,9 @@ pub use tlas::*;
 /// Object debugging label.
 pub type Label<'a> = Option<&'a str>;
 
-/// A cute utility type that works just like PhantomData, but also
-/// implements Drop. This forces any lifetimes that are associated
-/// with the type to be used until the Drop impl is ran. This prevents
+/// A cute utility type that works just like `PhantomData`, but also
+/// implements `Drop`. This forces any lifetimes that are associated
+/// with the type to be used until the `Drop` impl is ran. This prevents
 /// lifetimes from being shortened.
 #[derive(Debug)]
 pub(crate) struct PhantomDrop<T>(core::marker::PhantomData<T>);
