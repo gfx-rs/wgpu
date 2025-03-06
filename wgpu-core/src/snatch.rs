@@ -3,9 +3,9 @@ use core::{cell::UnsafeCell, fmt};
 use crate::lock::{rank, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// A guard that provides read access to snatchable data.
-pub struct SnatchGuard<'a>(#[allow(dead_code)] RwLockReadGuard<'a, ()>);
+pub struct SnatchGuard<'a>(#[expect(dead_code)] RwLockReadGuard<'a, ()>);
 /// A guard that allows snatching the snatchable data.
-pub struct ExclusiveSnatchGuard<'a>(#[allow(dead_code)] RwLockWriteGuard<'a, ()>);
+pub struct ExclusiveSnatchGuard<'a>(#[expect(dead_code)] RwLockWriteGuard<'a, ()>);
 
 /// A value that is mostly immutable but can be "snatched" if we need to destroy
 /// it early.
@@ -61,7 +61,7 @@ impl<T> fmt::Debug for Snatchable<T> {
 unsafe impl<T> Sync for Snatchable<T> {}
 
 use trace::LockTrace;
-#[cfg(debug_assertions)]
+#[cfg(all(debug_assertions, feature = "std"))]
 mod trace {
     use core::{cell::Cell, fmt, panic::Location};
     use std::{backtrace::Backtrace, thread};
@@ -113,7 +113,7 @@ mod trace {
         static SNATCH_LOCK_TRACE: Cell<Option<LockTrace>> = const { Cell::new(None) };
     }
 }
-#[cfg(not(debug_assertions))]
+#[cfg(not(all(debug_assertions, feature = "std")))]
 mod trace {
     pub(super) struct LockTrace {
         _private: (),

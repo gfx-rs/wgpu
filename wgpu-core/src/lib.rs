@@ -63,7 +63,7 @@
 #![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
 
 extern crate alloc;
-// TODO(https://github.com/gfx-rs/wgpu/issues/6826): this should be optional
+#[cfg(feature = "std")]
 extern crate std;
 extern crate wgpu_hal as hal;
 extern crate wgpu_types as wgt;
@@ -111,7 +111,6 @@ use alloc::{
     borrow::{Cow, ToOwned as _},
     string::String,
 };
-use std::os::raw::c_char;
 
 pub(crate) use hash_utils::*;
 
@@ -123,7 +122,7 @@ pub type SubmissionIndex = hal::FenceValue;
 type Index = u32;
 type Epoch = u32;
 
-pub type RawString = *const c_char;
+pub type RawString = *const core::ffi::c_char;
 pub type Label<'a> = Option<Cow<'a, str>>;
 
 trait LabelHelpers<'a> {
@@ -227,17 +226,27 @@ pub(crate) fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
     }
 }
 
-#[test]
-fn test_lcd() {
-    assert_eq!(get_lowest_common_denom(2, 2), 2);
-    assert_eq!(get_lowest_common_denom(2, 3), 6);
-    assert_eq!(get_lowest_common_denom(6, 4), 12);
-}
+#[cfg(not(feature = "std"))]
+use core::cell::OnceCell as OnceCellOrLock;
+#[cfg(feature = "std")]
+use std::sync::OnceLock as OnceCellOrLock;
 
-#[test]
-fn test_gcd() {
-    assert_eq!(get_greatest_common_divisor(5, 1), 1);
-    assert_eq!(get_greatest_common_divisor(4, 2), 2);
-    assert_eq!(get_greatest_common_divisor(6, 4), 2);
-    assert_eq!(get_greatest_common_divisor(7, 7), 7);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lcd() {
+        assert_eq!(get_lowest_common_denom(2, 2), 2);
+        assert_eq!(get_lowest_common_denom(2, 3), 6);
+        assert_eq!(get_lowest_common_denom(6, 4), 12);
+    }
+
+    #[test]
+    fn test_gcd() {
+        assert_eq!(get_greatest_common_divisor(5, 1), 1);
+        assert_eq!(get_greatest_common_divisor(4, 2), 2);
+        assert_eq!(get_greatest_common_divisor(6, 4), 2);
+        assert_eq!(get_greatest_common_divisor(7, 7), 7);
+    }
 }
