@@ -243,7 +243,7 @@ By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905), [#7086](https:/
 ### Documentation
 
 - Improved documentation around pipeline caches and `TextureBlitter`. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978) and [#7003](https://github.com/gfx-rs/wgpu/pull/7003).
-- Improved documentation of `PresentMode`. By @kpreid in [#7211](https://github.com/gfx-rs/wgpu/pull/7211).
+- Improved documentation of `PresentMode`, buffer mapping functions, memory alignment requirements, texture formats’ automatic conversions, and various types and constants. By @kpreid in [#7211](https://github.com/gfx-rs/wgpu/pull/7211) and [#7283](https://github.com/gfx-rs/wgpu/pull/7283).
 
 - Added a hello window example. By @laycookie in [#6992](https://github.com/gfx-rs/wgpu/pull/6992).
 

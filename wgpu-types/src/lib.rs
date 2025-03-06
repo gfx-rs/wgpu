@@ -38,35 +38,71 @@ pub use counters::*;
 pub use features::*;
 pub use instance::*;
 
-/// Integral type used for buffer offsets.
+/// Integral type used for [`Buffer`] offsets and sizes.
+///
+/// [`Buffer`]: ../wgpu/struct.Buffer.html
 pub type BufferAddress = u64;
-/// Integral type used for buffer slice sizes.
+
+/// Integral type used for [`BufferSlice`] sizes.
+///
+/// Note that while this type is non-zero, a [`Buffer`] *per se* can have a size of zero,
+/// but no slice or mapping can be created from it.
+///
+/// [`Buffer`]: ../wgpu/struct.Buffer.html
+/// [`BufferSlice`]: ../wgpu/struct.BufferSlice.html
 pub type BufferSize = core::num::NonZeroU64;
+
 /// Integral type used for binding locations in shaders.
+///
+/// Used in [`VertexAttribute`]s and errors.
+///
+/// [`VertexAttribute`]: ../wgpu/struct.VertexAttribute.html
 pub type ShaderLocation = u32;
-/// Integral type used for dynamic bind group offsets.
+
+/// Integral type used for
+/// [dynamic bind group offsets](../wgpu/struct.RenderPass.html#method.set_bind_group).
 pub type DynamicOffset = u32;
 
-/// Buffer-Texture copies must have [`bytes_per_row`] aligned to this number.
+/// Buffer-to-texture copies must have [`bytes_per_row`] aligned to this number.
 ///
-/// This doesn't apply to [`Queue::write_texture`][Qwt].
+/// This doesn't apply to [`Queue::write_texture`][Qwt], only to [`copy_buffer_to_texture()`].
 ///
 /// [`bytes_per_row`]: TexelCopyBufferLayout::bytes_per_row
+/// [`copy_buffer_to_texture()`]: ../wgpu/struct.Queue.html#method.copy_buffer_to_texture
 /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
-/// An offset into the query resolve buffer has to be aligned to this.
+
+/// An [offset into the query resolve buffer] has to be aligned to this.
+///
+/// [offset into the query resolve buffer]: ../wgpu/struct.CommandEncoder.html#method.resolve_query_set
 pub const QUERY_RESOLVE_BUFFER_ALIGNMENT: BufferAddress = 256;
+
 /// Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
-/// Size to align mappings.
+
+/// Minimum alignment of buffer mappings.
+///
+/// The range passed to [`map_async()`] or [`get_mapped_range()`] must be at least this aligned.
+///
+/// [`map_async()`]: ../wgpu/struct.Buffer.html#method.map_async
+/// [`get_mapped_range()`]: ../wgpu/struct.Buffer.html#method.get_mapped_range
 pub const MAP_ALIGNMENT: BufferAddress = 8;
-/// Vertex buffer strides have to be aligned to this number.
+
+/// [Vertex buffer strides] have to be a multiple of this number.
+///
+/// [Vertex buffer strides]: ../wgpu/struct.VertexBufferLayout.html#structfield.array_stride
 pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
-/// Alignment all push constants need
+/// Ranges of [writes to push constant storage] must be at least this aligned.
+///
+/// [writes to push constant storage]: ../wgpu/struct.RenderPass.html#method.set_push_constants
 pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
-/// Maximum queries in a query set
+
+/// Maximum queries in a [`QuerySetDescriptor`].
 pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
-/// Size of a single piece of query data.
+
+/// Size in bytes of a single piece of [query] data.
+///
+/// [query]: ../wgpu/struct.QuerySet.html
 pub const QUERY_SIZE: u32 = 8;
 
 /// Backends supported by wgpu.
@@ -1739,13 +1775,24 @@ pub enum AstcChannel {
     Hdr,
 }
 
-/// Underlying texture data format.
+/// Format in which a texture’s texels are stored in GPU memory.
 ///
-/// If there is a conversion in the format (such as srgb -> linear), the conversion listed here is for
-/// loading from texture in a shader. When writing to the texture, the opposite conversion takes place.
+/// Certain formats additionally specify a conversion.
+/// When these formats are used in a shader, the conversion automatically takes place when loading
+/// from or storing to the texture.
+///
+/// * `Unorm` formats linearly scale the integer range of the storage format to a floating-point
+///   range of 0 to 1, inclusive.
+/// * `Snorm` formats linearly scale the integer range of the storage format to a floating-point
+///   range of &minus;1 to 1, inclusive.
+/// * `UnormSrgb` formats apply the [sRGB transfer function] so that the storage is sRGB encoded
+///   while the shader works with linear intensity values.
+/// * `Uint`, `Sint`, and `Float` formats perform no conversion.
 ///
 /// Corresponds to [WebGPU `GPUTextureFormat`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureformat).
+///
+/// [sRGB transfer function]: https://en.wikipedia.org/wiki/SRGB#Transfer_function_(%22gamma%22)
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum TextureFormat {
@@ -5676,12 +5723,15 @@ fn test_max_mips() {
     );
 }
 
-/// Describes a `TextureView`.
+/// Describes a [`TextureView`].
 ///
-/// For use with `Texture::create_view`.
+/// For use with [`Texture::create_view()`].
 ///
 /// Corresponds to [WebGPU `GPUTextureViewDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
+///
+/// [`TextureView`]: ../wgpu/struct.TextureView.html
+/// [`Texture::create_view()`]: ../wgpu/struct.Texture.html#method.create_view
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TextureViewDescriptor<L> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
@@ -5901,10 +5951,15 @@ impl<L: Default> Default for SamplerDescriptor<L> {
     }
 }
 
-/// Kind of data the texture holds.
+/// Selects a subset of the data a [`Texture`] holds.
+///
+/// Used in [texture views](TextureViewDescriptor) and
+/// [texture copy operations](TexelCopyTextureInfo).
 ///
 /// Corresponds to [WebGPU `GPUTextureAspect`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureaspect).
+///
+/// [`Texture`]: ../wgpu/struct.Texture.html
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -6363,12 +6418,16 @@ pub enum SamplerBindingType {
     Comparison,
 }
 
-/// Specific type of a binding.
+/// Type of a binding in a [bind group layout][`BindGroupLayoutEntry`].
 ///
-/// For use in [`BindGroupLayoutEntry`].
+/// For each binding in a layout, a [`BindGroup`] must provide a [`BindingResource`] of the
+/// corresponding type.
 ///
 /// Corresponds to WebGPU's mutually exclusive fields within [`GPUBindGroupLayoutEntry`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry).
+///
+/// [`BindingResource`]: ../wgpu/enum.BindingResource.html
+/// [`BindGroup`]: ../wgpu/struct.BindGroup.html
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BindingType {
@@ -6953,10 +7012,12 @@ impl<L> QuerySetDescriptor<L> {
     }
 }
 
-/// Type of query contained in a `QuerySet`.
+/// Type of query contained in a [`QuerySet`].
 ///
 /// Corresponds to [WebGPU `GPUQueryType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuquerytype).
+///
+/// [`QuerySet`]: ../wgpu/struct.QuerySet.html
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QueryType {
@@ -6984,14 +7045,16 @@ pub enum QueryType {
 }
 
 bitflags::bitflags! {
-    /// Flags for which pipeline data should be recorded.
+    /// Flags for which pipeline data should be recorded in a query.
+    ///
+    /// Used in [`QueryType`].
     ///
     /// The amount of values written when resolved depends
-    /// on the amount of flags. If 3 flags are enabled, 3
-    /// 64-bit values will be written per-query.
+    /// on the amount of flags set. For example, if 3 flags are set, 3
+    /// 64-bit values will be written per query.
     ///
     /// The order they are written is the order they are declared
-    /// in this bitflags. If you enabled `CLIPPER_PRIMITIVES_OUT`
+    /// in these bitflags. For example, if you enabled `CLIPPER_PRIMITIVES_OUT`
     /// and `COMPUTE_SHADER_INVOCATIONS`, it would write 16 bytes,
     /// the first 8 bytes being the primitive out value, the last 8
     /// bytes being the compute shader invocation count.

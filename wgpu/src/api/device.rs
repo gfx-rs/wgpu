@@ -585,7 +585,7 @@ impl From<wgc::instance::RequestDeviceError> for RequestDeviceError {
 pub trait UncapturedErrorHandler: Fn(Error) + Send + 'static {}
 impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + 'static {}
 
-/// Filter for error scopes.
+/// Kinds of [`Error`]s a [`Device::push_error_scope()`] may be configured to catch.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub enum ErrorFilter {
     /// Catch only out-of-memory errors.
@@ -610,15 +610,19 @@ pub type ErrorSource = Box<dyn error::Error + Send + Sync + 'static>;
 #[cfg_attr(docsrs, doc(cfg(all())))]
 pub type ErrorSource = Box<dyn error::Error + 'static>;
 
-/// Error type
+/// Errors resulting from usage of GPU APIs.
+///
+/// By default, errors translate into panics. Depending on the backend and circumstances,
+/// errors may occur synchronously or asynchronously. When errors need to be handled, use
+/// [`Device::push_error_scope()`] or [`Device::on_uncaptured_error()`].
 #[derive(Debug)]
 pub enum Error {
-    /// Out of memory error
+    /// Out of memory.
     OutOfMemory {
         /// Lower level source of the error.
         source: ErrorSource,
     },
-    /// Validation error, signifying a bug in code or data
+    /// Validation error, signifying a bug in code or data provided to `wgpu`.
     Validation {
         /// Lower level source of the error.
         source: ErrorSource,
