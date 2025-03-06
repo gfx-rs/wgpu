@@ -1,5 +1,4 @@
 use core::{error, fmt};
-use std::thread;
 
 use crate::*;
 
@@ -42,7 +41,7 @@ impl SurfaceTexture {
 
 impl Drop for SurfaceTexture {
     fn drop(&mut self) {
-        if !self.presented && !thread::panicking() {
+        if !self.presented && !definitely_panicking() {
             self.detail.texture_discard();
         }
     }
@@ -77,3 +76,14 @@ impl fmt::Display for SurfaceError {
 }
 
 impl error::Error for SurfaceError {}
+
+/// Returns `true` if the current thread is unwinding and `false` if it is not or the `std` feature
+/// is disabled.
+fn definitely_panicking() -> bool {
+    #[cfg(feature = "std")]
+    if std::thread::panicking() {
+        return true;
+    }
+
+    false
+}

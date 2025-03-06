@@ -3,6 +3,7 @@
 //! Nothing in this module is a part of the WebGPU API specification;
 //! they are unique to the `wgpu` library.
 
+#[cfg(feature = "std")]
 mod belt;
 mod device;
 mod encoder;
@@ -12,6 +13,7 @@ mod texture_blitter;
 use alloc::{borrow::Cow, format, string::String, sync::Arc, vec};
 use core::ptr::copy_nonoverlapping;
 
+#[cfg(feature = "std")]
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;

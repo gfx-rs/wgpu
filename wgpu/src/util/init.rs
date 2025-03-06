@@ -1,10 +1,11 @@
+#[cfg(feature = "std")]
 use crate::{Adapter, Instance, RequestAdapterOptions, Surface};
 
 #[cfg(doc)]
 use crate::Backends;
 
 /// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable.
-#[cfg(native)]
+#[cfg(all(feature = "std", native))]
 pub fn initialize_adapter_from_env(
     instance: &Instance,
     compatible_surface: Option<&Surface<'_>>,
@@ -36,7 +37,7 @@ pub fn initialize_adapter_from_env(
 }
 
 /// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable.
-#[cfg(not(native))]
+#[cfg(all(feature = "std", not(native)))]
 pub fn initialize_adapter_from_env(
     _instance: &Instance,
     _compatible_surface: Option<&Surface<'_>>,
@@ -44,6 +45,7 @@ pub fn initialize_adapter_from_env(
     Err(wgt::RequestAdapterError::EnvNotSet)
 }
 
+#[cfg(feature = "std")]
 /// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable and if it doesn't exist fall back on a default adapter.
 pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,

@@ -75,7 +75,7 @@ wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "24.0.0", path = "./wgpu-hal" }
 wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "24.0.0", path = "./tests" }
-wgpu-types = { version = "24.0.0", path = "./wgpu-types" }
+wgpu-types = { version = "24.0.0", path = "./wgpu-types", default-features = false }
 
 wgpu-core-deps-windows-linux-android = { version = "24.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
 wgpu-core-deps-apple = { version = "24.0.0", path = "./wgpu-core/platform-deps/apple" }

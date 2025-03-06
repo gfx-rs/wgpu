@@ -3,9 +3,12 @@ fn main() {
         native: { not(target_arch = "wasm32") },
         Emscripten: { all(target_arch = "wasm32", target_os = "emscripten") },
 
-        send_sync: { any(
-            native,
-            all(feature = "fragile-send-sync-non-atomic-wasm", not(target_feature = "atomics"))
+        send_sync: { all(
+            feature = "std",
+            any(
+                native,
+                all(feature = "fragile-send-sync-non-atomic-wasm", not(target_feature = "atomics"))
+            )
         ) },
 
         // Backends - keep this in sync with `wgpu-core/Cargo.toml` & docs in `wgpu/Cargo.toml`
