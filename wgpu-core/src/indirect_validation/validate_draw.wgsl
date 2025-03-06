@@ -25,6 +25,10 @@ var<storage, read> src: array<u32>;
 @group(2) @binding(0)
 var<storage, read_write> dst: array<u32>;
 
+fn is_bit_set(data: u32, index: u32) -> bool {
+    return ((data >> index) & 1u) == 1u;
+}
+
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_invocation_id: vec3u) {
     if global_invocation_id.x >= metadata_range.count { return; }
@@ -32,7 +36,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u) {
     let metadata = metadata[metadata_range.start + global_invocation_id.x];
     var failed = false;
 
-    let is_indexed = ((metadata.src_offset >> 31) & 1u) == 1u;
+    let is_indexed = is_bit_set(metadata.src_offset, 31);
     let src_base_offset = ((metadata.src_offset << 2) >> 2);
     let dst_base_offset = ((metadata.dst_offset << 2) >> 2);
 
@@ -40,7 +44,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u) {
     let vertex_or_index_count = src[src_base_offset + 0];
 
     {
-        let can_overflow = ((metadata.dst_offset >> 30) & 1u) == 1u;
+        let can_overflow = is_bit_set(metadata.dst_offset, 30);
         let sub_overflows = metadata.vertex_or_index_limit < first_vertex_or_index;
         failed |= sub_overflows && !can_overflow;
         let vertex_or_index_limit = metadata.vertex_or_index_limit - first_vertex_or_index;
@@ -51,7 +55,7 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u) {
     let instance_count = src[src_base_offset + 1];
 
     {
-        let can_overflow = (metadata.dst_offset >> 31) == 1u;
+        let can_overflow = is_bit_set(metadata.dst_offset, 31);
         let sub_overflows = metadata.instance_limit < first_instance;
         failed |= sub_overflows && !can_overflow;
         let instance_limit = metadata.instance_limit - first_instance;
