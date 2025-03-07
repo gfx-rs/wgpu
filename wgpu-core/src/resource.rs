@@ -1425,7 +1425,8 @@ impl Global {
         if let Ok(blas) = hub.blas_s.get(id).get() {
             let snatch_guard = blas.device.snatchable_lock.read();
             let hal_blas = blas
-                .raw(&snatch_guard)
+                .try_raw(&snatch_guard)
+                .ok()
                 .and_then(|b| b.as_any().downcast_ref());
             hal_blas_callback(hal_blas)
         } else {
@@ -1448,7 +1449,8 @@ impl Global {
         if let Ok(tlas) = hub.tlas_s.get(id).get() {
             let snatch_guard = tlas.device.snatchable_lock.read();
             let hal_tlas = tlas
-                .raw(&snatch_guard)
+                .try_raw(&snatch_guard)
+                .ok()
                 .and_then(|t| t.as_any().downcast_ref());
             hal_tlas_callback(hal_tlas)
         } else {

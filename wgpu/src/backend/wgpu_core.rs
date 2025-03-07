@@ -15,13 +15,7 @@ use smallvec::SmallVec;
 use wgc::{command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError};
 use wgt::WasmNotSendSync;
 
-use crate::{
-    api,
-    dispatch::{self, BufferMappedRangeInterface},
-    BindingResource, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
-    CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
-    ShaderSource, SurfaceTargetUnsafe, TextureDescriptor,
-};
+use crate::{api, dispatch::{self, BufferMappedRangeInterface}, BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage, CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations, ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas};
 
 #[derive(Clone)]
 pub struct ContextWgpuCore(Arc<wgc::global::Global>);
@@ -2498,8 +2492,8 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         blas: &mut dyn Iterator<Item = &'a Blas>,
         tlas: &mut dyn Iterator<Item = &'a Tlas>,
     ) {
-        let blas = blas.map(|b| b.shared.inner.as_core().id);
-        let tlas = tlas.map(|t| t.inner.as_core().id);
+        let blas = blas.map(|b| b.inner.as_core().id);
+        let tlas = tlas.map(|t| t.shared.inner.as_core().id);
         if let Err(cause) = self
             .context
             .0

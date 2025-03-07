@@ -79,12 +79,7 @@ impl Global {
 
         let device = &cmd_buf.device;
 
-        if !device
-            .features
-            .contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-        {
-            return Err(BuildAccelerationStructureError::MissingFeature);
-        }
+        device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
 
         let build_command_index = NonZeroU64::new(
             device
@@ -109,8 +104,7 @@ impl Global {
             let blas = hub
                 .blas_s
                 .get(blas)
-                .get()
-                .map_err(|_| BuildAccelerationStructureError::InvalidBlasId)?;
+                .get()?;
             cmd_buf_data.blas_actions.push(BlasAction {
                 blas,
                 kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
@@ -121,8 +115,7 @@ impl Global {
             let tlas = hub
                 .tlas_s
                 .get(tlas)
-                .get()
-                .map_err(|_| BuildAccelerationStructureError::InvalidTlasId)?;
+                .get()?;
             cmd_buf_data.tlas_actions.push(TlasAction {
                 tlas,
                 kind: crate::ray_tracing::TlasActionKind::Build {

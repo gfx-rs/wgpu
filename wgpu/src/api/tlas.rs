@@ -50,7 +50,7 @@ impl Tlas {
         &mut self,
         hal_tlas_callback: F,
     ) -> R {
-        if let Some(tlas) = self.inner.as_core_mut_opt() {
+        if let Some(tlas) = self.shared.inner.as_core_opt() {
             unsafe { tlas.context.tlas_as_hal::<A, F, R>(tlas, hal_tlas_callback) }
         } else {
             hal_tlas_callback(None)

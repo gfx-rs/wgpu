@@ -168,7 +168,7 @@ impl Blas {
         &mut self,
         hal_blas_callback: F,
     ) -> R {
-        if let Some(blas) = self.shared.inner.as_core_opt() {
+        if let Some(blas) = self.inner.as_core_opt() {
             unsafe { blas.context.blas_as_hal::<A, F, R>(blas, hal_blas_callback) }
         } else {
             hal_blas_callback(None)
