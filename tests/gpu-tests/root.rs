@@ -31,6 +31,7 @@ mod image_atomics;
 mod instance;
 mod life_cycle;
 mod mem_leaks;
+mod mesh_shader;
 mod nv12_texture;
 mod occlusion_query;
 mod oob_indexing;
