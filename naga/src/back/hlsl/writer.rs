@@ -268,10 +268,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module_info: &valid::ModuleInfo,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
-        if !module.overrides.is_empty() {
-            return Err(Error::Override);
-        }
-
         self.reset(module);
 
         // Write special constants, if needed
@@ -1129,12 +1125,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         write!(self.out, "[")?;
 
-        match size {
-            crate::ArraySize::Constant(size) => {
+        match size.resolve(module.to_ctx())? {
+            proc::IndexableLength::Known(size) => {
                 write!(self.out, "{size}")?;
             }
-            crate::ArraySize::Pending(_) => unreachable!(),
-            crate::ArraySize::Dynamic => unreachable!(),
+            proc::IndexableLength::Dynamic => unreachable!(),
         }
 
         write!(self.out, "]")?;
@@ -1179,7 +1174,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             let ty_inner = &module.types[member.ty].inner;
-            last_offset = member.offset + ty_inner.size_hlsl(module.to_ctx());
+            last_offset = member.offset + ty_inner.size_hlsl(module.to_ctx())?;
 
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
@@ -2701,7 +2696,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write_expression(self, value)?;
                 write!(self.out, ").{number_of_components}")?
             }
-            _ => unreachable!(),
+            _ => {
+                return Err(Error::Override);
+            }
         }
 
         Ok(())
@@ -2971,7 +2968,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             index::IndexableLength::Known(limit) => {
                                 write!(self.out, "{}u", limit - 1)?;
                             }
-                            index::IndexableLength::Pending => unreachable!(),
                             index::IndexableLength::Dynamic => unreachable!(),
                         }
                         write!(self.out, ")")?;

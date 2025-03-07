@@ -151,6 +151,7 @@ enum Rule {
     Directive,
     GenericExpr,
     EnclosedExpr,
+    LhsExpr,
 }
 
 struct ParsedAttribute<T> {
@@ -928,6 +929,53 @@ impl Parser {
                     let expr = ast::Expression::AddrOf(expr);
                     let span = this.peek_rule_span(lexer);
                     ctx.expressions.append(expr, span)
+                }
+                _ => this.singular_expression(lexer, ctx)?,
+            };
+
+            this.pop_rule_span(lexer);
+            Ok(expr)
+        })
+    }
+
+    /// Parse a `lhs_expression`.
+    ///
+    /// LHS expressions only support the `&` and `*` operators and
+    /// the `[]` and `.` postfix selectors.
+    fn lhs_expression<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+        self.track_recursion(|this| {
+            this.push_rule_span(Rule::LhsExpr, lexer);
+            let start = lexer.start_byte_offset();
+            let expr = match lexer.peek() {
+                (Token::Operation('*'), _) => {
+                    let _ = lexer.next();
+                    let expr = this.lhs_expression(lexer, ctx)?;
+                    let expr = ast::Expression::Deref(expr);
+                    let span = this.peek_rule_span(lexer);
+                    ctx.expressions.append(expr, span)
+                }
+                (Token::Operation('&'), _) => {
+                    let _ = lexer.next();
+                    let expr = this.lhs_expression(lexer, ctx)?;
+                    let expr = ast::Expression::AddrOf(expr);
+                    let span = this.peek_rule_span(lexer);
+                    ctx.expressions.append(expr, span)
+                }
+                (Token::Operation('('), _) => {
+                    let _ = lexer.next();
+                    let primary_expr = this.lhs_expression(lexer, ctx)?;
+                    lexer.expect(Token::Paren(')'))?;
+                    this.postfix(start, lexer, ctx, primary_expr)?
+                }
+                (Token::Word(word), span) => {
+                    let _ = lexer.next();
+                    let ident = this.ident_expr(word, span, ctx);
+                    let primary_expr = ctx.expressions.append(ast::Expression::Ident(ident), span);
+                    this.postfix(start, lexer, ctx, primary_expr)?
                 }
                 _ => this.singular_expression(lexer, ctx)?,
             };
@@ -1781,7 +1829,7 @@ impl Parser {
         block: &mut ast::Block<'a>,
     ) -> Result<(), Error<'a>> {
         let span_start = lexer.start_byte_offset();
-        let target = self.general_expression(lexer, ctx)?;
+        let target = self.lhs_expression(lexer, ctx)?;
         self.assignment_op_and_rhs(lexer, ctx, block, target, span_start)
     }
 

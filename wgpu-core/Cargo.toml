@@ -37,6 +37,11 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
 [features]
 #! See docuemntation for the `wgpu` crate for more in-depth information on these features.
 
+# TODO(https://github.com/gfx-rs/wgpu/issues/6826): "std" is a default feature for
+# compatibility with prior behavior only, and should be removed once we know how
+# wgpu-core’s dependents want to handle no_std.
+default = ["std"]
+
 #! ### Logging Configuration
 # --------------------------------------------------------------------
 
@@ -62,7 +67,7 @@ strict_asserts = ["wgpu-types/strict_asserts"]
 # --------------------------------------------------------------------
 
 ## Enable lock order observation.
-observe_locks = ["dep:ron", "serde/serde_derive"]
+observe_locks = ["std", "dep:ron", "serde/serde_derive"]
 
 #! ### Serialization
 # --------------------------------------------------------------------
@@ -71,7 +76,7 @@ observe_locks = ["dep:ron", "serde/serde_derive"]
 serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde"]
 
 ## Enable API tracing.
-trace = ["dep:ron", "serde", "naga/serialize"]
+trace = ["serde", "std", "dep:ron", "naga/serialize"]
 
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
@@ -106,6 +111,10 @@ counters = ["wgpu-types/counters"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-hal/fragile-send-sync-non-atomic-wasm",
 ]
+
+## Enable certain items to be `Send` and `Sync` when they would not otherwise be.
+## Also enables backtraces in some error cases when also under cfg(debug_assertions).
+std = []
 
 #! ### External libraries
 # --------------------------------------------------------------------

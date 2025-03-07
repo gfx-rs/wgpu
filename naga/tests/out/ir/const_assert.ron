@@ -16,12 +16,8 @@
             arguments: [],
             result: None,
             local_variables: [],
-            expressions: [
-                Literal(I32(1)),
-            ],
-            named_expressions: {
-                0: "z",
-            },
+            expressions: [],
+            named_expressions: {},
             body: [
                 Return(
                     value: None,

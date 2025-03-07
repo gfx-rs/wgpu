@@ -1,4 +1,4 @@
-//! We need to impl PartialEq, Eq, PartialOrd, Ord, and Hash for all handle types in wgpu.
+//! We need to impl `PartialEq`, `Eq`, `PartialOrd`, `Ord`, and `Hash` for all handle types in wgpu.
 //!
 //! For types that have some already-unique property, we can use that property to implement these traits.
 //!
@@ -27,7 +27,7 @@ impl Identifier {
     }
 }
 
-/// Implements PartialEq, Eq, PartialOrd, Ord, and Hash for a type by proxying the operations to a single field.
+/// Implements `PartialEq`, `Eq`, `PartialOrd`, `Ord`, and `Hash` for a type by proxying the operations to a single field.
 ///
 /// ```ignore
 /// impl_eq_ord_hash_proxy!(MyType => .field);
@@ -62,7 +62,7 @@ macro_rules! impl_eq_ord_hash_proxy {
     };
 }
 
-/// Implements PartialEq, Eq, PartialOrd, Ord, and Hash for a type by comparing the addresses of the Arcs.
+/// Implements `PartialEq`, `Eq`, `PartialOrd`, `Ord`, and `Hash` for a type by comparing the addresses of the `Arc`s.
 ///
 /// ```ignore
 /// impl_eq_ord_hash_arc_address!(MyType => .field);

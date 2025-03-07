@@ -421,6 +421,42 @@ fn parse_expressions() {
 }
 
 #[test]
+fn parse_assignment_statements() {
+    parse_str(
+        "
+        struct Foo { x: i32 };
+
+        fn foo() {
+            var x: u32 = 0u;
+            x++;
+            x--;
+            x = 1u;
+            x += 1u;
+            var v: vec2<f32> = vec2<f32>(1.0, 1.0);
+            v[0] += 1.0;
+            (v)[0] += 1.0;
+            var s: Foo = Foo(0);
+            s.x -= 1;
+            (s.x) -= 1;
+            (s).x -= 1;
+            _ = 5u;
+    }",
+    )
+    .unwrap();
+
+    let error = parse_str(
+        "fn foo() {
+        x|x++;
+    }",
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.message(),
+        "expected assignment or increment/decrement, found \"|\"",
+    );
+}
+
+#[test]
 fn binary_expression_mixed_scalar_and_vector_operands() {
     for (operand, expect_splat) in [
         ('<', false),

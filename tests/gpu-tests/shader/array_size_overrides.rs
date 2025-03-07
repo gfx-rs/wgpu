@@ -4,12 +4,28 @@ use wgpu::{BufferDescriptor, BufferUsages, MapMode, PollType};
 use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 const SHADER: &str = r#"
-    override n = 8;
+    const testing_shared: array<i32, 1> = array(8);
+    override n = testing_shared[0u];
+    override m = testing_shared[0u];
 
     var<workgroup> arr: array<u32, n - 2>;
 
     @group(0) @binding(0)
     var<storage, read_write> output: array<u32>;
+
+    // When `n` is overridden to 14 above, it will generate the type `array<u32, 14 - 2>` which
+    // already exists in the program because of variable declaration. Ensures naga does not panic
+    // when this happens.
+    //
+    // See https://github.com/gfx-rs/wgpu/issues/6722 for more info.
+    var<workgroup> testing0: array<u32, 12>;
+
+    // Tests whether two overrides that are initialized by the same expression
+    // crashes the unique types arena
+    //
+    // See https://github.com/gfx-rs/wgpu/pull/6787#pullrequestreview-2576905294
+    var<workgroup> testing1: array<u32, n>;
+    var<workgroup> testing2: array<u32, m>;
 
     @compute @workgroup_size(1) fn main() {
         // 1d spiral

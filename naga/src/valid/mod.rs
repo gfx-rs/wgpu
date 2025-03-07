@@ -281,7 +281,10 @@ pub struct Validator {
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: HandleSet<crate::Expression>,
     override_ids: FastHashSet<u16>,
-    allow_overrides: bool,
+
+    /// Treat overrides whose initializers are not fully-evaluated
+    /// constant expressions as errors.
+    overrides_resolved: bool,
 
     /// A checklist of expressions that must be visited by a specific kind of
     /// statement.
@@ -332,6 +335,13 @@ pub enum OverrideError {
     TypeNotScalar,
     #[error("Override declarations are not allowed")]
     NotAllowed,
+    #[error("Override is uninitialized")]
+    UninitializedOverride,
+    #[error("Constant expression {handle:?} is invalid")]
+    ConstExpression {
+        handle: Handle<crate::Expression>,
+        source: ConstExpressionError,
+    },
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -472,7 +482,7 @@ impl Validator {
             valid_expression_list: Vec::new(),
             valid_expression_set: HandleSet::new(),
             override_ids: FastHashSet::default(),
-            allow_overrides: true,
+            overrides_resolved: false,
             needs_visit: HandleSet::new(),
         }
     }
@@ -532,15 +542,7 @@ impl Validator {
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
     ) -> Result<(), OverrideError> {
-        if !self.allow_overrides {
-            return Err(OverrideError::NotAllowed);
-        }
-
         let o = &gctx.overrides[handle];
-
-        if o.name.is_none() && o.id.is_none() {
-            return Err(OverrideError::MissingNameAndID);
-        }
 
         if let Some(id) = o.id {
             if !self.override_ids.insert(id) {
@@ -570,6 +572,8 @@ impl Validator {
             if !decl_ty.equivalent(init_ty, gctx.types) {
                 return Err(OverrideError::InvalidType);
             }
+        } else if self.overrides_resolved {
+            return Err(OverrideError::UninitializedOverride);
         }
 
         Ok(())
@@ -580,18 +584,22 @@ impl Validator {
         &mut self,
         module: &crate::Module,
     ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
-        self.allow_overrides = true;
+        self.overrides_resolved = false;
         self.validate_impl(module)
     }
 
-    /// Check the given module to be valid.
+    /// Check the given module to be valid, requiring overrides to be resolved.
     ///
-    /// With the additional restriction that overrides are not present.
-    pub fn validate_no_overrides(
+    /// This is the same as [`validate`], except that any override
+    /// whose value is not a fully-evaluated constant expression is
+    /// treated as an error.
+    ///
+    /// [`validate`]: Validator::validate
+    pub fn validate_resolved_overrides(
         &mut self,
         module: &crate::Module,
     ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
-        self.allow_overrides = false;
+        self.overrides_resolved = true;
         self.validate_impl(module)
     }
 
@@ -634,20 +642,6 @@ impl Validator {
                     }
                     .with_span_handle(handle, &module.types)
                 })?;
-            if !self.allow_overrides {
-                if let crate::TypeInner::Array {
-                    size: crate::ArraySize::Pending(_),
-                    ..
-                } = ty.inner
-                {
-                    return Err((ValidationError::Type {
-                        handle,
-                        name: ty.name.clone().unwrap_or_default(),
-                        source: TypeError::UnresolvedOverride(handle),
-                    })
-                    .with_span_handle(handle, &module.types));
-                }
-            }
             mod_info.type_flags.push(ty_info.flags);
             self.types[handle.index()] = ty_info;
         }
@@ -702,7 +696,7 @@ impl Validator {
                             source,
                         }
                         .with_span_handle(handle, &module.overrides)
-                    })?
+                    })?;
             }
         }
 

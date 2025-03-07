@@ -135,7 +135,7 @@ impl crate::TypeInner {
     }
 
     /// Get the size of this type.
-    pub fn size(&self, _gctx: super::GlobalCtx) -> u32 {
+    pub fn size(&self, gctx: super::GlobalCtx) -> u32 {
         match *self {
             Self::Scalar(scalar) | Self::Atomic(scalar) => scalar.width as u32,
             Self::Vector { size, scalar } => size as u32 * scalar.width as u32,
@@ -151,13 +151,13 @@ impl crate::TypeInner {
                 size,
                 stride,
             } => {
-                let count = match size {
-                    crate::ArraySize::Constant(count) => count.get(),
+                let count = match size.resolve(gctx) {
+                    Ok(crate::proc::IndexableLength::Known(count)) => count,
                     // any struct member or array element needing a size at pipeline-creation time
                     // must have a creation-fixed footprint
-                    crate::ArraySize::Pending(_) => 0,
+                    Err(_) => 0,
                     // A dynamically-sized array has to have at least one element
-                    crate::ArraySize::Dynamic => 1,
+                    Ok(crate::proc::IndexableLength::Dynamic) => 1,
                 };
                 count * stride
             }

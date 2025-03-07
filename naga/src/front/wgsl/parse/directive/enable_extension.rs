@@ -43,6 +43,12 @@ pub enum EnableExtension {
     Unimplemented(UnimplementedEnableExtension),
 }
 
+impl From<ImplementedEnableExtension> for EnableExtension {
+    fn from(value: ImplementedEnableExtension) -> Self {
+        Self::Implemented(value)
+    }
+}
+
 impl EnableExtension {
     const F16: &'static str = "f16";
     const CLIP_DISTANCES: &'static str = "clip_distances";
@@ -92,13 +98,13 @@ pub enum UnimplementedEnableExtension {
     ///
     /// In the WGSL standard, this corresponds to [`enable clip_distances;`].
     ///
-    /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-f16
+    /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-clip_distances
     ClipDistances,
     /// Enables the `blend_src` attribute in WGSL.
     ///
     /// In the WGSL standard, this corresponds to [`enable dual_source_blending;`].
     ///
-    /// [`enable dual_source_blending;`]: https://www.w3.org/TR/WGSL/#extension-f16
+    /// [`enable dual_source_blending;`]: https://www.w3.org/TR/WGSL/#extension-dual_source_blending
     DualSourceBlending,
 }
 

@@ -1,18 +1,11 @@
-#![allow(unused)]
-
-use core::{
-    cell::{Cell, RefCell, UnsafeCell},
-    fmt,
-    panic::{self, Location},
-};
-use std::{backtrace::Backtrace, thread};
+use core::{cell::UnsafeCell, fmt};
 
 use crate::lock::{rank, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// A guard that provides read access to snatchable data.
-pub struct SnatchGuard<'a>(RwLockReadGuard<'a, ()>);
+pub struct SnatchGuard<'a>(#[expect(dead_code)] RwLockReadGuard<'a, ()>);
 /// A guard that allows snatching the snatchable data.
-pub struct ExclusiveSnatchGuard<'a>(RwLockWriteGuard<'a, ()>);
+pub struct ExclusiveSnatchGuard<'a>(#[expect(dead_code)] RwLockWriteGuard<'a, ()>);
 
 /// A value that is mostly immutable but can be "snatched" if we need to destroy
 /// it early.
@@ -31,6 +24,7 @@ impl<T> Snatchable<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn empty() -> Self {
         Snatchable {
             value: UnsafeCell::new(None),
@@ -66,58 +60,69 @@ impl<T> fmt::Debug for Snatchable<T> {
 
 unsafe impl<T> Sync for Snatchable<T> {}
 
-struct LockTrace {
-    purpose: &'static str,
-    caller: &'static Location<'static>,
-    backtrace: Backtrace,
-}
+use trace::LockTrace;
+#[cfg(all(debug_assertions, feature = "std"))]
+mod trace {
+    use core::{cell::Cell, fmt, panic::Location};
+    use std::{backtrace::Backtrace, thread};
 
-impl fmt::Display for LockTrace {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "a {} lock at {}\n{}",
-            self.purpose, self.caller, self.backtrace
-        )
+    pub(super) struct LockTrace {
+        purpose: &'static str,
+        caller: &'static Location<'static>,
+        backtrace: Backtrace,
     }
-}
 
-#[cfg(debug_assertions)]
-impl LockTrace {
-    #[track_caller]
-    fn enter(purpose: &'static str) {
-        let new = LockTrace {
-            purpose,
-            caller: Location::caller(),
-            backtrace: Backtrace::capture(),
-        };
-
-        if let Some(prev) = SNATCH_LOCK_TRACE.take() {
-            let current = thread::current();
-            let name = current.name().unwrap_or("<unnamed>");
-            panic!(
-                "thread '{name}' attempted to acquire a snatch lock recursively.\n\
-                 - Currently trying to acquire {new}\n\
-                 - Previously acquired {prev}",
-            );
-        } else {
-            SNATCH_LOCK_TRACE.set(Some(new));
+    impl fmt::Display for LockTrace {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(
+                f,
+                "a {} lock at {}\n{}",
+                self.purpose, self.caller, self.backtrace
+            )
         }
     }
 
-    fn exit() {
-        SNATCH_LOCK_TRACE.take();
+    impl LockTrace {
+        #[track_caller]
+        pub(super) fn enter(purpose: &'static str) {
+            let new = LockTrace {
+                purpose,
+                caller: Location::caller(),
+                backtrace: Backtrace::capture(),
+            };
+
+            if let Some(prev) = SNATCH_LOCK_TRACE.take() {
+                let current = thread::current();
+                let name = current.name().unwrap_or("<unnamed>");
+                panic!(
+                    "thread '{name}' attempted to acquire a snatch lock recursively.\n\
+                 - Currently trying to acquire {new}\n\
+                 - Previously acquired {prev}",
+                );
+            } else {
+                SNATCH_LOCK_TRACE.set(Some(new));
+            }
+        }
+
+        pub(super) fn exit() {
+            SNATCH_LOCK_TRACE.take();
+        }
+    }
+
+    std::thread_local! {
+        static SNATCH_LOCK_TRACE: Cell<Option<LockTrace>> = const { Cell::new(None) };
     }
 }
+#[cfg(not(all(debug_assertions, feature = "std")))]
+mod trace {
+    pub(super) struct LockTrace {
+        _private: (),
+    }
 
-#[cfg(not(debug_assertions))]
-impl LockTrace {
-    fn enter(purpose: &'static str) {}
-    fn exit() {}
-}
-
-std::thread_local! {
-    static SNATCH_LOCK_TRACE: Cell<Option<LockTrace>> = const { Cell::new(None) };
+    impl LockTrace {
+        pub(super) fn enter(_purpose: &'static str) {}
+        pub(super) fn exit() {}
+    }
 }
 
 /// A Device-global lock for all snatchable data.
