@@ -73,7 +73,13 @@ impl super::Instance {
             let render_devid =
                 libc::makedev(drm_props.render_major as _, drm_props.render_minor as _);
 
-            if [primary_devid, render_devid].contains(&drm_stat.st_rdev) {
+            // Various platforms use different widths between `dev_t` and `c_int`, so just
+            // force-convert to `u64` to keep things portable.
+            #[allow(clippy::useless_conversion)]
+            if [primary_devid, render_devid]
+                .map(u64::from)
+                .contains(&drm_stat.st_rdev)
+            {
                 physical_device = Some(device)
             }
         }
