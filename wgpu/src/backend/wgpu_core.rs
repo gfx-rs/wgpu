@@ -15,7 +15,13 @@ use smallvec::SmallVec;
 use wgc::{command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError};
 use wgt::WasmNotSendSync;
 
-use crate::{api, dispatch::{self, BufferMappedRangeInterface}, BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage, CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations, ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas};
+use crate::{
+    api,
+    dispatch::{self, BufferMappedRangeInterface},
+    BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
+    CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
+    ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas,
+};
 
 #[derive(Clone)]
 pub struct ContextWgpuCore(Arc<wgc::global::Global>);

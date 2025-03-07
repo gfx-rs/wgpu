@@ -101,10 +101,7 @@ impl Global {
         }
 
         for blas in blas_iter {
-            let blas = hub
-                .blas_s
-                .get(blas)
-                .get()?;
+            let blas = hub.blas_s.get(blas).get()?;
             cmd_buf_data.blas_actions.push(BlasAction {
                 blas,
                 kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
@@ -112,10 +109,7 @@ impl Global {
         }
 
         for tlas in tlas_iter {
-            let tlas = hub
-                .tlas_s
-                .get(tlas)
-                .get()?;
+            let tlas = hub.tlas_s.get(tlas).get()?;
             cmd_buf_data.tlas_actions.push(TlasAction {
                 tlas,
                 kind: crate::ray_tracing::TlasActionKind::Build {
