@@ -1522,7 +1522,7 @@ pub enum Expression {
         gather: Option<SwizzleComponent>,
         coordinate: Handle<Expression>,
         array_index: Option<Handle<Expression>>,
-        /// This refers to an expression in [`Module::global_expressions`].
+        /// This must be a const-expression.
         offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
@@ -2215,9 +2215,6 @@ pub struct Function {
     ///
     /// - Various expressions hold [`Type`] handles, and [`Type`]s may refer to
     ///   global expressions, for things like array lengths.
-    ///
-    /// - [`Expression::ImageSample::offset`] refers to an expression in
-    ///   [`Module::global_expressions`].
     ///
     /// An [`Expression`] must occur before all other [`Expression`]s that use
     /// its value.
