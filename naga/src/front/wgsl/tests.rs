@@ -322,9 +322,9 @@ fn parse_parentheses_switch() {
     parse_str(
         "
         fn main() {
-            var pos: f32;
-            switch pos > 1.0 {
-                default: { pos = 3.0; }
+            var pos: i32;
+            switch pos + 1 {
+                default: { pos = 3; }
             }
         }
     ",

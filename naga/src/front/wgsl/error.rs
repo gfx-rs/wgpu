@@ -256,8 +256,13 @@ pub(crate) enum Error<'a> {
         /// the same identifier as `ident`, above.
         path: Box<[(Span, Span)]>,
     },
-    InvalidSwitchValue {
-        uint: bool,
+    InvalidSwitchSelector {
+        span: Span,
+    },
+    InvalidSwitchCase {
+        span: Span,
+    },
+    SwitchCaseTypeMismatch {
         span: Span,
     },
     CalledEntryPoint(Span),
@@ -772,26 +777,32 @@ impl<'a> Error<'a> {
                     .collect(),
                 notes: vec![],
             },
-            Error::InvalidSwitchValue { uint, span } => ParseError {
-                message: "invalid switch value".to_string(),
+            Error::InvalidSwitchSelector { span } => ParseError {
+                message: "invalid `switch` selector".to_string(),
                 labels: vec![(
                     span,
-                    if uint {
-                        "expected unsigned integer"
-                    } else {
-                        "expected signed integer"
-                    }
+                    "`switch` selector must be a scalar integer"
                     .into(),
                 )],
-                notes: vec![if uint {
-                    format!("suffix the integer with a `u`: `{}u`", &source[span])
-                } else {
-                    let span = span.to_range().unwrap();
-                    format!(
-                        "remove the `u` suffix: `{}`",
-                        &source[span.start..span.end - 1]
-                    )
-                }],
+                notes: vec![],
+            },
+            Error::InvalidSwitchCase { span } => ParseError {
+                message: "invalid `switch` case selector value".to_string(),
+                labels: vec![(
+                    span,
+                    "`switch` case selector must be a scalar integer const expression"
+                    .into(),
+                )],
+                notes: vec![],
+            },
+            Error::SwitchCaseTypeMismatch { span } => ParseError {
+                message: "invalid `switch` case selector value".to_string(),
+                labels: vec![(
+                    span,
+                    "`switch` case selector must have the same type as the `switch` selector expression"
+                    .into(),
+                )],
+                notes: vec![],
             },
             Error::CalledEntryPoint(span) => ParseError {
                 message: "entry point cannot be called".to_string(),
