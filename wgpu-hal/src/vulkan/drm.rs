@@ -73,7 +73,7 @@ impl super::Instance {
             let render_devid =
                 libc::makedev(drm_props.render_major as _, drm_props.render_minor as _);
 
-            if primary_devid == drm_stat.st_rdev || render_devid == drm_stat.st_rdev {
+            if [primary_devid, render_devid].contains(&drm_stat.st_rdev) {
                 physical_device = Some(device)
             }
         }
