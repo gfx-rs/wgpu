@@ -1,5 +1,7 @@
 //! Producing the WGSL forms of types, for use in error messages.
 
+use crate::common::wgsl::ToWgsl;
+
 use alloc::{
     format,
     string::{String, ToString},
@@ -157,55 +159,6 @@ impl crate::Scalar {
             crate::ScalarKind::AbstractFloat => return "{AbstractFloat}".to_string(),
         };
         format!("{}{}", prefix, self.width * 8)
-    }
-}
-
-impl crate::StorageFormat {
-    pub const fn to_wgsl(self) -> &'static str {
-        use crate::StorageFormat as Sf;
-        match self {
-            Sf::R8Unorm => "r8unorm",
-            Sf::R8Snorm => "r8snorm",
-            Sf::R8Uint => "r8uint",
-            Sf::R8Sint => "r8sint",
-            Sf::R16Uint => "r16uint",
-            Sf::R16Sint => "r16sint",
-            Sf::R16Float => "r16float",
-            Sf::Rg8Unorm => "rg8unorm",
-            Sf::Rg8Snorm => "rg8snorm",
-            Sf::Rg8Uint => "rg8uint",
-            Sf::Rg8Sint => "rg8sint",
-            Sf::R32Uint => "r32uint",
-            Sf::R32Sint => "r32sint",
-            Sf::R32Float => "r32float",
-            Sf::Rg16Uint => "rg16uint",
-            Sf::Rg16Sint => "rg16sint",
-            Sf::Rg16Float => "rg16float",
-            Sf::Rgba8Unorm => "rgba8unorm",
-            Sf::Rgba8Snorm => "rgba8snorm",
-            Sf::Rgba8Uint => "rgba8uint",
-            Sf::Rgba8Sint => "rgba8sint",
-            Sf::Bgra8Unorm => "bgra8unorm",
-            Sf::Rgb10a2Uint => "rgb10a2uint",
-            Sf::Rgb10a2Unorm => "rgb10a2unorm",
-            Sf::Rg11b10Ufloat => "rg11b10float",
-            Sf::R64Uint => "r64uint",
-            Sf::Rg32Uint => "rg32uint",
-            Sf::Rg32Sint => "rg32sint",
-            Sf::Rg32Float => "rg32float",
-            Sf::Rgba16Uint => "rgba16uint",
-            Sf::Rgba16Sint => "rgba16sint",
-            Sf::Rgba16Float => "rgba16float",
-            Sf::Rgba32Uint => "rgba32uint",
-            Sf::Rgba32Sint => "rgba32sint",
-            Sf::Rgba32Float => "rgba32float",
-            Sf::R16Unorm => "r16unorm",
-            Sf::R16Snorm => "r16snorm",
-            Sf::Rg16Unorm => "rg16unorm",
-            Sf::Rg16Snorm => "rg16snorm",
-            Sf::Rgba16Unorm => "rgba16unorm",
-            Sf::Rgba16Snorm => "rgba16snorm",
-        }
     }
 }
 
