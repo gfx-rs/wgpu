@@ -1024,6 +1024,15 @@ pub enum DrawKind {
     MultiDrawIndirectCount,
 }
 
+/// The type of draw command(indexed or not, or mesh shader)
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DrawCommandFamily {
+    Draw,
+    DrawIndexed,
+    DrawMeshTasks,
+}
+
 #[derive(Clone, Copy, Debug, Error)]
 pub enum PassErrorScope {
     // TODO: Extract out the 2 error variants below so that we can always
@@ -1053,7 +1062,10 @@ pub enum PassErrorScope {
     #[error("In a set_scissor_rect command")]
     SetScissorRect,
     #[error("In a draw command, kind: {kind:?}")]
-    Draw { kind: DrawKind, indexed: bool },
+    Draw {
+        kind: DrawKind,
+        family: DrawCommandFamily,
+    },
     #[error("In a write_timestamp command")]
     WriteTimestamp,
     #[error("In a begin_occlusion_query command")]

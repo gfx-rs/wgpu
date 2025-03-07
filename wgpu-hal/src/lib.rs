@@ -2196,8 +2196,8 @@ pub struct MeshPipelineDescriptor<
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
     pub layout: &'a Pl,
-    pub task_stage: Option<ProgrammableStage<'a, M>>,
-    pub mesh_stage: ProgrammableStage<'a, M>,
+    pub task: Option<ProgrammableStage<'a, M>>,
+    pub mesh: ProgrammableStage<'a, M>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.

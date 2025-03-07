@@ -2145,7 +2145,7 @@ impl crate::Device for super::Device {
             .topology(conv::map_topology(desc.primitive.topology))
             .primitive_restart_enable(desc.primitive.strip_index_format.is_some());
 
-        let compiled_ts = match desc.task_stage {
+        let compiled_ts = match desc.task {
             Some(ref stage) => {
                 let mut compiled = self.compile_stage(
                     stage,
@@ -2160,7 +2160,7 @@ impl crate::Device for super::Device {
         };
 
         let mut compiled_ms = self.compile_stage(
-            &desc.mesh_stage,
+            &desc.mesh,
             naga::ShaderStage::Mesh,
             &desc.layout.binding_arrays,
         )?;

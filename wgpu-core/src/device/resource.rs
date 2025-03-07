@@ -2996,127 +2996,137 @@ impl Device {
         let mut io = validation::StageIo::default();
         let mut validated_stages = wgt::ShaderStages::empty();
 
-        let mut vertex_steps = Vec::with_capacity(desc.vertex.buffers.len());
-        let mut vertex_buffers = Vec::with_capacity(desc.vertex.buffers.len());
-        let mut total_attributes = 0;
+        let mut vertex_steps;
+        let mut vertex_buffers;
+        let mut total_attributes;
         let mut shader_expects_dual_source_blending = false;
         let mut pipeline_expects_dual_source_blending = false;
-        for (i, vb_state) in desc.vertex.buffers.iter().enumerate() {
-            // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
+        if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
+            vertex_steps = Vec::with_capacity(vertex.buffers.len());
+            vertex_buffers = Vec::with_capacity(vertex.buffers.len());
+            total_attributes = 0;
+            shader_expects_dual_source_blending = false;
+            pipeline_expects_dual_source_blending = false;
+            for (i, vb_state) in vertex.buffers.iter().enumerate() {
+                // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
 
-            if vb_state.array_stride > self.limits.max_vertex_buffer_array_stride as u64 {
-                return Err(pipeline::CreateRenderPipelineError::VertexStrideTooLarge {
-                    index: i as u32,
-                    given: vb_state.array_stride as u32,
-                    limit: self.limits.max_vertex_buffer_array_stride,
-                });
-            }
-            if vb_state.array_stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
-                return Err(pipeline::CreateRenderPipelineError::UnalignedVertexStride {
-                    index: i as u32,
+                if vb_state.array_stride > self.limits.max_vertex_buffer_array_stride as u64 {
+                    return Err(pipeline::CreateRenderPipelineError::VertexStrideTooLarge {
+                        index: i as u32,
+                        given: vb_state.array_stride as u32,
+                        limit: self.limits.max_vertex_buffer_array_stride,
+                    });
+                }
+                if vb_state.array_stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
+                    return Err(pipeline::CreateRenderPipelineError::UnalignedVertexStride {
+                        index: i as u32,
+                        stride: vb_state.array_stride,
+                    });
+                }
+
+                let max_stride = if vb_state.array_stride == 0 {
+                    self.limits.max_vertex_buffer_array_stride as u64
+                } else {
+                    vb_state.array_stride
+                };
+                let mut last_stride = 0;
+                for attribute in vb_state.attributes.iter() {
+                    let attribute_stride = attribute.offset + attribute.format.size();
+                    if attribute_stride > max_stride {
+                        return Err(
+                            pipeline::CreateRenderPipelineError::VertexAttributeStrideTooLarge {
+                                location: attribute.shader_location,
+                                given: attribute_stride as u32,
+                                limit: max_stride as u32,
+                            },
+                        );
+                    }
+
+                    let required_offset_alignment = attribute.format.size().min(4);
+                    if attribute.offset % required_offset_alignment != 0 {
+                        return Err(
+                            pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
+                                location: attribute.shader_location,
+                                offset: attribute.offset,
+                            },
+                        );
+                    }
+
+                    if attribute.shader_location >= self.limits.max_vertex_attributes {
+                        return Err(
+                            pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
+                                given: attribute.shader_location,
+                                limit: self.limits.max_vertex_attributes,
+                            },
+                        );
+                    }
+
+                    last_stride = last_stride.max(attribute_stride);
+                }
+                vertex_steps.push(pipeline::VertexStep {
                     stride: vb_state.array_stride,
+                    last_stride,
+                    mode: vb_state.step_mode,
+                });
+                if vb_state.attributes.is_empty() {
+                    continue;
+                }
+                vertex_buffers.push(hal::VertexBufferLayout {
+                    array_stride: vb_state.array_stride,
+                    step_mode: vb_state.step_mode,
+                    attributes: vb_state.attributes.as_ref(),
+                });
+
+                for attribute in vb_state.attributes.iter() {
+                    if attribute.offset >= 0x10000000 {
+                        return Err(
+                            pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
+                                location: attribute.shader_location,
+                                offset: attribute.offset,
+                            },
+                        );
+                    }
+
+                    if let wgt::VertexFormat::Float64
+                    | wgt::VertexFormat::Float64x2
+                    | wgt::VertexFormat::Float64x3
+                    | wgt::VertexFormat::Float64x4 = attribute.format
+                    {
+                        self.require_features(wgt::Features::VERTEX_ATTRIBUTE_64BIT)?;
+                    }
+
+                    let previous = io.insert(
+                        attribute.shader_location,
+                        validation::InterfaceVar::vertex_attribute(attribute.format),
+                    );
+
+                    if previous.is_some() {
+                        return Err(pipeline::CreateRenderPipelineError::ShaderLocationClash(
+                            attribute.shader_location,
+                        ));
+                    }
+                }
+                total_attributes += vb_state.attributes.len();
+            }
+
+            if vertex_buffers.len() > self.limits.max_vertex_buffers as usize {
+                return Err(pipeline::CreateRenderPipelineError::TooManyVertexBuffers {
+                    given: vertex_buffers.len() as u32,
+                    limit: self.limits.max_vertex_buffers,
                 });
             }
-
-            let max_stride = if vb_state.array_stride == 0 {
-                self.limits.max_vertex_buffer_array_stride as u64
-            } else {
-                vb_state.array_stride
-            };
-            let mut last_stride = 0;
-            for attribute in vb_state.attributes.iter() {
-                let attribute_stride = attribute.offset + attribute.format.size();
-                if attribute_stride > max_stride {
-                    return Err(
-                        pipeline::CreateRenderPipelineError::VertexAttributeStrideTooLarge {
-                            location: attribute.shader_location,
-                            given: attribute_stride as u32,
-                            limit: max_stride as u32,
-                        },
-                    );
-                }
-
-                let required_offset_alignment = attribute.format.size().min(4);
-                if attribute.offset % required_offset_alignment != 0 {
-                    return Err(
-                        pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
-                            location: attribute.shader_location,
-                            offset: attribute.offset,
-                        },
-                    );
-                }
-
-                if attribute.shader_location >= self.limits.max_vertex_attributes {
-                    return Err(
-                        pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
-                            given: attribute.shader_location,
-                            limit: self.limits.max_vertex_attributes,
-                        },
-                    );
-                }
-
-                last_stride = last_stride.max(attribute_stride);
-            }
-            vertex_steps.push(pipeline::VertexStep {
-                stride: vb_state.array_stride,
-                last_stride,
-                mode: vb_state.step_mode,
-            });
-            if vb_state.attributes.is_empty() {
-                continue;
-            }
-            vertex_buffers.push(hal::VertexBufferLayout {
-                array_stride: vb_state.array_stride,
-                step_mode: vb_state.step_mode,
-                attributes: vb_state.attributes.as_ref(),
-            });
-
-            for attribute in vb_state.attributes.iter() {
-                if attribute.offset >= 0x10000000 {
-                    return Err(
-                        pipeline::CreateRenderPipelineError::InvalidVertexAttributeOffset {
-                            location: attribute.shader_location,
-                            offset: attribute.offset,
-                        },
-                    );
-                }
-
-                if let wgt::VertexFormat::Float64
-                | wgt::VertexFormat::Float64x2
-                | wgt::VertexFormat::Float64x3
-                | wgt::VertexFormat::Float64x4 = attribute.format
-                {
-                    self.require_features(wgt::Features::VERTEX_ATTRIBUTE_64BIT)?;
-                }
-
-                let previous = io.insert(
-                    attribute.shader_location,
-                    validation::InterfaceVar::vertex_attribute(attribute.format),
+            if total_attributes > self.limits.max_vertex_attributes as usize {
+                return Err(
+                    pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
+                        given: total_attributes as u32,
+                        limit: self.limits.max_vertex_attributes,
+                    },
                 );
-
-                if previous.is_some() {
-                    return Err(pipeline::CreateRenderPipelineError::ShaderLocationClash(
-                        attribute.shader_location,
-                    ));
-                }
             }
-            total_attributes += vb_state.attributes.len();
-        }
-
-        if vertex_buffers.len() > self.limits.max_vertex_buffers as usize {
-            return Err(pipeline::CreateRenderPipelineError::TooManyVertexBuffers {
-                given: vertex_buffers.len() as u32,
-                limit: self.limits.max_vertex_buffers,
-            });
-        }
-        if total_attributes > self.limits.max_vertex_attributes as usize {
-            return Err(
-                pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
-                    given: total_attributes as u32,
-                    limit: self.limits.max_vertex_attributes,
-                },
-            );
-        }
+        } else {
+            vertex_steps = Vec::new();
+            vertex_buffers = Vec::new();
+        };
 
         if desc.primitive.strip_index_format.is_some() && !desc.primitive.topology.is_strip() {
             return Err(
@@ -3326,44 +3336,132 @@ impl Device {
             sc
         };
 
-        let vertex_entry_point_name;
-        let vertex_stage = {
-            let stage_desc = &desc.vertex.stage;
-            let stage = wgt::ShaderStages::VERTEX;
+        let mut vertex_stage = None;
+        let mut task_stage = None;
+        let mut mesh_stage = None;
+        let mut _vertex_entry_point_name = String::new();
+        let mut _task_entry_point_name = String::new();
+        let mut _mesh_entry_point_name = String::new();
+        match desc.vertex {
+            pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
+                vertex_stage = {
+                    let stage_desc = &vertex.stage;
+                    let stage = wgt::ShaderStages::VERTEX;
 
-            let vertex_shader_module = &stage_desc.module;
-            vertex_shader_module.same_device(self)?;
+                    let vertex_shader_module = &stage_desc.module;
+                    vertex_shader_module.same_device(self)?;
 
-            let stage_err = |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
+                    let stage_err =
+                        |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
 
-            vertex_entry_point_name = vertex_shader_module
-                .finalize_entry_point_name(
-                    stage,
-                    stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
-                )
-                .map_err(stage_err)?;
+                    _vertex_entry_point_name = vertex_shader_module
+                        .finalize_entry_point_name(
+                            stage,
+                            stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
+                        )
+                        .map_err(stage_err)?;
 
-            if let Some(ref interface) = vertex_shader_module.interface {
-                io = interface
-                    .check_stage(
-                        &mut binding_layout_source,
-                        &mut shader_binding_sizes,
-                        &vertex_entry_point_name,
-                        stage,
-                        io,
-                        desc.depth_stencil.as_ref().map(|d| d.depth_compare),
-                    )
-                    .map_err(stage_err)?;
-                validated_stages |= stage;
+                    if let Some(ref interface) = vertex_shader_module.interface {
+                        io = interface
+                            .check_stage(
+                                &mut binding_layout_source,
+                                &mut shader_binding_sizes,
+                                &_vertex_entry_point_name,
+                                stage,
+                                io,
+                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
+                            )
+                            .map_err(stage_err)?;
+                        validated_stages |= stage;
+                    }
+                    Some(hal::ProgrammableStage {
+                        module: vertex_shader_module.raw(),
+                        entry_point: &_vertex_entry_point_name,
+                        constants: &stage_desc.constants,
+                        zero_initialize_workgroup_memory: stage_desc
+                            .zero_initialize_workgroup_memory,
+                    })
+                };
             }
+            pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
+                task_stage = if let Some(task) = task {
+                    let stage_desc = &task.stage;
+                    let stage = wgt::ShaderStages::TASK;
+                    let task_shader_module = &stage_desc.module;
+                    task_shader_module.same_device(self)?;
 
-            hal::ProgrammableStage {
-                module: vertex_shader_module.raw(),
-                entry_point: &vertex_entry_point_name,
-                constants: &stage_desc.constants,
-                zero_initialize_workgroup_memory: stage_desc.zero_initialize_workgroup_memory,
+                    let stage_err =
+                        |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
+
+                    _task_entry_point_name = task_shader_module
+                        .finalize_entry_point_name(
+                            stage,
+                            stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
+                        )
+                        .map_err(stage_err)?;
+
+                    if let Some(ref interface) = task_shader_module.interface {
+                        io = interface
+                            .check_stage(
+                                &mut binding_layout_source,
+                                &mut shader_binding_sizes,
+                                &_task_entry_point_name,
+                                stage,
+                                io,
+                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
+                            )
+                            .map_err(stage_err)?;
+                        validated_stages |= stage;
+                    }
+                    Some(hal::ProgrammableStage {
+                        module: task_shader_module.raw(),
+                        entry_point: &_task_entry_point_name,
+                        constants: &stage_desc.constants,
+                        zero_initialize_workgroup_memory: stage_desc
+                            .zero_initialize_workgroup_memory,
+                    })
+                } else {
+                    None
+                };
+                mesh_stage = {
+                    let stage_desc = &mesh.stage;
+                    let stage = wgt::ShaderStages::MESH;
+                    let mesh_shader_module = &stage_desc.module;
+                    mesh_shader_module.same_device(self)?;
+
+                    let stage_err =
+                        |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
+
+                    _mesh_entry_point_name = mesh_shader_module
+                        .finalize_entry_point_name(
+                            stage,
+                            stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
+                        )
+                        .map_err(stage_err)?;
+
+                    if let Some(ref interface) = mesh_shader_module.interface {
+                        io = interface
+                            .check_stage(
+                                &mut binding_layout_source,
+                                &mut shader_binding_sizes,
+                                &_mesh_entry_point_name,
+                                stage,
+                                io,
+                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
+                            )
+                            .map_err(stage_err)?;
+                        validated_stages |= stage;
+                    }
+                    Some(hal::ProgrammableStage {
+                        module: mesh_shader_module.raw(),
+                        entry_point: &_mesh_entry_point_name,
+                        constants: &stage_desc.constants,
+                        zero_initialize_workgroup_memory: stage_desc
+                            .zero_initialize_workgroup_memory,
+                    })
+                };
             }
-        };
+        }
 
         let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
@@ -3512,39 +3610,81 @@ impl Device {
             None => None,
         };
 
-        let pipeline_desc = hal::RenderPipelineDescriptor {
-            label: desc.label.to_hal(self.instance_flags),
-            layout: pipeline_layout.raw(),
-            vertex_buffers: &vertex_buffers,
-            vertex_stage,
-            primitive: desc.primitive,
-            depth_stencil: desc.depth_stencil.clone(),
-            multisample: desc.multisample,
-            fragment_stage,
-            color_targets,
-            multiview: desc.multiview,
-            cache: cache.as_ref().map(|it| it.raw()),
-        };
-        let raw =
-            unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(
-                |err| match err {
-                    hal::PipelineError::Device(error) => {
-                        pipeline::CreateRenderPipelineError::Device(self.handle_hal_error(error))
-                    }
-                    hal::PipelineError::Linkage(stage, msg) => {
-                        pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
-                    }
-                    hal::PipelineError::EntryPoint(stage) => {
-                        pipeline::CreateRenderPipelineError::Internal {
-                            stage: hal::auxil::map_naga_stage(stage),
-                            error: ENTRYPOINT_FAILURE_ERROR.to_string(),
+        let is_mesh = mesh_stage.is_some();
+        let raw = match vertex_stage {
+            Some(vertex) => {
+                let pipeline_desc = hal::RenderPipelineDescriptor {
+                    label: desc.label.to_hal(self.instance_flags),
+                    layout: pipeline_layout.raw(),
+                    vertex_stage: vertex,
+                    vertex_buffers: &vertex_buffers,
+                    primitive: desc.primitive,
+                    depth_stencil: desc.depth_stencil.clone(),
+                    multisample: desc.multisample,
+                    fragment_stage,
+                    color_targets,
+                    multiview: desc.multiview,
+                    cache: cache.as_ref().map(|it| it.raw()),
+                };
+                unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(|err| {
+                    match err {
+                        hal::PipelineError::Device(error) => {
+                            pipeline::CreateRenderPipelineError::Device(
+                                self.handle_hal_error(error),
+                            )
+                        }
+                        hal::PipelineError::Linkage(stage, msg) => {
+                            pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
+                        }
+                        hal::PipelineError::EntryPoint(stage) => {
+                            pipeline::CreateRenderPipelineError::Internal {
+                                stage: hal::auxil::map_naga_stage(stage),
+                                error: ENTRYPOINT_FAILURE_ERROR.to_string(),
+                            }
+                        }
+                        hal::PipelineError::PipelineConstants(stage, error) => {
+                            pipeline::CreateRenderPipelineError::PipelineConstants { stage, error }
                         }
                     }
-                    hal::PipelineError::PipelineConstants(stage, error) => {
-                        pipeline::CreateRenderPipelineError::PipelineConstants { stage, error }
-                    }
-                },
-            )?;
+                })?
+            }
+            None => {
+                let pipeline_desc = hal::MeshPipelineDescriptor {
+                    label: desc.label.to_hal(self.instance_flags),
+                    layout: pipeline_layout.raw(),
+                    task: task_stage,
+                    mesh: mesh_stage.unwrap(),
+                    primitive: desc.primitive,
+                    depth_stencil: desc.depth_stencil.clone(),
+                    multisample: desc.multisample,
+                    fragment_stage,
+                    color_targets,
+                    multiview: desc.multiview,
+                    cache: cache.as_ref().map(|it| it.raw()),
+                };
+                unsafe { self.raw().create_mesh_pipeline(&pipeline_desc) }.map_err(
+                    |err| match err {
+                        hal::PipelineError::Device(error) => {
+                            pipeline::CreateRenderPipelineError::Device(
+                                self.handle_hal_error(error),
+                            )
+                        }
+                        hal::PipelineError::Linkage(stage, msg) => {
+                            pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
+                        }
+                        hal::PipelineError::EntryPoint(stage) => {
+                            pipeline::CreateRenderPipelineError::Internal {
+                                stage: hal::auxil::map_naga_stage(stage),
+                                error: ENTRYPOINT_FAILURE_ERROR.to_string(),
+                            }
+                        }
+                        hal::PipelineError::PipelineConstants(stage, error) => {
+                            pipeline::CreateRenderPipelineError::PipelineConstants { stage, error }
+                        }
+                    },
+                )?
+            }
+        };
 
         let pass_context = RenderPassContext {
             attachments: AttachmentData {
@@ -3578,10 +3718,19 @@ impl Device {
                 flags |= pipeline::PipelineFlags::WRITES_STENCIL;
             }
         }
-
         let shader_modules = {
             let mut shader_modules = ArrayVec::new();
-            shader_modules.push(desc.vertex.stage.module);
+            match desc.vertex {
+                pipeline::RenderPipelineVertexProcessor::Vertex(vertex) => {
+                    shader_modules.push(vertex.stage.module)
+                }
+                pipeline::RenderPipelineVertexProcessor::Mesh(task, mesh) => {
+                    if let Some(task) = task {
+                        shader_modules.push(task.stage.module);
+                    }
+                    shader_modules.push(mesh.stage.module);
+                }
+            }
             shader_modules.extend(desc.fragment.map(|f| f.stage.module));
             shader_modules
         };
@@ -3598,6 +3747,7 @@ impl Device {
             late_sized_buffer_groups,
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.render_pipelines.clone()),
+            is_mesh,
         };
 
         let pipeline = Arc::new(pipeline);

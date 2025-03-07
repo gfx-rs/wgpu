@@ -799,7 +799,7 @@ impl GPUDevice {
         let wgpu_descriptor = wgpu_core::pipeline::RenderPipelineDescriptor {
             label: crate::transform_label(descriptor.label.clone()),
             layout: descriptor.layout.into(),
-            vertex,
+            vertex: wgpu_core::pipeline::RenderPipelineVertexProcessor::Vertex(vertex),
             primitive,
             depth_stencil,
             multisample,

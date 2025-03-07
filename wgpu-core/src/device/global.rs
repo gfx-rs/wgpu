@@ -17,8 +17,9 @@ use crate::{
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
     pipeline::{
-        self, ResolvedComputePipelineDescriptor, ResolvedFragmentState,
-        ResolvedProgrammableStageDescriptor, ResolvedRenderPipelineDescriptor, ResolvedVertexState,
+        self, RenderPipelineVertexProcessor, ResolvedComputePipelineDescriptor,
+        ResolvedFragmentState, ResolvedMeshState, ResolvedProgrammableStageDescriptor,
+        ResolvedRenderPipelineDescriptor, ResolvedTaskState, ResolvedVertexState,
     },
     present,
     resource::{
@@ -1235,31 +1236,83 @@ impl Global {
                 Err(e) => break 'error e.into(),
             };
 
-            let vertex = {
-                let module = hub
-                    .shader_modules
-                    .get(desc.vertex.stage.module)
-                    .get()
-                    .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
-                        stage: wgt::ShaderStages::VERTEX,
-                        error: e.into(),
-                    });
-                let module = match module {
-                    Ok(module) => module,
-                    Err(e) => break 'error e,
-                };
-                let stage = ResolvedProgrammableStageDescriptor {
-                    module,
-                    entry_point: desc.vertex.stage.entry_point.clone(),
-                    constants: desc.vertex.stage.constants.clone(),
-                    zero_initialize_workgroup_memory: desc
-                        .vertex
-                        .stage
-                        .zero_initialize_workgroup_memory,
-                };
-                ResolvedVertexState {
-                    stage,
-                    buffers: desc.vertex.buffers.clone(),
+            let vertex = match desc.vertex {
+                RenderPipelineVertexProcessor::Vertex(ref vertex) => {
+                    let module = hub
+                        .shader_modules
+                        .get(vertex.stage.module)
+                        .get()
+                        .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
+                            stage: wgt::ShaderStages::VERTEX,
+                            error: e.into(),
+                        });
+                    let module = match module {
+                        Ok(module) => module,
+                        Err(e) => break 'error e,
+                    };
+                    let stage = ResolvedProgrammableStageDescriptor {
+                        module,
+                        entry_point: vertex.stage.entry_point.clone(),
+                        constants: vertex.stage.constants.clone(),
+                        zero_initialize_workgroup_memory: vertex
+                            .stage
+                            .zero_initialize_workgroup_memory,
+                    };
+                    RenderPipelineVertexProcessor::Vertex(ResolvedVertexState {
+                        stage,
+                        buffers: vertex.buffers.clone(),
+                    })
+                }
+                RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
+                    let task_module = if let Some(task) = task {
+                        let module = hub
+                            .shader_modules
+                            .get(task.stage.module)
+                            .get()
+                            .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
+                                stage: wgt::ShaderStages::VERTEX,
+                                error: e.into(),
+                            });
+                        let module = match module {
+                            Ok(module) => module,
+                            Err(e) => break 'error e,
+                        };
+                        let state = ResolvedProgrammableStageDescriptor {
+                            module,
+                            entry_point: task.stage.entry_point.clone(),
+                            constants: task.stage.constants.clone(),
+                            zero_initialize_workgroup_memory: task
+                                .stage
+                                .zero_initialize_workgroup_memory,
+                        };
+                        Some(ResolvedTaskState { stage: state })
+                    } else {
+                        None
+                    };
+                    let mesh_module =
+                        hub.shader_modules
+                            .get(mesh.stage.module)
+                            .get()
+                            .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
+                                stage: wgt::ShaderStages::MESH,
+                                error: e.into(),
+                            });
+                    let mesh_module = match mesh_module {
+                        Ok(module) => module,
+                        Err(e) => break 'error e,
+                    };
+                    let mesh_stage = ResolvedProgrammableStageDescriptor {
+                        module: mesh_module,
+                        entry_point: mesh.stage.entry_point.clone(),
+                        constants: mesh.stage.constants.clone(),
+                        zero_initialize_workgroup_memory: mesh
+                            .stage
+                            .zero_initialize_workgroup_memory,
+                    };
+                    RenderPipelineVertexProcessor::Mesh(
+                        task_module,
+                        ResolvedMeshState { stage: mesh_stage },
+                    )
                 }
             };
 
@@ -1280,10 +1333,7 @@ impl Global {
                     module,
                     entry_point: state.stage.entry_point.clone(),
                     constants: state.stage.constants.clone(),
-                    zero_initialize_workgroup_memory: desc
-                        .vertex
-                        .stage
-                        .zero_initialize_workgroup_memory,
+                    zero_initialize_workgroup_memory: state.stage.zero_initialize_workgroup_memory,
                 };
                 Some(ResolvedFragmentState {
                     stage,

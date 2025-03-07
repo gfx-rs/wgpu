@@ -412,8 +412,8 @@ impl<D: Device + DynResource> DynDevice for D {
         let desc = MeshPipelineDescriptor {
             label: desc.label,
             layout: desc.layout.expect_downcast_ref(),
-            task_stage: desc.task_stage.clone().map(|f| f.expect_downcast()),
-            mesh_stage: desc.mesh_stage.clone().expect_downcast(),
+            task: desc.task.clone().map(|f| f.expect_downcast()),
+            mesh: desc.mesh.clone().expect_downcast(),
             primitive: desc.primitive,
             depth_stencil: desc.depth_stencil.clone(),
             multisample: desc.multisample,

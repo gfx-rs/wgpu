@@ -54,6 +54,13 @@ pub enum DrawError {
     },
     #[error(transparent)]
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
+
+    #[error(
+        "Wrong pipeline type for this draw command. Attempted to call {} draw command on {} pipeline",
+        if *wanted_mesh_pipeline {"mesh shader"} else {"standard"},
+        if *wanted_mesh_pipeline {"standard"} else {"mesh shader"},
+    )]
+    WrongPipelineType { wanted_mesh_pipeline: bool },
 }
 
 /// Error encountered when encoding a render command.

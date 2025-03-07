@@ -334,6 +334,33 @@ pub struct FragmentState<'a, SM = ShaderModuleId> {
 /// cbindgen:ignore
 pub type ResolvedFragmentState<'a> = FragmentState<'a, Arc<ShaderModule>>;
 
+/// Describes the task shader in a mesh shader pipeline.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaskState<'a, SM = ShaderModuleId> {
+    /// The compiled task stage and its entry point.
+    pub stage: ProgrammableStageDescriptor<'a, SM>,
+}
+
+pub type ResolvedTaskState<'a> = TaskState<'a, Arc<ShaderModule>>;
+
+/// Describes the mesh shader in a mesh shader pipeline.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MeshState<'a, SM = ShaderModuleId> {
+    /// The compiled mesh stage and its entry point.
+    pub stage: ProgrammableStageDescriptor<'a, SM>,
+}
+
+pub type ResolvedMeshState<'a> = MeshState<'a, Arc<ShaderModule>>;
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum RenderPipelineVertexProcessor<'a, SM = ShaderModuleId> {
+    Vertex(VertexState<'a, SM>),
+    Mesh(Option<TaskState<'a, SM>>, MeshState<'a, SM>),
+}
+
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -347,7 +374,7 @@ pub struct RenderPipelineDescriptor<
     /// The layout of bind groups for this pipeline.
     pub layout: Option<PLL>,
     /// The vertex processing state for this pipeline.
-    pub vertex: VertexState<'a, SM>,
+    pub vertex: RenderPipelineVertexProcessor<'a, SM>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
     #[cfg_attr(feature = "serde", serde(default))]
     pub primitive: wgt::PrimitiveState,
@@ -545,6 +572,8 @@ pub struct RenderPipeline {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
+    /// Whether this is a mesh shader pipeline
+    pub(crate) is_mesh: bool,
 }
 
 impl Drop for RenderPipeline {
