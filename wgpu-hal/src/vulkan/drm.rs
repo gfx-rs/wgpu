@@ -20,9 +20,13 @@ impl super::Instance {
         height: u32,
         refresh_rate: u32,
     ) -> Result<super::Surface, crate::InstanceError> {
-        if !self.shared.extensions.contains(&khr::display::NAME) {
+        if !self
+            .shared
+            .extensions
+            .contains(&ext::acquire_drm_display::NAME)
+        {
             return Err(crate::InstanceError::new(
-                "Vulkan driver does not support VK_KHR_display".to_string(),
+                "Vulkan driver does not support VK_EXT_acquire_drm_display".to_string(),
             ));
         }
 
