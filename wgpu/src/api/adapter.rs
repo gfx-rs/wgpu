@@ -1,4 +1,4 @@
-use std::future::Future;
+use core::future::Future;
 
 use crate::*;
 
@@ -13,7 +13,7 @@ use crate::*;
 /// Does not have to be kept alive.
 ///
 /// Corresponds to [WebGPU `GPUAdapter`](https://gpuweb.github.io/gpuweb/#gpu-adapter).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Adapter {
     pub(crate) inner: dispatch::DispatchAdapter,
 }
@@ -133,6 +133,14 @@ impl Adapter {
             }
         } else {
             hal_adapter_callback(None)
+        }
+    }
+
+    #[cfg(custom)]
+    /// Creates Adapter from custom implementation
+    pub fn from_custom<T: custom::AdapterInterface>(adapter: T) -> Self {
+        Self {
+            inner: dispatch::DispatchAdapter::custom(adapter),
         }
     }
 

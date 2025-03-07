@@ -1,9 +1,9 @@
 [package]
 name = "naga"
-version = "23.0.0"
+version = "24.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
-description = "Shader translation infrastructure"
+description = "Shader translator and validator. Part of the wgpu project"
 repository = "https://github.com/gfx-rs/wgpu/tree/trunk/naga"
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license = "MIT OR Apache-2.0"
@@ -15,7 +15,7 @@ autotests = false
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.82.0"
 
 [[test]]
 name = "naga-test"
@@ -41,12 +41,23 @@ msl-out = []
 ## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
 msl-out-if-target-apple = []
 
-serialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
-deserialize = ["dep:serde", "bitflags/serde", "indexmap/serde"]
+serialize = ["dep:serde", "bitflags/serde", "hashbrown/serde", "indexmap/serde"]
+deserialize = [
+    "dep:serde",
+    "bitflags/serde",
+    "hashbrown/serde",
+    "indexmap/serde",
+]
 arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
 spv-in = ["dep:petgraph", "dep:spirv"]
 spv-out = ["dep:spirv"]
-wgsl-in = ["dep:hexf-parse", "dep:unicode-xid", "compact"]
+wgsl-in = [
+    "dep:hexf-parse",
+    "dep:strum",
+    "dep:unicode-ident",
+    "indexmap/std",
+    "compact",
+]
 wgsl-out = []
 
 ## Enables outputting to HLSL (Microsoft's High-Level Shader Language).
@@ -72,16 +83,21 @@ termcolor = { version = "1.4.1" }
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
 codespan-reporting = { version = "0.11.0" }
+hashbrown.workspace = true
 rustc-hash.workspace = true
 indexmap.workspace = true
 log = "0.4"
+strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.215", features = ["derive"], optional = true }
-petgraph = { version = "0.6", optional = true }
+serde = { version = "1.0.218", features = [
+    "default",
+    "derive",
+], optional = true }
+petgraph = { version = "0.7", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
-unicode-xid = { version = "0.2.6", optional = true }
+unicode-ident = { version = "1.0", optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true
@@ -89,16 +105,23 @@ cfg_aliases.workspace = true
 [dev-dependencies]
 diff = "0.1"
 env_logger.workspace = true
-itertools.workspace = true
+hashbrown = { workspace = true, features = ["serde"] }
 # This _cannot_ have a version specified. If it does, crates.io will look
 # for a version of the package on crates when we publish naga. Path dependencies
 # are allowed through though.
 hlsl-snapshots = { path = "./hlsl-snapshots" }
+itertools.workspace = true
 # Require at least version 0.7.1 of ron, this version changed how floating points are
 # serialized by forcing them to always have the decimal part, this makes it backwards
 # incompatible with our tests because we do a syntactic diff and not a semantic one.
 ron = "0.8.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["default", "derive"] }
 spirv = { version = "0.3", features = ["deserialize"] }
-strum.workspace = true
+toml = "0.8"
+walkdir.workspace = true
+
+[lints.clippy]
+std_instead_of_alloc = "warn"
+std_instead_of_core = "warn"
+alloc_instead_of_core = "warn"

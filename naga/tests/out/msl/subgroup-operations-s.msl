@@ -5,12 +5,12 @@
 using metal::uint;
 
 
-void main_1(
-    thread uint& subgroup_size_1,
-    thread uint& subgroup_invocation_id_1
+void function(
+    thread uint& global_2,
+    thread uint& global_3
 ) {
-    uint _e5 = subgroup_size_1;
-    uint _e6 = subgroup_invocation_id_1;
+    uint _e5 = global_2;
+    uint _e6 = global_3;
     metal::uint4 unnamed = metal::uint4((uint64_t)metal::simd_ballot((_e6 & 1u) == 1u), 0, 0, 0);
     metal::uint4 unnamed_1 = metal::uint4((uint64_t)metal::simd_ballot(true), 0, 0, 0);
     bool unnamed_2 = metal::simd_all(_e6 != 0u);
@@ -38,18 +38,18 @@ void main_1(
 struct main_Input {
 };
 kernel void main_(
-  uint num_subgroups [[simdgroups_per_threadgroup]]
-, uint subgroup_id [[simdgroup_index_in_threadgroup]]
-, uint subgroup_size [[threads_per_simdgroup]]
-, uint subgroup_invocation_id [[thread_index_in_simdgroup]]
+  uint param [[simdgroups_per_threadgroup]]
+, uint param_1 [[simdgroup_index_in_threadgroup]]
+, uint param_2 [[threads_per_simdgroup]]
+, uint param_3 [[thread_index_in_simdgroup]]
 ) {
-    uint num_subgroups_1 = {};
-    uint subgroup_id_1 = {};
-    uint subgroup_size_1 = {};
-    uint subgroup_invocation_id_1 = {};
-    num_subgroups_1 = num_subgroups;
-    subgroup_id_1 = subgroup_id;
-    subgroup_size_1 = subgroup_size;
-    subgroup_invocation_id_1 = subgroup_invocation_id;
-    main_1(subgroup_size_1, subgroup_invocation_id_1);
+    uint global = {};
+    uint global_1 = {};
+    uint global_2 = {};
+    uint global_3 = {};
+    global = param;
+    global_1 = param_1;
+    global_2 = param_2;
+    global_3 = param_3;
+    function(global_2, global_3);
 }

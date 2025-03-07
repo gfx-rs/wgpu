@@ -2,6 +2,9 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
+    extern crate wgpu_core as wgc;
+    extern crate wgpu_types as wgt;
+
     use player::GlobalPlay as _;
     use wgc::device::trace;
 
@@ -48,7 +51,7 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let global = wgc::global::Global::new("player", wgt::InstanceDescriptor::default());
+    let global = wgc::global::Global::new("player", &wgt::InstanceDescriptor::default());
     let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
 
     #[cfg(feature = "winit")]
@@ -108,7 +111,7 @@ fn main() {
         }
 
         global.device_stop_capture(device);
-        global.device_poll(device, wgt::Maintain::wait()).unwrap();
+        global.device_poll(device, wgt::PollType::wait()).unwrap();
     }
     #[cfg(feature = "winit")]
     {
@@ -200,7 +203,7 @@ fn main() {
                     },
                     Event::LoopExiting => {
                         log::info!("Closing");
-                        global.device_poll(device, wgt::Maintain::wait()).unwrap();
+                        global.device_poll(device, wgt::PollType::wait()).unwrap();
                     }
                     _ => {}
                 }

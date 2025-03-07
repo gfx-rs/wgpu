@@ -1,6 +1,5 @@
 use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
-
 use crate::{
     arena::Handle,
     proc::{IndexableLengthError, ResolveError},
@@ -54,8 +53,13 @@ pub enum ExpressionError {
         rhs_expr: Handle<crate::Expression>,
         rhs_type: crate::TypeInner,
     },
-    #[error("Selecting is not possible")]
-    InvalidSelectTypes,
+    #[error("Expected selection argument types to match, but reject value of type {reject:?} does not match accept value of value {accept:?}")]
+    SelectValuesTypeMismatch {
+        accept: crate::TypeInner,
+        reject: crate::TypeInner,
+    },
+    #[error("Expected selection condition to be a boolean value, got {actual:?}")]
+    SelectConditionNotABool { actual: crate::TypeInner },
     #[error("Relational argument {0:?} is not a boolean vector")]
     InvalidBooleanVector(Handle<crate::Expression>),
     #[error("Relational argument {0:?} is not a float")]
@@ -74,6 +78,10 @@ pub enum ExpressionError {
     ExpectedSamplerType(Handle<crate::Type>),
     #[error("Unable to operate on image class {0:?}")]
     InvalidImageClass(crate::ImageClass),
+    #[error("Image atomics are not supported for storage format {0:?}")]
+    InvalidImageFormat(crate::StorageFormat),
+    #[error("Image atomics require atomic storage access, {0:?} is insufficient")]
+    InvalidImageStorageAccess(crate::StorageAccess),
     #[error("Derivatives can only be taken from scalar and vector floats")]
     InvalidDerivative,
     #[error("Image array index parameter is misplaced")]
@@ -168,7 +176,7 @@ struct ExpressionTypeResolver<'a> {
     info: &'a FunctionInfo,
 }
 
-impl std::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'_> {
+impl core::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'_> {
     type Output = crate::TypeInner;
 
     #[allow(clippy::panic)]
@@ -215,7 +223,7 @@ impl super::Validator {
                 crate::TypeInner::Scalar { .. } => {}
                 _ => return Err(ConstExpressionError::InvalidSplatType(value)),
             },
-            _ if global_expr_kind.is_const(handle) || !self.allow_overrides => {
+            _ if global_expr_kind.is_const(handle) || self.overrides_resolved => {
                 return Err(ConstExpressionError::NonFullyEvaluatedConst)
             }
             // the constant evaluator will report errors about override-expressions
@@ -234,7 +242,7 @@ impl super::Validator {
         module: &crate::Module,
         info: &FunctionInfo,
         mod_info: &ModuleInfo,
-        global_expr_kind: &crate::proc::ExpressionKindTracker,
+        expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<ShaderStages, ExpressionError> {
         use crate::{Expression as E, Scalar as Sc, ScalarKind as Sk, TypeInner as Ti};
 
@@ -253,7 +261,7 @@ impl super::Validator {
                     | Ti::Array { .. }
                     | Ti::Pointer { .. }
                     | Ti::ValuePointer { size: Some(_), .. }
-                    | Ti::BindingArray { .. } => false,
+                    | Ti::BindingArray { .. } => {}
                     ref other => {
                         log::error!("Indexing of {:?}", other);
                         return Err(ExpressionError::InvalidBaseType(base));
@@ -271,25 +279,29 @@ impl super::Validator {
                     }
                 }
 
-                // If we know both the length and the index, we can do the
-                // bounds check now.
-                if let crate::proc::IndexableLength::Known(known_length) =
-                    base_type.indexable_length(module)?
+                // If index is const we can do check for non-negative index
+                match module
+                    .to_ctx()
+                    .eval_expr_to_u32_from(index, &function.expressions)
                 {
-                    match module
-                        .to_ctx()
-                        .eval_expr_to_u32_from(index, &function.expressions)
-                    {
-                        Ok(value) => {
+                    Ok(value) => {
+                        let length = if self.overrides_resolved {
+                            base_type.indexable_length_resolved(module)
+                        } else {
+                            base_type.indexable_length_pending(module)
+                        }?;
+                        // If we know both the length and the index, we can do the
+                        // bounds check now.
+                        if let crate::proc::IndexableLength::Known(known_length) = length {
                             if value >= known_length {
                                 return Err(ExpressionError::IndexOutOfBounds(base, value));
                             }
                         }
-                        Err(crate::proc::U32EvalError::Negative) => {
-                            return Err(ExpressionError::NegativeIndex(base))
-                        }
-                        Err(crate::proc::U32EvalError::NonConst) => {}
                     }
+                    Err(crate::proc::U32EvalError::Negative) => {
+                        return Err(ExpressionError::NegativeIndex(base))
+                    }
+                    Err(crate::proc::U32EvalError::NonConst) => {}
                 }
 
                 ShaderStages::all()
@@ -477,11 +489,11 @@ impl super::Validator {
 
                 // check constant offset
                 if let Some(const_expr) = offset {
-                    if !global_expr_kind.is_const(const_expr) {
+                    if !expr_kind.is_const(const_expr) {
                         return Err(ExpressionError::InvalidSampleOffsetExprType);
                     }
 
-                    match *mod_info[const_expr].inner_with(&module.types) {
+                    match resolver[const_expr] {
                         Ti::Scalar(Sc { kind: Sk::Sint, .. }) if num_components == 1 => {}
                         Ti::Vector {
                             size,
@@ -661,11 +673,15 @@ impl super::Validator {
 
                         match (level, class.is_mipmapped()) {
                             (None, false) => {}
-                            (Some(level), true) => {
-                                if resolver[level].scalar_kind() != Some(Sk::Sint) {
-                                    return Err(ExpressionError::InvalidImageOtherIndexType(level));
+                            (Some(level), true) => match resolver[level] {
+                                Ti::Scalar(Sc {
+                                    kind: Sk::Sint | Sk::Uint,
+                                    width: _,
+                                }) => {}
+                                _ => {
+                                    return Err(ExpressionError::InvalidImageArrayIndexType(level))
                                 }
-                            }
+                            },
                             _ => {
                                 return Err(ExpressionError::InvalidImageOtherIndex);
                             }
@@ -901,7 +917,8 @@ impl super::Validator {
             } => {
                 let accept_inner = &resolver[accept];
                 let reject_inner = &resolver[reject];
-                let condition_good = match resolver[condition] {
+                let condition_ty = &resolver[condition];
+                let condition_good = match *condition_ty {
                     Ti::Scalar(Sc {
                         kind: Sk::Bool,
                         width: _,
@@ -928,8 +945,16 @@ impl super::Validator {
                     },
                     _ => false,
                 };
-                if !condition_good || accept_inner != reject_inner {
-                    return Err(ExpressionError::InvalidSelectTypes);
+                if accept_inner != reject_inner {
+                    return Err(ExpressionError::SelectValuesTypeMismatch {
+                        accept: accept_inner.clone(),
+                        reject: reject_inner.clone(),
+                    });
+                }
+                if !condition_good {
+                    return Err(ExpressionError::SelectConditionNotABool {
+                        actual: condition_ty.clone(),
+                    });
                 }
                 ShaderStages::all()
             }
@@ -1704,7 +1729,28 @@ impl super::Validator {
                     base,
                     space: crate::AddressSpace::Function,
                 } => match resolver.types[base].inner {
-                    Ti::RayQuery => ShaderStages::all(),
+                    Ti::RayQuery { .. } => ShaderStages::all(),
+                    ref other => {
+                        log::error!("Intersection result of a pointer to {:?}", other);
+                        return Err(ExpressionError::InvalidRayQueryType(query));
+                    }
+                },
+                ref other => {
+                    log::error!("Intersection result of {:?}", other);
+                    return Err(ExpressionError::InvalidRayQueryType(query));
+                }
+            },
+            E::RayQueryVertexPositions {
+                query,
+                committed: _,
+            } => match resolver[query] {
+                Ti::Pointer {
+                    base,
+                    space: crate::AddressSpace::Function,
+                } => match resolver.types[base].inner {
+                    Ti::RayQuery {
+                        vertex_return: true,
+                    } => ShaderStages::all(),
                     ref other => {
                         log::error!("Intersection result of a pointer to {:?}", other);
                         return Err(ExpressionError::InvalidRayQueryType(query));

@@ -7,33 +7,34 @@
 // - partial instance buffer uploads (api surface already designed with this in mind)
 // - ([non performance] extract function in build (rust function extraction with guards is a pain))
 
-use crate::{
-    command::CommandEncoderError,
-    device::DeviceError,
-    id::{BlasId, BufferId, TlasId},
-    resource::CreateBufferError,
-};
-use std::num::NonZeroU64;
-use std::sync::Arc;
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use core::num::NonZeroU64;
 
-use crate::resource::{Blas, ResourceErrorIdent, Tlas};
 use thiserror::Error;
 use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
+
+use crate::{
+    command::CommandEncoderError,
+    device::{DeviceError, MissingFeatures},
+    id::{BlasId, BufferId, TlasId},
+    resource::{
+        Blas, DestroyedResourceError, InvalidResourceError, MissingBufferUsageError,
+        ResourceErrorIdent, Tlas,
+    },
+};
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBlasError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    CreateBufferError(#[from] CreateBufferError),
+    MissingFeatures(#[from] MissingFeatures),
     #[error(
         "Only one of 'index_count' and 'index_format' was provided (either provide both or none)"
     )]
     MissingIndexData,
     #[error("Provided format was not within allowed formats. Provided format: {0:?}. Allowed formats: {1:?}")]
     InvalidVertexFormat(VertexFormat, Vec<VertexFormat>),
-    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
-    MissingFeature,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -41,9 +42,9 @@ pub enum CreateTlasError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    CreateBufferError(#[from] CreateBufferError),
-    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
-    MissingFeature,
+    MissingFeatures(#[from] MissingFeatures),
+    #[error("Flag {0:?} is not allowed on a TLAS")]
+    DisallowedFlag(wgt::AccelerationStructureFlags),
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.
@@ -55,14 +56,17 @@ pub enum BuildAccelerationStructureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
 
-    #[error("BufferId is invalid or destroyed")]
-    InvalidBufferId,
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
 
-    #[error("Buffer {0:?} is invalid or destroyed")]
-    InvalidBuffer(ResourceErrorIdent),
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
 
-    #[error("Buffer {0:?} is missing `BLAS_INPUT` usage flag")]
-    MissingBlasInputUsageFlag(ResourceErrorIdent),
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
+
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
 
     #[error(
         "Buffer {0:?} size is insufficient for provided size information (size: {1}, required: {2}"
@@ -111,12 +115,6 @@ pub enum BuildAccelerationStructureError {
     #[error("Blas {0:?} build sizes require index buffer but none was provided")]
     MissingIndexBuffer(ResourceErrorIdent),
 
-    #[error("BlasId is invalid")]
-    InvalidBlasId,
-
-    #[error("Blas {0:?} is destroyed")]
-    InvalidBlas(ResourceErrorIdent),
-
     #[error(
         "Tlas {0:?} an associated instances contains an invalid custom index (more than 24bits)"
     )]
@@ -127,20 +125,15 @@ pub enum BuildAccelerationStructureError {
     )]
     TlasInstanceCountExceeded(ResourceErrorIdent, u32, u32),
 
-    #[error("BlasId is invalid or destroyed (for instance)")]
-    InvalidBlasIdForInstance,
+    #[error("Blas {0:?} has flag USE_TRANSFORM but the transform buffer is missing")]
+    TransformMissing(ResourceErrorIdent),
 
-    #[error("TlasId is invalid or destroyed")]
-    InvalidTlasId,
-
-    #[error("Tlas {0:?} is invalid or destroyed")]
-    InvalidTlas(ResourceErrorIdent),
-
-    #[error("Features::RAY_TRACING_ACCELERATION_STRUCTURE is not enabled")]
-    MissingFeature,
-
-    #[error("Buffer {0:?} is missing `TLAS_INPUT` usage flag")]
-    MissingTlasInputUsageFlag(ResourceErrorIdent),
+    #[error("Blas {0:?} is missing the flag USE_TRANSFORM but the transform buffer is set")]
+    UseTransformMissing(ResourceErrorIdent),
+    #[error(
+        "Tlas {0:?} dependent {1:?} is missing AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN"
+    )]
+    TlasDependentMissingVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -151,14 +144,14 @@ pub enum ValidateBlasActionsError {
 
 #[derive(Clone, Debug, Error)]
 pub enum ValidateTlasActionsError {
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
+
     #[error("Tlas {0:?} is used before it is built")]
     UsedUnbuilt(ResourceErrorIdent),
 
     #[error("Blas {0:?} is used before it is built (in Tlas {1:?})")]
     UsedUnbuiltBlas(ResourceErrorIdent, ResourceErrorIdent),
-
-    #[error("BlasId is destroyed (in Tlas {0:?})")]
-    InvalidBlas(ResourceErrorIdent),
 
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
@@ -172,7 +165,7 @@ pub struct BlasTriangleGeometry<'a> {
     pub transform_buffer: Option<BufferId>,
     pub first_vertex: u32,
     pub vertex_stride: BufferAddress,
-    pub index_buffer_offset: Option<BufferAddress>,
+    pub first_index: Option<u32>,
     pub transform_buffer_offset: Option<BufferAddress>,
 }
 
@@ -197,7 +190,7 @@ pub struct TlasBuildEntry {
 pub struct TlasInstance<'a> {
     pub blas_id: BlasId,
     pub transform: &'a [f32; 12],
-    pub custom_index: u32,
+    pub custom_data: u32,
     pub mask: u8,
 }
 
@@ -243,7 +236,7 @@ pub struct TraceBlasTriangleGeometry {
     pub transform_buffer: Option<BufferId>,
     pub first_vertex: u32,
     pub vertex_stride: BufferAddress,
-    pub index_buffer_offset: Option<BufferAddress>,
+    pub first_index: Option<u32>,
     pub transform_buffer_offset: Option<BufferAddress>,
 }
 
@@ -265,7 +258,7 @@ pub struct TraceBlasBuildEntry {
 pub struct TraceTlasInstance {
     pub blas_id: BlasId,
     pub transform: [f32; 12],
-    pub custom_index: u32,
+    pub custom_data: u32,
     pub mask: u8,
 }
 

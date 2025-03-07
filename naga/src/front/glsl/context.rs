@@ -1,3 +1,6 @@
+use alloc::{format, string::String, vec::Vec};
+use core::ops::Index;
+
 use super::{
     ast::{
         GlobalLookup, GlobalLookupKind, HirExpr, HirExprKind, ParameterInfo, ParameterQualifier,
@@ -8,11 +11,10 @@ use super::{
     Frontend, Result,
 };
 use crate::{
-    front::Typifier, proc::Emitter, AddressSpace, Arena, BinaryOperator, Block, Expression,
-    FastHashMap, FunctionArgument, Handle, Literal, LocalVariable, RelationalFunction, Scalar,
-    Span, Statement, Type, TypeInner, VectorSize,
+    front::Typifier, proc::Emitter, proc::Layouter, AddressSpace, Arena, BinaryOperator, Block,
+    Expression, FastHashMap, FunctionArgument, Handle, Literal, LocalVariable, RelationalFunction,
+    Scalar, Span, Statement, Type, TypeInner, VectorSize,
 };
-use std::ops::Index;
 
 /// The position at which an expression is, used while lowering
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -72,6 +74,7 @@ pub struct Context<'a> {
 
     pub const_typifier: Typifier,
     pub typifier: Typifier,
+    layouter: Layouter,
     emitter: Emitter,
     stmt_ctx: Option<StmtContext>,
     pub body: Block,
@@ -103,6 +106,7 @@ impl<'a> Context<'a> {
 
             const_typifier: Typifier::new(),
             typifier: Typifier::new(),
+            layouter: Layouter::default(),
             emitter: Emitter::default(),
             stmt_ctx: Some(StmtContext::new()),
             body: Block::new(),
@@ -134,10 +138,10 @@ impl<'a> Context<'a> {
         F: FnOnce(&mut Self) -> Result<R>,
     {
         self.emit_restart();
-        let old_body = std::mem::replace(&mut self.body, Block::new());
+        let old_body = core::mem::replace(&mut self.body, Block::new());
         let res = cb(self);
         self.emit_restart();
-        let new_body = std::mem::replace(&mut self.body, old_body);
+        let new_body = core::mem::replace(&mut self.body, old_body);
         res.map(|r| (new_body, r))
     }
 
@@ -146,10 +150,10 @@ impl<'a> Context<'a> {
         F: FnOnce(&mut Self) -> Result<()>,
     {
         self.emit_restart();
-        let old_body = std::mem::replace(&mut self.body, body);
+        let old_body = core::mem::replace(&mut self.body, body);
         let res = cb(self);
         self.emit_restart();
-        let body = std::mem::replace(&mut self.body, old_body);
+        let body = core::mem::replace(&mut self.body, old_body);
         res.map(|_| body)
     }
 
@@ -260,12 +264,14 @@ impl<'a> Context<'a> {
             crate::proc::ConstantEvaluator::for_glsl_module(
                 self.module,
                 self.global_expression_kind_tracker,
+                &mut self.layouter,
             )
         } else {
             crate::proc::ConstantEvaluator::for_glsl_function(
                 self.module,
                 &mut self.expressions,
                 &mut self.local_expression_kind_tracker,
+                &mut self.layouter,
                 &mut self.emitter,
                 &mut self.body,
             )
@@ -1099,14 +1105,14 @@ impl<'a> Context<'a> {
                         .and_then(|scalar| Some((type_power(scalar)?, scalar))),
                 ) {
                     match accept_power.cmp(&reject_power) {
-                        std::cmp::Ordering::Less => {
+                        core::cmp::Ordering::Less => {
                             accept_body = self.with_body(accept_body, |ctx| {
                                 ctx.conversion(&mut accept, accept_meta, reject_scalar)?;
                                 Ok(())
                             })?;
                         }
-                        std::cmp::Ordering::Equal => {}
-                        std::cmp::Ordering::Greater => {
+                        core::cmp::Ordering::Equal => {}
+                        core::cmp::Ordering::Greater => {
                             reject_body = self.with_body(reject_body, |ctx| {
                                 ctx.conversion(&mut reject, reject_meta, accept_scalar)?;
                                 Ok(())
@@ -1252,7 +1258,7 @@ impl<'a> Context<'a> {
                         right = self.add_expression(
                             Expression::Compose {
                                 ty,
-                                components: std::iter::repeat(right).take(cols as usize).collect(),
+                                components: core::iter::repeat(right).take(cols as usize).collect(),
                             },
                             meta,
                         )?;
@@ -1424,11 +1430,11 @@ impl<'a> Context<'a> {
             right_components.and_then(|scalar| Some((type_power(scalar)?, scalar))),
         ) {
             match left_power.cmp(&right_power) {
-                std::cmp::Ordering::Less => {
+                core::cmp::Ordering::Less => {
                     self.conversion(left, left_meta, right_scalar)?;
                 }
-                std::cmp::Ordering::Equal => {}
-                std::cmp::Ordering::Greater => {
+                core::cmp::Ordering::Equal => {}
+                core::cmp::Ordering::Greater => {
                     self.conversion(right, right_meta, left_scalar)?;
                 }
             }

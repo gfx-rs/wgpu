@@ -1,5 +1,12 @@
+use alloc::{
+    borrow::ToOwned,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{error::Error, fmt, ops::Range};
+
 use crate::{Arena, Handle, UniqueArena};
-use std::{error::Error, fmt, ops::Range};
 
 /// A source code span, used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -94,7 +101,7 @@ impl From<Range<usize>> for Span {
     }
 }
 
-impl std::ops::Index<Span> for str {
+impl core::ops::Index<Span> for str {
     type Output = str;
 
     #[inline]
@@ -314,7 +321,9 @@ impl<E> WithSpan<E> {
 
 /// Convenience trait for [`Error`] to be able to apply spans to anything.
 pub(crate) trait AddSpan: Sized {
+    /// The returned output type.
     type Output;
+
     /// See [`WithSpan::new`].
     fn with_span(self) -> Self::Output;
     /// See [`WithSpan::with_span`].
@@ -325,37 +334,9 @@ pub(crate) trait AddSpan: Sized {
     fn with_span_handle<T, A: SpanProvider<T>>(self, handle: Handle<T>, arena: &A) -> Self::Output;
 }
 
-/// Trait abstracting over getting a span from an [`Arena`] or a [`UniqueArena`].
-pub(crate) trait SpanProvider<T> {
-    fn get_span(&self, handle: Handle<T>) -> Span;
-    fn get_span_context(&self, handle: Handle<T>) -> SpanContext {
-        match self.get_span(handle) {
-            x if !x.is_defined() => (Default::default(), "".to_string()),
-            known => (
-                known,
-                format!("{} {:?}", std::any::type_name::<T>(), handle),
-            ),
-        }
-    }
-}
-
-impl<T> SpanProvider<T> for Arena<T> {
-    fn get_span(&self, handle: Handle<T>) -> Span {
-        self.get_span(handle)
-    }
-}
-
-impl<T> SpanProvider<T> for UniqueArena<T> {
-    fn get_span(&self, handle: Handle<T>) -> Span {
-        self.get_span(handle)
-    }
-}
-
-impl<E> AddSpan for E
-where
-    E: Error,
-{
+impl<E> AddSpan for E {
     type Output = WithSpan<Self>;
+
     fn with_span(self) -> WithSpan<Self> {
         WithSpan::new(self)
     }
@@ -377,10 +358,38 @@ where
     }
 }
 
+/// Trait abstracting over getting a span from an [`Arena`] or a [`UniqueArena`].
+pub(crate) trait SpanProvider<T> {
+    fn get_span(&self, handle: Handle<T>) -> Span;
+    fn get_span_context(&self, handle: Handle<T>) -> SpanContext {
+        match self.get_span(handle) {
+            x if !x.is_defined() => (Default::default(), "".to_string()),
+            known => (
+                known,
+                format!("{} {:?}", core::any::type_name::<T>(), handle),
+            ),
+        }
+    }
+}
+
+impl<T> SpanProvider<T> for Arena<T> {
+    fn get_span(&self, handle: Handle<T>) -> Span {
+        self.get_span(handle)
+    }
+}
+
+impl<T> SpanProvider<T> for UniqueArena<T> {
+    fn get_span(&self, handle: Handle<T>) -> Span {
+        self.get_span(handle)
+    }
+}
+
 /// Convenience trait for [`Result`], adding a [`MapErrWithSpan::map_err_inner`]
 /// mapping to [`WithSpan::and_then`].
-pub trait MapErrWithSpan<E, E2>: Sized {
+pub(crate) trait MapErrWithSpan<E, E2>: Sized {
+    /// The returned output type.
     type Output: Sized;
+
     fn map_err_inner<F, E3>(self, func: F) -> Self::Output
     where
         F: FnOnce(E) -> WithSpan<E3>,
@@ -389,6 +398,7 @@ pub trait MapErrWithSpan<E, E2>: Sized {
 
 impl<T, E, E2> MapErrWithSpan<E, E2> for Result<T, WithSpan<E>> {
     type Output = Result<T, WithSpan<E2>>;
+
     fn map_err_inner<F, E3>(self, func: F) -> Result<T, WithSpan<E2>>
     where
         F: FnOnce(E) -> WithSpan<E3>,

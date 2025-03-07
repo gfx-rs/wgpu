@@ -1,3 +1,5 @@
+use alloc::{vec, vec::Vec};
+
 use crate::front::glsl::context::ExprPos;
 use crate::front::glsl::Span;
 use crate::Literal;
@@ -15,7 +17,7 @@ use crate::{
 
 impl ParsingContext<'_> {
     pub fn peek_parameter_qualifier(&mut self, frontend: &mut Frontend) -> bool {
-        self.peek(frontend).map_or(false, |t| match t.value {
+        self.peek(frontend).is_some_and(|t| match t.value {
             TokenValue::In | TokenValue::Out | TokenValue::InOut | TokenValue::Const => true,
             _ => false,
         })

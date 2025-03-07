@@ -7,14 +7,17 @@ of IR inspection and debugging.
 [dot]: https://graphviz.org/doc/info/lang.html
 */
 
+use alloc::{
+    borrow::Cow,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::fmt::{Error as FmtError, Write as _};
+
 use crate::{
     arena::Handle,
     valid::{FunctionInfo, ModuleInfo},
-};
-
-use std::{
-    borrow::Cow,
-    fmt::{Error as FmtError, Write as _},
 };
 
 /// Configuration options for the dot backend
@@ -254,6 +257,21 @@ impl StatementGraph {
                     }
                     "Atomic"
                 }
+                S::ImageAtomic {
+                    image,
+                    coordinate,
+                    array_index,
+                    fun: _,
+                    value,
+                } => {
+                    self.dependencies.push((id, image, "image"));
+                    self.dependencies.push((id, coordinate, "coordinate"));
+                    if let Some(expr) = array_index {
+                        self.dependencies.push((id, expr, "array_index"));
+                    }
+                    self.dependencies.push((id, value, "value"));
+                    "ImageAtomic"
+                }
                 S::WorkGroupUniformLoad { pointer, result } => {
                     self.emits.push((id, result));
                     self.dependencies.push((id, pointer, "pointer"));
@@ -277,6 +295,13 @@ impl StatementGraph {
                         crate::RayQueryFunction::Proceed { result } => {
                             self.emits.push((id, result));
                             "RayQueryProceed"
+                        }
+                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                            self.dependencies.push((id, hit_t, "hit_t"));
+                            "RayQueryGenerateIntersection"
+                        }
+                        crate::RayQueryFunction::ConfirmIntersection => {
+                            "RayQueryConfirmIntersection"
                         }
                         crate::RayQueryFunction::Terminate => "RayQueryTerminate",
                     }
@@ -390,26 +415,26 @@ const COLORS: &[&str] = &[
 
 struct Prefixed<T>(Handle<T>);
 
-impl std::fmt::Display for Prefixed<crate::Expression> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::Expression> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "e")
     }
 }
 
-impl std::fmt::Display for Prefixed<crate::LocalVariable> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::LocalVariable> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "l")
     }
 }
 
-impl std::fmt::Display for Prefixed<crate::GlobalVariable> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::GlobalVariable> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "g")
     }
 }
 
-impl std::fmt::Display for Prefixed<crate::Function> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::Function> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "f")
     }
 }
@@ -702,6 +727,11 @@ fn write_function_expressions(
             }
             E::SubgroupBallotResult => ("SubgroupBallotResult".into(), 4),
             E::SubgroupOperationResult { .. } => ("SubgroupOperationResult".into(), 4),
+            E::RayQueryVertexPositions { query, committed } => {
+                edges.insert("", query);
+                let ty = if committed { "Committed" } else { "Candidate" };
+                (format!("get{}HitVertexPositions", ty).into(), 4)
+            }
         };
 
         // give uniform expressions an outline
@@ -771,7 +801,7 @@ pub fn write(
     mod_info: Option<&ModuleInfo>,
     options: Options,
 ) -> Result<String, FmtError> {
-    use std::fmt::Write as _;
+    use core::fmt::Write as _;
 
     let mut output = String::new();
     output += "digraph Module {\n";

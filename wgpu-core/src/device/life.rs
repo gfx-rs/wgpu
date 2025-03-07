@@ -1,3 +1,8 @@
+use alloc::{sync::Arc, vec::Vec};
+
+use smallvec::SmallVec;
+use thiserror::Error;
+
 use crate::{
     device::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
@@ -7,11 +12,6 @@ use crate::{
     snatch::SnatchGuard,
     SubmissionIndex,
 };
-use smallvec::SmallVec;
-
-use crate::resource::{Blas, Tlas};
-use std::sync::Arc;
-use thiserror::Error;
 
 /// A command submitted to the GPU for execution.
 ///
@@ -28,9 +28,6 @@ struct ActiveSubmission {
     /// When `Device::fence`'s value is greater than or equal to this, our queue
     /// submission has completed.
     index: SubmissionIndex,
-
-    /// Temporary resources to be freed once this queue submission has completed.
-    temp_resources: Vec<TempResource>,
 
     /// Buffers to be mapped once this submission has completed.
     mapped: Vec<Arc<Buffer>>,
@@ -104,44 +101,6 @@ impl ActiveSubmission {
 
         false
     }
-
-    pub fn contains_blas(&self, blas: &Blas) -> bool {
-        for encoder in &self.encoders {
-            // The ownership location of blas's depends on where the command encoder
-            // came from. If it is the staging command encoder on the queue, it is
-            // in the pending buffer list. If it came from a user command encoder,
-            // it is in the tracker.
-
-            if encoder.trackers.blas_s.contains(blas) {
-                return true;
-            }
-
-            if encoder.pending_blas_s.contains_key(&blas.tracker_index()) {
-                return true;
-            }
-        }
-
-        false
-    }
-
-    pub fn contains_tlas(&self, tlas: &Tlas) -> bool {
-        for encoder in &self.encoders {
-            // The ownership location of tlas's depends on where the command encoder
-            // came from. If it is the staging command encoder on the queue, it is
-            // in the pending buffer list. If it came from a user command encoder,
-            // it is in the tracker.
-
-            if encoder.trackers.tlas_s.contains(tlas) {
-                return true;
-            }
-
-            if encoder.pending_tlas_s.contains_key(&tlas.tracker_index()) {
-                return true;
-            }
-        }
-
-        false
-    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -151,6 +110,17 @@ pub enum WaitIdleError {
     Device(#[from] DeviceError),
     #[error("Tried to wait using a submission index ({0}) that has not been returned by a successful submission (last successful submission: {1})")]
     WrongSubmissionIndex(SubmissionIndex, SubmissionIndex),
+    #[error("Timed out trying to wait for the given submission index.")]
+    Timeout,
+}
+
+impl WaitIdleError {
+    pub fn to_poll_error(&self) -> Option<wgt::PollError> {
+        match self {
+            WaitIdleError::Timeout => Some(wgt::PollError::Timeout),
+            _ => None,
+        }
+    }
 }
 
 /// Resource tracking for a device.
@@ -211,15 +181,9 @@ impl LifetimeTracker {
     }
 
     /// Start tracking resources associated with a new queue submission.
-    pub fn track_submission(
-        &mut self,
-        index: SubmissionIndex,
-        temp_resources: impl Iterator<Item = TempResource>,
-        encoders: Vec<EncoderInFlight>,
-    ) {
+    pub fn track_submission(&mut self, index: SubmissionIndex, encoders: Vec<EncoderInFlight>) {
         self.active.push(ActiveSubmission {
             index,
-            temp_resources: temp_resources.collect(),
             mapped: Vec::new(),
             encoders,
             work_done_closures: SmallVec::new(),
@@ -250,34 +214,6 @@ impl LifetimeTracker {
         // as we find a hit.
         self.active.iter().rev().find_map(|submission| {
             if submission.contains_buffer(buffer) {
-                Some(submission.index)
-            } else {
-                None
-            }
-        })
-    }
-
-    /// Returns the submission index of the most recent submission that uses the
-    /// given blas.
-    pub fn get_blas_latest_submission_index(&self, blas: &Blas) -> Option<SubmissionIndex> {
-        // We iterate in reverse order, so that we can bail out early as soon
-        // as we find a hit.
-        self.active.iter().rev().find_map(|submission| {
-            if submission.contains_blas(blas) {
-                Some(submission.index)
-            } else {
-                None
-            }
-        })
-    }
-
-    /// Returns the submission index of the most recent submission that uses the
-    /// given tlas.
-    pub fn get_tlas_latest_submission_index(&self, tlas: &Tlas) -> Option<SubmissionIndex> {
-        // We iterate in reverse order, so that we can bail out early as soon
-        // as we find a hit.
-        self.active.iter().rev().find_map(|submission| {
-            if submission.contains_tlas(tlas) {
                 Some(submission.index)
             } else {
                 None
@@ -340,7 +276,6 @@ impl LifetimeTracker {
                 profiling::scope!("drop command buffer trackers");
                 drop(encoder);
             }
-            drop(a.temp_resources);
             work_done_closures.extend(a.work_done_closures);
         }
         work_done_closures
@@ -355,7 +290,12 @@ impl LifetimeTracker {
             .active
             .iter_mut()
             .find(|a| a.index == last_submit_index)
-            .map(|a| &mut a.temp_resources);
+            .map(|a| {
+                // Because this resource's `last_submit_index` matches `a.index`,
+                // we know that we must have done something with the resource,
+                // so `a.encoders` should not be empty.
+                &mut a.encoders.last_mut().unwrap().temp_resources
+            });
         if let Some(resources) = resources {
             resources.push(temp_resource);
         }

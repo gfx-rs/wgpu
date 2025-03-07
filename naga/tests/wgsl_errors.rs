@@ -38,7 +38,7 @@ fn very_negative_integers() {
 fn reserved_identifier_prefix() {
     check(
         "var __bad;",
-        r###"error: Identifier starts with a reserved prefix: '__bad'
+        r###"error: Identifier starts with a reserved prefix: `__bad`
   ┌─ wgsl:1:5
   │
 1 │ var __bad;
@@ -52,7 +52,7 @@ fn reserved_identifier_prefix() {
 fn function_without_identifier() {
     check(
         "fn () {}",
-        r###"error: expected identifier, found '('
+        r###"error: expected identifier, found "("
   ┌─ wgsl:1:4
   │
 1 │ fn () {}
@@ -66,7 +66,7 @@ fn function_without_identifier() {
 fn invalid_integer() {
     check(
         "fn foo([location(1.)] x: i32) {}",
-        r###"error: expected identifier, found '['
+        r###"error: expected identifier, found "["
   ┌─ wgsl:1:8
   │
 1 │ fn foo([location(1.)] x: i32) {}
@@ -80,7 +80,7 @@ fn invalid_integer() {
 fn invalid_float() {
     check(
         "const scale: f32 = 1.1.;",
-        r###"error: expected identifier, found ';'
+        r###"error: expected identifier, found ";"
   ┌─ wgsl:1:24
   │
 1 │ const scale: f32 = 1.1.;
@@ -112,7 +112,7 @@ fn unknown_identifier() {
                   return x * schmoo;
               }
           "###,
-        r###"error: no definition in scope for identifier: 'schmoo'
+        r###"error: no definition in scope for identifier: `schmoo`
   ┌─ wgsl:3:30
   │
 3 │                   return x * schmoo;
@@ -134,7 +134,7 @@ fn bad_texture() {
                 return textureSample(a, sampler1, vec2<f32>(0.0));
             }
         "#,
-        r#"error: expected an image, but found 'a' which is not an image
+        r#"error: expected an image, but found `a` which is not an image
   ┌─ wgsl:7:38
   │
 7 │                 return textureSample(a, sampler1, vec2<f32>(0.0));
@@ -266,7 +266,7 @@ fn bad_for_initializer() {
                 for ({};;) {}
             }
         "#,
-        r#"error: for(;;) initializer is not an assignment or a function call: '{}'
+        r#"error: for(;;) initializer is not an assignment or a function call: `{}`
   ┌─ wgsl:3:22
   │
 3 │                 for ({};;) {}
@@ -282,7 +282,7 @@ fn unknown_storage_class() {
         r#"
             @group(0) @binding(0) var<bad> texture: texture_2d<f32>;
         "#,
-        r#"error: unknown address space: 'bad'
+        r#"error: unknown address space: `bad`
   ┌─ wgsl:2:39
   │
 2 │             @group(0) @binding(0) var<bad> texture: texture_2d<f32>;
@@ -299,7 +299,7 @@ fn unknown_attribute() {
             @a
             fn x() {}
         "#,
-        r#"error: unknown attribute: 'a'
+        r#"error: unknown attribute: `a`
   ┌─ wgsl:2:14
   │
 2 │             @a
@@ -315,7 +315,7 @@ fn unknown_built_in() {
         r#"
             fn x(@builtin(unknown_built_in) y: u32) {}
         "#,
-        r#"error: unknown builtin: 'unknown_built_in'
+        r#"error: unknown builtin: `unknown_built_in`
   ┌─ wgsl:2:27
   │
 2 │             fn x(@builtin(unknown_built_in) y: u32) {}
@@ -331,7 +331,7 @@ fn unknown_access() {
         r#"
             var<storage,unknown_access> x: array<u32>;
         "#,
-        r#"error: unknown access: 'unknown_access'
+        r#"error: unknown access: `unknown_access`
   ┌─ wgsl:2:25
   │
 2 │             var<storage,unknown_access> x: array<u32>;
@@ -349,7 +349,7 @@ fn unknown_ident() {
                 let a = b;
             }
         "#,
-        r#"error: no definition in scope for identifier: 'b'
+        r#"error: no definition in scope for identifier: `b`
   ┌─ wgsl:3:25
   │
 3 │                 let a = b;
@@ -365,7 +365,7 @@ fn unknown_scalar_type() {
         r#"
             const a = vec2<vec2f>();
         "#,
-        r#"error: unknown scalar type: 'vec2f'
+        r#"error: unknown scalar type: `vec2f`
   ┌─ wgsl:2:28
   │
 2 │             const a = vec2<vec2f>();
@@ -383,7 +383,7 @@ fn unknown_type() {
         r#"
             const a: Vec = 10;
         "#,
-        r#"error: unknown type: 'Vec'
+        r#"error: unknown type: `Vec`
   ┌─ wgsl:2:22
   │
 2 │             const a: Vec = 10;
@@ -399,7 +399,7 @@ fn unknown_storage_format() {
         r#"
             const storage1: texture_storage_1d<rgba>;
         "#,
-        r#"error: unknown storage format: 'rgba'
+        r#"error: unknown storage format: `rgba`
   ┌─ wgsl:2:48
   │
 2 │             const storage1: texture_storage_1d<rgba>;
@@ -415,7 +415,7 @@ fn unknown_conservative_depth() {
         r#"
             @early_depth_test(abc) fn main() {}
         "#,
-        r#"error: unknown conservative depth: 'abc'
+        r#"error: unknown conservative depth: `abc`
   ┌─ wgsl:2:31
   │
 2 │             @early_depth_test(abc) fn main() {}
@@ -503,7 +503,7 @@ fn unknown_local_function() {
                 for (a();;) {}
             }
         "#,
-        r#"error: no definition in scope for identifier: 'a'
+        r#"error: no definition in scope for identifier: `a`
   ┌─ wgsl:3:22
   │
 3 │                 for (a();;) {}
@@ -575,44 +575,6 @@ fn local_var_missing_type() {
   │
 3 │                 var x;
   │                     ^ needs a type specifier or initializer
-
-"#,
-    );
-}
-
-#[test]
-fn postfix_pointers() {
-    check(
-        r#"
-            fn main() {
-                var v: vec4<f32> = vec4<f32>(1.0, 1.0, 1.0, 1.0);
-                let pv = &v;
-                let a = *pv[3]; // Problematic line
-            }
-        "#,
-        r#"error: the value indexed by a `[]` subscripting expression must not be a pointer
-  ┌─ wgsl:5:26
-  │
-5 │                 let a = *pv[3]; // Problematic line
-  │                          ^^ expression is a pointer
-
-"#,
-    );
-
-    check(
-        r#"
-            struct S { m: i32 };
-            fn main() {
-                var s: S = S(42);
-                let ps = &s;
-                let a = *ps.m; // Problematic line
-            }
-        "#,
-        r#"error: the value accessed by a `.member` expression must not be a pointer
-  ┌─ wgsl:6:26
-  │
-6 │                 let a = *ps.m; // Problematic line
-  │                          ^^ expression is a pointer
 
 "#,
     );
@@ -1010,11 +972,11 @@ fn invalid_arrays() {
 
     check(
         "alias Bad = array<f32, true>;",
-        r###"error: must be a const-expression that resolves to a concrete integer scalar (u32 or i32)
+        r###"error: must be a const-expression that resolves to a concrete integer scalar (`u32` or `i32`)
   ┌─ wgsl:1:24
   │
 1 │ alias Bad = array<f32, true>;
-  │                        ^^^^ must resolve to u32 or i32
+  │                        ^^^^ must resolve to `u32` or `i32`
 
 "###,
     );
@@ -1024,11 +986,11 @@ fn invalid_arrays() {
             const length: f32 = 2.718;
             alias Bad = array<f32, length>;
         "#,
-        r###"error: must be a const-expression that resolves to a concrete integer scalar (u32 or i32)
+        r###"error: must be a const-expression that resolves to a concrete integer scalar (`u32` or `i32`)
   ┌─ wgsl:3:36
   │
 3 │             alias Bad = array<f32, length>;
-  │                                    ^^^^^^ must resolve to u32 or i32
+  │                                    ^^^^^^ must resolve to `u32` or `i32`
 
 "###,
     );
@@ -1145,7 +1107,7 @@ fn invalid_functions() {
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::InvalidPointerToUnsized {
                 base: _,
-                space: naga::AddressSpace::WorkGroup { .. },
+                space: naga::AddressSpace::WorkGroup,
             },
             ..
         })
@@ -1238,8 +1200,8 @@ fn pointer_type_equivalence() {
 
             fn g() {
                var m: mat2x2<f32>;
-               let pv: ptr<function, vec2<f32>> = &m.x;
-               let pf: ptr<function, f32> = &m.x.x;
+               let pv: ptr<function, vec2<f32>> = &m[0];
+               let pf: ptr<function, f32> = &m[0].x;
 
                f(pv, pf);
             }
@@ -1543,7 +1505,7 @@ fn select() {
             naga::valid::ValidationError::Function {
                 name,
                 source: naga::valid::FunctionError::Expression {
-                    source: naga::valid::ExpressionError::InvalidSelectTypes,
+                    source: naga::valid::ExpressionError::SelectConditionNotABool { .. },
                     ..
                 },
                 ..
@@ -1797,11 +1759,11 @@ fn binary_statement() {
             3 + 5;
         }
     ",
-        r###"error: expected assignment or increment/decrement, found ';'
-  ┌─ wgsl:3:18
+        r###"error: expected assignment or increment/decrement, found "+"
+  ┌─ wgsl:3:15
   │
 3 │             3 + 5;
-  │                  ^ expected assignment or increment/decrement
+  │               ^ expected assignment or increment/decrement
 
 "###,
     );
@@ -1815,11 +1777,11 @@ fn assign_to_expr() {
             3 + 5 = 10;
         }
         ",
-        r###"error: invalid left-hand side of assignment
-  ┌─ wgsl:3:13
+        r###"error: expected assignment or increment/decrement, found "+"
+  ┌─ wgsl:3:15
   │
 3 │             3 + 5 = 10;
-  │             ^^^^^ cannot assign to this expression
+  │               ^ expected assignment or increment/decrement
 
 "###,
     );
@@ -1842,7 +1804,7 @@ fn assign_to_let() {
 4 │             a = 20;
   │             ^ cannot assign to this expression
   │
-  = note: consider declaring 'a' with `var` instead of `let`
+  = note: consider declaring `a` with `var` instead of `let`
 
 "###,
     );
@@ -1862,7 +1824,7 @@ fn assign_to_let() {
 4 │             a[0] = 1;
   │             ^^^^ cannot assign to this expression
   │
-  = note: consider declaring 'a' with `var` instead of `let`
+  = note: consider declaring `a` with `var` instead of `let`
 
 "###,
     );
@@ -1884,7 +1846,7 @@ fn assign_to_let() {
 6 │             a.a = 20;
   │             ^^^ cannot assign to this expression
   │
-  = note: consider declaring 'a' with `var` instead of `let`
+  = note: consider declaring `a` with `var` instead of `let`
 
 "###,
     );
@@ -1943,18 +1905,16 @@ fn switch_signed_unsigned_mismatch() {
     check(
         "
         fn x(y: u32) {
-	        switch y {
-		        case 1: {}
-	        }
+            switch y {
+                case 1i: {}
+            }
         }
         ",
-        r###"error: invalid switch value
-  ┌─ wgsl:4:16
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
   │
-4 │                 case 1: {}
-  │                      ^ expected unsigned integer
-  │
-  = note: suffix the integer with a `u`: '1u'
+4 │                 case 1i: {}
+  │                      ^^ `switch` case selector must have the same type as the `switch` selector expression
 
 "###,
     );
@@ -1962,18 +1922,90 @@ fn switch_signed_unsigned_mismatch() {
     check(
         "
         fn x(y: i32) {
-	        switch y {
-		        case 1u: {}
-	        }
+            switch y {
+                case 1u: {}
+            }
         }
         ",
-        r###"error: invalid switch value
-  ┌─ wgsl:4:16
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
   │
 4 │                 case 1u: {}
-  │                      ^^ expected signed integer
+  │                      ^^ `switch` case selector must have the same type as the `switch` selector expression
+
+"###,
+    );
+}
+
+#[test]
+fn switch_invalid_type() {
+    check(
+        "
+        fn x(y: f32) {
+            switch y {
+                case 1: {}
+            }
+        }
+        ",
+        r###"error: invalid `switch` selector
+  ┌─ wgsl:3:20
   │
-  = note: remove the `u` suffix: '1'
+3 │             switch y {
+  │                    ^ `switch` selector must be a scalar integer
+
+"###,
+    );
+
+    check(
+        "
+        fn x(y: vec2<i32>) {
+            switch y {
+                case 1: {}
+            }
+        }
+        ",
+        r###"error: invalid `switch` selector
+  ┌─ wgsl:3:20
+  │
+3 │             switch y {
+  │                    ^ `switch` selector must be a scalar integer
+
+"###,
+    );
+
+    check(
+        "
+        fn x() {
+            switch 0 {
+                case 1.0: {}
+            }
+        }
+    ",
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
+  │
+4 │                 case 1.0: {}
+  │                      ^^^ `switch` case selector must be a scalar integer const expression
+
+"###,
+    );
+}
+
+#[test]
+fn switch_non_const_case() {
+    check(
+        "
+        fn x(y: i32) {
+            switch 0 {
+                case y: {}
+            }
+        }
+    ",
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
+  │
+4 │                 case y: {}
+  │                      ^ `switch` case selector must be a scalar integer const expression
 
 "###,
     );
@@ -2000,6 +2032,94 @@ fn function_returns_void() {
   = note: perhaps you meant to call the function in a separate statement?
 
 "###,
+    )
+}
+
+#[test]
+fn function_must_use_unused() {
+    check(
+        r#"
+@must_use
+fn use_me(a: i32) -> i32 {
+  return 10;
+}
+
+fn useless() -> i32 {
+  use_me(1);
+  return 0;
+}
+"#,
+        r#"error: unused return value from function annotated with @must_use
+  ┌─ wgsl:8:3
+  │
+8 │   use_me(1);
+  │   ^^^^^^
+  │
+  = note: function 'use_me' is declared with `@must_use` attribute
+  = note: use a phony assignment or declare a value using the function call as the initializer
+
+"#,
+    );
+}
+
+#[test]
+fn function_must_use_returns_void() {
+    check(
+        r#"
+@must_use
+fn use_me(a: i32) {
+  let x = a;
+}
+"#,
+        r#"error: function annotated with @must_use but does not return any value
+  ┌─ wgsl:2:2
+  │
+2 │ @must_use
+  │  ^^^^^^^^
+3 │ fn use_me(a: i32) {
+  │    ^^^^^^^^^^^^^
+  │
+  = note: declare a return type or remove the attribute
+
+"#,
+    );
+}
+
+#[test]
+fn function_must_use_repeated() {
+    check(
+        r#"
+@must_use
+@must_use
+fn use_me(a: i32) -> i32 {
+  return 10;
+}
+"#,
+        r#"error: repeated attribute: `must_use`
+  ┌─ wgsl:3:2
+  │
+3 │ @must_use
+  │  ^^^^^^^^ repeated attribute
+
+"#,
+    );
+}
+
+#[test]
+fn struct_member_must_use() {
+    check(
+        r#"
+struct S {
+  @must_use a: i32,
+}
+"#,
+        r#"error: unknown attribute: `must_use`
+  ┌─ wgsl:3:4
+  │
+3 │   @must_use a: i32,
+  │    ^^^^^^^^ unknown attribute
+
+"#,
     )
 }
 
@@ -2042,19 +2162,62 @@ fn function_param_redefinition_as_local() {
 }
 
 #[test]
+fn struct_member_redefinition() {
+    check(
+        "
+        struct A {
+            a: f32,
+            a: f32,
+        }
+    ",
+        r###"error: redefinition of `a`
+  ┌─ wgsl:3:13
+  │
+3 │             a: f32,
+  │             ^ previous definition of `a`
+4 │             a: f32,
+  │             ^ redefinition of `a`
+
+"###,
+    )
+}
+
+#[test]
+fn function_must_return_value() {
+    check_validation!(
+        "fn func() -> i32 {
+        }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidReturnType(_),
+            ..
+        })
+    );
+    check_validation!(
+        "fn func(x: i32) -> i32 {
+            let y = x + 10;
+        }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidReturnType(_),
+            ..
+        })
+    );
+}
+
+#[test]
 fn constructor_type_error_span() {
     check(
         "
         fn unfortunate() {
-            var i: i32;
-            var a: array<f32, 1> = array<f32, 1>(i);
+            var a: array<i32, 1> = array<i32, 1>(1.0);
         }
     ",
-        r###"error: automatic conversions cannot convert `i32` to `f32`
-  ┌─ wgsl:4:36
+        r###"error: automatic conversions cannot convert `{AbstractFloat}` to `i32`
+  ┌─ wgsl:3:36
   │
-4 │             var a: array<f32, 1> = array<f32, 1>(i);
-  │                                    ^^^^^^^^^^^^^ a value of type f32 is required here
+3 │             var a: array<i32, 1> = array<i32, 1>(1.0);
+  │                                    ^^^^^^^^^^^^^ ^^^ this expression has type {AbstractFloat}
+  │                                    │              
+  │                                    a value of type i32 is required here
 
 "###,
     )
@@ -2108,10 +2271,10 @@ fn compaction_preserves_spans() {
     let source = r#"
         fn f() {
            var a: i32 = -(-(-(-42i)));
-           var x: i32;
-           x = 42u;
+           var x: array<i32,1>;
+           var y = x[1.0];
         }
-    "#; //     ^^^   correct error span: 95..98
+    "#; //         ^^^   correct error span: 108..114
     let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
     naga::compact::compact(&mut module);
     let err = naga::valid::Validator::new(
@@ -2135,7 +2298,10 @@ fn compaction_preserves_spans() {
         .0;
     if !matches!(
         dest_span.to_range(),
-        Some(std::ops::Range { start: 95, end: 98 })
+        Some(core::ops::Range {
+            start: 108,
+            end: 114
+        })
     ) {
         panic!("Error message has wrong span:\n\n{err:#?}");
     }
@@ -2404,11 +2570,11 @@ fn const_assert_must_be_bool() {
         "
             const_assert(5); // 5 is not bool
         ",
-        r###"error: must be a const-expression that resolves to a bool
+        r###"error: must be a const-expression that resolves to a `bool`
   ┌─ wgsl:2:26
   │
 2 │             const_assert(5); // 5 is not bool
-  │                          ^ must resolve to bool
+  │                          ^ must resolve to `bool`
 
 "###,
     );
@@ -2420,12 +2586,26 @@ fn const_assert_failed() {
         "
             const_assert(false);
         ",
-        r###"error: const_assert failure
+        r###"error: `const_assert` failure
   ┌─ wgsl:2:26
   │
 2 │             const_assert(false);
-  │                          ^^^^^ evaluates to false
+  │                          ^^^^^ evaluates to `false`
 
 "###,
+    );
+}
+
+#[test]
+fn reject_utf8_bom() {
+    check(
+        "\u{FEFF}fn main() {}",
+        r#"error: expected global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) or the end of the file, found "\u{feff}"
+  ┌─ wgsl:1:1
+  │
+1 │ ﻿fn main() {}
+  │  expected global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) or the end of the file
+
+"#,
     );
 }

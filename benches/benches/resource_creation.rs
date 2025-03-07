@@ -1,25 +1,33 @@
 use std::time::{Duration, Instant};
 
 use criterion::{criterion_group, Criterion, Throughput};
-use once_cell::sync::Lazy;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use std::sync::LazyLock;
 
-use crate::DeviceState;
+use crate::{is_test, DeviceState};
+
+fn thread_count_list() -> &'static [usize] {
+    if is_test() {
+        &[2]
+    } else {
+        &[1, 2, 4, 8]
+    }
+}
 
 fn run_bench(ctx: &mut Criterion) {
-    let state = Lazy::new(DeviceState::new);
+    let state = LazyLock::new(DeviceState::new);
 
     const RESOURCES_TO_CREATE: usize = 8;
 
     let mut group = ctx.benchmark_group("Resource Creation: Large Buffer");
     group.throughput(Throughput::Elements(RESOURCES_TO_CREATE as _));
 
-    for threads in [1, 2, 4, 8] {
+    for &threads in thread_count_list() {
         let resources_per_thread = RESOURCES_TO_CREATE / threads;
         group.bench_function(
             format!("{threads} threads x {resources_per_thread} resource"),
             |b| {
-                Lazy::force(&state);
+                LazyLock::force(&state);
 
                 b.iter_custom(|iters| {
                     profiling::scope!("benchmark invocation");
@@ -53,7 +61,7 @@ fn run_bench(ctx: &mut Criterion) {
                         drop(buffers);
 
                         state.queue.submit([]);
-                        state.device.poll(wgpu::Maintain::Wait);
+                        state.device.poll(wgpu::PollType::Wait).unwrap();
                     }
 
                     duration

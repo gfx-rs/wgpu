@@ -1,5 +1,6 @@
-#![no_main]
-#[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
+#![cfg_attr(all(fuzzable_platform, fuzzing), no_main)]
+
+#[cfg(all(fuzzable_platform, fuzzing))]
 mod fuzz {
     use libfuzzer_sys::fuzz_target;
 
@@ -12,3 +13,6 @@ mod fuzz {
         let _result = validator.validate(&module);
     });
 }
+
+#[cfg(not(all(fuzzable_platform, fuzzing)))]
+fn main() {}

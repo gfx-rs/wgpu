@@ -1,0 +1,9 @@
+god_mode = true
+targets = "SPIRV | GLSL | HLSL | WGSL"
+
+[glsl]
+version.Desktop = 420
+zero_initialize_workgroup_memory = true
+
+[spv]
+version = [1, 0]

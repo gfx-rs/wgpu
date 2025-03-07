@@ -3,6 +3,8 @@ Backend functions that export shader [`Module`](super::Module)s into binary and 
 */
 #![allow(dead_code)] // can be dead if none of the enabled backends need it
 
+use alloc::string::String;
+
 use crate::proc::ExpressionKindTracker;
 
 #[cfg(dot_out)]
@@ -35,15 +37,15 @@ pub type NeedBakeExpressions = crate::FastHashSet<crate::Handle<crate::Expressio
 /// A type for displaying expression handles as baking identifiers.
 ///
 /// Given an [`Expression`] [`Handle`] `h`, `Baked(h)` implements
-/// [`std::fmt::Display`], showing the handle's index prefixed by
+/// [`core::fmt::Display`], showing the handle's index prefixed by
 /// `_e`.
 ///
 /// [`Expression`]: crate::Expression
 /// [`Handle`]: crate::Handle
 struct Baked(crate::Handle<crate::Expression>);
 
-impl std::fmt::Display for Baked {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Baked {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "_e")
     }
 }
@@ -55,7 +57,7 @@ impl std::fmt::Display for Baked {
 /// the key must be the constant's identifier name.
 ///
 /// The value may represent any of WGSL's concrete scalar types.
-pub type PipelineConstants = std::collections::HashMap<String, f64>;
+pub type PipelineConstants = hashbrown::HashMap<String, f64>;
 
 /// Indentation level.
 #[derive(Clone, Copy)]
@@ -67,8 +69,8 @@ impl Level {
     }
 }
 
-impl std::fmt::Display for Level {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl core::fmt::Display for Level {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         (0..self.0).try_for_each(|_| formatter.write_str(INDENT))
     }
 }
@@ -245,15 +247,6 @@ pub const fn binary_operation_str(op: crate::BinaryOperator) -> &'static str {
         Bo::LogicalOr => "||",
         Bo::ShiftLeft => "<<",
         Bo::ShiftRight => ">>",
-    }
-}
-
-/// Helper function that returns the string corresponding to the [`VectorSize`](crate::VectorSize)
-const fn vector_size_str(size: crate::VectorSize) -> &'static str {
-    match size {
-        crate::VectorSize::Bi => "2",
-        crate::VectorSize::Tri => "3",
-        crate::VectorSize::Quad => "4",
     }
 }
 

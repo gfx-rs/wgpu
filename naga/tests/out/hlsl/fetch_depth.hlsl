@@ -13,7 +13,7 @@ Texture2D<float> global_2 : register(t2);
 void function()
 {
     uint2 _e6 = asuint(global_1.Load2(0));
-    float _e7 = global_2.Load(int3(_e6, 0)).x;
+    float _e7 = global_2.Load(int3(_e6, int(0))).x;
     global.Store(0, asuint((_e7).xxxx.x));
     return;
 }

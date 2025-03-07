@@ -21,4 +21,5 @@ kernel void main_(
     int _e6 = five();
     int _e7 = five();
     float phony_2 = binding;
+    return;
 }

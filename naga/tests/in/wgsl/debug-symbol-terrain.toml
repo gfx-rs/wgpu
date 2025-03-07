@@ -1,0 +1,6 @@
+targets = "SPIRV"
+
+[spv]
+adjust_coordinate_space = false
+debug = true
+version = [1, 1]

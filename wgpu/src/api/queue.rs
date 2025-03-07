@@ -1,4 +1,5 @@
-use std::ops::{Deref, DerefMut};
+use alloc::boxed::Box;
+use core::ops::{Deref, DerefMut};
 
 use crate::*;
 
@@ -9,7 +10,7 @@ use crate::*;
 /// It can be created along with a [`Device`] by calling [`Adapter::request_device`].
 ///
 /// Corresponds to [WebGPU `GPUQueue`](https://gpuweb.github.io/gpuweb/#gpu-queue).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Queue {
     pub(crate) inner: dispatch::DispatchQueue,
 }
@@ -26,17 +27,24 @@ crate::cmp::impl_eq_ord_hash_proxy!(Queue => .inner);
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex {
-    #[cfg_attr(not(native), allow(dead_code))]
+    #[cfg_attr(
+        all(
+            target_arch = "wasm32",
+            not(target_os = "emscripten"),
+            not(feature = "webgl"),
+        ),
+        expect(dead_code)
+    )]
     pub(crate) index: u64,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
-pub use wgt::Maintain as MaintainBase;
+pub use wgt::PollType as MaintainBase;
 /// Passed to [`Device::poll`] to control how and if it should block.
-pub type Maintain = wgt::Maintain<SubmissionIndex>;
+pub type PollType = wgt::PollType<SubmissionIndex>;
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(Maintain: Send, Sync);
+static_assertions::assert_impl_all!(PollType: Send, Sync);
 
 /// A write-only view into a staging buffer.
 ///
@@ -82,6 +90,14 @@ impl Drop for QueueWriteBufferView<'_> {
 }
 
 impl Queue {
+    #[cfg(custom)]
+    /// Creates Queue from custom implementation
+    pub fn from_custom<T: custom::QueueInterface>(queue: T) -> Self {
+        Self {
+            inner: dispatch::DispatchQueue::custom(queue),
+        }
+    }
+
     /// Schedule a data write into `buffer` starting at `offset`.
     ///
     /// This method fails if `data` overruns the size of `buffer` starting at `offset`.
@@ -102,6 +118,11 @@ impl Queue {
     /// If possible, consider using [`Queue::write_buffer_with`] instead. That
     /// method avoids an intermediate copy and is often able to transfer data
     /// more efficiently than this one.
+    ///
+    /// Currently on native platforms, for both of these methods the staging
+    /// memory will be a new allocation. This will then be released after the
+    /// next submission finishes. To entirely avoid short-lived allocations, you might
+    /// be able to use [`StagingBelt`](crate::util::StagingBelt).
     pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
         self.inner.write_buffer(&buffer.inner, offset, data);
     }
@@ -134,6 +155,10 @@ impl Queue {
     /// ```
     ///
     /// This method fails if `size` is greater than the size of `buffer` starting at `offset`.
+    ///
+    /// Currently on native platforms, the staging memory will be a new allocation, which will
+    /// then be released after the next submission finishes. To entirely avoid short-lived
+    /// allocations, you might be able to use [`StagingBelt`](crate::util::StagingBelt).
     #[must_use]
     pub fn write_buffer_with<'a>(
         &'a self,
@@ -204,9 +229,7 @@ impl Queue {
         &self,
         command_buffers: I,
     ) -> SubmissionIndex {
-        let mut command_buffers = command_buffers
-            .into_iter()
-            .map(|mut comb| comb.inner.take().unwrap());
+        let mut command_buffers = command_buffers.into_iter().map(|comb| comb.buffer);
 
         let index = self.inner.submit(&mut command_buffers);
 
@@ -236,5 +259,27 @@ impl Queue {
     /// and used to set flags, send messages, etc.
     pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) {
         self.inner.on_submitted_work_done(Box::new(callback));
+    }
+
+    /// Returns the inner hal Queue using a callback. The hal queue will be `None` if the
+    /// backend type argument does not match with this wgpu Queue
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Queue must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Queue>) -> R, R>(
+        &self,
+        hal_queue_callback: F,
+    ) -> R {
+        if let Some(core_queue) = self.inner.as_core_opt() {
+            unsafe {
+                core_queue
+                    .context
+                    .queue_as_hal::<A, F, R>(core_queue, hal_queue_callback)
+            }
+        } else {
+            hal_queue_callback(None)
+        }
     }
 }

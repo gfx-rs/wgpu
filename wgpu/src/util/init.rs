@@ -1,43 +1,9 @@
-use wgt::{Backends, PowerPreference, RequestAdapterOptions};
+use crate::{Adapter, Instance, RequestAdapterOptions, Surface};
 
-use crate::{Adapter, Instance, Surface};
+#[cfg(doc)]
+use crate::Backends;
 
-#[cfg(wgpu_core)]
-#[cfg_attr(docsrs, doc(cfg(all())))]
-pub use wgc::instance::parse_backends_from_comma_list;
-/// Just return ALL, if wgpu_core is not enabled.
-#[cfg(not(wgpu_core))]
-pub fn parse_backends_from_comma_list(_string: &str) -> Backends {
-    Backends::all()
-}
-
-/// Get a set of backend bits from the environment variable WGPU_BACKEND.
-pub fn backend_bits_from_env() -> Option<Backends> {
-    std::env::var("WGPU_BACKEND")
-        .as_deref()
-        .map(str::to_lowercase)
-        .ok()
-        .as_deref()
-        .map(parse_backends_from_comma_list)
-}
-
-/// Get a power preference from the environment variable WGPU_POWER_PREF
-pub fn power_preference_from_env() -> Option<PowerPreference> {
-    Some(
-        match std::env::var("WGPU_POWER_PREF")
-            .as_deref()
-            .map(str::to_lowercase)
-            .as_deref()
-        {
-            Ok("low") => PowerPreference::LowPower,
-            Ok("high") => PowerPreference::HighPerformance,
-            Ok("none") => PowerPreference::None,
-            _ => return None,
-        },
-    )
-}
-
-/// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
+/// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable.
 #[cfg(native)]
 pub fn initialize_adapter_from_env(
     instance: &Instance,
@@ -48,7 +14,7 @@ pub fn initialize_adapter_from_env(
         .map(str::to_lowercase)
         .ok()?;
 
-    let adapters = instance.enumerate_adapters(Backends::all());
+    let adapters = instance.enumerate_adapters(crate::Backends::all());
 
     let mut chosen_adapter = None;
     for adapter in adapters {
@@ -69,7 +35,7 @@ pub fn initialize_adapter_from_env(
     Some(chosen_adapter.expect("WGPU_ADAPTER_NAME set but no matching adapter found!"))
 }
 
-/// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable.
+/// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable.
 #[cfg(not(native))]
 pub fn initialize_adapter_from_env(
     _instance: &Instance,
@@ -78,7 +44,7 @@ pub fn initialize_adapter_from_env(
     None
 }
 
-/// Initialize the adapter obeying the WGPU_ADAPTER_NAME environment variable and if it doesn't exist fall back on a default adapter.
+/// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable and if it doesn't exist fall back on a default adapter.
 pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,
     compatible_surface: Option<&Surface<'_>>,
@@ -88,54 +54,13 @@ pub async fn initialize_adapter_from_env_or_default(
         None => {
             instance
                 .request_adapter(&RequestAdapterOptions {
-                    power_preference: power_preference_from_env().unwrap_or_default(),
+                    power_preference: crate::PowerPreference::from_env().unwrap_or_default(),
                     force_fallback_adapter: false,
                     compatible_surface,
                 })
                 .await
         }
     }
-}
-
-/// Choose which DX12 shader compiler to use from the environment variable `WGPU_DX12_COMPILER`.
-///
-/// Possible values are `dxc` and `fxc`. Case insensitive.
-pub fn dx12_shader_compiler_from_env() -> Option<wgt::Dx12Compiler> {
-    Some(
-        match std::env::var("WGPU_DX12_COMPILER")
-            .as_deref()
-            .map(str::to_lowercase)
-            .as_deref()
-        {
-            Ok("dxc") => wgt::Dx12Compiler::DynamicDxc {
-                dxc_path: std::path::PathBuf::from("dxcompiler.dll"),
-                dxil_path: std::path::PathBuf::from("dxil.dll"),
-            },
-            #[cfg(feature = "static-dxc")]
-            Ok("static-dxc") => wgt::Dx12Compiler::StaticDxc,
-            Ok("fxc") => wgt::Dx12Compiler::Fxc,
-            _ => return None,
-        },
-    )
-}
-
-/// Choose which minor OpenGL ES version to use from the environment variable `WGPU_GLES_MINOR_VERSION`.
-///
-/// Possible values are `0`, `1`, `2` or `automatic`. Case insensitive.
-pub fn gles_minor_version_from_env() -> Option<wgt::Gles3MinorVersion> {
-    Some(
-        match std::env::var("WGPU_GLES_MINOR_VERSION")
-            .as_deref()
-            .map(str::to_lowercase)
-            .as_deref()
-        {
-            Ok("automatic") => wgt::Gles3MinorVersion::Automatic,
-            Ok("0") => wgt::Gles3MinorVersion::Version0,
-            Ok("1") => wgt::Gles3MinorVersion::Version1,
-            Ok("2") => wgt::Gles3MinorVersion::Version2,
-            _ => return None,
-        },
-    )
 }
 
 /// Determines whether the [`Backends::BROWSER_WEBGPU`] backend is supported.
@@ -156,9 +81,7 @@ pub async fn is_browser_webgpu_supported() -> bool {
         let adapter_promise = gpu.request_adapter();
         wasm_bindgen_futures::JsFuture::from(adapter_promise)
             .await
-            .map_or(false, |adapter| {
-                !adapter.is_undefined() && !adapter.is_null()
-            })
+            .is_ok_and(|adapter| !adapter.is_undefined() && !adapter.is_null())
     }
     #[cfg(not(webgpu))]
     {
@@ -181,10 +104,10 @@ pub async fn is_browser_webgpu_supported() -> bool {
 ///
 /// If no backend feature for the active target platform is enabled,
 /// this method will panic, see [`Instance::enabled_backend_features()`].
-#[allow(unused_mut)]
 pub async fn new_instance_with_webgpu_detection(
-    mut instance_desc: wgt::InstanceDescriptor,
+    instance_desc: &wgt::InstanceDescriptor,
 ) -> crate::Instance {
+    let mut instance_desc = instance_desc.clone();
     if instance_desc
         .backends
         .contains(wgt::Backends::BROWSER_WEBGPU)
@@ -193,5 +116,5 @@ pub async fn new_instance_with_webgpu_detection(
         instance_desc.backends.remove(wgt::Backends::BROWSER_WEBGPU);
     }
 
-    crate::Instance::new(instance_desc)
+    crate::Instance::new(&instance_desc)
 }

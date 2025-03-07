@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
+use core::mem;
 
 use crate::id::{Id, Marker};
 use crate::resource::ResourceType;
@@ -41,7 +42,7 @@ macro_rules! impl_storage_item {
 
 /// A table of `T` values indexed by the id type `I`.
 ///
-/// `Storage` implements [`std::ops::Index`], accepting `Id` values as
+/// `Storage` implements [`core::ops::Index`], accepting `Id` values as
 /// indices.
 ///
 /// The table is represented as a vector indexed by the ids' index
@@ -78,7 +79,7 @@ where
         if index >= self.map.len() {
             self.map.resize_with(index + 1, || Element::Vacant);
         }
-        match std::mem::replace(&mut self.map[index], Element::Occupied(value, epoch)) {
+        match mem::replace(&mut self.map[index], Element::Occupied(value, epoch)) {
             Element::Vacant => {}
             Element::Occupied(_, storage_epoch) => {
                 assert_ne!(
@@ -93,7 +94,7 @@ where
 
     pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> T {
         let (index, epoch) = id.unzip();
-        match std::mem::replace(&mut self.map[index as usize], Element::Vacant) {
+        match mem::replace(&mut self.map[index as usize], Element::Vacant) {
             Element::Occupied(value, storage_epoch) => {
                 assert_eq!(epoch, storage_epoch);
                 value

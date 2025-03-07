@@ -42,8 +42,8 @@ pub fn fail<T>(
         assert!(
             lowered_actual.contains(&lowered_expected),
             concat!(
-                "expected validation error case-insensitively containing {:?}, ",
-                "but it was not present in actual error message:\n{:?}"
+                "expected validation error case-insensitively containing {}, ",
+                "but it was not present in actual error message:\n{}"
             ),
             expected_msg_substring,
             validation_error
@@ -83,7 +83,17 @@ pub fn fail_if<T>(
     }
 }
 
-/// Adds the necissary main function for our gpu test harness.
+/// Returns true if the provided callback fails validation.
+pub fn did_fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool, T) {
+    device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let result = callback();
+    let validation_error = pollster::block_on(device.pop_error_scope());
+    let failed = validation_error.is_some();
+
+    (failed, result)
+}
+
+/// Adds the necessary main function for our gpu test harness.
 #[macro_export]
 macro_rules! gpu_test_main {
     () => {

@@ -1,4 +1,12 @@
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{fmt, mem};
+
 use super::{
+    help,
     help::{
         WrappedArrayLength, WrappedConstructor, WrappedImageQuery, WrappedStructMatrixAccess,
         WrappedZeroValue,
@@ -8,10 +16,10 @@ use super::{
 };
 use crate::{
     back::{self, Baked},
+    common,
     proc::{self, index, ExpressionKindTracker, NameKey},
-    valid, Handle, Module, Scalar, ScalarKind, ShaderStage, TypeInner,
+    valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
-use std::{fmt, mem};
 
 const LOCATION_SEMANTIC: &str = "LOC";
 const SPECIAL_CBUF_TYPE: &str = "NagaConstants";
@@ -24,6 +32,12 @@ pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 pub(crate) const EXTRACT_BITS_FUNCTION: &str = "naga_extractBits";
 pub(crate) const INSERT_BITS_FUNCTION: &str = "naga_insertBits";
+pub(crate) const SAMPLER_HEAP_VAR: &str = "nagaSamplerHeap";
+pub(crate) const COMPARISON_SAMPLER_HEAP_VAR: &str = "nagaComparisonSamplerHeap";
+pub(crate) const ABS_FUNCTION: &str = "naga_abs";
+pub(crate) const DIV_FUNCTION: &str = "naga_div";
+pub(crate) const MOD_FUNCTION: &str = "naga_mod";
+pub(crate) const NEG_FUNCTION: &str = "naga_neg";
 
 struct EpStructMember {
     name: String,
@@ -94,6 +108,16 @@ const fn is_subgroup_builtin_binding(binding: &Option<crate::Binding>) -> bool {
     )
 }
 
+/// Information for how to generate a `binding_array<sampler>` access.
+struct BindingArraySamplerInfo {
+    /// Variable name of the sampler heap
+    sampler_heap_name: &'static str,
+    /// Variable name of the sampler index buffer
+    sampler_index_buffer_name: String,
+    /// Variable name of the base index _into_ the sampler index buffer
+    binding_array_base_index_name: String,
+}
+
 impl<'a, W: fmt::Write> super::Writer<'a, W> {
     pub fn new(out: W, options: &'a Options) -> Self {
         Self {
@@ -104,6 +128,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             entry_point_io: Vec::new(),
             named_expressions: crate::NamedExpressions::default(),
             wrapped: super::Wrapped::default(),
+            written_committed_intersection: false,
+            written_candidate_intersection: false,
             continue_ctx: back::continue_forward::ContinueCtx::default(),
             temp_access_chain: Vec::new(),
             need_bake_expressions: Default::default(),
@@ -117,14 +143,43 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             super::keywords::RESERVED,
             super::keywords::TYPES,
             super::keywords::RESERVED_CASE_INSENSITIVE,
-            &[],
+            super::keywords::RESERVED_PREFIXES,
             &mut self.names,
         );
         self.entry_point_io.clear();
         self.named_expressions.clear();
         self.wrapped.clear();
+        self.written_committed_intersection = false;
+        self.written_candidate_intersection = false;
         self.continue_ctx.clear();
         self.need_bake_expressions.clear();
+    }
+
+    /// Generates statements to be inserted immediately before and at the very
+    /// start of the body of each loop, to defeat infinite loop reasoning.
+    /// The 0th item of the returned tuple should be inserted immediately prior
+    /// to the loop and the 1st item should be inserted at the very start of
+    /// the loop body.
+    ///
+    /// See [`back::msl::Writer::gen_force_bounded_loop_statements`] for details.
+    fn gen_force_bounded_loop_statements(
+        &mut self,
+        level: back::Level,
+    ) -> Option<(String, String)> {
+        if !self.options.force_loop_bounding {
+            return None;
+        }
+
+        let loop_bound_name = self.namer.call("loop_bound");
+        let decl = format!("{level}uint2 {loop_bound_name} = uint2(0u, 0u);");
+        let level = level.next();
+        let max = u32::MAX;
+        let break_and_inc = format!(
+            "{level}if (all({loop_bound_name} == uint2({max}u, {max}u))) {{ break; }}
+{level}{loop_bound_name} += uint2({loop_bound_name}.y == {max}u, 1u);"
+        );
+
+        Some((decl, break_and_inc))
     }
 
     /// Helper method used to find which expressions of a given function require baking
@@ -139,11 +194,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) {
         use crate::Expression;
         self.need_bake_expressions.clear();
-        for (fun_handle, expr) in func.expressions.iter() {
-            let expr_info = &info[fun_handle];
-            let min_ref_count = func.expressions[fun_handle].bake_ref_count();
+        for (exp_handle, expr) in func.expressions.iter() {
+            let expr_info = &info[exp_handle];
+            let min_ref_count = func.expressions[exp_handle].bake_ref_count();
             if min_ref_count <= expr_info.ref_count {
-                self.need_bake_expressions.insert(fun_handle);
+                self.need_bake_expressions.insert(exp_handle);
             }
 
             if let Expression::Math { fun, arg, .. } = *expr {
@@ -168,7 +223,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::CountLeadingZeros => {
-                        let inner = info[fun_handle].ty.inner_with(&module.types);
+                        let inner = info[exp_handle].ty.inner_with(&module.types);
                         if let Some(ScalarKind::Sint) = inner.scalar_kind() {
                             self.need_bake_expressions.insert(arg);
                         }
@@ -181,6 +236,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 use crate::{DerivativeAxis as Axis, DerivativeControl as Ctrl};
                 if axis == Axis::Width && (ctrl == Ctrl::Coarse || ctrl == Ctrl::Fine) {
                     self.need_bake_expressions.insert(expr);
+                }
+            }
+
+            if let Expression::GlobalVariable(_) = *expr {
+                let inner = info[exp_handle].ty.inner_with(&module.types);
+
+                if let TypeInner::Sampler { .. } = *inner {
+                    self.need_bake_expressions.insert(exp_handle);
                 }
             }
         }
@@ -205,10 +268,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module_info: &valid::ModuleInfo,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
-        if !module.overrides.is_empty() {
-            return Err(Error::Override);
-        }
-
         self.reset(module);
 
         // Write special constants, if needed
@@ -227,6 +286,22 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ", space{}", bt.space)?;
             }
             writeln!(self.out, ");")?;
+
+            // Extra newline for readability
+            writeln!(self.out)?;
+        }
+
+        for (group, bt) in self.options.dynamic_storage_buffer_offsets_targets.iter() {
+            writeln!(self.out, "struct __dynamic_buffer_offsetsTy{} {{", group)?;
+            for i in 0..bt.size {
+                writeln!(self.out, "{}uint _{};", back::INDENT, i)?;
+            }
+            writeln!(self.out, "}};")?;
+            writeln!(
+                self.out,
+                "ConstantBuffer<__dynamic_buffer_offsetsTy{}> __dynamic_buffer_offsets{}: register(b{}, space{});",
+                group, group, bt.register, bt.space
+            )?;
 
             // Extra newline for readability
             writeln!(self.out)?;
@@ -274,7 +349,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.write_special_functions(module)?;
 
-        self.write_wrapped_compose_functions(module, &module.global_expressions)?;
+        self.write_wrapped_expression_functions(module, &module.global_expressions, None)?;
         self.write_wrapped_zero_value_functions(module, &module.global_expressions)?;
 
         // Write all named constants
@@ -810,6 +885,18 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
         }
 
+        let handle_ty = match *inner {
+            TypeInner::BindingArray { ref base, .. } => &module.types[*base].inner,
+            _ => inner,
+        };
+
+        // Samplers are handled entirely differently, so defer entirely to that method.
+        let is_sampler = matches!(*handle_ty, TypeInner::Sampler { .. });
+
+        if is_sampler {
+            return self.write_global_sampler(module, handle, global);
+        }
+
         // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-variable-register
         let register_ty = match global.space {
             crate::AddressSpace::Function => unreachable!("Function address space"),
@@ -839,13 +926,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 register
             }
             crate::AddressSpace::Handle => {
-                let handle_ty = match *inner {
-                    TypeInner::BindingArray { ref base, .. } => &module.types[*base].inner,
-                    _ => inner,
-                };
-
                 let register = match *handle_ty {
-                    TypeInner::Sampler { .. } => "s",
                     // all storage textures are UAV, unconditionally
                     TypeInner::Image {
                         class: crate::ImageClass::Storage { .. },
@@ -921,7 +1002,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             if global.space == crate::AddressSpace::Private {
                 write!(self.out, " = ")?;
                 if let Some(init) = global.init {
-                    self.write_const_expression(module, init)?;
+                    self.write_const_expression(module, init, &module.global_expressions)?;
                 } else {
                     self.write_default_init(module, global.ty)?;
                 }
@@ -952,6 +1033,66 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
+    fn write_global_sampler(
+        &mut self,
+        module: &Module,
+        handle: Handle<crate::GlobalVariable>,
+        global: &crate::GlobalVariable,
+    ) -> BackendResult {
+        let binding = *global.binding.as_ref().unwrap();
+
+        let key = super::SamplerIndexBufferKey {
+            group: binding.group,
+        };
+        self.write_wrapped_sampler_buffer(key)?;
+
+        // This was already validated, so we can confidently unwrap it.
+        let bt = self.options.resolve_resource_binding(&binding).unwrap();
+
+        match module.types[global.ty].inner {
+            TypeInner::Sampler { comparison } => {
+                // If we are generating a static access, we create a variable for the sampler.
+                //
+                // This prevents the DXIL from containing multiple lookups for the sampler, which
+                // the backend compiler will then have to eliminate. AMD does seem to be able to
+                // eliminate these, but better safe than sorry.
+
+                write!(self.out, "static const ")?;
+                self.write_type(module, global.ty)?;
+
+                let heap_var = if comparison {
+                    COMPARISON_SAMPLER_HEAP_VAR
+                } else {
+                    SAMPLER_HEAP_VAR
+                };
+
+                let index_buffer_name = &self.wrapped.sampler_index_buffers[&key];
+                let name = &self.names[&NameKey::GlobalVariable(handle)];
+                writeln!(
+                    self.out,
+                    " {name} = {heap_var}[{index_buffer_name}[{register}]];",
+                    register = bt.register
+                )?;
+            }
+            TypeInner::BindingArray { .. } => {
+                // If we are generating a binding array, we cannot directly access the sampler as the index
+                // into the sampler index buffer is unknown at compile time. Instead we generate a constant
+                // that represents the "base" index into the sampler index buffer. This constant is added
+                // to the user provided index to get the final index into the sampler index buffer.
+
+                let name = &self.names[&NameKey::GlobalVariable(handle)];
+                writeln!(
+                    self.out,
+                    "static const uint {name} = {register};",
+                    register = bt.register
+                )?;
+            }
+            _ => unreachable!(),
+        };
+
+        Ok(())
+    }
+
     /// Helper method used to write global constants
     ///
     /// # Notes
@@ -971,7 +1112,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             self.write_array_size(module, base, size)?;
         }
         write!(self.out, " = ")?;
-        self.write_const_expression(module, constant.init)?;
+        self.write_const_expression(module, constant.init, &module.global_expressions)?;
         writeln!(self.out, ";")?;
         Ok(())
     }
@@ -984,11 +1125,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         write!(self.out, "[")?;
 
-        match size {
-            crate::ArraySize::Constant(size) => {
+        match size.resolve(module.to_ctx())? {
+            proc::IndexableLength::Known(size) => {
                 write!(self.out, "{size}")?;
             }
-            crate::ArraySize::Dynamic => unreachable!(),
+            proc::IndexableLength::Dynamic => unreachable!(),
         }
 
         write!(self.out, "]")?;
@@ -1033,7 +1174,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             let ty_inner = &module.types[member.ty].inner;
-            last_offset = member.offset + ty_inner.size_hlsl(module.to_ctx());
+            last_offset = member.offset + ty_inner.size_hlsl(module.to_ctx())?;
 
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
@@ -1176,7 +1317,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.out,
                     "{}{}",
                     scalar.to_hlsl_str()?,
-                    back::vector_size_str(size)
+                    common::vector_size_str(size)
                 )?;
             }
             TypeInner::Matrix {
@@ -1192,8 +1333,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.out,
                     "{}{}x{}",
                     scalar.to_hlsl_str()?,
-                    back::vector_size_str(columns),
-                    back::vector_size_str(rows),
+                    common::vector_size_str(columns),
+                    common::vector_size_str(rows),
                 )?;
             }
             TypeInner::Image {
@@ -1217,6 +1358,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             TypeInner::Array { base, size, .. } | TypeInner::BindingArray { base, size } => {
                 self.write_array_size(module, base, size)?;
             }
+            TypeInner::AccelerationStructure { .. } => {
+                write!(self.out, "RaytracingAccelerationStructure")?;
+            }
+            TypeInner::RayQuery { .. } => {
+                // these are constant flags, there are dynamic flags also but constant flags are not supported by naga
+                write!(self.out, "RayQuery<RAY_FLAG_NONE>")?;
+            }
             _ => return Err(Error::Unimplemented(format!("write_value_type {inner:?}"))),
         }
 
@@ -1238,25 +1386,37 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.update_expressions_to_bake(module, func, info);
 
-        // Write modifier
-        if let Some(crate::FunctionResult {
-            binding:
-                Some(
-                    ref binding @ crate::Binding::BuiltIn(crate::BuiltIn::Position {
-                        invariant: true,
-                    }),
-                ),
-            ..
-        }) = func.result
-        {
-            self.write_modifier(binding)?;
-        }
-
-        // Write return type
         if let Some(ref result) = func.result {
+            // Write typedef if return type is an array
+            let array_return_type = match module.types[result.ty].inner {
+                TypeInner::Array { base, size, .. } => {
+                    let array_return_type = self.namer.call(&format!("ret_{name}"));
+                    write!(self.out, "typedef ")?;
+                    self.write_type(module, result.ty)?;
+                    write!(self.out, " {}", array_return_type)?;
+                    self.write_array_size(module, base, size)?;
+                    writeln!(self.out, ";")?;
+                    Some(array_return_type)
+                }
+                _ => None,
+            };
+
+            // Write modifier
+            if let Some(
+                ref binding @ crate::Binding::BuiltIn(crate::BuiltIn::Position { invariant: true }),
+            ) = result.binding
+            {
+                self.write_modifier(binding)?;
+            }
+
+            // Write return type
             match func_ctx.ty {
                 back::FunctionType::Function(_) => {
-                    self.write_type(module, result.ty)?;
+                    if let Some(array_return_type) = array_return_type {
+                        write!(self.out, "{array_return_type}")?;
+                    } else {
+                        self.write_type(module, result.ty)?;
+                    }
                 }
                 back::FunctionType::EntryPoint(index) => {
                     if let Some(ref ep_output) = self.entry_point_io[index as usize].output {
@@ -1374,15 +1534,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_array_size(module, base, size)?;
             }
 
-            write!(self.out, " = ")?;
-            // Write the local initializer if needed
-            if let Some(init) = local.init {
-                self.write_expr(module, init, func_ctx)?;
-            } else {
-                // Zero initialize local variables
-                self.write_default_init(module, local.ty)?;
+            match module.types[local.ty].inner {
+                // from https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#tracerayinline-example-1 it seems that ray queries shouldn't be zeroed
+                TypeInner::RayQuery { .. } => {}
+                _ => {
+                    write!(self.out, " = ")?;
+                    // Write the local initializer if needed
+                    if let Some(init) = local.init {
+                        self.write_expr(module, init, func_ctx)?;
+                    } else {
+                        // Zero initialize local variables
+                        self.write_default_init(module, local.ty)?;
+                    }
+                }
             }
-
             // Finish the local with `;` and add a newline (only for readability)
             writeln!(self.out, ";")?
         }
@@ -1552,14 +1717,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
 
                     let last_case = &cases[end_case_idx];
-                    if last_case.body.last().map_or(true, |s| !s.is_terminator()) {
+                    if last_case.body.last().is_none_or(|s| !s.is_terminator()) {
                         writeln!(self.out, "{indent_level_2}break;")?;
                     }
                 } else {
                     for sta in case.body.iter() {
                         self.write_stmt(module, sta, func_ctx, indent_level_2)?;
                     }
-                    if !case.fall_through && case.body.last().map_or(true, |s| !s.is_terminator()) {
+                    if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator()) {
                         writeln!(self.out, "{indent_level_2}break;")?;
                     }
                 }
@@ -2031,12 +2196,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 ref continuing,
                 break_if,
             } => {
-                self.continue_ctx.enter_loop();
-                let l2 = level.next();
-                if !continuing.is_empty() || break_if.is_some() {
-                    let gate_name = self.namer.call("loop_init");
+                let force_loop_bound_statements = self.gen_force_bounded_loop_statements(level);
+                let gate_name = (!continuing.is_empty() || break_if.is_some())
+                    .then(|| self.namer.call("loop_init"));
+
+                if let Some((ref decl, _)) = force_loop_bound_statements {
+                    writeln!(self.out, "{decl}")?;
+                }
+                if let Some(ref gate_name) = gate_name {
                     writeln!(self.out, "{level}bool {gate_name} = true;")?;
-                    writeln!(self.out, "{level}while(true) {{")?;
+                }
+
+                self.continue_ctx.enter_loop();
+                writeln!(self.out, "{level}while(true) {{")?;
+                if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
+                    writeln!(self.out, "{break_and_inc}")?;
+                }
+                let l2 = level.next();
+                if let Some(gate_name) = gate_name {
                     writeln!(self.out, "{l2}if (!{gate_name}) {{")?;
                     let l3 = l2.next();
                     for sta in continuing.iter() {
@@ -2051,13 +2228,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                     writeln!(self.out, "{l2}}}")?;
                     writeln!(self.out, "{l2}{gate_name} = false;")?;
-                } else {
-                    writeln!(self.out, "{level}while(true) {{")?;
                 }
 
                 for sta in body.iter() {
                     self.write_stmt(module, sta, func_ctx, l2)?;
                 }
+
                 writeln!(self.out, "{level}}}")?;
                 self.continue_ctx.exit_loop();
             }
@@ -2109,13 +2285,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, "const ")?;
                     let name = Baked(expr).to_string();
                     let expr_ty = &func_ctx.info[expr].ty;
-                    match *expr_ty {
-                        proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
+                    let ty_inner = match *expr_ty {
+                        proc::TypeResolution::Handle(handle) => {
+                            self.write_type(module, handle)?;
+                            &module.types[handle].inner
+                        }
                         proc::TypeResolution::Value(ref value) => {
-                            self.write_value_type(module, value)?
+                            self.write_value_type(module, value)?;
+                            value
                         }
                     };
-                    write!(self.out, " {name} = ")?;
+                    write!(self.out, " {name}")?;
+                    if let TypeInner::Array { base, size, .. } = *ty_inner {
+                        self.write_array_size(module, base, size)?;
+                    }
+                    write!(self.out, " = ")?;
                     self.named_expressions.insert(expr, name);
                 }
                 let func_name = &self.names[&NameKey::Function(function)];
@@ -2209,6 +2393,32 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 writeln!(self.out, ");")?;
             }
+            Statement::ImageAtomic {
+                image,
+                coordinate,
+                array_index,
+                fun,
+                value,
+            } => {
+                write!(self.out, "{level}")?;
+
+                let fun_str = fun.to_hlsl_suffix();
+                write!(self.out, "Interlocked{fun_str}(")?;
+                self.write_expr(module, image, func_ctx)?;
+                write!(self.out, "[")?;
+                self.write_texture_coordinates(
+                    "int",
+                    coordinate,
+                    array_index,
+                    None,
+                    module,
+                    func_ctx,
+                )?;
+                write!(self.out, "],")?;
+
+                self.write_expr(module, value, func_ctx)?;
+                writeln!(self.out, ");")?;
+            }
             Statement::WorkGroupUniformLoad { pointer, result } => {
                 self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
                 write!(self.out, "{level}")?;
@@ -2223,7 +2433,50 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             } => {
                 self.write_switch(module, func_ctx, level, selector, cases)?;
             }
-            Statement::RayQuery { .. } => unreachable!(),
+            Statement::RayQuery { query, ref fun } => match *fun {
+                RayQueryFunction::Initialize {
+                    acceleration_structure,
+                    descriptor,
+                } => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    write!(self.out, ".TraceRayInline(")?;
+                    self.write_expr(module, acceleration_structure, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, descriptor, func_ctx)?;
+                    write!(self.out, ".flags, ")?;
+                    self.write_expr(module, descriptor, func_ctx)?;
+                    write!(self.out, ".cull_mask, ")?;
+                    write!(self.out, "RayDescFromRayDesc_(")?;
+                    self.write_expr(module, descriptor, func_ctx)?;
+                    writeln!(self.out, "));")?;
+                }
+                RayQueryFunction::Proceed { result } => {
+                    write!(self.out, "{level}")?;
+                    let name = Baked(result).to_string();
+                    write!(self.out, "const bool {name} = ")?;
+                    self.named_expressions.insert(result, name);
+                    self.write_expr(module, query, func_ctx)?;
+                    writeln!(self.out, ".Proceed();")?;
+                }
+                RayQueryFunction::GenerateIntersection { hit_t } => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    write!(self.out, ".CommitProceduralPrimitiveHit(")?;
+                    self.write_expr(module, hit_t, func_ctx)?;
+                    writeln!(self.out, ");")?;
+                }
+                RayQueryFunction::ConfirmIntersection => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    writeln!(self.out, ".CommitNonOpaqueTriangleHit();")?;
+                }
+                RayQueryFunction::Terminate => {
+                    write!(self.out, "{level}")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    writeln!(self.out, ".Abort();")?;
+                }
+            },
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let name = Baked(result).to_string();
@@ -2356,13 +2609,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         module: &Module,
         expr: Handle<crate::Expression>,
+        arena: &crate::Arena<crate::Expression>,
     ) -> BackendResult {
-        self.write_possibly_const_expression(
-            module,
-            expr,
-            &module.global_expressions,
-            |writer, expr| writer.write_const_expression(module, expr),
-        )
+        self.write_possibly_const_expression(module, expr, arena, |writer, expr| {
+            writer.write_const_expression(module, expr, arena)
+        })
     }
 
     fn write_possibly_const_expression<E>(
@@ -2384,7 +2635,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
                 crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
-                crate::Literal::I32(value) => write!(self.out, "{value}")?,
+                // HLSL has no suffix for explicit i32 literals, but not using any suffix
+                // makes the type ambiguous which prevents overload resolution from
+                // working. So we explicitly use the int() constructor syntax.
+                crate::Literal::I32(value) => write!(self.out, "int({value})")?,
                 crate::Literal::U64(value) => write!(self.out, "{value}uL")?,
                 crate::Literal::I64(value) => write!(self.out, "{value}L")?,
                 crate::Literal::Bool(value) => write!(self.out, "{value}")?,
@@ -2399,7 +2653,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if constant.name.is_some() {
                     write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
                 } else {
-                    self.write_const_expression(module, constant.init)?;
+                    self.write_const_expression(module, constant.init, &module.global_expressions)?;
                 }
             }
             Expression::ZeroValue(ty) => {
@@ -2440,7 +2694,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write_expression(self, value)?;
                 write!(self.out, ").{number_of_components}")?
             }
-            _ => unreachable!(),
+            _ => {
+                return Err(Error::Override);
+            }
         }
 
         Ok(())
@@ -2507,6 +2763,30 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 )?;
             }
             Expression::Override(_) => return Err(Error::Override),
+            // Avoid undefined behaviour for addition, subtraction, and
+            // multiplication of signed integers by casting operands to
+            // unsigned, performing the operation, then casting the result back
+            // to signed.
+            // TODO(#7109): This relies on the asint()/asuint() functions which only work
+            // for 32-bit types, so we must find another solution for different bit widths.
+            Expression::Binary {
+                op:
+                    op @ crate::BinaryOperator::Add
+                    | op @ crate::BinaryOperator::Subtract
+                    | op @ crate::BinaryOperator::Multiply,
+                left,
+                right,
+            } if matches!(
+                func_ctx.resolve_type(expr, &module.types).scalar(),
+                Some(Scalar::I32)
+            ) =>
+            {
+                write!(self.out, "asint(asuint(",)?;
+                self.write_expr(module, left, func_ctx)?;
+                write!(self.out, ") {} asuint(", back::binary_operation_str(op))?;
+                self.write_expr(module, right, func_ctx)?;
+                write!(self.out, "))")?;
+            }
             // All of the multiplication can be expressed as `mul`,
             // except vector * vector, which needs to use the "*" operator.
             Expression::Binary {
@@ -2524,18 +2804,48 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?;
             }
 
-            // TODO: handle undefined behavior of BinaryOperator::Modulo
+            // WGSL says that floating-point division by zero should return
+            // infinity. Microsoft's Direct3D 11 functional specification
+            // (https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm)
+            // says:
             //
-            // sint:
-            // if right == 0 return 0
-            // if left == min(type_of(left)) && right == -1 return 0
-            // if sign(left) != sign(right) return result as defined by WGSL
+            //     Divide by 0 produces +/- INF, except 0/0 which results in NaN.
             //
-            // uint:
-            // if right == 0 return 0
+            // which is what we want. The DXIL specification for the FDiv
+            // instruction corroborates this:
             //
-            // float:
-            // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
+            // https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/DXIL.rst#fdiv
+            Expression::Binary {
+                op: crate::BinaryOperator::Divide,
+                left,
+                right,
+            } if matches!(
+                func_ctx.resolve_type(expr, &module.types).scalar_kind(),
+                Some(ScalarKind::Sint | ScalarKind::Uint)
+            ) =>
+            {
+                write!(self.out, "{DIV_FUNCTION}(")?;
+                self.write_expr(module, left, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, right, func_ctx)?;
+                write!(self.out, ")")?;
+            }
+
+            Expression::Binary {
+                op: crate::BinaryOperator::Modulo,
+                left,
+                right,
+            } if matches!(
+                func_ctx.resolve_type(expr, &module.types).scalar_kind(),
+                Some(ScalarKind::Sint | ScalarKind::Uint)
+            ) =>
+            {
+                write!(self.out, "{MOD_FUNCTION}(")?;
+                self.write_expr(module, left, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, right, func_ctx)?;
+                write!(self.out, ")")?;
+            }
 
             // While HLSL supports float operands with the % operator it is only
             // defined in cases where both sides are either positive or negative.
@@ -2597,7 +2907,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     };
 
                     self.write_expr(module, base, func_ctx)?;
-                    write!(self.out, "[")?;
+
+                    let array_sampler_info = self.sampler_binding_array_info_from_expression(
+                        module, func_ctx, base, resolved,
+                    );
+
+                    if let Some(ref info) = array_sampler_info {
+                        write!(self.out, "{}[", info.sampler_heap_name)?;
+                    } else {
+                        write!(self.out, "[")?;
+                    }
 
                     let needs_bound_check = self.options.restrict_indexing
                         && !indexing_binding_array
@@ -2609,7 +2928,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 | crate::AddressSpace::PushConstant,
                             )
                             | None => true,
-                            Some(crate::AddressSpace::Uniform) => false, // TODO: needs checks for dynamic uniform buffers, see https://github.com/gfx-rs/wgpu/issues/4483
+                            Some(crate::AddressSpace::Uniform) => {
+                                // check if BindTarget.restrict_indexing is set, this is used for dynamic buffers
+                                let var_handle = self.fill_access_chain(module, base, func_ctx)?;
+                                let bind_target = self
+                                    .options
+                                    .resolve_resource_binding(
+                                        module.global_variables[var_handle]
+                                            .binding
+                                            .as_ref()
+                                            .unwrap(),
+                                    )
+                                    .unwrap();
+                                bind_target.restrict_indexing
+                            }
                             Some(
                                 crate::AddressSpace::Handle | crate::AddressSpace::Storage { .. },
                             ) => unreachable!(),
@@ -2641,7 +2973,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         if non_uniform_qualifier {
                             write!(self.out, "NonUniformResourceIndex(")?;
                         }
+                        if let Some(ref info) = array_sampler_info {
+                            write!(
+                                self.out,
+                                "{}[{} + ",
+                                info.sampler_index_buffer_name, info.binding_array_base_index_name,
+                            )?;
+                        }
                         self.write_expr(module, index, func_ctx)?;
+                        if array_sampler_info.is_some() {
+                            write!(self.out, "]")?;
+                        }
                         if non_uniform_qualifier {
                             write!(self.out, ")")?;
                         }
@@ -2656,43 +2998,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 {
                     // do nothing, the chain is written on `Load`/`Store`
                 } else {
-                    fn write_access<W: fmt::Write>(
-                        writer: &mut super::Writer<'_, W>,
-                        resolved: &TypeInner,
-                        base_ty_handle: Option<Handle<crate::Type>>,
-                        index: u32,
-                    ) -> BackendResult {
-                        match *resolved {
-                            // We specifically lift the ValuePointer to this case. While `[0]` is valid
-                            // HLSL for any vector behind a value pointer, FXC completely miscompiles
-                            // it and generates completely nonsensical DXBC.
-                            //
-                            // See https://github.com/gfx-rs/naga/issues/2095 for more details.
-                            TypeInner::Vector { .. } | TypeInner::ValuePointer { .. } => {
-                                // Write vector access as a swizzle
-                                write!(writer.out, ".{}", back::COMPONENTS[index as usize])?
-                            }
-                            TypeInner::Matrix { .. }
-                            | TypeInner::Array { .. }
-                            | TypeInner::BindingArray { .. } => write!(writer.out, "[{index}]")?,
-                            TypeInner::Struct { .. } => {
-                                // This will never panic in case the type is a `Struct`, this is not true
-                                // for other types so we can only check while inside this match arm
-                                let ty = base_ty_handle.unwrap();
-
-                                write!(
-                                    writer.out,
-                                    ".{}",
-                                    &writer.names[&NameKey::StructMember(ty, index)]
-                                )?
-                            }
-                            ref other => {
-                                return Err(Error::Custom(format!("Cannot index {other:?}")))
-                            }
-                        }
-                        Ok(())
-                    }
-
                     // We write the matrix column access in a special way since
                     // the type of `base` is our special __matCx2 struct.
                     if let Some(MatrixType {
@@ -2742,8 +3047,60 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     }
 
+                    let array_sampler_info = self.sampler_binding_array_info_from_expression(
+                        module, func_ctx, base, resolved,
+                    );
+
+                    if let Some(ref info) = array_sampler_info {
+                        write!(
+                            self.out,
+                            "{}[{}",
+                            info.sampler_heap_name, info.sampler_index_buffer_name
+                        )?;
+                    }
+
                     self.write_expr(module, base, func_ctx)?;
-                    write_access(self, resolved, base_ty_handle, index)?;
+
+                    match *resolved {
+                        // We specifically lift the ValuePointer to this case. While `[0]` is valid
+                        // HLSL for any vector behind a value pointer, FXC completely miscompiles
+                        // it and generates completely nonsensical DXBC.
+                        //
+                        // See https://github.com/gfx-rs/naga/issues/2095 for more details.
+                        TypeInner::Vector { .. } | TypeInner::ValuePointer { .. } => {
+                            // Write vector access as a swizzle
+                            write!(self.out, ".{}", back::COMPONENTS[index as usize])?
+                        }
+                        TypeInner::Matrix { .. }
+                        | TypeInner::Array { .. }
+                        | TypeInner::BindingArray { .. } => {
+                            if let Some(ref info) = array_sampler_info {
+                                write!(
+                                    self.out,
+                                    "[{} + {index}]",
+                                    info.binding_array_base_index_name
+                                )?;
+                            } else {
+                                write!(self.out, "[{index}]")?;
+                            }
+                        }
+                        TypeInner::Struct { .. } => {
+                            // This will never panic in case the type is a `Struct`, this is not true
+                            // for other types so we can only check while inside this match arm
+                            let ty = base_ty_handle.unwrap();
+
+                            write!(
+                                self.out,
+                                ".{}",
+                                &self.names[&NameKey::StructMember(ty, index)]
+                            )?
+                        }
+                        ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
+                    }
+
+                    if array_sampler_info.is_some() {
+                        write!(self.out, "]")?;
+                    }
                 }
             }
             Expression::FunctionArgument(pos) => {
@@ -2819,7 +3176,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
                     write!(self.out, "int2(")?; // work around https://github.com/microsoft/DirectXShaderCompiler/issues/5082#issuecomment-1540147807
-                    self.write_const_expression(module, offset)?;
+                    self.write_const_expression(module, offset, func_ctx.expressions)?;
                     write!(self.out, ")")?;
                 }
 
@@ -2857,40 +3214,40 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 array_index,
                 sample,
                 level,
-            } => {
-                // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
-                self.write_expr(module, image, func_ctx)?;
-                write!(self.out, ".Load(")?;
+            } => self.write_image_load(
+                &module,
+                expr,
+                func_ctx,
+                image,
+                coordinate,
+                array_index,
+                sample,
+                level,
+            )?,
+            Expression::GlobalVariable(handle) => {
+                let global_variable = &module.global_variables[handle];
+                let ty = &module.types[global_variable.ty].inner;
 
-                self.write_texture_coordinates(
-                    "int",
-                    coordinate,
-                    array_index,
-                    level,
-                    module,
-                    func_ctx,
-                )?;
+                // In the case of binding arrays of samplers, we need to not write anything
+                // as the we are in the wrong position to fully write the expression.
+                //
+                // The entire writing is done by AccessIndex.
+                let is_binding_array_of_samplers = match *ty {
+                    TypeInner::BindingArray { base, .. } => {
+                        let base_ty = &module.types[base].inner;
+                        matches!(*base_ty, TypeInner::Sampler { .. })
+                    }
+                    _ => false,
+                };
 
-                if let Some(sample) = sample {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, sample, func_ctx)?;
-                }
+                let is_storage_space =
+                    matches!(global_variable.space, crate::AddressSpace::Storage { .. });
 
-                // close bracket for Load function
-                write!(self.out, ")")?;
-
-                // return x component if return type is scalar
-                if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
-                    write!(self.out, ".x")?;
-                }
-            }
-            Expression::GlobalVariable(handle) => match module.global_variables[handle].space {
-                crate::AddressSpace::Storage { .. } => {}
-                _ => {
+                if !is_binding_array_of_samplers && !is_storage_space {
                     let name = &self.names[&NameKey::GlobalVariable(handle)];
                     write!(self.out, "{name}")?;
                 }
-            },
+            }
             Expression::LocalVariable(handle) => {
                 write!(self.out, "{}", self.names[&func_ctx.name_key(handle)])?
             }
@@ -2947,7 +3304,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             Expression::Unary { op, expr } => {
                 // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-operators#unary-operators
                 let op_str = match op {
-                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::Negate => {
+                        match func_ctx.resolve_type(expr, &module.types).scalar() {
+                            Some(Scalar::I32) => NEG_FUNCTION,
+                            _ => "-",
+                        }
+                    }
                     crate::UnaryOperator::LogicalNot => "!",
                     crate::UnaryOperator::BitwiseNot => "~",
                 };
@@ -2973,7 +3335,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.out,
                                     "{}{}(",
                                     scalar.to_hlsl_str()?,
-                                    back::vector_size_str(size)
+                                    common::vector_size_str(size)
                                 )?;
                             }
                             TypeInner::Scalar(_) => {
@@ -2984,8 +3346,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.out,
                                     "{}{}x{}(",
                                     scalar.to_hlsl_str()?,
-                                    back::vector_size_str(columns),
-                                    back::vector_size_str(rows)
+                                    common::vector_size_str(columns),
+                                    common::vector_size_str(rows)
                                 )?;
                             }
                             _ => {
@@ -3046,7 +3408,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
                 let fun = match fun {
                     // comparison
-                    Mf::Abs => Function::Regular("abs"),
+                    Mf::Abs => match func_ctx.resolve_type(arg, &module.types).scalar() {
+                        Some(Scalar::I32) => Function::Regular(ABS_FUNCTION),
+                        _ => Function::Regular("abs"),
+                    },
                     Mf::Min => Function::Regular("min"),
                     Mf::Max => Function::Regular("max"),
                     Mf::Clamp => Function::Regular("clamp"),
@@ -3292,6 +3657,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         write!(self.out, " >> 24) / {scale}.0)")?;
                     }
                     fun @ (Function::Unpack4xI8 | Function::Unpack4xU8) => {
+                        write!(self.out, "(")?;
                         if matches!(fun, Function::Unpack4xU8) {
                             write!(self.out, "u")?;
                         }
@@ -3303,7 +3669,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " >> 16, ")?;
                         self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 24) << 24 >> 24")?;
+                        write!(self.out, " >> 24) << 24 >> 24)")?;
                     }
                     Function::QuantizeToF16 => {
                         write!(self.out, "f16tof32(f32tof16(")?;
@@ -3331,11 +3697,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // as non-32bit types are DXC only.
                     Function::MissingIntOverload(fun_name) => {
                         let scalar_kind = func_ctx.resolve_type(arg, &module.types).scalar();
-                        if let Some(Scalar {
-                            kind: ScalarKind::Sint,
-                            width: 4,
-                        }) = scalar_kind
-                        {
+                        if let Some(Scalar::I32) = scalar_kind {
                             write!(self.out, "asint({fun_name}(asuint(")?;
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, ")))")?;
@@ -3349,11 +3711,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // as non-32bit types are DXC only.
                     Function::MissingIntReturnType(fun_name) => {
                         let scalar_kind = func_ctx.resolve_type(arg, &module.types).scalar();
-                        if let Some(Scalar {
-                            kind: ScalarKind::Sint,
-                            width: 4,
-                        }) = scalar_kind
-                        {
+                        if let Some(Scalar::I32) = scalar_kind {
                             write!(self.out, "asint({fun_name}(")?;
                             self.write_expr(module, arg, func_ctx)?;
                             write!(self.out, "))")?;
@@ -3579,8 +3937,19 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_expr(module, reject, func_ctx)?;
                 write!(self.out, ")")?
             }
+            Expression::RayQueryGetIntersection { query, committed } => {
+                if committed {
+                    write!(self.out, "GetCommittedIntersection(")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    write!(self.out, ")")?;
+                } else {
+                    write!(self.out, "GetCandidateIntersection(")?;
+                    self.write_expr(module, query, func_ctx)?;
+                    write!(self.out, ")")?;
+                }
+            }
             // Not supported yet
-            Expression::RayQueryGetIntersection { .. } => unreachable!(),
+            Expression::RayQueryVertexPositions { .. } => unreachable!(),
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
@@ -3594,6 +3963,109 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             write!(self.out, "{closing_bracket}")?;
         }
         Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn write_image_load(
+        &mut self,
+        module: &&Module,
+        expr: Handle<crate::Expression>,
+        func_ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
+        coordinate: Handle<crate::Expression>,
+        array_index: Option<Handle<crate::Expression>>,
+        sample: Option<Handle<crate::Expression>>,
+        level: Option<Handle<crate::Expression>>,
+    ) -> Result<(), Error> {
+        let mut wrapping_type = None;
+        match *func_ctx.resolve_type(image, &module.types) {
+            TypeInner::Image {
+                class: crate::ImageClass::Storage { format, .. },
+                ..
+            } => {
+                if format.single_component() {
+                    wrapping_type = Some(Scalar::from(format));
+                }
+            }
+            _ => {}
+        }
+        if let Some(scalar) = wrapping_type {
+            write!(
+                self.out,
+                "{}{}(",
+                help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
+                scalar.to_hlsl_str()?
+            )?;
+        }
+        // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-load
+        self.write_expr(module, image, func_ctx)?;
+        write!(self.out, ".Load(")?;
+
+        self.write_texture_coordinates("int", coordinate, array_index, level, module, func_ctx)?;
+
+        if let Some(sample) = sample {
+            write!(self.out, ", ")?;
+            self.write_expr(module, sample, func_ctx)?;
+        }
+
+        // close bracket for Load function
+        write!(self.out, ")")?;
+
+        if wrapping_type.is_some() {
+            write!(self.out, ")")?;
+        }
+
+        // return x component if return type is scalar
+        if let TypeInner::Scalar(_) = *func_ctx.resolve_type(expr, &module.types) {
+            write!(self.out, ".x")?;
+        }
+        Ok(())
+    }
+
+    /// Find the [`BindingArraySamplerInfo`] from an expression so that such an access
+    /// can be generated later.
+    fn sampler_binding_array_info_from_expression(
+        &mut self,
+        module: &Module,
+        func_ctx: &back::FunctionCtx<'_>,
+        base: Handle<crate::Expression>,
+        resolved: &TypeInner,
+    ) -> Option<BindingArraySamplerInfo> {
+        if let TypeInner::BindingArray {
+            base: base_ty_handle,
+            ..
+        } = *resolved
+        {
+            let base_ty = &module.types[base_ty_handle].inner;
+            if let TypeInner::Sampler { comparison, .. } = *base_ty {
+                let base = &func_ctx.expressions[base];
+
+                if let crate::Expression::GlobalVariable(handle) = *base {
+                    let variable = &module.global_variables[handle];
+
+                    let sampler_heap_name = match comparison {
+                        true => COMPARISON_SAMPLER_HEAP_VAR,
+                        false => SAMPLER_HEAP_VAR,
+                    };
+
+                    return Some(BindingArraySamplerInfo {
+                        sampler_heap_name,
+                        sampler_index_buffer_name: self
+                            .wrapped
+                            .sampler_index_buffers
+                            .get(&super::SamplerIndexBufferKey {
+                                group: variable.binding.unwrap().group,
+                            })
+                            .unwrap()
+                            .clone(),
+                        binding_array_base_index_name: self.names[&NameKey::GlobalVariable(handle)]
+                            .clone(),
+                    });
+                }
+            }
+        }
+
+        None
     }
 
     fn write_named_expr(
@@ -3660,6 +4132,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
         if barrier.contains(crate::Barrier::SUB_GROUP) {
             // Does not exist in DirectX
+        }
+        if barrier.contains(crate::Barrier::TEXTURE) {
+            writeln!(self.out, "{level}DeviceMemoryBarrierWithGroupSync();")?;
         }
         Ok(())
     }

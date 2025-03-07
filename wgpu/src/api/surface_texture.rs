@@ -1,4 +1,5 @@
-use std::{error, fmt, thread};
+use core::{error, fmt};
+use std::thread;
 
 use crate::*;
 
@@ -8,7 +9,7 @@ use crate::*;
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// the [`GPUCanvasContext`](https://gpuweb.github.io/gpuweb/#canvas-context) provides
 /// a texture without any additional information.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SurfaceTexture {
     /// Accessible view of the frame.
     pub texture: Texture,
@@ -58,6 +59,8 @@ pub enum SurfaceError {
     Lost,
     /// There is no more memory left to allocate a new frame.
     OutOfMemory,
+    /// Acquiring a texture failed with a generic error. Check error callbacks for more information.
+    Other,
 }
 static_assertions::assert_impl_all!(SurfaceError: Send, Sync);
 
@@ -68,6 +71,7 @@ impl fmt::Display for SurfaceError {
             Self::Outdated => "The underlying surface has changed, and therefore the swap chain must be updated",
             Self::Lost =>  "The swap chain has been lost and needs to be recreated",
             Self::OutOfMemory => "There is no more memory left to allocate a new frame",
+            Self::Other => "Acquiring a texture failed with a generic error. Check error callbacks for more information",
         })
     }
 }

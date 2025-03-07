@@ -1,10 +1,11 @@
+use core::fmt::Write;
+
 use super::{BackendResult, Error, Version, Writer};
 use crate::{
     back::glsl::{Options, WriterFlags},
     AddressSpace, Binding, Expression, Handle, ImageClass, ImageDimension, Interpolation,
     SampleLevel, Sampling, Scalar, ScalarKind, ShaderStage, StorageFormat, Type, TypeInner,
 };
-use std::fmt::Write;
 
 bitflags::bitflags! {
     /// Structure used to encode additions to GLSL that aren't supported by all versions.
@@ -52,6 +53,8 @@ bitflags::bitflags! {
         const TEXTURE_SHADOW_LOD = 1 << 23;
         /// Subgroup operations
         const SUBGROUP_OPERATIONS = 1 << 24;
+        /// Image atomics
+        const TEXTURE_ATOMICS = 1 << 25;
     }
 }
 
@@ -120,6 +123,7 @@ impl FeaturesManager {
         check_feature!(DYNAMIC_ARRAY_SIZE, 430, 310);
         check_feature!(DUAL_SOURCE_BLENDING, 330, 300 /* with extension */);
         check_feature!(SUBGROUP_OPERATIONS, 430, 310);
+        check_feature!(TEXTURE_ATOMICS, 420, 310);
         match version {
             Version::Embedded { is_webgl: true, .. } => check_feature!(MULTI_VIEW, 140, 300),
             _ => check_feature!(MULTI_VIEW, 140, 310),
@@ -278,6 +282,11 @@ impl FeaturesManager {
             )?;
         }
 
+        if self.0.contains(Features::TEXTURE_ATOMICS) {
+            // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_shader_image_atomic.txt
+            writeln!(out, "#extension GL_OES_shader_image_atomic : require")?;
+        }
+
         Ok(())
     }
 }
@@ -400,6 +409,7 @@ impl<W> Writer<'_, W> {
                             | StorageFormat::Rgb10a2Uint
                             | StorageFormat::Rgb10a2Unorm
                             | StorageFormat::Rg11b10Ufloat
+                            | StorageFormat::R64Uint
                             | StorageFormat::Rg32Uint
                             | StorageFormat::Rg32Sint
                             | StorageFormat::Rg32Float => {
@@ -453,7 +463,7 @@ impl<W> Writer<'_, W> {
             .functions
             .iter()
             .map(|(h, f)| (&f.expressions, &info[h]))
-            .chain(std::iter::once((
+            .chain(core::iter::once((
                 &entry_point.function.expressions,
                 info.get_entry_point(entry_point_idx as usize),
             )))
@@ -543,6 +553,22 @@ impl<W> Writer<'_, W> {
                 }
                 _ => {}
             }
+            }
+        }
+
+        for blocks in module
+            .functions
+            .iter()
+            .map(|(_, f)| &f.body)
+            .chain(core::iter::once(&entry_point.function.body))
+        {
+            for (stmt, _) in blocks.span_iter() {
+                match *stmt {
+                    crate::Statement::ImageAtomic { .. } => {
+                        features.request(Features::TEXTURE_ATOMICS)
+                    }
+                    _ => {}
+                }
             }
         }
 

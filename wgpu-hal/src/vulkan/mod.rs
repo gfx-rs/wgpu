@@ -24,24 +24,33 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 !*/
 
+#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
+
 mod adapter;
 mod command;
 mod conv;
 mod device;
+mod drm;
 mod instance;
+mod sampler;
 
 use std::{
     borrow::Borrow,
-    collections::HashSet,
+    boxed::Box,
     ffi::{CStr, CString},
     fmt, mem,
     num::NonZeroU32,
+    ops::DerefMut,
     sync::Arc,
+    vec::Vec,
 };
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
+use hashbrown::HashSet;
 use parking_lot::{Mutex, RwLock};
+
+use naga::FastHashMap;
 use wgt::InternalCounter;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
@@ -456,7 +465,7 @@ pub struct Adapter {
     //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
     phd_capabilities: adapter::PhysicalDeviceProperties,
-    //phd_features: adapter::PhysicalDeviceFeatures,
+    phd_features: adapter::PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
@@ -475,6 +484,7 @@ struct DeviceExtensionFunctions {
     draw_indirect_count: Option<khr::draw_indirect_count::Device>,
     timeline_semaphore: Option<ExtensionFn<khr::timeline_semaphore::Device>>,
     ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
+    mesh_shading: Option<ext::mesh_shader::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
@@ -532,8 +542,7 @@ struct PrivateCapabilities {
     robust_image_access2: bool,
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
-    #[cfg(windows)]
-    external_memory_win32: bool,
+    maximum_samplers: u32,
 }
 
 bitflags::bitflags!(
@@ -613,7 +622,7 @@ struct FramebufferAttachment {
     /// Can be NULL if the framebuffer is image-less
     raw: vk::ImageView,
     raw_image_flags: vk::ImageCreateFlags,
-    view_usage: crate::TextureUses,
+    view_usage: wgt::TextureUses,
     view_format: wgt::TextureFormat,
     raw_view_formats: Vec<vk::Format>,
 }
@@ -641,8 +650,9 @@ struct DeviceShared {
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
     features: wgt::Features,
-    render_passes: Mutex<rustc_hash::FxHashMap<RenderPassKey, vk::RenderPass>>,
-    framebuffers: Mutex<rustc_hash::FxHashMap<FramebufferKey, vk::Framebuffer>>,
+    render_passes: Mutex<FastHashMap<RenderPassKey, vk::RenderPass>>,
+    framebuffers: Mutex<FastHashMap<FramebufferKey, vk::Framebuffer>>,
+    sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
 }
 
@@ -760,6 +770,13 @@ pub struct Queue {
     device: Arc<DeviceShared>,
     family_index: u32,
     relay_semaphores: Mutex<RelaySemaphores>,
+    signal_semaphores: Mutex<(Vec<vk::Semaphore>, Vec<u64>)>,
+}
+
+impl Queue {
+    pub fn as_raw(&self) -> vk::Queue {
+        self.raw
+    }
 }
 
 impl Drop for Queue {
@@ -781,6 +798,7 @@ pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
     block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    compacted_size_query: Option<vk::QueryPool>,
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
@@ -791,7 +809,7 @@ pub struct Texture {
     drop_guard: Option<crate::DropGuard>,
     external_memory: Option<vk::DeviceMemory>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
-    usage: crate::TextureUses,
+    usage: wgt::TextureUses,
     format: wgt::TextureFormat,
     raw_flags: vk::ImageCreateFlags,
     copy_size: crate::CopyExtent,
@@ -830,6 +848,7 @@ impl TextureView {
 #[derive(Debug)]
 pub struct Sampler {
     raw: vk::Sampler,
+    create_info: vk::SamplerCreateInfo<'static>,
 }
 
 impl crate::DynSampler for Sampler {}
@@ -974,7 +993,7 @@ pub enum ShaderModule {
     Raw(vk::ShaderModule),
     Intermediate {
         naga_shader: crate::NagaShader,
-        runtime_checks: bool,
+        runtime_checks: wgt::ShaderRuntimeChecks,
     },
 }
 
@@ -1210,6 +1229,15 @@ impl crate::Queue for Queue {
             signal_values.push(!0);
         }
 
+        let mut guards = self.signal_semaphores.lock();
+        let (ref mut pending_signal_semaphores, ref mut pending_signal_semaphore_values) =
+            guards.deref_mut();
+        assert!(pending_signal_semaphores.len() == pending_signal_semaphore_values.len());
+        if !pending_signal_semaphores.is_empty() {
+            signal_semaphores.append(pending_signal_semaphores);
+            signal_values.append(pending_signal_semaphore_values);
+        }
+
         // In order for submissions to be strictly ordered, we encode a dependency between each submission
         // using a pair of semaphores. This adds a wait if it is needed, and signals the next semaphore.
         let semaphore_state = self.relay_semaphores.lock().advance(&self.device)?;
@@ -1338,6 +1366,19 @@ impl crate::Queue for Queue {
     }
 }
 
+impl Queue {
+    pub fn raw_device(&self) -> &ash::Device {
+        &self.device.raw
+    }
+
+    pub fn add_signal_semaphore(&self, semaphore: vk::Semaphore, semaphore_value: Option<u64>) {
+        let mut guards = self.signal_semaphores.lock();
+        let (ref mut semaphores, ref mut semaphore_values) = guards.deref_mut();
+        semaphores.push(semaphore);
+        semaphore_values.push(semaphore_value.unwrap_or(!0));
+    }
+}
+
 /// Maps
 ///
 /// - VK_ERROR_OUT_OF_HOST_MEMORY
@@ -1452,7 +1493,7 @@ fn get_lost_err() -> crate::DeviceError {
 #[repr(C)]
 struct RawTlasInstance {
     transform: [f32; 12],
-    custom_index_and_mask: u32,
+    custom_data_and_mask: u32,
     shader_binding_table_record_offset_and_flags: u32,
     acceleration_structure_reference: u64,
 }

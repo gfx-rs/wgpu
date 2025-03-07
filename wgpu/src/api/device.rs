@@ -1,8 +1,9 @@
-use std::{error, fmt, future::Future, sync::Arc};
+use alloc::{boxed::Box, string::String, sync::Arc};
+use core::{error, fmt, future::Future};
 
 use parking_lot::Mutex;
 
-use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, BlasShared, CreateBlasDescriptor};
+use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
 use crate::*;
 
@@ -14,7 +15,7 @@ use crate::*;
 /// A device may be requested from an adapter with [`Adapter::request_device`].
 ///
 /// Corresponds to [WebGPU `GPUDevice`](https://gpuweb.github.io/gpuweb/#gpu-device).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Device {
     pub(crate) inner: dispatch::DispatchDevice,
 }
@@ -33,7 +34,15 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 
 impl Device {
-    /// Check for resource cleanups and mapping callbacks. Will block if [`Maintain::Wait`] is passed.
+    #[cfg(custom)]
+    /// Creates Device from custom implementation
+    pub fn from_custom<T: custom::DeviceInterface>(device: T) -> Self {
+        Self {
+            inner: dispatch::DispatchDevice::custom(device),
+        }
+    }
+
+    /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue
     /// submissions still in flight. (Note that, unless access to the [`Queue`] is
@@ -42,8 +51,8 @@ impl Device {
     /// other threads could submit new work at any time.)
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
-    pub fn poll(&self, maintain: Maintain) -> MaintainResult {
-        self.inner.poll(maintain)
+    pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
+        self.inner.poll(poll_type)
     }
 
     /// The features which can be used on this device.
@@ -62,7 +71,7 @@ impl Device {
         self.inner.limits()
     }
 
-    /// Creates a shader module from either SPIR-V or WGSL source code.
+    /// Creates a shader module.
     ///
     /// <div class="warning">
     // NOTE: Keep this in sync with `naga::front::wgsl::parse_str`!
@@ -80,28 +89,52 @@ impl Device {
     pub fn create_shader_module(&self, desc: ShaderModuleDescriptor<'_>) -> ShaderModule {
         let module = self
             .inner
-            .create_shader_module(desc, wgt::ShaderBoundChecks::new());
+            .create_shader_module(desc, wgt::ShaderRuntimeChecks::checked());
         ShaderModule { inner: module }
     }
 
-    /// Creates a shader module from either SPIR-V or WGSL source code without runtime checks.
+    /// Deprecated: Use [`create_shader_module_trusted`][csmt] instead.
     ///
     /// # Safety
-    /// In contrast with [`create_shader_module`](Self::create_shader_module) this function
-    /// creates a shader module without runtime checks which allows shaders to perform
-    /// operations which can lead to undefined behavior like indexing out of bounds, thus it's
-    /// the caller responsibility to pass a shader which doesn't perform any of this
-    /// operations.
     ///
-    /// This has no effect on web.
+    /// See [`create_shader_module_trusted`][csmt].
+    ///
+    /// [csmt]: Self::create_shader_module_trusted
+    #[deprecated(
+        since = "24.0.0",
+        note = "Use `Device::create_shader_module_trusted(desc, wgpu::ShaderRuntimeChecks::unchecked())` instead."
+    )]
     #[must_use]
     pub unsafe fn create_shader_module_unchecked(
         &self,
         desc: ShaderModuleDescriptor<'_>,
     ) -> ShaderModule {
-        let module = self
-            .inner
-            .create_shader_module(desc, unsafe { wgt::ShaderBoundChecks::unchecked() });
+        unsafe { self.create_shader_module_trusted(desc, crate::ShaderRuntimeChecks::unchecked()) }
+    }
+
+    /// Creates a shader module with flags to dictate runtime checks.
+    ///
+    /// When running on WebGPU, this will merely call [`create_shader_module`][csm].
+    ///
+    /// # Safety
+    ///
+    /// In contrast with [`create_shader_module`][csm] this function
+    /// creates a shader module with user-customizable runtime checks which allows shaders to
+    /// perform operations which can lead to undefined behavior like indexing out of bounds,
+    /// thus it's the caller responsibility to pass a shader which doesn't perform any of this
+    /// operations.
+    ///
+    /// See the documentation for [`ShaderRuntimeChecks`][src] for more information about specific checks.
+    ///
+    /// [csm]: Self::create_shader_module
+    /// [src]: crate::ShaderRuntimeChecks
+    #[must_use]
+    pub unsafe fn create_shader_module_trusted(
+        &self,
+        desc: ShaderModuleDescriptor<'_>,
+        runtime_checks: crate::ShaderRuntimeChecks,
+    ) -> ShaderModule {
+        let module = self.inner.create_shader_module(desc, runtime_checks);
         ShaderModule { inner: module }
     }
 
@@ -138,7 +171,7 @@ impl Device {
         let encoder = self.inner.create_render_bundle_encoder(desc);
         RenderBundleEncoder {
             inner: encoder,
-            _p: std::marker::PhantomData,
+            _p: core::marker::PhantomData,
         }
     }
 
@@ -192,7 +225,7 @@ impl Device {
 
         Buffer {
             inner: buffer,
-            map_context: Mutex::new(map_context),
+            map_context: Arc::new(Mutex::new(map_context)),
             size: desc.size,
             usage: desc.usage,
         }
@@ -273,7 +306,7 @@ impl Device {
 
         Buffer {
             inner: buffer.into(),
-            map_context: Mutex::new(map_context),
+            map_context: Arc::new(Mutex::new(map_context)),
             size: desc.size,
             usage: desc.usage,
         }
@@ -445,15 +478,15 @@ impl Device {
     /// # Validation
     /// If any of the following is not satisfied a validation error is generated
     ///
-    /// The device ***must*** have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled.
-    /// if `sizes` is [BlasGeometrySizeDescriptors::Triangles] then the following must be satisfied
+    /// The device ***must*** have [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] enabled.
+    /// if `sizes` is [`BlasGeometrySizeDescriptors::Triangles`] then the following must be satisfied
     /// - For every geometry descriptor (for the purposes this is called `geo_desc`) of `sizes.descriptors` the following must be satisfied:
     ///     - `geo_desc.vertex_format` must be within allowed formats (allowed formats for a given feature set
-    ///       may be queried with [Features::allowed_vertex_formats_for_blas]).
+    ///       may be queried with [`Features::allowed_vertex_formats_for_blas`]).
     ///     - Both or neither of `geo_desc.index_format` and `geo_desc.index_count` must be provided.
     ///
-    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-    /// [Features::allowed_vertex_formats_for_blas]: wgt::Features::allowed_vertex_formats_for_blas
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::allowed_vertex_formats_for_blas`]: wgt::Features::allowed_vertex_formats_for_blas
     #[must_use]
     pub fn create_blas(
         &self,
@@ -463,7 +496,7 @@ impl Device {
         let (handle, blas) = self.inner.create_blas(desc, sizes);
 
         Blas {
-            shared: Arc::new(BlasShared { inner: blas }),
+            inner: blas,
             handle,
         }
     }
@@ -474,16 +507,18 @@ impl Device {
     /// # Validation
     /// If any of the following is not satisfied a validation error is generated
     ///
-    /// The device ***must*** have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled.
+    /// The device ***must*** have [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] enabled.
     ///
-    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     #[must_use]
     pub fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas {
         let tlas = self.inner.create_tlas(desc);
 
         Tlas {
-            inner: tlas,
-            max_instances: desc.max_instances,
+            shared: Arc::new(TlasShared {
+                inner: tlas,
+                max_instances: desc.max_instances,
+            }),
         }
     }
 }
@@ -504,15 +539,9 @@ pub(crate) enum RequestDeviceErrorKind {
     ///
     /// (This is currently never used by the webgl backend, but it could be.)
     #[cfg(webgpu)]
-    WebGpu(wasm_bindgen::JsValue),
+    WebGpu(String),
 }
 
-#[cfg(send_sync)]
-unsafe impl Send for RequestDeviceErrorKind {}
-#[cfg(send_sync)]
-unsafe impl Sync for RequestDeviceErrorKind {}
-
-#[cfg(send_sync)]
 static_assertions::assert_impl_all!(RequestDeviceError: Send, Sync);
 
 impl fmt::Display for RequestDeviceError {
@@ -521,9 +550,8 @@ impl fmt::Display for RequestDeviceError {
             #[cfg(wgpu_core)]
             RequestDeviceErrorKind::Core(error) => error.fmt(_f),
             #[cfg(webgpu)]
-            RequestDeviceErrorKind::WebGpu(error_js_value) => {
-                // wasm-bindgen provides a reasonable error stringification via `Debug` impl
-                write!(_f, "{error_js_value:?}")
+            RequestDeviceErrorKind::WebGpu(error) => {
+                write!(_f, "{error}")
             }
             #[cfg(not(any(webgpu, wgpu_core)))]
             _ => unimplemented!("unknown `RequestDeviceErrorKind`"),
@@ -557,7 +585,7 @@ impl From<wgc::instance::RequestDeviceError> for RequestDeviceError {
 pub trait UncapturedErrorHandler: Fn(Error) + Send + 'static {}
 impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + 'static {}
 
-/// Filter for error scopes.
+/// Kinds of [`Error`]s a [`Device::push_error_scope()`] may be configured to catch.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub enum ErrorFilter {
     /// Catch only out-of-memory errors.
@@ -582,15 +610,19 @@ pub type ErrorSource = Box<dyn error::Error + Send + Sync + 'static>;
 #[cfg_attr(docsrs, doc(cfg(all())))]
 pub type ErrorSource = Box<dyn error::Error + 'static>;
 
-/// Error type
+/// Errors resulting from usage of GPU APIs.
+///
+/// By default, errors translate into panics. Depending on the backend and circumstances,
+/// errors may occur synchronously or asynchronously. When errors need to be handled, use
+/// [`Device::push_error_scope()`] or [`Device::on_uncaptured_error()`].
 #[derive(Debug)]
 pub enum Error {
-    /// Out of memory error
+    /// Out of memory.
     OutOfMemory {
         /// Lower level source of the error.
         source: ErrorSource,
     },
-    /// Validation error, signifying a bug in code or data
+    /// Validation error, signifying a bug in code or data provided to `wgpu`.
     Validation {
         /// Lower level source of the error.
         source: ErrorSource,

@@ -1,17 +1,25 @@
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::{
+    fmt::{Display, Error as FmtError, Formatter, Write},
+    iter,
+};
+
 use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
 use crate::{
     arena::{Handle, HandleSet},
     back::{self, Baked},
-    proc::index,
-    proc::{self, NameKey, TypeResolution},
+    common,
+    proc::{self, index, ExpressionKindTracker, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
 };
+
 #[cfg(test)]
-use std::ptr;
-use std::{
-    fmt::{Display, Error as FmtError, Formatter, Write},
-    iter,
-};
+use core::ptr;
 
 /// Shorthand result used internally by the backend
 type BackendResult = Result<(), Error>;
@@ -30,12 +38,25 @@ const RT_NAMESPACE: &str = "metal::raytracing";
 const RAY_QUERY_TYPE: &str = "_RayQuery";
 const RAY_QUERY_FIELD_INTERSECTOR: &str = "intersector";
 const RAY_QUERY_FIELD_INTERSECTION: &str = "intersection";
+const RAY_QUERY_MODERN_SUPPORT: bool = false; //TODO
 const RAY_QUERY_FIELD_READY: &str = "ready";
 const RAY_QUERY_FUN_MAP_INTERSECTION: &str = "_map_intersection_type";
 
 pub(crate) const ATOMIC_COMP_EXCH_FUNCTION: &str = "naga_atomic_compare_exchange_weak_explicit";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
+pub(crate) const ABS_FUNCTION: &str = "naga_abs";
+pub(crate) const DIV_FUNCTION: &str = "naga_div";
+pub(crate) const MOD_FUNCTION: &str = "naga_mod";
+pub(crate) const NEG_FUNCTION: &str = "naga_neg";
+/// For some reason, Metal does not let you have `metal::texture<..>*` as a buffer argument.
+/// However, if you put that texture inside a struct, everything is totally fine. This
+/// baffles me to no end.
+///
+/// As such, we wrap all argument buffers in a struct that has a single generic `<T>` field.
+/// This allows `NagaArgumentBufferWrapper<metal::texture<..>>*` to work. The astute among
+/// you have noticed that this should be exactly the same to the compiler, and you're correct.
+pub(crate) const ARGUMENT_BUFFER_WRAPPER_STRUCT: &str = "NagaArgumentBufferWrapper";
 
 /// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
 ///
@@ -60,7 +81,7 @@ fn put_numeric_type(
                 "{}::{}{}",
                 NAMESPACE,
                 scalar.to_msl_name(),
-                back::vector_size_str(rows)
+                common::vector_size_str(rows)
             )
         }
         (scalar, &[rows, columns]) => {
@@ -69,8 +90,8 @@ fn put_numeric_type(
                 "{}::{}{}x{}",
                 NAMESPACE,
                 scalar.to_msl_name(),
-                back::vector_size_str(columns),
-                back::vector_size_str(rows)
+                common::vector_size_str(columns),
+                common::vector_size_str(rows)
             )
         }
         (_, _) => Ok(()), // not meaningful
@@ -90,13 +111,13 @@ const CLAMPED_LOD_LOAD_PREFIX: &str = "clamped_lod_e";
 
 /// Wrapper for identifier names for clamped level-of-detail values
 ///
-/// Values of this type implement [`std::fmt::Display`], formatting as
+/// Values of this type implement [`core::fmt::Display`], formatting as
 /// the name of the variable used to hold the cached clamped
 /// level-of-detail value for an `ImageLoad` expression.
 struct ClampedLod(Handle<crate::Expression>);
 
 impl Display for ClampedLod {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, CLAMPED_LOD_LOAD_PREFIX)
     }
 }
@@ -111,14 +132,14 @@ impl Display for ClampedLod {
 ///
 /// If `global` is a [`Handle`] for a [`GlobalVariable`] that contains a
 /// runtime-sized array, then the value `ArraySize(global)` implements
-/// [`std::fmt::Display`], formatting as the name of the struct member carrying
+/// [`core::fmt::Display`], formatting as the name of the struct member carrying
 /// the number of elements in that runtime-sized array.
 ///
 /// [`GlobalVariable`]: crate::GlobalVariable
 struct ArraySizeMember(Handle<crate::GlobalVariable>);
 
 impl Display for ArraySizeMember {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "size")
     }
 }
@@ -269,30 +290,29 @@ impl Display for TypeContext<'_> {
             crate::TypeInner::Sampler { comparison: _ } => {
                 write!(out, "{NAMESPACE}::sampler")
             }
-            crate::TypeInner::AccelerationStructure => {
+            crate::TypeInner::AccelerationStructure { vertex_return } => {
+                if vertex_return {
+                    unimplemented!("metal does not support vertex ray hit return")
+                }
                 write!(out, "{RT_NAMESPACE}::instance_acceleration_structure")
             }
-            crate::TypeInner::RayQuery => {
+            crate::TypeInner::RayQuery { vertex_return } => {
+                if vertex_return {
+                    unimplemented!("metal does not support vertex ray hit return")
+                }
                 write!(out, "{RAY_QUERY_TYPE}")
             }
-            crate::TypeInner::BindingArray { base, size } => {
+            crate::TypeInner::BindingArray { base, .. } => {
                 let base_tyname = Self {
                     handle: base,
                     first_time: false,
                     ..*self
                 };
 
-                if let Some(&super::ResolvedBinding::Resource(super::BindTarget {
-                    binding_array_size: Some(override_size),
-                    ..
-                })) = self.binding
-                {
-                    write!(out, "{NAMESPACE}::array<{base_tyname}, {override_size}>")
-                } else if let crate::ArraySize::Constant(size) = size {
-                    write!(out, "{NAMESPACE}::array<{base_tyname}, {size}>")
-                } else {
-                    unreachable!("metal requires all arrays be constant sized");
-                }
+                write!(
+                    out,
+                    "constant {ARGUMENT_BUFFER_WRAPPER_STRUCT}<{base_tyname}>*"
+                )
             }
         }
     }
@@ -343,7 +363,7 @@ impl TypedGlobalVariable<'_> {
         let (space, access, reference) = match var.space.to_msl_name() {
             Some(space) if self.reference => {
                 let access = if var.space.needs_access_qualifier()
-                    && !self.usage.contains(valid::GlobalUse::WRITE)
+                    && !self.usage.intersects(valid::GlobalUse::WRITE)
                 {
                     "const"
                 } else {
@@ -368,6 +388,23 @@ impl TypedGlobalVariable<'_> {
     }
 }
 
+#[derive(Eq, PartialEq, Hash)]
+enum WrappedFunction {
+    UnaryOp {
+        op: crate::UnaryOperator,
+        ty: (Option<crate::VectorSize>, crate::Scalar),
+    },
+    BinaryOp {
+        op: crate::BinaryOperator,
+        left_ty: (Option<crate::VectorSize>, crate::Scalar),
+        right_ty: (Option<crate::VectorSize>, crate::Scalar),
+    },
+    Math {
+        fun: crate::MathFunction,
+        arg_ty: (Option<crate::VectorSize>, crate::Scalar),
+    },
+}
+
 pub struct Writer<W> {
     out: W,
     names: FastHashMap<NameKey, String>,
@@ -375,6 +412,7 @@ pub struct Writer<W> {
     /// Set of expressions that need to be baked to avoid unnecessary repetition in output
     need_bake_expressions: back::NeedBakeExpressions,
     namer: proc::Namer,
+    wrapped_functions: FastHashSet<WrappedFunction>,
     #[cfg(test)]
     put_expression_stack_pointers: FastHashSet<*const ()>,
     #[cfg(test)]
@@ -382,11 +420,6 @@ pub struct Writer<W> {
     /// Set of (struct type, struct field index) denoting which fields require
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
-
-    /// Name of the force-bounded-loop macro.
-    ///
-    /// See `emit_force_bounded_loop_macro` for details.
-    force_bounded_loop_macro_name: String,
 }
 
 impl crate::Scalar {
@@ -543,8 +576,8 @@ impl crate::Type {
             // handle types may be different, depending on the global var access, so we always inline them
             Ti::Image { .. }
             | Ti::Sampler { .. }
-            | Ti::AccelerationStructure
-            | Ti::RayQuery
+            | Ti::AccelerationStructure { .. }
+            | Ti::RayQuery { .. }
             | Ti::BindingArray { .. } => false,
         }
     }
@@ -600,6 +633,8 @@ struct ExpressionContext<'a> {
     /// accesses. These may need to be cached in temporary variables. See
     /// `index::find_checked_indexes` for details.
     guarded_indices: HandleSet<crate::Expression>,
+    /// See [`Writer::gen_force_bounded_loop_statements`] for details.
+    force_loop_bounding: bool,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -677,12 +712,12 @@ impl<W: Write> Writer<W> {
             named_expressions: Default::default(),
             need_bake_expressions: Default::default(),
             namer: proc::Namer::default(),
+            wrapped_functions: FastHashSet::default(),
             #[cfg(test)]
             put_expression_stack_pointers: Default::default(),
             #[cfg(test)]
             put_block_stack_pointers: Default::default(),
             struct_member_pads: FastHashSet::default(),
-            force_bounded_loop_macro_name: String::default(),
         }
     }
 
@@ -693,17 +728,11 @@ impl<W: Write> Writer<W> {
         self.out
     }
 
-    /// Define a macro to invoke at the bottom of each loop body, to
-    /// defeat MSL infinite loop reasoning.
-    ///
-    /// If we haven't done so already, emit the definition of a preprocessor
-    /// macro to be invoked at the end of each loop body in the generated MSL,
-    /// to ensure that the MSL compiler's optimizations do not remove bounds
-    /// checks.
-    ///
-    /// Only the first call to this function for a given module actually causes
-    /// the macro definition to be written. Subsequent loops can simply use the
-    /// prior macro definition, since macros aren't block-scoped.
+    /// Generates statements to be inserted immediately before and at the very
+    /// start of the body of each loop, to defeat MSL infinite loop reasoning.
+    /// The 0th item of the returned tuple should be inserted immediately prior
+    /// to the loop and the 1st item should be inserted at the very start of
+    /// the loop body.
     ///
     /// # What is this trying to solve?
     ///
@@ -771,7 +800,8 @@ impl<W: Write> Writer<W> {
     /// but which in fact generates no instructions. Unfortunately, inline
     /// assembly is not handled correctly by some Metal device drivers.
     ///
-    /// Instead, we add the following code to the bottom of every loop:
+    /// A previously used approach was to add the following code to the bottom
+    /// of every loop:
     ///
     /// ```ignore
     /// if (volatile bool unpredictable = false; unpredictable)
@@ -782,37 +812,47 @@ impl<W: Write> Writer<W> {
     /// the `volatile` qualifier prevents the compiler from assuming this. Thus,
     /// it must assume that the `break` might be reached, and hence that the
     /// loop is not unbounded. This prevents the range analysis impact described
-    /// above.
+    /// above. Unfortunately this prevented the compiler from making important,
+    /// and safe, optimizations such as loop unrolling and was observed to
+    /// significantly hurt performance.
     ///
-    /// Unfortunately, what makes this a kludge, not a hack, is that this
-    /// solution leaves the GPU executing a pointless conditional branch, at
-    /// runtime, in every iteration of the loop. There's no part of the system
-    /// that has a global enough view to be sure that `unpredictable` is true,
-    /// and remove it from the code. Adding the branch also affects
-    /// optimization: for example, it's impossible to unroll this loop. This
-    /// transformation has been observed to significantly hurt performance.
+    /// Our current approach declares a counter before every loop and
+    /// increments it every iteration, breaking after 2^64 iterations:
     ///
-    /// To make our output a bit more legible, we pull the condition out into a
-    /// preprocessor macro defined at the top of the module.
+    /// ```ignore
+    /// uint2 loop_bound = uint2(0);
+    /// while (true) {
+    ///   if (metal::all(loop_bound == uint2(4294967295))) { break; }
+    ///   loop_bound += uint2(loop_bound.y == 4294967295, 1);
+    /// }
+    /// ```
+    ///
+    /// This convinces the compiler that the loop is finite and therefore may
+    /// execute, whilst at the same time allowing optimizations such as loop
+    /// unrolling. Furthermore the 64-bit counter is large enough it seems
+    /// implausible that it would affect the execution of any shader.
     ///
     /// This approach is also used by Chromium WebGPU's Dawn shader compiler:
-    /// <https://dawn.googlesource.com/dawn/+/a37557db581c2b60fb1cd2c01abdb232927dd961/src/tint/lang/msl/writer/printer/printer.cc#222>
-    fn emit_force_bounded_loop_macro(&mut self) -> BackendResult {
-        if !self.force_bounded_loop_macro_name.is_empty() {
-            return Ok(());
+    /// <https://dawn.googlesource.com/dawn/+/d9e2d1f718678ebee0728b999830576c410cce0a/src/tint/lang/core/ir/transform/prevent_infinite_loops.cc>
+    fn gen_force_bounded_loop_statements(
+        &mut self,
+        level: back::Level,
+        context: &StatementContext,
+    ) -> Option<(String, String)> {
+        if !context.expression.force_loop_bounding {
+            return None;
         }
 
-        self.force_bounded_loop_macro_name = self.namer.call("LOOP_IS_BOUNDED");
-        let loop_bounded_volatile_name = self.namer.call("unpredictable_break_from_loop");
-        writeln!(
-            self.out,
-            "#define {} {{ volatile bool {} = false; if ({}) break; }}",
-            self.force_bounded_loop_macro_name,
-            loop_bounded_volatile_name,
-            loop_bounded_volatile_name,
-        )?;
+        let loop_bound_name = self.namer.call("loop_bound");
+        let decl = format!("{level}uint2 {loop_bound_name} = uint2(0u);");
+        let level = level.next();
+        let max = u32::MAX;
+        let break_and_inc = format!(
+            "{level}if ({NAMESPACE}::all({loop_bound_name} == uint2({max}u))) {{ break; }}
+{level}{loop_bound_name} += uint2({loop_bound_name}.y == {max}u, 1u);"
+        );
 
-        Ok(())
+        Some((decl, break_and_inc))
     }
 
     fn put_call_parameters(
@@ -1198,6 +1238,32 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    fn put_image_atomic(
+        &mut self,
+        level: back::Level,
+        image: Handle<crate::Expression>,
+        address: &TexelAddress,
+        fun: crate::AtomicFunction,
+        value: Handle<crate::Expression>,
+        context: &StatementContext,
+    ) -> BackendResult {
+        write!(self.out, "{level}")?;
+        self.put_expression(image, &context.expression, false)?;
+        let op = if context.expression.resolve_type(value).scalar_width() == Some(8) {
+            fun.to_msl_64_bit()?
+        } else {
+            fun.to_msl()
+        };
+        write!(self.out, ".atomic_{}(", op)?;
+        // coordinates in IR are int, but Metal expects uint
+        self.put_cast_to_uint_scalar_or_vector(address.coordinate, &context.expression)?;
+        write!(self.out, ", ")?;
+        self.put_expression(value, &context.expression, true)?;
+        writeln!(self.out, ");")?;
+
+        Ok(())
+    }
+
     fn put_image_store(
         &mut self,
         level: back::Level,
@@ -1328,7 +1394,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    /// Emit code for the sign(i32) expression.
+    /// Emit code for the isign expression.
     ///
     fn put_isign(
         &mut self,
@@ -1336,18 +1402,23 @@ impl<W: Write> Writer<W> {
         context: &ExpressionContext,
     ) -> BackendResult {
         write!(self.out, "{NAMESPACE}::select({NAMESPACE}::select(")?;
+        let scalar = context
+            .resolve_type(arg)
+            .scalar()
+            .expect("put_isign should only be called for args which have an integer scalar type")
+            .to_msl_name();
         match context.resolve_type(arg) {
             &crate::TypeInner::Vector { size, .. } => {
-                let size = back::vector_size_str(size);
-                write!(self.out, "int{size}(-1), int{size}(1)")?;
+                let size = common::vector_size_str(size);
+                write!(self.out, "{scalar}{size}(-1), {scalar}{size}(1)")?;
             }
             _ => {
-                write!(self.out, "-1, 1")?;
+                write!(self.out, "{scalar}(-1), {scalar}(1)")?;
             }
         }
         write!(self.out, ", (")?;
         self.put_expression(arg, context, true)?;
-        write!(self.out, " > 0)), 0, (")?;
+        write!(self.out, " > 0)), {scalar}(0), (")?;
         self.put_expression(arg, context, true)?;
         write!(self.out, " == 0))")?;
         Ok(())
@@ -1358,15 +1429,16 @@ impl<W: Write> Writer<W> {
         expr_handle: Handle<crate::Expression>,
         module: &crate::Module,
         mod_info: &valid::ModuleInfo,
+        arena: &crate::Arena<crate::Expression>,
     ) -> BackendResult {
         self.put_possibly_const_expression(
             expr_handle,
-            &module.global_expressions,
+            arena,
             module,
             mod_info,
             &(module, mod_info),
             |&(_, mod_info), expr| &mod_info[expr],
-            |writer, &(module, _), expr| writer.put_const_expression(expr, module, mod_info),
+            |writer, &(module, _), expr| writer.put_const_expression(expr, module, mod_info, arena),
         )
     }
 
@@ -1427,7 +1499,12 @@ impl<W: Write> Writer<W> {
                 if constant.name.is_some() {
                     write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
                 } else {
-                    self.put_const_expression(constant.init, module, mod_info)?;
+                    self.put_const_expression(
+                        constant.init,
+                        module,
+                        mod_info,
+                        &module.global_expressions,
+                    )?;
                 }
             }
             crate::Expression::ZeroValue(ty) => {
@@ -1492,7 +1569,9 @@ impl<W: Write> Writer<W> {
                 put_expression(self, ctx, value)?;
                 write!(self.out, ")")?;
             }
-            _ => unreachable!(),
+            _ => {
+                return Err(Error::Override);
+            }
         }
 
         Ok(())
@@ -1576,7 +1655,12 @@ impl<W: Write> Writer<W> {
                 vector,
                 pattern,
             } => {
-                self.put_wrapped_expression_for_packed_vec3_access(vector, context, false)?;
+                self.put_wrapped_expression_for_packed_vec3_access(
+                    vector,
+                    context,
+                    false,
+                    &Self::put_expression,
+                )?;
                 write!(self.out, ".")?;
                 for &sc in pattern[..size as usize].iter() {
                     write!(self.out, "{}", back::COMPONENTS[sc as usize])?;
@@ -1645,7 +1729,7 @@ impl<W: Write> Writer<W> {
 
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
-                    self.put_const_expression(offset, context.module, context.mod_info)?;
+                    self.put_expression(offset, context, true)?;
                 }
 
                 match gather {
@@ -1710,7 +1794,12 @@ impl<W: Write> Writer<W> {
             },
             crate::Expression::Unary { op, expr } => {
                 let op_str = match op {
-                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::Negate => {
+                        match context.resolve_type(expr).scalar_kind() {
+                            Some(crate::ScalarKind::Sint) => NEG_FUNCTION,
+                            _ => "-",
+                        }
+                    }
                     crate::UnaryOperator::LogicalNot => "!",
                     crate::UnaryOperator::BitwiseNot => "~",
                 };
@@ -1719,63 +1808,87 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
             }
             crate::Expression::Binary { op, left, right } => {
-                let op_str = back::binary_operation_str(op);
                 let kind = context
                     .resolve_type(left)
                     .scalar_kind()
                     .ok_or(Error::UnsupportedBinaryOp(op))?;
 
-                // TODO: handle undefined behavior of BinaryOperator::Modulo
-                //
-                // sint:
-                // if right == 0 return 0
-                // if left == min(type_of(left)) && right == -1 return 0
-                // if sign(left) == -1 || sign(right) == -1 return result as defined by WGSL
-                //
-                // uint:
-                // if right == 0 return 0
-                //
-                // float:
-                // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
-
-                if op == crate::BinaryOperator::Modulo && kind == crate::ScalarKind::Float {
+                if op == crate::BinaryOperator::Divide
+                    && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
+                {
+                    write!(self.out, "{DIV_FUNCTION}(")?;
+                    self.put_expression(left, context, true)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(right, context, true)?;
+                    write!(self.out, ")")?;
+                } else if op == crate::BinaryOperator::Modulo
+                    && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
+                {
+                    write!(self.out, "{MOD_FUNCTION}(")?;
+                    self.put_expression(left, context, true)?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(right, context, true)?;
+                    write!(self.out, ")")?;
+                } else if op == crate::BinaryOperator::Modulo && kind == crate::ScalarKind::Float {
+                    // TODO: handle undefined behavior of BinaryOperator::Modulo
+                    //
+                    // float:
+                    // if right == 0 return ? see https://github.com/gpuweb/gpuweb/issues/2798
                     write!(self.out, "{NAMESPACE}::fmod(")?;
                     self.put_expression(left, context, true)?;
                     write!(self.out, ", ")?;
                     self.put_expression(right, context, true)?;
                     write!(self.out, ")")?;
+                } else if (op == crate::BinaryOperator::Add
+                    || op == crate::BinaryOperator::Subtract
+                    || op == crate::BinaryOperator::Multiply)
+                    && kind == crate::ScalarKind::Sint
+                {
+                    let to_unsigned = |ty: &crate::TypeInner| match *ty {
+                        crate::TypeInner::Scalar(scalar) => {
+                            Ok(crate::TypeInner::Scalar(crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                ..scalar
+                            }))
+                        }
+                        crate::TypeInner::Vector { size, scalar } => Ok(crate::TypeInner::Vector {
+                            size,
+                            scalar: crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                ..scalar
+                            },
+                        }),
+                        _ => Err(Error::UnsupportedBitCast(ty.clone())),
+                    };
+
+                    // Avoid undefined behaviour due to overflowing signed
+                    // integer arithmetic. Cast the operands to unsigned prior
+                    // to performing the operation, then cast the result back
+                    // to signed.
+                    self.put_bitcasted_expression(
+                        context.resolve_type(expr_handle),
+                        context,
+                        &|writer, context, is_scoped| {
+                            writer.put_binop(
+                                op,
+                                left,
+                                right,
+                                context,
+                                is_scoped,
+                                &|writer, expr, context, _is_scoped| {
+                                    writer.put_bitcasted_expression(
+                                        &to_unsigned(context.resolve_type(expr))?,
+                                        context,
+                                        &|writer, context, is_scoped| {
+                                            writer.put_expression(expr, context, is_scoped)
+                                        },
+                                    )
+                                },
+                            )
+                        },
+                    )?;
                 } else {
-                    if !is_scoped {
-                        write!(self.out, "(")?;
-                    }
-
-                    // Cast packed vector if necessary
-                    // Packed vector - matrix multiplications are not supported in MSL
-                    if op == crate::BinaryOperator::Multiply
-                        && matches!(
-                            context.resolve_type(right),
-                            &crate::TypeInner::Matrix { .. }
-                        )
-                    {
-                        self.put_wrapped_expression_for_packed_vec3_access(left, context, false)?;
-                    } else {
-                        self.put_expression(left, context, false)?;
-                    }
-
-                    write!(self.out, " {op_str} ")?;
-
-                    // See comment above
-                    if op == crate::BinaryOperator::Multiply
-                        && matches!(context.resolve_type(left), &crate::TypeInner::Matrix { .. })
-                    {
-                        self.put_wrapped_expression_for_packed_vec3_access(right, context, false)?;
-                    } else {
-                        self.put_expression(right, context, false)?;
-                    }
-
-                    if !is_scoped {
-                        write!(self.out, ")")?;
-                    }
+                    self.put_binop(op, left, right, context, is_scoped, &Self::put_expression)?;
                 }
             }
             crate::Expression::Select {
@@ -1982,6 +2095,11 @@ impl<W: Write> Writer<W> {
                 }
 
                 match fun {
+                    Mf::Abs if arg_type.scalar_kind() == Some(crate::ScalarKind::Sint) => {
+                        write!(self.out, "{ABS_FUNCTION}(")?;
+                        self.put_expression(arg, context, true)?;
+                        write!(self.out, ")")?;
+                    }
                     Mf::Distance if scalar_argument => {
                         write!(self.out, "{NAMESPACE}::abs(")?;
                         self.put_expression(arg, context, false)?;
@@ -2024,7 +2142,7 @@ impl<W: Write> Writer<W> {
                         // or metal will complain that select is ambiguous
                         match *inner {
                             crate::TypeInner::Vector { size, scalar } => {
-                                let size = back::vector_size_str(size);
+                                let size = common::vector_size_str(size);
                                 let name = scalar.to_msl_name();
                                 write!(self.out, "{name}{size}")?;
                             }
@@ -2132,6 +2250,7 @@ impl<W: Write> Writer<W> {
                         }
                     }
                     fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
+                        write!(self.out, "(")?;
                         if matches!(fun, Mf::Unpack4xU8) {
                             write!(self.out, "u")?;
                         }
@@ -2143,7 +2262,7 @@ impl<W: Write> Writer<W> {
                         self.put_expression(arg, context, true)?;
                         write!(self.out, " >> 16, ")?;
                         self.put_expression(arg, context, true)?;
-                        write!(self.out, " >> 24) << 24 >> 24")?;
+                        write!(self.out, " >> 24) << 24 >> 24)")?;
                     }
                     Mf::QuantizeToF16 => {
                         match *context.resolve_type(arg) {
@@ -2151,7 +2270,7 @@ impl<W: Write> Writer<W> {
                             crate::TypeInner::Vector { size, .. } => write!(
                                 self.out,
                                 "{NAMESPACE}::float{size}({NAMESPACE}::half{size}(",
-                                size = back::vector_size_str(size),
+                                size = common::vector_size_str(size),
                             )?,
                             _ => unreachable!(
                                 "Correct TypeInner for QuantizeToF16 should be already validated"
@@ -2254,6 +2373,9 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 }
             }
+            crate::Expression::RayQueryVertexPositions { .. } => {
+                unimplemented!()
+            }
             crate::Expression::RayQueryGetIntersection {
                 query,
                 committed: _,
@@ -2295,20 +2417,111 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Emits code for a binary operation, using the provided callback to emit
+    /// the left and right operands.
+    fn put_binop<F>(
+        &mut self,
+        op: crate::BinaryOperator,
+        left: Handle<crate::Expression>,
+        right: Handle<crate::Expression>,
+        context: &ExpressionContext,
+        is_scoped: bool,
+        put_expression: &F,
+    ) -> BackendResult
+    where
+        F: Fn(&mut Self, Handle<crate::Expression>, &ExpressionContext, bool) -> BackendResult,
+    {
+        let op_str = back::binary_operation_str(op);
+
+        if !is_scoped {
+            write!(self.out, "(")?;
+        }
+
+        // Cast packed vector if necessary
+        // Packed vector - matrix multiplications are not supported in MSL
+        if op == crate::BinaryOperator::Multiply
+            && matches!(
+                context.resolve_type(right),
+                &crate::TypeInner::Matrix { .. }
+            )
+        {
+            self.put_wrapped_expression_for_packed_vec3_access(
+                left,
+                context,
+                false,
+                put_expression,
+            )?;
+        } else {
+            put_expression(self, left, context, false)?;
+        }
+
+        write!(self.out, " {op_str} ")?;
+
+        // See comment above
+        if op == crate::BinaryOperator::Multiply
+            && matches!(context.resolve_type(left), &crate::TypeInner::Matrix { .. })
+        {
+            self.put_wrapped_expression_for_packed_vec3_access(
+                right,
+                context,
+                false,
+                put_expression,
+            )?;
+        } else {
+            put_expression(self, right, context, false)?;
+        }
+
+        if !is_scoped {
+            write!(self.out, ")")?;
+        }
+
+        Ok(())
+    }
+
     /// Used by expressions like Swizzle and Binary since they need packed_vec3's to be casted to a vec3
-    fn put_wrapped_expression_for_packed_vec3_access(
+    fn put_wrapped_expression_for_packed_vec3_access<F>(
         &mut self,
         expr_handle: Handle<crate::Expression>,
         context: &ExpressionContext,
         is_scoped: bool,
-    ) -> BackendResult {
+        put_expression: &F,
+    ) -> BackendResult
+    where
+        F: Fn(&mut Self, Handle<crate::Expression>, &ExpressionContext, bool) -> BackendResult,
+    {
         if let Some(scalar) = context.get_packed_vec_kind(expr_handle) {
             write!(self.out, "{}::{}3(", NAMESPACE, scalar.to_msl_name())?;
-            self.put_expression(expr_handle, context, is_scoped)?;
+            put_expression(self, expr_handle, context, is_scoped)?;
             write!(self.out, ")")?;
         } else {
-            self.put_expression(expr_handle, context, is_scoped)?;
+            put_expression(self, expr_handle, context, is_scoped)?;
         }
+        Ok(())
+    }
+
+    /// Emits code for an expression using the provided callback, wrapping the
+    /// result in a bitcast to the type `cast_to`.
+    fn put_bitcasted_expression<F>(
+        &mut self,
+        cast_to: &crate::TypeInner,
+        context: &ExpressionContext,
+        put_expression: &F,
+    ) -> BackendResult
+    where
+        F: Fn(&mut Self, &ExpressionContext, bool) -> BackendResult,
+    {
+        write!(self.out, "as_type<")?;
+        match *cast_to {
+            crate::TypeInner::Scalar(scalar) => put_numeric_type(&mut self.out, scalar, &[])?,
+            crate::TypeInner::Vector { size, scalar } => {
+                put_numeric_type(&mut self.out, scalar, &[size])?
+            }
+            _ => return Err(Error::UnsupportedBitCast(cast_to.clone())),
+        };
+        write!(self.out, ">(")?;
+        put_expression(self, context, true)?;
+        write!(self.out, ")")?;
+
         Ok(())
     }
 
@@ -2543,11 +2756,13 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         let accessing_wrapped_array = match *base_ty {
             crate::TypeInner::Array {
-                size: crate::ArraySize::Constant(_),
+                size: crate::ArraySize::Constant(_) | crate::ArraySize::Pending(_),
                 ..
             } => true,
             _ => false,
         };
+        let accessing_wrapped_binding_array =
+            matches!(*base_ty, crate::TypeInner::BindingArray { .. });
 
         self.put_access_chain(base, policy, context)?;
         if accessing_wrapped_array {
@@ -2582,6 +2797,10 @@ impl<W: Write> Writer<W> {
         }
 
         write!(self.out, "]")?;
+
+        if accessing_wrapped_binding_array {
+            write!(self.out, ".{WRAPPED_ARRAY_FIELD}")?;
+        }
 
         Ok(())
     }
@@ -3028,8 +3247,7 @@ impl<W: Write> Writer<W> {
                         }
 
                         self.put_block(lcase.next(), &case.body, context)?;
-                        if !case.fall_through
-                            && case.body.last().map_or(true, |s| !s.is_terminator())
+                        if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator())
                         {
                             writeln!(self.out, "{}break;", lcase.next())?;
                         }
@@ -3045,10 +3263,23 @@ impl<W: Write> Writer<W> {
                     ref continuing,
                     break_if,
                 } => {
-                    if !continuing.is_empty() || break_if.is_some() {
-                        let gate_name = self.namer.call("loop_init");
+                    let force_loop_bound_statements =
+                        self.gen_force_bounded_loop_statements(level, context);
+                    let gate_name = (!continuing.is_empty() || break_if.is_some())
+                        .then(|| self.namer.call("loop_init"));
+
+                    if let Some((ref decl, _)) = force_loop_bound_statements {
+                        writeln!(self.out, "{decl}")?;
+                    }
+                    if let Some(ref gate_name) = gate_name {
                         writeln!(self.out, "{level}bool {gate_name} = true;")?;
-                        writeln!(self.out, "{level}while(true) {{",)?;
+                    }
+
+                    writeln!(self.out, "{level}while(true) {{",)?;
+                    if let Some((_, ref break_and_inc)) = force_loop_bound_statements {
+                        writeln!(self.out, "{break_and_inc}")?;
+                    }
+                    if let Some(ref gate_name) = gate_name {
                         let lif = level.next();
                         let lcontinuing = lif.next();
                         writeln!(self.out, "{lif}if (!{gate_name}) {{")?;
@@ -3062,17 +3293,9 @@ impl<W: Write> Writer<W> {
                         }
                         writeln!(self.out, "{lif}}}")?;
                         writeln!(self.out, "{lif}{gate_name} = false;")?;
-                    } else {
-                        writeln!(self.out, "{level}while(true) {{",)?;
                     }
                     self.put_block(level.next(), body, context)?;
-                    self.emit_force_bounded_loop_macro()?;
-                    writeln!(
-                        self.out,
-                        "{}{}",
-                        level.next(),
-                        self.force_bounded_loop_macro_name
-                    )?;
+
                     writeln!(self.out, "{level}}}")?;
                 }
                 crate::Statement::Break => {
@@ -3234,6 +3457,21 @@ impl<W: Write> Writer<W> {
                     // Done
                     writeln!(self.out, ";")?;
                 }
+                crate::Statement::ImageAtomic {
+                    image,
+                    coordinate,
+                    array_index,
+                    fun,
+                    value,
+                } => {
+                    let address = TexelAddress {
+                        coordinate,
+                        array_index,
+                        sample: None,
+                        level: None,
+                    };
+                    self.put_image_atomic(level, image, &address, fun, value, context)?
+                }
                 crate::Statement::WorkGroupUniformLoad { pointer, result } => {
                     self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
 
@@ -3331,16 +3569,41 @@ impl<W: Write> Writer<W> {
                             self.named_expressions.insert(result, name);
                             self.put_expression(query, &context.expression, true)?;
                             writeln!(self.out, ".{RAY_QUERY_FIELD_READY};")?;
-                            //TODO: actually proceed?
-
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                writeln!(self.out, ".?.next();")?;
+                            }
+                        }
+                        crate::RayQueryFunction::GenerateIntersection { hit_t } => {
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                write!(self.out, ".?.commit_bounding_box_intersection(")?;
+                                self.put_expression(hit_t, &context.expression, true)?;
+                                writeln!(self.out, ");")?;
+                            } else {
+                                log::warn!("Ray Query GenerateIntersection is not yet supported");
+                            }
+                        }
+                        crate::RayQueryFunction::ConfirmIntersection => {
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                writeln!(self.out, ".?.commit_triangle_intersection();")?;
+                            } else {
+                                log::warn!("Ray Query ConfirmIntersection is not yet supported");
+                            }
+                        }
+                        crate::RayQueryFunction::Terminate => {
+                            if RAY_QUERY_MODERN_SUPPORT {
+                                write!(self.out, "{level}")?;
+                                self.put_expression(query, &context.expression, true)?;
+                                writeln!(self.out, ".?.abort();")?;
+                            }
                             write!(self.out, "{level}")?;
                             self.put_expression(query, &context.expression, true)?;
                             writeln!(self.out, ".{RAY_QUERY_FIELD_READY} = false;")?;
-                        }
-                        crate::RayQueryFunction::Terminate => {
-                            write!(self.out, "{level}")?;
-                            self.put_expression(query, &context.expression, true)?;
-                            writeln!(self.out, ".{RAY_QUERY_FIELD_INTERSECTION}.abort();")?;
                         }
                     }
                 }
@@ -3538,10 +3801,6 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        if !module.overrides.is_empty() {
-            return Err(Error::Override);
-        }
-
         self.names.clear();
         self.namer.reset(
             module,
@@ -3551,7 +3810,7 @@ impl<W: Write> Writer<W> {
             &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
         );
-        self.force_bounded_loop_macro_name.clear();
+        self.wrapped_functions.clear();
         self.struct_member_pads.clear();
 
         writeln!(
@@ -3568,12 +3827,12 @@ impl<W: Write> Writer<W> {
         let mut uses_ray_query = false;
         for (_, ty) in module.types.iter() {
             match ty.inner {
-                crate::TypeInner::AccelerationStructure => {
+                crate::TypeInner::AccelerationStructure { .. } => {
                     if options.lang_version < (2, 4) {
                         return Err(Error::UnsupportedRayTracing);
                     }
                 }
-                crate::TypeInner::RayQuery => {
+                crate::TypeInner::RayQuery { .. } => {
                     if options.lang_version < (2, 4) {
                         return Err(Error::UnsupportedRayTracing);
                     }
@@ -3694,7 +3953,18 @@ impl<W: Write> Writer<W> {
     }
 
     fn write_type_defs(&mut self, module: &crate::Module) -> BackendResult {
+        let mut generated_argument_buffer_wrapper = false;
         for (handle, ty) in module.types.iter() {
+            if let crate::TypeInner::BindingArray { .. } = ty.inner {
+                if !generated_argument_buffer_wrapper {
+                    writeln!(self.out, "template <typename T>")?;
+                    writeln!(self.out, "struct {ARGUMENT_BUFFER_WRAPPER_STRUCT} {{")?;
+                    writeln!(self.out, "{}T {WRAPPED_ARRAY_FIELD};", back::INDENT)?;
+                    writeln!(self.out, "}};")?;
+                    generated_argument_buffer_wrapper = true;
+                }
+            }
+
             if !ty.needs_alias() {
                 continue;
             }
@@ -3727,8 +3997,8 @@ impl<W: Write> Writer<W> {
                         first_time: false,
                     };
 
-                    match size {
-                        crate::ArraySize::Constant(size) => {
+                    match size.resolve(module.to_ctx())? {
+                        proc::IndexableLength::Known(size) => {
                             writeln!(self.out, "struct {name} {{")?;
                             writeln!(
                                 self.out,
@@ -3740,7 +4010,7 @@ impl<W: Write> Writer<W> {
                             )?;
                             writeln!(self.out, "}};")?;
                         }
-                        crate::ArraySize::Dynamic => {
+                        proc::IndexableLength::Dynamic => {
                             writeln!(self.out, "typedef {base_name} {name}[1];")?;
                         }
                     }
@@ -3820,17 +4090,17 @@ impl<W: Write> Writer<W> {
         // Write functions to create special types.
         for (type_key, struct_ty) in module.special_types.predeclared_types.iter() {
             match type_key {
-                &crate::PredeclaredType::ModfResult { size, width }
-                | &crate::PredeclaredType::FrexpResult { size, width } => {
+                &crate::PredeclaredType::ModfResult { size, scalar }
+                | &crate::PredeclaredType::FrexpResult { size, scalar } => {
                     let arg_type_name_owner;
                     let arg_type_name = if let Some(size) = size {
                         arg_type_name_owner = format!(
                             "{NAMESPACE}::{}{}",
-                            if width == 8 { "double" } else { "float" },
+                            if scalar.width == 8 { "double" } else { "float" },
                             size as u8
                         );
                         &arg_type_name_owner
-                    } else if width == 8 {
+                    } else if scalar.width == 8 {
                         "double"
                     } else {
                         "float"
@@ -3914,7 +4184,7 @@ template <typename A>
             };
             let name = &self.names[&NameKey::Constant(handle)];
             write!(self.out, "constant {ty_name} {name} = ")?;
-            self.put_const_expression(constant.init, module, mod_info)?;
+            self.put_const_expression(constant.init, module, mod_info, &module.global_expressions)?;
             writeln!(self.out, ";")?;
         }
 
@@ -4005,6 +4275,13 @@ template <typename A>
     ) -> Result<(String, u32, u32), Error> {
         use back::msl::VertexFormat::*;
         match format {
+            Uint8 => {
+                let name = self.namer.call("unpackUint8");
+                writeln!(self.out, "uint {name}(metal::uchar b0) {{")?;
+                writeln!(self.out, "{}return uint(b0);", back::INDENT)?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 1, 1))
+            }
             Uint8x2 => {
                 let name = self.namer.call("unpackUint8x2");
                 writeln!(
@@ -4032,6 +4309,13 @@ template <typename A>
                 )?;
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
+            }
+            Sint8 => {
+                let name = self.namer.call("unpackSint8");
+                writeln!(self.out, "int {name}(metal::uchar b0) {{")?;
+                writeln!(self.out, "{}return int(as_type<char>(b0));", back::INDENT)?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 1, 1))
             }
             Sint8x2 => {
                 let name = self.namer.call("unpackSint8x2");
@@ -4069,6 +4353,17 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
             }
+            Unorm8 => {
+                let name = self.namer.call("unpackUnorm8");
+                writeln!(self.out, "float {name}(metal::uchar b0) {{")?;
+                writeln!(
+                    self.out,
+                    "{}return float(float(b0) / 255.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 1, 1))
+            }
             Unorm8x2 => {
                 let name = self.namer.call("unpackUnorm8x2");
                 writeln!(
@@ -4105,6 +4400,17 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
             }
+            Snorm8 => {
+                let name = self.namer.call("unpackSnorm8");
+                writeln!(self.out, "float {name}(metal::uchar b0) {{")?;
+                writeln!(
+                    self.out,
+                    "{}return float(metal::max(-1.0f, as_type<char>(b0) / 127.0f));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 1, 1))
+            }
             Snorm8x2 => {
                 let name = self.namer.call("unpackSnorm8x2");
                 writeln!(
@@ -4140,6 +4446,21 @@ template <typename A>
                 )?;
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
+            }
+            Uint16 => {
+                let name = self.namer.call("unpackUint16");
+                writeln!(
+                    self.out,
+                    "metal::uint {name}(metal::uint b0, \
+                                        metal::uint b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::uint(b1 << 8 | b0);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 1))
             }
             Uint16x2 => {
                 let name = self.namer.call("unpackUint16x2");
@@ -4183,6 +4504,21 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 8, 4))
             }
+            Sint16 => {
+                let name = self.namer.call("unpackSint16");
+                writeln!(
+                    self.out,
+                    "int {name}(metal::ushort b0, \
+                                metal::ushort b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return int(as_type<short>(metal::ushort(b1 << 8 | b0)));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 1))
+            }
             Sint16x2 => {
                 let name = self.namer.call("unpackSint16x2");
                 writeln!(
@@ -4224,6 +4560,21 @@ template <typename A>
                 )?;
                 writeln!(self.out, "}}")?;
                 Ok((name, 8, 4))
+            }
+            Unorm16 => {
+                let name = self.namer.call("unpackUnorm16");
+                writeln!(
+                    self.out,
+                    "float {name}(metal::ushort b0, \
+                                  metal::ushort b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return float(float(b1 << 8 | b0) / 65535.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 1))
             }
             Unorm16x2 => {
                 let name = self.namer.call("unpackUnorm16x2");
@@ -4267,6 +4618,21 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 8, 4))
             }
+            Snorm16 => {
+                let name = self.namer.call("unpackSnorm16");
+                writeln!(
+                    self.out,
+                    "float {name}(metal::ushort b0, \
+                                  metal::ushort b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::unpack_snorm2x16_to_float(b1 << 8 | b0).x;",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 1))
+            }
             Snorm16x2 => {
                 let name = self.namer.call("unpackSnorm16x2");
                 writeln!(
@@ -4305,6 +4671,21 @@ template <typename A>
                 )?;
                 writeln!(self.out, "}}")?;
                 Ok((name, 8, 4))
+            }
+            Float16 => {
+                let name = self.namer.call("unpackFloat16");
+                writeln!(
+                    self.out,
+                    "float {name}(metal::ushort b0, \
+                                  metal::ushort b1) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return float(as_type<half>(metal::ushort(b1 << 8 | b0)));",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 2, 1))
             }
             Float16x2 => {
                 let name = self.namer.call("unpackFloat16x2");
@@ -4670,7 +5051,290 @@ template <typename A>
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
             }
+            Unorm8x4Bgra => {
+                let name = self.namer.call("unpackUnorm8x4Bgra");
+                writeln!(
+                    self.out,
+                    "metal::float4 {name}(metal::uchar b0, \
+                                          metal::uchar b1, \
+                                          metal::uchar b2, \
+                                          metal::uchar b3) {{"
+                )?;
+                writeln!(
+                    self.out,
+                    "{}return metal::float4(float(b2) / 255.0f, \
+                                            float(b1) / 255.0f, \
+                                            float(b0) / 255.0f, \
+                                            float(b3) / 255.0f);",
+                    back::INDENT
+                )?;
+                writeln!(self.out, "}}")?;
+                Ok((name, 4, 4))
+            }
         }
+    }
+
+    pub(super) fn write_wrapped_functions(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+    ) -> BackendResult {
+        for (expr_handle, expr) in func_ctx.expressions.iter() {
+            match *expr {
+                crate::Expression::Unary { op, expr: operand } => {
+                    let operand_ty = func_ctx.resolve_type(operand, &module.types);
+                    match op {
+                        // Negating the TYPE_MIN of a two's complement signed integer
+                        // type causes overflow, which is undefined behaviour in MSL. To
+                        // avoid this we bitcast the value to unsigned and negate it,
+                        // then bitcast back to signed.
+                        // This adheres to the WGSL spec in that the negative of the
+                        // type's minimum value should equal to the minimum value.
+                        crate::UnaryOperator::Negate
+                            if operand_ty.scalar_kind() == Some(crate::ScalarKind::Sint) =>
+                        {
+                            let Some((vector_size, scalar)) = operand_ty.vector_size_and_scalar()
+                            else {
+                                continue;
+                            };
+                            let wrapped = WrappedFunction::UnaryOp {
+                                op,
+                                ty: (vector_size, scalar),
+                            };
+                            if !self.wrapped_functions.insert(wrapped) {
+                                continue;
+                            }
+
+                            let unsigned_scalar = crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                ..scalar
+                            };
+                            let mut type_name = String::new();
+                            let mut unsigned_type_name = String::new();
+                            match vector_size {
+                                None => {
+                                    put_numeric_type(&mut type_name, scalar, &[])?;
+                                    put_numeric_type(&mut unsigned_type_name, unsigned_scalar, &[])?
+                                }
+                                Some(size) => {
+                                    put_numeric_type(&mut type_name, scalar, &[size])?;
+                                    put_numeric_type(
+                                        &mut unsigned_type_name,
+                                        unsigned_scalar,
+                                        &[size],
+                                    )?;
+                                }
+                            };
+
+                            writeln!(self.out, "{type_name} {NEG_FUNCTION}({type_name} val) {{")?;
+                            let level = back::Level(1);
+                            writeln!(self.out, "{level}return as_type<{type_name}>(-as_type<{unsigned_type_name}>(val));")?;
+                            writeln!(self.out, "}}")?;
+                            writeln!(self.out)?;
+                        }
+                        _ => {}
+                    }
+                }
+                crate::Expression::Binary { op, left, right } => {
+                    let expr_ty = func_ctx.resolve_type(expr_handle, &module.types);
+                    let left_ty = func_ctx.resolve_type(left, &module.types);
+                    let right_ty = func_ctx.resolve_type(right, &module.types);
+                    match (op, expr_ty.scalar_kind()) {
+                        // Signed integer division of TYPE_MIN / -1, or signed or
+                        // unsigned division by zero, gives an unspecified value in MSL.
+                        // We override the divisor to 1 in these cases.
+                        // This adheres to the WGSL spec in that:
+                        // * TYPE_MIN / -1 == TYPE_MIN
+                        // * x / 0 == x
+                        (
+                            crate::BinaryOperator::Divide,
+                            Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
+                        ) => {
+                            let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
+                                continue;
+                            };
+                            let Some(right_wrapped_ty) = right_ty.vector_size_and_scalar() else {
+                                continue;
+                            };
+                            let wrapped = WrappedFunction::BinaryOp {
+                                op,
+                                left_ty: left_wrapped_ty,
+                                right_ty: right_wrapped_ty,
+                            };
+                            if !self.wrapped_functions.insert(wrapped) {
+                                continue;
+                            }
+
+                            let Some((vector_size, scalar)) = expr_ty.vector_size_and_scalar()
+                            else {
+                                continue;
+                            };
+                            let mut type_name = String::new();
+                            match vector_size {
+                                None => put_numeric_type(&mut type_name, scalar, &[])?,
+                                Some(size) => put_numeric_type(&mut type_name, scalar, &[size])?,
+                            };
+                            writeln!(
+                                self.out,
+                                "{type_name} {DIV_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
+                            )?;
+                            let level = back::Level(1);
+                            match scalar.kind {
+                                crate::ScalarKind::Sint => {
+                                    let min = -1i64 << (scalar.width as u32 * 8 - 1);
+                                    writeln!(self.out, "{level}return lhs / metal::select(rhs, 1, (lhs == {min} & rhs == -1) | (rhs == 0));")?
+                                }
+                                crate::ScalarKind::Uint => writeln!(
+                                    self.out,
+                                    "{level}return lhs / metal::select(rhs, 1u, rhs == 0u);"
+                                )?,
+                                _ => unreachable!(),
+                            }
+                            writeln!(self.out, "}}")?;
+                            writeln!(self.out)?;
+                        }
+                        // Integer modulo where one or both operands are negative, or the
+                        // divisor is zero, is undefined behaviour in MSL. To avoid this
+                        // we use the following equation:
+                        //
+                        // dividend - (dividend / divisor) * divisor
+                        //
+                        // overriding the divisor to 1 if either it is 0, or it is -1
+                        // and the dividend is TYPE_MIN.
+                        //
+                        // This adheres to the WGSL spec in that:
+                        // * TYPE_MIN % -1 == 0
+                        // * x % 0 == 0
+                        (
+                            crate::BinaryOperator::Modulo,
+                            Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
+                        ) => {
+                            let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
+                                continue;
+                            };
+                            let Some((right_vector_size, right_scalar)) =
+                                right_ty.vector_size_and_scalar()
+                            else {
+                                continue;
+                            };
+                            let wrapped = WrappedFunction::BinaryOp {
+                                op,
+                                left_ty: left_wrapped_ty,
+                                right_ty: (right_vector_size, right_scalar),
+                            };
+                            if !self.wrapped_functions.insert(wrapped) {
+                                continue;
+                            }
+
+                            let Some((vector_size, scalar)) = expr_ty.vector_size_and_scalar()
+                            else {
+                                continue;
+                            };
+                            let mut type_name = String::new();
+                            match vector_size {
+                                None => put_numeric_type(&mut type_name, scalar, &[])?,
+                                Some(size) => put_numeric_type(&mut type_name, scalar, &[size])?,
+                            };
+                            let mut rhs_type_name = String::new();
+                            match right_vector_size {
+                                None => put_numeric_type(&mut rhs_type_name, right_scalar, &[])?,
+                                Some(size) => {
+                                    put_numeric_type(&mut rhs_type_name, right_scalar, &[size])?
+                                }
+                            };
+
+                            writeln!(
+                                self.out,
+                                "{type_name} {MOD_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
+                            )?;
+                            let level = back::Level(1);
+                            match scalar.kind {
+                                crate::ScalarKind::Sint => {
+                                    let min = -1i64 << (scalar.width as u32 * 8 - 1);
+                                    writeln!(self.out, "{level}{rhs_type_name} divisor = metal::select(rhs, 1, (lhs == {min} & rhs == -1) | (rhs == 0));")?;
+                                    writeln!(
+                                        self.out,
+                                        "{level}return lhs - (lhs / divisor) * divisor;"
+                                    )?
+                                }
+                                crate::ScalarKind::Uint => writeln!(
+                                    self.out,
+                                    "{level}return lhs % metal::select(rhs, 1u, rhs == 0u);"
+                                )?,
+                                _ => unreachable!(),
+                            }
+                            writeln!(self.out, "}}")?;
+                            writeln!(self.out)?;
+                        }
+                        _ => {}
+                    }
+                }
+                crate::Expression::Math {
+                    fun,
+                    arg,
+                    arg1: _,
+                    arg2: _,
+                    arg3: _,
+                } => {
+                    let arg_ty = func_ctx.resolve_type(arg, &module.types);
+                    match fun {
+                        // Taking the absolute value of the TYPE_MIN of a two's
+                        // complement signed integer type causes overflow, which is
+                        // undefined behaviour in MSL. To avoid this, when the value is
+                        // negative we bitcast the value to unsigned and negate it, then
+                        // bitcast back to signed.
+                        // This adheres to the WGSL spec in that the absolute of the
+                        // type's minimum value should equal to the minimum value.
+                        crate::MathFunction::Abs
+                            if arg_ty.scalar_kind() == Some(crate::ScalarKind::Sint) =>
+                        {
+                            let Some((vector_size, scalar)) = arg_ty.vector_size_and_scalar()
+                            else {
+                                continue;
+                            };
+                            let wrapped = WrappedFunction::Math {
+                                fun,
+                                arg_ty: (vector_size, scalar),
+                            };
+                            if !self.wrapped_functions.insert(wrapped) {
+                                continue;
+                            }
+
+                            let unsigned_scalar = crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                ..scalar
+                            };
+                            let mut type_name = String::new();
+                            let mut unsigned_type_name = String::new();
+                            match vector_size {
+                                None => {
+                                    put_numeric_type(&mut type_name, scalar, &[])?;
+                                    put_numeric_type(&mut unsigned_type_name, unsigned_scalar, &[])?
+                                }
+                                Some(size) => {
+                                    put_numeric_type(&mut type_name, scalar, &[size])?;
+                                    put_numeric_type(
+                                        &mut unsigned_type_name,
+                                        unsigned_scalar,
+                                        &[size],
+                                    )?;
+                                }
+                            };
+
+                            writeln!(self.out, "{type_name} {ABS_FUNCTION}({type_name} val) {{")?;
+                            let level = back::Level(1);
+                            writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(-as_type<{unsigned_type_name}>(val)), val, val >= 0);")?;
+                            writeln!(self.out, "}}")?;
+                            writeln!(self.out)?;
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
     }
 
     // Returns the array of mapped entry point names.
@@ -4784,6 +5448,17 @@ template <typename A>
                 fun_handle
             );
 
+            let ctx = back::FunctionCtx {
+                ty: back::FunctionType::Function(fun_handle),
+                info: &mod_info[fun_handle],
+                expressions: &fun.expressions,
+                named_expressions: &fun.named_expressions,
+                expr_kind_tracker: ExpressionKindTracker::from_arena(&fun.expressions),
+            };
+
+            writeln!(self.out)?;
+            self.write_wrapped_functions(module, &ctx)?;
+
             let fun_info = &mod_info[fun_handle];
             pass_through_globals.clear();
             let mut needs_buffer_sizes = false;
@@ -4796,7 +5471,6 @@ template <typename A>
                 }
             }
 
-            writeln!(self.out)?;
             let fun_name = &self.names[&NameKey::Function(fun_handle)];
             match fun.result {
                 Some(ref result) => {
@@ -4880,6 +5554,7 @@ template <typename A>
                     module,
                     mod_info,
                     pipeline_options,
+                    force_loop_bounding: options.force_loop_bounding,
                 },
                 result_struct: None,
             };
@@ -4933,6 +5608,16 @@ template <typename A>
                 ep_index
             );
 
+            let ctx = back::FunctionCtx {
+                ty: back::FunctionType::EntryPoint(ep_index as u16),
+                info: fun_info,
+                expressions: &fun.expressions,
+                named_expressions: &fun.named_expressions,
+                expr_kind_tracker: ExpressionKindTracker::from_arena(&fun.expressions),
+            };
+
+            self.write_wrapped_functions(module, &ctx)?;
+
             let (em_str, in_mode, out_mode, can_vertex_pull) = match ep.stage {
                 crate::ShaderStage::Vertex => (
                     "vertex",
@@ -4940,13 +5625,13 @@ template <typename A>
                     LocationMode::VertexOutput,
                     true,
                 ),
-                crate::ShaderStage::Fragment { .. } => (
+                crate::ShaderStage::Fragment => (
                     "fragment",
                     LocationMode::FragmentInput,
                     LocationMode::FragmentOutput,
                     false,
                 ),
-                crate::ShaderStage::Compute { .. } => (
+                crate::ShaderStage::Compute => (
                     "kernel",
                     LocationMode::Uniform,
                     LocationMode::Uniform,
@@ -4990,13 +5675,10 @@ template <typename A>
                             let target = options.get_resource_binding_target(ep, br);
                             let good = match target {
                                 Some(target) => {
-                                    let binding_ty = match module.types[var.ty].inner {
-                                        crate::TypeInner::BindingArray { base, .. } => {
-                                            &module.types[base].inner
-                                        }
-                                        ref ty => ty,
-                                    };
-                                    match *binding_ty {
+                                    // We intentionally don't dereference binding_arrays here,
+                                    // so that binding arrays fall to the buffer location.
+
+                                    match module.types[var.ty].inner {
                                         crate::TypeInner::Image { .. } => target.texture.is_some(),
                                         crate::TypeInner::Sampler { .. } => {
                                             target.sampler.is_some()
@@ -5007,8 +5689,7 @@ template <typename A>
                                 None => false,
                             };
                             if !good {
-                                ep_error =
-                                    Some(super::EntryPointError::MissingBindTarget(br.clone()));
+                                ep_error = Some(super::EntryPointError::MissingBindTarget(*br));
                                 break;
                             }
                         }
@@ -5123,7 +5804,7 @@ template <typename A>
                             AttributeMappingResolved {
                                 ty_name: ty_name.to_string(),
                                 dimension: ty_name.vertex_input_dimension(),
-                                ty_is_int: ty_name.scalar().map_or(false, scalar_is_int),
+                                ty_is_int: ty_name.scalar().is_some_and(scalar_is_int),
                                 name: name.to_string(),
                             },
                         );
@@ -5474,7 +6155,7 @@ template <typename A>
                 }
                 if let Some(value) = var.init {
                     write!(self.out, " = ")?;
-                    self.put_const_expression(value, module, mod_info)?;
+                    self.put_const_expression(value, module, mod_info, &module.global_expressions)?;
                 }
                 writeln!(self.out)?;
             }
@@ -5679,7 +6360,12 @@ template <typename A>
                     match var.init {
                         Some(value) => {
                             write!(self.out, " = ")?;
-                            self.put_const_expression(value, module, mod_info)?;
+                            self.put_const_expression(
+                                value,
+                                module,
+                                mod_info,
+                                &module.global_expressions,
+                            )?;
                             writeln!(self.out, ";")?;
                         }
                         None => {
@@ -5780,6 +6466,7 @@ template <typename A>
                     module,
                     mod_info,
                     pipeline_options,
+                    force_loop_bounding: options.force_loop_bounding,
                 },
                 result_struct: Some(&stage_out_name),
             };
@@ -5846,6 +6533,12 @@ template <typename A>
             writeln!(
                 self.out,
                 "{level}{NAMESPACE}::simdgroup_barrier({NAMESPACE}::mem_flags::mem_threadgroup);",
+            )?;
+        }
+        if flags.contains(crate::Barrier::TEXTURE) {
+            writeln!(
+                self.out,
+                "{level}{NAMESPACE}::threadgroup_barrier({NAMESPACE}::mem_flags::mem_texture);",
             )?;
         }
         Ok(())
@@ -6005,8 +6698,7 @@ mod workgroup_mem_init {
                         writeln!(self.out, ", 0, {NAMESPACE}::memory_order_relaxed);")?;
                     }
                     crate::TypeInner::Array { base, size, .. } => {
-                        let count = match size.to_indexable_length(module).expect("Bad array size")
-                        {
+                        let count = match size.resolve(module.to_ctx())? {
                             proc::IndexableLength::Known(count) => count,
                             proc::IndexableLength::Dynamic => unreachable!(),
                         };

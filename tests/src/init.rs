@@ -1,5 +1,4 @@
-use wgpu::{Adapter, Device, Instance, Queue};
-use wgt::{Backends, Features, Limits};
+use wgpu::{Adapter, Backends, Device, Features, Instance, Limits, Queue};
 
 use crate::report::AdapterReport;
 
@@ -34,14 +33,32 @@ pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instanc
     let dx12_shader_compiler = if force_fxc {
         wgpu::Dx12Compiler::Fxc
     } else {
-        wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default()
+        wgpu::Dx12Compiler::from_env().unwrap_or(wgpu::Dx12Compiler::StaticDxc)
     };
-    let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
-    Instance::new(wgpu::InstanceDescriptor {
+    Instance::new(&wgpu::InstanceDescriptor {
         backends,
         flags: wgpu::InstanceFlags::debugging().with_env(),
-        dx12_shader_compiler,
-        gles_minor_version,
+        backend_options: wgpu::BackendOptions {
+            dx12: wgpu::Dx12BackendOptions {
+                shader_compiler: dx12_shader_compiler,
+            },
+            gl: wgpu::GlBackendOptions {
+                fence_behavior: if cfg!(target_family = "wasm") {
+                    // On WebGL, you cannot call Poll(Wait) with any timeout. This is because the
+                    // browser does not things to block. However all of our tests are written to
+                    // expect this behavior. This is the workaround to allow this to work.
+                    //
+                    // However on native you can wait, so we want to ensure that behavior as well.
+                    wgpu::GlFenceBehavior::AutoFinish
+                } else {
+                    wgpu::GlFenceBehavior::Normal
+                },
+                ..Default::default()
+            }
+            .with_env(),
+            // TODO(https://github.com/gfx-rs/wgpu/issues/7119): Enable noop backend?
+            noop: wgpu::NoopBackendOptions::default(),
+        },
     })
 }
 

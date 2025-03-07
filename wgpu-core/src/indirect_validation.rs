@@ -1,5 +1,5 @@
-use std::mem::size_of;
-use std::num::NonZeroU64;
+use alloc::{boxed::Box, format, string::ToString as _};
+use core::num::NonZeroU64;
 
 use thiserror::Error;
 
@@ -117,13 +117,13 @@ impl IndirectValidation {
             })
         })?;
         let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
-            module: std::borrow::Cow::Owned(module),
+            module: alloc::borrow::Cow::Owned(module),
             info,
             debug_source: None,
         });
         let hal_desc = hal::ShaderModuleDescriptor {
             label: None,
-            runtime_checks: false,
+            runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
         };
         let module =
             unsafe { device.create_shader_module(&hal_desc, hal_shader) }.map_err(|error| {
@@ -180,7 +180,7 @@ impl IndirectValidation {
 
         let pipeline_layout_desc = hal::PipelineLayoutDescriptor {
             label: None,
-            flags: hal::PipelineLayoutFlags::FIRST_VERTEX_INSTANCE,
+            flags: hal::PipelineLayoutFlags::empty(),
             bind_group_layouts: &[
                 dst_bind_group_layout.as_ref(),
                 src_bind_group_layout.as_ref(),
@@ -226,7 +226,7 @@ impl IndirectValidation {
         let dst_buffer_desc = hal::BufferDescriptor {
             label: None,
             size: DST_BUFFER_SIZE.get(),
-            usage: hal::BufferUses::INDIRECT | hal::BufferUses::STORAGE_READ_WRITE,
+            usage: wgt::BufferUses::INDIRECT | wgt::BufferUses::STORAGE_READ_WRITE,
             memory_flags: hal::MemoryFlags::empty(),
         };
         let dst_buffer =

@@ -1,3 +1,5 @@
+use alloc::format;
+
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::lexer::Token;
 

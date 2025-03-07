@@ -1,6 +1,8 @@
-use crate::arena::{Arena, Handle, UniqueArena};
+use alloc::{format, string::String};
 
 use thiserror::Error;
+
+use crate::arena::{Arena, Handle, UniqueArena};
 
 /// The result of computing an expression's type.
 ///
@@ -147,6 +149,7 @@ impl Clone for TypeResolution {
                     scalar,
                     space,
                 },
+                Ti::Array { base, size, stride } => Ti::Array { base, size, stride },
                 _ => unreachable!("Unexpected clone type: {:?}", v),
             }),
         }
@@ -668,19 +671,9 @@ impl<'a> ResolveContext<'a> {
                     | Mf::Pow
                     | Mf::QuantizeToF16 => res_arg.clone(),
                     Mf::Modf | Mf::Frexp => {
-                        let (size, width) = match res_arg.inner_with(types) {
-                            &Ti::Scalar(crate::Scalar {
-                                kind: crate::ScalarKind::Float,
-                                width,
-                            }) => (None, width),
-                            &Ti::Vector {
-                                scalar:
-                                    crate::Scalar {
-                                        kind: crate::ScalarKind::Float,
-                                        width,
-                                    },
-                                size,
-                            } => (Some(size), width),
+                        let (size, scalar) = match res_arg.inner_with(types) {
+                            &Ti::Scalar(scalar) => (None, scalar),
+                            &Ti::Vector { scalar, size } => (Some(size), scalar),
                             ref other => {
                                 return Err(ResolveError::IncompatibleOperands(format!(
                                     "{fun:?}({other:?}, _)"
@@ -691,9 +684,9 @@ impl<'a> ResolveContext<'a> {
                             .special_types
                             .predeclared_types
                             .get(&if fun == Mf::Modf {
-                                crate::PredeclaredType::ModfResult { size, width }
+                                crate::PredeclaredType::ModfResult { size, scalar }
                             } else {
-                                crate::PredeclaredType::FrexpResult { size, width }
+                                crate::PredeclaredType::FrexpResult { size, scalar }
                             })
                             .ok_or(ResolveError::MissingSpecialType)?;
                         TypeResolution::Handle(*result)
@@ -908,6 +901,13 @@ impl<'a> ResolveContext<'a> {
                     .ok_or(ResolveError::MissingSpecialType)?;
                 TypeResolution::Handle(result)
             }
+            crate::Expression::RayQueryVertexPositions { .. } => {
+                let result = self
+                    .special_types
+                    .ray_vertex_return
+                    .ok_or(ResolveError::MissingSpecialType)?;
+                TypeResolution::Handle(result)
+            }
             crate::Expression::SubgroupBallotResult => TypeResolution::Value(Ti::Vector {
                 scalar: crate::Scalar::U32,
                 size: crate::VectorSize::Quad,
@@ -918,6 +918,5 @@ impl<'a> ResolveContext<'a> {
 
 #[test]
 fn test_error_size() {
-    use std::mem::size_of;
     assert_eq!(size_of::<ResolveError>(), 32);
 }

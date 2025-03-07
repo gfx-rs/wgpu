@@ -1,19 +1,21 @@
-use super::{conv, RawTlasInstance};
-
-use arrayvec::ArrayVec;
-use ash::{khr, vk};
-use parking_lot::Mutex;
-
-use crate::TlasInstance;
 use std::{
-    borrow::Cow,
-    collections::{hash_map::Entry, BTreeMap},
+    borrow::{Cow, ToOwned as _},
+    collections::BTreeMap,
     ffi::{CStr, CString},
-    mem::{self, size_of, MaybeUninit},
+    mem::{self, MaybeUninit},
     num::NonZeroU32,
     ptr, slice,
     sync::Arc,
+    vec::Vec,
 };
+
+use arrayvec::ArrayVec;
+use ash::{khr, vk};
+use hashbrown::hash_map::Entry;
+use parking_lot::Mutex;
+
+use super::{conv, RawTlasInstance};
+use crate::TlasInstance;
 
 impl super::DeviceShared {
     /// Set the name of `object` to `name`.
@@ -417,6 +419,10 @@ impl
                 vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
                 descriptor_count.storage_buffer_dynamic,
             ),
+            (
+                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
+                descriptor_count.acceleration_structure,
+            ),
         ];
 
         let filtered_counts = unfiltered_counts
@@ -786,7 +792,7 @@ impl super::Device {
 
     /// # Safety
     ///
-    /// - Vulkan 1.1+ (or VK_KHR_external_memory)
+    /// - Vulkan (with VK_KHR_external_memory_win32)
     /// - The `d3d11_shared_handle` must be valid and respecting `desc`
     /// - `VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT` flag is used because we need to hold a reference to the handle
     #[cfg(windows)]
@@ -795,8 +801,12 @@ impl super::Device {
         d3d11_shared_handle: windows::Win32::Foundation::HANDLE,
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
-        if !self.shared.private_caps.external_memory_win32 {
-            log::error!("VK_KHR_external_memory extension is required");
+        if !self
+            .shared
+            .features
+            .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_WIN32)
+        {
+            log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
             return Err(crate::DeviceError::ResourceCreationFailed);
         }
 
@@ -894,23 +904,27 @@ impl super::Device {
                 runtime_checks,
             } => {
                 let pipeline_options = naga::back::spv::PipelineOptions {
-                    entry_point: stage.entry_point.to_string(),
+                    entry_point: stage.entry_point.to_owned(),
                     shader_stage: naga_stage,
                 };
-                let needs_temp_options = !runtime_checks
+                let needs_temp_options = !runtime_checks.bounds_checks
+                    || !runtime_checks.force_loop_bounding
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory;
                 let mut temp_options;
                 let options = if needs_temp_options {
                     temp_options = self.naga_options.clone();
-                    if !runtime_checks {
+                    if !runtime_checks.bounds_checks {
                         temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
                             index: naga::proc::BoundsCheckPolicy::Unchecked,
                             buffer: naga::proc::BoundsCheckPolicy::Unchecked,
                             image_load: naga::proc::BoundsCheckPolicy::Unchecked,
                             binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                         };
+                    }
+                    if !runtime_checks.force_loop_bounding {
+                        temp_options.force_loop_bounding = false;
                     }
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
@@ -1031,17 +1045,17 @@ impl crate::Device for super::Device {
 
         let mut alloc_usage = if desc
             .usage
-            .intersects(crate::BufferUses::MAP_READ | crate::BufferUses::MAP_WRITE)
+            .intersects(wgt::BufferUses::MAP_READ | wgt::BufferUses::MAP_WRITE)
         {
             let mut flags = gpu_alloc::UsageFlags::HOST_ACCESS;
             //TODO: find a way to use `crate::MemoryFlags::PREFER_COHERENT`
             flags.set(
                 gpu_alloc::UsageFlags::DOWNLOAD,
-                desc.usage.contains(crate::BufferUses::MAP_READ),
+                desc.usage.contains(wgt::BufferUses::MAP_READ),
             );
             flags.set(
                 gpu_alloc::UsageFlags::UPLOAD,
-                desc.usage.contains(crate::BufferUses::MAP_WRITE),
+                desc.usage.contains(wgt::BufferUses::MAP_WRITE),
             );
             flags
         } else {
@@ -1296,7 +1310,7 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::SamplerDescriptor,
     ) -> Result<super::Sampler, crate::DeviceError> {
-        let mut vk_info = vk::SamplerCreateInfo::default()
+        let mut create_info = vk::SamplerCreateInfo::default()
             .flags(vk::SamplerCreateFlags::empty())
             .mag_filter(conv::map_filter_mode(desc.mag_filter))
             .min_filter(conv::map_filter_mode(desc.min_filter))
@@ -1308,7 +1322,7 @@ impl crate::Device for super::Device {
             .max_lod(desc.lod_clamp.end);
 
         if let Some(fun) = desc.compare {
-            vk_info = vk_info
+            create_info = create_info
                 .compare_enable(true)
                 .compare_op(conv::map_comparison(fun));
         }
@@ -1316,32 +1330,38 @@ impl crate::Device for super::Device {
         if desc.anisotropy_clamp != 1 {
             // We only enable anisotropy if it is supported, and wgpu-hal interface guarantees
             // the clamp is in the range [1, 16] which is always supported if anisotropy is.
-            vk_info = vk_info
+            create_info = create_info
                 .anisotropy_enable(true)
                 .max_anisotropy(desc.anisotropy_clamp as f32);
         }
 
         if let Some(color) = desc.border_color {
-            vk_info = vk_info.border_color(conv::map_border_color(color));
+            create_info = create_info.border_color(conv::map_border_color(color));
         }
 
-        let raw = unsafe {
-            self.shared
-                .raw
-                .create_sampler(&vk_info, None)
-                .map_err(super::map_host_device_oom_and_ioca_err)?
-        };
+        let raw = self
+            .shared
+            .sampler_cache
+            .lock()
+            .create_sampler(&self.shared.raw, create_info)?;
 
+        // Note: Cached samplers will just continually overwrite the label
+        //
+        // https://github.com/gfx-rs/wgpu/issues/6867
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
         self.counters.samplers.add(1);
 
-        Ok(super::Sampler { raw })
+        Ok(super::Sampler { raw, create_info })
     }
     unsafe fn destroy_sampler(&self, sampler: super::Sampler) {
-        unsafe { self.shared.raw.destroy_sampler(sampler.raw, None) };
+        self.shared.sampler_cache.lock().destroy_sampler(
+            &self.shared.raw,
+            sampler.create_info,
+            sampler.raw,
+        );
 
         self.counters.samplers.sub(1);
     }
@@ -1426,7 +1446,7 @@ impl crate::Device for super::Device {
                 wgt::BindingType::StorageTexture { .. } => {
                     desc_count.storage_image += count;
                 }
-                wgt::BindingType::AccelerationStructure => {
+                wgt::BindingType::AccelerationStructure { .. } => {
                     desc_count.acceleration_structure += count;
                 }
             }
@@ -1446,44 +1466,47 @@ impl crate::Device for super::Device {
             })
             .collect::<Vec<_>>();
 
-        let vk_info = vk::DescriptorSetLayoutCreateInfo::default().bindings(&vk_bindings);
-
-        let binding_arrays = desc
+        let binding_arrays: Vec<_> = desc
             .entries
             .iter()
             .enumerate()
             .filter_map(|(idx, entry)| entry.count.map(|count| (idx as u32, count)))
             .collect();
 
-        let mut binding_flag_info;
-        let binding_flag_vec;
+        let vk_info = vk::DescriptorSetLayoutCreateInfo::default()
+            .bindings(&vk_bindings)
+            .flags(if !binding_arrays.is_empty() {
+                vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL
+            } else {
+                vk::DescriptorSetLayoutCreateFlags::empty()
+            });
 
         let partially_bound = desc
             .flags
             .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
 
-        let vk_info = if partially_bound {
-            binding_flag_vec = desc
-                .entries
-                .iter()
-                .map(|entry| {
-                    let mut flags = vk::DescriptorBindingFlags::empty();
+        let binding_flag_vec = desc
+            .entries
+            .iter()
+            .map(|entry| {
+                let mut flags = vk::DescriptorBindingFlags::empty();
 
-                    if partially_bound && entry.count.is_some() {
-                        flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
-                    }
+                if partially_bound && entry.count.is_some() {
+                    flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
+                }
 
-                    flags
-                })
-                .collect::<Vec<_>>();
+                if entry.count.is_some() {
+                    flags |= vk::DescriptorBindingFlags::UPDATE_AFTER_BIND;
+                }
 
-            binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
-                .binding_flags(&binding_flag_vec);
+                flags
+            })
+            .collect::<Vec<_>>();
 
-            vk_info.push_next(&mut binding_flag_info)
-        } else {
-            vk_info
-        };
+        let mut binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
+            .binding_flags(&binding_flag_vec);
+
+        let vk_info = vk_info.push_next(&mut binding_flag_info);
 
         let raw = unsafe {
             self.shared
@@ -1596,11 +1619,19 @@ impl crate::Device for super::Device {
             super::AccelerationStructure,
         >,
     ) -> Result<super::BindGroup, crate::DeviceError> {
+        let contains_binding_arrays = !desc.layout.binding_arrays.is_empty();
+
+        let desc_set_layout_flags = if contains_binding_arrays {
+            gpu_descriptor::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND
+        } else {
+            gpu_descriptor::DescriptorSetLayoutCreateFlags::empty()
+        };
+
         let mut vk_sets = unsafe {
             self.desc_allocator.lock().allocate(
                 &*self.shared,
                 &desc.layout.raw,
-                gpu_descriptor::DescriptorSetLayoutCreateFlags::empty(),
+                desc_set_layout_flags,
                 &desc.layout.desc_count,
                 1,
             )?
@@ -1813,7 +1844,7 @@ impl crate::Device for super::Device {
                             file_name: d.file_name.as_ref().as_ref(),
                             language: naga::back::spv::SourceLanguage::WGSL,
                         });
-                if !desc.runtime_checks {
+                if !desc.runtime_checks.bounds_checks {
                     naga_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
                         index: naga::proc::BoundsCheckPolicy::Unchecked,
                         buffer: naga::proc::BoundsCheckPolicy::Unchecked,
@@ -2037,10 +2068,7 @@ impl crate::Device for super::Device {
         let vk_dynamic_state =
             vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
 
-        let raw_pass = self
-            .shared
-            .make_render_pass(compatible_rp_key)
-            .map_err(crate::DeviceError::from)?;
+        let raw_pass = self.shared.make_render_pass(compatible_rp_key)?;
 
         let vk_infos = [{
             vk::GraphicsPipelineCreateInfo::default()
@@ -2078,6 +2106,237 @@ impl crate::Device for super::Device {
         }
 
         if let Some(raw_module) = compiled_vs.temp_raw_module {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+        if let Some(CompiledStage {
+            temp_raw_module: Some(raw_module),
+            ..
+        }) = compiled_fs
+        {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
+        self.counters.render_pipelines.add(1);
+
+        Ok(super::RenderPipeline { raw })
+    }
+    unsafe fn create_mesh_pipeline(
+        &self,
+        desc: &crate::MeshPipelineDescriptor<
+            <Self::A as crate::Api>::PipelineLayout,
+            <Self::A as crate::Api>::ShaderModule,
+            <Self::A as crate::Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
+        let dynamic_states = [
+            vk::DynamicState::VIEWPORT,
+            vk::DynamicState::SCISSOR,
+            vk::DynamicState::BLEND_CONSTANTS,
+            vk::DynamicState::STENCIL_REFERENCE,
+        ];
+        let mut compatible_rp_key = super::RenderPassKey {
+            sample_count: desc.multisample.count,
+            multiview: desc.multiview,
+            ..Default::default()
+        };
+        let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
+
+        let vk_input_assembly = vk::PipelineInputAssemblyStateCreateInfo::default()
+            .topology(conv::map_topology(desc.primitive.topology))
+            .primitive_restart_enable(desc.primitive.strip_index_format.is_some());
+
+        let compiled_ts = match desc.task_stage {
+            Some(ref stage) => {
+                // TODO: add proper naga stages
+                let mut compiled = self.compile_stage(
+                    stage,
+                    naga::ShaderStage::Compute,
+                    &desc.layout.binding_arrays,
+                )?;
+                compiled.create_info.stage = vk::ShaderStageFlags::TASK_EXT;
+                stages.push(compiled.create_info);
+                Some(compiled)
+            }
+            None => None,
+        };
+
+        // TODO: add proper naga stages
+        let mut compiled_ms = self.compile_stage(
+            &desc.mesh_stage,
+            naga::ShaderStage::Compute,
+            &desc.layout.binding_arrays,
+        )?;
+        compiled_ms.create_info.stage = vk::ShaderStageFlags::MESH_EXT;
+        stages.push(compiled_ms.create_info);
+        let compiled_fs = match desc.fragment_stage {
+            Some(ref stage) => {
+                let compiled = self.compile_stage(
+                    stage,
+                    naga::ShaderStage::Fragment,
+                    &desc.layout.binding_arrays,
+                )?;
+                stages.push(compiled.create_info);
+                Some(compiled)
+            }
+            None => None,
+        };
+
+        let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::default()
+            .polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode))
+            .front_face(conv::map_front_face(desc.primitive.front_face))
+            .line_width(1.0)
+            .depth_clamp_enable(desc.primitive.unclipped_depth);
+        if let Some(face) = desc.primitive.cull_mode {
+            vk_rasterization = vk_rasterization.cull_mode(conv::map_cull_face(face))
+        }
+        let mut vk_rasterization_conservative_state =
+            vk::PipelineRasterizationConservativeStateCreateInfoEXT::default()
+                .conservative_rasterization_mode(
+                    vk::ConservativeRasterizationModeEXT::OVERESTIMATE,
+                );
+        if desc.primitive.conservative {
+            vk_rasterization = vk_rasterization.push_next(&mut vk_rasterization_conservative_state);
+        }
+
+        let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::default();
+        if let Some(ref ds) = desc.depth_stencil {
+            let vk_format = self.shared.private_caps.map_texture_format(ds.format);
+            let vk_layout = if ds.is_read_only(desc.primitive.cull_mode) {
+                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
+            } else {
+                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            };
+            compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
+                base: super::AttachmentKey::compatible(vk_format, vk_layout),
+                stencil_ops: crate::AttachmentOps::all(),
+            });
+
+            if ds.is_depth_enabled() {
+                vk_depth_stencil = vk_depth_stencil
+                    .depth_test_enable(true)
+                    .depth_write_enable(ds.depth_write_enabled)
+                    .depth_compare_op(conv::map_comparison(ds.depth_compare));
+            }
+            if ds.stencil.is_enabled() {
+                let s = &ds.stencil;
+                let front = conv::map_stencil_face(&s.front, s.read_mask, s.write_mask);
+                let back = conv::map_stencil_face(&s.back, s.read_mask, s.write_mask);
+                vk_depth_stencil = vk_depth_stencil
+                    .stencil_test_enable(true)
+                    .front(front)
+                    .back(back);
+            }
+
+            if ds.bias.is_enabled() {
+                vk_rasterization = vk_rasterization
+                    .depth_bias_enable(true)
+                    .depth_bias_constant_factor(ds.bias.constant as f32)
+                    .depth_bias_clamp(ds.bias.clamp)
+                    .depth_bias_slope_factor(ds.bias.slope_scale);
+            }
+        }
+
+        let vk_viewport = vk::PipelineViewportStateCreateInfo::default()
+            .flags(vk::PipelineViewportStateCreateFlags::empty())
+            .scissor_count(1)
+            .viewport_count(1);
+
+        let vk_sample_mask = [
+            desc.multisample.mask as u32,
+            (desc.multisample.mask >> 32) as u32,
+        ];
+        let vk_multisample = vk::PipelineMultisampleStateCreateInfo::default()
+            .rasterization_samples(vk::SampleCountFlags::from_raw(desc.multisample.count))
+            .alpha_to_coverage_enable(desc.multisample.alpha_to_coverage_enabled)
+            .sample_mask(&vk_sample_mask);
+
+        let mut vk_attachments = Vec::with_capacity(desc.color_targets.len());
+        for cat in desc.color_targets {
+            let (key, attarchment) = if let Some(cat) = cat.as_ref() {
+                let mut vk_attachment = vk::PipelineColorBlendAttachmentState::default()
+                    .color_write_mask(vk::ColorComponentFlags::from_raw(cat.write_mask.bits()));
+                if let Some(ref blend) = cat.blend {
+                    let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
+                    let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
+                    vk_attachment = vk_attachment
+                        .blend_enable(true)
+                        .color_blend_op(color_op)
+                        .src_color_blend_factor(color_src)
+                        .dst_color_blend_factor(color_dst)
+                        .alpha_blend_op(alpha_op)
+                        .src_alpha_blend_factor(alpha_src)
+                        .dst_alpha_blend_factor(alpha_dst);
+                }
+
+                let vk_format = self.shared.private_caps.map_texture_format(cat.format);
+                (
+                    Some(super::ColorAttachmentKey {
+                        base: super::AttachmentKey::compatible(
+                            vk_format,
+                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                        ),
+                        resolve: None,
+                    }),
+                    vk_attachment,
+                )
+            } else {
+                (None, vk::PipelineColorBlendAttachmentState::default())
+            };
+
+            compatible_rp_key.colors.push(key);
+            vk_attachments.push(attarchment);
+        }
+
+        let vk_color_blend =
+            vk::PipelineColorBlendStateCreateInfo::default().attachments(&vk_attachments);
+
+        let vk_dynamic_state =
+            vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
+
+        let raw_pass = self.shared.make_render_pass(compatible_rp_key)?;
+
+        let vk_infos = [{
+            vk::GraphicsPipelineCreateInfo::default()
+                .layout(desc.layout.raw)
+                .stages(&stages)
+                .input_assembly_state(&vk_input_assembly)
+                .rasterization_state(&vk_rasterization)
+                .viewport_state(&vk_viewport)
+                .multisample_state(&vk_multisample)
+                .depth_stencil_state(&vk_depth_stencil)
+                .color_blend_state(&vk_color_blend)
+                .dynamic_state(&vk_dynamic_state)
+                .render_pass(raw_pass)
+        }];
+
+        let pipeline_cache = desc
+            .cache
+            .map(|it| it.raw)
+            .unwrap_or(vk::PipelineCache::null());
+
+        let mut raw_vec = {
+            profiling::scope!("vkCreateGraphicsPipelines");
+            unsafe {
+                self.shared
+                    .raw
+                    .create_graphics_pipelines(pipeline_cache, &vk_infos, None)
+                    .map_err(|(_, e)| super::map_pipeline_err(e))
+            }?
+        };
+
+        let raw = raw_vec.pop().unwrap();
+        if let Some(label) = desc.label {
+            unsafe { self.shared.set_object_name(raw, label) };
+        }
+        // NOTE: this could leak shaders in case of an error.
+        if let Some(CompiledStage {
+            temp_raw_module: Some(raw_module),
+            ..
+        }) = compiled_ts
+        {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+        if let Some(raw_module) = compiled_ms.temp_raw_module {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
         if let Some(CompiledStage {
@@ -2347,9 +2606,42 @@ impl crate::Device for super::Device {
                 for triangles in in_geometries {
                     let mut triangle_data =
                         vk::AccelerationStructureGeometryTrianglesDataKHR::default()
+                            .index_type(vk::IndexType::NONE_KHR)
                             .vertex_format(conv::map_vertex_format(triangles.vertex_format))
                             .max_vertex(triangles.vertex_count)
-                            .vertex_stride(triangles.vertex_stride);
+                            .vertex_stride(triangles.vertex_stride)
+                            // The vulkan spec suggests we could pass a non-zero invalid address here if fetching
+                            // the real address has significant overhead, but we pass the real one to be on the
+                            // safe side for now.
+                            // from https://registry.khronos.org/vulkan/specs/latest/man/html/vkGetAccelerationStructureBuildSizesKHR.html
+                            // > The srcAccelerationStructure, dstAccelerationStructure, and mode members
+                            // > of pBuildInfo are ignored. Any VkDeviceOrHostAddressKHR or VkDeviceOrHostAddressConstKHR
+                            // > members of pBuildInfo are ignored by this command, except that the hostAddress
+                            // > member of VkAccelerationStructureGeometryTrianglesDataKHR::transformData will
+                            // > be examined to check if it is NULL.
+                            .transform_data(vk::DeviceOrHostAddressConstKHR {
+                                device_address: if desc
+                                    .flags
+                                    .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                                {
+                                    unsafe {
+                                        ray_tracing_functions
+                                            .buffer_device_address
+                                            .get_buffer_device_address(
+                                                &vk::BufferDeviceAddressInfo::default().buffer(
+                                                    triangles
+                                                        .transform
+                                                        .as_ref()
+                                                        .unwrap()
+                                                        .buffer
+                                                        .raw,
+                                                ),
+                                            )
+                                    }
+                                } else {
+                                    0
+                                },
+                            });
 
                     let pritive_count = if let Some(ref indices) = triangles.indices {
                         triangle_data =
@@ -2509,10 +2801,26 @@ impl crate::Device for super::Device {
                     .set_object_name(raw_acceleration_structure, label);
             }
 
+            let pool = if desc.allow_compaction {
+                let vk_info = vk::QueryPoolCreateInfo::default()
+                    .query_type(vk::QueryType::ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR)
+                    .query_count(1);
+
+                let raw = self
+                    .shared
+                    .raw
+                    .create_query_pool(&vk_info, None)
+                    .map_err(super::map_host_oom_and_ioca_err)?;
+                Some(raw)
+            } else {
+                None
+            };
+
             Ok(super::AccelerationStructure {
                 raw: raw_acceleration_structure,
                 buffer: raw_buffer,
                 block: Mutex::new(block),
+                compacted_size_query: pool,
             })
         }
     }
@@ -2538,6 +2846,9 @@ impl crate::Device for super::Device {
             self.mem_allocator
                 .lock()
                 .dealloc(&*self.shared, acceleration_structure.block.into_inner());
+            if let Some(query) = acceleration_structure.compacted_size_query {
+                self.shared.raw.destroy_query_pool(query, None)
+            }
         }
     }
 
@@ -2553,7 +2864,7 @@ impl crate::Device for super::Device {
         const MAX_U24: u32 = (1u32 << 24u32) - 1u32;
         let temp = RawTlasInstance {
             transform: instance.transform,
-            custom_index_and_mask: (instance.custom_index & MAX_U24)
+            custom_data_and_mask: (instance.custom_data & MAX_U24)
                 | (u32::from(instance.mask) << 24),
             shader_binding_table_record_offset_and_flags: 0,
             acceleration_structure_reference: instance.blas_address,

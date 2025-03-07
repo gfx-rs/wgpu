@@ -62,7 +62,11 @@ impl PresentationTimer {
         let kernelbase =
             libloading::os::windows::Library::open_already_loaded("kernelbase.dll").unwrap();
         // No concerns about lifetimes here as kernelbase is always there.
-        let ptr = unsafe { kernelbase.get(b"QueryInterruptTimePrecise\0").unwrap() };
+        let ptr = unsafe {
+            kernelbase
+                .get(c"QueryInterruptTimePrecise".to_bytes())
+                .unwrap()
+        };
         Self::IPresentationManager {
             fnQueryInterruptTimePrecise: *ptr,
         }

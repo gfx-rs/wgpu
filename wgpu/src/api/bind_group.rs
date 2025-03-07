@@ -8,7 +8,7 @@ use crate::*;
 /// [`ComputePass`] with [`ComputePass::set_bind_group`].
 ///
 /// Corresponds to [WebGPU `GPUBindGroup`](https://gpuweb.github.io/gpuweb/#gpubindgroup).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BindGroup {
     pub(crate) inner: dispatch::DispatchBindGroup,
 }
@@ -17,7 +17,9 @@ static_assertions::assert_impl_all!(BindGroup: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(BindGroup => .inner);
 
-/// Resource that can be bound to a pipeline.
+/// Resource to be bound by a [`BindGroup`] for use with a pipeline.
+///
+/// The pipeline’s [`BindGroupLayout`] must contain a matching [`BindingType`].
 ///
 /// Corresponds to [WebGPU `GPUBindingResource`](
 /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubindingresource).

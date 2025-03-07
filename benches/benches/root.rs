@@ -1,10 +1,15 @@
 use criterion::criterion_main;
 use pollster::block_on;
 
+mod bind_groups;
 mod computepass;
 mod renderpass;
 mod resource_creation;
 mod shader;
+
+fn is_test() -> bool {
+    std::env::var("NEXTEST").is_ok()
+}
 
 struct DeviceState {
     adapter_info: wgpu::AdapterInfo,
@@ -24,12 +29,9 @@ impl DeviceState {
             wgpu::Backends::all()
         };
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::util::backend_bits_from_env().unwrap_or(base_backend),
-            flags: wgpu::InstanceFlags::empty(),
-            dx12_shader_compiler: wgpu::util::dx12_shader_compiler_from_env()
-                .unwrap_or(wgpu::Dx12Compiler::Fxc),
-            gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::from_env().unwrap_or(base_backend),
+            ..wgpu::InstanceDescriptor::from_env_or_default()
         });
 
         let adapter = block_on(wgpu::util::initialize_adapter_from_env_or_default(
@@ -61,6 +63,7 @@ impl DeviceState {
 }
 
 criterion_main!(
+    bind_groups::bind_groups,
     renderpass::renderpass,
     computepass::computepass,
     resource_creation::resource_creation,

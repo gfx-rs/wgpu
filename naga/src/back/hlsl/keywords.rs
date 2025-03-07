@@ -814,11 +814,18 @@ pub const RESERVED: &[&str] = &[
     "TextureBuffer",
     "ConstantBuffer",
     "RayQuery",
+    "RayDesc",
     // Naga utilities
     super::writer::MODF_FUNCTION,
     super::writer::FREXP_FUNCTION,
     super::writer::EXTRACT_BITS_FUNCTION,
     super::writer::INSERT_BITS_FUNCTION,
+    super::writer::SAMPLER_HEAP_VAR,
+    super::writer::COMPARISON_SAMPLER_HEAP_VAR,
+    super::writer::ABS_FUNCTION,
+    super::writer::DIV_FUNCTION,
+    super::writer::MOD_FUNCTION,
+    super::writer::NEG_FUNCTION,
 ];
 
 // DXC scalar types, from https://github.com/microsoft/DirectXShaderCompiler/blob/18c9e114f9c314f93e68fbc72ce207d4ed2e65ae/tools/clang/lib/AST/ASTContextHLSL.cpp#L48-L254
@@ -904,3 +911,8 @@ pub const TYPES: &[&str] = &{
 
     res
 };
+
+pub const RESERVED_PREFIXES: &[&str] = &[
+    "__dynamic_buffer_offsets",
+    super::help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
+];

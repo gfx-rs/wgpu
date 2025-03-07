@@ -1,3 +1,5 @@
+use alloc::format;
+
 use super::{context::Context, Error, ErrorKind, Result, Span};
 use crate::{
     proc::ResolveContext, Expression, Handle, ImageClass, ImageDimension, Scalar, ScalarKind, Type,
@@ -154,7 +156,7 @@ pub fn parse_type(type_name: &str) -> Option<Type> {
 
                 let class = ImageClass::Storage {
                     format: crate::StorageFormat::R8Uint,
-                    access: crate::StorageAccess::all(),
+                    access: crate::StorageAccess::LOAD | crate::StorageAccess::STORE,
                 };
 
                 // TODO: glsl support multisampled storage images, naga doesn't

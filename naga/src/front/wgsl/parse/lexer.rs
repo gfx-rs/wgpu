@@ -191,20 +191,33 @@ const fn is_blankspace(c: char) -> bool {
 
 /// Returns whether or not a char is a word start (Unicode XID_Start + '_')
 fn is_word_start(c: char) -> bool {
-    c == '_' || unicode_xid::UnicodeXID::is_xid_start(c)
+    c == '_' || unicode_ident::is_xid_start(c)
 }
 
 /// Returns whether or not a char is a word part (Unicode XID_Continue)
 fn is_word_part(c: char) -> bool {
-    unicode_xid::UnicodeXID::is_xid_continue(c)
+    unicode_ident::is_xid_continue(c)
 }
 
 #[derive(Clone)]
 pub(in crate::front::wgsl) struct Lexer<'a> {
+    /// The remaining unconsumed input.
     input: &'a str,
+
+    /// The full original source code.
+    ///
+    /// We compare `input` against this to compute the lexer's current offset in
+    /// the source.
     pub(in crate::front::wgsl) source: &'a str,
-    // The byte offset of the end of the last non-trivia token.
+
+    /// The byte offset of the end of the most recently returned non-trivia
+    /// token.
+    ///
+    /// This is consulted by the `span_from` function, for finding the
+    /// end of the span for larger structures like expressions or
+    /// statements.
     last_end_offset: usize,
+
     #[allow(dead_code)]
     pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
 }
@@ -339,6 +352,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    pub(in crate::front::wgsl) fn end_of_generic_arguments(&mut self) -> bool {
+        self.skip(Token::Separator(',')) && self.peek().0 != Token::Paren('>')
+    }
+
     /// If the next token matches it is skipped and true is returned
     pub(in crate::front::wgsl) fn skip(&mut self, what: Token<'_>) -> bool {
         let (peeked_token, rest) = self.peek_token_and_rest();
@@ -430,6 +447,9 @@ impl<'a> Lexer<'a> {
             "read" => Ok(crate::StorageAccess::LOAD),
             "write" => Ok(crate::StorageAccess::STORE),
             "read_write" => Ok(crate::StorageAccess::LOAD | crate::StorageAccess::STORE),
+            "atomic" => Ok(crate::StorageAccess::ATOMIC
+                | crate::StorageAccess::LOAD
+                | crate::StorageAccess::STORE),
             _ => Err(Error::UnknownAccess(span)),
         }
     }
@@ -444,6 +464,28 @@ impl<'a> Lexer<'a> {
         let access = self.next_storage_access()?;
         self.expect(Token::Paren('>'))?;
         Ok((format, access))
+    }
+
+    pub(in crate::front::wgsl) fn next_acceleration_structure_flags(
+        &mut self,
+    ) -> Result<bool, Error<'a>> {
+        Ok(if self.skip(Token::Paren('<')) {
+            if !self.skip(Token::Paren('>')) {
+                let (name, span) = self.next_ident_with_span()?;
+                let ret = if name == "vertex_return" {
+                    true
+                } else {
+                    return Err(Error::UnknownAttribute(span));
+                };
+                self.skip(Token::Separator(','));
+                self.expect(Token::Paren('>'))?;
+                ret
+            } else {
+                false
+            }
+        } else {
+            false
+        })
     }
 
     pub(in crate::front::wgsl) fn open_arguments(&mut self) -> Result<(), Error<'a>> {

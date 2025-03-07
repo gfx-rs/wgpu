@@ -34,7 +34,6 @@ mod native {
 
         let options = RuntimeOptions {
             module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
-            get_error_class_fn: Some(&get_error_class_name),
             extensions: vec![
                 deno_webidl::deno_webidl::init_ops_and_esm(),
                 deno_console::deno_console::init_ops_and_esm(),
@@ -69,8 +68,6 @@ mod native {
                 .unwrap();
         }
 
-        js_runtime.op_state().borrow_mut().put(Permissions {});
-
         let mod_id = js_runtime.load_main_es_module(&specifier).await?;
         let result = js_runtime.mod_evaluate(mod_id);
         js_runtime.run_event_loop(Default::default()).await?;
@@ -85,16 +82,19 @@ mod native {
         ops = [op_exit, op_read_file_sync, op_write_file_sync],
         esm_entry_point = "ext:cts_runner/src/bootstrap.js",
         esm = ["src/bootstrap.js"],
+        state = |state| {
+            state.put(Permissions {});
+        }
     );
 
     #[op2(fast)]
-    fn op_exit(code: i32) -> Result<(), AnyError> {
+    fn op_exit(code: i32) {
         std::process::exit(code)
     }
 
     #[op2]
     #[buffer]
-    fn op_read_file_sync(#[string] path: &str) -> Result<Vec<u8>, AnyError> {
+    fn op_read_file_sync(#[string] path: &str) -> Result<Vec<u8>, std::io::Error> {
         let path = std::path::Path::new(path);
         let mut file = std::fs::File::open(path)?;
         let mut buf = Vec::new();
@@ -103,19 +103,14 @@ mod native {
     }
 
     #[op2(fast)]
-    fn op_write_file_sync(#[string] path: &str, #[buffer] buf: &[u8]) -> Result<(), AnyError> {
+    fn op_write_file_sync(
+        #[string] path: &str,
+        #[buffer] buf: &[u8],
+    ) -> Result<(), std::io::Error> {
         let path = std::path::Path::new(path);
         let mut file = std::fs::File::create(path)?;
         file.write_all(buf)?;
         Ok(())
-    }
-
-    fn get_error_class_name(e: &AnyError) -> &'static str {
-        deno_core::error::get_custom_error_class(e)
-            .or_else(|| deno_webgpu::error::get_error_class_name(e))
-            .unwrap_or_else(|| {
-                panic!("Error '{e}' contains boxed error of unsupported type: {e:#}");
-            })
     }
 
     pub fn unwrap_or_exit<T>(result: Result<T, AnyError>) -> T {

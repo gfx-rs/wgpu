@@ -129,6 +129,7 @@
     special_types: (
         ray_desc: None,
         ray_intersection: None,
+        ray_vertex_return: None,
         predeclared_types: {},
     ),
     constants: [
@@ -194,8 +195,8 @@
                 GlobalVariable(2),
                 GlobalVariable(0),
                 GlobalVariable(1),
-                Constant(1),
                 Constant(0),
+                Constant(1),
                 AccessIndex(
                     base: 1,
                     index: 0,
@@ -212,7 +213,7 @@
                     coordinate: 7,
                     array_index: None,
                     sample: None,
-                    level: Some(3),
+                    level: Some(4),
                 ),
                 Splat(
                     size: Quad,

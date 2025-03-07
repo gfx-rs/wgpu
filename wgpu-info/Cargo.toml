@@ -8,12 +8,17 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
 bitflags.workspace = true
 env_logger.workspace = true
+hashbrown = { workspace = true, features = ["serde"] }
 pico-args.workspace = true
-serde.workspace = true
+serde = { workspace = true, features = ["default"] }
 serde_json.workspace = true
-wgpu = { workspace = true, features = ["serde"] }
+wgpu.workspace = true
+
+[lints.clippy]
+disallowed_types = "allow"

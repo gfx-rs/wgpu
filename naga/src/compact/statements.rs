@@ -1,3 +1,5 @@
+use alloc::{vec, vec::Vec};
+
 use super::functions::FunctionTracer;
 use super::FunctionMap;
 use crate::arena::Handle;
@@ -78,6 +80,20 @@ impl FunctionTracer<'_> {
                         if let Some(result) = result {
                             self.expressions_used.insert(result);
                         }
+                    }
+                    St::ImageAtomic {
+                        image,
+                        coordinate,
+                        array_index,
+                        fun: _,
+                        value,
+                    } => {
+                        self.expressions_used.insert(image);
+                        self.expressions_used.insert(coordinate);
+                        if let Some(array_index) = array_index {
+                            self.expressions_used.insert(array_index);
+                        }
+                        self.expressions_used.insert(value);
                     }
                     St::WorkGroupUniformLoad { pointer, result } => {
                         self.expressions_used.insert(pointer);
@@ -176,6 +192,10 @@ impl FunctionTracer<'_> {
             Qf::Proceed { result } => {
                 self.expressions_used.insert(result);
             }
+            Qf::GenerateIntersection { hit_t } => {
+                self.expressions_used.insert(hit_t);
+            }
+            Qf::ConfirmIntersection => {}
             Qf::Terminate => {}
         }
     }
@@ -260,6 +280,20 @@ impl FunctionMap {
                         if let Some(ref mut result) = *result {
                             adjust(result);
                         }
+                    }
+                    St::ImageAtomic {
+                        ref mut image,
+                        ref mut coordinate,
+                        ref mut array_index,
+                        fun: _,
+                        ref mut value,
+                    } => {
+                        adjust(image);
+                        adjust(coordinate);
+                        if let Some(ref mut array_index) = *array_index {
+                            adjust(array_index);
+                        }
+                        adjust(value);
                     }
                     St::WorkGroupUniformLoad {
                         ref mut pointer,
@@ -365,6 +399,10 @@ impl FunctionMap {
             Qf::Proceed { ref mut result } => {
                 self.expressions.adjust(result);
             }
+            Qf::GenerateIntersection { ref mut hit_t } => {
+                self.expressions.adjust(hit_t);
+            }
+            Qf::ConfirmIntersection => {}
             Qf::Terminate => {}
         }
     }

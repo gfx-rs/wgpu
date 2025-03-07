@@ -1,12 +1,12 @@
-use std::mem::ManuallyDrop;
-use std::sync::Arc;
+use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use core::mem::ManuallyDrop;
 
+use crate::api_log;
 #[cfg(feature = "trace")]
 use crate::device::trace;
-use crate::lock::{rank, Mutex};
+use crate::lock::rank;
 use crate::resource::{Fallible, TrackingData};
 use crate::snatch::Snatchable;
-use crate::weak_vec::WeakVec;
 use crate::{
     device::{Device, DeviceError},
     global::Global,
@@ -24,6 +24,16 @@ impl Device {
         blas_desc: &resource::BlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
     ) -> Result<Arc<resource::Blas>, CreateBlasError> {
+        self.check_is_valid()?;
+        self.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+
+        if blas_desc
+            .flags
+            .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
+        {
+            self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
+        }
+
         let size_info = match &sizes {
             wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => {
                 let mut entries =
@@ -54,6 +64,19 @@ impl Device {
                             self.features.allowed_vertex_formats_for_blas(),
                         ));
                     }
+
+                    let mut transform = None;
+
+                    if blas_desc
+                        .flags
+                        .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                    {
+                        transform = Some(wgpu_hal::AccelerationStructureTriangleTransform {
+                            buffer: self.zero_buffer.as_ref(),
+                            offset: 0,
+                        })
+                    }
+
                     entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> {
                         vertex_buffer: None,
                         vertex_format: desc.vertex_format,
@@ -61,7 +84,7 @@ impl Device {
                         vertex_count: desc.vertex_count,
                         vertex_stride: 0,
                         indices,
-                        transform: None,
+                        transform,
                         flags: desc.flags,
                     });
                 }
@@ -82,6 +105,8 @@ impl Device {
                     label: blas_desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
+                    // change this once compaction is implemented in wgpu-core
+                    allow_compaction: false,
                 })
         }
         .map_err(DeviceError::from_hal)?;
@@ -109,6 +134,25 @@ impl Device {
         self: &Arc<Self>,
         desc: &resource::TlasDescriptor,
     ) -> Result<Arc<resource::Tlas>, CreateTlasError> {
+        self.check_is_valid()?;
+        self.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+
+        if desc
+            .flags
+            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+        {
+            return Err(CreateTlasError::DisallowedFlag(
+                wgt::AccelerationStructureFlags::USE_TRANSFORM,
+            ));
+        }
+
+        if desc
+            .flags
+            .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
+        {
+            self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
+        }
+
         let size_info = unsafe {
             self.raw().get_acceleration_structure_build_sizes(
                 &hal::GetAccelerationStructureBuildSizesDescriptor {
@@ -130,6 +174,7 @@ impl Device {
                     label: desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::TopLevel,
+                    allow_compaction: false,
                 })
         }
         .map_err(DeviceError::from_hal)?;
@@ -140,8 +185,8 @@ impl Device {
             self.raw().create_buffer(&hal::BufferDescriptor {
                 label: Some("(wgpu-core) instances_buffer"),
                 size: instance_buffer_size as u64,
-                usage: hal::BufferUses::COPY_DST
-                    | hal::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                usage: wgt::BufferUses::COPY_DST
+                    | wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 memory_flags: hal::MemoryFlags::PREFER_COHERENT,
             })
         }
@@ -159,7 +204,6 @@ impl Device {
             label: desc.label.to_string(),
             max_instance_count: desc.max_instances,
             tracking_data: TrackingData::new(self.tracker_indices.tlas_s.clone()),
-            bind_groups: Mutex::new(rank::TLAS_BIND_GROUPS, WeakVec::new()),
         }))
     }
 }
@@ -174,23 +218,10 @@ impl Global {
     ) -> (BlasId, Option<u64>, Option<CreateBlasError>) {
         profiling::scope!("Device::create_blas");
 
-        let hub = &self.hub;
-        let fid = hub.blas_s.prepare(id_in);
+        let fid = self.hub.blas_s.prepare(id_in);
 
-        let device_guard = hub.devices.read();
         let error = 'error: {
-            let device = device_guard.get(device_id);
-            match device.check_is_valid() {
-                Ok(_) => {}
-                Err(err) => break 'error CreateBlasError::Device(err),
-            };
-
-            if !device
-                .features
-                .contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-            {
-                break 'error CreateBlasError::MissingFeature;
-            }
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(trace) = device.trace.lock().as_mut() {
@@ -207,8 +238,8 @@ impl Global {
             };
             let handle = blas.handle;
 
-            let id = fid.assign(Fallible::Valid(blas.clone()));
-            log::info!("Created blas {:?} with {:?}", id, desc);
+            let id = fid.assign(Fallible::Valid(blas));
+            api_log!("Device::create_blas -> {id:?}");
 
             return (id, Some(handle), None);
         };
@@ -225,23 +256,10 @@ impl Global {
     ) -> (TlasId, Option<CreateTlasError>) {
         profiling::scope!("Device::create_tlas");
 
-        let hub = &self.hub;
-        let fid = hub.tlas_s.prepare(id_in);
+        let fid = self.hub.tlas_s.prepare(id_in);
 
-        let device_guard = hub.devices.read();
         let error = 'error: {
-            let device = device_guard.get(device_id);
-            match device.check_is_valid() {
-                Ok(_) => {}
-                Err(e) => break 'error CreateTlasError::Device(e),
-            }
-
-            if !device
-                .features
-                .contains(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-            {
-                break 'error CreateTlasError::MissingFeature;
-            }
+            let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
             if let Some(trace) = device.trace.lock().as_mut() {
@@ -257,7 +275,7 @@ impl Global {
             };
 
             let id = fid.assign(Fallible::Valid(tlas));
-            log::info!("Created tlas {:?} with {:?}", id, desc);
+            api_log!("Device::create_tlas -> {id:?}");
 
             return (id, None);
         };
@@ -266,88 +284,29 @@ impl Global {
         (id, Some(error))
     }
 
-    pub fn blas_destroy(&self, blas_id: BlasId) -> Result<(), resource::DestroyError> {
-        profiling::scope!("Blas::destroy");
-        log::info!("Blas::destroy {blas_id:?}");
-
-        let hub = &self.hub;
-
-        let blas = hub.blas_s.get(blas_id).get()?;
-        let _device = &blas.device;
-
-        #[cfg(feature = "trace")]
-        if let Some(trace) = _device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeBlas(blas_id));
-        }
-
-        blas.destroy()
-    }
-
     pub fn blas_drop(&self, blas_id: BlasId) {
         profiling::scope!("Blas::drop");
-        log::debug!("blas {:?} is dropped", blas_id);
+        api_log!("Blas::drop {blas_id:?}");
 
-        let hub = &self.hub;
-
-        let _blas = match hub.blas_s.remove(blas_id).get() {
-            Ok(blas) => blas,
-            Err(_) => {
-                return;
-            }
-        };
+        let _blas = self.hub.blas_s.remove(blas_id);
 
         #[cfg(feature = "trace")]
-        {
-            let mut lock = _blas.device.trace.lock();
-
-            if let Some(t) = lock.as_mut() {
+        if let Ok(blas) = _blas.get() {
+            if let Some(t) = blas.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyBlas(blas_id));
             }
         }
     }
 
-    pub fn tlas_destroy(&self, tlas_id: TlasId) -> Result<(), resource::DestroyError> {
-        profiling::scope!("Tlas::destroy");
-
-        let hub = &self.hub;
-
-        log::info!("Tlas {:?} is destroyed", tlas_id);
-        let tlas_guard = hub.tlas_s.write();
-        let tlas = tlas_guard
-            .get(tlas_id)
-            .get()
-            .map_err(resource::DestroyError::InvalidResource)?
-            .clone();
-        drop(tlas_guard);
-
-        let _device = &mut tlas.device.clone();
-
-        #[cfg(feature = "trace")]
-        if let Some(trace) = _device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeTlas(tlas_id));
-        }
-
-        tlas.destroy()
-    }
-
     pub fn tlas_drop(&self, tlas_id: TlasId) {
         profiling::scope!("Tlas::drop");
-        log::debug!("tlas {:?} is dropped", tlas_id);
+        api_log!("Tlas::drop {tlas_id:?}");
 
-        let hub = &self.hub;
-
-        let _tlas = match hub.tlas_s.remove(tlas_id).get() {
-            Ok(tlas) => tlas,
-            Err(_) => {
-                return;
-            }
-        };
+        let _tlas = self.hub.tlas_s.remove(tlas_id);
 
         #[cfg(feature = "trace")]
-        {
-            let mut lock = _tlas.device.trace.lock();
-
-            if let Some(t) = lock.as_mut() {
+        if let Ok(tlas) = _tlas.get() {
+            if let Some(t) = tlas.device.trace.lock().as_mut() {
                 t.add(trace::Action::DestroyTlas(tlas_id));
             }
         }

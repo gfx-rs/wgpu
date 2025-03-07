@@ -13,6 +13,8 @@ end of the VS buffer table.
 
 !*/
 
+#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
+
 // `MTLFeatureSet` is superseded by `MTLGpuFamily`.
 // However, `MTLGpuFamily` is only supported starting MacOS 10.15, whereas our minimum target is MacOS 10.13,
 // See https://github.com/gpuweb/gpuweb/issues/1069 for minimum spec.
@@ -22,19 +24,25 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
+mod layer_observer;
 mod surface;
 mod time;
 
 use std::{
+    borrow::ToOwned as _,
     fmt, iter, ops,
     ptr::NonNull,
+    string::String,
     sync::{atomic, Arc},
     thread,
+    vec::Vec,
 };
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
+use hashbrown::HashMap;
 use metal::foreign_types::ForeignTypeRef as _;
+use naga::FastHashMap;
 use parking_lot::{Mutex, RwLock};
 
 #[derive(Clone, Debug)]
@@ -120,7 +128,7 @@ impl crate::Instance for Instance {
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
         match window_handle {
-            #[cfg(target_os = "ios")]
+            #[cfg(any(target_os = "ios", target_os = "visionos"))]
             raw_window_handle::RawWindowHandle::UiKit(handle) => {
                 Ok(unsafe { Surface::from_view(handle.ui_view.cast()) })
             }
@@ -199,7 +207,7 @@ struct PrivateCapabilities {
     msaa_apple3: bool,
     msaa_apple7: bool,
     resource_heaps: bool,
-    argument_buffers: bool,
+    argument_buffers: metal::MTLArgumentBuffersTier,
     shared_textures: bool,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
@@ -260,6 +268,8 @@ struct PrivateCapabilities {
     max_vertex_buffers: ResourceIndex,
     max_textures_per_stage: ResourceIndex,
     max_samplers_per_stage: ResourceIndex,
+    max_binding_array_elements: ResourceIndex,
+    max_sampler_binding_array_elements: ResourceIndex,
     buffer_alignment: u64,
     max_buffer_size: u64,
     max_texture_size: u64,
@@ -289,6 +299,7 @@ struct PrivateCapabilities {
     supports_simd_scoped_operations: bool,
     int64: bool,
     int64_atomics: bool,
+    float_atomics: bool,
     supports_shared_event: bool,
 }
 
@@ -350,6 +361,10 @@ impl Queue {
             raw: Arc::new(Mutex::new(raw)),
             timestamp_period,
         }
+    }
+
+    pub fn as_raw(&self) -> &Arc<Mutex<metal::CommandQueue>> {
+        &self.raw
     }
 }
 
@@ -516,6 +531,15 @@ pub struct Texture {
     copy_size: crate::CopyExtent,
 }
 
+impl Texture {
+    /// # Safety
+    ///
+    /// - The texture handle must not be manually destroyed
+    pub unsafe fn raw_handle(&self) -> &metal::Texture {
+        &self.raw
+    }
+}
+
 impl crate::DynTexture for Texture {}
 
 unsafe impl Send for Texture {}
@@ -651,9 +675,22 @@ trait AsNative {
     fn as_native(&self) -> &Self::Native;
 }
 
+type ResourcePtr = NonNull<metal::MTLResource>;
 type BufferPtr = NonNull<metal::MTLBuffer>;
 type TexturePtr = NonNull<metal::MTLTexture>;
 type SamplerPtr = NonNull<metal::MTLSamplerState>;
+
+impl AsNative for ResourcePtr {
+    type Native = metal::ResourceRef;
+    #[inline]
+    fn from(native: &Self::Native) -> Self {
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+    }
+    #[inline]
+    fn as_native(&self) -> &Self::Native {
+        unsafe { Self::Native::from_ptr(self.as_ptr()) }
+    }
+}
 
 impl AsNative for BufferPtr {
     type Native = metal::BufferRef;
@@ -710,12 +747,32 @@ struct BufferResource {
     binding_location: u32,
 }
 
+#[derive(Debug)]
+struct UseResourceInfo {
+    uses: metal::MTLResourceUsage,
+    stages: metal::MTLRenderStages,
+    visible_in_compute: bool,
+}
+
+impl Default for UseResourceInfo {
+    fn default() -> Self {
+        Self {
+            uses: metal::MTLResourceUsage::empty(),
+            stages: metal::MTLRenderStages::empty(),
+            visible_in_compute: false,
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct BindGroup {
     counters: MultiStageResourceCounters,
     buffers: Vec<BufferResource>,
     samplers: Vec<SamplerPtr>,
     textures: Vec<TexturePtr>,
+
+    argument_buffers: Vec<metal::Buffer>,
+    resources_to_use: HashMap<ResourcePtr, UseResourceInfo>,
 }
 
 impl crate::DynBindGroup for BindGroup {}
@@ -726,7 +783,7 @@ unsafe impl Sync for BindGroup {}
 #[derive(Debug)]
 pub struct ShaderModule {
     naga: crate::NagaShader,
-    runtime_checks: bool,
+    bounds_checks: wgt::ShaderRuntimeChecks,
 }
 
 impl crate::DynShaderModule for ShaderModule {}
@@ -893,9 +950,9 @@ struct CommandState {
     /// See `device::CompiledShader::sized_bindings` for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
-    storage_buffer_length_map: rustc_hash::FxHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
 
-    vertex_buffer_size_map: rustc_hash::FxHashMap<u64, wgt::BufferSize>,
+    vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,
 
     work_group_memory_sizes: Vec<u32>,
     push_constants: Vec<u32>,

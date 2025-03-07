@@ -1,15 +1,19 @@
+#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
+
 use std::{
-    collections::HashSet,
+    borrow::ToOwned as _,
     ffi::{c_void, CStr, CString},
-    mem::{self, size_of, size_of_val, ManuallyDrop},
+    mem::{self, ManuallyDrop},
     os::raw::c_int,
     ptr,
+    string::String,
     sync::{
         mpsc::{sync_channel, SyncSender},
-        Arc,
+        Arc, LazyLock,
     },
     thread,
     time::Duration,
+    vec::Vec,
 };
 
 use glow::HasContext;
@@ -17,7 +21,7 @@ use glutin_wgl_sys::wgl_extra::{
     Wgl, CONTEXT_CORE_PROFILE_BIT_ARB, CONTEXT_DEBUG_BIT_ARB, CONTEXT_FLAGS_ARB,
     CONTEXT_PROFILE_MASK_ARB,
 };
-use once_cell::sync::Lazy;
+use hashbrown::HashSet;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use wgt::InstanceFlags;
@@ -177,6 +181,7 @@ unsafe impl Sync for Inner {}
 
 pub struct Instance {
     srgb_capable: bool,
+    options: wgt::GlBackendOptions,
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -319,8 +324,8 @@ fn create_global_window_class() -> Result<CString, crate::InstanceError> {
 }
 
 fn get_global_window_class() -> Result<CString, crate::InstanceError> {
-    static GLOBAL: Lazy<Result<CString, crate::InstanceError>> =
-        Lazy::new(create_global_window_class);
+    static GLOBAL: LazyLock<Result<CString, crate::InstanceError>> =
+        LazyLock::new(create_global_window_class);
     GLOBAL.clone()
 }
 
@@ -434,14 +439,13 @@ impl crate::Instance for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (WGL) Backend");
         let opengl_module =
-            unsafe { LibraryLoader::LoadLibraryA(PCSTR("opengl32.dll\0".as_ptr())) }.map_err(
-                |e| {
+            unsafe { LibraryLoader::LoadLibraryA(PCSTR(c"opengl32.dll".as_ptr().cast())) }
+                .map_err(|e| {
                     crate::InstanceError::with_source(
                         String::from("unable to load the OpenGL library"),
                         e,
                     )
-                },
-            )?;
+                })?;
 
         let device = create_instance_device()?;
         let dc = device.dc;
@@ -542,6 +546,7 @@ impl crate::Instance for Instance {
                 gl,
                 context: Some(context),
             })),
+            options: desc.backend_options.gl.clone(),
             srgb_capable,
         })
     }
@@ -573,9 +578,12 @@ impl crate::Instance for Instance {
         _surface_hint: Option<&Surface>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         unsafe {
-            super::Adapter::expose(AdapterContext {
-                inner: self.inner.clone(),
-            })
+            super::Adapter::expose(
+                AdapterContext {
+                    inner: self.inner.clone(),
+                },
+                self.options.clone(),
+            )
         }
         .into_iter()
         .collect()
@@ -594,16 +602,20 @@ impl super::Adapter {
     ///   dropping any objects returned from this adapter.
     pub unsafe fn new_external(
         fun: impl FnMut(&str) -> *const c_void,
+        options: wgt::GlBackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         let context = unsafe { glow::Context::from_loader_function(fun) };
         unsafe {
-            Self::expose(AdapterContext {
-                inner: Arc::new(Mutex::new(Inner {
-                    gl: ManuallyDrop::new(context),
-                    device: create_instance_device().ok()?,
-                    context: None,
-                })),
-            })
+            Self::expose(
+                AdapterContext {
+                    inner: Arc::new(Mutex::new(Inner {
+                        gl: ManuallyDrop::new(context),
+                        device: create_instance_device().ok()?,
+                        context: None,
+                    })),
+                },
+                options,
+            )
         }
     }
 

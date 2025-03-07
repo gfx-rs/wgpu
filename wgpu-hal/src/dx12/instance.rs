@@ -1,4 +1,4 @@
-use std::{mem::size_of_val, sync::Arc};
+use std::{string::String, sync::Arc, vec::Vec};
 
 use parking_lot::RwLock;
 use windows::{
@@ -11,14 +11,6 @@ use windows::{
 
 use super::SurfaceTarget;
 use crate::{auxil, dx12::D3D12Lib};
-
-impl Drop for super::Instance {
-    fn drop(&mut self) {
-        if self.flags.contains(wgt::InstanceFlags::VALIDATION) {
-            auxil::dxgi::exception::unregister_exception_handler();
-        }
-    }
-}
 
 impl crate::Instance for super::Instance {
     type A = super::Api;
@@ -75,19 +67,20 @@ impl crate::Instance for super::Instance {
         }
 
         // Initialize DXC shader compiler
-        let dxc_container = match desc.dx12_shader_compiler.clone() {
+        let dxc_container = match desc.backend_options.dx12.shader_compiler.clone() {
             wgt::Dx12Compiler::DynamicDxc {
                 dxil_path,
                 dxc_path,
+                max_shader_model,
             } => {
-                let container =
-                    super::shader_compilation::get_dynamic_dxc_container(dxc_path, dxil_path)
-                        .map_err(|e| {
-                            crate::InstanceError::with_source(
-                                String::from("Failed to load dynamic DXC"),
-                                e,
-                            )
-                        })?;
+                let container = super::shader_compilation::get_dynamic_dxc_container(
+                    dxc_path.into(),
+                    dxil_path.into(),
+                    max_shader_model,
+                )
+                .map_err(|e| {
+                    crate::InstanceError::with_source(String::from("Failed to load dynamic DXC"), e)
+                })?;
 
                 Some(Arc::new(container))
             }

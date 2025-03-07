@@ -8,18 +8,18 @@
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-uint num_subgroups_1 = 0u;
+uint global = 0u;
 
-uint subgroup_id_1 = 0u;
+uint global_1 = 0u;
 
-uint subgroup_size_1 = 0u;
+uint global_2 = 0u;
 
-uint subgroup_invocation_id_1 = 0u;
+uint global_3 = 0u;
 
 
-void main_1() {
-    uint _e5 = subgroup_size_1;
-    uint _e6 = subgroup_invocation_id_1;
+void function() {
+    uint _e5 = global_2;
+    uint _e6 = global_3;
     uvec4 _e9 = subgroupBallot(((_e6 & 1u) == 1u));
     uvec4 _e10 = subgroupBallot(true);
     bool _e12 = subgroupAll((_e6 != 0u));
@@ -45,14 +45,14 @@ void main_1() {
 }
 
 void main() {
-    uint num_subgroups = gl_NumSubgroups;
-    uint subgroup_id = gl_SubgroupID;
-    uint subgroup_size = gl_SubgroupSize;
-    uint subgroup_invocation_id = gl_SubgroupInvocationID;
-    num_subgroups_1 = num_subgroups;
-    subgroup_id_1 = subgroup_id;
-    subgroup_size_1 = subgroup_size;
-    subgroup_invocation_id_1 = subgroup_invocation_id;
-    main_1();
+    uint param = gl_NumSubgroups;
+    uint param_1 = gl_SubgroupID;
+    uint param_2 = gl_SubgroupSize;
+    uint param_3 = gl_SubgroupInvocationID;
+    global = param;
+    global_1 = param_1;
+    global_2 = param_2;
+    global_3 = param_3;
+    function();
 }
 

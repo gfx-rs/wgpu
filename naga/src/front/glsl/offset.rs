@@ -11,6 +11,8 @@ The OpenGl spec (the layout rules are defined by the OpenGl spec in section
 equivalent to bytes.
 */
 
+use alloc::vec::Vec;
+
 use super::{
     ast::StructLayout,
     error::{Error, ErrorKind},
@@ -84,6 +86,7 @@ pub fn calculate_offset(
 
             let span = match size {
                 crate::ArraySize::Constant(size) => size.get() * stride,
+                crate::ArraySize::Pending(_) => unreachable!(),
                 crate::ArraySize::Dynamic => stride,
             };
 

@@ -1,3 +1,12 @@
+use alloc::{
+    borrow::Cow,
+    string::{String, ToString},
+};
+use core::mem;
+
+use hashbrown::HashSet;
+use thiserror::Error;
+
 use super::PipelineConstants;
 use crate::{
     arena::HandleVec,
@@ -6,8 +15,6 @@ use crate::{
     Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
     Span, Statement, TypeInner, WithSpan,
 };
-use std::{borrow::Cow, collections::HashSet, mem};
-use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -74,10 +81,12 @@ pub fn process_overrides<'a>(
     let mut adjusted_constant_initializers = HashSet::with_capacity(module.constants.len());
 
     let mut global_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
+    let mut layouter = crate::proc::Layouter::default();
 
     // An iterator through the original overrides table, consumed in
     // approximate tandem with the global expressions.
-    let mut override_iter = module.overrides.drain();
+    let mut overrides = mem::take(&mut module.overrides);
+    let mut override_iter = overrides.iter_mut_span();
 
     // Do two things in tandem:
     //
@@ -146,6 +155,7 @@ pub fn process_overrides<'a>(
         let mut evaluator = ConstantEvaluator::for_wgsl_module(
             &mut module,
             &mut global_expression_kind_tracker,
+            &mut layouter,
             false,
         );
         adjust_expr(&adjusted_global_expressions, &mut expr);
@@ -155,15 +165,26 @@ pub fn process_overrides<'a>(
 
     // Finish processing any overrides we didn't visit in the loop above.
     for entry in override_iter {
-        process_override(
-            entry,
-            pipeline_constants,
-            &mut module,
-            &mut override_map,
-            &adjusted_global_expressions,
-            &mut adjusted_constant_initializers,
-            &mut global_expression_kind_tracker,
-        )?;
+        match *entry.1 {
+            Override { name: Some(_), .. } | Override { id: Some(_), .. } => {
+                process_override(
+                    entry,
+                    pipeline_constants,
+                    &mut module,
+                    &mut override_map,
+                    &adjusted_global_expressions,
+                    &mut adjusted_constant_initializers,
+                    &mut global_expression_kind_tracker,
+                )?;
+            }
+            Override {
+                init: Some(ref mut init),
+                ..
+            } => {
+                *init = adjusted_global_expressions[*init];
+            }
+            _ => {}
+        }
     }
 
     // Update the initialization expression handles of all `Constant`s
@@ -185,22 +206,23 @@ pub fn process_overrides<'a>(
 
     let mut functions = mem::take(&mut module.functions);
     for (_, function) in functions.iter_mut() {
-        process_function(&mut module, &override_map, function)?;
+        process_function(&mut module, &override_map, &mut layouter, function)?;
     }
     module.functions = functions;
 
     let mut entry_points = mem::take(&mut module.entry_points);
     for ep in entry_points.iter_mut() {
-        process_function(&mut module, &override_map, &mut ep.function)?;
+        process_function(&mut module, &override_map, &mut layouter, &mut ep.function)?;
         process_workgroup_size_override(&mut module, &adjusted_global_expressions, ep)?;
     }
     module.entry_points = entry_points;
+    module.overrides = overrides;
 
     // Now that we've rewritten all the expressions, we need to
     // recompute their types and other metadata. For the time being,
     // do a full re-validation.
     let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
-    let module_info = validator.validate_no_overrides(&module)?;
+    let module_info = validator.validate_resolved_overrides(&module)?;
 
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
 }
@@ -244,7 +266,7 @@ fn process_workgroup_size_override(
 ///
 /// Add the new `Constant` to `override_map` and `adjusted_constant_initializers`.
 fn process_override(
-    (old_h, override_, span): (Handle<Override>, Override, Span),
+    (old_h, r#override, span): (Handle<Override>, &mut Override, &Span),
     pipeline_constants: &PipelineConstants,
     module: &mut Module,
     override_map: &mut HandleVec<Override, Handle<Constant>>,
@@ -252,20 +274,20 @@ fn process_override(
     adjusted_constant_initializers: &mut HashSet<Handle<Constant>>,
     global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
 ) -> Result<Handle<Constant>, PipelineConstantError> {
-    // Determine which key to use for `override_` in `pipeline_constants`.
-    let key = if let Some(id) = override_.id {
+    // Determine which key to use for `r#override` in `pipeline_constants`.
+    let key = if let Some(id) = r#override.id {
         Cow::Owned(id.to_string())
-    } else if let Some(ref name) = override_.name {
+    } else if let Some(ref name) = r#override.name {
         Cow::Borrowed(name)
     } else {
         unreachable!();
     };
 
-    // Generate a global expression for `override_`'s value, either
+    // Generate a global expression for `r#override`'s value, either
     // from the provided `pipeline_constants` table or its initializer
     // in the module.
     let init = if let Some(value) = pipeline_constants.get::<str>(&key) {
-        let literal = match module.types[override_.ty].inner {
+        let literal = match module.types[r#override.ty].inner {
             TypeInner::Scalar(scalar) => map_value_to_literal(*value, scalar)?,
             _ => unreachable!(),
         };
@@ -274,7 +296,7 @@ fn process_override(
             .append(Expression::Literal(literal), Span::UNDEFINED);
         global_expression_kind_tracker.insert(expr, crate::proc::ExpressionKind::Const);
         expr
-    } else if let Some(init) = override_.init {
+    } else if let Some(init) = r#override.init {
         adjusted_global_expressions[init]
     } else {
         return Err(PipelineConstantError::MissingValue(key.to_string()));
@@ -282,13 +304,14 @@ fn process_override(
 
     // Generate a new `Constant` to represent the override's value.
     let constant = Constant {
-        name: override_.name,
-        ty: override_.ty,
+        name: r#override.name.clone(),
+        ty: r#override.ty,
         init,
     };
-    let h = module.constants.append(constant, span);
+    let h = module.constants.append(constant, *span);
     override_map.insert(old_h, h);
     adjusted_constant_initializers.insert(h);
+    r#override.init = Some(init);
     Ok(h)
 }
 
@@ -304,6 +327,7 @@ fn process_override(
 fn process_function(
     module: &mut Module,
     override_map: &HandleVec<Override, Handle<Constant>>,
+    layouter: &mut crate::proc::Layouter,
     function: &mut Function,
 ) -> Result<(), ConstantEvaluatorError> {
     // A map from original local expression handles to
@@ -328,6 +352,7 @@ fn process_function(
         module,
         &mut function.expressions,
         &mut local_expression_kind_tracker,
+        layouter,
         &mut emitter,
         &mut block,
         false,
@@ -567,6 +592,12 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         | Expression::WorkGroupUniformLoadResult { ty: _ }
         | Expression::SubgroupBallotResult
         | Expression::SubgroupOperationResult { .. } => {}
+        Expression::RayQueryVertexPositions {
+            ref mut query,
+            committed: _,
+        } => {
+            adjust(query);
+        }
     }
 }
 
@@ -676,6 +707,20 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 | crate::AtomicFunction::Exchange { compare: None } => {}
             }
         }
+        Statement::ImageAtomic {
+            ref mut image,
+            ref mut coordinate,
+            ref mut array_index,
+            fun: _,
+            ref mut value,
+        } => {
+            adjust(image);
+            adjust(coordinate);
+            if let Some(ref mut array_index) = *array_index {
+                adjust(array_index);
+            }
+            adjust(value);
+        }
         Statement::WorkGroupUniformLoad {
             ref mut pointer,
             ref mut result,
@@ -746,6 +791,10 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::Proceed { ref mut result } => {
                     adjust(result);
                 }
+                crate::RayQueryFunction::GenerateIntersection { ref mut hit_t } => {
+                    adjust(hit_t);
+                }
+                crate::RayQueryFunction::ConfirmIntersection => {}
                 crate::RayQueryFunction::Terminate => {}
             }
         }

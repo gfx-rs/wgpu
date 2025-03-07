@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::*;
 
 /// Handle to a pipeline cache, which is used to accelerate
@@ -5,7 +7,9 @@ use crate::*;
 /// in subsequent executions
 ///
 /// This reuse is only applicable for the same or similar devices.
-/// See [`util::pipeline_cache_key`] for some details.
+/// See [`util::pipeline_cache_key`] for some details and a suggested workflow.
+///
+/// Created using [`Device::create_pipeline_cache`].
 ///
 /// # Background
 ///
@@ -28,6 +32,7 @@ use crate::*;
 ///
 /// # Usage
 ///
+/// This is used as [`RenderPipelineDescriptor::cache`] or [`ComputePipelineDescriptor::cache`].
 /// It is valid to use this resource when creating multiple pipelines, in
 /// which case it will likely cache each of those pipelines.
 /// It is also valid to create a new cache for each pipeline.
@@ -62,9 +67,9 @@ use crate::*;
 /// This type is unique to the Rust API of `wgpu`.
 ///
 /// [renaming]: std::fs::rename
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PipelineCache {
-    pub(crate) inner: dispatch::DispatchPipelineCache,
+    pub(crate) inner: crate::dispatch::DispatchPipelineCache,
 }
 
 #[cfg(send_sync)]

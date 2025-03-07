@@ -8,11 +8,12 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+rust-version.workspace = true
 autobenches = false
 publish = false
 
 [[bench]]
-name = "root"
+name = "wgpu-benchmark"
 harness = false
 path = "benches/root.rs"
 
@@ -20,6 +21,11 @@ path = "benches/root.rs"
 # Uncomment these features to enable tracy and superluminal profiling.
 # tracy = ["dep:tracy-client", "profiling/profile-with-tracy"]
 # superluminal = ["profiling/profile-with-superluminal"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(feature, values("tracy"))',
+] }
 
 [dependencies]
 bincode.workspace = true
@@ -38,9 +44,8 @@ naga = { workspace = true, features = [
     "wgsl-out",
 ] }
 nanorand.workspace = true
-once_cell.workspace = true
 pollster.workspace = true
 profiling.workspace = true
 rayon.workspace = true
 tracy-client = { workspace = true, optional = true }
-wgpu = { workspace = true, features = ["wgsl", "metal", "dx12"] }
+wgpu.workspace = true

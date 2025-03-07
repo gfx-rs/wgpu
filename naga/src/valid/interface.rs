@@ -1,11 +1,13 @@
+use alloc::vec::Vec;
+
+use bit_set::BitSet;
+
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
     Capabilities, Disalignment, FunctionError, ModuleInfo,
 };
 use crate::arena::{Handle, UniqueArena};
-
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
-use bit_set::BitSet;
 
 const MAX_WORKGROUP_SIZE: u32 = 0x4000;
 
@@ -128,6 +130,9 @@ fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
     }
     if access.contains(crate::StorageAccess::STORE) {
         storage_usage |= GlobalUse::WRITE;
+    }
+    if access.contains(crate::StorageAccess::ATOMIC) {
+        storage_usage |= GlobalUse::ATOMIC;
     }
     storage_usage
 }
@@ -497,7 +502,10 @@ impl super::Validator {
                 if access == crate::StorageAccess::STORE {
                     return Err(GlobalVariableError::StorageAddressSpaceWriteOnlyNotSupported);
                 }
-                (TypeFlags::DATA | TypeFlags::HOST_SHAREABLE, true)
+                (
+                    TypeFlags::DATA | TypeFlags::HOST_SHAREABLE | TypeFlags::CREATION_RESOLVED,
+                    true,
+                )
             }
             crate::AddressSpace::Uniform => {
                 if let Err((ty_handle, disalignment)) = type_info.uniform_layout {
@@ -513,7 +521,8 @@ impl super::Validator {
                     TypeFlags::DATA
                         | TypeFlags::COPY
                         | TypeFlags::SIZED
-                        | TypeFlags::HOST_SHAREABLE,
+                        | TypeFlags::HOST_SHAREABLE
+                        | TypeFlags::CREATION_RESOLVED,
                     true,
                 )
             }
@@ -542,8 +551,8 @@ impl super::Validator {
                         _ => {}
                     },
                     crate::TypeInner::Sampler { .. }
-                    | crate::TypeInner::AccelerationStructure
-                    | crate::TypeInner::RayQuery => {}
+                    | crate::TypeInner::AccelerationStructure { .. }
+                    | crate::TypeInner::RayQuery { .. } => {}
                     _ => {
                         return Err(GlobalVariableError::InvalidType(var.space));
                     }
@@ -551,7 +560,10 @@ impl super::Validator {
 
                 (TypeFlags::empty(), true)
             }
-            crate::AddressSpace::Private => (TypeFlags::CONSTRUCTIBLE, false),
+            crate::AddressSpace::Private => (
+                TypeFlags::CONSTRUCTIBLE | TypeFlags::CREATION_RESOLVED,
+                false,
+            ),
             crate::AddressSpace::WorkGroup => (TypeFlags::DATA | TypeFlags::SIZED, false),
             crate::AddressSpace::PushConstant => {
                 if !self.capabilities.contains(Capabilities::PUSH_CONSTANT) {
@@ -609,7 +621,6 @@ impl super::Validator {
         ep: &crate::EntryPoint,
         module: &crate::Module,
         mod_info: &ModuleInfo,
-        global_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<FunctionInfo, WithSpan<EntryPointError>> {
         if ep.early_depth_test.is_some() {
             let required = Capabilities::EARLY_DEPTH_TEST;
@@ -638,7 +649,7 @@ impl super::Validator {
         }
 
         let mut info = self
-            .validate_function(&ep.function, module, mod_info, true, global_expr_kind)
+            .validate_function(&ep.function, module, mod_info, true)
             .map_err(WithSpan::into_other)?;
 
         {
@@ -751,7 +762,9 @@ impl super::Validator {
                     } => storage_usage(access),
                     _ => GlobalUse::READ | GlobalUse::QUERY,
                 },
-                crate::AddressSpace::Private | crate::AddressSpace::WorkGroup => GlobalUse::all(),
+                crate::AddressSpace::Private | crate::AddressSpace::WorkGroup => {
+                    GlobalUse::READ | GlobalUse::WRITE | GlobalUse::QUERY
+                }
                 crate::AddressSpace::PushConstant => GlobalUse::READ,
             };
             if !allowed_usage.contains(usage) {
@@ -766,7 +779,7 @@ impl super::Validator {
             }
 
             if let Some(ref bind) = var.binding {
-                if !self.ep_resource_bindings.insert(bind.clone()) {
+                if !self.ep_resource_bindings.insert(*bind) {
                     if self.flags.contains(super::ValidationFlags::BINDINGS) {
                         return Err(EntryPointError::BindingCollision(var_handle)
                             .with_span_handle(var_handle, &module.global_variables));

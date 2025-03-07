@@ -1,3 +1,6 @@
+use alloc::{boxed::Box, string::String, vec::Vec};
+use core::{fmt, num::NonZeroU32};
+
 use crate::{
     binding_model,
     hub::Hub,
@@ -14,8 +17,6 @@ use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 use thiserror::Error;
 use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
-
-use std::num::NonZeroU32;
 
 pub(crate) mod bgl;
 pub mod global;
@@ -236,7 +237,7 @@ pub(crate) fn map_buffer(
     // If this is a write mapping zeroing out the memory here is the only
     // reasonable way as all data is pushed to GPU anyways.
 
-    let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
+    let mapped = unsafe { core::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
 
     // We can't call flush_mapped_ranges in this case, so we can't drain the uninitialized ranges either
     if !mapping.is_coherent
@@ -288,8 +289,8 @@ pub struct DeviceMismatch {
     pub(super) target_device: ResourceErrorIdent,
 }
 
-impl std::fmt::Display for DeviceMismatch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl fmt::Display for DeviceMismatch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "{} of {} doesn't match {}",
@@ -302,7 +303,7 @@ impl std::fmt::Display for DeviceMismatch {
     }
 }
 
-impl std::error::Error for DeviceMismatch {}
+impl core::error::Error for DeviceMismatch {}
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -340,8 +341,7 @@ pub struct MissingFeatures(pub wgt::Features);
 
 #[derive(Clone, Debug, Error)]
 #[error(
-    "Downlevel flags {0:?} are required but not supported on the device.\n{}",
-    DOWNLEVEL_ERROR_MESSAGE
+    "Downlevel flags {0:?} are required but not supported on the device.\n{DOWNLEVEL_ERROR_MESSAGE}",
 )]
 pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
 
@@ -393,9 +393,12 @@ pub fn create_validator(
             .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
     );
     caps.set(
-        Caps::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-        features
-            .contains(wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+        Caps::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        features.contains(wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    caps.set(
+        Caps::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        features.contains(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS),
     );
     // TODO: This needs a proper wgpu feature
     caps.set(
@@ -427,6 +430,18 @@ pub fn create_validator(
         features.contains(wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS),
     );
     caps.set(
+        Caps::TEXTURE_ATOMIC,
+        features.contains(wgt::Features::TEXTURE_ATOMIC),
+    );
+    caps.set(
+        Caps::TEXTURE_INT64_ATOMIC,
+        features.contains(wgt::Features::TEXTURE_INT64_ATOMIC),
+    );
+    caps.set(
+        Caps::SHADER_FLOAT32_ATOMIC,
+        features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC),
+    );
+    caps.set(
         Caps::MULTISAMPLED_SHADING,
         downlevel.contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING),
     );
@@ -453,6 +468,10 @@ pub fn create_validator(
     caps.set(
         Caps::SUBGROUP_VERTEX_STAGE,
         features.contains(wgt::Features::SUBGROUP_VERTEX),
+    );
+    caps.set(
+        Caps::RAY_HIT_VERTEX_POSITION,
+        features.intersects(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN),
     );
 
     naga::valid::Validator::new(flags, caps)

@@ -7,18 +7,17 @@ mod belt;
 mod device;
 mod encoder;
 mod init;
+mod texture_blitter;
 
-use std::sync::Arc;
-use std::{
-    borrow::Cow,
-    mem::{align_of, size_of},
-    ptr::copy_nonoverlapping,
-};
+use alloc::{borrow::Cow, format, string::String, sync::Arc, vec};
+use core::ptr::copy_nonoverlapping;
 
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
 pub use init::*;
+#[cfg(feature = "wgsl")]
+pub use texture_blitter::{TextureBlitter, TextureBlitterBuilder};
 pub use wgt::{
     math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs, TextureDataOrder,
 };
@@ -40,8 +39,8 @@ pub fn make_spirv(data: &[u8]) -> super::ShaderSource<'_> {
     super::ShaderSource::SpirV(make_spirv_raw(data))
 }
 
-/// Version of make_spirv intended for use with [`Device::create_shader_module_spirv`].
-/// Returns raw slice instead of ShaderSource.
+/// Version of `make_spirv` intended for use with [`Device::create_shader_module_spirv`].
+/// Returns a raw slice instead of [`ShaderSource`](super::ShaderSource).
 ///
 /// [`Device::create_shader_module_spirv`]: crate::Device::create_shader_module_spirv
 pub fn make_spirv_raw(data: &[u8]) -> Cow<'_, [u32]> {
@@ -135,7 +134,7 @@ impl DownloadBuffer {
     }
 }
 
-impl std::ops::Deref for DownloadBuffer {
+impl core::ops::Deref for DownloadBuffer {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         self.mapped_range.slice()
@@ -156,16 +155,35 @@ impl std::ops::Deref for DownloadBuffer {
 ///
 /// # Examples
 ///
-/// ``` no_run
+/// ```no_run
 /// # use std::path::PathBuf;
+/// use wgpu::PipelineCacheDescriptor;
 /// # let adapter_info = todo!();
-/// let cache_dir: PathBuf = PathBuf::new();
+/// # let device: wgpu::Device = todo!();
+/// let cache_dir: PathBuf = unimplemented!("Some reasonable platform-specific cache directory for your app.");
 /// let filename = wgpu::util::pipeline_cache_key(&adapter_info);
-/// if let Some(filename) = filename {
-///     let cache_file = cache_dir.join(&filename);
-///     let cache_data = std::fs::read(&cache_file);
-///     let pipeline_cache: wgpu::PipelineCache = todo!("Use data (if present) to create a pipeline cache");
+/// let (pipeline_cache, cache_file) = if let Some(filename) = filename {
+///     let cache_path = cache_dir.join(&filename);
+///     // If we failed to read the cache, for whatever reason, treat the data as lost.
+///     // In a real app, we'd probably avoid caching entirely unless the error was "file not found".
+///     let cache_data = std::fs::read(&cache_path).ok();
+///     let pipeline_cache = unsafe {
+///         device.create_pipeline_cache(&PipelineCacheDescriptor {
+///             data: cache_data.as_deref(),
+///             label: None,
+///             fallback: true
+///         })
+///     };
+///     (Some(pipeline_cache), Some(cache_path))
+/// } else {
+///     (None, None)
+/// };
 ///
+/// // Run pipeline initialisation, making sure to set the `cache`
+/// // fields of your `*PipelineDescriptor` to `pipeline_cache`
+///
+/// // And then save the resulting cache (probably off the main thread).
+/// if let (Some(pipeline_cache), Some(cache_file)) = (pipeline_cache, cache_file) {
 ///     let data = pipeline_cache.get_data();
 ///     if let Some(data) = data {
 ///         let temp_file = cache_file.with_extension("temp");
@@ -173,7 +191,7 @@ impl std::ops::Deref for DownloadBuffer {
 ///         std::fs::rename(&temp_file, &cache_file)?;
 ///     }
 /// }
-/// # Ok::<(), std::io::Error>(())
+/// # Ok::<_, std::io::Error>(())
 /// ```
 ///
 /// [`PipelineCache`]: super::PipelineCache
@@ -188,5 +206,44 @@ pub fn pipeline_cache_key(adapter_info: &wgt::AdapterInfo) -> Option<String> {
             adapter_info.vendor, adapter_info.device
         )),
         _ => None,
+    }
+}
+
+/// Adds extra conversion functions to `TextureFormat`.
+pub trait TextureFormatExt {
+    /// Finds the [`TextureFormat`](wgt::TextureFormat) corresponding to the given
+    /// [`StorageFormat`](wgc::naga::StorageFormat).
+    ///
+    /// # Examples
+    /// ```
+    /// use wgpu::util::TextureFormatExt;
+    /// assert_eq!(wgpu::TextureFormat::from_storage_format(wgpu::naga::StorageFormat::Bgra8Unorm), wgpu::TextureFormat::Bgra8Unorm);
+    /// ```
+    #[cfg(wgpu_core)]
+    fn from_storage_format(storage_format: crate::naga::StorageFormat) -> Self;
+
+    /// Finds the [`StorageFormat`](wgc::naga::StorageFormat) corresponding to the given [`TextureFormat`](wgt::TextureFormat).
+    /// Returns `None` if there is no matching storage format,
+    /// which typically indicates this format is not supported
+    /// for storage textures.
+    ///
+    /// # Examples
+    /// ```
+    /// use wgpu::util::TextureFormatExt;
+    /// assert_eq!(wgpu::TextureFormat::Bgra8Unorm.to_storage_format(), Some(wgpu::naga::StorageFormat::Bgra8Unorm));
+    /// ```
+    #[cfg(wgpu_core)]
+    fn to_storage_format(&self) -> Option<crate::naga::StorageFormat>;
+}
+
+impl TextureFormatExt for wgt::TextureFormat {
+    #[cfg(wgpu_core)]
+    fn from_storage_format(storage_format: crate::naga::StorageFormat) -> Self {
+        wgc::map_storage_format_from_naga(storage_format)
+    }
+
+    #[cfg(wgpu_core)]
+    fn to_storage_format(&self) -> Option<crate::naga::StorageFormat> {
+        wgc::map_storage_format_to_naga(*self)
     }
 }

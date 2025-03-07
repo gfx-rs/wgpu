@@ -1,5 +1,5 @@
 (
-    features: "TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES",
+    features: "",
     expectations: [
         (
             name: "Sampled Texture",

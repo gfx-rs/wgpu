@@ -1,4 +1,10 @@
-use std::{borrow::Cow, future::Future, marker::PhantomData};
+use alloc::{
+    borrow::Cow,
+    string::{String, ToString as _},
+    vec,
+    vec::Vec,
+};
+use core::{future::Future, marker::PhantomData};
 
 use crate::*;
 
@@ -10,7 +16,7 @@ use crate::*;
 /// of a pipeline.
 ///
 /// Corresponds to [WebGPU `GPUShaderModule`](https://gpuweb.github.io/gpuweb/#shader-module).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ShaderModule {
     pub(crate) inner: dispatch::DispatchShaderModule,
 }
@@ -168,7 +174,7 @@ impl From<crate::naga::SourceLocation> for SourceLocation {
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
-#[cfg_attr(feature = "naga-ir", allow(clippy::large_enum_variant))]
+#[cfg_attr(feature = "naga-ir", expect(clippy::large_enum_variant))]
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum ShaderSource<'a> {
@@ -186,8 +192,10 @@ pub enum ShaderSource<'a> {
         shader: Cow<'a, str>,
         /// The shader stage that the shader targets. For example, `naga::ShaderStage::Vertex`
         stage: naga::ShaderStage,
-        /// Defines to unlock configured shader features.
-        defines: naga::FastHashMap<String, String>,
+        /// Key-value pairs to represent defines sent to the glsl preprocessor.
+        ///
+        /// If the same name is defined multiple times, the last value is used.
+        defines: &'a [(&'a str, &'a str)],
     },
     /// WGSL module as a string slice.
     #[cfg(feature = "wgsl")]

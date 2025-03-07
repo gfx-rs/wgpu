@@ -2,6 +2,8 @@
 Reusing collections' previous allocations.
 */
 
+use alloc::vec::Vec;
+
 /// A value that can be reset to its initial state, retaining its current allocations.
 ///
 /// Naga attempts to lower the cost of SPIR-V generation by allowing clients to
@@ -38,14 +40,14 @@ impl<T> Recyclable for Vec<T> {
     }
 }
 
-impl<K, V, S: Clone> Recyclable for std::collections::HashMap<K, V, S> {
+impl<K, V, S: Clone> Recyclable for hashbrown::HashMap<K, V, S> {
     fn recycle(mut self) -> Self {
         self.clear();
         self
     }
 }
 
-impl<K, S: Clone> Recyclable for std::collections::HashSet<K, S> {
+impl<K, S: Clone> Recyclable for hashbrown::HashSet<K, S> {
     fn recycle(mut self) -> Self {
         self.clear();
         self
@@ -59,7 +61,7 @@ impl<K, S: Clone> Recyclable for indexmap::IndexSet<K, S> {
     }
 }
 
-impl<K: Ord, V> Recyclable for std::collections::BTreeMap<K, V> {
+impl<K: Ord, V> Recyclable for alloc::collections::BTreeMap<K, V> {
     fn recycle(mut self) -> Self {
         self.clear();
         self

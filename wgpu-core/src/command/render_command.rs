@@ -1,14 +1,14 @@
+use alloc::sync::Arc;
+
+use wgt::{BufferAddress, BufferSize, Color};
+
+use super::{Rect, RenderBundle};
 use crate::{
     binding_model::BindGroup,
     id,
     pipeline::RenderPipeline,
     resource::{Buffer, QuerySet},
 };
-use wgt::{BufferAddress, BufferSize, Color};
-
-use std::{num::NonZeroU32, sync::Arc};
-
-use super::{Rect, RenderBundle};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
@@ -82,11 +82,10 @@ pub enum RenderCommand {
         base_vertex: i32,
         first_instance: u32,
     },
-    MultiDrawIndirect {
+    DrawIndirect {
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        /// Count of `None` represents a non-multi call.
-        count: Option<NonZeroU32>,
+        count: u32,
         indexed: bool,
     },
     MultiDrawIndirectCount {
@@ -128,8 +127,9 @@ impl RenderCommand {
     pub fn resolve_render_command_ids(
         hub: &crate::hub::Hub,
         commands: &[RenderCommand],
-    ) -> Result<Vec<ArcRenderCommand>, super::RenderPassError> {
+    ) -> Result<alloc::vec::Vec<ArcRenderCommand>, super::RenderPassError> {
         use super::{DrawKind, PassErrorScope, RenderPassError};
+        use alloc::vec::Vec;
 
         let buffers_guard = hub.buffers.read();
         let bind_group_guard = hub.bind_groups.read();
@@ -311,16 +311,16 @@ impl RenderCommand {
                             first_instance,
                         },
 
-                        RenderCommand::MultiDrawIndirect {
+                        RenderCommand::DrawIndirect {
                             buffer_id,
                             offset,
                             count,
                             indexed,
-                        } => ArcRenderCommand::MultiDrawIndirect {
+                        } => ArcRenderCommand::DrawIndirect {
                             buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
                                 RenderPassError {
                                     scope: PassErrorScope::Draw {
-                                        kind: if count.is_some() {
+                                        kind: if count != 1 {
                                             DrawKind::MultiDrawIndirect
                                         } else {
                                             DrawKind::DrawIndirect
@@ -459,11 +459,10 @@ pub enum ArcRenderCommand {
         base_vertex: i32,
         first_instance: u32,
     },
-    MultiDrawIndirect {
+    DrawIndirect {
         buffer: Arc<Buffer>,
         offset: BufferAddress,
-        /// Count of `None` represents a non-multi call.
-        count: Option<NonZeroU32>,
+        count: u32,
         indexed: bool,
     },
     MultiDrawIndirectCount {
@@ -475,13 +474,13 @@ pub enum ArcRenderCommand {
         indexed: bool,
     },
     PushDebugGroup {
-        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+        #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },
     PopDebugGroup,
     InsertDebugMarker {
-        #[cfg_attr(target_os = "emscripten", allow(dead_code))]
+        #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },

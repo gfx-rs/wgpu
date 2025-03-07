@@ -1,7 +1,10 @@
 //! This is a player library for WebGPU traces.
 
 #![cfg(not(target_arch = "wasm32"))]
-#![warn(unsafe_op_in_unsafe_fn)]
+#![warn(clippy::allow_attributes, unsafe_op_in_unsafe_fn)]
+
+extern crate wgpu_core as wgc;
+extern crate wgpu_types as wgt;
 
 use wgc::device::trace;
 
@@ -133,7 +136,7 @@ impl GlobalPlay for wgc::global::Global {
                                         transform_buffer: tg.transform_buffer,
                                         first_vertex: tg.first_vertex,
                                         vertex_stride: tg.vertex_stride,
-                                        index_buffer_offset: tg.index_buffer_offset,
+                                        first_index: tg.first_index,
                                         transform_buffer_offset: tg.transform_buffer_offset,
                                     }
                                 });
@@ -171,7 +174,7 @@ impl GlobalPlay for wgc::global::Global {
                                         transform_buffer: tg.transform_buffer,
                                         first_vertex: tg.first_vertex,
                                         vertex_stride: tg.vertex_stride,
-                                        index_buffer_offset: tg.index_buffer_offset,
+                                        first_index: tg.first_index,
                                         transform_buffer_offset: tg.transform_buffer_offset,
                                     }
                                 });
@@ -191,7 +194,7 @@ impl GlobalPlay for wgc::global::Global {
                                 .map(|instance| wgc::ray_tracing::TlasInstance {
                                     blas_id: instance.blas_id,
                                     transform: &instance.transform,
-                                    custom_index: instance.custom_index,
+                                    custom_data: instance.custom_data,
                                     mask: instance.mask,
                                 })
                         });
@@ -286,7 +289,7 @@ impl GlobalPlay for wgc::global::Global {
             Action::GetSurfaceTexture { id, parent_id } => {
                 self.surface_get_current_texture(parent_id, Some(id))
                     .unwrap()
-                    .texture_id
+                    .texture
                     .unwrap();
             }
             Action::CreateBindGroupLayout(id, desc) => {
@@ -451,17 +454,11 @@ impl GlobalPlay for wgc::global::Global {
             Action::CreateBlas { id, desc, sizes } => {
                 self.device_create_blas(device, &desc, sizes, Some(id));
             }
-            Action::FreeBlas(id) => {
-                self.blas_destroy(id).unwrap();
-            }
             Action::DestroyBlas(id) => {
                 self.blas_drop(id);
             }
             Action::CreateTlas { id, desc } => {
                 self.device_create_tlas(device, &desc, Some(id));
-            }
-            Action::FreeTlas(id) => {
-                self.tlas_destroy(id).unwrap();
             }
             Action::DestroyTlas(id) => {
                 self.tlas_drop(id);

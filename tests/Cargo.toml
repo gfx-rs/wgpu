@@ -8,32 +8,49 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+rust-version.workspace = true
 autotests = false
 publish = false
 
 [[test]]
-name = "wgpu-test"
-path = "tests/root.rs"
+name = "wgpu-compile-test"
+path = "compile-tests/root.rs"
+harness = true
+
+[[test]]
+name = "wgpu-dependency-test"
+path = "dependency-tests/root.rs"
+harness = true
+
+[[test]]
+name = "wgpu-gpu-test"
+path = "gpu-tests/root.rs"
 harness = false
 
 [[test]]
-name = "wgpu-compile-test"
-path = "compile_tests/root.rs"
+name = "wgpu-validation-test"
+path = "validation-tests/root.rs"
 harness = true
 
 [features]
 webgl = ["wgpu/webgl"]
 
 [dependencies]
+wgpu = { workspace = true, features = ["noop"] }
+wgpu-macros.workspace = true
+
 anyhow.workspace = true
 arrayvec.workspace = true
+approx.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
+cargo_metadata.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true
 glam.workspace = true
 itertools.workspace = true
+image.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true
 parking_lot.workspace = true
@@ -44,20 +61,20 @@ serde_json.workspace = true
 serde.workspace = true
 strum = { workspace = true, features = ["derive"] }
 trybuild.workspace = true
-wgpu = { workspace = true, features = ["wgsl"] }
-wgpu-macros.workspace = true
-wgt = { workspace = true, features = ["serde"] }
 
+# Non-Webassembly
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger.workspace = true
 nv-flip.workspace = true
 parking_lot = { workspace = true, features = ["deadlock_detection"] }
 
+# Webassembly
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_log.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true }
 
+# Webassembly Dev Dependencies
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 image.workspace = true
 js-sys.workspace = true
@@ -65,3 +82,6 @@ wasm-bindgen-futures.workspace = true
 wasm-bindgen-test.workspace = true
 wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
+
+[lints.clippy]
+disallowed_types = "allow"

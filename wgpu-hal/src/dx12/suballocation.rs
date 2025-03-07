@@ -53,8 +53,8 @@ pub(crate) fn create_buffer_resource(
     desc: &crate::BufferDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
 ) -> Result<(Direct3D12::ID3D12Resource, Option<AllocationWrapper>), crate::DeviceError> {
-    let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
-    let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
+    let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
+    let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
     // Workaround for Intel Xe drivers
     if !device.private_caps.suballocation_supported {
@@ -151,6 +151,54 @@ pub(crate) fn create_texture_resource(
     Ok((resource, Some(AllocationWrapper { allocation })))
 }
 
+pub(crate) fn create_acceleration_structure_resource(
+    device: &crate::dx12::Device,
+    desc: &crate::AccelerationStructureDescriptor,
+    raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
+) -> Result<(Direct3D12::ID3D12Resource, Option<AllocationWrapper>), crate::DeviceError> {
+    // Workaround for Intel Xe drivers
+    if !device.private_caps.suballocation_supported {
+        return create_committed_acceleration_structure_resource(device, desc, raw_desc)
+            .map(|resource| (resource, None));
+    }
+
+    let location = MemoryLocation::GpuOnly;
+
+    let name = desc.label.unwrap_or("Unlabeled acceleration structure");
+
+    let mut allocator = device.mem_allocator.lock();
+
+    let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
+        allocator.allocator.device(),
+        &raw_desc,
+        name,
+        location,
+    );
+    let allocation = allocator.allocator.allocate(&allocation_desc)?;
+    let mut resource = None;
+
+    unsafe {
+        device.raw.CreatePlacedResource(
+            allocation.heap(),
+            allocation.offset(),
+            &raw_desc,
+            Direct3D12::D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+            None,
+            &mut resource,
+        )
+    }
+    .into_device_result("Placed acceleration structure creation")?;
+
+    let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
+
+    device
+        .counters
+        .acceleration_structure_memory
+        .add(allocation.size() as isize);
+
+    Ok((resource, Some(AllocationWrapper { allocation })))
+}
+
 pub(crate) fn free_buffer_allocation(
     device: &crate::dx12::Device,
     allocation: AllocationWrapper,
@@ -180,6 +228,22 @@ pub(crate) fn free_texture_allocation(
         Ok(_) => (),
         // TODO: Don't panic here
         Err(e) => panic!("Failed to destroy dx12 texture, {e}"),
+    };
+}
+
+pub(crate) fn free_acceleration_structure_allocation(
+    device: &crate::dx12::Device,
+    allocation: AllocationWrapper,
+    allocator: &Mutex<GpuAllocatorWrapper>,
+) {
+    device
+        .counters
+        .acceleration_structure_memory
+        .sub(allocation.allocation.size() as isize);
+    match allocator.lock().allocator.free(allocation.allocation) {
+        Ok(_) => (),
+        // TODO: Don't panic here
+        Err(e) => panic!("Failed to destroy dx12 acceleration structure, {e}"),
     };
 }
 
@@ -225,8 +289,8 @@ pub(crate) fn create_committed_buffer_resource(
     desc: &crate::BufferDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
 ) -> Result<Direct3D12::ID3D12Resource, crate::DeviceError> {
-    let is_cpu_read = desc.usage.contains(crate::BufferUses::MAP_READ);
-    let is_cpu_write = desc.usage.contains(crate::BufferUses::MAP_WRITE);
+    let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
+    let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
     let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
         Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,
@@ -301,6 +365,43 @@ pub(crate) fn create_committed_texture_resource(
         )
     }
     .into_device_result("Committed texture creation")?;
+
+    resource.ok_or(crate::DeviceError::Unexpected)
+}
+
+pub(crate) fn create_committed_acceleration_structure_resource(
+    device: &crate::dx12::Device,
+    _desc: &crate::AccelerationStructureDescriptor,
+    raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
+) -> Result<Direct3D12::ID3D12Resource, crate::DeviceError> {
+    let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
+        Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,
+        CPUPageProperty: Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+        MemoryPoolPreference: match device.private_caps.memory_architecture {
+            crate::dx12::MemoryArchitecture::NonUnified => Direct3D12::D3D12_MEMORY_POOL_L1,
+            _ => Direct3D12::D3D12_MEMORY_POOL_L0,
+        },
+        CreationNodeMask: 0,
+        VisibleNodeMask: 0,
+    };
+
+    let mut resource = None;
+
+    unsafe {
+        device.raw.CreateCommittedResource(
+            &heap_properties,
+            if device.private_caps.heap_create_not_zeroed {
+                Direct3D12::D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
+            } else {
+                Direct3D12::D3D12_HEAP_FLAG_NONE
+            },
+            &raw_desc,
+            Direct3D12::D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+            None,
+            &mut resource,
+        )
+    }
+    .into_device_result("Committed acceleration structure creation")?;
 
     resource.ok_or(crate::DeviceError::Unexpected)
 }

@@ -1,6 +1,9 @@
-#![no_main]
-#[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
+#![cfg_attr(all(fuzzable_platform, fuzzing), no_main)]
+
+#[cfg(all(fuzzable_platform, fuzzing))]
 mod fuzz {
+    use std::iter::FromIterator;
+
     use arbitrary::Arbitrary;
     use libfuzzer_sys::fuzz_target;
     use naga::{
@@ -9,33 +12,22 @@ mod fuzz {
     };
 
     #[derive(Debug, Arbitrary)]
-    enum ShaderStageProxy {
-        Vertex,
-        Fragment,
-        Compute,
-    }
-
-    impl From<ShaderStageProxy> for ShaderStage {
-        fn from(proxy: ShaderStageProxy) -> Self {
-            match proxy {
-                ShaderStageProxy::Vertex => ShaderStage::Vertex,
-                ShaderStageProxy::Fragment => ShaderStage::Fragment,
-                ShaderStageProxy::Compute => ShaderStage::Compute,
-            }
-        }
-    }
-
-    #[derive(Debug, Arbitrary)]
     struct OptionsProxy {
-        pub stage: ShaderStageProxy,
-        pub defines: FastHashMap<String, String>,
+        pub stage: ShaderStage,
+        pub defines: std::collections::HashMap<String, String>,
     }
 
     impl From<OptionsProxy> for Options {
         fn from(proxy: OptionsProxy) -> Self {
             Options {
-                stage: proxy.stage.into(),
-                defines: proxy.defines,
+                stage: proxy.stage,
+                // NOTE: This is a workaround needed due to lack of rust-fuzz/arbitrary support for hashbrown.
+                defines: FastHashMap::from_iter(
+                    proxy
+                        .defines
+                        .keys()
+                        .map(|k| (k.clone(), proxy.defines.get(&k.clone()).unwrap().clone())),
+                ),
             }
         }
     }
@@ -47,3 +39,6 @@ mod fuzz {
         let _result = parser.parse(&options.into(), &source);
     });
 }
+
+#[cfg(not(all(fuzzable_platform, fuzzing)))]
+fn main() {}

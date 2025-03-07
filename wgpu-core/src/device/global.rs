@@ -1,3 +1,6 @@
+use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::{ptr::NonNull, sync::atomic::Ordering};
+
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
@@ -27,12 +30,6 @@ use crate::{
 };
 
 use wgt::{BufferAddress, TextureFormat};
-
-use std::{
-    borrow::Cow,
-    ptr::NonNull,
-    sync::{atomic::Ordering, Arc},
-};
 
 use super::{ImplicitPipelineIds, UserClosures};
 
@@ -112,7 +109,7 @@ impl Global {
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 let mut desc = desc.clone();
-                let mapped_at_creation = std::mem::replace(&mut desc.mapped_at_creation, false);
+                let mapped_at_creation = core::mem::replace(&mut desc.mapped_at_creation, false);
                 if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                     desc.usage |= wgt::BufferUsages::COPY_DST;
                 }
@@ -239,7 +236,7 @@ impl Global {
         }
         .map_err(|e| device.handle_hal_error(e))?;
 
-        unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
+        unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
 
         if !mapping.is_coherent {
             #[allow(clippy::single_range_in_vec_init)]
@@ -331,8 +328,6 @@ impl Global {
             return (id, None);
         };
 
-        log::error!("Device::create_texture error: {error}");
-
         let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
@@ -375,8 +370,6 @@ impl Global {
 
             return (id, None);
         };
-
-        log::error!("Device::create_texture error: {error}");
 
         let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
@@ -487,7 +480,6 @@ impl Global {
             return (id, None);
         };
 
-        log::error!("Texture::create_view({texture_id:?}) error: {error}");
         let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
@@ -739,7 +731,7 @@ impl Global {
             {
                 let resolve_buffer = |bb: &BufferBinding| {
                     buffer_storage
-                        .get(bb.buffer_id)
+                        .get(bb.buffer)
                         .get()
                         .map(|buffer| ResolvedBufferBinding {
                             buffer,
@@ -942,8 +934,6 @@ impl Global {
             return (id, None);
         };
 
-        log::error!("Device::create_shader_module error: {error}");
-
         let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
@@ -975,7 +965,7 @@ impl Global {
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 let data = trace.make_binary("spv", unsafe {
-                    std::slice::from_raw_parts(source.as_ptr().cast::<u8>(), source.len() * 4)
+                    core::slice::from_raw_parts(source.as_ptr().cast::<u8>(), source.len() * 4)
                 });
                 trace.add(trace::Action::CreateShaderModule {
                     id: fid.id(),
@@ -992,8 +982,6 @@ impl Global {
             api_log!("Device::create_shader_module_spirv -> {id:?}");
             return (id, None);
         };
-
-        log::error!("Device::create_shader_module_spirv error: {error}");
 
         let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
@@ -1374,8 +1362,6 @@ impl Global {
                 bgl_guard.insert(bgl_id, Fallible::Invalid(Arc::new(String::new())));
             }
         }
-
-        log::error!("Device::create_render_pipeline error: {error}");
 
         (id, Some(error))
     }
@@ -1820,7 +1806,7 @@ impl Global {
                     Err(_) => break 'error E::UnsupportedQueueFamily,
                 };
 
-                let mut hal_view_formats = vec![];
+                let mut hal_view_formats = Vec::new();
                 for format in config.view_formats.iter() {
                     if *format == config.format {
                         continue;
@@ -1859,7 +1845,13 @@ impl Global {
                         height: config.height,
                         depth_or_array_layers: 1,
                     },
-                    usage: conv::map_texture_usage(config.usage, hal::FormatAspects::COLOR),
+                    usage: conv::map_texture_usage(
+                        config.usage,
+                        hal::FormatAspects::COLOR,
+                        wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
+                            | wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
+                            | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                    ),
                     view_formats: hal_view_formats,
                 };
 
@@ -1874,9 +1866,21 @@ impl Global {
                 // Wait for all work to finish before configuring the surface.
                 let snatch_guard = device.snatchable_lock.read();
                 let fence = device.fence.read();
-                match device.maintain(fence, wgt::Maintain::Wait, snatch_guard) {
-                    Ok((closures, _)) => {
-                        user_callbacks = closures;
+
+                let maintain_result;
+                (user_callbacks, maintain_result) =
+                    device.maintain(fence, wgt::PollType::Wait, snatch_guard);
+
+                match maintain_result {
+                    // We're happy
+                    Ok(wgt::PollStatus::QueueEmpty) => {}
+                    Ok(wgt::PollStatus::WaitSucceeded) => {
+                        // After the wait, the queue should be empty. It can only be non-empty
+                        // if another thread is submitting at the same time.
+                        break 'error E::GpuWaitTimeout;
+                    }
+                    Ok(wgt::PollStatus::Poll) => {
+                        unreachable!("Cannot get a Poll result from a Wait action.")
                     }
                     Err(e) => {
                         break 'error e.into();
@@ -1936,38 +1940,32 @@ impl Global {
     pub fn device_poll(
         &self,
         device_id: DeviceId,
-        maintain: wgt::Maintain<crate::SubmissionIndex>,
-    ) -> Result<bool, WaitIdleError> {
-        api_log!("Device::poll {maintain:?}");
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
+    ) -> Result<wgt::PollStatus, WaitIdleError> {
+        api_log!("Device::poll {poll_type:?}");
 
         let device = self.hub.devices.get(device_id);
 
-        let DevicePoll {
-            closures,
-            queue_empty,
-        } = Self::poll_single_device(&device, maintain)?;
+        let (closures, result) = Self::poll_single_device(&device, poll_type);
 
         closures.fire();
 
-        Ok(queue_empty)
+        result
     }
 
     fn poll_single_device(
         device: &crate::device::Device,
-        maintain: wgt::Maintain<crate::SubmissionIndex>,
-    ) -> Result<DevicePoll, WaitIdleError> {
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
+    ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
         let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();
-        let (closures, queue_empty) = device.maintain(fence, maintain, snatch_guard)?;
+        let maintain_result = device.maintain(fence, poll_type, snatch_guard);
 
         // Some deferred destroys are scheduled in maintain so run this right after
         // to avoid holding on to them until the next device poll.
         device.deferred_resource_destruction();
 
-        Ok(DevicePoll {
-            closures,
-            queue_empty,
-        })
+        maintain_result
     }
 
     /// Poll all devices belonging to the specified backend.
@@ -1979,7 +1977,7 @@ impl Global {
     fn poll_all_devices_of_api(
         &self,
         force_wait: bool,
-        closures: &mut UserClosures,
+        closure_list: &mut UserClosures,
     ) -> Result<bool, WaitIdleError> {
         profiling::scope!("poll_device");
 
@@ -1989,20 +1987,19 @@ impl Global {
             let device_guard = hub.devices.read();
 
             for (_id, device) in device_guard.iter() {
-                let maintain = if force_wait {
-                    wgt::Maintain::Wait
+                let poll_type = if force_wait {
+                    wgt::PollType::Wait
                 } else {
-                    wgt::Maintain::Poll
+                    wgt::PollType::Poll
                 };
 
-                let DevicePoll {
-                    closures: cbs,
-                    queue_empty,
-                } = Self::poll_single_device(device, maintain)?;
+                let (closures, result) = Self::poll_single_device(device, poll_type);
 
-                all_queue_empty &= queue_empty;
+                let is_queue_empty = matches!(result, Ok(wgt::PollStatus::QueueEmpty));
 
-                closures.extend(cbs);
+                all_queue_empty &= is_queue_empty;
+
+                closure_list.extend(closures);
             }
         }
 
@@ -2168,7 +2165,6 @@ impl Global {
                 if let Some(callback) = operation.callback.take() {
                     callback(Err(err.clone()));
                 }
-                log::error!("Buffer::map_async error: {err}");
                 Err(err)
             }
         }
@@ -2270,9 +2266,4 @@ impl Global {
             buffer_id,
         )
     }
-}
-
-struct DevicePoll {
-    closures: UserClosures,
-    queue_empty: bool,
 }

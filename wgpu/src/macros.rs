@@ -32,8 +32,6 @@ macro_rules! vertex_attr_array {
 
 #[test]
 fn test_vertex_attr_array() {
-    use std::mem::size_of;
-
     let attrs = vertex_attr_array![0 => Float32x2, 3 => Uint16x4];
     // VertexAttribute does not support PartialEq, so we cannot test directly
     assert_eq!(attrs.len(), 2);
@@ -73,8 +71,8 @@ macro_rules! include_spirv_raw {
         {
             //log::info!("including '{}'", $($token)*);
             $crate::ShaderModuleDescriptorSpirV {
-                label: Some($($token)*),
-                source: $crate::util::make_spirv_raw(include_bytes!($($token)*)),
+                label: $crate::__macro_helpers::Some($($token)*),
+                source: $crate::util::make_spirv_raw($crate::__macro_helpers::include_bytes!($($token)*)),
             }
         }
     };
@@ -96,9 +94,16 @@ macro_rules! include_wgsl {
         {
             //log::info!("including '{}'", $($token)*);
             $crate::ShaderModuleDescriptor {
-                label: Some($($token)*),
-                source: $crate::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!($($token)*))),
+                label: $crate::__macro_helpers::Some($($token)*),
+                source: $crate::ShaderSource::Wgsl($crate::__macro_helpers::Cow::Borrowed($crate::__macro_helpers::include_str!($($token)*))),
             }
         }
     };
+}
+
+#[doc(hidden)]
+pub mod helpers {
+    pub use alloc::borrow::Cow;
+    pub use core::{include_bytes, include_str};
+    pub use Some;
 }

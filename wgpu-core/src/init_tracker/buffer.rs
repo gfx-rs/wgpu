@@ -1,6 +1,7 @@
 use super::{InitTracker, MemoryInitKind};
 use crate::resource::Buffer;
-use std::{ops::Range, sync::Arc};
+use alloc::sync::Arc;
+use core::ops::Range;
 
 #[derive(Debug, Clone)]
 pub(crate) struct BufferInitTrackerAction {

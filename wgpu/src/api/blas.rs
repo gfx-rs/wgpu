@@ -1,7 +1,9 @@
+use alloc::{boxed::Box, vec::Vec};
+
+use wgt::WasmNotSendSync;
+
 use crate::dispatch;
 use crate::{Buffer, Label};
-use std::sync::Arc;
-use wgt::WasmNotSendSync;
 
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
 pub type BlasTriangleGeometrySizeDescriptor = wgt::BlasTriangleGeometrySizeDescriptor;
@@ -34,8 +36,7 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 ///
 /// Each one contains:
 /// - A reference to a BLAS, this ***must*** be interacted with using [TlasInstance::new] or [TlasInstance::set_blas], a
-///   TlasInstance that references a BLAS keeps that BLAS from being dropped, but if the BLAS is explicitly destroyed (e.g.
-///   using [Blas::destroy]) the TlasInstance becomes invalid
+///   TlasInstance that references a BLAS keeps that BLAS from being dropped
 /// - A user accessible transformation matrix
 /// - A user accessible mask
 /// - A user accessible custom index
@@ -44,14 +45,14 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 /// [TlasPackage]: crate::TlasPackage
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
-    pub(crate) blas: Arc<BlasShared>,
+    pub(crate) blas: dispatch::DispatchBlas,
     /// Affine transform matrix 3x4 (rows x columns, row major order).
     pub transform: [f32; 12],
     /// Custom index for the instance used inside the shader.
     ///
     /// This must only use the lower 24 bits, if any bits are outside that range (byte 4 does not equal 0) the TlasInstance becomes
     /// invalid and generates a validation error when built
-    pub custom_index: u32,
+    pub custom_data: u32,
     /// Mask for the instance used inside the shader to filter instances.
     /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`.
     pub mask: u8,
@@ -61,7 +62,7 @@ impl TlasInstance {
     /// Construct TlasInstance.
     /// - blas: Reference to the bottom level acceleration structure
     /// - transform: Transform buffer offset in bytes (optional, required if transform buffer is present)
-    /// - custom_index: Custom index for the instance used inside the shader (max 24 bits)
+    /// - custom_data: Custom index for the instance used inside the shader (max 24 bits)
     /// - mask: Mask for the instance used inside the shader to filter instances
     ///
     /// Note: while one of these contains a reference to a BLAS that BLAS will not be dropped,
@@ -69,11 +70,11 @@ impl TlasInstance {
     /// TlasInstance(s) will immediately make them invalid. If one or more of those invalid
     /// TlasInstances is inside a TlasPackage that is attempted to be built, the build will
     /// generate a validation error.
-    pub fn new(blas: &Blas, transform: [f32; 12], custom_index: u32, mask: u8) -> Self {
+    pub fn new(blas: &Blas, transform: [f32; 12], custom_data: u32, mask: u8) -> Self {
         Self {
-            blas: blas.shared.clone(),
+            blas: blas.inner.clone(),
             transform,
-            custom_index,
+            custom_data,
             mask,
         }
     }
@@ -83,7 +84,7 @@ impl TlasInstance {
     /// See the note on [TlasInstance] about the
     /// guarantees of keeping a BLAS alive.
     pub fn set_blas(&mut self, blas: &Blas) {
-        self.blas = blas.shared.clone();
+        self.blas = blas.inner.clone();
     }
 }
 
@@ -103,8 +104,8 @@ pub struct BlasTriangleGeometry<'a> {
     pub vertex_stride: wgt::BufferAddress,
     /// Index buffer (optional).
     pub index_buffer: Option<&'a Buffer>,
-    /// Index buffer offset in bytes (optional, required if index buffer is present).
-    pub index_buffer_offset: Option<wgt::BufferAddress>,
+    /// Number of indexes to skip in the index buffer (optional, required if index buffer is present).
+    pub first_index: Option<u32>,
     /// Transform buffer containing 3x4 (rows x columns, row major) affine transform matrices `[f32; 12]` (optional).
     pub transform_buffer: Option<&'a Buffer>,
     /// Transform buffer offset in bytes (optional, required if transform buffer is present).
@@ -128,13 +129,7 @@ pub struct BlasBuildEntry<'a> {
 }
 static_assertions::assert_impl_all!(BlasBuildEntry<'_>: WasmNotSendSync);
 
-#[derive(Debug)]
-pub(crate) struct BlasShared {
-    pub(crate) inner: dispatch::DispatchBlas,
-}
-static_assertions::assert_impl_all!(BlasShared: WasmNotSendSync);
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// Bottom Level Acceleration Structure (BLAS).
 ///
 /// A BLAS is a device-specific raytracing acceleration structure that contains geometry data.
@@ -144,20 +139,16 @@ static_assertions::assert_impl_all!(BlasShared: WasmNotSendSync);
 /// [Tlas]: crate::Tlas
 pub struct Blas {
     pub(crate) handle: Option<u64>,
-    pub(crate) shared: Arc<BlasShared>,
+    pub(crate) inner: dispatch::DispatchBlas,
 }
 static_assertions::assert_impl_all!(Blas: WasmNotSendSync);
 
-crate::cmp::impl_eq_ord_hash_proxy!(Blas => .shared.inner);
+crate::cmp::impl_eq_ord_hash_proxy!(Blas => .inner);
 
 impl Blas {
     /// Raw handle to the acceleration structure, used inside raw instance buffers.
     pub fn handle(&self) -> Option<u64> {
         self.handle
-    }
-    /// Destroy the associated native resources as soon as possible.
-    pub fn destroy(&self) {
-        self.shared.inner.destroy();
     }
 
     /// Returns the inner hal Acceleration Structure using a callback. The hal acceleration structure
@@ -186,15 +177,22 @@ impl Blas {
 }
 
 /// Context version of [BlasTriangleGeometry].
-#[allow(dead_code)]
 pub struct ContextBlasTriangleGeometry<'a> {
+    #[expect(dead_code)]
     pub(crate) size: &'a BlasTriangleGeometrySizeDescriptor,
+    #[expect(dead_code)]
     pub(crate) vertex_buffer: &'a dispatch::DispatchBuffer,
+    #[expect(dead_code)]
     pub(crate) index_buffer: Option<&'a dispatch::DispatchBuffer>,
+    #[expect(dead_code)]
     pub(crate) transform_buffer: Option<&'a dispatch::DispatchBuffer>,
+    #[expect(dead_code)]
     pub(crate) first_vertex: u32,
+    #[expect(dead_code)]
     pub(crate) vertex_stride: wgt::BufferAddress,
+    #[expect(dead_code)]
     pub(crate) index_buffer_offset: Option<wgt::BufferAddress>,
+    #[expect(dead_code)]
     pub(crate) transform_buffer_offset: Option<wgt::BufferAddress>,
 }
 
@@ -205,8 +203,9 @@ pub enum ContextBlasGeometries<'a> {
 }
 
 /// Context version see [BlasBuildEntry].
-#[allow(dead_code)]
 pub struct ContextBlasBuildEntry<'a> {
+    #[expect(dead_code)]
     pub(crate) blas: &'a dispatch::DispatchBlas,
+    #[expect(dead_code)]
     pub(crate) geometries: ContextBlasGeometries<'a>,
 }

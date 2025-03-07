@@ -1,3 +1,5 @@
+use alloc::format;
+
 use super::parse_str;
 
 #[test]
@@ -77,7 +79,29 @@ fn parse_type_cast() {
     assert!(parse_str(
         "
         fn main() {
-            let x: vec2<f32> = vec2<f32>(0i, 0i);
+            let x: vec2<i32> = vec2<i32>(0.0, 0.0);
+        }
+    ",
+    )
+    .is_err());
+}
+
+#[test]
+fn parse_type_coercion() {
+    parse_str(
+        "
+        fn foo(bar: f32) {}
+        fn main() {
+            foo(0);
+        }
+    ",
+    )
+    .unwrap();
+    assert!(parse_str(
+        "
+        fn foo(bar: i32) {}
+        fn main() {
+            foo(0.0);
         }
     ",
     )
@@ -298,9 +322,9 @@ fn parse_parentheses_switch() {
     parse_str(
         "
         fn main() {
-            var pos: f32;
-            switch pos > 1.0 {
-                default: { pos = 3.0; }
+            var pos: i32;
+            switch pos + 1 {
+                default: { pos = 3; }
             }
         }
     ",
@@ -377,6 +401,14 @@ fn parse_postfix() {
     }",
     )
     .unwrap();
+
+    let err = parse_str(
+        "fn foo() {
+        let v = mat4x4<f32>().x;
+    }",
+    )
+    .unwrap_err();
+    assert_eq!(err.message(), "invalid field accessor `x`");
 }
 
 #[test]
@@ -386,6 +418,42 @@ fn parse_expressions() {
         let y: vec2<f32> = select(vec2<f32>(1.0, 1.0), vec2<f32>(x, x), vec2<bool>(x < 0.5, x > 0.5));
         let z: bool = !(0.0 == 1.0);
     }").unwrap();
+}
+
+#[test]
+fn parse_assignment_statements() {
+    parse_str(
+        "
+        struct Foo { x: i32 };
+
+        fn foo() {
+            var x: u32 = 0u;
+            x++;
+            x--;
+            x = 1u;
+            x += 1u;
+            var v: vec2<f32> = vec2<f32>(1.0, 1.0);
+            v[0] += 1.0;
+            (v)[0] += 1.0;
+            var s: Foo = Foo(0);
+            s.x -= 1;
+            (s.x) -= 1;
+            (s).x -= 1;
+            _ = 5u;
+    }",
+    )
+    .unwrap();
+
+    let error = parse_str(
+        "fn foo() {
+        x|x++;
+    }",
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.message(),
+        "expected assignment or increment/decrement, found \"|\"",
+    );
 }
 
 #[test]
@@ -461,7 +529,7 @@ fn binary_expression_mixed_scalar_and_vector_operands() {
 #[test]
 fn parse_pointers() {
     parse_str(
-        "fn foo(a: ptr<private, f32>) -> f32 { return *a; }
+        "fn foo(a: ptr<function, f32>) -> f32 { return *a; }
     fn bar() {
         var x: f32 = 1.0;
         let px = &x;
@@ -638,6 +706,27 @@ fn parse_missing_workgroup_size() {
 }
 
 mod diagnostic_filter {
+    use crate::front::wgsl::assert_parse_err;
+
+    #[test]
+    fn intended_global_directive() {
+        let shader = "@diagnostic(off, my.lint);";
+        assert_parse_err(
+            shader,
+            "\
+error: `@diagnostic(…)` attribute(s) on semicolons are not supported
+  ┌─ wgsl:1:1
+  │
+1 │ @diagnostic(off, my.lint);
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^
+  │
+  = note: `@diagnostic(…)` attributes are only permitted on `fn`s, some statements, and `switch`/`loop` bodies.
+  = note: If you meant to declare a diagnostic filter that applies to the entire module, move this line to the top of the file and remove the `@` symbol.
+
+"
+        );
+    }
+
     mod parse_sites_not_yet_supported {
         use crate::front::wgsl::assert_parse_err;
 

@@ -12,23 +12,23 @@ fn function() -> vec4<f32> {
     var i: i32 = 0i;
 
     loop {
-        let _e9 = i;
-        if !((_e9 < NUM_VECS)) {
+        let _e8 = i;
+        if !((_e8 < NUM_VECS)) {
             break;
         }
         {
-            let _e15 = sum;
-            let _e16 = i;
-            let _e18 = global.vecs[_e16];
-            sum = (_e15 + _e18);
+            let _e14 = sum;
+            let _e15 = i;
+            let _e17 = global.vecs[_e15];
+            sum = (_e14 + _e17);
         }
         continuing {
-            let _e12 = i;
-            i = (_e12 + 1i);
+            let _e11 = i;
+            i = (_e11 + 1i);
         }
     }
-    let _e20 = sum;
-    return _e20;
+    let _e19 = sum;
+    return _e19;
 }
 
 fn main_1() {

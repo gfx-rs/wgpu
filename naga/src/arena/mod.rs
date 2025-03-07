@@ -2,11 +2,10 @@
 
 To improve translator performance and reduce memory usage, most structures are
 stored in an [`Arena`]. An `Arena<T>` stores a series of `T` values, indexed by
-[`Handle<T>`](Handle) values, which are just wrappers around integer indexes.
+[`Handle<T>`] values, which are just wrappers around integer indexes.
 For example, a `Function`'s expressions are stored in an `Arena<Expression>`,
 and compound expressions refer to their sub-expressions via `Handle<Expression>`
-values. (When examining the serialized form of a `Module`, note that the first
-element of an `Arena` has an index of 1, not 0.)
+values.
 
 A [`UniqueArena`] is just like an `Arena`, except that it stores only a single
 instance of each value. The value type must implement `Eq` and `Hash`. Like an
@@ -32,11 +31,12 @@ pub(crate) use handlevec::HandleVec;
 pub use range::{BadRangeError, Range};
 pub use unique_arena::UniqueArena;
 
+use alloc::vec::Vec;
+use core::{fmt, ops};
+
 use crate::Span;
 
 use handle::Index;
-
-use std::{fmt, ops};
 
 /// An arena holding some kind of component (e.g., type, constant,
 /// instruction, etc.) that can be referenced.
@@ -95,16 +95,28 @@ impl<T> Arena<T> {
 
     /// Returns an iterator over the items stored in this arena, returning both
     /// the item's handle and a reference to it.
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Handle<T>, &T)> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Handle<T>, &T)> + ExactSizeIterator {
         self.data
             .iter()
             .enumerate()
             .map(|(i, v)| unsafe { (Handle::from_usize_unchecked(i), v) })
     }
 
+    /// Returns an iterator over the items stored in this arena, returning both
+    /// the item's handle and a reference to it.
+    pub fn iter_mut_span(
+        &mut self,
+    ) -> impl DoubleEndedIterator<Item = (Handle<T>, &mut T, &Span)> + ExactSizeIterator {
+        self.data
+            .iter_mut()
+            .zip(self.span_info.iter())
+            .enumerate()
+            .map(|(i, (v, span))| unsafe { (Handle::from_usize_unchecked(i), v, span) })
+    }
+
     /// Drains the arena, returning an iterator over the items stored.
     pub fn drain(&mut self) -> impl DoubleEndedIterator<Item = (Handle<T>, T, Span)> {
-        let arena = std::mem::take(self);
+        let arena = core::mem::take(self);
         arena
             .data
             .into_iter()
@@ -259,7 +271,7 @@ where
         D: serde::Deserializer<'de>,
     {
         let data = Vec::deserialize(deserializer)?;
-        let span_info = std::iter::repeat(Span::default())
+        let span_info = core::iter::repeat(Span::default())
             .take(data.len())
             .collect();
 

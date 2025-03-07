@@ -307,7 +307,7 @@ fn main() {{
         );
         let module = naga::front::wgsl::parse_str(&source).unwrap();
         let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
-            .validate_no_overrides(&module)
+            .validate(&module)
             .expect_err("module should be invalid");
         assert_eq!(err.emit_to_string(&source), expected_err);
     }
@@ -381,7 +381,7 @@ fn incompatible_interpolation_and_sampling_types() {
     for (invalid_source, invalid_module, interpolation, sampling, interpolate_attr) in invalid_cases
     {
         let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
-            .validate_no_overrides(&invalid_module)
+            .validate(&invalid_module)
             .expect_err(&format!(
                 "module should be invalid for {interpolate_attr:?}"
             ));
@@ -523,7 +523,7 @@ impl BindingArrayFixture {
                 name: Some("array<u32, 10>".into()),
                 inner: naga::TypeInner::Array {
                     base: ty_u32,
-                    size: naga::ArraySize::Constant(std::num::NonZeroU32::new(10).unwrap()),
+                    size: naga::ArraySize::Constant(core::num::NonZeroU32::new(10).unwrap()),
                     stride: 4,
                 },
             },
@@ -610,8 +610,9 @@ fn binding_arrays_cannot_hold_scalars() {
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn validation_error_messages() {
-    let cases = [(
-        r#"@group(0) @binding(0) var my_sampler: sampler;
+    let cases = [
+        (
+            r#"@group(0) @binding(0) var my_sampler: sampler;
 
                 fn foo(tex: texture_2d<f32>) -> vec4<f32> {
                     return textureSampleLevel(tex, my_sampler, vec2f(0, 0), 0.0);
@@ -621,7 +622,7 @@ fn validation_error_messages() {
                     foo();
                 }
             "#,
-        "\
+            "\
 error: Function [1] 'main' is invalid
   ┌─ wgsl:7:17
   │  \n7 │ ╭                 fn main() {
@@ -632,12 +633,53 @@ error: Function [1] 'main' is invalid
   = Requires 1 arguments, but 0 are provided
 
 ",
-    )];
+        ),
+        (
+            "\
+@compute @workgroup_size(1, 1)
+fn main() {
+    // Bad: `9001` isn't a `bool`.
+    _ = select(1, 2, 9001);
+}
+",
+            "\
+error: Entry point main at Compute is invalid
+  ┌─ wgsl:4:9
+  │
+4 │     _ = select(1, 2, 9001);
+  │         ^^^^^^ naga::Expression [3]
+  │
+  = Expression [3] is invalid
+  = Expected selection condition to be a boolean value, got Scalar(Scalar { kind: Sint, width: 4 })
+
+",
+        ),
+        (
+            "\
+@compute @workgroup_size(1, 1)
+fn main() {
+    // Bad: `bool` and abstract int args. don't match.
+    _ = select(true, 1, false);
+}
+",
+            "\
+error: Entry point main at Compute is invalid
+  ┌─ wgsl:4:9
+  │
+4 │     _ = select(true, 1, false);
+  │         ^^^^^^ naga::Expression [3]
+  │
+  = Expression [3] is invalid
+  = Expected selection argument types to match, but reject value of type Scalar(Scalar { kind: Bool, width: 1 }) does not match accept value of value Scalar(Scalar { kind: Sint, width: 4 })
+
+",
+        ),
+    ];
 
     for (source, expected_err) in cases {
         let module = naga::front::wgsl::parse_str(source).unwrap();
         let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
-            .validate_no_overrides(&module)
+            .validate(&module)
             .expect_err("module should be invalid");
         println!("{}", err.emit_to_string(source));
         assert_eq!(err.emit_to_string(source), expected_err);

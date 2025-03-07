@@ -112,7 +112,7 @@
                 (
                     binding: 0,
                     resource: Buffer((
-                        buffer_id: Id(3, 1),
+                        buffer: Id(3, 1),
                         offset: 0,
                         size: Some(16),
                     )),

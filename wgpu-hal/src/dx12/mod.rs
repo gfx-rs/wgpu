@@ -13,13 +13,52 @@ and destination states match, and they are for storage sync.
 
 For now, all resources are created with "committed" memory.
 
+## Sampler Descriptor Management
+
+At most one descriptor heap of each type can be bound at once. This
+means that the descriptors from all bind groups need to be present
+in the same heap, and they need to be contiguous within that heap.
+This is not a problem for the SRV/CBV/UAV heap as it can be sized into
+the millions of entries. However the sampler heap is limited to 2048 entries.
+
+In order to work around this limitation, we refer to samplers indirectly by index.
+The entire sampler heap is bound at once and a buffer containing all sampler indexes
+for that bind group is bound. The shader then uses the index to look up the sampler
+in the heap. To help visualize this, the generated HLSL looks like this:
+
+```wgsl
+@group(0) @binding(2) var myLinearSampler: sampler;
+@group(1) @binding(1) var myAnisoSampler: sampler;
+@group(1) @binding(4) var myCompSampler: sampler;
+```
+
+```cpp
+// These bindings alias the same descriptors. Depending on the type, the shader will use the correct one.
+SamplerState nagaSamplerHeap[2048]: register(s0, space0);
+SamplerComparisonState nagaComparisonSamplerHeap[2048]: register(s2048, space1);
+
+StructuredBuffer<uint> nagaGroup0SamplerIndexArray : register(t0, space0);
+StructuredBuffer<uint> nagaGroup1SamplerIndexArray : register(t1, space0);
+
+// Indexes into group 0 index array
+static const SamplerState myLinearSampler = nagaSamplerHeap[nagaGroup0SamplerIndexArray[0]];
+
+// Indexes into group 1 index array
+static const SamplerState myAnisoSampler = nagaSamplerHeap[nagaGroup1SamplerIndexArray[0]];
+static const SamplerComparisonState myCompSampler = nagaComparisonSamplerHeap[nagaGroup1SamplerIndexArray[1]];
+```
+
+Without this transform we would need separate set of sampler descriptors for each unique combination of samplers
+in a bind group. This results in a lot of duplication and makes it easy to hit the 2048 limit. With the transform
+the limit is merely 2048 unique samplers in existence, which is much more reasonable.
+
 ## Resource binding
 
 See ['Device::create_pipeline_layout`] documentation for the structure
 of the root signature corresponding to WebGPU pipeline layout.
 
 Binding groups is mostly straightforward, with one big caveat:
-all bindings have to be reset whenever the pipeline layout changes.
+all bindings have to be reset whenever the root signature changes.
 This is the rule of D3D12, and we can do nothing to help it.
 
 We detect this change at both [`crate::CommandEncoder::set_bind_group`]
@@ -33,18 +72,21 @@ Otherwise, we pass a range corresponding only to the current bind group.
 
 !*/
 
+#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
+
 mod adapter;
 mod command;
 mod conv;
 mod descriptor;
 mod device;
 mod instance;
+mod sampler;
 mod shader_compilation;
 mod suballocation;
 mod types;
 mod view;
 
-use std::{ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc};
+use std::{borrow::ToOwned as _, ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc, vec::Vec};
 
 use arrayvec::ArrayVec;
 use parking_lot::{Mutex, RwLock};
@@ -116,7 +158,8 @@ impl D3D12Lib {
             riid: *const windows_core::GUID,
             ppdevice: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"D3D12CreateDevice\0") }?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"D3D12CreateDevice".to_bytes()) }?;
 
         let mut result__: Option<Direct3D12::ID3D12Device> = None;
 
@@ -157,7 +200,7 @@ impl D3D12Lib {
             pperrorblob: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
-            unsafe { self.lib.get(b"D3D12SerializeRootSignature\0") }?;
+            unsafe { self.lib.get(c"D3D12SerializeRootSignature".to_bytes()) }?;
 
         let desc = Direct3D12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
@@ -196,7 +239,8 @@ impl D3D12Lib {
             riid: *const windows_core::GUID,
             ppvdebug: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"D3D12GetDebugInterface\0") }?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"D3D12GetDebugInterface".to_bytes()) }?;
 
         let mut result__ = None;
 
@@ -233,7 +277,8 @@ impl DxgiLib {
             riid: *const windows_core::GUID,
             pdebug: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"DXGIGetDebugInterface1\0") }?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"DXGIGetDebugInterface1".to_bytes()) }?;
 
         let mut result__ = None;
 
@@ -262,7 +307,8 @@ impl DxgiLib {
             riid: *const windows_core::GUID,
             ppfactory: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"CreateDXGIFactory2\0") }?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"CreateDXGIFactory2".to_bytes()) }?;
 
         let mut result__ = None;
 
@@ -284,7 +330,8 @@ impl DxgiLib {
             riid: *const windows_core::GUID,
             ppfactory: *mut *mut core::ffi::c_void,
         ) -> windows_core::HRESULT;
-        let func: libloading::Symbol<Fun> = unsafe { self.lib.get(b"CreateDXGIFactory1\0") }?;
+        let func: libloading::Symbol<Fun> =
+            unsafe { self.lib.get(c"CreateDXGIFactory1".to_bytes()) }?;
 
         let mut result__ = None;
 
@@ -518,6 +565,7 @@ struct PrivateCapabilities {
     casting_fully_typed_format_supported: bool,
     suballocation_supported: bool,
     shader_model: naga::back::hlsl::ShaderModel,
+    max_sampler_descriptor_heap_size: u32,
 }
 
 #[derive(Default)]
@@ -575,7 +623,7 @@ struct DeviceShared {
     zero_buffer: Direct3D12::ID3D12Resource,
     cmd_signatures: CommandSignatures,
     heap_views: descriptor::GeneralHeap,
-    heap_samplers: descriptor::GeneralHeap,
+    sampler_heap: sampler::SamplerHeap,
 }
 
 unsafe impl Send for DeviceShared {}
@@ -591,7 +639,6 @@ pub struct Device {
     rtv_pool: Mutex<descriptor::CpuPool>,
     dsv_pool: Mutex<descriptor::CpuPool>,
     srv_uav_pool: Mutex<descriptor::CpuPool>,
-    sampler_pool: Mutex<descriptor::CpuPool>,
     // library
     library: Arc<D3D12Lib>,
     #[cfg(feature = "renderdoc")]
@@ -605,6 +652,13 @@ pub struct Device {
 impl Drop for Device {
     fn drop(&mut self) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
+        if self
+            .private_caps
+            .instance_flags
+            .contains(wgt::InstanceFlags::VALIDATION)
+        {
+            auxil::dxgi::exception::unregister_exception_handler();
+        }
     }
 }
 
@@ -614,6 +668,12 @@ unsafe impl Sync for Device {}
 pub struct Queue {
     raw: Direct3D12::ID3D12CommandQueue,
     temp_lists: Mutex<Vec<Option<Direct3D12::ID3D12CommandList>>>,
+}
+
+impl Queue {
+    pub fn as_raw(&self) -> &Direct3D12::ID3D12CommandQueue {
+        &self.raw
+    }
 }
 
 unsafe impl Send for Queue {}
@@ -638,7 +698,7 @@ struct PassResolve {
     format: Dxgi::Common::DXGI_FORMAT,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum RootElement {
     Empty,
     Constant,
@@ -652,10 +712,19 @@ enum RootElement {
     },
     /// Descriptor table.
     Table(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
-    /// Descriptor for a buffer that has dynamic offset.
-    DynamicOffsetBuffer {
-        kind: BufferViewKind,
+    /// Descriptor for an uniform buffer that has dynamic offset.
+    DynamicUniformBuffer {
         address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE,
+    },
+    /// Descriptor table referring to the entire sampler heap.
+    SamplerHeap,
+    /// Root constants for dynamic offsets.
+    ///
+    /// start..end is the range of values in [`PassState::dynamic_storage_buffer_offsets`]
+    /// that will be used to update the root constants.
+    DynamicOffsetsBuffer {
+        start: usize,
+        end: usize,
     },
 }
 
@@ -672,6 +741,7 @@ struct PassState {
     layout: PipelineLayoutShared,
     root_elements: [RootElement; MAX_ROOT_ELEMENTS],
     constant_data: [u32; MAX_ROOT_ELEMENTS],
+    dynamic_storage_buffer_offsets: Vec<u32>,
     dirty_root_elements: u64,
     vertex_buffers: [Direct3D12::D3D12_VERTEX_BUFFER_VIEW; crate::MAX_VERTEX_BUFFERS],
     dirty_vertex_buffers: usize,
@@ -693,9 +763,11 @@ impl PassState {
                 total_root_elements: 0,
                 special_constants: None,
                 root_constant_info: None,
+                sampler_heap_root_index: None,
             },
             root_elements: [RootElement::Empty; MAX_ROOT_ELEMENTS],
             constant_data: [0; MAX_ROOT_ELEMENTS],
+            dynamic_storage_buffer_offsets: Vec::new(),
             dirty_root_elements: 0,
             vertex_buffers: [Default::default(); crate::MAX_VERTEX_BUFFERS],
             dirty_vertex_buffers: 0,
@@ -846,7 +918,8 @@ unsafe impl Sync for TextureView {}
 
 #[derive(Debug)]
 pub struct Sampler {
-    handle: descriptor::Handle,
+    index: sampler::SamplerIndex,
+    desc: Direct3D12::D3D12_SAMPLER_DESC,
 }
 
 impl crate::DynSampler for Sampler {}
@@ -886,24 +959,28 @@ pub struct BindGroupLayout {
     /// Sorted list of entries.
     entries: Vec<wgt::BindGroupLayoutEntry>,
     cpu_heap_views: Option<descriptor::CpuHeap>,
-    cpu_heap_samplers: Option<descriptor::CpuHeap>,
     copy_counts: Vec<u32>, // all 1's
 }
 
 impl crate::DynBindGroupLayout for BindGroupLayout {}
 
 #[derive(Debug, Clone, Copy)]
-enum BufferViewKind {
-    Constant,
-    ShaderResource,
-    UnorderedAccess,
+enum DynamicBuffer {
+    Uniform(Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE),
+    Storage,
+}
+
+#[derive(Debug)]
+struct SamplerIndexBuffer {
+    buffer: Direct3D12::ID3D12Resource,
+    allocation: Option<suballocation::AllocationWrapper>,
 }
 
 #[derive(Debug)]
 pub struct BindGroup {
     handle_views: Option<descriptor::DualHandle>,
-    handle_samplers: Option<descriptor::DualHandle>,
-    dynamic_buffers: Vec<Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE>,
+    sampler_index_buffer: Option<SamplerIndexBuffer>,
+    dynamic_buffers: Vec<DynamicBuffer>,
 }
 
 impl crate::DynBindGroup for BindGroup {}
@@ -923,7 +1000,7 @@ type RootIndex = u32;
 struct BindGroupInfo {
     base_root_index: RootIndex,
     tables: TableTypes,
-    dynamic_buffers: Vec<BufferViewKind>,
+    dynamic_storage_buffer_offsets: Option<DynamicStorageBufferOffsets>,
 }
 
 #[derive(Debug, Clone)]
@@ -933,11 +1010,18 @@ struct RootConstantInfo {
 }
 
 #[derive(Debug, Clone)]
+struct DynamicStorageBufferOffsets {
+    root_index: RootIndex,
+    range: std::ops::Range<usize>,
+}
+
+#[derive(Debug, Clone)]
 struct PipelineLayoutShared {
     signature: Option<Direct3D12::ID3D12RootSignature>,
     total_root_elements: RootIndex,
     special_constants: Option<PipelineLayoutSpecialConstants>,
     root_constant_info: Option<RootConstantInfo>,
+    sampler_heap_root_index: Option<RootIndex>,
 }
 
 unsafe impl Send for PipelineLayoutShared {}
@@ -946,7 +1030,7 @@ unsafe impl Sync for PipelineLayoutShared {}
 #[derive(Debug, Clone)]
 struct PipelineLayoutSpecialConstants {
     root_index: RootIndex,
-    cmd_signatures: CommandSignatures,
+    indirect_cmd_signatures: Option<CommandSignatures>,
 }
 
 unsafe impl Send for PipelineLayoutSpecialConstants {}
@@ -967,7 +1051,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 pub struct ShaderModule {
     naga: crate::NagaShader,
     raw_name: Option<ffi::CString>,
-    runtime_checks: bool,
+    runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
 impl crate::DynShaderModule for ShaderModule {}
@@ -1024,7 +1108,10 @@ pub struct PipelineCache;
 impl crate::DynPipelineCache for PipelineCache {}
 
 #[derive(Debug)]
-pub struct AccelerationStructure {}
+pub struct AccelerationStructure {
+    resource: Direct3D12::ID3D12Resource,
+    allocation: Option<suballocation::AllocationWrapper>,
+}
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
 

@@ -1,4 +1,5 @@
-use std::num::NonZeroU32;
+use alloc::{vec, vec::Vec};
+use core::num::NonZeroU32;
 
 use crate::{
     front::glsl::{
@@ -147,7 +148,7 @@ impl ParsingContext<'_> {
     }
 
     pub fn peek_type_qualifier(&mut self, frontend: &mut Frontend) -> bool {
-        self.peek(frontend).map_or(false, |t| match t.value {
+        self.peek(frontend).is_some_and(|t| match t.value {
             TokenValue::Invariant
             | TokenValue::Interpolation(_)
             | TokenValue::Sampling(_)
@@ -228,7 +229,7 @@ impl ParsingContext<'_> {
                         }
                         TokenValue::Buffer => {
                             StorageQualifier::AddressSpace(AddressSpace::Storage {
-                                access: crate::StorageAccess::all(),
+                                access: crate::StorageAccess::LOAD | crate::StorageAccess::STORE,
                             })
                         }
                         _ => unreachable!(),
@@ -274,10 +275,12 @@ impl ParsingContext<'_> {
                     qualifiers.precision = Some((p, token.meta));
                 }
                 TokenValue::MemoryQualifier(access) => {
+                    let load_store = crate::StorageAccess::LOAD | crate::StorageAccess::STORE;
                     let storage_access = qualifiers
                         .storage_access
-                        .get_or_insert((crate::StorageAccess::all(), Span::default()));
-                    if !storage_access.0.contains(!access) {
+                        .get_or_insert((load_store, Span::default()));
+
+                    if !storage_access.0.contains(!access & load_store) {
                         frontend.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 "The same memory qualifier can only be used once".into(),
@@ -379,7 +382,7 @@ impl ParsingContext<'_> {
     }
 
     pub fn peek_type_name(&mut self, frontend: &mut Frontend) -> bool {
-        self.peek(frontend).map_or(false, |t| match t.value {
+        self.peek(frontend).is_some_and(|t| match t.value {
             TokenValue::TypeName(_) | TokenValue::Void => true,
             TokenValue::Struct => true,
             TokenValue::Identifier(ref ident) => frontend.lookup_type.contains_key(ident),
@@ -428,6 +431,7 @@ fn map_image_format(word: &str) -> Option<crate::StorageFormat> {
         "rgba32ui" => Sf::Rgba32Uint,
         "rgba16ui" => Sf::Rgba16Uint,
         "rgba8ui" => Sf::Rgba8Uint,
+        "r64ui" => Sf::R64Uint,
         "rg32ui" => Sf::Rg32Uint,
         "rg16ui" => Sf::Rg16Uint,
         "rg8ui" => Sf::Rg8Uint,

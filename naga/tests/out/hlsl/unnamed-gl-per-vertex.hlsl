@@ -26,7 +26,7 @@ static int global_1 = (int)0;
 void function()
 {
     int _e9 = global_1;
-    global.member = float4(((_e9 == 0) ? -4.0 : 1.0), ((_e9 == 2) ? 4.0 : -1.0), 0.0, 1.0);
+    global.member = float4(((_e9 == int(0)) ? -4.0 : 1.0), ((_e9 == int(2)) ? 4.0 : -1.0), 0.0, 1.0);
     return;
 }
 

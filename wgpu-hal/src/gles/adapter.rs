@@ -1,6 +1,8 @@
+use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::Vec};
+use core::sync::atomic::AtomicU8;
+
 use glow::HasContext;
 use parking_lot::Mutex;
-use std::sync::{atomic::AtomicU8, Arc};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -79,7 +81,7 @@ impl super::Adapter {
     /// resulting in an `Err`.
     pub(super) fn parse_full_version(src: &str) -> Result<(u8, u8), crate::InstanceError> {
         let (version, _vendor_info) = match src.find(' ') {
-            Some(i) => (&src[..i], src[i + 1..].to_string()),
+            Some(i) => (&src[..i], src[i + 1..].to_owned()),
             None => (src, String::new()),
         };
 
@@ -192,6 +194,7 @@ impl super::Adapter {
 
     pub(super) unsafe fn expose(
         context: super::AdapterContext,
+        backend_options: wgt::GlBackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         let gl = context.lock();
         let extensions = gl.supported_extensions();
@@ -200,7 +203,9 @@ impl super::Adapter {
             // emscripten doesn't enable "WEBGL_debug_renderer_info" extension by default. so, we do it manually.
             // See https://github.com/gfx-rs/wgpu/issues/3245 for context
             #[cfg(Emscripten)]
-            if unsafe { super::emscripten::enable_extension("WEBGL_debug_renderer_info\0") } {
+            if unsafe {
+                super::emscripten::enable_extension(c"WEBGL_debug_renderer_info".to_str().unwrap())
+            } {
                 (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
             } else {
                 (glow::VENDOR, glow::RENDERER)
@@ -372,6 +377,8 @@ impl super::Adapter {
         } else {
             vertex_shader_storage_textures.min(fragment_shader_storage_textures)
         };
+        let indirect_execution =
+            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect");
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
@@ -383,10 +390,7 @@ impl super::Adapter {
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
             max_storage_block_size != 0,
         );
-        downlevel_flags.set(
-            wgt::DownlevelFlags::INDIRECT_EXECUTION,
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect"),
-        );
+        downlevel_flags.set(wgt::DownlevelFlags::INDIRECT_EXECUTION, indirect_execution);
         downlevel_flags.set(wgt::DownlevelFlags::BASE_VERTEX, supported((3, 2), (3, 2)));
         downlevel_flags.set(
             wgt::DownlevelFlags::INDEPENDENT_BLEND,
@@ -471,6 +475,8 @@ impl super::Adapter {
             wgt::Features::SHADER_EARLY_DEPTH_TEST,
             supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
+        // We emulate MDI with a loop of draw calls.
+        features.set(wgt::Features::MULTI_DRAW_INDIRECT, indirect_execution);
         if extensions.contains("GL_ARB_timer_query") {
             features.set(wgt::Features::TIMESTAMP_QUERY, true);
             features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS, true);
@@ -663,8 +669,9 @@ impl super::Adapter {
                 .min(crate::MAX_COLOR_ATTACHMENTS as i32) as u32
         };
 
-        // TODO: programmatically determine this.
-        let max_color_attachment_bytes_per_sample = 32;
+        // 16 bytes per sample is the maximum size of a color attachment.
+        let max_color_attachment_bytes_per_sample =
+            max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
         let limits = wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
@@ -682,6 +689,8 @@ impl super::Adapter {
             max_storage_buffers_per_shader_stage,
             max_storage_textures_per_shader_stage,
             max_uniform_buffers_per_shader_stage,
+            max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_sampler_elements_per_shader_stage: 0,
             max_uniform_buffer_binding_size: unsafe {
                 gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
             } as u32,
@@ -822,6 +831,8 @@ impl super::Adapter {
                     private_caps,
                     workarounds,
                     features,
+                    limits: limits.clone(),
+                    options: backend_options,
                     shading_language_version,
                     next_shader_id: Default::default(),
                     program_cache: Default::default(),
@@ -1080,6 +1091,9 @@ impl crate::Adapter for super::Adapter {
 
         let texture_float_linear = feature_fn(wgt::Features::FLOAT32_FILTERABLE, filterable);
 
+        let image_atomic = feature_fn(wgt::Features::TEXTURE_ATOMIC, Tfc::STORAGE_ATOMIC);
+        let image_64_atomic = feature_fn(wgt::Features::TEXTURE_INT64_ATOMIC, Tfc::STORAGE_ATOMIC);
+
         match format {
             Tf::R8Unorm => filterable_renderable,
             Tf::R8Snorm => filterable,
@@ -1094,8 +1108,8 @@ impl crate::Adapter for super::Adapter {
             Tf::Rg8Snorm => filterable,
             Tf::Rg8Uint => renderable,
             Tf::Rg8Sint => renderable,
-            Tf::R32Uint => renderable | storage,
-            Tf::R32Sint => renderable | storage,
+            Tf::R32Uint => renderable | storage | image_atomic,
+            Tf::R32Sint => renderable | storage | image_atomic,
             Tf::R32Float => unfilterable | storage | float_renderable | texture_float_linear,
             Tf::Rg16Uint => renderable,
             Tf::Rg16Sint => renderable,
@@ -1111,6 +1125,7 @@ impl crate::Adapter for super::Adapter {
             Tf::Rgb10a2Uint => renderable,
             Tf::Rgb10a2Unorm => filterable_renderable,
             Tf::Rg11b10Ufloat => filterable | float_renderable,
+            Tf::R64Uint => image_64_atomic,
             Tf::Rg32Uint => renderable,
             Tf::Rg32Sint => renderable,
             Tf::Rg32Float => unfilterable | float_renderable | texture_float_linear,
@@ -1205,7 +1220,7 @@ impl crate::Adapter for super::Adapter {
                 composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
                 maximum_frame_latency: 2..=2, //TODO, unused currently
                 current_extent: None,
-                usage: crate::TextureUses::COLOR_TARGET,
+                usage: wgt::TextureUses::COLOR_TARGET,
             })
         } else {
             None
@@ -1236,7 +1251,9 @@ impl super::AdapterShared {
             let buffer_mapping =
                 unsafe { gl.map_buffer_range(target, offset, length as _, glow::MAP_READ_BIT) };
 
-            unsafe { std::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length) };
+            unsafe {
+                core::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length)
+            };
 
             unsafe { gl.unmap_buffer(target) };
         }

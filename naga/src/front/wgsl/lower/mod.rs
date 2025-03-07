@@ -1,4 +1,9 @@
-use std::num::NonZeroU32;
+use alloc::{
+    borrow::ToOwned,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::num::NonZeroU32;
 
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
@@ -87,6 +92,8 @@ pub struct GlobalContext<'source, 'temp, 'out> {
 
     const_typifier: &'temp mut Typifier,
 
+    layouter: &'temp mut Layouter,
+
     global_expression_kind_tracker: &'temp mut crate::proc::ExpressionKindTracker,
 }
 
@@ -98,6 +105,7 @@ impl<'source> GlobalContext<'source, '_, '_> {
             types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             expr_type: ExpressionContextType::Constant(None),
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
@@ -110,6 +118,7 @@ impl<'source> GlobalContext<'source, '_, '_> {
             types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             expr_type: ExpressionContextType::Override,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
@@ -165,6 +174,7 @@ pub struct StatementContext<'source, 'temp, 'out> {
 
     const_typifier: &'temp mut Typifier,
     typifier: &'temp mut Typifier,
+    layouter: &'temp mut Layouter,
     function: &'out mut crate::Function,
     /// Stores the names of expressions that are assigned in `let` statement
     /// Also stores the spans of the names, for use in errors.
@@ -198,6 +208,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             types: self.types,
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
             module: self.module,
             expr_type: ExpressionContextType::Constant(Some(LocalExpressionContext {
@@ -224,6 +235,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             types: self.types,
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
             module: self.module,
             expr_type: ExpressionContextType::Runtime(LocalExpressionContext {
@@ -237,6 +249,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         }
     }
 
+    #[allow(dead_code)]
     fn as_global(&mut self) -> GlobalContext<'a, '_, '_> {
         GlobalContext {
             ast_expressions: self.ast_expressions,
@@ -244,6 +257,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
     }
@@ -364,6 +378,7 @@ pub struct ExpressionContext<'source, 'temp, 'out> {
     ///
     /// [`module::global_expressions`]: crate::Module::global_expressions
     const_typifier: &'temp mut Typifier,
+    layouter: &'temp mut Layouter,
     global_expression_kind_tracker: &'temp mut crate::proc::ExpressionKindTracker,
 
     /// Whether we are lowering a constant expression or a general
@@ -372,14 +387,30 @@ pub struct ExpressionContext<'source, 'temp, 'out> {
 }
 
 impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
+    #[allow(dead_code)]
     fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
             globals: self.globals,
             types: self.types,
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             module: self.module,
-            expr_type: ExpressionContextType::Constant(None),
+            expr_type: ExpressionContextType::Constant(match self.expr_type {
+                ExpressionContextType::Runtime(ref mut local_expression_context)
+                | ExpressionContextType::Constant(Some(ref mut local_expression_context)) => {
+                    Some(LocalExpressionContext {
+                        local_table: local_expression_context.local_table,
+                        function: local_expression_context.function,
+                        block: local_expression_context.block,
+                        emitter: local_expression_context.emitter,
+                        typifier: local_expression_context.typifier,
+                        local_expression_kind_tracker: local_expression_context
+                            .local_expression_kind_tracker,
+                    })
+                }
+                ExpressionContextType::Constant(None) | ExpressionContextType::Override => None,
+            }),
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
     }
@@ -391,6 +422,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
+            layouter: self.layouter,
             global_expression_kind_tracker: self.global_expression_kind_tracker,
         }
     }
@@ -401,6 +433,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 self.module,
                 &mut rctx.function.expressions,
                 rctx.local_expression_kind_tracker,
+                self.layouter,
                 rctx.emitter,
                 rctx.block,
                 false,
@@ -410,6 +443,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     self.module,
                     &mut rctx.function.expressions,
                     rctx.local_expression_kind_tracker,
+                    self.layouter,
                     rctx.emitter,
                     rctx.block,
                     true,
@@ -418,11 +452,13 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             ExpressionContextType::Constant(None) => ConstantEvaluator::for_wgsl_module(
                 self.module,
                 self.global_expression_kind_tracker,
+                self.layouter,
                 false,
             ),
             ExpressionContextType::Override => ConstantEvaluator::for_wgsl_module(
                 self.module,
                 self.global_expression_kind_tracker,
+                self.layouter,
                 true,
             ),
         }
@@ -438,29 +474,28 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             .map_err(|e| Error::ConstantEvaluatorError(e.into(), span))
     }
 
-    fn const_access(&self, handle: Handle<crate::Expression>) -> Option<u32> {
+    fn const_eval_expr_to_u32(
+        &self,
+        handle: Handle<crate::Expression>,
+    ) -> Result<u32, crate::proc::U32EvalError> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => {
                 if !ctx.local_expression_kind_tracker.is_const(handle) {
-                    return None;
+                    return Err(crate::proc::U32EvalError::NonConst);
                 }
 
                 self.module
                     .to_ctx()
                     .eval_expr_to_u32_from(handle, &ctx.function.expressions)
-                    .ok()
             }
             ExpressionContextType::Constant(Some(ref ctx)) => {
                 assert!(ctx.local_expression_kind_tracker.is_const(handle));
                 self.module
                     .to_ctx()
                     .eval_expr_to_u32_from(handle, &ctx.function.expressions)
-                    .ok()
             }
-            ExpressionContextType::Constant(None) => {
-                self.module.to_ctx().eval_expr_to_u32(handle).ok()
-            }
-            ExpressionContextType::Override => None,
+            ExpressionContextType::Constant(None) => self.module.to_ctx().eval_expr_to_u32(handle),
+            ExpressionContextType::Override => Err(crate::proc::U32EvalError::NonConst),
         }
     }
 
@@ -752,7 +787,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
 }
 
 struct ArgumentContext<'ctx, 'source> {
-    args: std::slice::Iter<'ctx, Handle<ast::Expression<'source>>>,
+    args: core::slice::Iter<'ctx, Handle<ast::Expression<'source>>>,
     min_args: u32,
     args_used: u32,
     total_args: u32,
@@ -919,7 +954,10 @@ impl Components {
 
 /// An `ast::GlobalDecl` for which we have built the Naga IR equivalent.
 enum LoweredGlobalDecl {
-    Function(Handle<crate::Function>),
+    Function {
+        handle: Handle<crate::Function>,
+        must_use: bool,
+    },
     Var(Handle<crate::GlobalVariable>),
     Const(Handle<crate::Constant>),
     Override(Handle<crate::Override>),
@@ -996,25 +1034,30 @@ impl SubgroupGather {
     }
 }
 
+/// Whether a declaration accepts abstract types, or concretizes.
+enum AbstractRule {
+    /// This declaration concretizes its initialization expression.
+    Concretize,
+
+    /// This declaration can accept initializers with abstract types.
+    Allow,
+}
+
 pub struct Lowerer<'source, 'temp> {
     index: &'temp Index<'source>,
-    layouter: Layouter,
 }
 
 impl<'source, 'temp> Lowerer<'source, 'temp> {
-    pub fn new(index: &'temp Index<'source>) -> Self {
-        Self {
-            index,
-            layouter: Layouter::default(),
-        }
+    pub const fn new(index: &'temp Index<'source>) -> Self {
+        Self { index }
     }
 
     pub fn lower(
         &mut self,
-        tu: &'temp ast::TranslationUnit<'source>,
+        tu: ast::TranslationUnit<'source>,
     ) -> Result<crate::Module, Error<'source>> {
         let mut module = crate::Module {
-            diagnostic_filters: tu.diagnostic_filters.clone(),
+            diagnostic_filters: tu.diagnostic_filters,
             diagnostic_filter_leaf: tu.diagnostic_filter_leaf,
             ..Default::default()
         };
@@ -1025,6 +1068,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             types: &tu.types,
             module: &mut module,
             const_typifier: &mut Typifier::new(),
+            layouter: &mut Layouter::default(),
             global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker::new(),
         };
 
@@ -1039,41 +1083,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
                     let explicit_ty =
-                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx))
+                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
                             .transpose()?;
 
-                    let mut ectx = ctx.as_override();
-
-                    let ty;
-                    let initializer;
-                    match (v.init, explicit_ty) {
-                        (Some(init), Some(explicit_ty)) => {
-                            let init = self.expression_for_abstract(init, &mut ectx)?;
-                            let ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
-                            let init = ectx
-                                .try_automatic_conversions(init, &ty_res, v.name.span)
-                                .map_err(|error| match error {
-                                Error::AutoConversion(e) => Error::InitializationTypeMismatch {
-                                    name: v.name.span,
-                                    expected: e.dest_type,
-                                    got: e.source_type,
-                                },
-                                other => other,
-                            })?;
-                            ty = explicit_ty;
-                            initializer = Some(init);
-                        }
-                        (Some(init), None) => {
-                            let concretized = self.expression(init, &mut ectx)?;
-                            ty = ectx.register_type(concretized)?;
-                            initializer = Some(concretized);
-                        }
-                        (None, Some(explicit_ty)) => {
-                            ty = explicit_ty;
-                            initializer = None;
-                        }
-                        (None, None) => return Err(Error::DeclMissingTypeAndInit(v.name.span)),
-                    }
+                    let (ty, initializer) = self.type_and_init(
+                        v.name,
+                        v.init,
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ctx.as_override(),
+                    )?;
 
                     let binding = if let Some(ref binding) = v.binding {
                         Some(crate::ResourceBinding {
@@ -1100,28 +1119,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
                 ast::GlobalDeclKind::Const(ref c) => {
                     let mut ectx = ctx.as_const();
-                    let mut init = self.expression_for_abstract(c.init, &mut ectx)?;
 
-                    let ty;
-                    if let Some(explicit_ty) = c.ty {
-                        let explicit_ty =
-                            self.resolve_ast_type(explicit_ty, &mut ectx.as_global())?;
-                        let explicit_ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
-                        init = ectx
-                            .try_automatic_conversions(init, &explicit_ty_res, c.name.span)
-                            .map_err(|error| match error {
-                                Error::AutoConversion(e) => Error::InitializationTypeMismatch {
-                                    name: c.name.span,
-                                    expected: e.dest_type,
-                                    got: e.source_type,
-                                },
-                                other => other,
-                            })?;
-                        ty = explicit_ty;
-                    } else {
-                        init = ectx.concretize(init)?;
-                        ty = ectx.register_type(init)?;
-                    }
+                    let explicit_ty =
+                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx))
+                            .transpose()?;
+
+                    let (ty, init) = self.type_and_init(
+                        c.name,
+                        Some(c.init),
+                        explicit_ty,
+                        AbstractRule::Allow,
+                        &mut ectx,
+                    )?;
+                    let init = init.expect("Global const must have init");
 
                     let handle = ctx.module.constants.append(
                         crate::Constant {
@@ -1136,17 +1146,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .insert(c.name.name, LoweredGlobalDecl::Const(handle));
                 }
                 ast::GlobalDeclKind::Override(ref o) => {
-                    let init = o
-                        .init
-                        .map(|init| self.expression(init, &mut ctx.as_override()))
-                        .transpose()?;
-                    let inferred_type = init
-                        .map(|init| ctx.as_const().register_type(init))
-                        .transpose()?;
-
                     let explicit_ty =
-                        o.ty.map(|ty| self.resolve_ast_type(ty, &mut ctx))
+                        o.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
                             .transpose()?;
+
+                    let mut ectx = ctx.as_override();
+
+                    let (ty, init) = self.type_and_init(
+                        o.name,
+                        o.init,
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ectx,
+                    )?;
 
                     let id =
                         o.id.map(|id| self.const_u32(id, &mut ctx.as_const()))
@@ -1159,26 +1171,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         )
                     } else {
                         None
-                    };
-
-                    let ty = match (explicit_ty, inferred_type) {
-                        (Some(explicit_ty), Some(inferred_type)) => {
-                            if explicit_ty == inferred_type {
-                                explicit_ty
-                            } else {
-                                let gctx = ctx.module.to_ctx();
-                                return Err(Error::InitializationTypeMismatch {
-                                    name: o.name.span,
-                                    expected: explicit_ty.to_wgsl(&gctx).into(),
-                                    got: inferred_type.to_wgsl(&gctx).into(),
-                                });
-                            }
-                        }
-                        (Some(explicit_ty), None) => explicit_ty,
-                        (None, Some(inferred_type)) => inferred_type,
-                        (None, None) => {
-                            return Err(Error::DeclMissingTypeAndInit(o.name.span));
-                        }
                     };
 
                     let handle = ctx.module.overrides.append(
@@ -1203,7 +1195,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let ty = self.resolve_named_ast_type(
                         alias.ty,
                         Some(alias.name.name.to_string()),
-                        &mut ctx,
+                        &mut ctx.as_const(),
                     )?;
                     ctx.globals
                         .insert(alias.name.name, LoweredGlobalDecl::Type(ty));
@@ -1233,6 +1225,62 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         Ok(module)
     }
 
+    /// Obtain (inferred) type and initializer after automatic conversion
+    fn type_and_init(
+        &mut self,
+        name: ast::Ident<'source>,
+        init: Option<Handle<ast::Expression<'source>>>,
+        explicit_ty: Option<Handle<crate::Type>>,
+        abstract_rule: AbstractRule,
+        ectx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<(Handle<crate::Type>, Option<Handle<crate::Expression>>), Error<'source>> {
+        let ty;
+        let initializer;
+        match (init, explicit_ty) {
+            (Some(init), Some(explicit_ty)) => {
+                let init = self.expression_for_abstract(init, ectx)?;
+                let ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
+                let init = ectx
+                    .try_automatic_conversions(init, &ty_res, name.span)
+                    .map_err(|error| match error {
+                        Error::AutoConversion(e) => Error::InitializationTypeMismatch {
+                            name: name.span,
+                            expected: e.dest_type,
+                            got: e.source_type,
+                        },
+                        other => other,
+                    })?;
+
+                let init_ty = ectx.register_type(init)?;
+                let explicit_inner = &ectx.module.types[explicit_ty].inner;
+                let init_inner = &ectx.module.types[init_ty].inner;
+                if !explicit_inner.equivalent(init_inner, &ectx.module.types) {
+                    return Err(Error::InitializationTypeMismatch {
+                        name: name.span,
+                        expected: explicit_inner.to_wgsl(&ectx.module.to_ctx()).into(),
+                        got: init_inner.to_wgsl(&ectx.module.to_ctx()).into(),
+                    });
+                }
+                ty = explicit_ty;
+                initializer = Some(init);
+            }
+            (Some(init), None) => {
+                let mut init = self.expression_for_abstract(init, ectx)?;
+                if let AbstractRule::Concretize = abstract_rule {
+                    init = ectx.concretize(init)?;
+                }
+                ty = ectx.register_type(init)?;
+                initializer = Some(init);
+            }
+            (None, Some(explicit_ty)) => {
+                ty = explicit_ty;
+                initializer = None;
+            }
+            (None, None) => return Err(Error::DeclMissingTypeAndInit(name.span)),
+        }
+        Ok((ty, initializer))
+    }
+
     fn function(
         &mut self,
         f: &ast::Function<'source>,
@@ -1249,7 +1297,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .iter()
             .enumerate()
             .map(|(i, arg)| -> Result<_, Error<'_>> {
-                let ty = self.resolve_ast_type(arg.ty, ctx)?;
+                let ty = self.resolve_ast_type(arg.ty, &mut ctx.as_const())?;
                 let expr = expressions
                     .append(crate::Expression::FunctionArgument(i as u32), arg.name.span);
                 local_table.insert(arg.handle, Declared::Runtime(Typed::Plain(expr)));
@@ -1268,7 +1316,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .result
             .as_ref()
             .map(|res| -> Result<_, Error<'_>> {
-                let ty = self.resolve_ast_type(res.ty, ctx)?;
+                let ty = self.resolve_ast_type(res.ty, &mut ctx.as_const())?;
                 Ok(crate::FunctionResult {
                     ty,
                     binding: self.binding(&res.binding, ty, ctx)?,
@@ -1294,6 +1342,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast_expressions: ctx.ast_expressions,
             const_typifier: ctx.const_typifier,
             typifier: &mut typifier,
+            layouter: ctx.layouter,
             function: &mut function,
             named_expressions: &mut named_expressions,
             types: ctx.types,
@@ -1363,7 +1412,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             Ok(LoweredGlobalDecl::EntryPoint)
         } else {
             let handle = ctx.module.functions.append(function, span);
-            Ok(LoweredGlobalDecl::Function(handle))
+            Ok(LoweredGlobalDecl::Function {
+                handle,
+                must_use: f.result.as_ref().is_some_and(|res| res.must_use),
+            })
         }
     }
 
@@ -1422,9 +1474,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // optimization.
                     ctx.local_expression_kind_tracker.force_non_const(value);
 
-                    let explicit_ty =
-                        l.ty.map(|ty| self.resolve_ast_type(ty, &mut ctx.as_global()))
-                            .transpose()?;
+                    let explicit_ty = l
+                        .ty
+                        .map(|ty| self.resolve_ast_type(ty, &mut ctx.as_const(block, &mut emitter)))
+                        .transpose()?;
 
                     if let Some(ty) = explicit_ty {
                         let mut ctx = ctx.as_expression(block, &mut emitter);
@@ -1451,44 +1504,23 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     return Ok(());
                 }
                 ast::LocalDecl::Var(ref v) => {
-                    let explicit_ty =
-                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_global()))
-                            .transpose()?;
-
                     let mut emitter = Emitter::default();
                     emitter.start(&ctx.function.expressions);
-                    let mut ectx = ctx.as_expression(block, &mut emitter);
 
-                    let ty;
-                    let initializer;
-                    match (v.init, explicit_ty) {
-                        (Some(init), Some(explicit_ty)) => {
-                            let init = self.expression_for_abstract(init, &mut ectx)?;
-                            let ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
-                            let init = ectx
-                                .try_automatic_conversions(init, &ty_res, v.name.span)
-                                .map_err(|error| match error {
-                                Error::AutoConversion(e) => Error::InitializationTypeMismatch {
-                                    name: v.name.span,
-                                    expected: e.dest_type,
-                                    got: e.source_type,
-                                },
-                                other => other,
-                            })?;
-                            ty = explicit_ty;
-                            initializer = Some(init);
-                        }
-                        (Some(init), None) => {
-                            let concretized = self.expression(init, &mut ectx)?;
-                            ty = ectx.register_type(concretized)?;
-                            initializer = Some(concretized);
-                        }
-                        (None, Some(explicit_ty)) => {
-                            ty = explicit_ty;
-                            initializer = None;
-                        }
-                        (None, None) => return Err(Error::DeclMissingTypeAndInit(v.name.span)),
-                    }
+                    let explicit_ty =
+                        v.ty.map(|ast| {
+                            self.resolve_ast_type(ast, &mut ctx.as_const(block, &mut emitter))
+                        })
+                        .transpose()?;
+
+                    let mut ectx = ctx.as_expression(block, &mut emitter);
+                    let (ty, initializer) = self.type_and_init(
+                        v.name,
+                        v.init,
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ectx,
+                    )?;
 
                     let (const_initializer, initializer) = {
                         match initializer {
@@ -1543,33 +1575,29 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let ectx = &mut ctx.as_const(block, &mut emitter);
 
-                    let mut init = self.expression_for_abstract(c.init, ectx)?;
+                    let explicit_ty =
+                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_const()))
+                            .transpose()?;
 
-                    if let Some(explicit_ty) = c.ty {
-                        let explicit_ty =
-                            self.resolve_ast_type(explicit_ty, &mut ectx.as_global())?;
-                        let explicit_ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
-                        init = ectx
-                            .try_automatic_conversions(init, &explicit_ty_res, c.name.span)
-                            .map_err(|error| match error {
-                                Error::AutoConversion(error) => Error::InitializationTypeMismatch {
-                                    name: c.name.span,
-                                    expected: error.dest_type,
-                                    got: error.source_type,
-                                },
-                                other => other,
-                            })?;
-                    } else {
-                        init = ectx.concretize(init)?;
-                        ectx.register_type(init)?;
-                    }
+                    let (ty, init) = self.type_and_init(
+                        c.name,
+                        Some(c.init),
+                        explicit_ty,
+                        AbstractRule::Allow,
+                        &mut ectx.as_const(),
+                    )?;
+                    let init = init.expect("Local const must have init");
 
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
                         .insert(c.handle, Declared::Const(Typed::Plain(init)));
-                    ctx.named_expressions
-                        .insert(init, (c.name.name.to_string(), c.name.span));
-
+                    // Only add constants of non-abstract types to the named expressions
+                    // to prevent abstract types ending up in the IR.
+                    let is_abstract = ctx.module.types[ty].inner.is_abstract(&ctx.module.types);
+                    if !is_abstract {
+                        ctx.named_expressions
+                            .insert(init, (c.name.name.to_string(), c.name.span));
+                    }
                     return Ok(());
                 }
             },
@@ -1602,11 +1630,52 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 emitter.start(&ctx.function.expressions);
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
-                let selector = self.expression(selector, &mut ectx)?;
 
-                let uint =
-                    resolve_inner!(ectx, selector).scalar_kind() == Some(crate::ScalarKind::Uint);
+                // Determine the scalar type of the selector and case expressions, find the
+                // consensus type for automatic conversion, then convert them.
+                let (mut exprs, spans) = core::iter::once(selector)
+                    .chain(cases.iter().filter_map(|case| match case.value {
+                        ast::SwitchValue::Expr(expr) => Some(expr),
+                        ast::SwitchValue::Default => None,
+                    }))
+                    .enumerate()
+                    .map(|(i, expr)| {
+                        let span = ectx.ast_expressions.get_span(expr);
+                        let expr = self.expression_for_abstract(expr, &mut ectx)?;
+                        let ty = resolve_inner!(ectx, expr);
+                        match *ty {
+                            crate::TypeInner::Scalar(
+                                crate::Scalar::I32
+                                | crate::Scalar::U32
+                                | crate::Scalar::ABSTRACT_INT,
+                            ) => Ok((expr, span)),
+                            _ => match i {
+                                0 => Err(Error::InvalidSwitchSelector { span }),
+                                _ => Err(Error::InvalidSwitchCase { span }),
+                            },
+                        }
+                    })
+                    .collect::<Result<(Vec<_>, Vec<_>), _>>()?;
+
+                let mut consensus =
+                    ectx.automatic_conversion_consensus(&exprs)
+                        .map_err(|span_idx| Error::SwitchCaseTypeMismatch {
+                            span: spans[span_idx],
+                        })?;
+                // Concretize to I32 if the selector and all cases were abstract
+                if consensus == crate::Scalar::ABSTRACT_INT {
+                    consensus = crate::Scalar::I32;
+                }
+                for expr in &mut exprs {
+                    ectx.convert_to_leaf_scalar(expr, consensus)?;
+                }
+
                 block.extend(emitter.finish(&ctx.function.expressions));
+
+                let mut exprs = exprs.into_iter();
+                let selector = exprs
+                    .next()
+                    .expect("First element should be selector expression");
 
                 let cases = cases
                     .iter()
@@ -1615,17 +1684,22 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             value: match case.value {
                                 ast::SwitchValue::Expr(expr) => {
                                     let span = ctx.ast_expressions.get_span(expr);
-                                    let expr =
-                                        self.expression(expr, &mut ctx.as_global().as_const())?;
-                                    match ctx.module.to_ctx().eval_expr_to_literal(expr) {
-                                        Some(crate::Literal::I32(value)) if !uint => {
+                                    let expr = exprs.next().expect(
+                                        "Should yield expression for each SwitchValue::Expr case",
+                                    );
+                                    match ctx
+                                        .module
+                                        .to_ctx()
+                                        .eval_expr_to_literal_from(expr, &ctx.function.expressions)
+                                    {
+                                        Some(crate::Literal::I32(value)) => {
                                             crate::SwitchValue::I32(value)
                                         }
-                                        Some(crate::Literal::U32(value)) if uint => {
+                                        Some(crate::Literal::U32(value)) => {
                                             crate::SwitchValue::U32(value)
                                         }
                                         _ => {
-                                            return Err(Error::InvalidSwitchValue { uint, span });
+                                            return Err(Error::InvalidSwitchCase { span });
                                         }
                                     }
                                 }
@@ -1664,13 +1738,28 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::StatementKind::Break => crate::Statement::Break,
             ast::StatementKind::Continue => crate::Statement::Continue,
-            ast::StatementKind::Return { value } => {
+            ast::StatementKind::Return { value: ast_value } => {
                 let mut emitter = Emitter::default();
                 emitter.start(&ctx.function.expressions);
 
-                let value = value
-                    .map(|expr| self.expression(expr, &mut ctx.as_expression(block, &mut emitter)))
-                    .transpose()?;
+                let value;
+                if let Some(ast_expr) = ast_value {
+                    let result_ty = ctx.function.result.as_ref().map(|r| r.ty);
+                    let mut ectx = ctx.as_expression(block, &mut emitter);
+                    let expr = self.expression_for_abstract(ast_expr, &mut ectx)?;
+
+                    if let Some(result_ty) = result_ty {
+                        let mut ectx = ctx.as_expression(block, &mut emitter);
+                        let resolution = crate::proc::TypeResolution::Handle(result_ty);
+                        let converted =
+                            ectx.try_automatic_conversions(expr, &resolution, Span::default())?;
+                        value = Some(converted);
+                    } else {
+                        value = Some(expr);
+                    }
+                } else {
+                    value = None;
+                }
                 block.extend(emitter.finish(&ctx.function.expressions));
 
                 crate::Statement::Return { value }
@@ -1700,31 +1789,48 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             } => {
                 let mut emitter = Emitter::default();
                 emitter.start(&ctx.function.expressions);
+                let target_span = ctx.ast_expressions.get_span(ast_target);
 
-                let target = self.expression_for_reference(
-                    ast_target,
-                    &mut ctx.as_expression(block, &mut emitter),
-                )?;
-                let mut value =
-                    self.expression(value, &mut ctx.as_expression(block, &mut emitter))?;
-
+                let mut ectx = ctx.as_expression(block, &mut emitter);
+                let target = self.expression_for_reference(ast_target, &mut ectx)?;
                 let target_handle = match target {
                     Typed::Reference(handle) => handle,
                     Typed::Plain(handle) => {
                         let ty = ctx.invalid_assignment_type(handle);
                         return Err(Error::InvalidAssignment {
-                            span: ctx.ast_expressions.get_span(ast_target),
+                            span: target_span,
                             ty,
                         });
                     }
                 };
 
+                // Usually the value needs to be converted to match the type of
+                // the memory view you're assigning it to. The bit shift
+                // operators are exceptions, in that the right operand is always
+                // a `u32` or `vecN<u32>`.
+                let target_scalar = match op {
+                    Some(crate::BinaryOperator::ShiftLeft | crate::BinaryOperator::ShiftRight) => {
+                        Some(crate::Scalar::U32)
+                    }
+                    _ => resolve_inner!(ectx, target_handle)
+                        .pointer_automatically_convertible_scalar(&ectx.module.types),
+                };
+
+                let value = self.expression_for_abstract(value, &mut ectx)?;
+                let mut value = match target_scalar {
+                    Some(target_scalar) => ectx.try_automatic_conversion_for_leaf_scalar(
+                        value,
+                        target_scalar,
+                        target_span,
+                    )?,
+                    None => value,
+                };
+
                 let value = match op {
                     Some(op) => {
-                        let mut ctx = ctx.as_expression(block, &mut emitter);
-                        let mut left = ctx.apply_load_rule(target)?;
-                        ctx.binary_op_splat(op, &mut left, &mut value)?;
-                        ctx.append_expression(
+                        let mut left = ectx.apply_load_rule(target)?;
+                        ectx.binary_op_splat(op, &mut left, &mut value)?;
+                        ectx.append_expression(
                             crate::Expression::Binary {
                                 op,
                                 left,
@@ -1915,7 +2021,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     LoweredGlobalDecl::Override(handle) => {
                         Typed::Plain(crate::Expression::Override(handle))
                     }
-                    LoweredGlobalDecl::Function(_)
+                    LoweredGlobalDecl::Function { .. }
                     | LoweredGlobalDecl::Type(_)
                     | LoweredGlobalDecl::EntryPoint => {
                         return Err(Error::Unexpected(span, ExpectedToken::Variable));
@@ -1973,25 +2079,40 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Ok(Typed::Plain(handle));
             }
             ast::Expression::Index { base, index } => {
-                let lowered_base = self.expression_for_reference(base, ctx)?;
+                let mut lowered_base = self.expression_for_reference(base, ctx)?;
                 let index = self.expression(index, ctx)?;
 
+                // <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
+                // Declare pointer as reference
                 if let Typed::Plain(handle) = lowered_base {
                     if resolve_inner!(ctx, handle).pointer_space().is_some() {
-                        return Err(Error::Pointer(
-                            "the value indexed by a `[]` subscripting expression",
-                            ctx.ast_expressions.get_span(base),
-                        ));
+                        lowered_base = Typed::Reference(handle);
                     }
                 }
 
-                lowered_base.map(|base| match ctx.const_access(index) {
-                    Some(index) => crate::Expression::AccessIndex { base, index },
-                    None => crate::Expression::Access { base, index },
-                })
+                lowered_base.try_map(|base| match ctx.const_eval_expr_to_u32(index).ok() {
+                    Some(index) => Ok::<_, Error>(crate::Expression::AccessIndex { base, index }),
+                    None => {
+                        // When an abstract array value e is indexed by an expression
+                        // that is not a const-expression, then the array is concretized
+                        // before the index is applied.
+                        // https://www.w3.org/TR/WGSL/#array-access-expr
+                        // Also applies to vectors and matrices.
+                        let base = ctx.concretize(base)?;
+                        Ok(crate::Expression::Access { base, index })
+                    }
+                })?
             }
             ast::Expression::Member { base, ref field } => {
-                let lowered_base = self.expression_for_reference(base, ctx)?;
+                let mut lowered_base = self.expression_for_reference(base, ctx)?;
+
+                // <https://www.w3.org/TR/WGSL/#language_extension-pointer_composite_access>
+                // Declare pointer as reference
+                if let Typed::Plain(handle) = lowered_base {
+                    if resolve_inner!(ctx, handle).pointer_space().is_some() {
+                        lowered_base = Typed::Reference(handle);
+                    }
+                }
 
                 let temp_inner;
                 let composite_type: &crate::TypeInner = match lowered_base {
@@ -2020,16 +2141,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
 
                     Typed::Plain(handle) => {
-                        let inner = resolve_inner!(ctx, handle);
-                        if let crate::TypeInner::Pointer { .. }
-                        | crate::TypeInner::ValuePointer { .. } = *inner
-                        {
-                            return Err(Error::Pointer(
-                                "the value accessed by a `.member` expression",
-                                ctx.ast_expressions.get_span(base),
-                            ));
-                        }
-                        inner
+                        resolve_inner!(ctx, handle)
                     }
                 };
 
@@ -2043,11 +2155,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                         lowered_base.map(|base| crate::Expression::AccessIndex { base, index })
                     }
-                    crate::TypeInner::Vector { .. } | crate::TypeInner::Matrix { .. } => {
+                    crate::TypeInner::Vector { .. } => {
                         match Components::new(field.name, field.span)? {
                             Components::Swizzle { size, pattern } => {
-                                // Swizzles aren't allowed on matrices, but
-                                // validation will catch that.
                                 Typed::Plain(crate::Expression::Swizzle {
                                     size,
                                     vector: ctx.apply_load_rule(lowered_base)?,
@@ -2065,7 +2175,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::Expression::Bitcast { expr, to, ty_span } => {
                 let expr = self.expression(expr, ctx)?;
-                let to_resolved = self.resolve_ast_type(to, &mut ctx.as_global())?;
+                let to_resolved = self.resolve_ast_type(to, &mut ctx.as_const())?;
 
                 let element_scalar = match ctx.module.types[to_resolved].inner {
                     crate::TypeInner::Scalar(scalar) => scalar,
@@ -2110,13 +2220,37 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         // Apply automatic conversions.
         match op {
-            // Shift operators require the right operand to be `u32` or
-            // `vecN<u32>`. We can let the validator sort out vector length
-            // issues, but the right operand must be, or convert to, a u32 leaf
-            // scalar.
             crate::BinaryOperator::ShiftLeft | crate::BinaryOperator::ShiftRight => {
+                // Shift operators require the right operand to be `u32` or
+                // `vecN<u32>`. We can let the validator sort out vector length
+                // issues, but the right operand must be, or convert to, a u32 leaf
+                // scalar.
                 right =
                     ctx.try_automatic_conversion_for_leaf_scalar(right, crate::Scalar::U32, span)?;
+
+                // Additionally, we must concretize the left operand if the right operand
+                // is not a const-expression.
+                // See https://www.w3.org/TR/WGSL/#overload-resolution-section.
+                //
+                // 2. Eliminate any candidate where one of its subexpressions resolves to
+                // an abstract type after feasible automatic conversions, but another of
+                // the candidate’s subexpressions is not a const-expression.
+                //
+                // We only have to explicitly do so for shifts as their operands may be
+                // of different types - for other binary ops this is achieved by finding
+                // the conversion consensus for both operands.
+                let expr_kind_tracker = match ctx.expr_type {
+                    ExpressionContextType::Runtime(ref ctx)
+                    | ExpressionContextType::Constant(Some(ref ctx)) => {
+                        &ctx.local_expression_kind_tracker
+                    }
+                    ExpressionContextType::Constant(None) | ExpressionContextType::Override => {
+                        &ctx.global_expression_kind_tracker
+                    }
+                };
+                if !expr_kind_tracker.is_const(right) {
+                    left = ctx.concretize(left)?;
+                }
             }
 
             // All other operators follow the same pattern: reconcile the
@@ -2164,12 +2298,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         ctx: &mut ExpressionContext<'source, '_, '_>,
         is_statement: bool,
     ) -> Result<Option<Handle<crate::Expression>>, Error<'source>> {
+        let function_span = function.span;
         match ctx.globals.get(function.name) {
             Some(&LoweredGlobalDecl::Type(ty)) => {
                 let handle = self.construct(
                     span,
                     &ast::ConstructorType::Type(ty),
-                    function.span,
+                    function_span,
                     arguments,
                     ctx,
                 )?;
@@ -2179,15 +2314,41 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 &LoweredGlobalDecl::Const(_)
                 | &LoweredGlobalDecl::Override(_)
                 | &LoweredGlobalDecl::Var(_),
-            ) => Err(Error::Unexpected(function.span, ExpectedToken::Function)),
-            Some(&LoweredGlobalDecl::EntryPoint) => Err(Error::CalledEntryPoint(function.span)),
-            Some(&LoweredGlobalDecl::Function(function)) => {
+            ) => Err(Error::Unexpected(function_span, ExpectedToken::Function)),
+            Some(&LoweredGlobalDecl::EntryPoint) => Err(Error::CalledEntryPoint(function_span)),
+            Some(&LoweredGlobalDecl::Function {
+                handle: function,
+                must_use,
+            }) => {
                 let arguments = arguments
                     .iter()
-                    .map(|&arg| self.expression(arg, ctx))
+                    .enumerate()
+                    .map(|(i, &arg)| {
+                        // Try to convert abstract values to the known argument types
+                        let Some(&crate::FunctionArgument {
+                            ty: parameter_ty, ..
+                        }) = ctx.module.functions[function].arguments.get(i)
+                        else {
+                            // Wrong number of arguments... just concretize the type here
+                            // and let the validator report the error.
+                            return self.expression(arg, ctx);
+                        };
+
+                        let expr = self.expression_for_abstract(arg, ctx)?;
+                        ctx.try_automatic_conversions(
+                            expr,
+                            &crate::proc::TypeResolution::Handle(parameter_ty),
+                            ctx.ast_expressions.get_span(arg),
+                        )
+                    })
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let has_result = ctx.module.functions[function].result.is_some();
+
+                if must_use && is_statement {
+                    return Err(Error::FunctionMustUseUnused(function_span));
+                }
+
                 let rctx = ctx.runtime_expression_ctx(span)?;
                 // we need to always do this before a fn call since all arguments need to be emitted before the fn call
                 rctx.block
@@ -2214,7 +2375,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(result)
             }
             None => {
-                let span = function.span;
+                let span = function_span;
                 let expr = if let Some(fun) = conv::map_relational_fun(function.name) {
                     let mut args = ctx.prepare_args(arguments, 1, span);
                     let argument = self.expression(args.next()?, ctx)?;
@@ -2269,22 +2430,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     args.finish()?;
 
                     if fun == crate::MathFunction::Modf || fun == crate::MathFunction::Frexp {
-                        if let Some((size, width)) = match *resolve_inner!(ctx, arg) {
-                            crate::TypeInner::Scalar(crate::Scalar { width, .. }) => {
-                                Some((None, width))
+                        if let Some((size, scalar)) = match *resolve_inner!(ctx, arg) {
+                            crate::TypeInner::Scalar(scalar) => Some((None, scalar)),
+                            crate::TypeInner::Vector { size, scalar, .. } => {
+                                Some((Some(size), scalar))
                             }
-                            crate::TypeInner::Vector {
-                                size,
-                                scalar: crate::Scalar { width, .. },
-                                ..
-                            } => Some((Some(size), width)),
                             _ => None,
                         } {
                             ctx.module.generate_predeclared_type(
                                 if fun == crate::MathFunction::Modf {
-                                    crate::PredeclaredType::ModfResult { size, width }
+                                    crate::PredeclaredType::ModfResult { size, scalar }
                                 } else {
-                                    crate::PredeclaredType::FrexpResult { size, width }
+                                    crate::PredeclaredType::FrexpResult { size, scalar }
                                 },
                             );
                         }
@@ -2396,6 +2553,50 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
+                        "textureAtomicMin" | "textureAtomicMax" | "textureAtomicAdd"
+                        | "textureAtomicAnd" | "textureAtomicOr" | "textureAtomicXor" => {
+                            let mut args = ctx.prepare_args(arguments, 3, span);
+
+                            let image = args.next()?;
+                            let image_span = ctx.ast_expressions.get_span(image);
+                            let image = self.expression(image, ctx)?;
+
+                            let coordinate = self.expression(args.next()?, ctx)?;
+
+                            let (_, arrayed) = ctx.image_data(image, image_span)?;
+                            let array_index = arrayed
+                                .then(|| {
+                                    args.min_args += 1;
+                                    self.expression(args.next()?, ctx)
+                                })
+                                .transpose()?;
+
+                            let value = self.expression(args.next()?, ctx)?;
+
+                            args.finish()?;
+
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .extend(rctx.emitter.finish(&rctx.function.expressions));
+                            rctx.emitter.start(&rctx.function.expressions);
+                            let stmt = crate::Statement::ImageAtomic {
+                                image,
+                                coordinate,
+                                array_index,
+                                fun: match function.name {
+                                    "textureAtomicMin" => crate::AtomicFunction::Min,
+                                    "textureAtomicMax" => crate::AtomicFunction::Max,
+                                    "textureAtomicAdd" => crate::AtomicFunction::Add,
+                                    "textureAtomicAnd" => crate::AtomicFunction::And,
+                                    "textureAtomicOr" => crate::AtomicFunction::InclusiveOr,
+                                    "textureAtomicXor" => crate::AtomicFunction::ExclusiveOr,
+                                    _ => unreachable!(),
+                                },
+                                value,
+                            };
+                            rctx.block.push(stmt, span);
+                            return Ok(None);
+                        }
                         "storageBarrier" => {
                             ctx.prepare_args(arguments, 0, span).finish()?;
 
@@ -2418,6 +2619,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
                                 .push(crate::Statement::Barrier(crate::Barrier::SUB_GROUP), span);
+                            return Ok(None);
+                        }
+                        "textureBarrier" => {
+                            ctx.prepare_args(arguments, 0, span).finish()?;
+
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .push(crate::Statement::Barrier(crate::Barrier::TEXTURE), span);
                             return Ok(None);
                         }
                         "workgroupUniformLoad" => {
@@ -2589,6 +2798,30 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .push(crate::Statement::RayQuery { query, fun }, span);
                             return Ok(None);
                         }
+                        "getCommittedHitVertexPositions" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let _ = ctx.module.generate_vertex_return_type();
+
+                            crate::Expression::RayQueryVertexPositions {
+                                query,
+                                committed: true,
+                            }
+                        }
+                        "getCandidateHitVertexPositions" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let _ = ctx.module.generate_vertex_return_type();
+
+                            crate::Expression::RayQueryVertexPositions {
+                                query,
+                                committed: false,
+                            }
+                        }
                         "rayQueryProceed" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
                             let query = self.ray_query_pointer(args.next()?, ctx)?;
@@ -2603,6 +2836,40 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             rctx.block
                                 .push(crate::Statement::RayQuery { query, fun }, span);
                             return Ok(Some(result));
+                        }
+                        "rayQueryGenerateIntersection" => {
+                            let mut args = ctx.prepare_args(arguments, 2, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            let hit_t = self.expression(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let fun = crate::RayQueryFunction::GenerateIntersection { hit_t };
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .push(crate::Statement::RayQuery { query, fun }, span);
+                            return Ok(None);
+                        }
+                        "rayQueryConfirmIntersection" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let fun = crate::RayQueryFunction::ConfirmIntersection;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .push(crate::Statement::RayQuery { query, fun }, span);
+                            return Ok(None);
+                        }
+                        "rayQueryTerminate" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let query = self.ray_query_pointer(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let fun = crate::RayQueryFunction::Terminate;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block
+                                .push(crate::Statement::RayQuery { query, fun }, span);
+                            return Ok(None);
                         }
                         "rayQueryGetCommittedIntersection" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
@@ -2946,12 +3213,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut members = Vec::with_capacity(s.members.len());
 
         for member in s.members.iter() {
-            let ty = self.resolve_ast_type(member.ty, ctx)?;
+            let ty = self.resolve_ast_type(member.ty, &mut ctx.as_const())?;
 
-            self.layouter.update(ctx.module.to_ctx()).unwrap();
+            ctx.layouter.update(ctx.module.to_ctx()).unwrap();
 
-            let member_min_size = self.layouter[ty].size;
-            let member_min_alignment = self.layouter[ty].alignment;
+            let member_min_size = ctx.layouter[ty].size;
+            let member_min_alignment = ctx.layouter[ty].alignment;
 
             let member_size = if let Some(size_expr) = member.size {
                 let (size, span) = self.const_u32(size_expr, &mut ctx.as_const())?;
@@ -3033,17 +3300,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn array_size(
         &mut self,
         size: ast::ArraySize<'source>,
-        ctx: &mut GlobalContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<crate::ArraySize, Error<'source>> {
         Ok(match size {
             ast::ArraySize::Constant(expr) => {
                 let span = ctx.ast_expressions.get_span(expr);
-                let const_expr = self.expression(expr, &mut ctx.as_const())?;
-                let len =
-                    ctx.module
-                        .to_ctx()
-                        .eval_expr_to_u32(const_expr)
-                        .map_err(|err| match err {
+                let const_expr = self.expression(expr, &mut ctx.as_const());
+                match const_expr {
+                    Ok(value) => {
+                        let len = ctx.const_eval_expr_to_u32(value).map_err(|err| match err {
                             crate::proc::U32EvalError::NonConst => {
                                 Error::ExpectedConstExprConcreteIntegerScalar(span)
                             }
@@ -3051,11 +3316,62 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 Error::ExpectedPositiveArrayLength(span)
                             }
                         })?;
-                let size = NonZeroU32::new(len).ok_or(Error::ExpectedPositiveArrayLength(span))?;
-                crate::ArraySize::Constant(size)
+                        let size =
+                            NonZeroU32::new(len).ok_or(Error::ExpectedPositiveArrayLength(span))?;
+                        crate::ArraySize::Constant(size)
+                    }
+                    err => {
+                        if let Err(Error::ConstantEvaluatorError(ref ty, _)) = err {
+                            match **ty {
+                                crate::proc::ConstantEvaluatorError::OverrideExpr => {
+                                    crate::ArraySize::Pending(self.array_size_override(
+                                        expr,
+                                        &mut ctx.as_global().as_override(),
+                                        span,
+                                    )?)
+                                }
+                                _ => {
+                                    err?;
+                                    unreachable!()
+                                }
+                            }
+                        } else {
+                            err?;
+                            unreachable!()
+                        }
+                    }
+                }
             }
             ast::ArraySize::Dynamic => crate::ArraySize::Dynamic,
         })
+    }
+
+    fn array_size_override(
+        &mut self,
+        size_expr: Handle<ast::Expression<'source>>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+        span: Span,
+    ) -> Result<Handle<crate::Override>, Error<'source>> {
+        let expr = self.expression(size_expr, ctx)?;
+        match resolve_inner!(ctx, expr).scalar_kind().ok_or(0) {
+            Ok(crate::ScalarKind::Sint) | Ok(crate::ScalarKind::Uint) => Ok({
+                if let crate::Expression::Override(handle) = ctx.module.global_expressions[expr] {
+                    handle
+                } else {
+                    let ty = ctx.register_type(expr)?;
+                    ctx.module.overrides.append(
+                        crate::Override {
+                            name: None,
+                            id: None,
+                            ty,
+                            init: Some(expr),
+                        },
+                        span,
+                    )
+                }
+            }),
+            _ => Err(Error::ExpectedConstExprConcreteIntegerScalar(span)),
+        }
     }
 
     /// Build the Naga equivalent of a named AST type.
@@ -3071,7 +3387,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         handle: Handle<ast::Type<'source>>,
         name: Option<String>,
-        ctx: &mut GlobalContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         let inner = match ctx.types[handle] {
             ast::Type::Scalar(scalar) => scalar.to_inner_scalar(),
@@ -3109,11 +3425,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 crate::TypeInner::Pointer { base, space }
             }
             ast::Type::Array { base, size } => {
-                let base = self.resolve_ast_type(base, ctx)?;
+                let base = self.resolve_ast_type(base, &mut ctx.as_const())?;
                 let size = self.array_size(size, ctx)?;
 
-                self.layouter.update(ctx.module.to_ctx()).unwrap();
-                let stride = self.layouter[base].to_stride();
+                ctx.layouter.update(ctx.module.to_ctx()).unwrap();
+                let stride = ctx.layouter[base].to_stride();
 
                 crate::TypeInner::Array { base, size, stride }
             }
@@ -3127,8 +3443,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 class,
             },
             ast::Type::Sampler { comparison } => crate::TypeInner::Sampler { comparison },
-            ast::Type::AccelerationStructure => crate::TypeInner::AccelerationStructure,
-            ast::Type::RayQuery => crate::TypeInner::RayQuery,
+            ast::Type::AccelerationStructure { vertex_return } => {
+                crate::TypeInner::AccelerationStructure { vertex_return }
+            }
+            ast::Type::RayQuery { vertex_return } => crate::TypeInner::RayQuery { vertex_return },
             ast::Type::BindingArray { base, size } => {
                 let base = self.resolve_ast_type(base, ctx)?;
                 let size = self.array_size(size, ctx)?;
@@ -3149,14 +3467,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
         };
 
-        Ok(ctx.ensure_type_exists(name, inner))
+        Ok(ctx.as_global().ensure_type_exists(name, inner))
     }
 
     /// Return a Naga `Handle<Type>` representing the front-end type `handle`.
     fn resolve_ast_type(
         &mut self,
         handle: Handle<ast::Type<'source>>,
-        ctx: &mut GlobalContext<'source, '_, '_>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<Handle<crate::Type>, Error<'source>> {
         self.resolve_named_ast_type(handle, None, ctx)
     }
@@ -3198,7 +3516,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         match *resolve_inner!(ctx, pointer) {
             crate::TypeInner::Pointer { base, .. } => match ctx.module.types[base].inner {
-                crate::TypeInner::RayQuery => Ok(pointer),
+                crate::TypeInner::RayQuery { .. } => Ok(pointer),
                 ref other => {
                     log::error!("Pointer type to {:?} passed to ray query op", other);
                     Err(Error::InvalidRayQueryPointer(span))

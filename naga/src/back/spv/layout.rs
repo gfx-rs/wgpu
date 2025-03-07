@@ -1,6 +1,12 @@
-use super::{Instruction, LogicalLayout, PhysicalLayout};
+use alloc::{vec, vec::Vec};
+use core::iter;
+
 use spirv::{Op, Word, MAGIC_NUMBER};
-use std::iter;
+
+use super::{Instruction, LogicalLayout, PhysicalLayout};
+
+#[cfg(test)]
+use alloc::format;
 
 // https://github.com/KhronosGroup/SPIRV-Headers/pull/195
 const GENERATOR: Word = 28;
@@ -108,7 +114,7 @@ impl Instruction {
     }
 
     pub(super) fn to_words(&self, sink: &mut impl Extend<Word>) {
-        sink.extend(Some(self.wc << 16 | self.op as u32));
+        sink.extend(Some((self.wc << 16) | self.op as u32));
         sink.extend(self.type_id);
         sink.extend(self.result_id);
         sink.extend(self.operands.iter().cloned());

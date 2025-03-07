@@ -84,7 +84,7 @@ FooStruct ConstructFooStruct(float3 arg0, float arg1) {
 
 void test_msl_packed_vec3_()
 {
-    int idx = 1;
+    int idx = int(1);
 
     alignment.Store3(0, asuint((1.0).xxx));
     alignment.Store(0+0, asuint(1.0));
@@ -99,6 +99,7 @@ void test_msl_packed_vec3_()
     float3 mvm1_ = mul(data.v3_, ZeroValuefloat3x3());
     float3 svm0_ = (data.v3_ * 2.0);
     float3 svm1_ = (2.0 * data.v3_);
+    return;
 }
 
 uint NagaBufferLength(ByteAddressBuffer buffer)

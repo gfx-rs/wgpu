@@ -1,11 +1,16 @@
-use std::{mem, ops::Range};
+use std::{mem, ops::Range, vec::Vec};
 
-use windows::Win32::{Foundation, Graphics::Direct3D12};
+use windows::Win32::{
+    Foundation,
+    Graphics::{Direct3D12, Dxgi},
+};
+use windows_core::Interface;
 
 use super::conv;
 use crate::{
     auxil::{self, dxgi::result::HResult as _},
     dx12::borrow_interface_temporarily,
+    AccelerationStructureEntries,
 };
 
 fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> Direct3D12::D3D12_BOX {
@@ -82,7 +87,7 @@ impl super::CommandEncoder {
         unsafe {
             list.SetDescriptorHeaps(&[
                 Some(self.shared.heap_views.raw.clone()),
-                Some(self.shared.heap_samplers.raw.clone()),
+                Some(self.shared.sampler_heap.heap().clone()),
             ])
         };
     }
@@ -168,7 +173,7 @@ impl super::CommandEncoder {
     // Note: we have to call this lazily before draw calls. Otherwise, D3D complains
     // about the root parameters being incompatible with root signature.
     fn update_root_elements(&mut self) {
-        use super::{BufferViewKind as Bvk, PassKind as Pk};
+        use super::PassKind as Pk;
 
         while self.pass.dirty_root_elements != 0 {
             let list = self.list.as_ref().unwrap();
@@ -214,30 +219,48 @@ impl super::CommandEncoder {
                     Pk::Compute => unsafe { list.SetComputeRootDescriptorTable(index, descriptor) },
                     Pk::Transfer => (),
                 },
-                super::RootElement::DynamicOffsetBuffer { kind, address } => {
+                super::RootElement::DynamicUniformBuffer { address } => {
                     let address = address.ptr;
-                    match (self.pass.kind, kind) {
-                        (Pk::Render, Bvk::Constant) => unsafe {
+                    match self.pass.kind {
+                        Pk::Render => unsafe {
                             list.SetGraphicsRootConstantBufferView(index, address)
                         },
-                        (Pk::Compute, Bvk::Constant) => unsafe {
+                        Pk::Compute => unsafe {
                             list.SetComputeRootConstantBufferView(index, address)
                         },
-                        (Pk::Render, Bvk::ShaderResource) => unsafe {
-                            list.SetGraphicsRootShaderResourceView(index, address)
-                        },
-                        (Pk::Compute, Bvk::ShaderResource) => unsafe {
-                            list.SetComputeRootShaderResourceView(index, address)
-                        },
-                        (Pk::Render, Bvk::UnorderedAccess) => unsafe {
-                            list.SetGraphicsRootUnorderedAccessView(index, address)
-                        },
-                        (Pk::Compute, Bvk::UnorderedAccess) => unsafe {
-                            list.SetComputeRootUnorderedAccessView(index, address)
-                        },
-                        (Pk::Transfer, _) => (),
+                        Pk::Transfer => (),
                     }
                 }
+                super::RootElement::DynamicOffsetsBuffer { start, end } => {
+                    let values = &self.pass.dynamic_storage_buffer_offsets[start..end];
+
+                    for (offset, &value) in values.iter().enumerate() {
+                        match self.pass.kind {
+                            Pk::Render => unsafe {
+                                list.SetGraphicsRoot32BitConstant(index, value, offset as u32)
+                            },
+                            Pk::Compute => unsafe {
+                                list.SetComputeRoot32BitConstant(index, value, offset as u32)
+                            },
+                            Pk::Transfer => (),
+                        }
+                    }
+                }
+                super::RootElement::SamplerHeap => match self.pass.kind {
+                    Pk::Render => unsafe {
+                        list.SetGraphicsRootDescriptorTable(
+                            index,
+                            self.shared.sampler_heap.gpu_descriptor_table(),
+                        )
+                    },
+                    Pk::Compute => unsafe {
+                        list.SetComputeRootDescriptorTable(
+                            index,
+                            self.shared.sampler_heap.gpu_descriptor_table(),
+                        )
+                    },
+                    Pk::Transfer => (),
+                },
             }
         }
     }
@@ -250,6 +273,9 @@ impl super::CommandEncoder {
                     first_instance: 0,
                     other: 0,
                 };
+        }
+        if let Some(root_index) = layout.sampler_heap_root_index {
+            self.pass.root_elements[root_index as usize] = super::RootElement::SamplerHeap;
         }
         self.pass.layout = layout.clone();
         self.pass.dirty_root_elements = (1 << layout.total_root_elements) - 1;
@@ -339,8 +365,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.temp.barriers.clear();
 
         for barrier in barriers {
-            let s0 = conv::map_buffer_usage_to_state(barrier.usage.start);
-            let s1 = conv::map_buffer_usage_to_state(barrier.usage.end);
+            let s0 = conv::map_buffer_usage_to_state(barrier.usage.from);
+            let s1 = conv::map_buffer_usage_to_state(barrier.usage.to);
             if s0 != s1 {
                 let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -359,7 +385,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     },
                 };
                 self.temp.barriers.push(raw);
-            } else if barrier.usage.start == crate::BufferUses::STORAGE_READ_WRITE {
+            } else if barrier.usage.from == wgt::BufferUses::STORAGE_READ_WRITE
+                || barrier.usage.from == wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY
+            {
                 let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                     Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -392,8 +420,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.temp.barriers.clear();
 
         for barrier in barriers {
-            let s0 = conv::map_texture_usage_to_state(barrier.usage.start);
-            let s1 = conv::map_texture_usage_to_state(barrier.usage.end);
+            let s0 = conv::map_texture_usage_to_state(barrier.usage.from);
+            let s1 = conv::map_texture_usage_to_state(barrier.usage.to);
             if s0 != s1 {
                 let mut raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -458,7 +486,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         }
                     }
                 }
-            } else if barrier.usage.start == crate::TextureUses::STORAGE_READ_WRITE {
+            } else if barrier.usage.from == wgt::TextureUses::STORAGE_READ_WRITE {
                 let raw = Direct3D12::D3D12_RESOURCE_BARRIER {
                     Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                     Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -521,7 +549,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn copy_texture_to_texture<T>(
         &mut self,
         src: &super::Texture,
-        _src_usage: crate::TextureUses,
+        _src_usage: wgt::TextureUses,
         dst: &super::Texture,
         regions: T,
     ) where
@@ -602,7 +630,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn copy_texture_to_buffer<T>(
         &mut self,
         src: &super::Texture,
-        _src_usage: crate::TextureUses,
+        _src_usage: wgt::TextureUses,
         dst: &super::Buffer,
         regions: T,
     ) where
@@ -656,6 +684,29 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 index,
             )
         };
+    }
+    unsafe fn read_acceleration_structure_compact_size(
+        &mut self,
+        acceleration_structure: &super::AccelerationStructure,
+        buf: &super::Buffer,
+    ) {
+        let list = self
+            .list
+            .as_ref()
+            .unwrap()
+            .cast::<Direct3D12::ID3D12GraphicsCommandList4>()
+            .unwrap();
+        unsafe {
+            list.EmitRaytracingAccelerationStructurePostbuildInfo(
+                &Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC {
+                    DestBuffer: buf.resource.GetGPUVirtualAddress(),
+                    InfoType: Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTED_SIZE,
+                },
+                &[
+                    acceleration_structure.resource.GetGPUVirtualAddress()
+                ],
+            )
+        }
     }
     unsafe fn reset_queries(&mut self, _set: &super::QuerySet, _range: Range<u32>) {
         // nothing to do here
@@ -711,7 +762,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         let ds_view = desc.depth_stencil_attachment.as_ref().map(|ds| {
-            if ds.target.usage == crate::TextureUses::DEPTH_STENCIL_WRITE {
+            if ds.target.usage == wgt::TextureUses::DEPTH_STENCIL_WRITE {
                 ds.target.view.handle_dsv_rw.as_ref().unwrap().raw
             } else {
                 ds.target.view.handle_dsv_ro.as_ref().unwrap().raw
@@ -777,8 +828,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         // )
                         // TODO: Replace with the above in the next breaking windows-rs release,
                         // when https://github.com/microsoft/win32metadata/pull/1971 is in.
-                        (windows_core::Interface::vtable(list).ClearDepthStencilView)(
-                            windows_core::Interface::as_raw(list),
+                        (Interface::vtable(list).ClearDepthStencilView)(
+                            Interface::as_raw(list),
                             ds_view,
                             flags,
                             ds.clear_value.0,
@@ -904,27 +955,51 @@ impl crate::CommandEncoder for super::CommandEncoder {
             root_index += 1;
         }
 
-        // Bind Sampler descriptor tables.
-        if info.tables.contains(super::TableTypes::SAMPLERS) {
-            self.pass.root_elements[root_index] =
-                super::RootElement::Table(group.handle_samplers.unwrap().gpu);
-            root_index += 1;
+        let mut offsets_index = 0;
+        if let Some(dynamic_storage_buffer_offsets) = info.dynamic_storage_buffer_offsets.as_ref() {
+            let root_index = dynamic_storage_buffer_offsets.root_index;
+            let range = &dynamic_storage_buffer_offsets.range;
+
+            if range.end > self.pass.dynamic_storage_buffer_offsets.len() {
+                self.pass
+                    .dynamic_storage_buffer_offsets
+                    .resize(range.end, 0);
+            }
+
+            offsets_index += range.start;
+
+            self.pass.root_elements[root_index as usize] =
+                super::RootElement::DynamicOffsetsBuffer {
+                    start: range.start,
+                    end: range.end,
+                };
+
+            if self.pass.layout.signature == layout.shared.signature {
+                self.pass.dirty_root_elements |= 1 << root_index;
+            } else {
+                // D3D12 requires full reset on signature change
+                // but we don't reset it here since it will be reset below
+            };
         }
 
-        // Bind root descriptors
-        for ((&kind, &gpu_base), &offset) in info
-            .dynamic_buffers
-            .iter()
-            .zip(group.dynamic_buffers.iter())
-            .zip(dynamic_offsets)
-        {
-            self.pass.root_elements[root_index] = super::RootElement::DynamicOffsetBuffer {
-                kind,
-                address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE {
-                    ptr: gpu_base.ptr + offset as u64,
-                },
-            };
-            root_index += 1;
+        // Bind root descriptors for dynamic uniform buffers
+        // or set root constants for offsets of dynamic storage buffers
+        for (&dynamic_buffer, &offset) in group.dynamic_buffers.iter().zip(dynamic_offsets) {
+            match dynamic_buffer {
+                super::DynamicBuffer::Uniform(gpu_base) => {
+                    self.pass.root_elements[root_index] =
+                        super::RootElement::DynamicUniformBuffer {
+                            address: Direct3D12::D3D12_GPU_DESCRIPTOR_HANDLE {
+                                ptr: gpu_base.ptr + offset as u64,
+                            },
+                        };
+                    root_index += 1;
+                }
+                super::DynamicBuffer::Storage => {
+                    self.pass.dynamic_storage_buffer_offsets[offsets_index] = offset;
+                    offsets_index += 1;
+                }
+            }
         }
 
         if self.pass.layout.signature == layout.shared.signature {
@@ -1104,6 +1179,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         }
     }
+    unsafe fn draw_mesh_tasks(
+        &mut self,
+        _group_count_x: u32,
+        _group_count_y: u32,
+        _group_count_z: u32,
+    ) {
+        unreachable!()
+    }
     unsafe fn draw_indirect(
         &mut self,
         buffer: &super::Buffer,
@@ -1139,6 +1222,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 0,
             )
         }
+    }
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _draw_count: u32,
+    ) {
+        unreachable!()
     }
     unsafe fn draw_indirect_count(
         &mut self,
@@ -1179,6 +1270,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 count_offset,
             )
         }
+    }
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _count_buffer: &<Self::A as crate::Api>::Buffer,
+        _count_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        unreachable!()
     }
 
     // compute
@@ -1223,13 +1324,25 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
-        self.update_root_elements();
+        if self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
+            .is_some()
+        {
+            self.update_root_elements();
+        } else {
+            self.prepare_dispatch([0; 3]);
+        }
+
         let cmd_signature = &self
             .pass
             .layout
             .special_constants
             .as_ref()
-            .map(|sc| &sc.cmd_signatures)
+            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
             .unwrap_or_else(|| &self.shared.cmd_signatures)
             .dispatch;
         unsafe {
@@ -1247,7 +1360,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn build_acceleration_structures<'a, T>(
         &mut self,
         _descriptor_count: u32,
-        _descriptors: T,
+        descriptors: T,
     ) where
         super::Api: 'a,
         T: IntoIterator<
@@ -1260,13 +1373,210 @@ impl crate::CommandEncoder for super::CommandEncoder {
     {
         // Implement using `BuildRaytracingAccelerationStructure`:
         // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#buildraytracingaccelerationstructure
-        todo!()
+        let list = self
+            .list
+            .as_ref()
+            .unwrap()
+            .cast::<Direct3D12::ID3D12GraphicsCommandList4>()
+            .unwrap();
+        for descriptor in descriptors {
+            // TODO: This is the same as getting build sizes apart from requiring buffers, should this be de-duped?
+            let mut geometry_desc;
+            let ty;
+            let inputs0;
+            let num_desc;
+            match descriptor.entries {
+                AccelerationStructureEntries::Instances(instances) => {
+                    let desc_address = unsafe {
+                        instances
+                            .buffer
+                            .expect("needs buffer to build")
+                            .resource
+                            .GetGPUVirtualAddress()
+                    } + instances.offset as u64;
+                    ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+                    inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                        InstanceDescs: desc_address,
+                    };
+                    num_desc = instances.count;
+                }
+                AccelerationStructureEntries::Triangles(triangles) => {
+                    geometry_desc = Vec::with_capacity(triangles.len());
+                    for triangle in triangles {
+                        let transform_address =
+                            triangle.transform.as_ref().map_or(0, |transform| unsafe {
+                                transform.buffer.resource.GetGPUVirtualAddress()
+                                    + transform.offset as u64
+                            });
+                        let index_format = triangle
+                            .indices
+                            .as_ref()
+                            .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |indices| {
+                                auxil::dxgi::conv::map_index_format(indices.format)
+                            });
+                        let vertex_format =
+                            auxil::dxgi::conv::map_vertex_format(triangle.vertex_format);
+                        let index_count =
+                            triangle.indices.as_ref().map_or(0, |indices| indices.count);
+                        let index_address = triangle.indices.as_ref().map_or(0, |indices| unsafe {
+                            indices
+                                .buffer
+                                .expect("needs buffer to build")
+                                .resource
+                                .GetGPUVirtualAddress()
+                                + indices.offset as u64
+                        });
+                        let vertex_address = unsafe {
+                            triangle
+                                .vertex_buffer
+                                .expect("needs buffer to build")
+                                .resource
+                                .GetGPUVirtualAddress()
+                                + (triangle.first_vertex as u64 * triangle.vertex_stride)
+                        };
+
+                        let triangle_desc = Direct3D12::D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC {
+                            Transform3x4: transform_address,
+                            IndexFormat: index_format,
+                            VertexFormat: vertex_format,
+                            IndexCount: index_count,
+                            VertexCount: triangle.vertex_count,
+                            IndexBuffer: index_address,
+                            VertexBuffer: Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
+                                StartAddress: vertex_address,
+                                StrideInBytes: triangle.vertex_stride,
+                            },
+                        };
+
+                        geometry_desc.push(Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC {
+                            Type: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES,
+                            Flags: conv::map_acceleration_structure_geometry_flags(triangle.flags),
+                            Anonymous: Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC_0 {
+                                Triangles: triangle_desc,
+                            },
+                        })
+                    }
+                    ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+                    inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                        pGeometryDescs: geometry_desc.as_ptr(),
+                    };
+                    num_desc = geometry_desc.len() as u32;
+                }
+                AccelerationStructureEntries::AABBs(aabbs) => {
+                    geometry_desc = Vec::with_capacity(aabbs.len());
+                    for aabb in aabbs {
+                        let aabb_address = unsafe {
+                            aabb.buffer
+                                .expect("needs buffer to build")
+                                .resource
+                                .GetGPUVirtualAddress()
+                                + (aabb.offset as u64 * aabb.stride)
+                        };
+
+                        let aabb_desc = Direct3D12::D3D12_RAYTRACING_GEOMETRY_AABBS_DESC {
+                            AABBCount: aabb.count as u64,
+                            AABBs: Direct3D12::D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE {
+                                StartAddress: aabb_address,
+                                StrideInBytes: aabb.stride,
+                            },
+                        };
+
+                        geometry_desc.push(Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC {
+                            Type: Direct3D12::D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS,
+                            Flags: conv::map_acceleration_structure_geometry_flags(aabb.flags),
+                            Anonymous: Direct3D12::D3D12_RAYTRACING_GEOMETRY_DESC_0 {
+                                AABBs: aabb_desc,
+                            },
+                        })
+                    }
+                    ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+                    inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
+                        pGeometryDescs: geometry_desc.as_ptr(),
+                    };
+                    num_desc = geometry_desc.len() as u32;
+                }
+            };
+            let acceleration_structure_inputs =
+                Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS {
+                    Type: ty,
+                    Flags: conv::map_acceleration_structure_build_flags(
+                        descriptor.flags,
+                        Some(descriptor.mode),
+                    ),
+                    NumDescs: num_desc,
+                    DescsLayout: Direct3D12::D3D12_ELEMENTS_LAYOUT_ARRAY,
+                    Anonymous: inputs0,
+                };
+
+            let dst_acceleration_structure_address = unsafe {
+                descriptor
+                    .destination_acceleration_structure
+                    .resource
+                    .GetGPUVirtualAddress()
+            };
+            let src_acceleration_structure_address = descriptor
+                .source_acceleration_structure
+                .as_ref()
+                .map_or(0, |source| unsafe {
+                    source.resource.GetGPUVirtualAddress()
+                });
+            let scratch_address = unsafe {
+                descriptor.scratch_buffer.resource.GetGPUVirtualAddress()
+                    + descriptor.scratch_buffer_offset
+            };
+
+            let desc = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC {
+                DestAccelerationStructureData: dst_acceleration_structure_address,
+                Inputs: acceleration_structure_inputs,
+                SourceAccelerationStructureData: src_acceleration_structure_address,
+                ScratchAccelerationStructureData: scratch_address,
+            };
+            unsafe { list.BuildRaytracingAccelerationStructure(&desc, None) };
+        }
     }
 
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         _barriers: crate::AccelerationStructureBarrier,
     ) {
-        todo!()
+        // TODO: This is not very optimal, we should be using [enhanced barriers](https://microsoft.github.io/DirectX-Specs/d3d/D3D12EnhancedBarriers.html) if possible
+        let list = self
+            .list
+            .as_ref()
+            .unwrap()
+            .cast::<Direct3D12::ID3D12GraphicsCommandList4>()
+            .unwrap();
+        unsafe {
+            list.ResourceBarrier(&[Direct3D12::D3D12_RESOURCE_BARRIER {
+                Type: Direct3D12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
+                Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                Anonymous: Direct3D12::D3D12_RESOURCE_BARRIER_0 {
+                    UAV: mem::ManuallyDrop::new(Direct3D12::D3D12_RESOURCE_UAV_BARRIER {
+                        pResource: Default::default(),
+                    }),
+                },
+            }])
+        }
+    }
+
+    unsafe fn copy_acceleration_structure_to_acceleration_structure(
+        &mut self,
+        src: &super::AccelerationStructure,
+        dst: &super::AccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
+    ) {
+        let list = self
+            .list
+            .as_ref()
+            .unwrap()
+            .cast::<Direct3D12::ID3D12GraphicsCommandList4>()
+            .unwrap();
+        unsafe {
+            list.CopyRaytracingAccelerationStructure(
+                dst.resource.GetGPUVirtualAddress(),
+                src.resource.GetGPUVirtualAddress(),
+                conv::map_acceleration_structure_copy_mode(copy),
+            )
+        }
     }
 }

@@ -1,5 +1,6 @@
-#![no_main]
-#[cfg(not(any(target_arch = "wasm32", target_os = "ios")))]
+#![cfg_attr(all(fuzzable_platform, fuzzing), no_main)]
+
+#[cfg(all(fuzzable_platform, fuzzing))]
 mod fuzz {
     use libfuzzer_sys::fuzz_target;
     use naga::front::spv::{Frontend, Options};
@@ -10,3 +11,6 @@ mod fuzz {
         let _result = Frontend::new(data.into_iter(), &options).parse();
     });
 }
+
+#[cfg(not(all(fuzzable_platform, fuzzing)))]
+fn main() {}

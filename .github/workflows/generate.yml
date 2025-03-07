@@ -1,0 +1,78 @@
+name: cargo-generate
+
+on:
+  push:
+    branches: ["*"]
+    tags: [v0.*]
+  pull_request:
+  merge_group:
+
+env:
+  #
+  # Dependency versioning
+  #
+
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.85"
+  RUSTFLAGS: -D warnings
+
+jobs:
+  cargo-generate:
+    timeout-minutes: 5
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "01-hello-compute"
+            path: "examples/standalone/01_hello_compute"
+          - name: "02-hello-window"
+            path: "examples/standalone/02_hello_window"
+
+    name: "${{ matrix.name }}"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # We can't rely on an override here, as that would only set
+      # the toolchain for the current directory, not the newly generated project.
+      - name: Install repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
+          cargo -V
+
+      - name: Disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
+
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cargo-generate-${{ matrix.name }}
+
+      - name: Install `cargo-generate`
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-generate
+
+      - name: Run `cargo-generate`
+        run: |
+          cd ..
+          cargo generate --path wgpu --name ${{ matrix.name }} ${{ matrix.path }}
+
+      - name: Check generated files
+        run: |
+          cd ../${{ matrix.name }}/
+          cat <<EOF >> Cargo.toml
+            [patch.crates-io]
+            wgpu = { path = "../wgpu/wgpu" }
+          EOF
+          cargo +${{ env.REPO_MSRV }} check

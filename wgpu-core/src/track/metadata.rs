@@ -1,5 +1,7 @@
 //! The `ResourceMetadata` type.
 
+use alloc::vec::Vec;
+
 use bit_vec::BitVec;
 use wgt::strict_assert;
 
@@ -111,13 +113,13 @@ impl<T: Clone> ResourceMetadata<T> {
     }
 
     /// Returns an iterator over the resources owned by `self`.
-    pub(super) fn owned_resources(&self) -> impl Iterator<Item = T> + '_ {
+    pub(super) fn owned_resources(&self) -> impl Iterator<Item = &T> + '_ {
         if !self.owned.is_empty() {
             self.tracker_assert_in_bounds(self.owned.len() - 1)
         };
         iterate_bitvec_indices(&self.owned).map(move |index| {
             let resource = unsafe { self.resources.get_unchecked(index) };
-            resource.as_ref().unwrap().clone()
+            resource.as_ref().unwrap()
         })
     }
 

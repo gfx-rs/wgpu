@@ -1,19 +1,26 @@
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+
+use hashbrown::hash_map::Entry;
+use spirv::Word;
+
 use super::{
     block::DebugInfoInner,
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
     Block, BlockContext, CachedConstant, CachedExpressions, DebugInfo, EntryPointContext, Error,
-    Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalType, LocalVariable,
-    LogicalLayout, LookupFunctionType, LookupType, NumericType, Options, PhysicalLayout,
-    PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
+    Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalImageType,
+    LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType, NumericType, Options,
+    PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
 };
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
-    back::spv::BindingInfo,
+    back::spv::{BindingInfo, WrappedFunction},
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
-use spirv::Word;
-use std::collections::hash_map::Entry;
 
 struct FunctionInterface<'a> {
     varying_ids: &'a mut Vec<Word>,
@@ -21,7 +28,7 @@ struct FunctionInterface<'a> {
 }
 
 impl Function {
-    fn to_words(&self, sink: &mut impl Extend<Word>) {
+    pub(super) fn to_words(&self, sink: &mut impl Extend<Word>) {
         self.signature.as_ref().unwrap().to_words(sink);
         for argument in self.parameters.iter() {
             argument.instruction.to_words(sink);
@@ -32,6 +39,9 @@ impl Function {
                 for local_var in self.variables.values() {
                     local_var.instruction.to_words(sink);
                 }
+                for local_var in self.force_loop_bounding_vars.iter() {
+                    local_var.instruction.to_words(sink);
+                }
                 for internal_var in self.spilled_composites.values() {
                     internal_var.instruction.to_words(sink);
                 }
@@ -40,6 +50,7 @@ impl Function {
                 instruction.to_words(sink);
             }
         }
+        Instruction::function_end().to_words(sink);
     }
 }
 
@@ -70,10 +81,12 @@ impl Writer {
             flags: options.flags,
             bounds_check_policies: options.bounds_check_policies,
             zero_initialize_workgroup_memory: options.zero_initialize_workgroup_memory,
+            force_loop_bounding: options.force_loop_bounding,
             void_type,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
+            wrapped_functions: crate::FastHashMap::default(),
             constant_ids: HandleVec::new(),
             cached_constants: crate::FastHashMap::default(),
             global_variables: HandleVec::new(),
@@ -81,6 +94,7 @@ impl Writer {
             saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
             temp_list: Vec::new(),
+            ray_get_intersection_function: None,
         })
     }
 
@@ -90,12 +104,12 @@ impl Writer {
     /// `Recyclable::recycle` requires ownership of the value, not just
     /// `&mut`; see the trait documentation. But we need to use this method
     /// from functions like `Writer::write`, which only have `&mut Writer`.
-    /// Workarounds include unsafe code (`std::ptr::read`, then `write`, ugh)
+    /// Workarounds include unsafe code (`core::ptr::read`, then `write`, ugh)
     /// or something like a `Default` impl that returns an oddly-initialized
     /// `Writer`, which is worse.
     fn reset(&mut self) {
         use super::recyclable::Recyclable;
-        use std::mem::take;
+        use core::mem::take;
 
         let mut id_gen = IdGenerator::default();
         let gl450_ext_inst_id = id_gen.next();
@@ -108,6 +122,7 @@ impl Writer {
             flags: self.flags,
             bounds_check_policies: self.bounds_check_policies,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
+            force_loop_bounding: self.force_loop_bounding,
             capabilities_available: take(&mut self.capabilities_available),
             binding_map: take(&mut self.binding_map),
 
@@ -126,11 +141,13 @@ impl Writer {
             lookup_type: take(&mut self.lookup_type).recycle(),
             lookup_function: take(&mut self.lookup_function).recycle(),
             lookup_function_type: take(&mut self.lookup_function_type).recycle(),
+            wrapped_functions: take(&mut self.wrapped_functions).recycle(),
             constant_ids: take(&mut self.constant_ids).recycle(),
             cached_constants: take(&mut self.cached_constants).recycle(),
             global_variables: take(&mut self.global_variables).recycle(),
             saved_cached: take(&mut self.saved_cached).recycle(),
             temp_list: take(&mut self.temp_list).recycle(),
+            ray_get_intersection_function: None,
         };
 
         *self = fresh;
@@ -165,7 +182,11 @@ impl Writer {
                 let selected = match self.capabilities_available {
                     None => first,
                     Some(ref available) => {
-                        match capabilities.iter().find(|cap| available.contains(cap)) {
+                        match capabilities
+                            .iter()
+                            // need explicit type for hashbrown::HashSet::contains fn call to keep rustc happy
+                            .find(|cap| available.contains::<spirv::Capability>(cap))
+                        {
                             Some(&cap) => cap,
                             None => {
                                 return Err(Error::MissingCapabilities(what, capabilities.to_vec()))
@@ -201,11 +222,16 @@ impl Writer {
         }
     }
 
+    pub(super) fn get_handle_type_id(&mut self, handle: Handle<crate::Type>) -> Word {
+        self.get_type_id(LookupType::Handle(handle))
+    }
+
     pub(super) fn get_expression_lookup_type(&mut self, tr: &TypeResolution) -> LookupType {
         match *tr {
             TypeResolution::Handle(ty_handle) => LookupType::Handle(ty_handle),
             TypeResolution::Value(ref inner) => {
-                LookupType::Local(LocalType::from_inner(inner).unwrap())
+                let inner_local_type = self.localtype_from_inner(inner).unwrap();
+                LookupType::Local(inner_local_type)
             }
         }
     }
@@ -215,15 +241,42 @@ impl Writer {
         self.get_type_id(lookup_ty)
     }
 
-    pub(super) fn get_pointer_id(
+    pub(super) fn get_localtype_id(&mut self, local: LocalType) -> Word {
+        self.get_type_id(LookupType::Local(local))
+    }
+
+    pub(super) fn get_pointer_type_id(&mut self, base: Word, class: spirv::StorageClass) -> Word {
+        self.get_type_id(LookupType::Local(LocalType::Pointer { base, class }))
+    }
+
+    pub(super) fn get_handle_pointer_type_id(
         &mut self,
-        handle: Handle<crate::Type>,
+        base: Handle<crate::Type>,
         class: spirv::StorageClass,
     ) -> Word {
-        self.get_type_id(LookupType::Local(LocalType::Pointer {
-            base: handle,
-            class,
-        }))
+        let base_id = self.get_handle_type_id(base);
+        self.get_pointer_type_id(base_id, class)
+    }
+
+    pub(super) fn get_ray_query_pointer_id(&mut self, module: &crate::Module) -> Word {
+        let rq_ty = module
+            .types
+            .get(&crate::Type {
+                name: None,
+                inner: crate::TypeInner::RayQuery {
+                    vertex_return: false,
+                },
+            })
+            .or_else(|| {
+                module.types.get(&crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::RayQuery {
+                        vertex_return: true,
+                    },
+                })
+            })
+            .expect("ray_query type should have been populated by the variable passed into this!");
+        self.get_handle_pointer_type_id(rq_ty, spirv::StorageClass::Function)
     }
 
     /// Return a SPIR-V type for a pointer to `resolution`.
@@ -235,68 +288,366 @@ impl Writer {
         resolution: &TypeResolution,
         class: spirv::StorageClass,
     ) -> Word {
-        match *resolution {
-            TypeResolution::Handle(handle) => self.get_pointer_id(handle, class),
-            TypeResolution::Value(ref inner) => {
-                let base = NumericType::from_inner(inner).unwrap();
-                self.get_type_id(LookupType::Local(LocalType::LocalPointer { base, class }))
-            }
-        }
+        let resolution_type_id = self.get_expression_type_id(resolution);
+        self.get_pointer_type_id(resolution_type_id, class)
     }
 
-    pub(super) fn get_uint_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::U32));
-        self.get_type_id(local_type.into())
+    pub(super) fn get_numeric_type_id(&mut self, numeric: NumericType) -> Word {
+        self.get_type_id(LocalType::Numeric(numeric).into())
     }
 
-    pub(super) fn get_float_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::F32));
-        self.get_type_id(local_type.into())
+    pub(super) fn get_u32_type_id(&mut self) -> Word {
+        self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32))
     }
 
-    pub(super) fn get_uint3_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Vector {
+    pub(super) fn get_f32_type_id(&mut self) -> Word {
+        self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::F32))
+    }
+
+    pub(super) fn get_vec2u_type_id(&mut self) -> Word {
+        self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::U32,
+        })
+    }
+
+    pub(super) fn get_vec3u_type_id(&mut self) -> Word {
+        self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Tri,
+            scalar: crate::Scalar::U32,
+        })
+    }
+
+    pub(super) fn get_f32_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
+        let f32_id = self.get_f32_type_id();
+        self.get_pointer_type_id(f32_id, class)
+    }
+
+    pub(super) fn get_vec2u_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
+        let vec2u_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::U32,
+        });
+        self.get_pointer_type_id(vec2u_id, class)
+    }
+
+    pub(super) fn get_vec3u_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
+        let vec3u_id = self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Tri,
             scalar: crate::Scalar::U32,
         });
-        self.get_type_id(local_type.into())
-    }
-
-    pub(super) fn get_float_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
-        let local_type = LocalType::LocalPointer {
-            base: NumericType::Scalar(crate::Scalar::F32),
-            class,
-        };
-        self.get_type_id(local_type.into())
-    }
-
-    pub(super) fn get_uint3_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
-        let local_type = LocalType::LocalPointer {
-            base: NumericType::Vector {
-                size: crate::VectorSize::Tri,
-                scalar: crate::Scalar::U32,
-            },
-            class,
-        };
-        self.get_type_id(local_type.into())
+        self.get_pointer_type_id(vec3u_id, class)
     }
 
     pub(super) fn get_bool_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Scalar(crate::Scalar::BOOL));
-        self.get_type_id(local_type.into())
+        self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::BOOL))
     }
 
-    pub(super) fn get_bool3_type_id(&mut self) -> Word {
-        let local_type = LocalType::Numeric(NumericType::Vector {
+    pub(super) fn get_vec2_bool_type_id(&mut self) -> Word {
+        self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::BOOL,
+        })
+    }
+
+    pub(super) fn get_vec3_bool_type_id(&mut self) -> Word {
+        self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Tri,
             scalar: crate::Scalar::BOOL,
-        });
-        self.get_type_id(local_type.into())
+        })
     }
 
     pub(super) fn decorate(&mut self, id: Word, decoration: spirv::Decoration, operands: &[Word]) {
         self.annotations
             .push(Instruction::decorate(id, decoration, operands));
+    }
+
+    /// Return `inner` as a `LocalType`, if that's possible.
+    ///
+    /// If `inner` can be represented as a `LocalType`, return
+    /// `Some(local_type)`.
+    ///
+    /// Otherwise, return `None`. In this case, the type must always be looked
+    /// up using a `LookupType::Handle`.
+    fn localtype_from_inner(&mut self, inner: &crate::TypeInner) -> Option<LocalType> {
+        Some(match *inner {
+            crate::TypeInner::Scalar(_)
+            | crate::TypeInner::Atomic(_)
+            | crate::TypeInner::Vector { .. }
+            | crate::TypeInner::Matrix { .. } => {
+                // We expect `NumericType::from_inner` to handle all
+                // these cases, so unwrap.
+                LocalType::Numeric(NumericType::from_inner(inner).unwrap())
+            }
+            crate::TypeInner::Pointer { base, space } => {
+                let base_type_id = self.get_handle_type_id(base);
+                LocalType::Pointer {
+                    base: base_type_id,
+                    class: map_storage_class(space),
+                }
+            }
+            crate::TypeInner::ValuePointer {
+                size,
+                scalar,
+                space,
+            } => {
+                let base_numeric_type = match size {
+                    Some(size) => NumericType::Vector { size, scalar },
+                    None => NumericType::Scalar(scalar),
+                };
+                LocalType::Pointer {
+                    base: self.get_numeric_type_id(base_numeric_type),
+                    class: map_storage_class(space),
+                }
+            }
+            crate::TypeInner::Image {
+                dim,
+                arrayed,
+                class,
+            } => LocalType::Image(LocalImageType::from_inner(dim, arrayed, class)),
+            crate::TypeInner::Sampler { comparison: _ } => LocalType::Sampler,
+            crate::TypeInner::AccelerationStructure { .. } => LocalType::AccelerationStructure,
+            crate::TypeInner::RayQuery { .. } => LocalType::RayQuery,
+            crate::TypeInner::Array { .. }
+            | crate::TypeInner::Struct { .. }
+            | crate::TypeInner::BindingArray { .. } => return None,
+        })
+    }
+
+    /// Emits code for any wrapper functions required by the expressions in ir_function.
+    /// The IDs of any emitted functions will be stored in [`Self::wrapped_functions`].
+    fn write_wrapped_functions(
+        &mut self,
+        ir_function: &crate::Function,
+        info: &FunctionInfo,
+        ir_module: &crate::Module,
+    ) -> Result<(), Error> {
+        log::trace!("Generating wrapped functions for {:?}", ir_function.name);
+
+        for (expr_handle, expr) in ir_function.expressions.iter() {
+            match *expr {
+                crate::Expression::Binary { op, left, right } => {
+                    let expr_ty_inner = info[expr_handle].ty.inner_with(&ir_module.types);
+                    if let Some(expr_ty) = NumericType::from_inner(expr_ty_inner) {
+                        match (op, expr_ty.scalar().kind) {
+                            // Division and modulo are undefined behaviour when the
+                            // dividend is the minimum representable value and the divisor
+                            // is negative one, or when the divisor is zero. These wrapped
+                            // functions override the divisor to one in these cases,
+                            // matching the WGSL spec.
+                            (
+                                crate::BinaryOperator::Divide | crate::BinaryOperator::Modulo,
+                                crate::ScalarKind::Sint | crate::ScalarKind::Uint,
+                            ) => {
+                                self.write_wrapped_binary_op(
+                                    op,
+                                    expr_ty,
+                                    &info[left].ty,
+                                    &info[right].ty,
+                                )?;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Write a SPIR-V function that performs the operator `op` with Naga IR semantics.
+    ///
+    /// Define a function that performs an integer division or modulo operation,
+    /// except that using a divisor of zero or causing signed overflow with a
+    /// divisor of -1 returns the numerator unchanged, rather than exhibiting
+    /// undefined behavior.
+    ///
+    /// Store the generated function's id in the [`wrapped_functions`] table.
+    ///
+    /// The operator `op` must be either [`Divide`] or [`Modulo`].
+    ///
+    /// # Panics
+    ///
+    /// The `return_type`, `left_type` or `right_type` arguments must all be
+    /// integer scalars or vectors. If not, this function panics.
+    ///
+    /// [`wrapped_functions`]: Writer::wrapped_functions
+    /// [`Divide`]: crate::BinaryOperator::Divide
+    /// [`Modulo`]: crate::BinaryOperator::Modulo
+    fn write_wrapped_binary_op(
+        &mut self,
+        op: crate::BinaryOperator,
+        return_type: NumericType,
+        left_type: &TypeResolution,
+        right_type: &TypeResolution,
+    ) -> Result<(), Error> {
+        let return_type_id = self.get_localtype_id(LocalType::Numeric(return_type));
+        let left_type_id = self.get_expression_type_id(left_type);
+        let right_type_id = self.get_expression_type_id(right_type);
+
+        // Check if we've already emitted this function.
+        let wrapped = WrappedFunction::BinaryOp {
+            op,
+            left_type_id,
+            right_type_id,
+        };
+        let function_id = match self.wrapped_functions.entry(wrapped) {
+            Entry::Occupied(_) => return Ok(()),
+            Entry::Vacant(e) => *e.insert(self.id_gen.next()),
+        };
+
+        let scalar = return_type.scalar();
+
+        if self.flags.contains(WriterFlags::DEBUG) {
+            let function_name = match op {
+                crate::BinaryOperator::Divide => "naga_div",
+                crate::BinaryOperator::Modulo => "naga_mod",
+                _ => unreachable!(),
+            };
+            self.debugs
+                .push(Instruction::name(function_id, function_name));
+        }
+        let mut function = Function::default();
+
+        let function_type_id = self.get_function_type(LookupFunctionType {
+            parameter_type_ids: vec![left_type_id, right_type_id],
+            return_type_id,
+        });
+        function.signature = Some(Instruction::function(
+            return_type_id,
+            function_id,
+            spirv::FunctionControl::empty(),
+            function_type_id,
+        ));
+
+        let lhs_id = self.id_gen.next();
+        let rhs_id = self.id_gen.next();
+        if self.flags.contains(WriterFlags::DEBUG) {
+            self.debugs.push(Instruction::name(lhs_id, "lhs"));
+            self.debugs.push(Instruction::name(rhs_id, "rhs"));
+        }
+        let left_par = Instruction::function_parameter(left_type_id, lhs_id);
+        let right_par = Instruction::function_parameter(right_type_id, rhs_id);
+        for instruction in [left_par, right_par] {
+            function.parameters.push(FunctionArgument {
+                instruction,
+                handle_id: 0,
+            });
+        }
+
+        let label_id = self.id_gen.next();
+        let mut block = Block::new(label_id);
+
+        let bool_type = return_type.with_scalar(crate::Scalar::BOOL);
+        let bool_type_id = self.get_numeric_type_id(bool_type);
+
+        let maybe_splat_const = |writer: &mut Self, const_id| match return_type {
+            NumericType::Scalar(_) => const_id,
+            NumericType::Vector { size, .. } => {
+                let constituent_ids = [const_id; crate::VectorSize::MAX];
+                writer.get_constant_composite(
+                    LookupType::Local(LocalType::Numeric(return_type)),
+                    &constituent_ids[..size as usize],
+                )
+            }
+            NumericType::Matrix { .. } => unreachable!(),
+        };
+
+        let const_zero_id = self.get_constant_scalar_with(0, scalar)?;
+        let composite_zero_id = maybe_splat_const(self, const_zero_id);
+        let rhs_eq_zero_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::IEqual,
+            bool_type_id,
+            rhs_eq_zero_id,
+            rhs_id,
+            composite_zero_id,
+        ));
+        let divisor_selector_id = match scalar.kind {
+            crate::ScalarKind::Sint => {
+                let (const_min_id, const_neg_one_id) = match scalar.width {
+                    4 => Ok((
+                        self.get_constant_scalar(crate::Literal::I32(i32::MIN)),
+                        self.get_constant_scalar(crate::Literal::I32(-1i32)),
+                    )),
+                    8 => Ok((
+                        self.get_constant_scalar(crate::Literal::I64(i64::MIN)),
+                        self.get_constant_scalar(crate::Literal::I64(-1i64)),
+                    )),
+                    _ => Err(Error::Validation("Unexpected scalar width")),
+                }?;
+                let composite_min_id = maybe_splat_const(self, const_min_id);
+                let composite_neg_one_id = maybe_splat_const(self, const_neg_one_id);
+
+                let lhs_eq_int_min_id = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IEqual,
+                    bool_type_id,
+                    lhs_eq_int_min_id,
+                    lhs_id,
+                    composite_min_id,
+                ));
+                let rhs_eq_neg_one_id = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IEqual,
+                    bool_type_id,
+                    rhs_eq_neg_one_id,
+                    rhs_id,
+                    composite_neg_one_id,
+                ));
+                let lhs_eq_int_min_and_rhs_eq_neg_one_id = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::LogicalAnd,
+                    bool_type_id,
+                    lhs_eq_int_min_and_rhs_eq_neg_one_id,
+                    lhs_eq_int_min_id,
+                    rhs_eq_neg_one_id,
+                ));
+                let rhs_eq_zero_or_lhs_eq_int_min_and_rhs_eq_neg_one_id = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::LogicalOr,
+                    bool_type_id,
+                    rhs_eq_zero_or_lhs_eq_int_min_and_rhs_eq_neg_one_id,
+                    rhs_eq_zero_id,
+                    lhs_eq_int_min_and_rhs_eq_neg_one_id,
+                ));
+                rhs_eq_zero_or_lhs_eq_int_min_and_rhs_eq_neg_one_id
+            }
+            crate::ScalarKind::Uint => rhs_eq_zero_id,
+            _ => unreachable!(),
+        };
+
+        let const_one_id = self.get_constant_scalar_with(1, scalar)?;
+        let composite_one_id = maybe_splat_const(self, const_one_id);
+        let divisor_id = self.id_gen.next();
+        block.body.push(Instruction::select(
+            right_type_id,
+            divisor_id,
+            divisor_selector_id,
+            composite_one_id,
+            rhs_id,
+        ));
+        let op = match (op, scalar.kind) {
+            (crate::BinaryOperator::Divide, crate::ScalarKind::Sint) => spirv::Op::SDiv,
+            (crate::BinaryOperator::Divide, crate::ScalarKind::Uint) => spirv::Op::UDiv,
+            (crate::BinaryOperator::Modulo, crate::ScalarKind::Sint) => spirv::Op::SRem,
+            (crate::BinaryOperator::Modulo, crate::ScalarKind::Uint) => spirv::Op::UMod,
+            _ => unreachable!(),
+        };
+        let return_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            op,
+            return_type_id,
+            return_id,
+            lhs_id,
+            divisor_id,
+        ));
+
+        function.consume(block, Instruction::return_value(return_id));
+        function.to_words(&mut self.logical_layout.function_definitions);
+        Ok(())
     }
 
     fn write_function(
@@ -307,6 +658,8 @@ impl Writer {
         mut interface: Option<FunctionInterface>,
         debug_info: &Option<DebugInfoInner>,
     ) -> Result<Word, Error> {
+        self.write_wrapped_functions(ir_function, info, ir_module)?;
+
         log::trace!("Generating code for {:?}", ir_function.name);
         let mut function = Function::default();
 
@@ -323,9 +676,10 @@ impl Writer {
         for argument in ir_function.arguments.iter() {
             let class = spirv::StorageClass::Input;
             let handle_ty = ir_module.types[argument.ty].inner.is_handle();
-            let argument_type_id = match handle_ty {
-                true => self.get_pointer_id(argument.ty, spirv::StorageClass::UniformConstant),
-                false => self.get_type_id(LookupType::Handle(argument.ty)),
+            let argument_type_id = if handle_ty {
+                self.get_handle_pointer_type_id(argument.ty, spirv::StorageClass::UniformConstant)
+            } else {
+                self.get_handle_type_id(argument.ty)
             };
 
             if let Some(ref mut iface) = interface {
@@ -357,7 +711,7 @@ impl Writer {
                     let struct_id = self.id_gen.next();
                     let mut constituent_ids = Vec::with_capacity(members.len());
                     for member in members {
-                        let type_id = self.get_type_id(LookupType::Handle(member.ty));
+                        let type_id = self.get_handle_type_id(member.ty);
                         let name = member.name.as_deref();
                         let binding = member.binding.as_ref().unwrap();
                         let varying_id = self.write_varying(
@@ -402,7 +756,7 @@ impl Writer {
                     handle_id: if handle_ty {
                         let id = self.id_gen.next();
                         prelude.body.push(Instruction::load(
-                            self.get_type_id(LookupType::Handle(argument.ty)),
+                            self.get_handle_type_id(argument.ty),
                             id,
                             argument_id,
                             None,
@@ -424,7 +778,7 @@ impl Writer {
                     if let Some(ref binding) = result.binding {
                         has_point_size |=
                             *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
-                        let type_id = self.get_type_id(LookupType::Handle(result.ty));
+                        let type_id = self.get_handle_type_id(result.ty);
                         let varying_id = self.write_varying(
                             ir_module,
                             iface.stage,
@@ -443,7 +797,7 @@ impl Writer {
                         ir_module.types[result.ty].inner
                     {
                         for member in members {
-                            let type_id = self.get_type_id(LookupType::Handle(member.ty));
+                            let type_id = self.get_handle_type_id(member.ty);
                             let name = member.name.as_deref();
                             let binding = member.binding.as_ref().unwrap();
                             has_point_size |=
@@ -473,7 +827,7 @@ impl Writer {
                     {
                         // add point size artificially
                         let varying_id = self.id_gen.next();
-                        let pointer_type_id = self.get_float_pointer_type_id(class);
+                        let pointer_type_id = self.get_f32_pointer_type_id(class);
                         Instruction::variable(pointer_type_id, varying_id, class, None)
                             .to_words(&mut self.logical_layout.declarations);
                         self.decorate(
@@ -490,7 +844,7 @@ impl Writer {
                     }
                     self.void_type
                 } else {
-                    self.get_type_id(LookupType::Handle(result.ty))
+                    self.get_handle_type_id(result.ty)
                 }
             }
             None => self.void_type,
@@ -546,7 +900,7 @@ impl Writer {
                 }
                 _ => {
                     if var.space == crate::AddressSpace::Handle {
-                        let var_type_id = self.get_type_id(LookupType::Handle(var.ty));
+                        let var_type_id = self.get_handle_type_id(var.ty);
                         let id = self.id_gen.next();
                         prelude
                             .body
@@ -555,7 +909,7 @@ impl Writer {
                         gv.handle_id = id;
                     } else if global_needs_wrapper(ir_module, var) {
                         let class = map_storage_class(var.space);
-                        let pointer_type_id = self.get_pointer_id(var.ty, class);
+                        let pointer_type_id = self.get_handle_pointer_type_id(var.ty, class);
                         let index_id = self.get_index_constant(0);
                         let id = self.id_gen.next();
                         prelude.body.push(Instruction::access_chain(
@@ -584,10 +938,11 @@ impl Writer {
             fun_info: info,
             function: &mut function,
             // Re-use the cached expression table from prior functions.
-            cached: std::mem::take(&mut self.saved_cached),
+            cached: core::mem::take(&mut self.saved_cached),
 
             // Steal the Writer's temp list for a bit.
-            temp_list: std::mem::take(&mut self.temp_list),
+            temp_list: core::mem::take(&mut self.temp_list),
+            force_loop_bounding: self.force_loop_bounding,
             writer: self,
             expression_constness: super::ExpressionConstnessTracker::from_arena(
                 &ir_function.expressions,
@@ -616,15 +971,15 @@ impl Writer {
             let init_word = variable.init.map(|constant| context.cached[constant]);
             let pointer_type_id = context
                 .writer
-                .get_pointer_id(variable.ty, spirv::StorageClass::Function);
+                .get_handle_pointer_type_id(variable.ty, spirv::StorageClass::Function);
             let instruction = Instruction::variable(
                 pointer_type_id,
                 id,
                 spirv::StorageClass::Function,
                 init_word.or_else(|| match ir_module.types[variable.ty].inner {
-                    crate::TypeInner::RayQuery => None,
+                    crate::TypeInner::RayQuery { .. } => None,
                     _ => {
-                        let type_id = context.get_type_id(LookupType::Handle(variable.ty));
+                        let type_id = context.get_handle_type_id(variable.ty);
                         Some(context.writer.write_constant_null(type_id))
                     }
                 }),
@@ -696,7 +1051,6 @@ impl Writer {
         self.temp_list = temp_list;
 
         function.to_words(&mut self.logical_layout.function_definitions);
-        Instruction::function_end().to_words(&mut self.logical_layout.function_definitions);
 
         Ok(function_id)
     }
@@ -848,14 +1202,24 @@ impl Writer {
                     _ => {}
                 }
             }
-            crate::TypeInner::AccelerationStructure => {
+            crate::TypeInner::AccelerationStructure { .. } => {
                 self.require_any("Acceleration Structure", &[spirv::Capability::RayQueryKHR])?;
             }
-            crate::TypeInner::RayQuery => {
+            crate::TypeInner::RayQuery { .. } => {
                 self.require_any("Ray Query", &[spirv::Capability::RayQueryKHR])?;
             }
             crate::TypeInner::Atomic(crate::Scalar { width: 8, kind: _ }) => {
                 self.require_any("64 bit integer atomics", &[spirv::Capability::Int64Atomics])?;
+            }
+            crate::TypeInner::Atomic(crate::Scalar {
+                width: 4,
+                kind: crate::ScalarKind::Float,
+            }) => {
+                self.require_any(
+                    "32 bit floating-point atomics",
+                    &[spirv::Capability::AtomicFloat32AddEXT],
+                )?;
+                self.use_extension("SPV_EXT_shader_atomic_float_add");
             }
             _ => {}
         }
@@ -863,26 +1227,22 @@ impl Writer {
     }
 
     fn write_numeric_type_declaration_local(&mut self, id: Word, numeric: NumericType) {
-        let instruction =
-            match numeric {
-                NumericType::Scalar(scalar) => self.make_scalar(id, scalar),
-                NumericType::Vector { size, scalar } => {
-                    let scalar_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-                        NumericType::Scalar(scalar),
-                    )));
-                    Instruction::type_vector(id, scalar_id, size)
-                }
-                NumericType::Matrix {
-                    columns,
-                    rows,
-                    scalar,
-                } => {
-                    let column_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-                        NumericType::Vector { size: rows, scalar },
-                    )));
-                    Instruction::type_matrix(id, column_id, columns)
-                }
-            };
+        let instruction = match numeric {
+            NumericType::Scalar(scalar) => self.make_scalar(id, scalar),
+            NumericType::Vector { size, scalar } => {
+                let scalar_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
+                Instruction::type_vector(id, scalar_id, size)
+            }
+            NumericType::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => {
+                let column_id =
+                    self.get_numeric_type_id(NumericType::Vector { size: rows, scalar });
+                Instruction::type_matrix(id, column_id, columns)
+            }
+        };
 
         instruction.to_words(&mut self.logical_layout.declarations);
     }
@@ -893,17 +1253,10 @@ impl Writer {
                 self.write_numeric_type_declaration_local(id, numeric);
                 return;
             }
-            LocalType::LocalPointer { base, class } => {
-                let base_id = self.get_type_id(LookupType::Local(LocalType::Numeric(base)));
-                Instruction::type_pointer(id, class, base_id)
-            }
-            LocalType::Pointer { base, class } => {
-                let type_id = self.get_type_id(LookupType::Handle(base));
-                Instruction::type_pointer(id, class, type_id)
-            }
+            LocalType::Pointer { base, class } => Instruction::type_pointer(id, class, base),
             LocalType::Image(image) => {
                 let local_type = LocalType::Numeric(NumericType::Scalar(image.sampled_type));
-                let type_id = self.get_type_id(LookupType::Local(local_type));
+                let type_id = self.get_localtype_id(local_type);
                 Instruction::type_image(id, type_id, image.dim, image.flags, image.image_format)
             }
             LocalType::Sampler => Instruction::type_sampler(id),
@@ -911,15 +1264,9 @@ impl Writer {
                 Instruction::type_sampled_image(id, image_type_id)
             }
             LocalType::BindingArray { base, size } => {
-                let inner_ty = self.get_type_id(LookupType::Handle(base));
+                let inner_ty = self.get_handle_type_id(base);
                 let scalar_id = self.get_constant_scalar(crate::Literal::U32(size));
                 Instruction::type_array(id, inner_ty, scalar_id)
-            }
-            LocalType::PointerToBindingArray { base, size, space } => {
-                let inner_ty =
-                    self.get_type_id(LookupType::Local(LocalType::BindingArray { base, size }));
-                let class = map_storage_class(space);
-                Instruction::type_pointer(id, class, inner_ty)
             }
             LocalType::AccelerationStructure => Instruction::type_acceleration_structure(id),
             LocalType::RayQuery => Instruction::type_ray_query(id),
@@ -930,16 +1277,16 @@ impl Writer {
 
     fn write_type_declaration_arena(
         &mut self,
-        arena: &UniqueArena<crate::Type>,
+        module: &crate::Module,
         handle: Handle<crate::Type>,
     ) -> Result<Word, Error> {
-        let ty = &arena[handle];
+        let ty = &module.types[handle];
         // If it's a type that needs SPIR-V capabilities, request them now.
         // This needs to happen regardless of the LocalType lookup succeeding,
         // because some types which map to the same LocalType have different
         // capability requirements. See https://github.com/gfx-rs/wgpu/issues/5569
         self.request_type_capabilities(&ty.inner)?;
-        let id = if let Some(local) = LocalType::from_inner(&ty.inner) {
+        let id = if let Some(local) = self.localtype_from_inner(&ty.inner) {
             // This type can be represented as a `LocalType`, so check if we've
             // already written an instruction for it. If not, do so now, with
             // `write_type_declaration_local`.
@@ -965,23 +1312,27 @@ impl Writer {
                 crate::TypeInner::Array { base, size, stride } => {
                     self.decorate(id, Decoration::ArrayStride, &[stride]);
 
-                    let type_id = self.get_type_id(LookupType::Handle(base));
-                    match size {
-                        crate::ArraySize::Constant(length) => {
-                            let length_id = self.get_index_constant(length.get());
+                    let type_id = self.get_handle_type_id(base);
+                    match size.resolve(module.to_ctx())? {
+                        crate::proc::IndexableLength::Known(length) => {
+                            let length_id = self.get_index_constant(length);
                             Instruction::type_array(id, type_id, length_id)
                         }
-                        crate::ArraySize::Dynamic => Instruction::type_runtime_array(id, type_id),
+                        crate::proc::IndexableLength::Dynamic => {
+                            Instruction::type_runtime_array(id, type_id)
+                        }
                     }
                 }
                 crate::TypeInner::BindingArray { base, size } => {
-                    let type_id = self.get_type_id(LookupType::Handle(base));
-                    match size {
-                        crate::ArraySize::Constant(length) => {
-                            let length_id = self.get_index_constant(length.get());
+                    let type_id = self.get_handle_type_id(base);
+                    match size.resolve(module.to_ctx())? {
+                        crate::proc::IndexableLength::Known(length) => {
+                            let length_id = self.get_index_constant(length);
                             Instruction::type_array(id, type_id, length_id)
                         }
-                        crate::ArraySize::Dynamic => Instruction::type_runtime_array(id, type_id),
+                        crate::proc::IndexableLength::Dynamic => {
+                            Instruction::type_runtime_array(id, type_id)
+                        }
                     }
                 }
                 crate::TypeInner::Struct {
@@ -991,7 +1342,7 @@ impl Writer {
                     let mut has_runtime_array = false;
                     let mut member_ids = Vec::with_capacity(members.len());
                     for (index, member) in members.iter().enumerate() {
-                        let member_ty = &arena[member.ty];
+                        let member_ty = &module.types[member.ty];
                         match member_ty.inner {
                             crate::TypeInner::Array {
                                 base: _,
@@ -1002,8 +1353,8 @@ impl Writer {
                             }
                             _ => (),
                         }
-                        self.decorate_struct_member(id, index, member, arena)?;
-                        let member_id = self.get_type_id(LookupType::Handle(member.ty));
+                        self.decorate_struct_member(id, index, member, &module.types)?;
+                        let member_id = self.get_handle_type_id(member.ty);
                         member_ids.push(member_id);
                     }
                     if has_runtime_array {
@@ -1022,8 +1373,8 @@ impl Writer {
                 | crate::TypeInner::ValuePointer { .. }
                 | crate::TypeInner::Image { .. }
                 | crate::TypeInner::Sampler { .. }
-                | crate::TypeInner::AccelerationStructure
-                | crate::TypeInner::RayQuery => unreachable!(),
+                | crate::TypeInner::AccelerationStructure { .. }
+                | crate::TypeInner::RayQuery { .. } => unreachable!(),
             };
 
             instruction.to_words(&mut self.logical_layout.declarations);
@@ -1077,10 +1428,13 @@ impl Writer {
                 "storage image format",
                 &[spirv::Capability::StorageImageExtendedFormats],
             ),
-            If::R64ui | If::R64i => self.require_any(
-                "64-bit integer storage image format",
-                &[spirv::Capability::Int64ImageEXT],
-            ),
+            If::R64ui | If::R64i => {
+                self.use_extension("SPV_EXT_shader_image_int64");
+                self.require_any(
+                    "64-bit integer storage image format",
+                    &[spirv::Capability::Int64ImageEXT],
+                )
+            }
             If::Unknown
             | If::Rgba32f
             | If::Rgba16f
@@ -1136,9 +1490,7 @@ impl Writer {
                 self.debugs.push(Instruction::name(id, name));
             }
         }
-        let type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Scalar(
-            value.scalar(),
-        ))));
+        let type_id = self.get_numeric_type_id(NumericType::Scalar(value.scalar()));
         let instruction = match *value {
             crate::Literal::F64(value) => {
                 let bits = value.to_bits();
@@ -1228,7 +1580,7 @@ impl Writer {
                 self.constant_ids[constant.init]
             }
             crate::Expression::ZeroValue(ty) => {
-                let type_id = self.get_type_id(LookupType::Handle(ty));
+                let type_id = self.get_handle_type_id(ty);
                 self.get_constant_null(type_id)
             }
             crate::Expression::Compose { ty, ref components } => {
@@ -1250,7 +1602,9 @@ impl Writer {
 
                 self.get_constant_composite(ty, component_ids)
             }
-            _ => unreachable!(),
+            _ => {
+                return Err(Error::Override);
+            }
         };
 
         self.constant_ids[handle] = id;
@@ -1272,6 +1626,10 @@ impl Writer {
         semantics.set(
             spirv::MemorySemantics::WORKGROUP_MEMORY,
             flags.contains(crate::Barrier::WORK_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::IMAGE_MEMORY,
+            flags.contains(crate::Barrier::TEXTURE),
         );
         let exec_scope_id = if flags.contains(crate::Barrier::SUB_GROUP) {
             self.get_index_constant(spirv::Scope::Subgroup as u32)
@@ -1307,7 +1665,7 @@ impl Writer {
                 // variables in the `Uniform` and `StorageBuffer` address spaces
                 // get wrapped, and we're initializing `WorkGroup` variables.
                 let var_id = self.global_variables[handle].var_id;
-                let var_type_id = self.get_type_id(LookupType::Handle(var.ty));
+                let var_type_id = self.get_handle_type_id(var.ty);
                 let init_word = self.get_constant_null(var_type_id);
                 Instruction::store(var_id, init_word, None)
             })
@@ -1317,7 +1675,7 @@ impl Writer {
             return None;
         }
 
-        let uint3_type_id = self.get_uint3_type_id();
+        let uint3_type_id = self.get_vec3u_type_id();
 
         let mut pre_if_block = Block::new(entry_id);
 
@@ -1326,7 +1684,7 @@ impl Writer {
         } else {
             let varying_id = self.id_gen.next();
             let class = spirv::StorageClass::Input;
-            let pointer_type_id = self.get_uint3_pointer_type_id(class);
+            let pointer_type_id = self.get_vec3u_pointer_type_id(class);
 
             Instruction::variable(pointer_type_id, varying_id, class, None)
                 .to_words(&mut self.logical_layout.declarations);
@@ -1347,7 +1705,7 @@ impl Writer {
         };
 
         let zero_id = self.get_constant_null(uint3_type_id);
-        let bool3_type_id = self.get_bool3_type_id();
+        let bool3_type_id = self.get_vec3_bool_type_id();
 
         let eq_id = self.id_gen.next();
         pre_if_block.body.push(Instruction::binary(
@@ -1423,7 +1781,7 @@ impl Writer {
         binding: &crate::Binding,
     ) -> Result<Word, Error> {
         let id = self.id_gen.next();
-        let pointer_type_id = self.get_pointer_id(ty, class);
+        let pointer_type_id = self.get_handle_pointer_type_id(ty, class);
         Instruction::variable(pointer_type_id, id, class, None)
             .to_words(&mut self.logical_layout.declarations);
 
@@ -1681,12 +2039,15 @@ impl Writer {
                 if let crate::TypeInner::BindingArray { base, .. } =
                     ir_module.types[global_variable.ty].inner
                 {
-                    substitute_inner_type_lookup =
-                        Some(LookupType::Local(LocalType::PointerToBindingArray {
+                    let binding_array_type_id =
+                        self.get_type_id(LookupType::Local(LocalType::BindingArray {
                             base,
                             size: remapped_binding_array_size,
-                            space: global_variable.space,
-                        }))
+                        }));
+                    substitute_inner_type_lookup = Some(LookupType::Local(LocalType::Pointer {
+                        base: binding_array_type_id,
+                        class,
+                    }));
                 }
             }
         };
@@ -1746,7 +2107,7 @@ impl Writer {
                             }
                         }
                         if should_decorate {
-                            let decorated_id = self.get_type_id(LookupType::Handle(base));
+                            let decorated_id = self.get_handle_type_id(base);
                             self.decorate(decorated_id, Decoration::Block, &[]);
                         }
                     }
@@ -1756,7 +2117,7 @@ impl Writer {
             if substitute_inner_type_lookup.is_some() {
                 inner_type_id
             } else {
-                self.get_pointer_id(global_variable.ty, class)
+                self.get_handle_pointer_type_id(global_variable.ty, class)
             }
         };
 
@@ -1831,7 +2192,7 @@ impl Writer {
         Ok(())
     }
 
-    fn get_function_type(&mut self, lookup_function_type: LookupFunctionType) -> Word {
+    pub(super) fn get_function_type(&mut self, lookup_function_type: LookupFunctionType) -> Word {
         match self
             .lookup_function_type
             .entry(lookup_function_type.clone())
@@ -1890,9 +2251,13 @@ impl Writer {
             .any(|arg| has_view_index_check(ir_module, arg.binding.as_ref(), arg.ty));
         let mut has_ray_query = ir_module.special_types.ray_desc.is_some()
             | ir_module.special_types.ray_intersection.is_some();
+        let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
 
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
-            if let &crate::TypeInner::AccelerationStructure | &crate::TypeInner::RayQuery = inner {
+            // spirv does not know whether these have vertex return - that is done by us
+            if let &crate::TypeInner::AccelerationStructure { .. }
+            | &crate::TypeInner::RayQuery { .. } = inner
+            {
                 has_ray_query = true
             }
         }
@@ -1909,6 +2274,10 @@ impl Writer {
         if has_ray_query {
             Instruction::extension("SPV_KHR_ray_query")
                 .to_words(&mut self.logical_layout.extensions)
+        }
+        if has_vertex_return {
+            Instruction::extension("SPV_KHR_ray_tracing_position_fetch")
+                .to_words(&mut self.logical_layout.extensions);
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
@@ -1937,7 +2306,7 @@ impl Writer {
 
         // write all types
         for (handle, _) in ir_module.types.iter() {
-            self.write_type_declaration_arena(&ir_module.types, handle)?;
+            self.write_type_declaration_arena(ir_module, handle)?;
         }
 
         // write all const-expressions as constants
@@ -2057,10 +2426,6 @@ impl Writer {
         debug_info: &Option<DebugInfo>,
         words: &mut Vec<Word>,
     ) -> Result<(), Error> {
-        if !ir_module.overrides.is_empty() {
-            return Err(Error::Override);
-        }
-
         self.reset();
 
         // Try to find the entry point and corresponding index

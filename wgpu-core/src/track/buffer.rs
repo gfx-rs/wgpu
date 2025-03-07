@@ -4,7 +4,13 @@
 //! a 16 bit bitflag of buffer usages. Because there is only ever
 //! one subresource, they have no selector.
 
-use std::sync::{Arc, Weak};
+use alloc::{
+    sync::{Arc, Weak},
+    vec::Vec,
+};
+
+use hal::BufferBarrier;
+use wgt::{strict_assert, strict_assert_eq, BufferUses};
 
 use super::{PendingTransition, TrackerIndex};
 use crate::{
@@ -15,8 +21,6 @@ use crate::{
         ResourceUsageCompatibilityError, ResourceUses,
     },
 };
-use hal::{BufferBarrier, BufferUses};
-use wgt::{strict_assert, strict_assert_eq};
 
 impl ResourceUses for BufferUses {
     const EXCLUSIVE: Self = Self::EXCLUSIVE;
@@ -311,7 +315,7 @@ impl BufferTracker {
     }
 
     /// Returns a list of all buffers tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = Arc<Buffer>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = &Arc<Buffer>> + '_ {
         self.metadata.owned_resources()
     }
 
@@ -559,7 +563,7 @@ impl DeviceBufferTracker {
     }
 
     /// Returns a list of all buffers tracked.
-    pub fn used_resources(&self) -> impl Iterator<Item = Weak<Buffer>> + '_ {
+    pub fn used_resources(&self) -> impl Iterator<Item = &Weak<Buffer>> + '_ {
         self.metadata.owned_resources()
     }
 
@@ -753,7 +757,10 @@ unsafe fn barrier(
     barriers.push(PendingTransition {
         id: index as _,
         selector: (),
-        usage: current_state..new_state,
+        usage: hal::StateTransition {
+            from: current_state,
+            to: new_state,
+        },
     });
 }
 

@@ -1,5 +1,7 @@
+use alloc::vec::Vec;
+use core::ops::{Deref, DerefMut, RangeBounds};
+
 use crate::{Span, Statement};
-use std::ops::{Deref, DerefMut, RangeBounds};
 
 /// A code block is a vector of statements, with maybe a vector of spans.
 #[derive(Debug, Clone, Default)]
@@ -21,7 +23,7 @@ impl Block {
     }
 
     pub fn from_vec(body: Vec<Statement>) -> Self {
-        let span_info = std::iter::repeat(Span::default())
+        let span_info = core::iter::repeat(Span::default())
             .take(body.len())
             .collect();
         Self { body, span_info }
@@ -105,9 +107,9 @@ impl DerefMut for Block {
 
 impl<'a> IntoIterator for &'a Block {
     type Item = &'a Statement;
-    type IntoIter = std::slice::Iter<'a, Statement>;
+    type IntoIter = core::slice::Iter<'a, Statement>;
 
-    fn into_iter(self) -> std::slice::Iter<'a, Statement> {
+    fn into_iter(self) -> core::slice::Iter<'a, Statement> {
         self.iter()
     }
 }

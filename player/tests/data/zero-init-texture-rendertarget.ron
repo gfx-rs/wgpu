@@ -50,13 +50,10 @@
                     Some((
                         view: Id(0, 1),
                         resolve_target: None,
-                        channel: (
-                            load_op: load,
-                            store_op: store,
-                            clear_value: (
-                                r: 1, g: 1, b: 1, a: 1,
-                            ),
-                            read_only: false,
+                        load_op: load,
+                        store_op: store,
+                        clear_value: (
+                            r: 1, g: 1, b: 1, a: 1,
                         ),
                     )),
                 ],

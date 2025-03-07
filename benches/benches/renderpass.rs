@@ -5,18 +5,26 @@ use std::{
 
 use criterion::{criterion_group, Criterion, Throughput};
 use nanorand::{Rng, WyRand};
-use once_cell::sync::Lazy;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use std::sync::LazyLock;
 
-use crate::DeviceState;
+use crate::{is_test, DeviceState};
 
 fn draw_count() -> usize {
-    // On CI we only want to run a very lightweight version of the benchmark
+    // When testing we only want to run a very lightweight version of the benchmark
     // to ensure that it does not break.
-    if std::env::var("WGPU_TESTING").is_ok() {
+    if is_test() {
         8
     } else {
         10_000
+    }
+}
+
+fn thread_count_list() -> &'static [usize] {
+    if is_test() {
+        &[2]
+    } else {
+        &[1, 2, 4, 8]
     }
 }
 
@@ -427,7 +435,7 @@ impl RenderpassState {
 }
 
 fn run_bench(ctx: &mut Criterion) {
-    let state = Lazy::new(RenderpassState::new);
+    let state = LazyLock::new(RenderpassState::new);
 
     let draw_count = draw_count();
     let vertex_buffer_count = draw_count * VERTEX_BUFFERS_PER_DRAW;
@@ -438,7 +446,7 @@ fn run_bench(ctx: &mut Criterion) {
     group.throughput(Throughput::Elements(draw_count as _));
 
     for time_submit in [false, true] {
-        for rpasses in [1, 2, 4, 8] {
+        for &rpasses in thread_count_list() {
             let draws_per_pass = draw_count / rpasses;
 
             let label = if time_submit {
@@ -450,14 +458,14 @@ fn run_bench(ctx: &mut Criterion) {
             group.bench_function(
                 format!("{rpasses} renderpasses x {draws_per_pass} draws ({label})"),
                 |b| {
-                    Lazy::force(&state);
+                    LazyLock::force(&state);
 
                     b.iter_custom(|iters| {
                         profiling::scope!("benchmark invocation");
 
                         // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
                         if state.device_state.adapter_info.name.contains("Paravirtual") {
-                            return Duration::from_secs_f32(1.0);
+                            return Duration::from_secs(1);
                         }
 
                         let mut duration = Duration::ZERO;
@@ -484,7 +492,11 @@ fn run_bench(ctx: &mut Criterion) {
                                 duration += start.elapsed();
                             }
 
-                            state.device_state.device.poll(wgpu::Maintain::Wait);
+                            state
+                                .device_state
+                                .device
+                                .poll(wgpu::PollType::Wait)
+                                .unwrap();
                         }
 
                         duration
@@ -499,10 +511,10 @@ fn run_bench(ctx: &mut Criterion) {
     let mut group = ctx.benchmark_group("Renderpass: Multi Threaded");
     group.throughput(Throughput::Elements(draw_count as _));
 
-    for threads in [2, 4, 8] {
+    for &threads in thread_count_list() {
         let draws_per_pass = draw_count / threads;
         group.bench_function(format!("{threads} threads x {draws_per_pass} draws"), |b| {
-            Lazy::force(&state);
+            LazyLock::force(&state);
 
             b.iter_custom(|iters| {
                 profiling::scope!("benchmark invocation");
@@ -527,7 +539,11 @@ fn run_bench(ctx: &mut Criterion) {
                     duration += start.elapsed();
 
                     state.device_state.queue.submit(buffers);
-                    state.device_state.device.poll(wgpu::Maintain::Wait);
+                    state
+                        .device_state
+                        .device
+                        .poll(wgpu::PollType::Wait)
+                        .unwrap();
                 }
 
                 duration
@@ -541,7 +557,7 @@ fn run_bench(ctx: &mut Criterion) {
     group.throughput(Throughput::Elements(draw_count as _));
 
     group.bench_function(format!("{draw_count} draws"), |b| {
-        Lazy::force(&state);
+        LazyLock::force(&state);
 
         b.iter_custom(|iters| {
             profiling::scope!("benchmark invocation");
@@ -563,7 +579,11 @@ fn run_bench(ctx: &mut Criterion) {
                 duration += start.elapsed();
 
                 state.device_state.queue.submit([buffer]);
-                state.device_state.device.poll(wgpu::Maintain::Wait);
+                state
+                    .device_state
+                    .device
+                    .poll(wgpu::PollType::Wait)
+                    .unwrap();
             }
 
             duration
@@ -577,7 +597,7 @@ fn run_bench(ctx: &mut Criterion) {
             texture_count + vertex_buffer_count
         ),
         |b| {
-            Lazy::force(&state);
+            LazyLock::force(&state);
 
             b.iter(|| state.device_state.queue.submit([]));
         },
