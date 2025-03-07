@@ -83,7 +83,7 @@ jobs:
       matrix:
         include:
           # Windows
-          - name: Windows x86_64
+          - name: Windows x86-64
             os: windows-2022
             target: x86_64-pc-windows-msvc
             tier: 1
@@ -97,7 +97,7 @@ jobs:
             kind: native
 
           # MacOS
-          - name: MacOS x86_64
+          - name: MacOS x86-64
             os: macos-14
             target: x86_64-apple-darwin
             tier: 1
@@ -125,7 +125,7 @@ jobs:
             extra-flags: -Zbuild-std
 
           # Linux
-          - name: Linux x86_64
+          - name: Linux x86-64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             tier: 1
@@ -152,7 +152,7 @@ jobs:
             kind: wgpu-only
 
           # Android
-          - name: Android x86_64
+          - name: Android x86-64
             os: ubuntu-22.04
             target: x86_64-linux-android
             tier: 2
@@ -347,17 +347,17 @@ jobs:
       matrix:
         include:
           # Windows
-          - name: Windows x86_64
+          - name: Windows x86-64
             os: windows-2022
             target: x86_64-pc-windows-msvc
 
           # MacOS
-          - name: MacOS x86_64
+          - name: MacOS x86-64
             os: macos-14
             target: x86_64-apple-darwin
 
           # Linux
-          - name: Linux x86_64
+          - name: Linux x86-64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
 
@@ -484,7 +484,7 @@ jobs:
       matrix:
         include:
           # Windows
-          - name: Windows x86_64
+          - name: Windows x86-64
             os: windows-2022
 
           # Mac
@@ -492,7 +492,7 @@ jobs:
             os: macos-14
 
           # Linux
-          - name: Linux x86_64
+          - name: Linux x86-64
             os: ubuntu-24.04
 
     name: Test ${{ matrix.name }}
