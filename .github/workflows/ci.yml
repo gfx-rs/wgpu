@@ -152,7 +152,7 @@ jobs:
             kind: wgpu-only
 
           # Android
-          - name: Android x86-64
+          - name: Android x86_64
             os: ubuntu-22.04
             target: x86_64-linux-android
             tier: 2
