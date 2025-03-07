@@ -431,7 +431,7 @@ pub fn main() {
 #[cfg(test)]
 fn test_parameters() -> wgpu_test::TestParameters {
     wgpu_test::TestParameters::default()
-        // #7287
+        // https://github.com/gfx-rs/wgpu/issues/7287
         .expect_fail(wgpu_test::FailureCase::backend_adapter(
             wgpu::Backends::METAL,
             "Apple M",
