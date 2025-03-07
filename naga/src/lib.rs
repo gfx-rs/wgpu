@@ -378,6 +378,8 @@ pub enum ShaderStage {
     Vertex,
     Fragment,
     Compute,
+    Task,
+    Mesh,
 }
 
 /// Addressing space of variables.

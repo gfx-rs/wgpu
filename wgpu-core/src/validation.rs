@@ -1241,6 +1241,9 @@ impl Interface {
                                         )
                                     }
                                     naga::ShaderStage::Compute => (false, 0),
+                                    naga::ShaderStage::Task | naga::ShaderStage::Mesh => {
+                                        unreachable!()
+                                    }
                                 };
                                 if compatible {
                                     Ok(num_components)

@@ -1076,6 +1076,7 @@ impl Writer {
                 .to_words(&mut self.logical_layout.execution_modes);
                 spirv::ExecutionModel::GLCompute
             }
+            crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
         };
         //self.check(exec_model.required_capabilities())?;
 
