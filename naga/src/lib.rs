@@ -502,15 +502,6 @@ pub struct Scalar {
     pub width: Bytes,
 }
 
-#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum PendingArraySize {
-    Expression(Handle<Expression>),
-    Override(Handle<Override>),
-}
-
 /// Size of an array.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -521,7 +512,7 @@ pub enum ArraySize {
     /// The array size is constant.
     Constant(core::num::NonZeroU32),
     /// The array size is an override-expression.
-    Pending(PendingArraySize),
+    Pending(Handle<Override>),
     /// The array size can change at runtime.
     Dynamic,
 }
@@ -1531,7 +1522,7 @@ pub enum Expression {
         gather: Option<SwizzleComponent>,
         coordinate: Handle<Expression>,
         array_index: Option<Handle<Expression>>,
-        /// This refers to an expression in [`Module::global_expressions`].
+        /// This must be a const-expression.
         offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
@@ -2224,9 +2215,6 @@ pub struct Function {
     ///
     /// - Various expressions hold [`Type`] handles, and [`Type`]s may refer to
     ///   global expressions, for things like array lengths.
-    ///
-    /// - [`Expression::ImageSample::offset`] refers to an expression in
-    ///   [`Module::global_expressions`].
     ///
     /// An [`Expression`] must occur before all other [`Expression`]s that use
     /// its value.

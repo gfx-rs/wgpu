@@ -257,13 +257,6 @@ impl super::Instance {
         // VK_KHR_surface
         extensions.push(khr::surface::NAME);
 
-        // Extensions needed for drm support
-        extensions.push(khr::display::NAME);
-        extensions.push(ext::physical_device_drm::NAME);
-        extensions.push(khr::get_display_properties2::NAME);
-        extensions.push(ext::direct_mode_display::NAME);
-        extensions.push(ext::acquire_drm_display::NAME);
-
         // Platform-specific WSI extensions
         if cfg!(all(
             unix,
@@ -289,6 +282,19 @@ impl super::Instance {
             // VK_EXT_metal_surface
             extensions.push(ext::metal_surface::NAME);
             extensions.push(khr::portability_enumeration::NAME);
+        }
+        if cfg!(all(
+            unix,
+            not(target_vendor = "apple"),
+            not(target_family = "wasm")
+        )) {
+            // VK_EXT_acquire_drm_display -> VK_EXT_direct_mode_display -> VK_KHR_display
+            extensions.push(ext::acquire_drm_display::NAME);
+            extensions.push(ext::direct_mode_display::NAME);
+            extensions.push(khr::display::NAME);
+            //  VK_EXT_physical_device_drm -> VK_KHR_get_physical_device_properties2
+            extensions.push(ext::physical_device_drm::NAME);
+            extensions.push(khr::get_display_properties2::NAME);
         }
 
         if flags.contains(wgt::InstanceFlags::DEBUG) {
