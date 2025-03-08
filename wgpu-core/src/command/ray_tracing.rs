@@ -66,8 +66,8 @@ impl Global {
     pub fn command_encoder_mark_acceleration_structures_built(
         &self,
         command_encoder_id: CommandEncoderId,
-        blas_iter: impl Iterator<Item = BlasId>,
-        tlas_iter: impl Iterator<Item = TlasId>,
+        blas_ids: &[BlasId],
+        tlas_ids: &[TlasId],
     ) -> Result<(), BuildAccelerationStructureError> {
         profiling::scope!("CommandEncoder::mark_acceleration_structures_built");
 
@@ -92,24 +92,20 @@ impl Global {
         let mut cmd_buf_data_guard = cmd_buf_data.record()?;
         let cmd_buf_data = &mut *cmd_buf_data_guard;
 
-        if let Some(size) = blas_iter.size_hint().1 {
-            let _ = cmd_buf_data.blas_actions.try_reserve(size);
-        }
+        cmd_buf_data.blas_actions.reserve(blas_ids.len());
 
-        if let Some(size) = tlas_iter.size_hint().1 {
-            let _ = cmd_buf_data.tlas_actions.try_reserve(size);
-        }
+        cmd_buf_data.tlas_actions.reserve(tlas_ids.len());
 
-        for blas in blas_iter {
-            let blas = hub.blas_s.get(blas).get()?;
+        for blas in blas_ids {
+            let blas = hub.blas_s.get(*blas).get()?;
             cmd_buf_data.blas_actions.push(BlasAction {
                 blas,
                 kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
             });
         }
 
-        for tlas in tlas_iter {
-            let tlas = hub.tlas_s.get(tlas).get()?;
+        for tlas in tlas_ids {
+            let tlas = hub.tlas_s.get(*tlas).get()?;
             cmd_buf_data.tlas_actions.push(TlasAction {
                 tlas,
                 kind: crate::ray_tracing::TlasActionKind::Build {

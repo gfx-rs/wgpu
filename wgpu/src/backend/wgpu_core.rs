@@ -2498,12 +2498,12 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         blas: &mut dyn Iterator<Item = &'a Blas>,
         tlas: &mut dyn Iterator<Item = &'a Tlas>,
     ) {
-        let blas = blas.map(|b| b.inner.as_core().id);
-        let tlas = tlas.map(|t| t.shared.inner.as_core().id);
+        let blas = blas.map(|b| b.inner.as_core().id).collect::<SmallVec<[_; 4]>>();
+        let tlas = tlas.map(|t| t.shared.inner.as_core().id).collect::<SmallVec<[_; 4]>>();
         if let Err(cause) = self
             .context
             .0
-            .command_encoder_mark_acceleration_structures_built(self.id, blas, tlas)
+            .command_encoder_mark_acceleration_structures_built(self.id, &blas, &tlas)
         {
             self.context.handle_error_nolabel(
                 &self.error_sink,
