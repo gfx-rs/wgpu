@@ -307,7 +307,7 @@ fn main() {{
         );
         let module = naga::front::wgsl::parse_str(&source).unwrap();
         let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
-            .validate_no_overrides(&module)
+            .validate(&module)
             .expect_err("module should be invalid");
         assert_eq!(err.emit_to_string(&source), expected_err);
     }
@@ -381,7 +381,7 @@ fn incompatible_interpolation_and_sampling_types() {
     for (invalid_source, invalid_module, interpolation, sampling, interpolate_attr) in invalid_cases
     {
         let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
-            .validate_no_overrides(&invalid_module)
+            .validate(&invalid_module)
             .expect_err(&format!(
                 "module should be invalid for {interpolate_attr:?}"
             ));
@@ -679,7 +679,7 @@ error: Entry point main at Compute is invalid
     for (source, expected_err) in cases {
         let module = naga::front::wgsl::parse_str(source).unwrap();
         let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
-            .validate_no_overrides(&module)
+            .validate(&module)
             .expect_err("module should be invalid");
         println!("{}", err.emit_to_string(source));
         assert_eq!(err.emit_to_string(source), expected_err);

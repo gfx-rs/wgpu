@@ -658,7 +658,7 @@ impl FunctionInfo {
                 gather: _,
                 coordinate,
                 array_index,
-                offset: _,
+                offset,
                 level,
                 depth_ref,
             } => {
@@ -685,6 +685,7 @@ impl FunctionInfo {
                     Sl::Gradient { x, y } => self.add_ref(x).or(self.add_ref(y)),
                 };
                 let dref_nur = depth_ref.and_then(|h| self.add_ref(h));
+                let offset_nur = offset.and_then(|h| self.add_ref(h));
                 Uniformity {
                     non_uniform_result: self
                         .add_ref(image)
@@ -692,7 +693,8 @@ impl FunctionInfo {
                         .or(self.add_ref(coordinate))
                         .or(array_nur)
                         .or(level_nur)
-                        .or(dref_nur),
+                        .or(dref_nur)
+                        .or(offset_nur),
                     requirements: if level.implicit_derivatives() {
                         UniformityRequirements::IMPLICIT_LEVEL
                     } else {

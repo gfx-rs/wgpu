@@ -226,6 +226,8 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 - Forward '--keep-coordinate-space' flag to GLSL backend in naga-cli. By @cloone8 in [#7206](https://github.com/gfx-rs/wgpu/pull/7206).
 - Allow template lists to have a trailing comma. By @KentSlaney in [#7142](https://github.com/gfx-rs/wgpu/pull/7142).
 - Allow WGSL const declarations to have abstract types. By @jamienicol in [#7055](https://github.com/gfx-rs/wgpu/pull/7055) and [#7222](https://github.com/gfx-rs/wgpu/pull/7222).
+- Allows override-sized arrays to resolve to the same size without causing the type arena to panic. By @KentSlaney in [#7082](https://github.com/gfx-rs/wgpu/pull/7082).
+- Allow abstract types to be used for WGSL switch statement selector and case selector expressions. By @jamienicol in [#7250](https://github.com/gfx-rs/wgpu/pull/7250).
 
 #### General
 
@@ -270,7 +272,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 ### Documentation
 
 - Improved documentation around pipeline caches and `TextureBlitter`. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978) and [#7003](https://github.com/gfx-rs/wgpu/pull/7003).
-- Improved documentation of `PresentMode`. By @kpreid in [#7211](https://github.com/gfx-rs/wgpu/pull/7211).
+- Improved documentation of `PresentMode`, buffer mapping functions, memory alignment requirements, texture formats’ automatic conversions, and various types and constants. By @kpreid in [#7211](https://github.com/gfx-rs/wgpu/pull/7211) and [#7283](https://github.com/gfx-rs/wgpu/pull/7283).
 
 - Added a hello window example. By @laycookie in [#6992](https://github.com/gfx-rs/wgpu/pull/6992).
 

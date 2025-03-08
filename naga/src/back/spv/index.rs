@@ -225,8 +225,9 @@ impl BlockContext<'_> {
             Some(index_id) => {
                 let element_type_id = match self.ir_module.types[global.ty].inner {
                     crate::TypeInner::BindingArray { base, size: _ } => {
+                        let base_id = self.get_handle_type_id(base);
                         let class = map_storage_class(global.space);
-                        self.get_pointer_id(base, class)
+                        self.get_pointer_type_id(base_id, class)
                     }
                     _ => return Err(Error::Validation("array length expression case-5")),
                 };
@@ -243,7 +244,7 @@ impl BlockContext<'_> {
         };
         let length_id = self.gen_id();
         block.body.push(Instruction::array_length(
-            self.writer.get_uint_type_id(),
+            self.writer.get_u32_type_id(),
             length_id,
             structure_id,
             last_member_index,
@@ -267,12 +268,9 @@ impl BlockContext<'_> {
         block: &mut Block,
     ) -> Result<MaybeKnown<u32>, Error> {
         let sequence_ty = self.fun_info[sequence].ty.inner_with(&self.ir_module.types);
-        match sequence_ty.indexable_length(self.ir_module) {
+        match sequence_ty.indexable_length_resolved(self.ir_module) {
             Ok(crate::proc::IndexableLength::Known(known_length)) => {
                 Ok(MaybeKnown::Known(known_length))
-            }
-            Ok(crate::proc::IndexableLength::Pending) => {
-                unreachable!()
             }
             Ok(crate::proc::IndexableLength::Dynamic) => {
                 let length_id = self.write_runtime_array_length(sequence, block)?;
@@ -314,7 +312,7 @@ impl BlockContext<'_> {
                 let max_index_id = self.gen_id();
                 block.body.push(Instruction::binary(
                     spirv::Op::ISub,
-                    self.writer.get_uint_type_id(),
+                    self.writer.get_u32_type_id(),
                     max_index_id,
                     length_id,
                     const_one_id,
@@ -371,7 +369,7 @@ impl BlockContext<'_> {
         block.body.push(Instruction::ext_inst(
             self.writer.gl450_ext_inst_id,
             spirv::GLOp::UMin,
-            self.writer.get_uint_type_id(),
+            self.writer.get_u32_type_id(),
             restricted_index_id,
             &[index_id, max_index_id],
         ));

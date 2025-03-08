@@ -38,35 +38,71 @@ pub use counters::*;
 pub use features::*;
 pub use instance::*;
 
-/// Integral type used for buffer offsets.
+/// Integral type used for [`Buffer`] offsets and sizes.
+///
+/// [`Buffer`]: ../wgpu/struct.Buffer.html
 pub type BufferAddress = u64;
-/// Integral type used for buffer slice sizes.
+
+/// Integral type used for [`BufferSlice`] sizes.
+///
+/// Note that while this type is non-zero, a [`Buffer`] *per se* can have a size of zero,
+/// but no slice or mapping can be created from it.
+///
+/// [`Buffer`]: ../wgpu/struct.Buffer.html
+/// [`BufferSlice`]: ../wgpu/struct.BufferSlice.html
 pub type BufferSize = core::num::NonZeroU64;
+
 /// Integral type used for binding locations in shaders.
+///
+/// Used in [`VertexAttribute`]s and errors.
+///
+/// [`VertexAttribute`]: ../wgpu/struct.VertexAttribute.html
 pub type ShaderLocation = u32;
-/// Integral type used for dynamic bind group offsets.
+
+/// Integral type used for
+/// [dynamic bind group offsets](../wgpu/struct.RenderPass.html#method.set_bind_group).
 pub type DynamicOffset = u32;
 
-/// Buffer-Texture copies must have [`bytes_per_row`] aligned to this number.
+/// Buffer-to-texture copies must have [`bytes_per_row`] aligned to this number.
 ///
-/// This doesn't apply to [`Queue::write_texture`][Qwt].
+/// This doesn't apply to [`Queue::write_texture`][Qwt], only to [`copy_buffer_to_texture()`].
 ///
 /// [`bytes_per_row`]: TexelCopyBufferLayout::bytes_per_row
+/// [`copy_buffer_to_texture()`]: ../wgpu/struct.Queue.html#method.copy_buffer_to_texture
 /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
-/// An offset into the query resolve buffer has to be aligned to this.
+
+/// An [offset into the query resolve buffer] has to be aligned to this.
+///
+/// [offset into the query resolve buffer]: ../wgpu/struct.CommandEncoder.html#method.resolve_query_set
 pub const QUERY_RESOLVE_BUFFER_ALIGNMENT: BufferAddress = 256;
+
 /// Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
-/// Size to align mappings.
+
+/// Minimum alignment of buffer mappings.
+///
+/// The range passed to [`map_async()`] or [`get_mapped_range()`] must be at least this aligned.
+///
+/// [`map_async()`]: ../wgpu/struct.Buffer.html#method.map_async
+/// [`get_mapped_range()`]: ../wgpu/struct.Buffer.html#method.get_mapped_range
 pub const MAP_ALIGNMENT: BufferAddress = 8;
-/// Vertex buffer strides have to be aligned to this number.
+
+/// [Vertex buffer strides] have to be a multiple of this number.
+///
+/// [Vertex buffer strides]: ../wgpu/struct.VertexBufferLayout.html#structfield.array_stride
 pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
-/// Alignment all push constants need
+/// Ranges of [writes to push constant storage] must be at least this aligned.
+///
+/// [writes to push constant storage]: ../wgpu/struct.RenderPass.html#method.set_push_constants
 pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
-/// Maximum queries in a query set
+
+/// Maximum queries in a [`QuerySetDescriptor`].
 pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
-/// Size of a single piece of query data.
+
+/// Size in bytes of a single piece of [query] data.
+///
+/// [query]: ../wgpu/struct.QuerySet.html
 pub const QUERY_SIZE: u32 = 8;
 
 /// Backends supported by wgpu.
@@ -1739,20 +1775,35 @@ pub enum AstcChannel {
     Hdr,
 }
 
-/// Underlying texture data format.
+/// Format in which a texture’s texels are stored in GPU memory.
 ///
-/// If there is a conversion in the format (such as srgb -> linear), the conversion listed here is for
-/// loading from texture in a shader. When writing to the texture, the opposite conversion takes place.
+/// Certain formats additionally specify a conversion.
+/// When these formats are used in a shader, the conversion automatically takes place when loading
+/// from or storing to the texture.
+///
+/// * `Unorm` formats linearly scale the integer range of the storage format to a floating-point
+///   range of 0 to 1, inclusive.
+/// * `Snorm` formats linearly scale the integer range of the storage format to a floating-point
+///   range of &minus;1 to 1, inclusive, except that the most negative value
+///   (&minus;128 for 8-bit, &minus;32768 for 16-bit) is excluded; on conversion,
+///   it is treated as identical to the second most negative
+///   (&minus;127 for 8-bit, &minus;32767 for 16-bit),
+///   so that the positive and negative ranges are symmetric.
+/// * `UnormSrgb` formats apply the [sRGB transfer function] so that the storage is sRGB encoded
+///   while the shader works with linear intensity values.
+/// * `Uint`, `Sint`, and `Float` formats perform no conversion.
 ///
 /// Corresponds to [WebGPU `GPUTextureFormat`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureformat).
+///
+/// [sRGB transfer function]: https://en.wikipedia.org/wiki/SRGB#Transfer_function_(%22gamma%22)
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     R8Unorm,
-    /// Red channel only. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red channel only. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     R8Snorm,
     /// Red channel only. 8 bit integer per channel. Unsigned in shader.
     R8Uint,
@@ -1768,7 +1819,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     R16Unorm,
-    /// Red channel only. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red channel only. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     R16Snorm,
@@ -1776,7 +1827,7 @@ pub enum TextureFormat {
     R16Float,
     /// Red and green channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     Rg8Unorm,
-    /// Red and green channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red and green channels. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     Rg8Snorm,
     /// Red and green channels. 8 bit integer per channel. Unsigned in shader.
     Rg8Uint,
@@ -1798,7 +1849,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rg16Unorm,
-    /// Red and green channels. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red and green channels. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rg16Snorm,
@@ -1808,7 +1859,7 @@ pub enum TextureFormat {
     Rgba8Unorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     Rgba8UnormSrgb,
-    /// Red, green, blue, and alpha channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red, green, blue, and alpha channels. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     Rgba8Snorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Unsigned in shader.
     Rgba8Uint,
@@ -1848,7 +1899,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rgba16Unorm,
-    /// Red, green, blue, and alpha. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red, green, blue, and alpha. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rgba16Snorm,
@@ -1952,7 +2003,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_BC_SLICED_3D`] must be enabled to use this texture format with 3D dimension.
     Bc4RUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// Also known as RGTC1.
     ///
@@ -1968,7 +2019,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_BC_SLICED_3D`] must be enabled to use this texture format with 3D dimension.
     Bc5RgUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// Also known as RGTC2.
     ///
@@ -2041,7 +2092,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacR11Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 11 bit integer R.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacR11Snorm,
@@ -2051,7 +2102,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacRg11Unorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 11 bit integer R + 11 bit integer G.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacRg11Snorm,
@@ -4085,7 +4136,7 @@ pub enum PollStatus {
 }
 
 impl PollStatus {
-    /// Returns true if the result is [`Self::QueueEmpty`]`.
+    /// Returns true if the result is [`Self::QueueEmpty`].
     #[must_use]
     pub fn is_queue_empty(&self) -> bool {
         matches!(self, Self::QueueEmpty)
@@ -4603,11 +4654,11 @@ pub enum VertexFormat {
     Unorm8x2 = 7,
     /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm8x4 = 8,
-    /// One signed byte (i8). [-127, 127] converted to float [-1, 1] `f32` in shaders.
+    /// One signed byte (i8). [&minus;127, 127] converted to float [&minus;1, 1] `f32` in shaders.
     Snorm8 = 9,
-    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2<f32>` in shaders.
+    /// Two signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec2<f32>` in shaders.
     Snorm8x2 = 10,
-    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4<f32>` in shaders.
+    /// Four signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec4<f32>` in shaders.
     Snorm8x4 = 11,
     /// One unsigned short (u16). `u32` in shaders.
     Uint16 = 12,
@@ -4627,11 +4678,11 @@ pub enum VertexFormat {
     Unorm16x2 = 19,
     /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm16x4 = 20,
-    /// One signed short (i16). [-32767, 32767] converted to float [-1, 1] `f32` in shaders.
+    /// One signed short (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `f32` in shaders.
     Snorm16 = 21,
-    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2<f32>` in shaders.
+    /// Two signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec2<f32>` in shaders.
     Snorm16x2 = 22,
-    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4<f32>` in shaders.
+    /// Four signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec4<f32>` in shaders.
     Snorm16x4 = 23,
     /// One half-precision float (no Rust equiv). `f32` in shaders.
     Float16 = 24,
@@ -5676,12 +5727,15 @@ fn test_max_mips() {
     );
 }
 
-/// Describes a `TextureView`.
+/// Describes a [`TextureView`].
 ///
-/// For use with `Texture::create_view`.
+/// For use with [`Texture::create_view()`].
 ///
 /// Corresponds to [WebGPU `GPUTextureViewDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
+///
+/// [`TextureView`]: ../wgpu/struct.TextureView.html
+/// [`Texture::create_view()`]: ../wgpu/struct.Texture.html#method.create_view
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TextureViewDescriptor<L> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
@@ -5901,10 +5955,15 @@ impl<L: Default> Default for SamplerDescriptor<L> {
     }
 }
 
-/// Kind of data the texture holds.
+/// Selects a subset of the data a [`Texture`] holds.
+///
+/// Used in [texture views](TextureViewDescriptor) and
+/// [texture copy operations](TexelCopyTextureInfo).
 ///
 /// Corresponds to [WebGPU `GPUTextureAspect`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureaspect).
+///
+/// [`Texture`]: ../wgpu/struct.Texture.html
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -6363,12 +6422,16 @@ pub enum SamplerBindingType {
     Comparison,
 }
 
-/// Specific type of a binding.
+/// Type of a binding in a [bind group layout][`BindGroupLayoutEntry`].
 ///
-/// For use in [`BindGroupLayoutEntry`].
+/// For each binding in a layout, a [`BindGroup`] must provide a [`BindingResource`] of the
+/// corresponding type.
 ///
 /// Corresponds to WebGPU's mutually exclusive fields within [`GPUBindGroupLayoutEntry`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry).
+///
+/// [`BindingResource`]: ../wgpu/enum.BindingResource.html
+/// [`BindGroup`]: ../wgpu/struct.BindGroup.html
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BindingType {
@@ -6953,10 +7016,12 @@ impl<L> QuerySetDescriptor<L> {
     }
 }
 
-/// Type of query contained in a `QuerySet`.
+/// Type of query contained in a [`QuerySet`].
 ///
 /// Corresponds to [WebGPU `GPUQueryType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuquerytype).
+///
+/// [`QuerySet`]: ../wgpu/struct.QuerySet.html
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QueryType {
@@ -6984,14 +7049,16 @@ pub enum QueryType {
 }
 
 bitflags::bitflags! {
-    /// Flags for which pipeline data should be recorded.
+    /// Flags for which pipeline data should be recorded in a query.
+    ///
+    /// Used in [`QueryType`].
     ///
     /// The amount of values written when resolved depends
-    /// on the amount of flags. If 3 flags are enabled, 3
-    /// 64-bit values will be written per-query.
+    /// on the amount of flags set. For example, if 3 flags are set, 3
+    /// 64-bit values will be written per query.
     ///
     /// The order they are written is the order they are declared
-    /// in this bitflags. If you enabled `CLIPPER_PRIMITIVES_OUT`
+    /// in these bitflags. For example, if you enabled `CLIPPER_PRIMITIVES_OUT`
     /// and `COMPUTE_SHADER_INVOCATIONS`, it would write 16 bytes,
     /// the first 8 bytes being the primitive out value, the last 8
     /// bytes being the compute shader invocation count.

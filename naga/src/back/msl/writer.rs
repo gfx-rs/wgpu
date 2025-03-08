@@ -1429,15 +1429,16 @@ impl<W: Write> Writer<W> {
         expr_handle: Handle<crate::Expression>,
         module: &crate::Module,
         mod_info: &valid::ModuleInfo,
+        arena: &crate::Arena<crate::Expression>,
     ) -> BackendResult {
         self.put_possibly_const_expression(
             expr_handle,
-            &module.global_expressions,
+            arena,
             module,
             mod_info,
             &(module, mod_info),
             |&(_, mod_info), expr| &mod_info[expr],
-            |writer, &(module, _), expr| writer.put_const_expression(expr, module, mod_info),
+            |writer, &(module, _), expr| writer.put_const_expression(expr, module, mod_info, arena),
         )
     }
 
@@ -1498,7 +1499,12 @@ impl<W: Write> Writer<W> {
                 if constant.name.is_some() {
                     write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
                 } else {
-                    self.put_const_expression(constant.init, module, mod_info)?;
+                    self.put_const_expression(
+                        constant.init,
+                        module,
+                        mod_info,
+                        &module.global_expressions,
+                    )?;
                 }
             }
             crate::Expression::ZeroValue(ty) => {
@@ -1563,7 +1569,9 @@ impl<W: Write> Writer<W> {
                 put_expression(self, ctx, value)?;
                 write!(self.out, ")")?;
             }
-            _ => unreachable!(),
+            _ => {
+                return Err(Error::Override);
+            }
         }
 
         Ok(())
@@ -1721,7 +1729,7 @@ impl<W: Write> Writer<W> {
 
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
-                    self.put_const_expression(offset, context.module, context.mod_info)?;
+                    self.put_expression(offset, context, true)?;
                 }
 
                 match gather {
@@ -2612,7 +2620,6 @@ impl<W: Write> Writer<W> {
                     self.out.write_str(") < ")?;
                     match length {
                         index::IndexableLength::Known(value) => write!(self.out, "{value}")?,
-                        index::IndexableLength::Pending => unreachable!(),
                         index::IndexableLength::Dynamic => {
                             let global =
                                 context.function.originating_global(base).ok_or_else(|| {
@@ -2749,7 +2756,7 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         let accessing_wrapped_array = match *base_ty {
             crate::TypeInner::Array {
-                size: crate::ArraySize::Constant(_),
+                size: crate::ArraySize::Constant(_) | crate::ArraySize::Pending(_),
                 ..
             } => true,
             _ => false,
@@ -2777,7 +2784,6 @@ impl<W: Write> Writer<W> {
                 index::IndexableLength::Known(limit) => {
                     write!(self.out, "{}u", limit - 1)?;
                 }
-                index::IndexableLength::Pending => unreachable!(),
                 index::IndexableLength::Dynamic => {
                     let global = context.function.originating_global(base).ok_or_else(|| {
                         Error::GenericValidation("Could not find originating global".into())
@@ -3795,10 +3801,6 @@ impl<W: Write> Writer<W> {
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        if !module.overrides.is_empty() {
-            return Err(Error::Override);
-        }
-
         self.names.clear();
         self.namer.reset(
             module,
@@ -3995,8 +3997,8 @@ impl<W: Write> Writer<W> {
                         first_time: false,
                     };
 
-                    match size {
-                        crate::ArraySize::Constant(size) => {
+                    match size.resolve(module.to_ctx())? {
+                        proc::IndexableLength::Known(size) => {
                             writeln!(self.out, "struct {name} {{")?;
                             writeln!(
                                 self.out,
@@ -4008,10 +4010,7 @@ impl<W: Write> Writer<W> {
                             )?;
                             writeln!(self.out, "}};")?;
                         }
-                        crate::ArraySize::Pending(_) => {
-                            unreachable!()
-                        }
-                        crate::ArraySize::Dynamic => {
+                        proc::IndexableLength::Dynamic => {
                             writeln!(self.out, "typedef {base_name} {name}[1];")?;
                         }
                     }
@@ -4185,7 +4184,7 @@ template <typename A>
             };
             let name = &self.names[&NameKey::Constant(handle)];
             write!(self.out, "constant {ty_name} {name} = ")?;
-            self.put_const_expression(constant.init, module, mod_info)?;
+            self.put_const_expression(constant.init, module, mod_info, &module.global_expressions)?;
             writeln!(self.out, ";")?;
         }
 
@@ -6156,7 +6155,7 @@ template <typename A>
                 }
                 if let Some(value) = var.init {
                     write!(self.out, " = ")?;
-                    self.put_const_expression(value, module, mod_info)?;
+                    self.put_const_expression(value, module, mod_info, &module.global_expressions)?;
                 }
                 writeln!(self.out)?;
             }
@@ -6361,7 +6360,12 @@ template <typename A>
                     match var.init {
                         Some(value) => {
                             write!(self.out, " = ")?;
-                            self.put_const_expression(value, module, mod_info)?;
+                            self.put_const_expression(
+                                value,
+                                module,
+                                mod_info,
+                                &module.global_expressions,
+                            )?;
                             writeln!(self.out, ";")?;
                         }
                         None => {
@@ -6694,10 +6698,8 @@ mod workgroup_mem_init {
                         writeln!(self.out, ", 0, {NAMESPACE}::memory_order_relaxed);")?;
                     }
                     crate::TypeInner::Array { base, size, .. } => {
-                        let count = match size.to_indexable_length(module).expect("Bad array size")
-                        {
+                        let count = match size.resolve(module.to_ctx())? {
                             proc::IndexableLength::Known(count) => count,
-                            proc::IndexableLength::Pending => unreachable!(),
                             proc::IndexableLength::Dynamic => unreachable!(),
                         };
 

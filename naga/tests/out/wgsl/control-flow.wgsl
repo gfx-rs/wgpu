@@ -17,6 +17,46 @@ fn switch_case_break() {
     return;
 }
 
+fn switch_selector_type_conversion() {
+    switch 0u {
+        case 0u: {
+        }
+        default: {
+        }
+    }
+    switch 0u {
+        case 0u: {
+            return;
+        }
+        default: {
+            return;
+        }
+    }
+}
+
+fn switch_const_expr_case_selectors() {
+    switch 0i {
+        case 0: {
+            return;
+        }
+        case 1: {
+            return;
+        }
+        case 2: {
+            return;
+        }
+        case 3: {
+            return;
+        }
+        case 4: {
+            return;
+        }
+        default: {
+            return;
+        }
+    }
+}
+
 fn loop_switch_continue(x: i32) {
     loop {
         switch x {

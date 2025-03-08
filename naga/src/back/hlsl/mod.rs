@@ -442,6 +442,8 @@ pub enum Error {
     Custom(String),
     #[error("overrides should not be present at this stage")]
     Override,
+    #[error(transparent)]
+    ResolveArraySizeError(#[from] proc::ResolveArraySizeError),
 }
 
 #[derive(PartialEq, Eq, Hash)]

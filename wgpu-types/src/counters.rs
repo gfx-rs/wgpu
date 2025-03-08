@@ -102,7 +102,7 @@ impl core::fmt::Debug for InternalCounter {
     }
 }
 
-/// `wgpu-hal`'s internal counters.
+/// `wgpu-hal`'s part of [`InternalCounters`].
 #[allow(missing_docs)]
 #[derive(Clone, Default)]
 pub struct HalCounters {
@@ -132,13 +132,16 @@ pub struct HalCounters {
     pub memory_allocations: InternalCounter,
 }
 
-/// `wgpu-core`'s internal counters.
+/// `wgpu-core`'s part of [`InternalCounters`].
 #[derive(Clone, Default)]
 pub struct CoreCounters {
     // TODO    #[cfg(features=)]
 }
 
 /// All internal counters, exposed for debugging purposes.
+///
+/// Obtain this from
+/// [`Device::get_internal_counters()`](../wgpu/struct.Device.html#method.get_internal_counters).
 #[derive(Clone, Default)]
 pub struct InternalCounters {
     /// `wgpu-core` counters.

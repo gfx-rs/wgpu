@@ -144,6 +144,20 @@ jobs:
             tier: 2
             kind: native
 
+          # Android
+          - name: Android ARMv7
+            os: ubuntu-22.04
+            target: armv7-linux-androideabi
+            tier: 2
+            kind: wgpu-only
+
+          # Android
+          - name: Android x86_64
+            os: ubuntu-22.04
+            target: x86_64-linux-android
+            tier: 2
+            kind: wgpu-only
+
           # OpenHarmony
           - name: OpenHarmony aarch64
             os: ubuntu-22.04

@@ -182,6 +182,8 @@ pub enum Error {
     Override,
     #[error("bitcasting to {0:?} is not supported")]
     UnsupportedBitCast(crate::TypeInner),
+    #[error(transparent)]
+    ResolveArraySizeError(#[from] crate::proc::ResolveArraySizeError),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]

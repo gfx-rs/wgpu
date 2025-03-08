@@ -11,7 +11,6 @@ use core::{
     num::NonZeroU32,
     sync::atomic::{AtomicBool, Ordering},
 };
-use std::sync::OnceLock;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
@@ -49,7 +48,7 @@ use crate::{
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation::{self, validate_color_attachment_bytes_per_sample},
     weak_vec::WeakVec,
-    FastHashMap, LabelHelpers,
+    FastHashMap, LabelHelpers, OnceCellOrLock,
 };
 
 use super::{
@@ -67,7 +66,7 @@ use portable_atomic::AtomicU64;
 pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queue: OnceLock<Weak<Queue>>,
+    pub(crate) queue: OnceCellOrLock<Weak<Queue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -257,7 +256,7 @@ impl Device {
         Ok(Self {
             raw: raw_device,
             adapter: adapter.clone(),
-            queue: OnceLock::new(),
+            queue: OnceCellOrLock::new(),
             zero_buffer: ManuallyDrop::new(zero_buffer),
             label: desc.label.to_string(),
             command_allocator,
@@ -1986,7 +1985,7 @@ impl Device {
             device: self.clone(),
             entries: entry_map,
             origin,
-            exclusive_pipeline: OnceLock::new(),
+            exclusive_pipeline: OnceCellOrLock::new(),
             binding_count_validator: count_validator,
             label: label.to_string(),
         };

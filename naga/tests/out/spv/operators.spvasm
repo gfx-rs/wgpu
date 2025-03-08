@@ -1,13 +1,13 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 528
+; Bound: 527
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %513 "main" %510
-OpExecutionMode %513 LocalSize 1 1 1
-OpDecorate %510 BuiltIn WorkgroupId
+OpEntryPoint GLCompute %512 "main" %509
+OpExecutionMode %512 LocalSize 1 1 1
+OpDecorate %509 BuiltIn WorkgroupId
 %2 = OpTypeVoid
 %3 = OpTypeFloat 32
 %4 = OpTypeVector %3 4
@@ -101,10 +101,9 @@ OpDecorate %510 BuiltIn WorkgroupId
 %418 = OpTypePointer Function %5
 %419 = OpConstantNull  %5
 %421 = OpTypePointer Function %14
-%449 = OpTypePointer Function %5
-%511 = OpTypePointer Input %15
-%510 = OpVariable  %511  Input
-%514 = OpConstantComposite  %10  %17 %17 %17
+%510 = OpTypePointer Input %15
+%509 = OpVariable  %510  Input
+%513 = OpConstantComposite  %10  %17 %17 %17
 %26 = OpFunction  %4  None %27
 %25 = OpLabel
 OpBranch %34
@@ -524,88 +523,88 @@ OpStore %417 %446
 %447 = OpLoad  %5  %417
 %448 = OpISub  %5  %447 %23
 OpStore %417 %448
-%450 = OpAccessChain  %449  %420 %157
-%451 = OpLoad  %5  %450
-%452 = OpIAdd  %5  %451 %23
-%453 = OpAccessChain  %449  %420 %157
-OpStore %453 %452
-%454 = OpAccessChain  %449  %420 %157
-%455 = OpLoad  %5  %454
-%456 = OpISub  %5  %455 %23
-%457 = OpAccessChain  %449  %420 %157
-OpStore %457 %456
+%449 = OpAccessChain  %418  %420 %157
+%450 = OpLoad  %5  %449
+%451 = OpIAdd  %5  %450 %23
+%452 = OpAccessChain  %418  %420 %157
+OpStore %452 %451
+%453 = OpAccessChain  %418  %420 %157
+%454 = OpLoad  %5  %453
+%455 = OpISub  %5  %454 %23
+%456 = OpAccessChain  %418  %420 %157
+OpStore %456 %455
 OpReturn
 OpFunctionEnd
-%459 = OpFunction  %2  None %122
-%458 = OpLabel
-OpBranch %460
-%460 = OpLabel
+%458 = OpFunction  %2  None %122
+%457 = OpLabel
+OpBranch %459
+%459 = OpLabel
+%460 = OpSNegate  %5  %23
 %461 = OpSNegate  %5  %23
-%462 = OpSNegate  %5  %23
-%463 = OpSNegate  %5  %462
-%464 = OpSNegate  %5  %23
-%465 = OpSNegate  %5  %464
-%466 = OpSNegate  %5  %23
-%467 = OpSNegate  %5  %466
-%468 = OpSNegate  %5  %23
+%462 = OpSNegate  %5  %461
+%463 = OpSNegate  %5  %23
+%464 = OpSNegate  %5  %463
+%465 = OpSNegate  %5  %23
+%466 = OpSNegate  %5  %465
+%467 = OpSNegate  %5  %23
+%468 = OpSNegate  %5  %467
 %469 = OpSNegate  %5  %468
-%470 = OpSNegate  %5  %469
-%471 = OpSNegate  %5  %23
+%470 = OpSNegate  %5  %23
+%471 = OpSNegate  %5  %470
 %472 = OpSNegate  %5  %471
 %473 = OpSNegate  %5  %472
-%474 = OpSNegate  %5  %473
-%475 = OpSNegate  %5  %23
+%474 = OpSNegate  %5  %23
+%475 = OpSNegate  %5  %474
 %476 = OpSNegate  %5  %475
 %477 = OpSNegate  %5  %476
 %478 = OpSNegate  %5  %477
-%479 = OpSNegate  %5  %478
-%480 = OpSNegate  %5  %23
+%479 = OpSNegate  %5  %23
+%480 = OpSNegate  %5  %479
 %481 = OpSNegate  %5  %480
 %482 = OpSNegate  %5  %481
 %483 = OpSNegate  %5  %482
-%484 = OpSNegate  %5  %483
+%484 = OpFNegate  %3  %17
 %485 = OpFNegate  %3  %17
-%486 = OpFNegate  %3  %17
-%487 = OpFNegate  %3  %486
-%488 = OpFNegate  %3  %17
-%489 = OpFNegate  %3  %488
-%490 = OpFNegate  %3  %17
-%491 = OpFNegate  %3  %490
-%492 = OpFNegate  %3  %17
+%486 = OpFNegate  %3  %485
+%487 = OpFNegate  %3  %17
+%488 = OpFNegate  %3  %487
+%489 = OpFNegate  %3  %17
+%490 = OpFNegate  %3  %489
+%491 = OpFNegate  %3  %17
+%492 = OpFNegate  %3  %491
 %493 = OpFNegate  %3  %492
-%494 = OpFNegate  %3  %493
-%495 = OpFNegate  %3  %17
+%494 = OpFNegate  %3  %17
+%495 = OpFNegate  %3  %494
 %496 = OpFNegate  %3  %495
 %497 = OpFNegate  %3  %496
-%498 = OpFNegate  %3  %497
-%499 = OpFNegate  %3  %17
+%498 = OpFNegate  %3  %17
+%499 = OpFNegate  %3  %498
 %500 = OpFNegate  %3  %499
 %501 = OpFNegate  %3  %500
 %502 = OpFNegate  %3  %501
-%503 = OpFNegate  %3  %502
-%504 = OpFNegate  %3  %17
+%503 = OpFNegate  %3  %17
+%504 = OpFNegate  %3  %503
 %505 = OpFNegate  %3  %504
 %506 = OpFNegate  %3  %505
 %507 = OpFNegate  %3  %506
-%508 = OpFNegate  %3  %507
 OpReturn
 OpFunctionEnd
-%513 = OpFunction  %2  None %122
-%509 = OpLabel
-%512 = OpLoad  %15  %510
-OpBranch %515
-%515 = OpLabel
-%516 = OpFunctionCall  %4  %26
-%517 = OpCompositeExtract  %16  %512 0
-%518 = OpConvertUToF  %3  %517
-%519 = OpCompositeExtract  %16  %512 1
-%520 = OpBitcast  %5  %519
-%521 = OpFunctionCall  %4  %74 %518 %520
-%522 = OpFunctionCall  %10  %112 %514
-%523 = OpFunctionCall  %2  %121
-%524 = OpFunctionCall  %2  %242
-%525 = OpFunctionCall  %2  %349
-%526 = OpFunctionCall  %2  %376
-%527 = OpFunctionCall  %2  %415
+%512 = OpFunction  %2  None %122
+%508 = OpLabel
+%511 = OpLoad  %15  %509
+OpBranch %514
+%514 = OpLabel
+%515 = OpFunctionCall  %4  %26
+%516 = OpCompositeExtract  %16  %511 0
+%517 = OpConvertUToF  %3  %516
+%518 = OpCompositeExtract  %16  %511 1
+%519 = OpBitcast  %5  %518
+%520 = OpFunctionCall  %4  %74 %517 %519
+%521 = OpFunctionCall  %10  %112 %513
+%522 = OpFunctionCall  %2  %121
+%523 = OpFunctionCall  %2  %242
+%524 = OpFunctionCall  %2  %349
+%525 = OpFunctionCall  %2  %376
+%526 = OpFunctionCall  %2  %415
 OpReturn
 OpFunctionEnd

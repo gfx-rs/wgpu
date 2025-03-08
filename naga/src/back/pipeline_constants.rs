@@ -85,7 +85,8 @@ pub fn process_overrides<'a>(
 
     // An iterator through the original overrides table, consumed in
     // approximate tandem with the global expressions.
-    let mut override_iter = module.overrides.drain();
+    let mut overrides = mem::take(&mut module.overrides);
+    let mut override_iter = overrides.iter_mut_span();
 
     // Do two things in tandem:
     //
@@ -164,15 +165,26 @@ pub fn process_overrides<'a>(
 
     // Finish processing any overrides we didn't visit in the loop above.
     for entry in override_iter {
-        process_override(
-            entry,
-            pipeline_constants,
-            &mut module,
-            &mut override_map,
-            &adjusted_global_expressions,
-            &mut adjusted_constant_initializers,
-            &mut global_expression_kind_tracker,
-        )?;
+        match *entry.1 {
+            Override { name: Some(_), .. } | Override { id: Some(_), .. } => {
+                process_override(
+                    entry,
+                    pipeline_constants,
+                    &mut module,
+                    &mut override_map,
+                    &adjusted_global_expressions,
+                    &mut adjusted_constant_initializers,
+                    &mut global_expression_kind_tracker,
+                )?;
+            }
+            Override {
+                init: Some(ref mut init),
+                ..
+            } => {
+                *init = adjusted_global_expressions[*init];
+            }
+            _ => {}
+        }
     }
 
     // Update the initialization expression handles of all `Constant`s
@@ -204,74 +216,15 @@ pub fn process_overrides<'a>(
         process_workgroup_size_override(&mut module, &adjusted_global_expressions, ep)?;
     }
     module.entry_points = entry_points;
-
-    process_pending(&mut module, &override_map, &adjusted_global_expressions)?;
+    module.overrides = overrides;
 
     // Now that we've rewritten all the expressions, we need to
     // recompute their types and other metadata. For the time being,
     // do a full re-validation.
     let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
-    let module_info = validator.validate_no_overrides(&module)?;
+    let module_info = validator.validate_resolved_overrides(&module)?;
 
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
-}
-
-fn process_pending(
-    module: &mut Module,
-    override_map: &HandleVec<Override, Handle<Constant>>,
-    adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
-) -> Result<(), PipelineConstantError> {
-    for (handle, ty) in module.types.clone().iter() {
-        if let TypeInner::Array {
-            base,
-            size: crate::ArraySize::Pending(size),
-            stride,
-        } = ty.inner
-        {
-            let expr = match size {
-                crate::PendingArraySize::Expression(size_expr) => {
-                    adjusted_global_expressions[size_expr]
-                }
-                crate::PendingArraySize::Override(size_override) => {
-                    module.constants[override_map[size_override]].init
-                }
-            };
-            let value = module
-                .to_ctx()
-                .eval_expr_to_u32(expr)
-                .map(|n| {
-                    if n == 0 {
-                        Err(PipelineConstantError::ValidationError(
-                            WithSpan::new(ValidationError::ArraySizeError { handle: expr })
-                                .with_span(
-                                    module.global_expressions.get_span(expr),
-                                    "evaluated to zero",
-                                ),
-                        ))
-                    } else {
-                        Ok(core::num::NonZeroU32::new(n).unwrap())
-                    }
-                })
-                .map_err(|_| {
-                    PipelineConstantError::ValidationError(
-                        WithSpan::new(ValidationError::ArraySizeError { handle: expr })
-                            .with_span(module.global_expressions.get_span(expr), "negative"),
-                    )
-                })??;
-            module.types.replace(
-                handle,
-                crate::Type {
-                    name: None,
-                    inner: TypeInner::Array {
-                        base,
-                        size: crate::ArraySize::Constant(value),
-                        stride,
-                    },
-                },
-            );
-        }
-    }
-    Ok(())
 }
 
 fn process_workgroup_size_override(
@@ -313,7 +266,7 @@ fn process_workgroup_size_override(
 ///
 /// Add the new `Constant` to `override_map` and `adjusted_constant_initializers`.
 fn process_override(
-    (old_h, r#override, span): (Handle<Override>, Override, Span),
+    (old_h, r#override, span): (Handle<Override>, &mut Override, &Span),
     pipeline_constants: &PipelineConstants,
     module: &mut Module,
     override_map: &mut HandleVec<Override, Handle<Constant>>,
@@ -351,13 +304,14 @@ fn process_override(
 
     // Generate a new `Constant` to represent the override's value.
     let constant = Constant {
-        name: r#override.name,
+        name: r#override.name.clone(),
         ty: r#override.ty,
         init,
     };
-    let h = module.constants.append(constant, span);
+    let h = module.constants.append(constant, *span);
     override_map.insert(old_h, h);
     adjusted_constant_initializers.insert(h);
+    r#override.init = Some(init);
     Ok(h)
 }
 
