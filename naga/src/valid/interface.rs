@@ -69,7 +69,7 @@ pub enum VaryingError {
     MemberMissingBinding(u32),
     #[error("Multiple bindings at location {location} are present")]
     BindingCollision { location: u32 },
-    #[error("Multiple bindings use the same blend_src {blend_src}")]
+    #[error("Multiple bindings use the same `blend_src` {blend_src}")]
     BindingCollisionBlendSrc { blend_src: u32 },
     #[error("Built-in {0:?} is present more than once")]
     DuplicateBuiltIn(crate::BuiltIn),
@@ -79,16 +79,16 @@ pub enum VaryingError {
     InvalidInputAttributeInStage(&'static str, crate::ShaderStage),
     #[error("The attribute {0:?} is not valid for stage {1:?}")]
     InvalidAttributeInStage(&'static str, crate::ShaderStage),
-    #[error("The blend_src attribute can only be used on location 0, only indices 0 and 1 are valid. Location was {location}, index was {blend_src}.")]
+    #[error("The `blend_src` attribute can only be used on location 0, only indices 0 and 1 are valid. Location was {location}, index was {blend_src}.")]
     InvalidBlendSrcIndex { location: u32, blend_src: u32 },
-    #[error("If blend_src is used, there must be exactly two outputs both with location 0, one with blend_src(0) and the other with blend_src(1).")]
+    #[error("If `blend_src` is used, there must be exactly two outputs both with location 0, one with `blend_src(0)` and the other with `blend_src(1)`.")]
     IncompleteBlendSrcUsage,
-    #[error("If blend_src is used, both outputs must have the same type. blend_src(0) has type {blend_src_0_type:?} and blend_src(1) has type {blend_src_1_type:?}.")]
+    #[error("If `blend_src` is used, both outputs must have the same type. `blend_src(0)` has type {blend_src_0_type:?} and `blend_src(1)` has type {blend_src_1_type:?}.")]
     BlendSrcOutputTypeMismatch {
         blend_src_0_type: Handle<crate::Type>,
         blend_src_1_type: Handle<crate::Type>,
     },
-    #[error("Workgroup size is multi dimensional, @builtin(subgroup_id) and @builtin(subgroup_invocation_id) are not supported.")]
+    #[error("Workgroup size is multi dimensional, `@builtin(subgroup_id)` and `@builtin(subgroup_invocation_id)` are not supported.")]
     InvalidMultiDimensionalSubgroupBuiltIn,
 }
 
