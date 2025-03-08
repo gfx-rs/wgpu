@@ -1604,7 +1604,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_const()))
                             .transpose()?;
 
-                    let (ty, init) = self.type_and_init(
+                    let (_ty, init) = self.type_and_init(
                         c.name,
                         Some(c.init),
                         explicit_ty,
@@ -1616,13 +1616,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
                         .insert(c.handle, Declared::Const(Typed::Plain(init)));
-                    // Only add constants of non-abstract types to the named expressions
-                    // to prevent abstract types ending up in the IR.
-                    let is_abstract = ctx.module.types[ty].inner.is_abstract(&ctx.module.types);
-                    if !is_abstract {
-                        ctx.named_expressions
-                            .insert(init, (c.name.name.to_string(), c.name.span));
-                    }
                     return Ok(());
                 }
             },
