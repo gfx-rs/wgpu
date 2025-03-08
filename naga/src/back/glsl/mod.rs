@@ -64,7 +64,7 @@ use thiserror::Error;
 use crate::{
     back::{self, Baked},
     common,
-    proc::{self, ExpressionKindTracker, NameKey},
+    proc::{self, NameKey},
     valid, Handle, ShaderStage, TypeInner,
 };
 use features::FeaturesManager;
@@ -1678,7 +1678,6 @@ impl<'a, W: Write> Writer<'a, W> {
             info,
             expressions: &func.expressions,
             named_expressions: &func.named_expressions,
-            expr_kind_tracker: ExpressionKindTracker::from_arena(&func.expressions),
         };
 
         self.named_expressions.clear();
