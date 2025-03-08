@@ -290,8 +290,9 @@ impl CommandEncoder {
     ///
     /// # Safety
     ///
-    /// - all acceleration structures must have been build in this command encoder.
-    /// - all BLASes must have been built before all TLASes use them.
+    /// - All acceleration structures must have been build in this command encoder.
+    /// - All BLASes inputted must have been built before all TLASes that were inputted here and
+    /// which use them.
     pub unsafe fn mark_acceleration_structures_built<'a>(
         &self,
         blas: impl IntoIterator<Item = &'a Blas>,

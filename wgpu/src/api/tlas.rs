@@ -41,6 +41,7 @@ impl Tlas {
     /// # Safety
     ///
     /// - The raw handle obtained from the hal Acceleration Structure must not be manually destroyed
+    /// - If the raw handle is build,
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<
         A: wgc::hal_api::HalApi,
