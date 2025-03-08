@@ -3,6 +3,8 @@ use std::{borrow::ToOwned as _, collections::BTreeMap, ffi::CStr, sync::Arc, vec
 use ash::{amd, ext, google, khr, vk};
 use parking_lot::Mutex;
 
+use crate::vulkan::DynamicStateFlags;
+
 use super::conv;
 
 fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
@@ -120,11 +122,17 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_EXT_subgroup_size_control`, promoted to Vulkan 1.3.
     subgroup_size_control: Option<vk::PhysicalDeviceSubgroupSizeControlFeatures<'static>>,
 
-    /// Features proved by `VK_KHR_maintenance4`, needed for mesh shaders
+    /// Features provided by `VK_KHR_maintenance4`, needed for mesh shaders
     maintenance4: Option<vk::PhysicalDeviceMaintenance4FeaturesKHR<'static>>,
 
-    /// Features proved by `VK_EXT_mesh_shader`
+    /// Features provided by `VK_EXT_mesh_shader`
     mesh_shader: Option<vk::PhysicalDeviceMeshShaderFeaturesEXT<'static>>,
+
+    /// Features provided by `VK_EXT_extended_dynamic_state`
+    extended_dynamic_state: Option<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT<'static>>,
+
+    /// Features provided by `VK_EXT_extended_dynamic_state3`
+    extended_dynamic_state3: Option<vk::PhysicalDeviceExtendedDynamicState3FeaturesEXT<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -190,6 +198,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.mesh_shader {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.extended_dynamic_state {
             info = info.push_next(feature);
         }
         info
@@ -510,6 +521,45 @@ impl PhysicalDeviceFeatures {
             maintenance4: if enabled_extensions.contains(&khr::maintenance4::NAME) {
                 let needed = requested_features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER);
                 Some(vk::PhysicalDeviceMaintenance4FeaturesKHR::default().maintenance4(needed))
+            } else {
+                None
+            },
+            extended_dynamic_state: if device_api_version < vk::API_VERSION_1_3
+                && enabled_extensions.contains(&ext::extended_dynamic_state::NAME)
+            {
+                Some(
+                    vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT::default()
+                        .extended_dynamic_state(true),
+                )
+            } else {
+                None
+            },
+            extended_dynamic_state3: if enabled_extensions
+                .contains(&ext::extended_dynamic_state3::NAME)
+            {
+                Some(
+                    vk::PhysicalDeviceExtendedDynamicState3FeaturesEXT::default()
+                        .extended_dynamic_state3_depth_clamp_enable(
+                            private_caps
+                                .dynamic_state_flags
+                                .contains(DynamicStateFlags::DEPTH_CLAMP_ENABLE),
+                        )
+                        .extended_dynamic_state3_color_blend_enable(
+                            private_caps
+                                .dynamic_state_flags
+                                .contains(DynamicStateFlags::COLOR_BLEND_ENABLE),
+                        )
+                        .extended_dynamic_state3_color_blend_equation(
+                            private_caps
+                                .dynamic_state_flags
+                                .contains(DynamicStateFlags::COLOR_BLEND_EQUATION),
+                        )
+                        .extended_dynamic_state3_polygon_mode(
+                            private_caps
+                                .dynamic_state_flags
+                                .contains(DynamicStateFlags::POLYGON_MODE),
+                        ),
+                )
             } else {
                 None
             },
@@ -1516,6 +1566,13 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.supports_extension(ext::extended_dynamic_state::NAME) {
+                let next = features
+                    .extended_dynamic_state
+                    .insert(vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT::default());
+                features2 = features2.push_next(next);
+            }
+
             unsafe { get_device_properties.get_physical_device_features2(phd, &mut features2) };
             features2.features
         } else {
@@ -1641,6 +1698,30 @@ impl super::Instance {
             return None;
         }
 
+        let mut dynamic_state_flags = DynamicStateFlags::empty();
+        if let Some(feature) = phd_features.extended_dynamic_state {
+            if feature.extended_dynamic_state == vk::TRUE {
+                dynamic_state_flags |= DynamicStateFlags::CULL_MODE
+                    | DynamicStateFlags::DEPTH_TEST_ENABLE
+                    | DynamicStateFlags::DEPTH_WRITE_ENABLE
+                    | DynamicStateFlags::FRONT_FACE;
+            }
+        }
+        if let Some(feature) = phd_features.extended_dynamic_state3 {
+            if feature.extended_dynamic_state3_depth_clamp_enable == vk::TRUE {
+                dynamic_state_flags |= DynamicStateFlags::DEPTH_CLAMP_ENABLE;
+            }
+            if feature.extended_dynamic_state3_color_blend_enable == vk::TRUE {
+                dynamic_state_flags |= DynamicStateFlags::COLOR_BLEND_ENABLE;
+            }
+            if feature.extended_dynamic_state3_color_blend_equation == vk::TRUE {
+                dynamic_state_flags |= DynamicStateFlags::COLOR_BLEND_EQUATION;
+            }
+            if feature.extended_dynamic_state3_polygon_mode == vk::TRUE {
+                dynamic_state_flags |= DynamicStateFlags::POLYGON_MODE;
+            }
+        }
+
         let private_caps = super::PrivateCapabilities {
             flip_y_requires_shift: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance1::NAME),
@@ -1708,6 +1789,7 @@ impl super::Instance {
                 .properties
                 .limits
                 .max_sampler_allocation_count,
+            dynamic_state_flags,
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1892,6 +1974,25 @@ impl super::Adapter {
         } else {
             None
         };
+        let extended_dynamic_state_fns =
+            if self.phd_capabilities.device_api_version >= vk::API_VERSION_1_3 {
+                Some(super::ExtensionFn::Promoted)
+            } else if enabled_extensions.contains(&ext::extended_dynamic_state::NAME) {
+                Some(super::ExtensionFn::Extension(
+                    ext::extended_dynamic_state::Device::new(&self.instance.raw, &raw_device),
+                ))
+            } else {
+                None
+            };
+        let extended_dynamic_state3_fns =
+            if enabled_extensions.contains(&ext::extended_dynamic_state3::NAME) {
+                Some(ext::extended_dynamic_state3::Device::new(
+                    &self.instance.raw,
+                    &raw_device,
+                ))
+            } else {
+                None
+            };
 
         let naga_options = {
             use naga::back::spv;
@@ -2071,6 +2172,8 @@ impl super::Adapter {
                 timeline_semaphore: timeline_semaphore_fn,
                 ray_tracing: ray_tracing_fns,
                 mesh_shading: mesh_shading_fns,
+                extended_dynamic_state: extended_dynamic_state_fns,
+                extended_dynamic_state3: extended_dynamic_state3_fns,
             },
             pipeline_cache_validation_key,
             vendor_id: self.phd_capabilities.properties.vendor_id,

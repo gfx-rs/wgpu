@@ -803,10 +803,11 @@ pub fn map_front_face(front_face: wgt::FrontFace) -> vk::FrontFace {
     }
 }
 
-pub fn map_cull_face(face: wgt::Face) -> vk::CullModeFlags {
+pub fn map_cull_face(face: Option<wgt::Face>) -> vk::CullModeFlags {
     match face {
-        wgt::Face::Front => vk::CullModeFlags::FRONT,
-        wgt::Face::Back => vk::CullModeFlags::BACK,
+        Some(wgt::Face::Front) => vk::CullModeFlags::FRONT,
+        Some(wgt::Face::Back) => vk::CullModeFlags::BACK,
+        None => vk::CullModeFlags::NONE,
     }
 }
 
@@ -824,18 +825,14 @@ pub fn map_stencil_op(op: wgt::StencilOperation) -> vk::StencilOp {
     }
 }
 
-pub fn map_stencil_face(
-    face: &wgt::StencilFaceState,
-    compare_mask: u32,
-    write_mask: u32,
-) -> vk::StencilOpState {
+pub fn map_stencil_face(face: &wgt::StencilFaceState) -> vk::StencilOpState {
     vk::StencilOpState {
         fail_op: map_stencil_op(face.fail_op),
         pass_op: map_stencil_op(face.pass_op),
         depth_fail_op: map_stencil_op(face.depth_fail_op),
         compare_op: map_comparison(face.compare),
-        compare_mask,
-        write_mask,
+        compare_mask: 0,
+        write_mask: 0,
         reference: 0,
     }
 }

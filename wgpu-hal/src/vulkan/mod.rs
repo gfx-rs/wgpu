@@ -485,12 +485,33 @@ struct DeviceExtensionFunctions {
     timeline_semaphore: Option<ExtensionFn<khr::timeline_semaphore::Device>>,
     ray_tracing: Option<RayTracingDeviceExtensionFunctions>,
     mesh_shading: Option<ext::mesh_shader::Device>,
+    extended_dynamic_state: Option<ExtensionFn<ext::extended_dynamic_state::Device>>,
+    extended_dynamic_state3: Option<ext::extended_dynamic_state3::Device>,
 }
 
 struct RayTracingDeviceExtensionFunctions {
     acceleration_structure: khr::acceleration_structure::Device,
     buffer_device_address: khr::buffer_device_address::Device,
 }
+
+bitflags::bitflags!(
+    // Subset of VK_EXT_extended_dynamic_state, VK_EXT_extended_dynamic_state2, etc. flags that matter for wgpu.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    pub struct DynamicStateFlags: u32 {
+        // VK_EXT_extended_dynamic_state
+        const CULL_MODE = 1 << 0;
+        const DEPTH_TEST_ENABLE = 1 << 1;
+        const DEPTH_WRITE_ENABLE = 1 << 2;
+        const DEPTH_COMPARE_OP = 1 << 3;
+        const FRONT_FACE = 1 << 4;
+
+        // VK_EXT_extended_dynamic_state3
+        const DEPTH_CLAMP_ENABLE = 1 << 5;
+        const COLOR_BLEND_ENABLE = 1 << 6;
+        const COLOR_BLEND_EQUATION = 1 << 7;
+        const POLYGON_MODE = 1 << 8;
+    }
+);
 
 /// Set of internal capabilities, which don't show up in the exposed
 /// device geometry, but affect the code paths taken internally.
@@ -543,6 +564,8 @@ struct PrivateCapabilities {
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
     maximum_samplers: u32,
+
+    dynamic_state_flags: DynamicStateFlags,
 }
 
 bitflags::bitflags!(
@@ -997,11 +1020,32 @@ pub enum ShaderModule {
     },
 }
 
+#[derive(Debug)]
+pub enum DynamicStateCommand {
+    SetStencilMasks {
+        read_mask: u32,
+        write_mask: u32,
+    },
+    SetDepthBias {
+        constant: f32,
+        clamp: f32,
+        slope: f32,
+    },
+    SetDepthTest(bool),
+    SetDepthCompare(vk::CompareOp),
+    SetDepthWrite(bool),
+    SetCullMode(vk::CullModeFlags),
+    SetFrontFace(vk::FrontFace),
+    SetPolygonMode(vk::PolygonMode),
+    SetDepthClampEnable(bool),
+}
+
 impl crate::DynShaderModule for ShaderModule {}
 
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: vk::Pipeline,
+    dynamic_state_commands: Vec<DynamicStateCommand>,
 }
 
 impl crate::DynRenderPipeline for RenderPipeline {}

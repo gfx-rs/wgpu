@@ -14,7 +14,7 @@ use ash::{khr, vk};
 use hashbrown::hash_map::Entry;
 use parking_lot::Mutex;
 
-use super::{conv, RawTlasInstance};
+use super::{conv, DynamicStateCommand, RawTlasInstance};
 use crate::TlasInstance;
 
 impl super::DeviceShared {
@@ -1895,7 +1895,7 @@ impl crate::Device for super::Device {
             super::PipelineCache,
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
-        let dynamic_states = [
+        let mut dynamic_states = vec![
             vk::DynamicState::VIEWPORT,
             vk::DynamicState::SCISSOR,
             vk::DynamicState::BLEND_CONSTANTS,
@@ -1909,6 +1909,7 @@ impl crate::Device for super::Device {
         let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
         let mut vertex_buffers = Vec::with_capacity(desc.vertex_buffers.len());
         let mut vertex_attributes = Vec::new();
+        let mut dynamic_state_commands = Vec::new();
 
         for (i, vb) in desc.vertex_buffers.iter().enumerate() {
             vertex_buffers.push(vk::VertexInputBindingDescription {
@@ -1956,14 +1957,68 @@ impl crate::Device for super::Device {
             None => None,
         };
 
-        let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::default()
-            .polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode))
-            .front_face(conv::map_front_face(desc.primitive.front_face))
-            .line_width(1.0)
-            .depth_clamp_enable(desc.primitive.unclipped_depth);
-        if let Some(face) = desc.primitive.cull_mode {
-            vk_rasterization = vk_rasterization.cull_mode(conv::map_cull_face(face))
+        let mut vk_rasterization =
+            vk::PipelineRasterizationStateCreateInfo::default().line_width(1.0);
+
+        if self
+            .shared
+            .private_caps
+            .dynamic_state_flags
+            .contains(super::DynamicStateFlags::POLYGON_MODE)
+        {
+            dynamic_states.push(vk::DynamicState::POLYGON_MODE_EXT);
+            dynamic_state_commands.push(DynamicStateCommand::SetPolygonMode(
+                conv::map_polygon_mode(desc.primitive.polygon_mode),
+            ));
+        } else {
+            vk_rasterization =
+                vk_rasterization.polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode));
         }
+
+        if self
+            .shared
+            .private_caps
+            .dynamic_state_flags
+            .contains(super::DynamicStateFlags::FRONT_FACE)
+        {
+            dynamic_states.push(vk::DynamicState::FRONT_FACE);
+            dynamic_state_commands.push(DynamicStateCommand::SetFrontFace(conv::map_front_face(
+                desc.primitive.front_face,
+            )));
+        } else {
+            vk_rasterization =
+                vk_rasterization.front_face(conv::map_front_face(desc.primitive.front_face));
+        }
+
+        if self
+            .shared
+            .private_caps
+            .dynamic_state_flags
+            .contains(super::DynamicStateFlags::DEPTH_CLAMP_ENABLE)
+        {
+            dynamic_states.push(vk::DynamicState::DEPTH_CLAMP_ENABLE_EXT);
+            dynamic_state_commands.push(DynamicStateCommand::SetDepthClampEnable(
+                desc.primitive.unclipped_depth,
+            ));
+        } else {
+            vk_rasterization = vk_rasterization.depth_clamp_enable(desc.primitive.unclipped_depth);
+        }
+
+        if self
+            .shared
+            .private_caps
+            .dynamic_state_flags
+            .contains(super::DynamicStateFlags::CULL_MODE)
+        {
+            dynamic_states.push(vk::DynamicState::CULL_MODE);
+            dynamic_state_commands.push(DynamicStateCommand::SetCullMode(conv::map_cull_face(
+                desc.primitive.cull_mode,
+            )));
+        } else {
+            vk_rasterization =
+                vk_rasterization.cull_mode(conv::map_cull_face(desc.primitive.cull_mode));
+        }
+
         let mut vk_rasterization_conservative_state =
             vk::PipelineRasterizationConservativeStateCreateInfoEXT::default()
                 .conservative_rasterization_mode(
@@ -1973,7 +2028,8 @@ impl crate::Device for super::Device {
             vk_rasterization = vk_rasterization.push_next(&mut vk_rasterization_conservative_state);
         }
 
-        let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::default();
+        let mut vk_depth_stencil: vk::PipelineDepthStencilStateCreateInfo<'_> =
+            vk::PipelineDepthStencilStateCreateInfo::default();
         if let Some(ref ds) = desc.depth_stencil {
             let vk_format = self.shared.private_caps.map_texture_format(ds.format);
             let vk_layout = if ds.is_read_only(desc.primitive.cull_mode) {
@@ -1986,28 +2042,76 @@ impl crate::Device for super::Device {
                 stencil_ops: crate::AttachmentOps::all(),
             });
 
-            if ds.is_depth_enabled() {
-                vk_depth_stencil = vk_depth_stencil
-                    .depth_test_enable(true)
-                    .depth_write_enable(ds.depth_write_enabled)
-                    .depth_compare_op(conv::map_comparison(ds.depth_compare));
+            if self
+                .shared
+                .private_caps
+                .dynamic_state_flags
+                .contains(super::DynamicStateFlags::DEPTH_TEST_ENABLE)
+            {
+                dynamic_states.push(vk::DynamicState::DEPTH_TEST_ENABLE);
+                dynamic_state_commands
+                    .push(DynamicStateCommand::SetDepthTest(ds.is_depth_enabled()));
+            } else {
+                vk_depth_stencil = vk_depth_stencil.depth_test_enable(ds.is_depth_enabled());
             }
+
+            if self
+                .shared
+                .private_caps
+                .dynamic_state_flags
+                .contains(super::DynamicStateFlags::DEPTH_WRITE_ENABLE)
+            {
+                dynamic_states.push(vk::DynamicState::DEPTH_WRITE_ENABLE);
+                dynamic_state_commands
+                    .push(DynamicStateCommand::SetDepthWrite(ds.depth_write_enabled));
+            } else if ds.is_depth_enabled() {
+                vk_depth_stencil = vk_depth_stencil.depth_write_enable(ds.depth_write_enabled);
+            }
+
+            if self
+                .shared
+                .private_caps
+                .dynamic_state_flags
+                .contains(super::DynamicStateFlags::DEPTH_COMPARE_OP)
+            {
+                dynamic_states.push(vk::DynamicState::DEPTH_COMPARE_OP);
+                dynamic_state_commands.push(DynamicStateCommand::SetDepthCompare(
+                    conv::map_comparison(ds.depth_compare),
+                ));
+            } else {
+                vk_depth_stencil =
+                    vk_depth_stencil.depth_compare_op(conv::map_comparison(ds.depth_compare));
+            }
+
+            if ds.is_depth_enabled() && ds.bias.is_enabled() {
+                dynamic_states.push(vk::DynamicState::DEPTH_BIAS);
+
+                vk_rasterization = vk_rasterization.depth_bias_enable(true);
+
+                dynamic_state_commands.push(DynamicStateCommand::SetDepthBias {
+                    constant: ds.bias.constant as f32,
+                    clamp: ds.bias.clamp,
+                    slope: ds.bias.slope_scale,
+                });
+            }
+
             if ds.stencil.is_enabled() {
                 let s = &ds.stencil;
-                let front = conv::map_stencil_face(&s.front, s.read_mask, s.write_mask);
-                let back = conv::map_stencil_face(&s.back, s.read_mask, s.write_mask);
+
+                dynamic_states.push(vk::DynamicState::STENCIL_COMPARE_MASK);
+                dynamic_states.push(vk::DynamicState::STENCIL_WRITE_MASK);
+
+                let front = conv::map_stencil_face(&s.front);
+                let back = conv::map_stencil_face(&s.back);
                 vk_depth_stencil = vk_depth_stencil
                     .stencil_test_enable(true)
                     .front(front)
                     .back(back);
-            }
 
-            if ds.bias.is_enabled() {
-                vk_rasterization = vk_rasterization
-                    .depth_bias_enable(true)
-                    .depth_bias_constant_factor(ds.bias.constant as f32)
-                    .depth_bias_clamp(ds.bias.clamp)
-                    .depth_bias_slope_factor(ds.bias.slope_scale);
+                dynamic_state_commands.push(DynamicStateCommand::SetStencilMasks {
+                    read_mask: s.read_mask,
+                    write_mask: s.write_mask,
+                });
             }
         }
 
@@ -2118,7 +2222,10 @@ impl crate::Device for super::Device {
 
         self.counters.render_pipelines.add(1);
 
-        Ok(super::RenderPipeline { raw })
+        Ok(super::RenderPipeline {
+            raw,
+            dynamic_state_commands,
+        })
     }
     unsafe fn create_mesh_pipeline(
         &self,
@@ -2128,7 +2235,7 @@ impl crate::Device for super::Device {
             <Self::A as crate::Api>::PipelineCache,
         >,
     ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
-        let dynamic_states = [
+        let mut dynamic_states = vec![
             vk::DynamicState::VIEWPORT,
             vk::DynamicState::SCISSOR,
             vk::DynamicState::BLEND_CONSTANTS,
@@ -2140,10 +2247,12 @@ impl crate::Device for super::Device {
             ..Default::default()
         };
         let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
+        let mut dynamic_state_commands = Vec::new();
 
-        let vk_input_assembly = vk::PipelineInputAssemblyStateCreateInfo::default()
-            .topology(conv::map_topology(desc.primitive.topology))
-            .primitive_restart_enable(desc.primitive.strip_index_format.is_some());
+        let vk_input_assembly: vk::PipelineInputAssemblyStateCreateInfo<'_> =
+            vk::PipelineInputAssemblyStateCreateInfo::default()
+                .topology(conv::map_topology(desc.primitive.topology))
+                .primitive_restart_enable(desc.primitive.strip_index_format.is_some());
 
         let compiled_ts = match desc.task_stage {
             Some(ref stage) => {
@@ -2181,14 +2290,53 @@ impl crate::Device for super::Device {
             None => None,
         };
 
-        let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::default()
-            .polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode))
-            .front_face(conv::map_front_face(desc.primitive.front_face))
-            .line_width(1.0)
-            .depth_clamp_enable(desc.primitive.unclipped_depth);
-        if let Some(face) = desc.primitive.cull_mode {
-            vk_rasterization = vk_rasterization.cull_mode(conv::map_cull_face(face))
+        let mut vk_rasterization =
+            vk::PipelineRasterizationStateCreateInfo::default().line_width(1.0);
+
+        if self
+            .shared
+            .private_caps
+            .dynamic_state_flags
+            .contains(super::DynamicStateFlags::FRONT_FACE)
+        {
+            dynamic_states.push(vk::DynamicState::FRONT_FACE);
+            dynamic_state_commands.push(DynamicStateCommand::SetFrontFace(conv::map_front_face(
+                desc.primitive.front_face,
+            )));
+        } else {
+            vk_rasterization =
+                vk_rasterization.front_face(conv::map_front_face(desc.primitive.front_face));
         }
+
+        if self
+            .shared
+            .private_caps
+            .dynamic_state_flags
+            .contains(super::DynamicStateFlags::DEPTH_CLAMP_ENABLE)
+        {
+            dynamic_states.push(vk::DynamicState::DEPTH_CLAMP_ENABLE_EXT);
+            dynamic_state_commands.push(DynamicStateCommand::SetDepthClampEnable(
+                desc.primitive.unclipped_depth,
+            ));
+        } else {
+            vk_rasterization = vk_rasterization.depth_clamp_enable(desc.primitive.unclipped_depth);
+        }
+
+        if self
+            .shared
+            .private_caps
+            .dynamic_state_flags
+            .contains(super::DynamicStateFlags::CULL_MODE)
+        {
+            dynamic_states.push(vk::DynamicState::CULL_MODE);
+            dynamic_state_commands.push(DynamicStateCommand::SetCullMode(conv::map_cull_face(
+                desc.primitive.cull_mode,
+            )));
+        } else {
+            vk_rasterization =
+                vk_rasterization.cull_mode(conv::map_cull_face(desc.primitive.cull_mode));
+        }
+
         let mut vk_rasterization_conservative_state =
             vk::PipelineRasterizationConservativeStateCreateInfoEXT::default()
                 .conservative_rasterization_mode(
@@ -2211,28 +2359,82 @@ impl crate::Device for super::Device {
                 stencil_ops: crate::AttachmentOps::all(),
             });
 
-            if ds.is_depth_enabled() {
-                vk_depth_stencil = vk_depth_stencil
-                    .depth_test_enable(true)
-                    .depth_write_enable(ds.depth_write_enabled)
-                    .depth_compare_op(conv::map_comparison(ds.depth_compare));
+            if self
+                .shared
+                .private_caps
+                .dynamic_state_flags
+                .contains(super::DynamicStateFlags::DEPTH_TEST_ENABLE)
+            {
+                dynamic_states.push(vk::DynamicState::DEPTH_TEST_ENABLE);
+                dynamic_state_commands
+                    .push(DynamicStateCommand::SetDepthTest(ds.is_depth_enabled()));
+            } else {
+                vk_depth_stencil = vk_depth_stencil.depth_test_enable(ds.is_depth_enabled());
             }
+
+            if self
+                .shared
+                .private_caps
+                .dynamic_state_flags
+                .contains(super::DynamicStateFlags::DEPTH_WRITE_ENABLE)
+            {
+                dynamic_states.push(vk::DynamicState::DEPTH_WRITE_ENABLE);
+
+                if ds.is_depth_enabled() {
+                    dynamic_state_commands
+                        .push(DynamicStateCommand::SetDepthWrite(ds.depth_write_enabled));
+                }
+            } else if ds.is_depth_enabled() {
+                vk_depth_stencil = vk_depth_stencil.depth_write_enable(ds.depth_write_enabled);
+            }
+
+            if self
+                .shared
+                .private_caps
+                .dynamic_state_flags
+                .contains(super::DynamicStateFlags::DEPTH_COMPARE_OP)
+            {
+                dynamic_states.push(vk::DynamicState::DEPTH_COMPARE_OP);
+
+                if ds.is_depth_enabled() {
+                    dynamic_state_commands.push(DynamicStateCommand::SetDepthCompare(
+                        conv::map_comparison(ds.depth_compare),
+                    ));
+                }
+            } else {
+                vk_depth_stencil =
+                    vk_depth_stencil.depth_compare_op(conv::map_comparison(ds.depth_compare));
+            }
+
+            if ds.is_depth_enabled() && ds.bias.is_enabled() {
+                dynamic_states.push(vk::DynamicState::DEPTH_BIAS);
+
+                vk_rasterization = vk_rasterization.depth_bias_enable(true);
+
+                dynamic_state_commands.push(DynamicStateCommand::SetDepthBias {
+                    constant: ds.bias.constant as f32,
+                    clamp: ds.bias.clamp,
+                    slope: ds.bias.slope_scale,
+                });
+            }
+
             if ds.stencil.is_enabled() {
                 let s = &ds.stencil;
-                let front = conv::map_stencil_face(&s.front, s.read_mask, s.write_mask);
-                let back = conv::map_stencil_face(&s.back, s.read_mask, s.write_mask);
+
+                dynamic_states.push(vk::DynamicState::STENCIL_COMPARE_MASK);
+                dynamic_states.push(vk::DynamicState::STENCIL_WRITE_MASK);
+
+                let front = conv::map_stencil_face(&s.front);
+                let back = conv::map_stencil_face(&s.back);
                 vk_depth_stencil = vk_depth_stencil
                     .stencil_test_enable(true)
                     .front(front)
                     .back(back);
-            }
 
-            if ds.bias.is_enabled() {
-                vk_rasterization = vk_rasterization
-                    .depth_bias_enable(true)
-                    .depth_bias_constant_factor(ds.bias.constant as f32)
-                    .depth_bias_clamp(ds.bias.clamp)
-                    .depth_bias_slope_factor(ds.bias.slope_scale);
+                dynamic_state_commands.push(DynamicStateCommand::SetStencilMasks {
+                    read_mask: s.read_mask,
+                    write_mask: s.write_mask,
+                });
             }
         }
 
@@ -2349,7 +2551,10 @@ impl crate::Device for super::Device {
 
         self.counters.render_pipelines.add(1);
 
-        Ok(super::RenderPipeline { raw })
+        Ok(super::RenderPipeline {
+            raw,
+            dynamic_state_commands,
+        })
     }
 
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {

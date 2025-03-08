@@ -1,4 +1,4 @@
-use super::conv;
+use super::{conv, ExtensionFn};
 
 use arrayvec::ArrayVec;
 use ash::vk;
@@ -931,7 +931,138 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 self.active,
                 vk::PipelineBindPoint::GRAPHICS,
                 pipeline.raw,
-            )
+            );
+
+            for cmd in pipeline.dynamic_state_commands.iter() {
+                match cmd {
+                    super::DynamicStateCommand::SetStencilMasks {
+                        read_mask,
+                        write_mask,
+                    } => {
+                        self.device.raw.cmd_set_stencil_compare_mask(
+                            self.active,
+                            vk::StencilFaceFlags::FRONT_AND_BACK,
+                            *read_mask,
+                        );
+                        self.device.raw.cmd_set_stencil_write_mask(
+                            self.active,
+                            vk::StencilFaceFlags::FRONT_AND_BACK,
+                            *write_mask,
+                        );
+                    }
+                    super::DynamicStateCommand::SetDepthBias {
+                        constant,
+                        clamp,
+                        slope,
+                    } => {
+                        self.device
+                            .raw
+                            .cmd_set_depth_bias(self.active, *constant, *clamp, *slope);
+                    }
+                    super::DynamicStateCommand::SetDepthTest(enable) => {
+                        match self
+                            .device
+                            .extension_fns
+                            .extended_dynamic_state
+                            .as_ref()
+                            .unwrap()
+                        {
+                            ExtensionFn::Promoted => {
+                                self.device
+                                    .raw
+                                    .cmd_set_depth_test_enable(self.active, *enable);
+                            }
+                            ExtensionFn::Extension(ext) => {
+                                ext.cmd_set_depth_test_enable(self.active, *enable);
+                            }
+                        }
+                    }
+                    super::DynamicStateCommand::SetDepthCompare(compare) => {
+                        match self
+                            .device
+                            .extension_fns
+                            .extended_dynamic_state
+                            .as_ref()
+                            .unwrap()
+                        {
+                            ExtensionFn::Promoted => {
+                                self.device
+                                    .raw
+                                    .cmd_set_depth_compare_op(self.active, *compare);
+                            }
+                            ExtensionFn::Extension(ext) => {
+                                ext.cmd_set_depth_compare_op(self.active, *compare);
+                            }
+                        }
+                    }
+                    super::DynamicStateCommand::SetDepthWrite(enable) => {
+                        match self
+                            .device
+                            .extension_fns
+                            .extended_dynamic_state
+                            .as_ref()
+                            .unwrap()
+                        {
+                            ExtensionFn::Promoted => {
+                                self.device
+                                    .raw
+                                    .cmd_set_depth_write_enable(self.active, *enable);
+                            }
+                            ExtensionFn::Extension(ext) => {
+                                ext.cmd_set_depth_write_enable(self.active, *enable);
+                            }
+                        }
+                    }
+                    super::DynamicStateCommand::SetCullMode(mode) => {
+                        match self
+                            .device
+                            .extension_fns
+                            .extended_dynamic_state
+                            .as_ref()
+                            .unwrap()
+                        {
+                            ExtensionFn::Promoted => {
+                                self.device.raw.cmd_set_cull_mode(self.active, *mode);
+                            }
+                            ExtensionFn::Extension(ext) => {
+                                ext.cmd_set_cull_mode(self.active, *mode);
+                            }
+                        }
+                    }
+                    super::DynamicStateCommand::SetFrontFace(mode) => {
+                        match self
+                            .device
+                            .extension_fns
+                            .extended_dynamic_state
+                            .as_ref()
+                            .unwrap()
+                        {
+                            ExtensionFn::Promoted => {
+                                self.device.raw.cmd_set_front_face(self.active, *mode);
+                            }
+                            ExtensionFn::Extension(ext) => {
+                                ext.cmd_set_front_face(self.active, *mode);
+                            }
+                        }
+                    }
+                    super::DynamicStateCommand::SetPolygonMode(mode) => {
+                        self.device
+                            .extension_fns
+                            .extended_dynamic_state3
+                            .as_ref()
+                            .unwrap()
+                            .cmd_set_polygon_mode(self.active, *mode);
+                    }
+                    super::DynamicStateCommand::SetDepthClampEnable(enable) => {
+                        self.device
+                            .extension_fns
+                            .extended_dynamic_state3
+                            .as_ref()
+                            .unwrap()
+                            .cmd_set_depth_clamp_enable(self.active, *enable);
+                    }
+                }
+            }
         };
     }
 
