@@ -1,18 +1,9 @@
 [package]
 name = "custom-backend"
-description = "Example of creating and loading custom wgpu backend"
-edition.workspace = true
-rust-version.workspace = true
-keywords.workspace = true
-license.workspace = true
-homepage.workspace = true
-repository.workspace = true
-version.workspace = true
-authors.workspace = true
+edition = "2021"
+rust-version = "1.85"
+publish = false
 
 [dependencies]
-wgpu = { workspace = true, features = ["custom"], default-features = false }
-pollster = { workspace = true, features = ["macro"] }
-
-[lints]
-workspace = true
+wgpu = { version = "24.0.0", features = ["custom"], default-features = false }
+pollster = { version = "0.4", features = ["macro"] }
