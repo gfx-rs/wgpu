@@ -5,5 +5,8 @@ rust-version = "1.85"
 publish = false
 
 [dependencies]
-wgpu = { version = "24.0.0", features = ["custom"], default-features = false }
+wgpu = { version = "24.0.0", features = [
+    "custom",
+    "wgsl",
+], default-features = false }
 pollster = { version = "0.4", features = ["macro"] }
