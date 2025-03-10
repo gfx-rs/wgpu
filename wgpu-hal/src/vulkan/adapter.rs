@@ -1056,7 +1056,7 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::external_memory_fd::NAME);
         }
 
-        // Optional `VK_EXT_external_memory_win32`
+        // Optional `VK_EXT_external_memory_dma`
         if self.supports_extension(ext::external_memory_dma_buf::NAME) {
             extensions.push(ext::external_memory_dma_buf::NAME);
         }
