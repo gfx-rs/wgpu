@@ -404,7 +404,7 @@ impl crate::Device for super::Device {
     ) -> Result<super::Buffer, crate::DeviceError> {
         let alloc_size = if desc.usage.contains(wgt::BufferUses::UNIFORM) {
             desc.size
-                .next_multiple_of(Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as u64)
+                .next_multiple_of(Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.into())
         } else {
             desc.size
         };
