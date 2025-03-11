@@ -402,16 +402,17 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
-        let mut size = desc.size;
-        if desc.usage.contains(wgt::BufferUses::UNIFORM) {
-            let align_mask = Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as u64 - 1;
-            size = ((size - 1) | align_mask) + 1;
-        }
+        let alloc_size = if desc.usage.contains(wgt::BufferUses::UNIFORM) {
+            desc.size
+                .next_multiple_of(Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.into())
+        } else {
+            desc.size
+        };
 
         let raw_desc = Direct3D12::D3D12_RESOURCE_DESC {
             Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
             Alignment: 0,
-            Width: size,
+            Width: alloc_size,
             Height: 1,
             DepthOrArraySize: 1,
             MipLevels: 1,
@@ -436,7 +437,7 @@ impl crate::Device for super::Device {
 
         Ok(super::Buffer {
             resource,
-            size,
+            size: desc.size,
             allocation,
         })
     }

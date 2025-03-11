@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
+use directive::enable_extension::ImplementedEnableExtension;
 
 use crate::diagnostic_filter::{
     self, DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, FilterableTriggeringRule,
@@ -177,11 +178,11 @@ impl<T> ParsedAttribute<T> {
 #[derive(Default)]
 struct BindingParser<'a> {
     location: ParsedAttribute<Handle<ast::Expression<'a>>>,
-    second_blend_source: ParsedAttribute<bool>,
     built_in: ParsedAttribute<crate::BuiltIn>,
     interpolation: ParsedAttribute<crate::Interpolation>,
     sampling: ParsedAttribute<crate::Sampling>,
     invariant: ParsedAttribute<bool>,
+    blend_src: ParsedAttribute<Handle<ast::Expression<'a>>>,
 }
 
 impl<'a> BindingParser<'a> {
@@ -219,11 +220,25 @@ impl<'a> BindingParser<'a> {
                 }
                 lexer.expect(Token::Paren(')'))?;
             }
-            "second_blend_source" => {
-                self.second_blend_source.set(true, name_span)?;
-            }
+
             "invariant" => {
                 self.invariant.set(true, name_span)?;
+            }
+            "blend_src" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::DualSourceBlending)
+                {
+                    return Err(Error::EnableExtensionNotEnabled {
+                        span: name_span,
+                        kind: ImplementedEnableExtension::DualSourceBlending.into(),
+                    });
+                }
+
+                lexer.expect(Token::Paren('('))?;
+                self.blend_src
+                    .set(parser.general_expression(lexer, ctx)?, name_span)?;
+                lexer.expect(Token::Paren(')'))?;
             }
             _ => return Err(Error::UnknownAttribute(name_span)),
         }
@@ -237,9 +252,10 @@ impl<'a> BindingParser<'a> {
             self.interpolation.value,
             self.sampling.value,
             self.invariant.value.unwrap_or_default(),
+            self.blend_src.value,
         ) {
-            (None, None, None, None, false) => Ok(None),
-            (Some(location), None, interpolation, sampling, false) => {
+            (None, None, None, None, false, None) => Ok(None),
+            (Some(location), None, interpolation, sampling, false, blend_src) => {
                 // Before handing over the completed `Module`, we call
                 // `apply_default_interpolation` to ensure that the interpolation and
                 // sampling have been explicitly specified on all vertex shader output and fragment
@@ -248,16 +264,18 @@ impl<'a> BindingParser<'a> {
                     location,
                     interpolation,
                     sampling,
-                    second_blend_source: self.second_blend_source.value.unwrap_or(false),
+                    blend_src,
                 }))
             }
-            (None, Some(crate::BuiltIn::Position { .. }), None, None, invariant) => {
+            (None, Some(crate::BuiltIn::Position { .. }), None, None, invariant, None) => {
                 Ok(Some(ast::Binding::BuiltIn(crate::BuiltIn::Position {
                     invariant,
                 })))
             }
-            (None, Some(built_in), None, None, false) => Ok(Some(ast::Binding::BuiltIn(built_in))),
-            (_, _, _, _, _) => Err(Error::InconsistentBinding(span)),
+            (None, Some(built_in), None, None, false, None) => {
+                Ok(Some(ast::Binding::BuiltIn(built_in)))
+            }
+            (_, _, _, _, _, _) => Err(Error::InconsistentBinding(span)),
         }
     }
 }

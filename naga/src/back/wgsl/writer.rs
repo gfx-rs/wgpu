@@ -30,7 +30,7 @@ enum Attribute {
     Invariant,
     Interpolate(Option<crate::Interpolation>, Option<crate::Sampling>),
     Location(u32),
-    SecondBlendSource,
+    BlendSrc(u32),
     Stage(ShaderStage),
     WorkGroupSize([u32; 3]),
 }
@@ -126,6 +126,9 @@ impl<W: Write> Writer<W> {
         }
 
         self.reset(module);
+
+        // Write all needed directives.
+        self.write_enable_dual_source_blending_if_needed(module)?;
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
@@ -319,7 +322,7 @@ impl<W: Write> Writer<W> {
         for attribute in attributes {
             match *attribute {
                 Attribute::Location(id) => write!(self.out, "@location({id}) ")?,
-                Attribute::SecondBlendSource => write!(self.out, "@second_blend_source ")?,
+                Attribute::BlendSrc(blend_src) => write!(self.out, "@blend_src({blend_src}) ")?,
                 Attribute::BuiltIn(builtin_attrib) => {
                     let builtin = builtin_attrib.to_wgsl_if_implemented()?;
                     write!(self.out, "@builtin({builtin}) ")?;
@@ -360,6 +363,32 @@ impl<W: Write> Writer<W> {
                 }
             };
         }
+        Ok(())
+    }
+
+    /// Writes all the necessary directives out
+    fn write_enable_dual_source_blending_if_needed(&mut self, module: &Module) -> BackendResult {
+        // Check for dual source blending.
+        if module.types.iter().any(|(_handle, ty)| {
+            if let TypeInner::Struct { ref members, .. } = ty.inner {
+                members.iter().any(|member| {
+                    member.binding.as_ref().is_some_and(|binding| {
+                        matches!(
+                            binding,
+                            &crate::Binding::Location {
+                                blend_src: Some(_),
+                                ..
+                            }
+                        )
+                    })
+                })
+            } else {
+                false
+            }
+        }) {
+            writeln!(self.out, "enable dual_source_blending;")?;
+        }
+
         Ok(())
     }
 
@@ -1888,7 +1917,7 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             location,
             interpolation,
             sampling,
-            second_blend_source: false,
+            blend_src: None,
         } => vec![
             Attribute::Location(location),
             Attribute::Interpolate(interpolation, sampling),
@@ -1897,10 +1926,10 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             location,
             interpolation,
             sampling,
-            second_blend_source: true,
+            blend_src: Some(blend_src),
         } => vec![
             Attribute::Location(location),
-            Attribute::SecondBlendSource,
+            Attribute::BlendSrc(blend_src),
             Attribute::Interpolate(interpolation, sampling),
         ],
     }

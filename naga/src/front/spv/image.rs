@@ -602,16 +602,16 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     words_left -= 2;
                 }
                 spirv::ImageOperands::CONST_OFFSET => {
-                    let offset_constant = self.next()?;
-                    let offset_expr = self
-                        .lookup_constant
-                        .lookup(offset_constant)?
-                        .inner
-                        .to_expr();
-                    let offset_handle = ctx
-                        .module
-                        .global_expressions
-                        .append(offset_expr, Default::default());
+                    let offset_expr = self.next()?;
+                    let offset_lexp = self.lookup_expression.lookup(offset_expr)?;
+                    let offset_handle = self.get_expr_handle(
+                        offset_expr,
+                        offset_lexp,
+                        ctx,
+                        emitter,
+                        block,
+                        body_idx,
+                    );
                     offset = Some(offset_handle);
                     words_left -= 1;
                 }

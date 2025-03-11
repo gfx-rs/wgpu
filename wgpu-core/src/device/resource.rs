@@ -200,13 +200,27 @@ impl Device {
         raw_device: Box<dyn hal::DynDevice>,
         adapter: &Arc<Adapter>,
         desc: &DeviceDescriptor,
-        trace_dir_name: Option<&str>,
         instance_flags: wgt::InstanceFlags,
     ) -> Result<Self, DeviceError> {
         #[cfg(not(feature = "trace"))]
-        if let Some(_) = trace_dir_name {
-            log::error!("Feature 'trace' is not enabled");
-        }
+        match &desc.trace {
+            wgt::Trace::Off => {}
+            _ => {
+                log::error!("wgpu-core feature 'trace' is not enabled");
+            }
+        };
+        #[cfg(feature = "trace")]
+        let trace_dir_name: Option<&std::path::PathBuf> = match &desc.trace {
+            wgt::Trace::Off => None,
+            wgt::Trace::Directory(d) => Some(d),
+            // The enum is non_exhaustive, so we must have a fallback arm (that should be
+            // unreachable in practice).
+            t => {
+                log::error!("unimplemented wgpu_types::Trace variant {t:?}");
+                None
+            }
+        };
+
         let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = command::CommandAllocator::new();
@@ -272,16 +286,19 @@ impl Device {
             #[cfg(feature = "trace")]
             trace: Mutex::new(
                 rank::DEVICE_TRACE,
-                trace_dir_name.and_then(|dir_path_name| match trace::Trace::new(dir_path_name) {
+                trace_dir_name.and_then(|path| match trace::Trace::new(path.clone()) {
                     Ok(mut trace) => {
                         trace.add(trace::Action::Init {
-                            desc: desc.clone(),
+                            desc: wgt::DeviceDescriptor {
+                                trace: wgt::Trace::Off,
+                                ..desc.clone()
+                            },
                             backend: adapter.backend(),
                         });
                         Some(trace)
                     }
                     Err(e) => {
-                        log::error!("Unable to start a trace in '{dir_path_name:?}': {e}");
+                        log::error!("Unable to start a trace in '{path:?}': {e}");
                         None
                     }
                 }),

@@ -239,9 +239,9 @@
                         ty: 3,
                         binding: Some(Location(
                             location: 0,
-                            second_blend_source: false,
                             interpolation: Some(Perspective),
                             sampling: Some(Center),
+                            blend_src: None,
                         )),
                         offset: 0,
                     ),
@@ -611,9 +611,9 @@
                         ty: 3,
                         binding: Some(Location(
                             location: 2,
-                            second_blend_source: false,
                             interpolation: None,
                             sampling: None,
+                            blend_src: None,
                         )),
                     ),
                     (
@@ -621,9 +621,9 @@
                         ty: 5,
                         binding: Some(Location(
                             location: 0,
-                            second_blend_source: false,
                             interpolation: None,
                             sampling: None,
+                            blend_src: None,
                         )),
                     ),
                     (
@@ -631,9 +631,9 @@
                         ty: 5,
                         binding: Some(Location(
                             location: 1,
-                            second_blend_source: false,
                             interpolation: None,
                             sampling: None,
+                            blend_src: None,
                         )),
                     ),
                 ],

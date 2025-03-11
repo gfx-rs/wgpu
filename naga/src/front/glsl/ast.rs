@@ -179,6 +179,8 @@ pub enum QualifierKey<'a> {
     Layout,
     /// Used for image formats
     Format,
+    /// Used for `index` layout qualifiers
+    Index,
 }
 
 #[derive(Debug)]
