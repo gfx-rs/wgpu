@@ -1386,7 +1386,7 @@ impl Device {
             } else {
                 wgt::TextureUses::RESOURCE
             };
-            texture.hal_usage & resolved_hal_usage & mask_copy & mask_dimension & mask_mip_level
+            resolved_hal_usage & mask_copy & mask_dimension & mask_mip_level
         };
 
         // use the combined depth-stencil format for the view
