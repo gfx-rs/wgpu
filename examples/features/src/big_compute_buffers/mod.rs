@@ -34,14 +34,14 @@ pub async fn execute_gpu(numbers: &[f32]) -> Vec<f32> {
         .await
         .unwrap();
 
-    execute_gpu_inner(&device, &queue, numbers).await.unwrap()
+    execute_gpu_inner(&device, &queue, numbers).await
 }
 
 pub async fn execute_gpu_inner(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     numbers: &[f32],
-) -> Option<Vec<f32>> {
+) -> Vec<f32> {
     let (staging_buffers, storage_buffers, bind_group, compute_pipeline) = setup(device, numbers);
 
     let mut encoder =
@@ -82,11 +82,13 @@ pub async fn execute_gpu_inner(
         })
     }
 
-    device.poll(wgpu::Maintain::wait());
+    device.poll(wgpu::PollType::Wait).unwrap();
 
     let Ok(Ok(())) = receiver.recv_async().await else {
-        log::error!("Failed to run compute on GPU!");
-        return None;
+        panic!(
+            "
+        Failed to run compute on GPU!"
+        )
     };
 
     let data: Vec<f32> = buffer_slices
@@ -103,7 +105,7 @@ pub async fn execute_gpu_inner(
         sb.unmap()
     }
 
-    Some(data)
+    data
 }
 
 fn setup(
