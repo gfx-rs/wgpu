@@ -21,16 +21,6 @@
                 width: 4,
             )),
         ),
-        (
-            name: None,
-            inner: Vector(
-                size: Tri,
-                scalar: (
-                    kind: Sint,
-                    width: 4,
-                ),
-            ),
-        ),
     ],
     special_types: (
         ray_desc: None,
@@ -70,61 +60,24 @@
             local_variables: [],
             expressions: [
                 Literal(I32(4)),
-                Literal(I32(4)),
                 Literal(U32(4)),
                 Literal(F32(4.0)),
-                Compose(
-                    ty: 3,
-                    components: [
-                        0,
-                        0,
-                        0,
-                    ],
-                ),
-                Literal(F32(2.0)),
-                Literal(I32(4)),
                 Constant(0),
                 Constant(1),
                 Constant(2),
-                Literal(I32(4)),
-                Literal(I32(4)),
-                Literal(I32(4)),
-                Compose(
-                    ty: 3,
-                    components: [
-                        10,
-                        11,
-                        12,
-                    ],
-                ),
-                Literal(F32(2.0)),
             ],
             named_expressions: {
-                0: "a",
-                1: "b",
-                2: "c",
-                3: "d",
-                4: "e",
-                5: "f",
-                6: "ag",
-                7: "bg",
-                8: "cg",
-                9: "dg",
-                13: "eg",
-                14: "fg",
+                0: "b",
+                1: "c",
+                2: "d",
+                3: "bg",
+                4: "cg",
+                5: "dg",
             },
             body: [
                 Emit((
-                    start: 4,
-                    end: 5,
-                )),
-                Emit((
                     start: 0,
                     end: 0,
-                )),
-                Emit((
-                    start: 13,
-                    end: 14,
                 )),
                 Return(
                     value: None,

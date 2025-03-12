@@ -3,6 +3,8 @@ Tests for the WGSL front end.
 */
 #![cfg(feature = "wgsl-in")]
 
+use naga::valid::Capabilities;
+
 fn check(input: &str, snapshot: &str) {
     let output = naga::front::wgsl::parse_str(input)
         .expect_err("expected parser error")
@@ -1319,6 +1321,230 @@ fn missing_bindings2() {
 }
 
 #[test]
+fn invalid_blend_src() {
+    // Missing capability.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(0) @blend_src(1) output1: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::UnsupportedCapability(Capabilities::DUAL_SOURCE_BLENDING),
+                ),
+                ..
+            },
+        )
+    }
+
+    // Missing enable directive.
+    // Note that this is a parsing error, not a validation error.
+    check("
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(0) @blend_src(1) output1: vec4<f32>,
+        }
+        @fragment
+        fn main(@builtin(position) position: vec4<f32>) -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(0.0)); }
+        ",
+        r###"error: `dual_source_blending` enable-extension is not enabled
+  ┌─ wgsl:3:27
+  │
+3 │             @location(0) @blend_src(0) output0: vec4<f32>,
+  │                           ^^^^^^^^^ the `dual_source_blending` enable-extension is needed for this functionality, but it is not currently enabled
+
+"###,
+    );
+
+    // Using blend_src on an input.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        @fragment
+        fn main(@location(0) @blend_src(0) input: f32) -> vec4f { return vec4f(0.0); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Argument(
+                    0,
+                    naga::valid::VaryingError::InvalidInputAttributeInStage("blend_src", naga::ShaderStage::Fragment),
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Using blend_src as output on something that isn't a fragment shader.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct VertexOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(0) @blend_src(1) output1: vec4<f32>,
+        }
+        @vertex
+        fn main() -> VertexOutput { return VertexOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Vertex,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::InvalidAttributeInStage("blend_src", naga::ShaderStage::Vertex),
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Invalid blend_src index.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(0) @blend_src(2) output1: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::InvalidBlendSrcIndex { location: 0, blend_src: 2 },
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Using a location other than 1 on blend_src
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(1) @blend_src(1) output1: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::InvalidBlendSrcIndex { location: 1, blend_src: 1 },
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Using same blend_src several times.
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(1) output0: vec4<f32>,
+            @location(0) @blend_src(1) output1: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::BindingCollisionBlendSrc { blend_src: 1 },
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Two attributes, only one has blend_src
+    check_validation! {
+        "
+        enable dual_source_blending;
+        struct FragmentOutput {
+            @location(0) @blend_src(0) output0: vec4<f32>,
+            @location(1) output1: vec4<f32>,
+        }
+        @fragment
+        fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
+        ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::IncompleteBlendSrcUsage,
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Single attribute using blend_src.
+    check_validation! {
+        "
+            enable dual_source_blending;
+            struct FragmentOutput {
+                @location(0) @blend_src(0) output0: vec4<f32>,
+            }
+            @fragment
+            fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0)); }
+            ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::IncompleteBlendSrcUsage,
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+
+    // Mixed output types.
+    check_validation! {
+        "
+            enable dual_source_blending;
+            struct FragmentOutput {
+                @location(0) @blend_src(0) output0: vec4<f32>,
+                @location(0) @blend_src(1) output1: f32,
+            }
+            @fragment
+            fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), 1.0); }
+            ":
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::BlendSrcOutputTypeMismatch { blend_src_0_type: _, blend_src_1_type: _ },
+                ),
+                ..
+            },
+        ),
+        Capabilities::DUAL_SOURCE_BLENDING
+    }
+}
+
+#[test]
 fn invalid_access() {
     check_validation! {
         r#"
@@ -1759,11 +1985,11 @@ fn binary_statement() {
             3 + 5;
         }
     ",
-        r###"error: expected assignment or increment/decrement, found ";"
-  ┌─ wgsl:3:18
+        r###"error: expected assignment or increment/decrement, found "+"
+  ┌─ wgsl:3:15
   │
 3 │             3 + 5;
-  │                  ^ expected assignment or increment/decrement
+  │               ^ expected assignment or increment/decrement
 
 "###,
     );
@@ -1777,11 +2003,11 @@ fn assign_to_expr() {
             3 + 5 = 10;
         }
         ",
-        r###"error: invalid left-hand side of assignment
-  ┌─ wgsl:3:13
+        r###"error: expected assignment or increment/decrement, found "+"
+  ┌─ wgsl:3:15
   │
 3 │             3 + 5 = 10;
-  │             ^^^^^ cannot assign to this expression
+  │               ^ expected assignment or increment/decrement
 
 "###,
     );
@@ -1905,18 +2131,16 @@ fn switch_signed_unsigned_mismatch() {
     check(
         "
         fn x(y: u32) {
-	        switch y {
-		        case 1: {}
-	        }
+            switch y {
+                case 1i: {}
+            }
         }
         ",
-        r###"error: invalid switch value
-  ┌─ wgsl:4:16
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
   │
-4 │                 case 1: {}
-  │                      ^ expected unsigned integer
-  │
-  = note: suffix the integer with a `u`: `1u`
+4 │                 case 1i: {}
+  │                      ^^ `switch` case selector must have the same type as the `switch` selector expression
 
 "###,
     );
@@ -1924,18 +2148,90 @@ fn switch_signed_unsigned_mismatch() {
     check(
         "
         fn x(y: i32) {
-	        switch y {
-		        case 1u: {}
-	        }
+            switch y {
+                case 1u: {}
+            }
         }
         ",
-        r###"error: invalid switch value
-  ┌─ wgsl:4:16
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
   │
 4 │                 case 1u: {}
-  │                      ^^ expected signed integer
+  │                      ^^ `switch` case selector must have the same type as the `switch` selector expression
+
+"###,
+    );
+}
+
+#[test]
+fn switch_invalid_type() {
+    check(
+        "
+        fn x(y: f32) {
+            switch y {
+                case 1: {}
+            }
+        }
+        ",
+        r###"error: invalid `switch` selector
+  ┌─ wgsl:3:20
   │
-  = note: remove the `u` suffix: `1`
+3 │             switch y {
+  │                    ^ `switch` selector must be a scalar integer
+
+"###,
+    );
+
+    check(
+        "
+        fn x(y: vec2<i32>) {
+            switch y {
+                case 1: {}
+            }
+        }
+        ",
+        r###"error: invalid `switch` selector
+  ┌─ wgsl:3:20
+  │
+3 │             switch y {
+  │                    ^ `switch` selector must be a scalar integer
+
+"###,
+    );
+
+    check(
+        "
+        fn x() {
+            switch 0 {
+                case 1.0: {}
+            }
+        }
+    ",
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
+  │
+4 │                 case 1.0: {}
+  │                      ^^^ `switch` case selector must be a scalar integer const expression
+
+"###,
+    );
+}
+
+#[test]
+fn switch_non_const_case() {
+    check(
+        "
+        fn x(y: i32) {
+            switch 0 {
+                case y: {}
+            }
+        }
+    ",
+        r###"error: invalid `switch` case selector value
+  ┌─ wgsl:4:22
+  │
+4 │                 case y: {}
+  │                      ^ `switch` case selector must be a scalar integer const expression
 
 "###,
     );

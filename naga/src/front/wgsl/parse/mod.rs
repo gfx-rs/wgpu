@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
+use directive::enable_extension::ImplementedEnableExtension;
 
 use crate::diagnostic_filter::{
     self, DiagnosticFilter, DiagnosticFilterMap, DiagnosticFilterNode, FilterableTriggeringRule,
@@ -151,6 +152,7 @@ enum Rule {
     Directive,
     GenericExpr,
     EnclosedExpr,
+    LhsExpr,
 }
 
 struct ParsedAttribute<T> {
@@ -176,11 +178,11 @@ impl<T> ParsedAttribute<T> {
 #[derive(Default)]
 struct BindingParser<'a> {
     location: ParsedAttribute<Handle<ast::Expression<'a>>>,
-    second_blend_source: ParsedAttribute<bool>,
     built_in: ParsedAttribute<crate::BuiltIn>,
     interpolation: ParsedAttribute<crate::Interpolation>,
     sampling: ParsedAttribute<crate::Sampling>,
     invariant: ParsedAttribute<bool>,
+    blend_src: ParsedAttribute<Handle<ast::Expression<'a>>>,
 }
 
 impl<'a> BindingParser<'a> {
@@ -218,11 +220,25 @@ impl<'a> BindingParser<'a> {
                 }
                 lexer.expect(Token::Paren(')'))?;
             }
-            "second_blend_source" => {
-                self.second_blend_source.set(true, name_span)?;
-            }
+
             "invariant" => {
                 self.invariant.set(true, name_span)?;
+            }
+            "blend_src" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::DualSourceBlending)
+                {
+                    return Err(Error::EnableExtensionNotEnabled {
+                        span: name_span,
+                        kind: ImplementedEnableExtension::DualSourceBlending.into(),
+                    });
+                }
+
+                lexer.expect(Token::Paren('('))?;
+                self.blend_src
+                    .set(parser.general_expression(lexer, ctx)?, name_span)?;
+                lexer.expect(Token::Paren(')'))?;
             }
             _ => return Err(Error::UnknownAttribute(name_span)),
         }
@@ -236,9 +252,10 @@ impl<'a> BindingParser<'a> {
             self.interpolation.value,
             self.sampling.value,
             self.invariant.value.unwrap_or_default(),
+            self.blend_src.value,
         ) {
-            (None, None, None, None, false) => Ok(None),
-            (Some(location), None, interpolation, sampling, false) => {
+            (None, None, None, None, false, None) => Ok(None),
+            (Some(location), None, interpolation, sampling, false, blend_src) => {
                 // Before handing over the completed `Module`, we call
                 // `apply_default_interpolation` to ensure that the interpolation and
                 // sampling have been explicitly specified on all vertex shader output and fragment
@@ -247,16 +264,18 @@ impl<'a> BindingParser<'a> {
                     location,
                     interpolation,
                     sampling,
-                    second_blend_source: self.second_blend_source.value.unwrap_or(false),
+                    blend_src,
                 }))
             }
-            (None, Some(crate::BuiltIn::Position { .. }), None, None, invariant) => {
+            (None, Some(crate::BuiltIn::Position { .. }), None, None, invariant, None) => {
                 Ok(Some(ast::Binding::BuiltIn(crate::BuiltIn::Position {
                     invariant,
                 })))
             }
-            (None, Some(built_in), None, None, false) => Ok(Some(ast::Binding::BuiltIn(built_in))),
-            (_, _, _, _, _) => Err(Error::InconsistentBinding(span)),
+            (None, Some(built_in), None, None, false, None) => {
+                Ok(Some(ast::Binding::BuiltIn(built_in)))
+            }
+            (_, _, _, _, _, _) => Err(Error::InconsistentBinding(span)),
         }
     }
 }
@@ -928,6 +947,53 @@ impl Parser {
                     let expr = ast::Expression::AddrOf(expr);
                     let span = this.peek_rule_span(lexer);
                     ctx.expressions.append(expr, span)
+                }
+                _ => this.singular_expression(lexer, ctx)?,
+            };
+
+            this.pop_rule_span(lexer);
+            Ok(expr)
+        })
+    }
+
+    /// Parse a `lhs_expression`.
+    ///
+    /// LHS expressions only support the `&` and `*` operators and
+    /// the `[]` and `.` postfix selectors.
+    fn lhs_expression<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+        self.track_recursion(|this| {
+            this.push_rule_span(Rule::LhsExpr, lexer);
+            let start = lexer.start_byte_offset();
+            let expr = match lexer.peek() {
+                (Token::Operation('*'), _) => {
+                    let _ = lexer.next();
+                    let expr = this.lhs_expression(lexer, ctx)?;
+                    let expr = ast::Expression::Deref(expr);
+                    let span = this.peek_rule_span(lexer);
+                    ctx.expressions.append(expr, span)
+                }
+                (Token::Operation('&'), _) => {
+                    let _ = lexer.next();
+                    let expr = this.lhs_expression(lexer, ctx)?;
+                    let expr = ast::Expression::AddrOf(expr);
+                    let span = this.peek_rule_span(lexer);
+                    ctx.expressions.append(expr, span)
+                }
+                (Token::Operation('('), _) => {
+                    let _ = lexer.next();
+                    let primary_expr = this.lhs_expression(lexer, ctx)?;
+                    lexer.expect(Token::Paren(')'))?;
+                    this.postfix(start, lexer, ctx, primary_expr)?
+                }
+                (Token::Word(word), span) => {
+                    let _ = lexer.next();
+                    let ident = this.ident_expr(word, span, ctx);
+                    let primary_expr = ctx.expressions.append(ast::Expression::Ident(ident), span);
+                    this.postfix(start, lexer, ctx, primary_expr)?
                 }
                 _ => this.singular_expression(lexer, ctx)?,
             };
@@ -1781,7 +1847,7 @@ impl Parser {
         block: &mut ast::Block<'a>,
     ) -> Result<(), Error<'a>> {
         let span_start = lexer.start_byte_offset();
-        let target = self.general_expression(lexer, ctx)?;
+        let target = self.lhs_expression(lexer, ctx)?;
         self.assignment_op_and_rhs(lexer, ctx, block, target, span_start)
     }
 

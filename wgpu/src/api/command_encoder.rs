@@ -217,6 +217,8 @@ impl CommandEncoder {
     ///
     /// Occlusion and timestamp queries are 8 bytes each (see [`crate::QUERY_SIZE`]). For pipeline statistics queries,
     /// see [`PipelineStatisticsTypes`] for more information.
+    ///
+    /// `destination_offset` must be aligned to [`QUERY_RESOLVE_BUFFER_ALIGNMENT`].
     pub fn resolve_query_set(
         &mut self,
         query_set: &QuerySet,

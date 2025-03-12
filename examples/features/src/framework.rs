@@ -281,18 +281,18 @@ impl ExampleContext {
         // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the surface.
         let needed_limits = E::required_limits().using_resolution(adapter.limits());
 
-        let trace_dir = std::env::var("WGPU_TRACE");
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: (E::optional_features() & adapter.features())
-                        | E::required_features(),
-                    required_limits: needed_limits,
-                    memory_hints: wgpu::MemoryHints::MemoryUsage,
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: (E::optional_features() & adapter.features())
+                    | E::required_features(),
+                required_limits: needed_limits,
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
+                trace: match std::env::var_os("WGPU_TRACE") {
+                    Some(path) => wgpu::Trace::Directory(path.into()),
+                    None => wgpu::Trace::Off,
                 },
-                trace_dir.ok().as_ref().map(std::path::Path::new),
-            )
+            })
             .await
             .expect("Unable to find a suitable GPU adapter!");
 

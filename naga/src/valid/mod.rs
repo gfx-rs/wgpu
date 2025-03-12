@@ -275,13 +275,17 @@ pub struct Validator {
     types: Vec<r#type::TypeInfo>,
     layouter: Layouter,
     location_mask: BitSet,
+    blend_src_mask: BitSet,
     ep_resource_bindings: FastHashSet<crate::ResourceBinding>,
     #[allow(dead_code)]
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: HandleSet<crate::Expression>,
     override_ids: FastHashSet<u16>,
-    allow_overrides: bool,
+
+    /// Treat overrides whose initializers are not fully-evaluated
+    /// constant expressions as errors.
+    overrides_resolved: bool,
 
     /// A checklist of expressions that must be visited by a specific kind of
     /// statement.
@@ -332,6 +336,13 @@ pub enum OverrideError {
     TypeNotScalar,
     #[error("Override declarations are not allowed")]
     NotAllowed,
+    #[error("Override is uninitialized")]
+    UninitializedOverride,
+    #[error("Constant expression {handle:?} is invalid")]
+    ConstExpression {
+        handle: Handle<crate::Expression>,
+        source: ConstExpressionError,
+    },
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -467,12 +478,13 @@ impl Validator {
             types: Vec::new(),
             layouter: Layouter::default(),
             location_mask: BitSet::new(),
+            blend_src_mask: BitSet::new(),
             ep_resource_bindings: FastHashSet::default(),
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
             valid_expression_set: HandleSet::new(),
             override_ids: FastHashSet::default(),
-            allow_overrides: true,
+            overrides_resolved: false,
             needs_visit: HandleSet::new(),
         }
     }
@@ -492,6 +504,7 @@ impl Validator {
         self.types.clear();
         self.layouter.clear();
         self.location_mask.clear();
+        self.blend_src_mask.clear();
         self.ep_resource_bindings.clear();
         self.switch_values.clear();
         self.valid_expression_list.clear();
@@ -532,15 +545,7 @@ impl Validator {
         gctx: crate::proc::GlobalCtx,
         mod_info: &ModuleInfo,
     ) -> Result<(), OverrideError> {
-        if !self.allow_overrides {
-            return Err(OverrideError::NotAllowed);
-        }
-
         let o = &gctx.overrides[handle];
-
-        if o.name.is_none() && o.id.is_none() {
-            return Err(OverrideError::MissingNameAndID);
-        }
 
         if let Some(id) = o.id {
             if !self.override_ids.insert(id) {
@@ -570,6 +575,8 @@ impl Validator {
             if !decl_ty.equivalent(init_ty, gctx.types) {
                 return Err(OverrideError::InvalidType);
             }
+        } else if self.overrides_resolved {
+            return Err(OverrideError::UninitializedOverride);
         }
 
         Ok(())
@@ -580,18 +587,22 @@ impl Validator {
         &mut self,
         module: &crate::Module,
     ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
-        self.allow_overrides = true;
+        self.overrides_resolved = false;
         self.validate_impl(module)
     }
 
-    /// Check the given module to be valid.
+    /// Check the given module to be valid, requiring overrides to be resolved.
     ///
-    /// With the additional restriction that overrides are not present.
-    pub fn validate_no_overrides(
+    /// This is the same as [`validate`], except that any override
+    /// whose value is not a fully-evaluated constant expression is
+    /// treated as an error.
+    ///
+    /// [`validate`]: Validator::validate
+    pub fn validate_resolved_overrides(
         &mut self,
         module: &crate::Module,
     ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
-        self.allow_overrides = false;
+        self.overrides_resolved = true;
         self.validate_impl(module)
     }
 
@@ -634,20 +645,6 @@ impl Validator {
                     }
                     .with_span_handle(handle, &module.types)
                 })?;
-            if !self.allow_overrides {
-                if let crate::TypeInner::Array {
-                    size: crate::ArraySize::Pending(_),
-                    ..
-                } = ty.inner
-                {
-                    return Err((ValidationError::Type {
-                        handle,
-                        name: ty.name.clone().unwrap_or_default(),
-                        source: TypeError::UnresolvedOverride(handle),
-                    })
-                    .with_span_handle(handle, &module.types));
-                }
-            }
             mod_info.type_flags.push(ty_info.flags);
             self.types[handle.index()] = ty_info;
         }
@@ -702,7 +699,7 @@ impl Validator {
                             source,
                         }
                         .with_span_handle(handle, &module.overrides)
-                    })?
+                    })?;
             }
         }
 
@@ -719,7 +716,7 @@ impl Validator {
         }
 
         for (handle, fun) in module.functions.iter() {
-            match self.validate_function(fun, module, &mod_info, false, &global_expr_kind) {
+            match self.validate_function(fun, module, &mod_info, false) {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {
@@ -745,7 +742,7 @@ impl Validator {
                 .with_span()); // TODO: keep some EP span information?
             }
 
-            match self.validate_entry_point(ep, module, &mod_info, &global_expr_kind) {
+            match self.validate_entry_point(ep, module, &mod_info) {
                 Ok(info) => mod_info.entry_points.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {

@@ -11,7 +11,6 @@ use core::{
     num::NonZeroU32,
     sync::atomic::{AtomicBool, Ordering},
 };
-use std::sync::OnceLock;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
@@ -49,7 +48,7 @@ use crate::{
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation::{self, validate_color_attachment_bytes_per_sample},
     weak_vec::WeakVec,
-    FastHashMap, LabelHelpers,
+    FastHashMap, LabelHelpers, OnceCellOrLock,
 };
 
 use super::{
@@ -67,7 +66,7 @@ use portable_atomic::AtomicU64;
 pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queue: OnceLock<Weak<Queue>>,
+    pub(crate) queue: OnceCellOrLock<Weak<Queue>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -201,13 +200,27 @@ impl Device {
         raw_device: Box<dyn hal::DynDevice>,
         adapter: &Arc<Adapter>,
         desc: &DeviceDescriptor,
-        trace_dir_name: Option<&str>,
         instance_flags: wgt::InstanceFlags,
     ) -> Result<Self, DeviceError> {
         #[cfg(not(feature = "trace"))]
-        if let Some(_) = trace_dir_name {
-            log::error!("Feature 'trace' is not enabled");
-        }
+        match &desc.trace {
+            wgt::Trace::Off => {}
+            _ => {
+                log::error!("wgpu-core feature 'trace' is not enabled");
+            }
+        };
+        #[cfg(feature = "trace")]
+        let trace_dir_name: Option<&std::path::PathBuf> = match &desc.trace {
+            wgt::Trace::Off => None,
+            wgt::Trace::Directory(d) => Some(d),
+            // The enum is non_exhaustive, so we must have a fallback arm (that should be
+            // unreachable in practice).
+            t => {
+                log::error!("unimplemented wgpu_types::Trace variant {t:?}");
+                None
+            }
+        };
+
         let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = command::CommandAllocator::new();
@@ -257,7 +270,7 @@ impl Device {
         Ok(Self {
             raw: raw_device,
             adapter: adapter.clone(),
-            queue: OnceLock::new(),
+            queue: OnceCellOrLock::new(),
             zero_buffer: ManuallyDrop::new(zero_buffer),
             label: desc.label.to_string(),
             command_allocator,
@@ -273,16 +286,19 @@ impl Device {
             #[cfg(feature = "trace")]
             trace: Mutex::new(
                 rank::DEVICE_TRACE,
-                trace_dir_name.and_then(|dir_path_name| match trace::Trace::new(dir_path_name) {
+                trace_dir_name.and_then(|path| match trace::Trace::new(path.clone()) {
                     Ok(mut trace) => {
                         trace.add(trace::Action::Init {
-                            desc: desc.clone(),
+                            desc: wgt::DeviceDescriptor {
+                                trace: wgt::Trace::Off,
+                                ..desc.clone()
+                            },
                             backend: adapter.backend(),
                         });
                         Some(trace)
                     }
                     Err(e) => {
-                        log::error!("Unable to start a trace in '{dir_path_name:?}': {e}");
+                        log::error!("Unable to start a trace in '{path:?}': {e}");
                         None
                     }
                 }),
@@ -1170,9 +1186,8 @@ impl Device {
             }
         };
 
-        let allowed_format_usages = self
-            .describe_format_features(resolved_format)?
-            .allowed_usages;
+        let format_features = self.describe_format_features(resolved_format)?;
+        let allowed_format_usages = format_features.allowed_usages;
         if resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
             && !allowed_format_usages.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
         {
@@ -1348,6 +1363,11 @@ impl Device {
 
         // filter the usages based on the other criteria
         let usage = {
+            let resolved_hal_usage = conv::map_texture_usage(
+                resolved_usage,
+                resolved_format.into(),
+                format_features.flags,
+            );
             let mask_copy = !(wgt::TextureUses::COPY_SRC | wgt::TextureUses::COPY_DST);
             let mask_dimension = match resolved_dimension {
                 TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
@@ -1366,7 +1386,7 @@ impl Device {
             } else {
                 wgt::TextureUses::RESOURCE
             };
-            texture.hal_usage & mask_copy & mask_dimension & mask_mip_level
+            resolved_hal_usage & mask_copy & mask_dimension & mask_mip_level
         };
 
         // use the combined depth-stencil format for the view
@@ -1986,7 +2006,7 @@ impl Device {
             device: self.clone(),
             entries: entry_map,
             origin,
-            exclusive_pipeline: OnceLock::new(),
+            exclusive_pipeline: OnceCellOrLock::new(),
             binding_count_validator: count_validator,
             label: label.to_string(),
         };

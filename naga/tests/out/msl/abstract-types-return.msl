@@ -43,6 +43,11 @@ float return_const_f32_const_ai(
     return 1.0;
 }
 
+metal::float2 return_vec2f32_const_ai(
+) {
+    return metal::float2(1.0);
+}
+
 kernel void main_(
 ) {
     return;

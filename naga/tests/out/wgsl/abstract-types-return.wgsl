@@ -26,6 +26,10 @@ fn return_const_f32_const_ai() -> f32 {
     return 1f;
 }
 
+fn return_vec2f32_const_ai() -> vec2<f32> {
+    return vec2(1f);
+}
+
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
     return;

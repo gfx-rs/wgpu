@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 174
+; Bound: 172
 OpCapability Shader
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
@@ -143,13 +143,11 @@ OpDecorate %116 BuiltIn LocalInvocationId
 %148 = OpTypePointer StorageBuffer %10
 %149 = OpConstant  %7  1
 %152 = OpConstant  %7  5
-%154 = OpTypePointer Uniform %12
-%155 = OpTypePointer Uniform %4
-%156 = OpConstant  %7  3
-%159 = OpConstant  %7  4
-%161 = OpTypePointer StorageBuffer %4
-%172 = OpConstant  %23  2
-%173 = OpConstant  %7  256
+%154 = OpTypePointer Uniform %4
+%155 = OpConstant  %7  3
+%158 = OpConstant  %7  4
+%170 = OpConstant  %23  2
+%171 = OpConstant  %7  256
 %53 = OpFunction  %2  None %54
 %52 = OpFunctionParameter  %8
 %51 = OpLabel
@@ -233,24 +231,24 @@ OpStore %147 %145
 %151 = OpLoad  %4  %150
 %153 = OpAccessChain  %128  %26 %152
 OpStore %153 %151
-%157 = OpAccessChain  %155  %98 %60 %156
-%158 = OpLoad  %4  %157
-%160 = OpAccessChain  %128  %26 %159
-OpStore %160 %158
-%162 = OpAccessChain  %161  %94 %149
-%163 = OpLoad  %4  %162
-%164 = OpAccessChain  %128  %26 %156
-OpStore %164 %163
-%165 = OpAccessChain  %73  %94 %60 %60
-%166 = OpLoad  %4  %165
-%167 = OpAccessChain  %128  %26 %18
-OpStore %167 %166
-%168 = OpAccessChain  %161  %94 %149
-OpStore %168 %107
-%169 = OpArrayLength  %7  %33 0
-%170 = OpConvertUToF  %4  %169
-%171 = OpAccessChain  %128  %26 %149
-OpStore %171 %170
-OpAtomicStore %28 %172 %173 %18
+%156 = OpAccessChain  %154  %98 %60 %155
+%157 = OpLoad  %4  %156
+%159 = OpAccessChain  %128  %26 %158
+OpStore %159 %157
+%160 = OpAccessChain  %73  %94 %149
+%161 = OpLoad  %4  %160
+%162 = OpAccessChain  %128  %26 %155
+OpStore %162 %161
+%163 = OpAccessChain  %73  %94 %60 %60
+%164 = OpLoad  %4  %163
+%165 = OpAccessChain  %128  %26 %18
+OpStore %165 %164
+%166 = OpAccessChain  %73  %94 %149
+OpStore %166 %107
+%167 = OpArrayLength  %7  %33 0
+%168 = OpConvertUToF  %4  %167
+%169 = OpAccessChain  %128  %26 %149
+OpStore %169 %168
+OpAtomicStore %28 %170 %171 %18
 OpReturn
 OpFunctionEnd

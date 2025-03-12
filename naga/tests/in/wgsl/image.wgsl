@@ -113,26 +113,27 @@ var sampler_reg: sampler;
 
 @fragment
 fn texture_sample() -> @location(0) vec4<f32> {
-    let tc = vec2<f32>(0.5);
-    let tc3 = vec3<f32>(0.5);
+    const tc = vec2<f32>(0.5);
+    const tc3 = vec3<f32>(0.5);
+    const offset = vec2<i32>(3, 1);
     let level = 2.3;
     var a: vec4<f32>;
     a += textureSample(image_1d, sampler_reg, tc.x);
     a += textureSample(image_2d, sampler_reg, tc);
     a += textureSample(image_2d, sampler_reg, tc, vec2<i32>(3, 1));
     a += textureSampleLevel(image_2d, sampler_reg, tc, level);
-    a += textureSampleLevel(image_2d, sampler_reg, tc, level, vec2<i32>(3, 1));
-    a += textureSampleBias(image_2d, sampler_reg, tc, 2.0, vec2<i32>(3, 1));
+    a += textureSampleLevel(image_2d, sampler_reg, tc, level, offset);
+    a += textureSampleBias(image_2d, sampler_reg, tc, 2.0, offset);
     a += textureSample(image_2d_array, sampler_reg, tc, 0u);
-    a += textureSample(image_2d_array, sampler_reg, tc, 0u, vec2<i32>(3, 1));
+    a += textureSample(image_2d_array, sampler_reg, tc, 0u, offset);
     a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, level);
-    a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, level, vec2<i32>(3, 1));
-    a += textureSampleBias(image_2d_array, sampler_reg, tc, 0u, 2.0, vec2<i32>(3, 1));
+    a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0u, level, offset);
+    a += textureSampleBias(image_2d_array, sampler_reg, tc, 0u, 2.0, offset);
     a += textureSample(image_2d_array, sampler_reg, tc, 0);
-    a += textureSample(image_2d_array, sampler_reg, tc, 0, vec2<i32>(3, 1));
+    a += textureSample(image_2d_array, sampler_reg, tc, 0, offset);
     a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0, level);
-    a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0, level, vec2<i32>(3, 1));
-    a += textureSampleBias(image_2d_array, sampler_reg, tc, 0, 2.0, vec2<i32>(3, 1));
+    a += textureSampleLevel(image_2d_array, sampler_reg, tc, 0, level, offset);
+    a += textureSampleBias(image_2d_array, sampler_reg, tc, 0, 2.0, offset);
     a += textureSample(image_cube_array, sampler_reg, tc3, 0u);
     a += textureSampleLevel(image_cube_array, sampler_reg, tc3, 0u, level);
     a += textureSampleBias(image_cube_array, sampler_reg, tc3, 0u, 2.0);

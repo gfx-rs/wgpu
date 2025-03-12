@@ -359,12 +359,7 @@ impl<'module> ModuleTracer<'module> {
                     crate::TypeInner::Array { size, .. }
                     | crate::TypeInner::BindingArray { size, .. } => match size {
                         crate::ArraySize::Constant(_) | crate::ArraySize::Dynamic => None,
-                        crate::ArraySize::Pending(pending) => match pending {
-                            crate::PendingArraySize::Expression(handle) => Some(handle),
-                            crate::PendingArraySize::Override(handle) => {
-                                self.module.overrides[handle].init
-                            }
-                        },
+                        crate::ArraySize::Pending(handle) => self.module.overrides[handle].init,
                     },
                     _ => None,
                 },
@@ -517,12 +512,21 @@ fn type_expression_interdependence() {
         crate::Span::default(),
     );
     let type_needs_expression = |module: &mut crate::Module, handle| {
+        let override_handle = module.overrides.append(
+            crate::Override {
+                name: None,
+                id: None,
+                ty: u32,
+                init: Some(handle),
+            },
+            crate::Span::default(),
+        );
         module.types.insert(
             crate::Type {
                 name: None,
                 inner: crate::TypeInner::Array {
                     base: u32,
-                    size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(handle)),
+                    size: crate::ArraySize::Pending(override_handle),
                     stride: 4,
                 },
             },
@@ -654,7 +658,7 @@ fn array_length_override() {
             name: Some("array<bool, o>".to_string()),
             inner: crate::TypeInner::Array {
                 base: ty_bool,
-                size: crate::ArraySize::Pending(crate::PendingArraySize::Override(o)),
+                size: crate::ArraySize::Pending(o),
                 stride: 4,
             },
         },
@@ -760,7 +764,7 @@ fn array_length_override_mutual() {
             name: Some("delicious_array".to_string()),
             inner: Ti::Array {
                 base: ty_u32,
-                size: crate::ArraySize::Pending(crate::PendingArraySize::Override(second_override)),
+                size: crate::ArraySize::Pending(second_override),
                 stride: 4,
             },
         },
@@ -795,12 +799,21 @@ fn array_length_expression() {
         crate::Expression::Literal(crate::Literal::U32(1)),
         crate::Span::default(),
     );
+    let override_one = module.overrides.append(
+        crate::Override {
+            name: None,
+            id: None,
+            ty: ty_u32,
+            init: Some(one),
+        },
+        crate::Span::default(),
+    );
     let _ty_array = module.types.insert(
         crate::Type {
             name: Some("array<u32, 1>".to_string()),
             inner: crate::TypeInner::Array {
                 base: ty_u32,
-                size: crate::ArraySize::Pending(crate::PendingArraySize::Expression(one)),
+                size: crate::ArraySize::Pending(override_one),
                 stride: 4,
             },
         },
