@@ -1186,9 +1186,8 @@ impl Device {
             }
         };
 
-        let allowed_format_usages = self
-            .describe_format_features(resolved_format)?
-            .allowed_usages;
+        let format_features = self.describe_format_features(resolved_format)?;
+        let allowed_format_usages = format_features.allowed_usages;
         if resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
             && !allowed_format_usages.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
         {
@@ -1364,6 +1363,11 @@ impl Device {
 
         // filter the usages based on the other criteria
         let usage = {
+            let resolved_hal_usage = conv::map_texture_usage(
+                resolved_usage,
+                resolved_format.into(),
+                format_features.flags,
+            );
             let mask_copy = !(wgt::TextureUses::COPY_SRC | wgt::TextureUses::COPY_DST);
             let mask_dimension = match resolved_dimension {
                 TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
@@ -1382,7 +1386,7 @@ impl Device {
             } else {
                 wgt::TextureUses::RESOURCE
             };
-            texture.hal_usage & mask_copy & mask_dimension & mask_mip_level
+            resolved_hal_usage & mask_copy & mask_dimension & mask_mip_level
         };
 
         // use the combined depth-stencil format for the view
