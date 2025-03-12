@@ -1687,7 +1687,6 @@ impl<W: Write> Writer<W> {
         }
 
         let expression = &context.function.expressions[expr_handle];
-        log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
             crate::Expression::Literal(_)
             | crate::Expression::Constant(_)
