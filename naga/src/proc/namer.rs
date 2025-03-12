@@ -21,9 +21,19 @@ pub enum NameKey {
     Function(Handle<crate::Function>),
     FunctionArgument(Handle<crate::Function>, u32),
     FunctionLocal(Handle<crate::Function>, Handle<crate::LocalVariable>),
+
+    /// A local variable used by ReadZeroSkipWrite bounds-check policy
+    /// when it needs to produce a pointer-typed result for an OOB access.
+    /// These are unique per accessed type, so the second element is a
+    /// type handle. See docs for [`crate::back::msl`].
+    FunctionOobLocal(Handle<crate::Function>, Handle<crate::Type>),
+
     EntryPoint(EntryPointIndex),
     EntryPointLocal(EntryPointIndex, Handle<crate::LocalVariable>),
     EntryPointArgument(EntryPointIndex, u32),
+
+    /// Entry point version of `FunctionOobLocal`.
+    EntryPointOobLocal(EntryPointIndex, Handle<crate::Type>),
 }
 
 /// This processor assigns names to all the things in a module

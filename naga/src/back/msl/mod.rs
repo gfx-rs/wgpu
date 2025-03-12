@@ -29,6 +29,20 @@ holding the result.
 [msl]: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
 [all-atom]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
 
+## Pointer-typed bounds-checked expressions and OOB locals
+
+MSL (unlike HLSL and GLSL) has native support for pointer-typed function
+arguments. When the [`BoundsCheckPolicy`] is `ReadZeroSkipWrite` and an
+out-of-bounds index expression is used for such an argument, our strategy is to
+pass a pointer to a dummy variable. These dummy variables are called "OOB
+locals". We emit at most one OOB local per function for each type, since all
+expressions producing a result of that type can share the same OOB local. (Note
+that the OOB local mechanism is not actually implementing "skip write", nor even
+"read zero" in some cases of read-after-write, but doing so would require
+additional effort and the difference is unlikely to matter.)
+
+[`BoundsCheckPolicy`]: crate::proc::BoundsCheckPolicy
+
 */
 
 use alloc::{
