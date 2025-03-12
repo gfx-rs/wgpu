@@ -1850,6 +1850,13 @@ impl dispatch::DeviceInterface for WebDevice {
         unreachable!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
     }
 
+    unsafe fn create_shader_module_msl(
+        &self,
+        _desc: &crate::ShaderModuleDescriptorMsl<'_>,
+    ) -> dispatch::DispatchShaderModule {
+        unreachable!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
+    }
+
     fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor<'_>,

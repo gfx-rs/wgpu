@@ -203,6 +203,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 
 - Support getting vertices of the hit triangle when raytracing. By @Vecvec in [#7183](https://github.com/gfx-rs/wgpu/pull/7183) .
 
+- Add Metal compute shader passthrough. Use `create_shader_module_msl` on device. By @syl20bnr in [#7326](https://github.com/gfx-rs/wgpu/pull/7326).
 
 #### Naga
 

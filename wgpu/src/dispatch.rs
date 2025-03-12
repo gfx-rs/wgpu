@@ -115,6 +115,10 @@ pub trait DeviceInterface: CommonTraits {
         &self,
         desc: &crate::ShaderModuleDescriptorSpirV<'_>,
     ) -> DispatchShaderModule;
+    unsafe fn create_shader_module_msl(
+        &self,
+        desc: &crate::ShaderModuleDescriptorMsl<'_>,
+    ) -> DispatchShaderModule;
     fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor<'_>,

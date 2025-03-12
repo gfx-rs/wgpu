@@ -133,6 +133,13 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    unsafe fn create_shader_module_msl(
+        &self,
+        _desc: &wgpu::ShaderModuleDescriptorMsl<'_>,
+    ) -> DispatchShaderModule {
+        unimplemented!()
+    }
+
     fn create_bind_group_layout(
         &self,
         _desc: &wgpu::BindGroupLayoutDescriptor<'_>,

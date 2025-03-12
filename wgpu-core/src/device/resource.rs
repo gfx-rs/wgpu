@@ -1790,6 +1790,45 @@ impl Device {
         Ok(module)
     }
 
+    #[allow(unused_unsafe)]
+    pub(crate) unsafe fn create_shader_module_msl<'a>(
+        self: &Arc<Self>,
+        desc: &pipeline::ShaderModuleDescriptor<'a>,
+        source: &'a Cow<str>,
+        entry_point: &str,
+        num_workgroups: (u32, u32, u32),
+    ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
+        let hal_shader = hal::ShaderInput::Msl {
+            shader: source.to_string(),
+            entry_point: entry_point.to_string(),
+            num_workgroups,
+        };
+        let hal_desc = hal::ShaderModuleDescriptor {
+            label: desc.label.to_hal(self.instance_flags),
+            runtime_checks: desc.runtime_checks,
+        };
+        let raw =
+            unsafe { self.raw().create_shader_module(&hal_desc, hal_shader) }.map_err(|error| {
+                match error {
+                    hal::ShaderError::Device(err) => {
+                        pipeline::CreateShaderModuleError::Device(self.handle_hal_error(err))
+                    }
+                    hal::ShaderError::Compilation(msg) => {
+                        log::error!("Shader compilation error: {}", msg);
+                        pipeline::CreateShaderModuleError::Generation
+                    }
+                }
+            })?;
+        let module = pipeline::ShaderModule {
+            raw: ManuallyDrop::new(raw),
+            device: self.clone(),
+            interface: None,
+            label: desc.label.to_string(),
+        };
+
+        Ok(Arc::new(module))
+    }
+
     pub(crate) fn create_command_encoder(
         self: &Arc<Self>,
         label: &crate::Label,

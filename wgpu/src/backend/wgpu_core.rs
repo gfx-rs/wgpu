@@ -1081,6 +1081,46 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into()
     }
 
+    unsafe fn create_shader_module_msl(
+        &self,
+        desc: &crate::ShaderModuleDescriptorMsl<'_>,
+    ) -> dispatch::DispatchShaderModule {
+        let descriptor = wgc::pipeline::ShaderModuleDescriptor {
+            label: desc.label.map(Borrowed),
+            // Doesn't matter the value since msl passthrough shaders aren't mutated to include
+            // runtime checks
+            runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+        };
+        let (id, error) = unsafe {
+            self.context.0.device_create_shader_module_msl(
+                self.id,
+                &descriptor,
+                Borrowed(&desc.source),
+                &desc.entry_point,
+                desc.num_workgroups,
+                None,
+            )
+        };
+        let compilation_info = match error {
+            Some(cause) => {
+                self.context.handle_error(
+                    &self.error_sink,
+                    cause.clone(),
+                    desc.label,
+                    "Device::create_shader_module_msl",
+                );
+                CompilationInfo::from(cause)
+            }
+            None => CompilationInfo { messages: vec![] },
+        };
+        CoreShaderModule {
+            context: self.context.clone(),
+            id,
+            compilation_info,
+        }
+        .into()
+    }
+
     fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor<'_>,

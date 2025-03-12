@@ -985,6 +985,46 @@ impl Global {
         (id, Some(error))
     }
 
+    // Unsafe-ness of internal calls has little to do with unsafe-ness of this.
+    #[allow(unused_unsafe)]
+    /// # Safety
+    ///
+    /// This function passes MSL source  code to the backend as-is and can potentially result in a
+    /// driver crash.
+    pub unsafe fn device_create_shader_module_msl(
+        &self,
+        device_id: DeviceId,
+        desc: &pipeline::ShaderModuleDescriptor,
+        source: Cow<str>,
+        entry_point: &str,
+        num_workgroups: (u32, u32, u32),
+        id_in: Option<id::ShaderModuleId>,
+    ) -> (
+        id::ShaderModuleId,
+        Option<pipeline::CreateShaderModuleError>,
+    ) {
+        profiling::scope!("Device::create_shader_module");
+
+        let hub = &self.hub;
+        let fid = hub.shader_modules.prepare(id_in);
+
+        let error = 'error: {
+            let device = self.hub.devices.get(device_id);
+            let shader = match unsafe {
+                device.create_shader_module_msl(desc, &source, entry_point, num_workgroups)
+            } {
+                Ok(shader) => shader,
+                Err(e) => break 'error e,
+            };
+            let id = fid.assign(Fallible::Valid(shader));
+            api_log!("Device::create_shader_module_spirv -> {id:?}");
+            return (id, None);
+        };
+
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        (id, Some(error))
+    }
+
     pub fn shader_module_drop(&self, shader_module_id: id::ShaderModuleId) {
         profiling::scope!("ShaderModule::drop");
         api_log!("ShaderModule::drop {shader_module_id:?}");

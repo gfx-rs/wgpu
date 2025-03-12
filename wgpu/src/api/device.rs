@@ -189,6 +189,21 @@ impl Device {
         ShaderModule { inner: module }
     }
 
+    /// Creates a shader module from Metal MSL shader directly.
+    ///
+    /// # Safety
+    ///
+    /// This function passes the source to the backend as-is and can potentially result in a
+    /// driver crash or bogus behaviour. No attempt is made to ensure that source code is valid.
+    #[must_use]
+    pub unsafe fn create_shader_module_msl(
+        &self,
+        desc: &ShaderModuleDescriptorMsl<'_>,
+    ) -> ShaderModule {
+        let module = unsafe { self.inner.create_shader_module_msl(desc) };
+        ShaderModule { inner: module }
+    }
+
     /// Creates an empty [`CommandEncoder`].
     #[must_use]
     pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor<'_>) -> CommandEncoder {

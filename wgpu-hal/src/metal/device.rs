@@ -991,7 +991,38 @@ impl crate::Device for super::Device {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
                 naga,
                 bounds_checks: desc.runtime_checks,
+                library: None,
+                function: None,
+                entry_point: None,
+                num_workgroups: None,
             }),
+            crate::ShaderInput::Msl {
+                shader: source,
+                entry_point,
+                num_workgroups,
+            } => {
+                let options = metal::CompileOptions::new();
+                // Obtain the locked device from shared
+                let device = self.shared.device.lock();
+                let library = device
+                    .new_library_with_source(&source, &options)
+                    .map_err(|e| crate::ShaderError::Compilation(format!("MSL: {:?}", e)))?;
+                let function = library.get_function(&entry_point, None).map_err(|_| {
+                    crate::ShaderError::Compilation(format!(
+                        "Entry point '{}' not found",
+                        entry_point
+                    ))
+                })?;
+
+                Ok(super::ShaderModule {
+                    naga: crate::NagaShader::default(), // naga modules is not used for passthrough
+                    library: Some(library),
+                    function: Some(function),
+                    entry_point: Some(entry_point),
+                    num_workgroups: Some(num_workgroups),
+                    bounds_checks: desc.runtime_checks,
+                })
+            }
             crate::ShaderInput::SpirV(_) => {
                 panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
             }
@@ -1299,13 +1330,34 @@ impl crate::Device for super::Device {
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::ComputePipelineDescriptor::new();
 
-            let cs = self.load_shader(
-                &desc.stage,
-                &[],
-                desc.layout,
-                metal::MTLPrimitiveTopologyClass::Unspecified,
-                naga::ShaderStage::Compute,
-            )?;
+            let module = desc.stage.module;
+            let cs = if module.function.is_some()
+                && module.library.is_some()
+                && module.num_workgroups.is_some()
+            {
+                let wg_size = module.num_workgroups.unwrap();
+                CompiledShader {
+                    library: module.library.clone().unwrap(),
+                    function: module.function.clone().unwrap(),
+                    wg_size: metal::MTLSize::new(
+                        wg_size.0 as u64,
+                        wg_size.1 as u64,
+                        wg_size.2 as u64,
+                    ),
+                    wg_memory_sizes: vec![],
+                    sized_bindings: vec![],
+                    immutable_buffer_mask: 0,
+                }
+            } else {
+                self.load_shader(
+                    &desc.stage,
+                    &[],
+                    desc.layout,
+                    metal::MTLPrimitiveTopologyClass::Unspecified,
+                    naga::ShaderStage::Compute,
+                )?
+            };
+
             descriptor.set_compute_function(Some(&cs.function));
 
             if self.shared.private_caps.supports_mutability {
