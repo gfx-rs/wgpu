@@ -14,23 +14,20 @@ pub async fn execute_gpu(numbers: &[f32]) -> Vec<f32> {
         .unwrap();
 
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                // These features are required to use `binding_array` in your wgsl.
-                // Without them your shader may fail to compile.
-                required_features: Features::STORAGE_RESOURCE_BINDING_ARRAY
-                    | Features::BUFFER_BINDING_ARRAY
-                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        .request_device(&wgpu::DeviceDescriptor {
+            label: None,
+            // These features are required to use `binding_array` in your wgsl.
+            // Without them your shader may fail to compile.
+            required_features: Features::STORAGE_RESOURCE_BINDING_ARRAY
+                | Features::BUFFER_BINDING_ARRAY,
 
-                memory_hints: wgpu::MemoryHints::Performance,
-                required_limits: wgpu::Limits {
-                    max_buffer_size: MAX_BUFFER_SIZE,
-                    ..Default::default()
-                },
+            memory_hints: wgpu::MemoryHints::Performance,
+            required_limits: wgpu::Limits {
+                max_buffer_size: MAX_BUFFER_SIZE,
+                ..Default::default()
             },
-            None,
-        )
+            ..Default::default()
+        })
         .await
         .unwrap();
 

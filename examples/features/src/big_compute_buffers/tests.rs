@@ -5,11 +5,7 @@ use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(
-                Features::STORAGE_RESOURCE_BINDING_ARRAY
-                    | Features::BUFFER_BINDING_ARRAY
-                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            )
+            .features(Features::STORAGE_RESOURCE_BINDING_ARRAY | Features::BUFFER_BINDING_ARRAY)
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS),
     )
     .run_async(|ctx| {
@@ -23,8 +19,8 @@ static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
 
 async fn assert_execute_gpu(device: &wgpu::Device, queue: &wgpu::Queue, input: &[f32]) {
     let expected_len = input.len();
-    if let Some(produced) = execute_gpu_inner(device, queue, input).await {
-        assert_eq!(produced.len(), expected_len);
-        assert!(produced.into_iter().all(|v| v == 1.0));
-    }
+    let produced = execute_gpu_inner(device, queue, input).await;
+
+    assert_eq!(produced.len(), expected_len);
+    assert!(produced.into_iter().all(|v| v == 1.0));
 }
