@@ -23,13 +23,10 @@ async fn main() {
         assert_eq!(counter.count(), 3);
 
         let (device, _queue) = adapter
-            .request_device(
-                &DeviceDescriptor {
-                    label: Some("device"),
-                    ..Default::default()
-                },
-                None,
-            )
+            .request_device(&DeviceDescriptor {
+                label: Some("device"),
+                ..Default::default()
+            })
             .await
             .unwrap();
         assert_eq!(counter.count(), 5);

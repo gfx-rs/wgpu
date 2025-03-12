@@ -144,9 +144,9 @@ pub enum Binding<'a> {
     BuiltIn(crate::BuiltIn),
     Location {
         location: Handle<Expression<'a>>,
-        second_blend_source: bool,
         interpolation: Option<crate::Interpolation>,
         sampling: Option<crate::Sampling>,
+        blend_src: Option<Handle<Expression<'a>>>,
     },
 }
 

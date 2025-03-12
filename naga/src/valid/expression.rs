@@ -242,7 +242,7 @@ impl super::Validator {
         module: &crate::Module,
         info: &FunctionInfo,
         mod_info: &ModuleInfo,
-        global_expr_kind: &crate::proc::ExpressionKindTracker,
+        expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<ShaderStages, ExpressionError> {
         use crate::{Expression as E, Scalar as Sc, ScalarKind as Sk, TypeInner as Ti};
 
@@ -489,11 +489,11 @@ impl super::Validator {
 
                 // check constant offset
                 if let Some(const_expr) = offset {
-                    if !global_expr_kind.is_const(const_expr) {
+                    if !expr_kind.is_const(const_expr) {
                         return Err(ExpressionError::InvalidSampleOffsetExprType);
                     }
 
-                    match *mod_info[const_expr].inner_with(&module.types) {
+                    match resolver[const_expr] {
                         Ti::Scalar(Sc { kind: Sk::Sint, .. }) if num_components == 1 => {}
                         Ti::Vector {
                             size,

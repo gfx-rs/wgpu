@@ -11,7 +11,7 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
         // Create a bind group using a layout from another device. This should be a validation
         // error but currently crashes.
         let (device2, _) =
-            pollster::block_on(ctx.adapter.request_device(&Default::default(), None)).unwrap();
+            pollster::block_on(ctx.adapter.request_device(&Default::default())).unwrap();
 
         {
             let bind_group_layout =
@@ -64,11 +64,11 @@ static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(|ctx| {
         use pollster::FutureExt as _;
         ctx.adapter
-            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .request_device(&wgpu::DeviceDescriptor::default())
             .block_on()
             .expect("failed to create device");
         ctx.adapter
-            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .request_device(&wgpu::DeviceDescriptor::default())
             .block_on()
             .expect("failed to create device");
     });
@@ -105,22 +105,19 @@ async fn request_device_error_message() {
     let (_instance, adapter, _surface_guard) = wgpu_test::initialize_adapter(None, false).await;
 
     let device_error = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                // Force a failure by requesting absurd limits.
-                required_features: wgpu::Features::all(),
-                required_limits: wgpu::Limits {
-                    max_texture_dimension_1d: u32::MAX,
-                    max_texture_dimension_2d: u32::MAX,
-                    max_texture_dimension_3d: u32::MAX,
-                    max_bind_groups: u32::MAX,
-                    max_push_constant_size: u32::MAX,
-                    ..Default::default()
-                },
+        .request_device(&wgpu::DeviceDescriptor {
+            // Force a failure by requesting absurd limits.
+            required_features: wgpu::Features::all(),
+            required_limits: wgpu::Limits {
+                max_texture_dimension_1d: u32::MAX,
+                max_texture_dimension_2d: u32::MAX,
+                max_texture_dimension_3d: u32::MAX,
+                max_bind_groups: u32::MAX,
+                max_push_constant_size: u32::MAX,
                 ..Default::default()
             },
-            None,
-        )
+            ..Default::default()
+        })
         .await
         .unwrap_err();
 

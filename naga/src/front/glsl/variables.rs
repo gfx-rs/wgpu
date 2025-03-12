@@ -449,6 +449,14 @@ impl Frontend {
                     meta,
                 );
 
+                let blend_src = qualifiers
+                    .layout_qualifiers
+                    .remove(&QualifierKey::Index)
+                    .and_then(|(value, _span)| match value {
+                        QualifierValue::Uint(index) => Some(index),
+                        _ => None,
+                    });
+
                 let idx = self.entry_args.len();
                 self.entry_args.push(EntryArg {
                     name: name.clone(),
@@ -456,7 +464,7 @@ impl Frontend {
                         location,
                         interpolation,
                         sampling,
-                        second_blend_source: false,
+                        blend_src,
                     },
                     handle,
                     storage,

@@ -1246,9 +1246,9 @@
                         ty: 1,
                         binding: Some(Location(
                             location: 0,
-                            second_blend_source: false,
                             interpolation: Some(Perspective),
                             sampling: Some(Center),
+                            blend_src: None,
                         )),
                     ),
                     (
@@ -1256,9 +1256,9 @@
                         ty: 3,
                         binding: Some(Location(
                             location: 1,
-                            second_blend_source: false,
                             interpolation: Some(Perspective),
                             sampling: Some(Center),
+                            blend_src: None,
                         )),
                     ),
                 ],
@@ -1266,9 +1266,9 @@
                     ty: 3,
                     binding: Some(Location(
                         location: 0,
-                        second_blend_source: false,
                         interpolation: None,
                         sampling: None,
+                        blend_src: None,
                     )),
                 )),
                 local_variables: [],

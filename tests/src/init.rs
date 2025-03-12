@@ -142,15 +142,13 @@ pub async fn initialize_device(
     limits: Limits,
 ) -> (Device, Queue) {
     let bundle = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: features,
-                required_limits: limits,
-                memory_hints: wgpu::MemoryHints::MemoryUsage,
-            },
-            None,
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: None,
+            required_features: features,
+            required_limits: limits,
+            memory_hints: wgpu::MemoryHints::MemoryUsage,
+            trace: wgpu::Trace::Off,
+        })
         .await;
 
     match bundle {

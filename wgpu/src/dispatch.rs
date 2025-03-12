@@ -82,7 +82,6 @@ pub trait AdapterInterface: CommonTraits {
     fn request_device(
         &self,
         desc: &crate::DeviceDescriptor<'_>,
-        trace_dir: Option<&std::path::Path>,
     ) -> Pin<Box<dyn RequestDeviceFuture>>;
 
     fn is_surface_supported(&self, surface: &DispatchSurface) -> bool;
