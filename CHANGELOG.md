@@ -128,6 +128,42 @@ can be disabled by using `Device::create_shader_module_trusted()`.
 
 By @jamienicol in [#6929](https://github.com/gfx-rs/wgpu/pull/6929) and [#7080](https://github.com/gfx-rs/wgpu/pull/7080).
 
+#### Split up `Features` internally
+
+Internally split up the `Features` struct and recombine them internally using a macro. There should be no breaking 
+changes from this. This means there are also namespaces (as well as the old `Features::*`) for all wgpu specific
+features and webgpu feature (`FeaturesWGPU` and `FeaturesWebGPU` respectively) and `Features::from_internal_flags` which
+allow you to be explicit about whether features you need are available on the web too.
+
+By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905), [#7086](https://github.com/gfx-rs/wgpu/pull/7086)
+
+#### WebGPU compliant dual source blending feature
+
+Previously, dual source blending was implemented with a `wgpu` native only feature flag and used a custom syntax in wgpu.
+By now, dual source blending was added to the [WebGPU spec as an extension](https://www.w3.org/TR/webgpu/#dom-gpufeaturename-dual-source-blending).
+We're now following suite and implement the official syntax.
+
+Existing shaders using dual source blending need to be updated:
+
+```diff
+struct FragmentOutput{
+-    @location(0) source0: vec4<f32>,
+-    @location(0) @second_blend_source source1: vec4<f32>,
++    @location(0) @blend_src(0) source0: vec4<f32>,
++    @location(0) @blend_src(1) source1: vec4<f32>,
+}
+
+```
+With that `wgpu::Features::DUAL_SOURCE_BLENDING` is now available on WebGPU.
+
+Furthermore, GLSL shaders now support dual source blending as well via the `index` layout qualifier:
+```c
+layout(location = 0, index = 0) out vec4 output0;
+layout(location = 0, index = 1) out vec4 output1;
+```
+
+By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
+
 ### New Features
 
 - Added mesh shader support to `wgpu_hal`. By @SupaMaggie70Incorporated in [#7089](https://github.com/gfx-rs/wgpu/pull/7089)
@@ -171,20 +207,6 @@ By @jamienicol in [#6929](https://github.com/gfx-rs/wgpu/pull/6929) and [#7080](
 - Rename `instance_id` and `instance_custom_index` to `instance_index` and `instance_custom_data` by @Vecvec in
   [#6780](https://github.com/gfx-rs/wgpu/pull/6780)
 
-##### Split up `Features` internally
-
-Internally split up the `Features` struct and recombine them internally using a macro. There should be no breaking
-changes from this. This means there are also namespaces (as well as the old `Features::*`) for all wgpu specific
-features and webgpu feature (`FeaturesWGPU` and `FeaturesWebGPU` respectively) and `Features::from_internal_flags` which
-allow you to be explicit about whether features you need are available on the web too.
-
-By @Vecvec in [#6905](https://github.com/gfx-rs/wgpu/pull/6905), [#7086](https://github.com/gfx-rs/wgpu/pull/7086)
-
-##### Refactored internal trace path parameter
-
-Refactored some functions to handle the internal trace path as a string to avoid possible issues with `no_std` support.
-
-By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 
 #### Naga
 
@@ -205,7 +227,9 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 - Error if structs have two fields with the same name. By @SparkyPotato in [#7088](https://github.com/gfx-rs/wgpu/pull/7088).
 - Forward '--keep-coordinate-space' flag to GLSL backend in naga-cli. By @cloone8 in [#7206](https://github.com/gfx-rs/wgpu/pull/7206).
 - Allow template lists to have a trailing comma. By @KentSlaney in [#7142](https://github.com/gfx-rs/wgpu/pull/7142).
-- Allow WGSL const declarations to have abstract types. By @jamienicol in [#7055](https://github.com/gfx-rs/wgpu/pull/7055).
+- Allow WGSL const declarations to have abstract types. By @jamienicol in [#7055](https://github.com/gfx-rs/wgpu/pull/7055) and [#7222](https://github.com/gfx-rs/wgpu/pull/7222).
+- Allows override-sized arrays to resolve to the same size without causing the type arena to panic. By @KentSlaney in [#7082](https://github.com/gfx-rs/wgpu/pull/7082).
+- Allow abstract types to be used for WGSL switch statement selector and case selector expressions. By @jamienicol in [#7250](https://github.com/gfx-rs/wgpu/pull/7250).
 
 #### General
 
@@ -250,7 +274,7 @@ By @brodycj in [#6924](https://github.com/gfx-rs/wgpu/pull/6924).
 ### Documentation
 
 - Improved documentation around pipeline caches and `TextureBlitter`. By @DJMcNab in [#6978](https://github.com/gfx-rs/wgpu/pull/6978) and [#7003](https://github.com/gfx-rs/wgpu/pull/7003).
-- Improved documentation of `PresentMode`. By @kpreid in [#7211](https://github.com/gfx-rs/wgpu/pull/7211).
+- Improved documentation of `PresentMode`, buffer mapping functions, memory alignment requirements, texture formats’ automatic conversions, and various types and constants. By @kpreid in [#7211](https://github.com/gfx-rs/wgpu/pull/7211) and [#7283](https://github.com/gfx-rs/wgpu/pull/7283).
 
 - Added a hello window example. By @laycookie in [#6992](https://github.com/gfx-rs/wgpu/pull/6992).
 

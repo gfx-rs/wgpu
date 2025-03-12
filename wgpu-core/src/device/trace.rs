@@ -223,13 +223,12 @@ pub struct Trace {
 
 #[cfg(feature = "trace")]
 impl Trace {
-    pub fn new(dir_path_name: &str) -> Result<Self, std::io::Error> {
-        let path = std::path::Path::new(dir_path_name);
+    pub fn new(path: std::path::PathBuf) -> Result<Self, std::io::Error> {
         log::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;
         Ok(Self {
-            path: path.to_path_buf(),
+            path,
             file,
             config: ron::ser::PrettyConfig::default(),
             binary_id: 0,

@@ -6,7 +6,6 @@ use alloc::{
     vec::Vec,
 };
 use core::{fmt, mem::ManuallyDrop, ops::Range};
-use std::sync::OnceLock;
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
@@ -602,7 +601,7 @@ pub struct BindGroupLayout {
     /// We cannot unconditionally remove from the pool, as BGLs that don't come from the pool
     /// (derived BGLs) must not be removed.
     pub(crate) origin: bgl::Origin,
-    pub(crate) exclusive_pipeline: OnceLock<ExclusivePipeline>,
+    pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
     #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     /// The `label` from the descriptor used to create the resource.

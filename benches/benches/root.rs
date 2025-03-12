@@ -43,15 +43,13 @@ impl DeviceState {
 
         eprintln!("{adapter_info:?}");
 
-        let (device, queue) = block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: adapter.features(),
-                required_limits: adapter.limits(),
-                memory_hints: wgpu::MemoryHints::Performance,
-                label: Some("Compute/RenderPass Device"),
-            },
-            None,
-        ))
+        let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            required_features: adapter.features(),
+            required_limits: adapter.limits(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            label: Some("Compute/RenderPass Device"),
+            trace: wgpu::Trace::Off,
+        }))
         .unwrap();
 
         Self {

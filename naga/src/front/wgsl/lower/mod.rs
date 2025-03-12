@@ -1579,11 +1579,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_const()))
                             .transpose()?;
 
-                    let (_ty, init) = self.type_and_init(
+                    let (ty, init) = self.type_and_init(
                         c.name,
                         Some(c.init),
                         explicit_ty,
-                        AbstractRule::Concretize,
+                        AbstractRule::Allow,
                         &mut ectx.as_const(),
                     )?;
                     let init = init.expect("Local const must have init");
@@ -1591,9 +1591,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
                         .insert(c.handle, Declared::Const(Typed::Plain(init)));
-                    ctx.named_expressions
-                        .insert(init, (c.name.name.to_string(), c.name.span));
-
+                    // Only add constants of non-abstract types to the named expressions
+                    // to prevent abstract types ending up in the IR.
+                    let is_abstract = ctx.module.types[ty].inner.is_abstract(&ctx.module.types);
+                    if !is_abstract {
+                        ctx.named_expressions
+                            .insert(init, (c.name.name.to_string(), c.name.span));
+                    }
                     return Ok(());
                 }
             },
@@ -1626,11 +1630,52 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 emitter.start(&ctx.function.expressions);
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
-                let selector = self.expression(selector, &mut ectx)?;
 
-                let uint =
-                    resolve_inner!(ectx, selector).scalar_kind() == Some(crate::ScalarKind::Uint);
+                // Determine the scalar type of the selector and case expressions, find the
+                // consensus type for automatic conversion, then convert them.
+                let (mut exprs, spans) = core::iter::once(selector)
+                    .chain(cases.iter().filter_map(|case| match case.value {
+                        ast::SwitchValue::Expr(expr) => Some(expr),
+                        ast::SwitchValue::Default => None,
+                    }))
+                    .enumerate()
+                    .map(|(i, expr)| {
+                        let span = ectx.ast_expressions.get_span(expr);
+                        let expr = self.expression_for_abstract(expr, &mut ectx)?;
+                        let ty = resolve_inner!(ectx, expr);
+                        match *ty {
+                            crate::TypeInner::Scalar(
+                                crate::Scalar::I32
+                                | crate::Scalar::U32
+                                | crate::Scalar::ABSTRACT_INT,
+                            ) => Ok((expr, span)),
+                            _ => match i {
+                                0 => Err(Error::InvalidSwitchSelector { span }),
+                                _ => Err(Error::InvalidSwitchCase { span }),
+                            },
+                        }
+                    })
+                    .collect::<Result<(Vec<_>, Vec<_>), _>>()?;
+
+                let mut consensus =
+                    ectx.automatic_conversion_consensus(&exprs)
+                        .map_err(|span_idx| Error::SwitchCaseTypeMismatch {
+                            span: spans[span_idx],
+                        })?;
+                // Concretize to I32 if the selector and all cases were abstract
+                if consensus == crate::Scalar::ABSTRACT_INT {
+                    consensus = crate::Scalar::I32;
+                }
+                for expr in &mut exprs {
+                    ectx.convert_to_leaf_scalar(expr, consensus)?;
+                }
+
                 block.extend(emitter.finish(&ctx.function.expressions));
+
+                let mut exprs = exprs.into_iter();
+                let selector = exprs
+                    .next()
+                    .expect("First element should be selector expression");
 
                 let cases = cases
                     .iter()
@@ -1639,17 +1684,22 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             value: match case.value {
                                 ast::SwitchValue::Expr(expr) => {
                                     let span = ctx.ast_expressions.get_span(expr);
-                                    let expr =
-                                        self.expression(expr, &mut ctx.as_global().as_const())?;
-                                    match ctx.module.to_ctx().eval_expr_to_literal(expr) {
-                                        Some(crate::Literal::I32(value)) if !uint => {
+                                    let expr = exprs.next().expect(
+                                        "Should yield expression for each SwitchValue::Expr case",
+                                    );
+                                    match ctx
+                                        .module
+                                        .to_ctx()
+                                        .eval_expr_to_literal_from(expr, &ctx.function.expressions)
+                                    {
+                                        Some(crate::Literal::I32(value)) => {
                                             crate::SwitchValue::I32(value)
                                         }
-                                        Some(crate::Literal::U32(value)) if uint => {
+                                        Some(crate::Literal::U32(value)) => {
                                             crate::SwitchValue::U32(value)
                                         }
                                         _ => {
-                                            return Err(Error::InvalidSwitchValue { uint, span });
+                                            return Err(Error::InvalidSwitchCase { span });
                                         }
                                     }
                                 }
@@ -2170,13 +2220,37 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         // Apply automatic conversions.
         match op {
-            // Shift operators require the right operand to be `u32` or
-            // `vecN<u32>`. We can let the validator sort out vector length
-            // issues, but the right operand must be, or convert to, a u32 leaf
-            // scalar.
             crate::BinaryOperator::ShiftLeft | crate::BinaryOperator::ShiftRight => {
+                // Shift operators require the right operand to be `u32` or
+                // `vecN<u32>`. We can let the validator sort out vector length
+                // issues, but the right operand must be, or convert to, a u32 leaf
+                // scalar.
                 right =
                     ctx.try_automatic_conversion_for_leaf_scalar(right, crate::Scalar::U32, span)?;
+
+                // Additionally, we must concretize the left operand if the right operand
+                // is not a const-expression.
+                // See https://www.w3.org/TR/WGSL/#overload-resolution-section.
+                //
+                // 2. Eliminate any candidate where one of its subexpressions resolves to
+                // an abstract type after feasible automatic conversions, but another of
+                // the candidate’s subexpressions is not a const-expression.
+                //
+                // We only have to explicitly do so for shifts as their operands may be
+                // of different types - for other binary ops this is achieved by finding
+                // the conversion consensus for both operands.
+                let expr_kind_tracker = match ctx.expr_type {
+                    ExpressionContextType::Runtime(ref ctx)
+                    | ExpressionContextType::Constant(Some(ref ctx)) => {
+                        &ctx.local_expression_kind_tracker
+                    }
+                    ExpressionContextType::Constant(None) | ExpressionContextType::Override => {
+                        &ctx.global_expression_kind_tracker
+                    }
+                };
+                if !expr_kind_tracker.is_const(right) {
+                    left = ctx.concretize(left)?;
+                }
             }
 
             // All other operators follow the same pattern: reconcile the
@@ -3036,7 +3110,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         let offset = args
             .next()
-            .map(|arg| self.expression(arg, &mut ctx.as_global().as_const()))
+            .map(|arg| self.expression(arg, &mut ctx.as_const()))
             .ok()
             .transpose()?;
 
@@ -3277,14 +3351,23 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         size_expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
         span: Span,
-    ) -> Result<crate::PendingArraySize, Error<'source>> {
+    ) -> Result<Handle<crate::Override>, Error<'source>> {
         let expr = self.expression(size_expr, ctx)?;
         match resolve_inner!(ctx, expr).scalar_kind().ok_or(0) {
             Ok(crate::ScalarKind::Sint) | Ok(crate::ScalarKind::Uint) => Ok({
                 if let crate::Expression::Override(handle) = ctx.module.global_expressions[expr] {
-                    crate::PendingArraySize::Override(handle)
+                    handle
                 } else {
-                    crate::PendingArraySize::Expression(expr)
+                    let ty = ctx.register_type(expr)?;
+                    ctx.module.overrides.append(
+                        crate::Override {
+                            name: None,
+                            id: None,
+                            ty,
+                            init: Some(expr),
+                        },
+                        span,
+                    )
                 }
             }),
             _ => Err(Error::ExpectedConstExprConcreteIntegerScalar(span)),
@@ -3406,15 +3489,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             Some(ast::Binding::BuiltIn(b)) => Some(crate::Binding::BuiltIn(b)),
             Some(ast::Binding::Location {
                 location,
-                second_blend_source,
                 interpolation,
                 sampling,
+                blend_src,
             }) => {
+                let blend_src = if let Some(blend_src) = blend_src {
+                    Some(self.const_u32(blend_src, &mut ctx.as_const())?.0)
+                } else {
+                    None
+                };
+
                 let mut binding = crate::Binding::Location {
                     location: self.const_u32(location, &mut ctx.as_const())?.0,
-                    second_blend_source,
                     interpolation,
                     sampling,
+                    blend_src,
                 };
                 binding.apply_default_interpolation(&ctx.module.types[ty].inner);
                 Some(binding)

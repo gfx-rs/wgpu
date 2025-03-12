@@ -1,10 +1,14 @@
 //! Code shared between the WGSL front and back ends.
 
+mod types;
+
 use core::fmt::{self, Display, Formatter};
 
 use crate::diagnostic_filter::{
     FilterableTriggeringRule, Severity, StandardFilterableTriggeringRule,
 };
+
+pub use types::TypeContext;
 
 impl Severity {
     const ERROR: &'static str = "error";

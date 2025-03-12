@@ -28,11 +28,15 @@ const shl_iaiai: i32 = 1 << 2;
 const shl_iai_u: i32 = 1 << 2u;
 const shl_uaiai: u32 = 1 << 2;
 const shl_uai_u: u32 = 1 << 2u;
+const shlaiaiai = 1 << 2;
+const shlaiai_u = 1 << 2u;
 
 const shr_iaiai: i32 = 1 >> 2;
 const shr_iai_u: i32 = 1 >> 2u;
 const shr_uaiai: u32 = 1 >> 2;
 const shr_uai_u: u32 = 1 >> 2u;
+const shraiaiai = 1 >> 2;
+const shraiai_u = 1 >> 2u;
 
 fn runtime_values() {
   var f: f32 = 42;
@@ -58,6 +62,9 @@ fn runtime_values() {
   var plus_uai_u: u32 = 1 + u;
   var plus_u_uai: u32 = u + 2;
   var plus_u_u_u: u32 = u + u;
+
+  var shl_iai_u: i32 = 1 << u;
+  var shr_iai_u: i32 = 1 << u;
 }
 
 fn wgpu_4445() {

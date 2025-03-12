@@ -172,12 +172,13 @@ impl RenderPass<'_> {
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffer(s) can be set with [`RenderPass::set_vertex_buffer`].
-    /// Does not use an Index Buffer. If you need this see [`RenderPass::draw_indexed`]
+    /// This does not use an index buffer. If you need indexed drawing, see [`RenderPass::draw_indexed`]
     ///
-    /// Panics if vertices Range is outside of the range of the vertices range of any set vertex buffer.
+    /// Panics if `vertices` range is outside of the range of the vertices range of any set vertex buffer.
     ///
-    /// vertices: The range of vertices to draw.
-    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// - `vertices`: The range of vertices to draw.
+    /// - `instances`: Range of instances to draw. Use `0..1` if instance buffers are not used.
+    ///
     /// E.g.of how its used internally
     /// ```rust ignore
     /// for instance_id in instance_range {
@@ -199,11 +200,12 @@ impl RenderPass<'_> {
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`]
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    /// Panics if indices Range is outside of the range of the indices range of any set index buffer.
+    /// Panics if `indices` range is outside of the range of the indices range of the set index buffer.
     ///
-    /// indices: The range of indices to draw.
-    /// base_vertex: value added to each index value before indexing into the vertex buffers.
-    /// instances: Range of Instances to draw. Use 0..1 if instance buffers are not used.
+    /// - `indices`: The range of indices to draw.
+    /// - `base_vertex`: value added to each index value before indexing into the vertex buffers.
+    /// - `instances`: Range of instances to draw. Use `0..1` if instance buffers are not used.
+    ///
     /// E.g.of how its used internally
     /// ```rust ignore
     /// for instance_id in instance_range {
@@ -230,7 +232,7 @@ impl RenderPass<'_> {
     /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
     /// these and issue an error.
     /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
-    ///   [`DrawIndirect::first_instance`](crate::util::DrawIndirectArgs::first_instance) will be ignored.
+    ///   [`DrawIndirectArgs::first_instance`](crate::util::DrawIndirectArgs::first_instance) will be ignored.
     /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
     ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
@@ -249,7 +251,7 @@ impl RenderPass<'_> {
     /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
     /// these and issue an error.
     /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
-    ///   [`DrawIndexedIndirect::first_instance`](crate::util::DrawIndexedIndirectArgs::first_instance) will be ignored.
+    ///   [`DrawIndexedIndirectArgs::first_instance`](crate::util::DrawIndexedIndirectArgs::first_instance) will be ignored.
     /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
     ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
     ///
@@ -372,7 +374,6 @@ impl RenderPass<'_> {
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     ///
-    ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     ///
     /// These draw structures are expected to be tightly packed.
@@ -469,13 +470,15 @@ impl RenderPass<'_> {
 
 impl RenderPass<'_> {
     /// Start a occlusion query on this render pass. It can be ended with
-    /// `end_occlusion_query`. Occlusion queries may not be nested.
+    /// [`end_occlusion_query`](Self::end_occlusion_query).
+    /// Occlusion queries may not be nested.
     pub fn begin_occlusion_query(&mut self, query_index: u32) {
         self.inner.begin_occlusion_query(query_index);
     }
 
     /// End the occlusion query on this render pass. It can be started with
-    /// `begin_occlusion_query`. Occlusion queries may not be nested.
+    /// [`begin_occlusion_query`](Self::begin_occlusion_query).
+    /// Occlusion queries may not be nested.
     pub fn end_occlusion_query(&mut self) {
         self.inner.end_occlusion_query();
     }
@@ -484,14 +487,16 @@ impl RenderPass<'_> {
 /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled on the device in order to call these functions.
 impl RenderPass<'_> {
     /// Start a pipeline statistics query on this render pass. It can be ended with
-    /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
+    /// [`end_pipeline_statistics_query`](Self::end_pipeline_statistics_query).
+    /// Pipeline statistics queries may not be nested.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         self.inner
             .begin_pipeline_statistics_query(&query_set.inner, query_index);
     }
 
     /// End the pipeline statistics query on this render pass. It can be started with
-    /// `begin_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
+    /// [`begin_pipeline_statistics_query`](Self::begin_pipeline_statistics_query).
+    /// Pipeline statistics queries may not be nested.
     pub fn end_pipeline_statistics_query(&mut self) {
         self.inner.end_pipeline_statistics_query();
     }
@@ -500,7 +505,8 @@ impl RenderPass<'_> {
 /// Describes the timestamp writes of a render pass.
 ///
 /// For use with [`RenderPassDescriptor`].
-/// At least one of `beginning_of_pass_write_index` and `end_of_pass_write_index` must be `Some`.
+/// At least one of [`Self::beginning_of_pass_write_index`] and [`Self::end_of_pass_write_index`]
+/// must be `Some`.
 ///
 /// Corresponds to [WebGPU `GPURenderPassTimestampWrite`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpurenderpasstimestampwrites).

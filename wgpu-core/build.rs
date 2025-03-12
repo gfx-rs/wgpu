@@ -1,9 +1,12 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
         windows_linux_android: { any(windows, target_os = "linux", target_os = "android") },
-        send_sync: { any(
-            not(target_arch = "wasm32"),
-            all(feature = "fragile-send-sync-non-atomic-wasm", not(target_feature = "atomics"))
+        send_sync: { all(
+            feature = "std",
+            any(
+                not(target_arch = "wasm32"),
+                all(feature = "fragile-send-sync-non-atomic-wasm", not(target_feature = "atomics"))
+            )
         ) },
         dx12: { all(target_os = "windows", feature = "dx12") },
         webgl: { all(target_arch = "wasm32", not(target_os = "emscripten"), feature = "webgl") },

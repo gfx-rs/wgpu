@@ -95,8 +95,8 @@ impl Test<'_> {
                 required_features: self.features,
                 required_limits: wgt::Limits::default(),
                 memory_hints: wgt::MemoryHints::default(),
+                trace: wgt::Trace::Off,
             },
-            None,
             Some(device_id),
             Some(queue_id),
         );

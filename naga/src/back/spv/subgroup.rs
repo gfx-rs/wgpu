@@ -1,9 +1,5 @@
 use super::{Block, BlockContext, Error, Instruction, NumericType};
-use crate::{
-    arena::Handle,
-    back::spv::{LocalType, LookupType},
-    TypeInner,
-};
+use crate::{arena::Handle, TypeInner};
 
 impl BlockContext<'_> {
     pub(super) fn write_subgroup_ballot(
@@ -16,11 +12,10 @@ impl BlockContext<'_> {
             "GroupNonUniformBallot",
             &[spirv::Capability::GroupNonUniformBallot],
         )?;
-        let vec4_u32_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
-                size: crate::VectorSize::Quad,
-                scalar: crate::Scalar::U32,
-            })));
+        let vec4_u32_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Quad,
+            scalar: crate::Scalar::U32,
+        });
         let exec_scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
         let predicate = if let Some(predicate) = *predicate {
             self.cached[predicate]
