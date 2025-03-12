@@ -1,3 +1,5 @@
+use alloc::format;
+
 use super::{context::Context, Error, ErrorKind, Result, Span};
 use crate::{
     proc::ResolveContext, Expression, Handle, ImageClass, ImageDimension, Scalar, ScalarKind, Type,

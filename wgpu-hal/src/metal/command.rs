@@ -2,7 +2,6 @@ use super::{conv, AsNative, TimestampQuerySupport};
 use crate::CommandEncoder as _;
 use std::{
     borrow::{Cow, ToOwned as _},
-    mem::size_of,
     ops::Range,
     vec::Vec,
 };
@@ -1101,6 +1100,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
+    unsafe fn draw_mesh_tasks(
+        &mut self,
+        _group_count_x: u32,
+        _group_count_y: u32,
+        _group_count_z: u32,
+    ) {
+        unreachable!()
+    }
+
     unsafe fn draw_indirect(
         &mut self,
         buffer: &super::Buffer,
@@ -1135,6 +1143,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _draw_count: u32,
+    ) {
+        unreachable!()
+    }
+
     unsafe fn draw_indirect_count(
         &mut self,
         _buffer: &super::Buffer,
@@ -1154,6 +1171,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _max_count: u32,
     ) {
         //TODO
+    }
+
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _count_buffer: &<Self::A as crate::Api>::Buffer,
+        _count_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        unreachable!()
     }
 
     // compute
@@ -1257,8 +1285,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .zip(pipeline.work_group_memory_sizes.iter())
             .enumerate()
         {
-            const ALIGN_MASK: u32 = 0xF; // must be a multiple of 16 bytes
-            let size = ((*pipeline_size - 1) | ALIGN_MASK) + 1;
+            let size = pipeline_size.next_multiple_of(16);
             if *cur_size != size {
                 *cur_size = size;
                 encoder.set_threadgroup_memory_length(index as _, size as _);

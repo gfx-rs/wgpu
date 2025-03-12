@@ -303,7 +303,7 @@ impl fmt::Display for DeviceMismatch {
     }
 }
 
-impl std::error::Error for DeviceMismatch {}
+impl core::error::Error for DeviceMismatch {}
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -468,6 +468,10 @@ pub fn create_validator(
     caps.set(
         Caps::SUBGROUP_VERTEX_STAGE,
         features.contains(wgt::Features::SUBGROUP_VERTEX),
+    );
+    caps.set(
+        Caps::RAY_HIT_VERTEX_POSITION,
+        features.intersects(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN),
     );
 
     naga::valid::Validator::new(flags, caps)

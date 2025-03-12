@@ -31,8 +31,14 @@ holding the result.
 
 */
 
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::fmt::{Error as FmtError, Write};
+
 use crate::{arena::Handle, proc::index, valid::ModuleInfo};
-use std::fmt::{Error as FmtError, Write};
 
 mod keywords;
 pub mod sampler;
@@ -85,7 +91,7 @@ where
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
 #[derive(Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -106,7 +112,7 @@ pub struct EntryPointResources {
     pub sizes_buffer: Option<Slot>,
 }
 
-pub type EntryPointResourceMap = std::collections::BTreeMap<String, EntryPointResources>;
+pub type EntryPointResourceMap = alloc::collections::BTreeMap<String, EntryPointResources>;
 
 enum ResolvedBinding {
     BuiltIn(crate::BuiltIn),
@@ -723,6 +729,5 @@ pub fn write_string(
 
 #[test]
 fn test_error_size() {
-    use std::mem::size_of;
     assert_eq!(size_of::<Error>(), 32);
 }

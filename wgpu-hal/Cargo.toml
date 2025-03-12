@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.82.0"
 
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
@@ -104,6 +104,7 @@ gles = [
     "naga/glsl-out",
     "dep:arrayvec",
     "dep:bytemuck",
+    "dep:cfg-if",
     "dep:glow",
     "dep:glutin_wgl_sys",
     "dep:hashbrown",
@@ -112,10 +113,10 @@ gles = [
     "dep:libloading",
     "dep:log",
     "dep:ndk-sys",
+    "dep:objc",
     "dep:profiling",
     "dep:wasm-bindgen",
     "dep:web-sys",
-    "once_cell/std",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_System_LibraryLoader",
@@ -217,6 +218,7 @@ rustc-hash = { workspace = true, optional = true }
 # Backend: GLES
 bytemuck = { workspace = true, optional = true }
 glow = { workspace = true, optional = true }
+cfg-if = { workspace = true, optional = true }
 
 ########################
 ### Platform: Native ###

@@ -2,12 +2,13 @@
 Generating SPIR-V for image operations.
 */
 
+use spirv::Word;
+
 use super::{
     selection::{MergeTuple, Selection},
     Block, BlockContext, Error, IdGenerator, Instruction, LocalType, LookupType, NumericType,
 };
 use crate::arena::Handle;
-use spirv::Word;
 
 /// Information about a vector of coordinates.
 ///

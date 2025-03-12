@@ -1,5 +1,7 @@
 //! WGSL's automatic conversions for abstract types.
 
+use alloc::{boxed::Box, string::String, vec::Vec};
+
 use crate::front::wgsl::error::{
     AutoConversionError, AutoConversionLeafScalarError, ConcretizationFailedError,
 };
@@ -440,8 +442,8 @@ impl crate::TypeInner {
             | Ti::Struct { .. }
             | Ti::Image { .. }
             | Ti::Sampler { .. }
-            | Ti::AccelerationStructure
-            | Ti::RayQuery
+            | Ti::AccelerationStructure { .. }
+            | Ti::RayQuery { .. }
             | Ti::BindingArray { .. } => None,
         }
     }
@@ -466,8 +468,8 @@ impl crate::TypeInner {
             Ti::Struct { .. }
             | Ti::Image { .. }
             | Ti::Sampler { .. }
-            | Ti::AccelerationStructure
-            | Ti::RayQuery
+            | Ti::AccelerationStructure { .. }
+            | Ti::RayQuery { .. }
             | Ti::BindingArray { .. } => None,
         }
     }

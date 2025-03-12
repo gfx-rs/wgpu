@@ -112,7 +112,7 @@ impl DxcLib {
                 -> windows_core::HRESULT;
 
             let func: libloading::Symbol<DxcCreateInstanceFn> =
-                self.lib.get(b"DxcCreateInstance\0")?;
+                self.lib.get(c"DxcCreateInstance".to_bytes())?;
             dxc_create_instance::<T>(|clsid, iid, ppv| func(clsid, iid, ppv))
         }
     }

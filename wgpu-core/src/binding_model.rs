@@ -188,6 +188,8 @@ pub enum CreateBindGroupError {
         layout_flt: bool,
         sampler_flt: bool,
     },
+    #[error("TLAS binding {binding} is required to support vertex returns but is missing flag AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN")]
+    MissingTLASVertexReturn { binding: u32 },
     #[error("Bound texture views can not have both depth and stencil aspects enabled")]
     DepthStencilAspect,
     #[error("The adapter does not support read access for storage textures of format {0:?}")]
@@ -380,7 +382,7 @@ impl BindingTypeMaxCountValidator {
                 wgt::BindingType::StorageTexture { .. } => {
                     self.storage_textures.add(binding.visibility, count);
                 }
-                wgt::BindingType::AccelerationStructure => {
+                wgt::BindingType::AccelerationStructure { .. } => {
                     self.acceleration_structures.add(binding.visibility, count);
                 }
             }

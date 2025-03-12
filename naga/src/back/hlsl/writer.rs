@@ -1,3 +1,10 @@
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{fmt, mem};
+
 use super::{
     help,
     help::{
@@ -9,10 +16,10 @@ use super::{
 };
 use crate::{
     back::{self, Baked},
+    common,
     proc::{self, index, ExpressionKindTracker, NameKey},
     valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
-use std::{fmt, mem};
 
 const LOCATION_SEMANTIC: &str = "LOC";
 const SPECIAL_CBUF_TYPE: &str = "NagaConstants";
@@ -1315,7 +1322,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.out,
                     "{}{}",
                     scalar.to_hlsl_str()?,
-                    back::vector_size_str(size)
+                    common::vector_size_str(size)
                 )?;
             }
             TypeInner::Matrix {
@@ -1331,8 +1338,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.out,
                     "{}{}x{}",
                     scalar.to_hlsl_str()?,
-                    back::vector_size_str(columns),
-                    back::vector_size_str(rows),
+                    common::vector_size_str(columns),
+                    common::vector_size_str(rows),
                 )?;
             }
             TypeInner::Image {
@@ -1356,10 +1363,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             TypeInner::Array { base, size, .. } | TypeInner::BindingArray { base, size } => {
                 self.write_array_size(module, base, size)?;
             }
-            TypeInner::AccelerationStructure => {
+            TypeInner::AccelerationStructure { .. } => {
                 write!(self.out, "RaytracingAccelerationStructure")?;
             }
-            TypeInner::RayQuery => {
+            TypeInner::RayQuery { .. } => {
                 // these are constant flags, there are dynamic flags also but constant flags are not supported by naga
                 write!(self.out, "RayQuery<RAY_FLAG_NONE>")?;
             }
@@ -1534,7 +1541,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             match module.types[local.ty].inner {
                 // from https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#tracerayinline-example-1 it seems that ray queries shouldn't be zeroed
-                TypeInner::RayQuery => {}
+                TypeInner::RayQuery { .. } => {}
                 _ => {
                     write!(self.out, " = ")?;
                     // Write the local initializer if needed
@@ -1715,14 +1722,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
 
                     let last_case = &cases[end_case_idx];
-                    if last_case.body.last().map_or(true, |s| !s.is_terminator()) {
+                    if last_case.body.last().is_none_or(|s| !s.is_terminator()) {
                         writeln!(self.out, "{indent_level_2}break;")?;
                     }
                 } else {
                     for sta in case.body.iter() {
                         self.write_stmt(module, sta, func_ctx, indent_level_2)?;
                     }
-                    if !case.fall_through && case.body.last().map_or(true, |s| !s.is_terminator()) {
+                    if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator()) {
                         writeln!(self.out, "{indent_level_2}break;")?;
                     }
                 }
@@ -3334,7 +3341,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.out,
                                     "{}{}(",
                                     scalar.to_hlsl_str()?,
-                                    back::vector_size_str(size)
+                                    common::vector_size_str(size)
                                 )?;
                             }
                             TypeInner::Scalar(_) => {
@@ -3345,8 +3352,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.out,
                                     "{}{}x{}(",
                                     scalar.to_hlsl_str()?,
-                                    back::vector_size_str(columns),
-                                    back::vector_size_str(rows)
+                                    common::vector_size_str(columns),
+                                    common::vector_size_str(rows)
                                 )?;
                             }
                             _ => {
@@ -3947,6 +3954,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, ")")?;
                 }
             }
+            // Not supported yet
+            Expression::RayQueryVertexPositions { .. } => unreachable!(),
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
@@ -4129,6 +4138,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
         if barrier.contains(crate::Barrier::SUB_GROUP) {
             // Does not exist in DirectX
+        }
+        if barrier.contains(crate::Barrier::TEXTURE) {
+            writeln!(self.out, "{level}DeviceMemoryBarrierWithGroupSync();")?;
         }
         Ok(())
     }

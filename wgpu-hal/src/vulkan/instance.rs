@@ -34,10 +34,8 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         // https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/5671
         // Versions 1.3.240 through 1.3.250 return a spurious error here if
         // the debug range start and end appear in different command buffers.
-        const KHRONOS_VALIDATION_LAYER: &CStr =
-            unsafe { CStr::from_bytes_with_nul_unchecked(b"Khronos Validation Layer\0") };
         if let Some(layer_properties) = user_data.validation_layer_properties.as_ref() {
-            if layer_properties.layer_description.as_ref() == KHRONOS_VALIDATION_LAYER
+            if layer_properties.layer_description.as_ref() == c"Khronos Validation Layer"
                 && layer_properties.layer_spec_version >= vk::make_api_version(0, 1, 3, 240)
                 && layer_properties.layer_spec_version <= vk::make_api_version(0, 1, 3, 250)
             {
@@ -258,6 +256,12 @@ impl super::Instance {
 
         // VK_KHR_surface
         extensions.push(khr::surface::NAME);
+
+        // Extensions needed for drm support
+        extensions.push(khr::display::NAME);
+        extensions.push(ext::physical_device_drm::NAME);
+        extensions.push(khr::get_display_properties2::NAME);
+        extensions.push(ext::acquire_drm_display::NAME);
 
         // Platform-specific WSI extensions
         if cfg!(all(
@@ -552,7 +556,10 @@ impl super::Instance {
         Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
-    fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR) -> super::Surface {
+    pub(super) fn create_surface_from_vk_surface_khr(
+        &self,
+        surface: vk::SurfaceKHR,
+    ) -> super::Surface {
         let functor = khr::surface::Instance::new(&self.shared.entry, &self.shared.raw);
         super::Surface {
             raw: surface,
@@ -611,7 +618,7 @@ impl crate::Instance for super::Instance {
         let app_info = vk::ApplicationInfo::default()
             .application_name(app_name.as_c_str())
             .application_version(1)
-            .engine_name(CStr::from_bytes_with_nul(b"wgpu-hal\0").unwrap())
+            .engine_name(c"wgpu-hal")
             .engine_version(2)
             .api_version(
                 // Vulkan 1.0 doesn't like anything but 1.0 passed in here...
@@ -653,8 +660,7 @@ impl crate::Instance for super::Instance {
                 .find(|inst_layer| inst_layer.layer_name_as_c_str() == Ok(name))
         }
 
-        let validation_layer_name =
-            CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap();
+        let validation_layer_name = c"VK_LAYER_KHRONOS_validation";
         let validation_layer_properties = find_layer(&instance_layers, validation_layer_name);
 
         // Determine if VK_EXT_validation_features is available, so we can enable
@@ -678,11 +684,9 @@ impl crate::Instance for super::Instance {
             .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
             && validation_features_are_enabled;
 
-        let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
-        let has_nv_optimus = find_layer(&instance_layers, nv_optimus_layer).is_some();
+        let has_nv_optimus = find_layer(&instance_layers, c"VK_LAYER_NV_optimus").is_some();
 
-        let obs_layer = CStr::from_bytes_with_nul(b"VK_LAYER_OBS_HOOK\0").unwrap();
-        let has_obs_layer = find_layer(&instance_layers, obs_layer).is_some();
+        let has_obs_layer = find_layer(&instance_layers, c"VK_LAYER_OBS_HOOK").is_some();
 
         let mut layers: Vec<&'static CStr> = Vec::new();
 

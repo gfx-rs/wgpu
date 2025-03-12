@@ -164,8 +164,8 @@ impl crate::TypeInner {
             Self::Struct { span, .. } => span,
             Self::Image { .. }
             | Self::Sampler { .. }
-            | Self::AccelerationStructure
-            | Self::RayQuery
+            | Self::AccelerationStructure { .. }
+            | Self::RayQuery { .. }
             | Self::BindingArray { .. } => 0,
         }
     }
@@ -276,8 +276,8 @@ impl crate::TypeInner {
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::Image { .. }
             | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure
-            | crate::TypeInner::RayQuery
+            | crate::TypeInner::AccelerationStructure { .. }
+            | crate::TypeInner::RayQuery { .. }
             | crate::TypeInner::BindingArray { .. } => None,
         }
     }
@@ -298,8 +298,8 @@ impl crate::TypeInner {
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::Image { .. }
             | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure
-            | crate::TypeInner::RayQuery
+            | crate::TypeInner::AccelerationStructure { .. }
+            | crate::TypeInner::RayQuery { .. }
             | crate::TypeInner::BindingArray { .. } => false,
         }
     }

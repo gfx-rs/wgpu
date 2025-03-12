@@ -1,9 +1,5 @@
 use alloc::string::String;
-use core::{
-    mem::{self, size_of, size_of_val},
-    ops::Range,
-    slice,
-};
+use core::{mem, ops::Range, slice};
 
 use arrayvec::ArrayVec;
 
@@ -1077,6 +1073,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             first_instance_location: self.state.first_instance_location.clone(),
         });
     }
+    unsafe fn draw_mesh_tasks(
+        &mut self,
+        _group_count_x: u32,
+        _group_count_y: u32,
+        _group_count_z: u32,
+    ) {
+        unreachable!()
+    }
     unsafe fn draw_indirect(
         &mut self,
         buffer: &super::Buffer,
@@ -1120,6 +1124,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             });
         }
     }
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _draw_count: u32,
+    ) {
+        unreachable!()
+    }
     unsafe fn draw_indirect_count(
         &mut self,
         _buffer: &super::Buffer,
@@ -1135,6 +1147,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _buffer: &super::Buffer,
         _offset: wgt::BufferAddress,
         _count_buffer: &super::Buffer,
+        _count_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        unreachable!()
+    }
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        _buffer: &<Self::A as crate::Api>::Buffer,
+        _offset: wgt::BufferAddress,
+        _count_buffer: &<Self::A as crate::Api>::Buffer,
         _count_offset: wgt::BufferAddress,
         _max_count: u32,
     ) {

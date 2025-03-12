@@ -10,13 +10,19 @@
 
 #![allow(drop_bounds)] // This exists to remind implementors to impl drop.
 #![allow(clippy::too_many_arguments)] // It's fine.
+#![allow(missing_docs, clippy::missing_safety_doc)] // Interfaces are not documented
 
 use crate::{WasmNotSend, WasmNotSendSync};
 
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin};
 
-use crate::backend;
+#[cfg(custom)]
+use crate::backend::custom::*;
+#[cfg(webgpu)]
+use crate::backend::webgpu::*;
+#[cfg(wgpu_core)]
+use crate::backend::wgpu_core::*;
 
 /// Create a single trait with the given supertraits and a blanket impl for all types that implement them.
 ///
@@ -50,43 +56,9 @@ pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>)
 
 // Common traits on all the interface traits
 trait_alias!(CommonTraits: Any + Debug + WasmNotSendSync);
-// Non-object-safe traits that are added as a bound on InterfaceTypes.
-trait_alias!(ComparisonTraits: PartialEq + Eq + PartialOrd + Ord + Hash);
-
-/// Types that represent a "Backend" for the wgpu API.
-pub trait InterfaceTypes {
-    type Instance: InstanceInterface + ComparisonTraits;
-    type Adapter: AdapterInterface + ComparisonTraits;
-    type Device: DeviceInterface + ComparisonTraits;
-    type Queue: QueueInterface + ComparisonTraits;
-    type ShaderModule: ShaderModuleInterface + ComparisonTraits;
-    type BindGroupLayout: BindGroupLayoutInterface + ComparisonTraits;
-    type BindGroup: BindGroupInterface + ComparisonTraits;
-    type TextureView: TextureViewInterface + ComparisonTraits;
-    type Sampler: SamplerInterface + ComparisonTraits;
-    type Buffer: BufferInterface + ComparisonTraits;
-    type Texture: TextureInterface + ComparisonTraits;
-    type Blas: BlasInterface + ComparisonTraits;
-    type Tlas: TlasInterface + ComparisonTraits;
-    type QuerySet: QuerySetInterface + ComparisonTraits;
-    type PipelineLayout: PipelineLayoutInterface + ComparisonTraits;
-    type RenderPipeline: RenderPipelineInterface + ComparisonTraits;
-    type ComputePipeline: ComputePipelineInterface + ComparisonTraits;
-    type PipelineCache: PipelineCacheInterface + ComparisonTraits;
-    type CommandEncoder: CommandEncoderInterface + ComparisonTraits;
-    type ComputePass: ComputePassInterface + ComparisonTraits;
-    type RenderPass: RenderPassInterface + ComparisonTraits;
-    type CommandBuffer: CommandBufferInterface + ComparisonTraits;
-    type RenderBundleEncoder: RenderBundleEncoderInterface + ComparisonTraits;
-    type RenderBundle: RenderBundleInterface + ComparisonTraits;
-    type Surface: SurfaceInterface + ComparisonTraits;
-    type SurfaceOutputDetail: SurfaceOutputDetailInterface + ComparisonTraits;
-    type QueueWriteBuffer: QueueWriteBufferInterface + ComparisonTraits;
-    type BufferMappedRange: BufferMappedRangeInterface + ComparisonTraits;
-}
 
 pub trait InstanceInterface: CommonTraits {
-    fn new(desc: &wgt::InstanceDescriptor) -> Self
+    fn new(desc: &crate::InstanceDescriptor) -> Self
     where
         Self: Sized;
 
@@ -138,7 +110,7 @@ pub trait DeviceInterface: CommonTraits {
     fn create_shader_module(
         &self,
         desc: crate::ShaderModuleDescriptor<'_>,
-        shader_bound_checks: wgt::ShaderRuntimeChecks,
+        shader_bound_checks: crate::ShaderRuntimeChecks,
     ) -> DispatchShaderModule;
     unsafe fn create_shader_module_spirv(
         &self,
@@ -196,7 +168,7 @@ pub trait DeviceInterface: CommonTraits {
     fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError>;
 
     fn get_internal_counters(&self) -> crate::InternalCounters;
-    fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
+    fn generate_allocator_report(&self) -> Option<crate::AllocatorReport>;
 
     fn destroy(&self);
 }
@@ -208,8 +180,8 @@ pub trait QueueInterface: CommonTraits {
     fn validate_write_buffer(
         &self,
         buffer: &DispatchBuffer,
-        offset: wgt::BufferAddress,
-        size: wgt::BufferSize,
+        offset: crate::BufferAddress,
+        size: crate::BufferSize,
     ) -> Option<()>;
     fn write_staging_buffer(
         &self,
@@ -258,7 +230,7 @@ pub trait BufferInterface: CommonTraits {
     #[cfg(webgpu)]
     fn get_mapped_range_as_array_buffer(
         &self,
-        sub_range: Range<wgt::BufferAddress>,
+        sub_range: Range<crate::BufferAddress>,
     ) -> Option<js_sys::ArrayBuffer>;
 
     fn unmap(&self);
@@ -523,7 +495,7 @@ pub trait CommandBufferInterface: CommonTraits {}
 pub trait RenderBundleInterface: CommonTraits {}
 
 pub trait SurfaceInterface: CommonTraits {
-    fn get_capabilities(&self, adapter: &DispatchAdapter) -> wgt::SurfaceCapabilities;
+    fn get_capabilities(&self, adapter: &DispatchAdapter) -> crate::SurfaceCapabilities;
 
     fn configure(&self, device: &DispatchDevice, config: &crate::SurfaceConfiguration);
     fn get_current_texture(
@@ -561,25 +533,26 @@ pub trait BufferMappedRangeInterface: CommonTraits {
 /// arguments. These are similarly free when there is only one backend.
 ///
 /// In the future, we may want a truly generic backend, which could be extended from this enum.
-macro_rules! dispatch_types_inner {
+macro_rules! dispatch_types {
     (
-        wgpu_core = $wgpu_core_context:ty;
-        webgpu = $webgpu_context:ty;
-        {ref type $name:ident = InterfaceTypes::$subtype:ident: $trait:ident};
+        ref type $name:ident: $interface:ident = $core_type:ident,$webgpu_type:ident,$custom_type:ident
     ) => {
         #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
         pub enum $name {
             #[cfg(wgpu_core)]
-            Core(Arc<<$wgpu_core_context as InterfaceTypes>::$subtype>),
+            Core(Arc<$core_type>),
             #[cfg(webgpu)]
-            WebGPU(Arc<<$webgpu_context as InterfaceTypes>::$subtype>),
+            WebGPU(Arc<$webgpu_type>),
+            #[allow(clippy::allow_attributes, private_interfaces)]
+            #[cfg(custom)]
+            Custom($custom_type),
         }
 
         impl $name {
             #[cfg(wgpu_core)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
-            pub fn as_core(&self) -> &<$wgpu_core_context as InterfaceTypes>::$subtype {
+            pub fn as_core(&self) -> &$core_type {
                 match self {
                     Self::Core(value) => value,
                     _ => panic!(concat!(stringify!($name), " is not core")),
@@ -589,7 +562,7 @@ macro_rules! dispatch_types_inner {
             #[cfg(wgpu_core)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
-            pub fn as_core_opt(&self) -> Option<&<$wgpu_core_context as InterfaceTypes>::$subtype> {
+            pub fn as_core_opt(&self) -> Option<&$core_type> {
                 match self {
                     Self::Core(value) => Some(value),
                     _ => None,
@@ -599,7 +572,7 @@ macro_rules! dispatch_types_inner {
             #[cfg(webgpu)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
-            pub fn as_webgpu(&self) -> &<$webgpu_context as InterfaceTypes>::$subtype {
+            pub fn as_webgpu(&self) -> &$webgpu_type {
                 match self {
                     Self::WebGPU(value) => value,
                     _ => panic!(concat!(stringify!($name), " is not webgpu")),
@@ -609,32 +582,38 @@ macro_rules! dispatch_types_inner {
             #[cfg(webgpu)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
-            pub fn as_webgpu_opt(&self) -> Option<&<$webgpu_context as InterfaceTypes>::$subtype> {
+            pub fn as_webgpu_opt(&self) -> Option<&$webgpu_type> {
                 match self {
                     Self::WebGPU(value) => Some(value),
                     _ => None,
                 }
             }
+
+            #[cfg(custom)]
+            #[inline]
+            pub fn custom<T: $interface>(t: T) -> Self {
+                Self::Custom($custom_type::new(t))
+            }
         }
 
         #[cfg(wgpu_core)]
-        impl From<<$wgpu_core_context as InterfaceTypes>::$subtype> for $name {
+        impl From<$core_type> for $name {
             #[inline]
-            fn from(value: <$wgpu_core_context as InterfaceTypes>::$subtype) -> Self {
+            fn from(value: $core_type) -> Self {
                 Self::Core(Arc::new(value))
             }
         }
 
         #[cfg(webgpu)]
-        impl From<<$webgpu_context as InterfaceTypes>::$subtype> for $name {
+        impl From<$webgpu_type> for $name {
             #[inline]
-            fn from(value: <$webgpu_context as InterfaceTypes>::$subtype) -> Self {
+            fn from(value: $webgpu_type) -> Self {
                 Self::WebGPU(Arc::new(value))
             }
         }
 
         impl core::ops::Deref for $name {
-            type Target = dyn $trait;
+            type Target = dyn $interface;
 
             #[inline]
             fn deref(&self) -> &Self::Target {
@@ -643,6 +622,8 @@ macro_rules! dispatch_types_inner {
                     Self::Core(value) => value.as_ref(),
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value.as_ref(),
+                    #[cfg(custom)]
+                    Self::Custom(value) => value.deref(),
                     #[cfg(not(any(wgpu_core, webgpu)))]
                     _ => panic!("No context available. You need to enable one of wgpu's backend feature build flags."),
                 }
@@ -650,23 +631,24 @@ macro_rules! dispatch_types_inner {
         }
     };
     (
-        wgpu_core = $wgpu_core_context:ty;
-        webgpu = $webgpu_context:ty;
-        {mut type $name:ident = InterfaceTypes::$subtype:ident: $trait:ident};
+        mut type $name:ident: $interface:ident = $core_type:ident,$webgpu_type:ident,$custom_type:ident
     ) => {
         #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub enum $name {
             #[cfg(wgpu_core)]
-            Core(<$wgpu_core_context as InterfaceTypes>::$subtype),
+            Core($core_type),
             #[cfg(webgpu)]
-            WebGPU(<$webgpu_context as InterfaceTypes>::$subtype),
+            WebGPU($webgpu_type),
+            #[allow(clippy::allow_attributes, private_interfaces)]
+            #[cfg(custom)]
+            Custom($custom_type),
         }
 
         impl $name {
             #[cfg(wgpu_core)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
-            pub fn as_core(&self) -> &<$wgpu_core_context as InterfaceTypes>::$subtype {
+            pub fn as_core(&self) -> &$core_type {
                 match self {
                     Self::Core(value) => value,
                     _ => panic!(concat!(stringify!($name), " is not core")),
@@ -676,7 +658,7 @@ macro_rules! dispatch_types_inner {
             #[cfg(wgpu_core)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
-            pub fn as_core_mut(&mut self) -> &mut <$wgpu_core_context as InterfaceTypes>::$subtype {
+            pub fn as_core_mut(&mut self) -> &mut $core_type {
                 match self {
                     Self::Core(value) => value,
                     _ => panic!(concat!(stringify!($name), " is not core")),
@@ -686,7 +668,7 @@ macro_rules! dispatch_types_inner {
             #[cfg(wgpu_core)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
-            pub fn as_core_opt(&self) -> Option<&<$wgpu_core_context as InterfaceTypes>::$subtype> {
+            pub fn as_core_opt(&self) -> Option<&$core_type> {
                 match self {
                     Self::Core(value) => Some(value),
                     _ => None,
@@ -698,7 +680,7 @@ macro_rules! dispatch_types_inner {
             #[allow(clippy::allow_attributes, unused)]
             pub fn as_core_mut_opt(
                 &mut self,
-            ) -> Option<&mut <$wgpu_core_context as InterfaceTypes>::$subtype> {
+            ) -> Option<&mut $core_type> {
                 match self {
                     Self::Core(value) => Some(value),
                     _ => None,
@@ -708,7 +690,7 @@ macro_rules! dispatch_types_inner {
             #[cfg(webgpu)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
-            pub fn as_webgpu(&self) -> &<$webgpu_context as InterfaceTypes>::$subtype {
+            pub fn as_webgpu(&self) -> &$webgpu_type {
                 match self {
                     Self::WebGPU(value) => value,
                     _ => panic!(concat!(stringify!($name), " is not webgpu")),
@@ -718,7 +700,7 @@ macro_rules! dispatch_types_inner {
             #[cfg(webgpu)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
-            pub fn as_webgpu_mut(&mut self) -> &mut <$webgpu_context as InterfaceTypes>::$subtype {
+            pub fn as_webgpu_mut(&mut self) -> &mut $webgpu_type {
                 match self {
                     Self::WebGPU(value) => value,
                     _ => panic!(concat!(stringify!($name), " is not webgpu")),
@@ -728,7 +710,7 @@ macro_rules! dispatch_types_inner {
             #[cfg(webgpu)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
-            pub fn as_webgpu_opt(&self) -> Option<&<$webgpu_context as InterfaceTypes>::$subtype> {
+            pub fn as_webgpu_opt(&self) -> Option<&$webgpu_type> {
                 match self {
                     Self::WebGPU(value) => Some(value),
                     _ => None,
@@ -740,32 +722,38 @@ macro_rules! dispatch_types_inner {
             #[allow(clippy::allow_attributes, unused)]
             pub fn as_webgpu_mut_opt(
                 &mut self,
-            ) -> Option<&mut <$webgpu_context as InterfaceTypes>::$subtype> {
+            ) -> Option<&mut $webgpu_type> {
                 match self {
                     Self::WebGPU(value) => Some(value),
                     _ => None,
                 }
             }
+
+            #[cfg(custom)]
+            #[inline]
+            pub fn custom<T: $interface>(t: T) -> Self {
+                Self::Custom($custom_type::new(t))
+            }
         }
 
         #[cfg(wgpu_core)]
-        impl From<<$wgpu_core_context as InterfaceTypes>::$subtype> for $name {
+        impl From<$core_type> for $name {
             #[inline]
-            fn from(value: <$wgpu_core_context as InterfaceTypes>::$subtype) -> Self {
+            fn from(value: $core_type) -> Self {
                 Self::Core(value)
             }
         }
 
         #[cfg(webgpu)]
-        impl From<<$webgpu_context as InterfaceTypes>::$subtype> for $name {
+        impl From<$webgpu_type> for $name {
             #[inline]
-            fn from(value: <$webgpu_context as InterfaceTypes>::$subtype) -> Self {
+            fn from(value: $webgpu_type) -> Self {
                 Self::WebGPU(value)
             }
         }
 
         impl core::ops::Deref for $name {
-            type Target = dyn $trait;
+            type Target = dyn $interface;
 
             #[inline]
             fn deref(&self) -> &Self::Target {
@@ -774,6 +762,8 @@ macro_rules! dispatch_types_inner {
                     Self::Core(value) => value,
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value,
+                    #[cfg(custom)]
+                    Self::Custom(value) => value.deref(),
                     #[cfg(not(any(wgpu_core, webgpu)))]
                     _ => panic!("No context available. You need to enable one of wgpu's backend feature build flags."),
                 }
@@ -788,6 +778,8 @@ macro_rules! dispatch_types_inner {
                     Self::Core(value) => value,
                     #[cfg(webgpu)]
                     Self::WebGPU(value) => value,
+                    #[cfg(custom)]
+                    Self::Custom(value) => value.deref_mut(),
                     #[cfg(not(any(wgpu_core, webgpu)))]
                     _ => panic!("No context available. You need to enable one of wgpu's backend feature build flags."),
                 }
@@ -796,55 +788,31 @@ macro_rules! dispatch_types_inner {
     };
 }
 
-macro_rules! dispatch_types {
-    (
-        wgpu_core = $wgpu_core_context:ty;
-        webgpu = $webgpu_context:ty;
-        {$(
-            $type:tt;
-        )*}
-    ) => {
-        $(
-            dispatch_types_inner!{
-                wgpu_core = backend::ContextWgpuCore;
-                webgpu = backend::ContextWebGpu;
-                $type;
-            }
-        )*
-    };
-}
-
-dispatch_types! {
-    wgpu_core = backend::ContextWgpuCore;
-    webgpu = backend::ContextWebGpu;
-    {
-        {ref type DispatchInstance = InterfaceTypes::Instance: InstanceInterface};
-        {ref type DispatchAdapter = InterfaceTypes::Adapter: AdapterInterface};
-        {ref type DispatchDevice = InterfaceTypes::Device: DeviceInterface};
-        {ref type DispatchQueue = InterfaceTypes::Queue: QueueInterface};
-        {ref type DispatchShaderModule = InterfaceTypes::ShaderModule: ShaderModuleInterface};
-        {ref type DispatchBindGroupLayout = InterfaceTypes::BindGroupLayout: BindGroupLayoutInterface};
-        {ref type DispatchBindGroup = InterfaceTypes::BindGroup: BindGroupInterface};
-        {ref type DispatchTextureView = InterfaceTypes::TextureView: TextureViewInterface};
-        {ref type DispatchSampler = InterfaceTypes::Sampler: SamplerInterface};
-        {ref type DispatchBuffer = InterfaceTypes::Buffer: BufferInterface};
-        {ref type DispatchTexture = InterfaceTypes::Texture: TextureInterface};
-        {ref type DispatchBlas = InterfaceTypes::Blas: BlasInterface};
-        {ref type DispatchTlas = InterfaceTypes::Tlas: TlasInterface};
-        {ref type DispatchQuerySet = InterfaceTypes::QuerySet: QuerySetInterface};
-        {ref type DispatchPipelineLayout = InterfaceTypes::PipelineLayout: PipelineLayoutInterface};
-        {ref type DispatchRenderPipeline = InterfaceTypes::RenderPipeline: RenderPipelineInterface};
-        {ref type DispatchComputePipeline = InterfaceTypes::ComputePipeline: ComputePipelineInterface};
-        {ref type DispatchPipelineCache = InterfaceTypes::PipelineCache: PipelineCacheInterface};
-        {mut type DispatchCommandEncoder = InterfaceTypes::CommandEncoder: CommandEncoderInterface};
-        {mut type DispatchComputePass = InterfaceTypes::ComputePass: ComputePassInterface};
-        {mut type DispatchRenderPass = InterfaceTypes::RenderPass: RenderPassInterface};
-        {mut type DispatchCommandBuffer = InterfaceTypes::CommandBuffer: CommandBufferInterface};
-        {mut type DispatchRenderBundleEncoder = InterfaceTypes::RenderBundleEncoder: RenderBundleEncoderInterface};
-        {ref type DispatchRenderBundle = InterfaceTypes::RenderBundle: RenderBundleInterface};
-        {ref type DispatchSurface = InterfaceTypes::Surface: SurfaceInterface};
-        {ref type DispatchSurfaceOutputDetail = InterfaceTypes::SurfaceOutputDetail: SurfaceOutputDetailInterface};
-        {mut type DispatchQueueWriteBuffer = InterfaceTypes::QueueWriteBuffer: QueueWriteBufferInterface};
-        {mut type DispatchBufferMappedRange = InterfaceTypes::BufferMappedRange: BufferMappedRangeInterface};
-    }
-}
+dispatch_types! {ref type DispatchInstance: InstanceInterface = ContextWgpuCore, ContextWebGpu, DynContext}
+dispatch_types! {ref type DispatchAdapter: AdapterInterface = CoreAdapter, WebAdapter, DynAdapter}
+dispatch_types! {ref type DispatchDevice: DeviceInterface = CoreDevice, WebDevice, DynDevice}
+dispatch_types! {ref type DispatchQueue: QueueInterface = CoreQueue, WebQueue, DynQueue}
+dispatch_types! {ref type DispatchShaderModule: ShaderModuleInterface = CoreShaderModule, WebShaderModule, DynShaderModule}
+dispatch_types! {ref type DispatchBindGroupLayout: BindGroupLayoutInterface = CoreBindGroupLayout, WebBindGroupLayout, DynBindGroupLayout}
+dispatch_types! {ref type DispatchBindGroup: BindGroupInterface = CoreBindGroup, WebBindGroup, DynBindGroup}
+dispatch_types! {ref type DispatchTextureView: TextureViewInterface = CoreTextureView, WebTextureView, DynTextureView}
+dispatch_types! {ref type DispatchSampler: SamplerInterface = CoreSampler, WebSampler, DynSampler}
+dispatch_types! {ref type DispatchBuffer: BufferInterface = CoreBuffer, WebBuffer, DynBuffer}
+dispatch_types! {ref type DispatchTexture: TextureInterface = CoreTexture, WebTexture, DynTexture}
+dispatch_types! {ref type DispatchBlas: BlasInterface = CoreBlas, WebBlas, DynBlas}
+dispatch_types! {ref type DispatchTlas: TlasInterface = CoreTlas, WebTlas, DynTlas}
+dispatch_types! {ref type DispatchQuerySet: QuerySetInterface = CoreQuerySet, WebQuerySet, DynQuerySet}
+dispatch_types! {ref type DispatchPipelineLayout: PipelineLayoutInterface = CorePipelineLayout, WebPipelineLayout, DynPipelineLayout}
+dispatch_types! {ref type DispatchRenderPipeline: RenderPipelineInterface = CoreRenderPipeline, WebRenderPipeline, DynRenderPipeline}
+dispatch_types! {ref type DispatchComputePipeline: ComputePipelineInterface = CoreComputePipeline, WebComputePipeline, DynComputePipeline}
+dispatch_types! {ref type DispatchPipelineCache: PipelineCacheInterface = CorePipelineCache, WebPipelineCache, DynPipelineCache}
+dispatch_types! {mut type DispatchCommandEncoder: CommandEncoderInterface = CoreCommandEncoder, WebCommandEncoder, DynCommandEncoder}
+dispatch_types! {mut type DispatchComputePass: ComputePassInterface = CoreComputePass, WebComputePassEncoder, DynComputePass}
+dispatch_types! {mut type DispatchRenderPass: RenderPassInterface = CoreRenderPass, WebRenderPassEncoder, DynRenderPass}
+dispatch_types! {ref type DispatchCommandBuffer: CommandBufferInterface = CoreCommandBuffer, WebCommandBuffer, DynCommandBuffer}
+dispatch_types! {mut type DispatchRenderBundleEncoder: RenderBundleEncoderInterface = CoreRenderBundleEncoder, WebRenderBundleEncoder, DynRenderBundleEncoder}
+dispatch_types! {ref type DispatchRenderBundle: RenderBundleInterface = CoreRenderBundle, WebRenderBundle, DynRenderBundle}
+dispatch_types! {ref type DispatchSurface: SurfaceInterface = CoreSurface, WebSurface, DynSurface}
+dispatch_types! {ref type DispatchSurfaceOutputDetail: SurfaceOutputDetailInterface = CoreSurfaceOutputDetail, WebSurfaceOutputDetail, DynSurfaceOutputDetail}
+dispatch_types! {mut type DispatchQueueWriteBuffer: QueueWriteBufferInterface = CoreQueueWriteBuffer, WebQueueWriteBuffer, DynQueueWriteBuffer}
+dispatch_types! {mut type DispatchBufferMappedRange: BufferMappedRangeInterface = CoreBufferMappedRange, WebBufferMappedRange, DynBufferMappedRange}

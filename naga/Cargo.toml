@@ -15,7 +15,7 @@ autotests = false
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.82.0"
 
 [[test]]
 name = "naga-test"
@@ -120,3 +120,8 @@ serde = { workspace = true, features = ["default", "derive"] }
 spirv = { version = "0.3", features = ["deserialize"] }
 toml = "0.8"
 walkdir.workspace = true
+
+[lints.clippy]
+std_instead_of_alloc = "warn"
+std_instead_of_core = "warn"
+alloc_instead_of_core = "warn"

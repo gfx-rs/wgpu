@@ -1,10 +1,11 @@
+use alloc::{format, vec, vec::Vec};
+
+use super::{Error, Instruction, LookupExpression, LookupHelper as _};
+use crate::proc::Emitter;
 use crate::{
     arena::{Arena, Handle},
     front::spv::{BlockContext, BodyIndex},
 };
-
-use super::{Error, Instruction, LookupExpression, LookupHelper as _};
-use crate::proc::Emitter;
 
 pub type BlockId = u32;
 
@@ -643,7 +644,7 @@ impl BlockContext<'_> {
                                 let body = lower_impl(blocks, bodies, body_idx);
 
                                 // Handle simple cases that would make a fallthrough statement unreachable code
-                                let fall_through = body.last().map_or(true, |s| !s.is_terminator());
+                                let fall_through = body.last().is_none_or(|s| !s.is_terminator());
 
                                 crate::SwitchCase {
                                     value: crate::SwitchValue::I32(value),

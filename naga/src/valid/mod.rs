@@ -10,13 +10,16 @@ mod handles;
 mod interface;
 mod r#type;
 
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
+use core::ops;
+
+use bit_set::BitSet;
+
 use crate::{
     arena::{Handle, HandleSet},
     proc::{ExpressionKindTracker, LayoutError, Layouter, TypeResolution},
     FastHashSet,
 };
-use bit_set::BitSet;
-use std::ops;
 
 //TODO: analyze the model at the same time as we validate it,
 // merge the corresponding matches over expressions and statements.
@@ -158,6 +161,8 @@ bitflags::bitflags! {
         const TEXTURE_ATOMIC = 1 << 23;
         /// Support for atomic operations on 64-bit images.
         const TEXTURE_INT64_ATOMIC = 1 << 24;
+        /// Support for ray queries returning vertex position
+        const RAY_HIT_VERTEX_POSITION = 1 << 25;
     }
 }
 
@@ -400,8 +405,8 @@ impl crate::TypeInner {
             Self::Array { .. }
             | Self::Image { .. }
             | Self::Sampler { .. }
-            | Self::AccelerationStructure
-            | Self::RayQuery
+            | Self::AccelerationStructure { .. }
+            | Self::RayQuery { .. }
             | Self::BindingArray { .. } => false,
         }
     }

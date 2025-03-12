@@ -90,6 +90,14 @@ impl Drop for QueueWriteBufferView<'_> {
 }
 
 impl Queue {
+    #[cfg(custom)]
+    /// Creates Queue from custom implementation
+    pub fn from_custom<T: custom::QueueInterface>(queue: T) -> Self {
+        Self {
+            inner: dispatch::DispatchQueue::custom(queue),
+        }
+    }
+
     /// Schedule a data write into `buffer` starting at `offset`.
     ///
     /// This method fails if `data` overruns the size of `buffer` starting at `offset`.
@@ -251,5 +259,27 @@ impl Queue {
     /// and used to set flags, send messages, etc.
     pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) {
         self.inner.on_submitted_work_done(Box::new(callback));
+    }
+
+    /// Returns the inner hal Queue using a callback. The hal queue will be `None` if the
+    /// backend type argument does not match with this wgpu Queue
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Queue must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Queue>) -> R, R>(
+        &self,
+        hal_queue_callback: F,
+    ) -> R {
+        if let Some(core_queue) = self.inner.as_core_opt() {
+            unsafe {
+                core_queue
+                    .context
+                    .queue_as_hal::<A, F, R>(core_queue, hal_queue_callback)
+            }
+        } else {
+            hal_queue_callback(None)
+        }
     }
 }

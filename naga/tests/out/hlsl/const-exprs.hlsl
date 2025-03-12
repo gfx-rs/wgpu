@@ -125,6 +125,24 @@ void relational()
     return;
 }
 
+typedef int ret_Constructarray9_int_[9];
+ret_Constructarray9_int_ Constructarray9_int_(int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, int arg7, int arg8) {
+    int ret[9] = { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 };
+    return ret;
+}
+
+void abstract_access(uint i)
+{
+    float a_1 = 1.0;
+    uint b_1 = 1u;
+    int c_1 = (int)0;
+    int d = (int)0;
+
+    c_1 = Constructarray9_int_(int(1), int(2), int(3), int(4), int(5), int(6), int(7), int(8), int(9))[min(uint(i), 8u)];
+    d = int4(int(1), int(2), int(3), int(4))[min(uint(i), 3u)];
+    return;
+}
+
 [numthreads(2, 3, 1)]
 void main()
 {

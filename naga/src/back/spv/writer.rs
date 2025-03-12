@@ -1,3 +1,12 @@
+use alloc::{
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+
+use hashbrown::hash_map::Entry;
+use spirv::Word;
+
 use super::{
     block::DebugInfoInner,
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
@@ -12,8 +21,6 @@ use crate::{
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
-use hashbrown::hash_map::Entry;
-use spirv::Word;
 
 struct FunctionInterface<'a> {
     varying_ids: &'a mut Vec<Word>,
@@ -97,12 +104,12 @@ impl Writer {
     /// `Recyclable::recycle` requires ownership of the value, not just
     /// `&mut`; see the trait documentation. But we need to use this method
     /// from functions like `Writer::write`, which only have `&mut Writer`.
-    /// Workarounds include unsafe code (`std::ptr::read`, then `write`, ugh)
+    /// Workarounds include unsafe code (`core::ptr::read`, then `write`, ugh)
     /// or something like a `Default` impl that returns an oddly-initialized
     /// `Writer`, which is worse.
     fn reset(&mut self) {
         use super::recyclable::Recyclable;
-        use std::mem::take;
+        use core::mem::take;
 
         let mut id_gen = IdGenerator::default();
         let gl450_ext_inst_id = id_gen.next();
@@ -241,6 +248,30 @@ impl Writer {
         self.get_type_id(LookupType::Local(LocalType::Pointer {
             base: handle,
             class,
+        }))
+    }
+
+    pub(super) fn get_ray_query_pointer_id(&mut self, module: &crate::Module) -> Word {
+        let rq_ty = module
+            .types
+            .get(&crate::Type {
+                name: None,
+                inner: crate::TypeInner::RayQuery {
+                    vertex_return: false,
+                },
+            })
+            .or_else(|| {
+                module.types.get(&crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::RayQuery {
+                        vertex_return: true,
+                    },
+                })
+            })
+            .expect("ray_query type should have been populated by the variable passed into this!");
+        self.get_type_id(LookupType::Local(LocalType::Pointer {
+            base: rq_ty,
+            class: spirv::StorageClass::Function,
         }))
     }
 
@@ -867,10 +898,10 @@ impl Writer {
             fun_info: info,
             function: &mut function,
             // Re-use the cached expression table from prior functions.
-            cached: std::mem::take(&mut self.saved_cached),
+            cached: core::mem::take(&mut self.saved_cached),
 
             // Steal the Writer's temp list for a bit.
-            temp_list: std::mem::take(&mut self.temp_list),
+            temp_list: core::mem::take(&mut self.temp_list),
             force_loop_bounding: self.force_loop_bounding,
             writer: self,
             expression_constness: super::ExpressionConstnessTracker::from_arena(
@@ -906,7 +937,7 @@ impl Writer {
                 id,
                 spirv::StorageClass::Function,
                 init_word.or_else(|| match ir_module.types[variable.ty].inner {
-                    crate::TypeInner::RayQuery => None,
+                    crate::TypeInner::RayQuery { .. } => None,
                     _ => {
                         let type_id = context.get_type_id(LookupType::Handle(variable.ty));
                         Some(context.writer.write_constant_null(type_id))
@@ -1131,10 +1162,10 @@ impl Writer {
                     _ => {}
                 }
             }
-            crate::TypeInner::AccelerationStructure => {
+            crate::TypeInner::AccelerationStructure { .. } => {
                 self.require_any("Acceleration Structure", &[spirv::Capability::RayQueryKHR])?;
             }
-            crate::TypeInner::RayQuery => {
+            crate::TypeInner::RayQuery { .. } => {
                 self.require_any("Ray Query", &[spirv::Capability::RayQueryKHR])?;
             }
             crate::TypeInner::Atomic(crate::Scalar { width: 8, kind: _ }) => {
@@ -1317,8 +1348,8 @@ impl Writer {
                 | crate::TypeInner::ValuePointer { .. }
                 | crate::TypeInner::Image { .. }
                 | crate::TypeInner::Sampler { .. }
-                | crate::TypeInner::AccelerationStructure
-                | crate::TypeInner::RayQuery => unreachable!(),
+                | crate::TypeInner::AccelerationStructure { .. }
+                | crate::TypeInner::RayQuery { .. } => unreachable!(),
             };
 
             instruction.to_words(&mut self.logical_layout.declarations);
@@ -1570,6 +1601,10 @@ impl Writer {
         semantics.set(
             spirv::MemorySemantics::WORKGROUP_MEMORY,
             flags.contains(crate::Barrier::WORK_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::IMAGE_MEMORY,
+            flags.contains(crate::Barrier::TEXTURE),
         );
         let exec_scope_id = if flags.contains(crate::Barrier::SUB_GROUP) {
             self.get_index_constant(spirv::Scope::Subgroup as u32)
@@ -2188,9 +2223,13 @@ impl Writer {
             .any(|arg| has_view_index_check(ir_module, arg.binding.as_ref(), arg.ty));
         let mut has_ray_query = ir_module.special_types.ray_desc.is_some()
             | ir_module.special_types.ray_intersection.is_some();
+        let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
 
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
-            if let &crate::TypeInner::AccelerationStructure | &crate::TypeInner::RayQuery = inner {
+            // spirv does not know whether these have vertex return - that is done by us
+            if let &crate::TypeInner::AccelerationStructure { .. }
+            | &crate::TypeInner::RayQuery { .. } = inner
+            {
                 has_ray_query = true
             }
         }
@@ -2207,6 +2246,10 @@ impl Writer {
         if has_ray_query {
             Instruction::extension("SPV_KHR_ray_query")
                 .to_words(&mut self.logical_layout.extensions)
+        }
+        if has_vertex_return {
+            Instruction::extension("SPV_KHR_ray_tracing_position_fetch")
+                .to_words(&mut self.logical_layout.extensions);
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")

@@ -5,6 +5,9 @@
 //! - texture/sampler pairs
 //! - expression reference counts
 
+use alloc::{boxed::Box, vec};
+use core::ops;
+
 use super::{ExpressionError, FunctionError, ModuleInfo, ShaderStages, ValidationFlags};
 use crate::diagnostic_filter::{DiagnosticFilterNode, StandardFilterableTriggeringRule};
 use crate::span::{AddSpan as _, WithSpan};
@@ -12,7 +15,6 @@ use crate::{
     arena::{Arena, Handle},
     proc::{ResolveContext, TypeResolution},
 };
-use std::ops;
 
 pub type NonUniformResult = Option<Handle<crate::Expression>>;
 
@@ -261,7 +263,7 @@ pub struct FunctionInfo {
     /// How this function and its callees use this module's globals.
     ///
     /// This is indexed by `Handle<GlobalVariable>` indices. However,
-    /// `FunctionInfo` implements `std::ops::Index<Handle<GlobalVariable>>`,
+    /// `FunctionInfo` implements `core::ops::Index<Handle<GlobalVariable>>`,
     /// so you can simply index this struct with a global handle to retrieve
     /// its usage information.
     global_uses: Box<[GlobalUse]>,
@@ -269,7 +271,7 @@ pub struct FunctionInfo {
     /// Information about each expression in this function's body.
     ///
     /// This is indexed by `Handle<Expression>` indices. However, `FunctionInfo`
-    /// implements `std::ops::Index<Handle<Expression>>`, so you can simply
+    /// implements `core::ops::Index<Handle<Expression>>`, so you can simply
     /// index this struct with an expression handle to retrieve its
     /// `ExpressionInfo`.
     expressions: Box<[ExpressionInfo]>,
@@ -805,6 +807,13 @@ impl FunctionInfo {
             },
             E::SubgroupOperationResult { .. } => Uniformity {
                 non_uniform_result: Some(handle),
+                requirements: UniformityRequirements::empty(),
+            },
+            E::RayQueryVertexPositions {
+                query,
+                committed: _,
+            } => Uniformity {
+                non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
             },
         };

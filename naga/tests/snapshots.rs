@@ -130,7 +130,7 @@ struct Parameters {
     glsl: naga::back::glsl::Options,
     glsl_exclude_list: naga::FastHashSet<String>,
     #[cfg(all(feature = "deserialize", glsl_out))]
-    glsl_multiview: Option<std::num::NonZeroU32>,
+    glsl_multiview: Option<core::num::NonZeroU32>,
 
     // -- HLSL options --
     #[cfg(all(feature = "deserialize", hlsl_out))]
@@ -661,7 +661,7 @@ fn write_output_glsl(
     ep_name: &str,
     options: &naga::back::glsl::Options,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
-    multiview: Option<std::num::NonZeroU32>,
+    multiview: Option<core::num::NonZeroU32>,
     pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::glsl;
@@ -702,8 +702,8 @@ fn write_output_hlsl(
     pipeline_constants: &naga::back::PipelineConstants,
     frag_ep: Option<naga::back::hlsl::FragmentEntryPoint>,
 ) {
+    use core::fmt::Write as _;
     use naga::back::hlsl;
-    use std::fmt::Write as _;
 
     println!("generating HLSL");
 

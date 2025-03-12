@@ -45,7 +45,6 @@ default-members = [
 ]
 
 [workspace.lints.clippy]
-manual_c_str_literals = "allow"
 ref_as_ptr = "warn"
 # NOTE: disallowed-types is configured in other file: clippy.toml
 
@@ -64,6 +63,8 @@ naga = { version = "24.0.0", path = "./naga" }
 wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features = [
     "serde",
     "wgsl",
+    "vulkan",
+    "gles",
     "dx12",
     "metal",
     "static-dxc",
@@ -88,12 +89,13 @@ arrayvec = { version = "0.7.6", default-features = false }
 bincode = "1"
 bit-set = { version = "0.8", default-features = false }
 bit-vec = { version = "0.8", default-features = false }
-bitflags = "2.7"
+bitflags = "2.9"
 bytemuck = { version = "1.21", features = [
     "derive",
     "extern_crate_alloc",
     "min_const_generics",
 ] }
+cargo_metadata = "0.19"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.5"

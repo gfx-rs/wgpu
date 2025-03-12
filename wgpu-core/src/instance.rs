@@ -202,6 +202,72 @@ impl Instance {
         }
     }
 
+    /// Creates a new surface from the given drm configuration.
+    ///
+    /// # Safety
+    ///
+    /// - All parameters must point to valid DRM values.
+    ///
+    /// # Platform Support
+    ///
+    /// This function is only available on non-apple Unix-like platforms (Linux, FreeBSD) and
+    /// currently only works with the Vulkan backend.
+    #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+    #[cfg_attr(not(vulkan), expect(unused_variables))]
+    pub unsafe fn create_surface_from_drm(
+        &self,
+        fd: i32,
+        plane: u32,
+        connector_id: u32,
+        width: u32,
+        height: u32,
+        refresh_rate: u32,
+    ) -> Result<Surface, CreateSurfaceError> {
+        profiling::scope!("Instance::create_surface_from_drm");
+
+        let mut errors = HashMap::default();
+        let mut surface_per_backend: HashMap<Backend, Box<dyn hal::DynSurface>> =
+            HashMap::default();
+
+        #[cfg(vulkan)]
+        {
+            let instance = unsafe { self.as_hal::<hal::api::Vulkan>() }
+                .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Vulkan))?;
+
+            // Safety must be upheld by the caller
+            match unsafe {
+                instance.create_surface_from_drm(
+                    fd,
+                    plane,
+                    connector_id,
+                    width,
+                    height,
+                    refresh_rate,
+                )
+            } {
+                Ok(surface) => {
+                    surface_per_backend.insert(Backend::Vulkan, Box::new(surface));
+                }
+                Err(err) => {
+                    errors.insert(Backend::Vulkan, err);
+                }
+            }
+        }
+
+        if surface_per_backend.is_empty() {
+            Err(CreateSurfaceError::FailedToCreateSurfaceForAnyBackend(
+                errors,
+            ))
+        } else {
+            let surface = Surface {
+                presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+                surface_per_backend,
+            };
+
+            Ok(surface)
+        }
+    }
+
     /// # Safety
     ///
     /// `layer` must be a valid pointer.
@@ -769,6 +835,42 @@ impl Global {
     ) -> Result<SurfaceId, CreateSurfaceError> {
         let surface = unsafe { self.instance.create_surface(display_handle, window_handle) }?;
         let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+        Ok(id)
+    }
+
+    /// Creates a new surface from the given drm configuration.
+    ///
+    /// # Safety
+    ///
+    /// - All parameters must point to valid DRM values.
+    ///
+    /// # Platform Support
+    ///
+    /// This function is only available on non-apple Unix-like platforms (Linux, FreeBSD) and
+    /// currently only works with the Vulkan backend.
+    #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+    pub unsafe fn instance_create_surface_from_drm(
+        &self,
+        fd: i32,
+        plane: u32,
+        connector_id: u32,
+        width: u32,
+        height: u32,
+        refresh_rate: u32,
+        id_in: Option<SurfaceId>,
+    ) -> Result<SurfaceId, CreateSurfaceError> {
+        let surface = unsafe {
+            self.instance.create_surface_from_drm(
+                fd,
+                plane,
+                connector_id,
+                width,
+                height,
+                refresh_rate,
+            )
+        }?;
+        let id = self.surfaces.prepare(id_in).assign(Arc::new(surface));
+
         Ok(id)
     }
 

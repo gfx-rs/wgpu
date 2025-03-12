@@ -2228,7 +2228,7 @@ fn compaction_preserves_spans() {
         .0;
     if !matches!(
         dest_span.to_range(),
-        Some(std::ops::Range {
+        Some(core::ops::Range {
             start: 108,
             end: 114
         })

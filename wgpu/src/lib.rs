@@ -26,7 +26,8 @@
     rust_2018_idioms,
     unsafe_op_in_unsafe_fn
 )]
-#![allow(clippy::arc_with_non_send_sync)]
+// NOTE: Keep this in sync with `wgpu-core`.
+#![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
 #![cfg_attr(not(any(wgpu_core, webgpu)), allow(unused))]
 
 extern crate alloc;
@@ -62,12 +63,15 @@ pub mod util;
 //
 //
 
+#[cfg(custom)]
+pub use backend::custom;
+
 pub use api::*;
 pub use wgt::{
-    AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, BackendOptions, Backends,
-    BindGroupLayoutEntry, BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState,
-    BufferAddress, BufferBindingType, BufferSize, BufferTransition, BufferUsages, BufferUses,
-    Color, ColorTargetState, ColorWrites, CommandBufferDescriptor, CompareFunction,
+    AdapterInfo, AddressMode, AllocatorReport, AstcBlock, AstcChannel, Backend, BackendOptions,
+    Backends, BindGroupLayoutEntry, BindingType, BlendComponent, BlendFactor, BlendOperation,
+    BlendState, BufferAddress, BufferBindingType, BufferSize, BufferTransition, BufferUsages,
+    BufferUses, Color, ColorTargetState, ColorWrites, CommandBufferDescriptor, CompareFunction,
     CompositeAlphaMode, CopyExternalImageDestInfo, CoreCounters, DepthBiasState, DepthStencilState,
     DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags, DownlevelLimits,
     Dx12BackendOptions, Dx12Compiler, DxcShaderModel, DynamicOffset, Extent3d, Face, Features,

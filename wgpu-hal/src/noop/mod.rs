@@ -368,6 +368,16 @@ impl crate::Device for Context {
     ) -> Result<Resource, crate::PipelineError> {
         Ok(Resource)
     }
+    unsafe fn create_mesh_pipeline(
+        &self,
+        desc: &crate::MeshPipelineDescriptor<
+            <Self::A as crate::Api>::PipelineLayout,
+            <Self::A as crate::Api>::ShaderModule,
+            <Self::A as crate::Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
+        Ok(Resource)
+    }
     unsafe fn destroy_render_pipeline(&self, pipeline: Resource) {}
     unsafe fn create_compute_pipeline(
         &self,

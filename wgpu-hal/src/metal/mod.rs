@@ -362,6 +362,10 @@ impl Queue {
             timestamp_period,
         }
     }
+
+    pub fn as_raw(&self) -> &Arc<Mutex<metal::CommandQueue>> {
+        &self.raw
+    }
 }
 
 pub struct Device {

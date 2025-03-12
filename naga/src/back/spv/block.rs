@@ -2,13 +2,16 @@
 Implementations for `BlockContext` methods.
 */
 
+use alloc::vec::Vec;
+
+use spirv::Word;
+
 use super::{
     index::BoundsCheckResult, selection::Selection, Block, BlockContext, Dimension, Error,
     Instruction, LocalType, LookupType, NumericType, ResultMember, WrappedFunction, Writer,
     WriterFlags,
 };
 use crate::{arena::Handle, proc::index::GuardedIndex, Statement};
-use spirv::Word;
 
 fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
     match *type_inner {
@@ -1579,7 +1582,7 @@ impl BlockContext<'_> {
 
                         const VEC_LENGTH: u8 = 4;
                         let parts: [_; VEC_LENGTH as usize] =
-                            std::array::from_fn(|_| self.gen_id());
+                            core::array::from_fn(|_| self.gen_id());
                         for (i, part_id) in parts.into_iter().enumerate() {
                             let index = self
                                 .writer
@@ -1927,6 +1930,13 @@ impl BlockContext<'_> {
                 ));
                 id
             }
+            crate::Expression::RayQueryVertexPositions { query, committed } => {
+                self.writer.require_any(
+                    "RayQueryVertexPositions",
+                    &[spirv::Capability::RayQueryPositionFetchKHR],
+                )?;
+                self.write_ray_query_return_vertex_position(query, block, committed)
+            }
         };
 
         self.cached[expr_handle] = id;
@@ -2230,26 +2240,60 @@ impl BlockContext<'_> {
     }
 
     fn spill_to_internal_variable(&mut self, base: Handle<crate::Expression>, block: &mut Block) {
-        // Generate an internal variable of the appropriate type for `base`.
-        let variable_id = self.writer.id_gen.next();
-        let pointer_type_id = self
-            .writer
-            .get_resolution_pointer_id(&self.fun_info[base].ty, spirv::StorageClass::Function);
-        let variable = super::LocalVariable {
-            id: variable_id,
-            instruction: Instruction::variable(
-                pointer_type_id,
-                variable_id,
-                spirv::StorageClass::Function,
-                None,
-            ),
+        use indexmap::map::Entry;
+
+        // Make sure we have an internal variable to spill `base` to.
+        let spill_variable_id = match self.function.spilled_composites.entry(base) {
+            Entry::Occupied(preexisting) => preexisting.get().id,
+            Entry::Vacant(vacant) => {
+                // Generate a new internal variable of the appropriate
+                // type for `base`.
+                let pointer_type_id = self.writer.get_resolution_pointer_id(
+                    &self.fun_info[base].ty,
+                    spirv::StorageClass::Function,
+                );
+                let id = self.writer.id_gen.next();
+                vacant.insert(super::LocalVariable {
+                    id,
+                    instruction: Instruction::variable(
+                        pointer_type_id,
+                        id,
+                        spirv::StorageClass::Function,
+                        None,
+                    ),
+                });
+                id
+            }
         };
 
+        // Perform the store even if we already had a spill variable for `base`.
+        // Consider this code:
+        //
+        // var x = ...;
+        // var y = ...;
+        // var z = ...;
+        // for (i = 0; i<2; i++) {
+        //     let a = array(i, i, i);
+        //     if (i == 0) {
+        //         x += a[y];
+        //     } else [
+        //         x += a[z];
+        //     }
+        // }
+        //
+        // The value of `a` needs to be spilled so we can subscript it with `y` and `z`.
+        //
+        // When we generate SPIR-V for `a[y]`, we will create the spill
+        // variable, and store `a`'s value in it.
+        //
+        // When we generate SPIR-V for `a[z]`, we will notice that the spill
+        // variable for `a` has already been declared, but it is still essential
+        // that we store `a` into it, so that `a[z]` sees this iteration's value
+        // of `a`.
         let base_id = self.cached[base];
         block
             .body
-            .push(Instruction::store(variable.id, base_id, None));
-        self.function.spilled_composites.insert(base, variable);
+            .push(Instruction::store(spill_variable_id, base_id, None));
     }
 
     /// Generate an access to a spilled temporary, if necessary.

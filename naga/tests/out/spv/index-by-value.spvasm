@@ -24,7 +24,7 @@ OpDecorate %64 BuiltIn Position
 %11 = OpTypeMatrix %12 2
 %13 = OpTypeVector %10 4
 %18 = OpTypeFunction %3 %4 %3
-%21 = OpTypePointer Function %4
+%20 = OpTypePointer Function %4
 %22 = OpTypePointer Function %3
 %29 = OpTypeFunction %3 %3 %3
 %30 = OpConstant  %3  1
@@ -34,7 +34,7 @@ OpDecorate %64 BuiltIn Position
 %34 = OpConstant  %3  4
 %35 = OpConstantComposite  %7  %33 %34
 %36 = OpConstantComposite  %9  %32 %35
-%39 = OpTypePointer Function %9
+%38 = OpTypePointer Function %9
 %46 = OpTypeFunction %10 %3 %3
 %47 = OpConstant  %10  1.0
 %48 = OpConstant  %10  2.0
@@ -43,7 +43,7 @@ OpDecorate %64 BuiltIn Position
 %51 = OpConstantComposite  %12  %47 %48
 %52 = OpConstantComposite  %12  %49 %50
 %53 = OpConstantComposite  %11  %51 %52
-%56 = OpTypePointer Function %11
+%55 = OpTypePointer Function %11
 %57 = OpTypePointer Function %10
 %62 = OpTypePointer Input %6
 %61 = OpVariable  %62  Input
@@ -57,11 +57,11 @@ OpDecorate %64 BuiltIn Position
 %15 = OpFunctionParameter  %4
 %16 = OpFunctionParameter  %3
 %14 = OpLabel
-%20 = OpVariable  %21  Function
+%21 = OpVariable  %20  Function
 OpBranch %19
 %19 = OpLabel
-OpStore %20 %15
-%23 = OpAccessChain  %22  %20 %16
+OpStore %21 %15
+%23 = OpAccessChain  %22  %21 %16
 %24 = OpLoad  %3  %23
 OpReturnValue %24
 OpFunctionEnd
@@ -69,11 +69,11 @@ OpFunctionEnd
 %26 = OpFunctionParameter  %3
 %27 = OpFunctionParameter  %3
 %25 = OpLabel
-%38 = OpVariable  %39  Function
+%39 = OpVariable  %38  Function
 OpBranch %37
 %37 = OpLabel
-OpStore %38 %36
-%40 = OpAccessChain  %22  %38 %26 %27
+OpStore %39 %36
+%40 = OpAccessChain  %22  %39 %26 %27
 %41 = OpLoad  %3  %40
 OpReturnValue %41
 OpFunctionEnd
@@ -81,17 +81,17 @@ OpFunctionEnd
 %43 = OpFunctionParameter  %3
 %44 = OpFunctionParameter  %3
 %42 = OpLabel
-%55 = OpVariable  %56  Function
+%56 = OpVariable  %55  Function
 OpBranch %54
 %54 = OpLabel
-OpStore %55 %53
-%58 = OpAccessChain  %57  %55 %43 %44
+OpStore %56 %53
+%58 = OpAccessChain  %57  %56 %43 %44
 %59 = OpLoad  %10  %58
 OpReturnValue %59
 OpFunctionEnd
 %66 = OpFunction  %2  None %67
 %60 = OpLabel
-%71 = OpVariable  %21  Function
+%71 = OpVariable  %20  Function
 %63 = OpLoad  %6  %61
 OpBranch %70
 %70 = OpLabel

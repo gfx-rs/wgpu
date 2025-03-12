@@ -3,11 +3,7 @@ use super::conv;
 use arrayvec::ArrayVec;
 use ash::vk;
 
-use std::{
-    mem::{self, size_of},
-    ops::Range,
-    slice,
-};
+use std::{mem, ops::Range, slice};
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
@@ -1051,6 +1047,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
     }
+    unsafe fn draw_mesh_tasks(
+        &mut self,
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
+    ) {
+        if let Some(ref t) = self.device.extension_fns.mesh_shading {
+            unsafe {
+                t.cmd_draw_mesh_tasks(self.active, group_count_x, group_count_y, group_count_z);
+            };
+        } else {
+            panic!("Feature `MESH_SHADING` not enabled");
+        }
+    }
     unsafe fn draw_indirect(
         &mut self,
         buffer: &super::Buffer,
@@ -1082,6 +1092,26 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
             )
         };
+    }
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        buffer: &<Self::A as crate::Api>::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
+    ) {
+        if let Some(ref t) = self.device.extension_fns.mesh_shading {
+            unsafe {
+                t.cmd_draw_mesh_tasks_indirect(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    draw_count,
+                    size_of::<wgt::DispatchIndirectArgs>() as u32,
+                );
+            };
+        } else {
+            panic!("Feature `MESH_SHADING` not enabled");
+        }
     }
     unsafe fn draw_indirect_count(
         &mut self,
@@ -1133,6 +1163,33 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 };
             }
             None => panic!("Feature `DRAW_INDIRECT_COUNT` not enabled"),
+        }
+    }
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        buffer: &<Self::A as crate::Api>::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &super::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
+    ) {
+        if self.device.extension_fns.draw_indirect_count.is_none() {
+            panic!("Feature `DRAW_INDIRECT_COUNT` not enabled");
+        }
+        if let Some(ref t) = self.device.extension_fns.mesh_shading {
+            unsafe {
+                t.cmd_draw_mesh_tasks_indirect_count(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    count_buffer.raw,
+                    count_offset,
+                    max_count,
+                    size_of::<wgt::DispatchIndirectArgs>() as u32,
+                );
+            };
+        } else {
+            panic!("Feature `MESH_SHADING` not enabled");
         }
     }
 

@@ -1,4 +1,10 @@
-use std::iter;
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::iter;
 
 use arrayvec::ArrayVec;
 
@@ -957,7 +963,9 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::ImageSample { .. }
             | Expression::ImageLoad { .. }
             | Expression::ImageQuery { .. } => Err(ConstantEvaluatorError::ImageExpression),
-            Expression::RayQueryProceedResult | Expression::RayQueryGetIntersection { .. } => {
+            Expression::RayQueryProceedResult
+            | Expression::RayQueryGetIntersection { .. }
+            | Expression::RayQueryVertexPositions { .. } => {
                 Err(ConstantEvaluatorError::RayQueryExpression)
             }
             Expression::SubgroupBallotResult => Err(ConstantEvaluatorError::SubgroupExpression),
@@ -1744,7 +1752,7 @@ impl<'a> ConstantEvaluator<'a> {
                 self.types.insert(Type { name: None, inner }, span)
             }
         };
-        let mut layouter = std::mem::take(self.layouter);
+        let mut layouter = core::mem::take(self.layouter);
         layouter.update(self.to_ctx()).unwrap();
         *self.layouter = layouter;
 
@@ -2536,7 +2544,7 @@ impl TryFromAbstract<f64> for u64 {
 
 #[cfg(test)]
 mod tests {
-    use std::vec;
+    use alloc::{vec, vec::Vec};
 
     use crate::{
         Arena, Constant, Expression, Literal, ScalarKind, Type, TypeInner, UnaryOperator,

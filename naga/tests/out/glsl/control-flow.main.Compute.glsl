@@ -149,6 +149,8 @@ void main() {
     barrier();
     memoryBarrierShared();
     barrier();
+    memoryBarrierImage();
+    barrier();
     do {
         pos = 1;
     } while(false);

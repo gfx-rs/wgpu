@@ -735,7 +735,7 @@ impl crate::Device for super::Device {
                                     wgt::StorageTextureAccess::Atomic => true,
                                 };
                             }
-                            wgt::BindingType::AccelerationStructure => unimplemented!(),
+                            wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
                         }
                     }
 
@@ -960,7 +960,7 @@ impl crate::Device for super::Device {
                                 );
                                 counter.textures += 1;
                             }
-                            wgt::BindingType::AccelerationStructure => unimplemented!(),
+                            wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
                         }
                     }
                 }
@@ -1267,6 +1267,17 @@ impl crate::Device for super::Device {
                 depth_stencil,
             })
         })
+    }
+
+    unsafe fn create_mesh_pipeline(
+        &self,
+        _desc: &crate::MeshPipelineDescriptor<
+            <Self::A as crate::Api>::PipelineLayout,
+            <Self::A as crate::Api>::ShaderModule,
+            <Self::A as crate::Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
+        unreachable!()
     }
 
     unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {

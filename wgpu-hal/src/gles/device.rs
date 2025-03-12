@@ -2,13 +2,12 @@ use alloc::{
     borrow::ToOwned, format, string::String, string::ToString as _, sync::Arc, vec, vec::Vec,
 };
 use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Ordering};
-use std::sync::Mutex;
 
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use naga::FastHashMap;
 
-use super::{conv, PrivateCapabilities};
+use super::{conv, lock, MaybeMutex, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
 
@@ -526,8 +525,8 @@ impl crate::Device for super::Device {
                 target,
                 size: desc.size,
                 map_flags: 0,
-                data: Some(Arc::new(Mutex::new(vec![0; desc.size as usize]))),
-                offset_of_current_mapping: Arc::new(Mutex::new(0)),
+                data: Some(Arc::new(MaybeMutex::new(vec![0; desc.size as usize]))),
+                offset_of_current_mapping: Arc::new(MaybeMutex::new(0)),
             });
         }
 
@@ -614,7 +613,7 @@ impl crate::Device for super::Device {
         }
 
         let data = if emulate_map && desc.usage.contains(wgt::BufferUses::MAP_READ) {
-            Some(Arc::new(Mutex::new(vec![0; desc.size as usize])))
+            Some(Arc::new(MaybeMutex::new(vec![0; desc.size as usize])))
         } else {
             None
         };
@@ -627,7 +626,7 @@ impl crate::Device for super::Device {
             size: desc.size,
             map_flags,
             data,
-            offset_of_current_mapping: Arc::new(Mutex::new(0)),
+            offset_of_current_mapping: Arc::new(MaybeMutex::new(0)),
         })
     }
 
@@ -652,7 +651,7 @@ impl crate::Device for super::Device {
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
         let ptr = match buffer.raw {
             None => {
-                let mut vec = buffer.data.as_ref().unwrap().lock().unwrap();
+                let mut vec = lock(buffer.data.as_ref().unwrap());
                 let slice = &mut vec.as_mut_slice()[range.start as usize..range.end as usize];
                 slice.as_mut_ptr()
             }
@@ -660,12 +659,12 @@ impl crate::Device for super::Device {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
                 let ptr = if let Some(ref map_read_allocation) = buffer.data {
-                    let mut guard = map_read_allocation.lock().unwrap();
+                    let mut guard = lock(map_read_allocation);
                     let slice = guard.as_mut_slice();
                     unsafe { self.shared.get_buffer_sub_data(gl, buffer.target, 0, slice) };
                     slice.as_mut_ptr()
                 } else {
-                    *buffer.offset_of_current_mapping.lock().unwrap() = range.start;
+                    *lock(&buffer.offset_of_current_mapping) = range.start;
                     unsafe {
                         gl.map_buffer_range(
                             buffer.target,
@@ -691,7 +690,7 @@ impl crate::Device for super::Device {
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
                 unsafe { gl.unmap_buffer(buffer.target) };
                 unsafe { gl.bind_buffer(buffer.target, None) };
-                *buffer.offset_of_current_mapping.lock().unwrap() = 0;
+                *lock(&buffer.offset_of_current_mapping) = 0;
             }
         }
     }
@@ -704,8 +703,7 @@ impl crate::Device for super::Device {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
                 for range in ranges {
-                    let offset_of_current_mapping =
-                        *buffer.offset_of_current_mapping.lock().unwrap();
+                    let offset_of_current_mapping = *lock(&buffer.offset_of_current_mapping);
                     unsafe {
                         gl.flush_mapped_buffer_range(
                             buffer.target,
@@ -1191,7 +1189,7 @@ impl crate::Device for super::Device {
                         ty: wgt::BufferBindingType::Storage { .. },
                         ..
                     } => &mut num_storage_buffers,
-                    wgt::BindingType::AccelerationStructure => unimplemented!(),
+                    wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
                 };
 
                 binding_to_slot[entry.binding as usize] = *counter;
@@ -1301,7 +1299,7 @@ impl crate::Device for super::Device {
                         format: format_desc.internal,
                     })
                 }
-                wgt::BindingType::AccelerationStructure => unimplemented!(),
+                wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
             };
             contents.push(binding);
         }
@@ -1414,6 +1412,16 @@ impl crate::Device for super::Device {
                 .map(|ds| conv::map_stencil(&ds.stencil)),
             alpha_to_coverage_enabled: desc.multisample.alpha_to_coverage_enabled,
         })
+    }
+    unsafe fn create_mesh_pipeline(
+        &self,
+        _desc: &crate::MeshPipelineDescriptor<
+            <Self::A as crate::Api>::PipelineLayout,
+            <Self::A as crate::Api>::ShaderModule,
+            <Self::A as crate::Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
+        unreachable!()
     }
 
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {

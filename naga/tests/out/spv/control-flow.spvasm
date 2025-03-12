@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 207
+; Bound: 208
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -37,6 +37,7 @@ OpDecorate %176 BuiltIn GlobalInvocationId
 %185 = OpConstant  %4  2
 %186 = OpConstant  %4  72
 %187 = OpConstant  %4  264
+%188 = OpConstant  %4  2056
 %8 = OpFunction  %2  None %9
 %7 = OpFunctionParameter  %5
 %6 = OpLabel
@@ -318,55 +319,56 @@ OpBranch %184
 %184 = OpLabel
 OpControlBarrier %185 %35 %186
 OpControlBarrier %185 %185 %187
-OpSelectionMerge %188 None
-OpSwitch %127 %189
+OpControlBarrier %185 %185 %188
+OpSelectionMerge %189 None
+OpSwitch %127 %190
+%190 = OpLabel
+OpStore %182 %127
+OpBranch %189
 %189 = OpLabel
-OpStore %182 %127
-OpBranch %188
-%188 = OpLabel
-%190 = OpLoad  %5  %182
-OpSelectionMerge %191 None
-OpSwitch %190 %196 1 %192 2 %193 3 %194 4 %194 5 %195 6 %196
-%192 = OpLabel
-OpStore %182 %16
-OpBranch %191
+%191 = OpLoad  %5  %182
+OpSelectionMerge %192 None
+OpSwitch %191 %197 1 %193 2 %194 3 %195 4 %195 5 %196 6 %197
 %193 = OpLabel
-OpStore %182 %127
-OpBranch %191
-%194 = OpLabel
-OpStore %182 %128
-OpBranch %191
-%195 = OpLabel
-OpStore %182 %180
-OpBranch %191
-%196 = OpLabel
-OpStore %182 %181
-OpBranch %191
-%191 = OpLabel
-OpSelectionMerge %197 None
-OpSwitch %33 %199 0 %198
-%198 = OpLabel
-OpBranch %197
-%199 = OpLabel
-OpBranch %197
-%197 = OpLabel
-%200 = OpLoad  %5  %182
-OpSelectionMerge %201 None
-OpSwitch %200 %206 1 %202 2 %203 3 %204 4 %205
-%202 = OpLabel
 OpStore %182 %16
-OpBranch %201
-%203 = OpLabel
+OpBranch %192
+%194 = OpLabel
 OpStore %182 %127
-OpReturn
-%204 = OpLabel
+OpBranch %192
+%195 = OpLabel
 OpStore %182 %128
+OpBranch %192
+%196 = OpLabel
+OpStore %182 %180
+OpBranch %192
+%197 = OpLabel
+OpStore %182 %181
+OpBranch %192
+%192 = OpLabel
+OpSelectionMerge %198 None
+OpSwitch %33 %200 0 %199
+%199 = OpLabel
+OpBranch %198
+%200 = OpLabel
+OpBranch %198
+%198 = OpLabel
+%201 = OpLoad  %5  %182
+OpSelectionMerge %202 None
+OpSwitch %201 %207 1 %203 2 %204 3 %205 4 %206
+%203 = OpLabel
+OpStore %182 %16
+OpBranch %202
+%204 = OpLabel
+OpStore %182 %127
 OpReturn
 %205 = OpLabel
+OpStore %182 %128
 OpReturn
 %206 = OpLabel
+OpReturn
+%207 = OpLabel
 OpStore %182 %180
 OpReturn
-%201 = OpLabel
+%202 = OpLabel
 OpReturn
 OpFunctionEnd

@@ -2,6 +2,8 @@
 Generating SPIR-V for ray query operations.
 */
 
+use alloc::vec;
+
 use super::{
     Block, BlockContext, Function, FunctionArgument, Instruction, LocalType, LookupFunctionType,
     LookupType, NumericType, Writer,
@@ -114,17 +116,8 @@ impl Writer {
             class: spirv::StorageClass::Function,
         }));
 
-        let rq_ty = ir_module
-            .types
-            .get(&Type {
-                name: None,
-                inner: TypeInner::RayQuery,
-            })
-            .expect("ray_query type should have been populated by the variable passed into this!");
-        let argument_type_id = self.get_type_id(LookupType::Local(LocalType::Pointer {
-            base: rq_ty,
-            class: spirv::StorageClass::Function,
-        }));
+        let argument_type_id = self.get_ray_query_pointer_id(ir_module);
+
         let func_ty = self.get_function_type(LookupFunctionType {
             parameter_type_ids: vec![argument_type_id],
             return_type_id: intersection_type_id,
@@ -623,5 +616,40 @@ impl BlockContext<'_> {
             }
             crate::RayQueryFunction::Terminate => {}
         }
+    }
+
+    pub(super) fn write_ray_query_return_vertex_position(
+        &mut self,
+        query: Handle<crate::Expression>,
+        block: &mut Block,
+        is_committed: bool,
+    ) -> spirv::Word {
+        let query_id = self.cached[query];
+        let id = self.gen_id();
+        let result = self
+            .ir_module
+            .special_types
+            .ray_vertex_return
+            .expect("type should have been populated");
+        let intersection_id =
+            self.writer
+                .get_constant_scalar(crate::Literal::U32(if is_committed {
+                    spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR
+                } else {
+                    spirv::RayQueryIntersection::RayQueryCandidateIntersectionKHR
+                } as _));
+        block
+            .body
+            .push(Instruction::ray_query_return_vertex_position(
+                *self
+                    .writer
+                    .lookup_type
+                    .get(&LookupType::Handle(result))
+                    .expect("type should have been populated"),
+                id,
+                query_id,
+                intersection_id,
+            ));
+        id
     }
 }

@@ -37,6 +37,7 @@ This is a table of contents, in the form of the repository's directory structure
    - [tests](#player-tests)
 - tests
    - [compile-tests](#wgpu-compile-tests)
+   - [dependency-tests](#wgpu-dependency-tests)
    - [gpu-tests](#wgpu-gpu-tests)
    - [validation-tests](#wgpu-validation-tests)
 
@@ -168,6 +169,18 @@ These use the `trybuild` crate to test a few scenarios where
 the `wgpu` crate is expected to fail to compile. This mainly
 revolves around ensuring lifetimes are properly handled when
 dropping passes, etc.
+
+## `wgpu` Dependency Tests
+
+- Located in: `tests/dependency-tests`
+- Run with `cargo nextest run --test wgpu-dependency-test`
+- Tests against `cargo tree`.
+
+These tests ensure that the `wgpu` crate has the correct dependency
+tree on all platforms. It's super easy to subtly mess up the dependencies
+which can cause issues or extra dependencies to be pulled in.
+
+This provides a way to ensure that our `toml` files are correct.
 
 ## `wgpu` GPU Tests
 

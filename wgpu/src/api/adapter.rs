@@ -136,6 +136,14 @@ impl Adapter {
         }
     }
 
+    #[cfg(custom)]
+    /// Creates Adapter from custom implementation
+    pub fn from_custom<T: custom::AdapterInterface>(adapter: T) -> Self {
+        Self {
+            inner: dispatch::DispatchAdapter::custom(adapter),
+        }
+    }
+
     /// Returns whether this adapter may present to the passed surface.
     pub fn is_surface_supported(&self, surface: &Surface<'_>) -> bool {
         self.inner.is_surface_supported(&surface.inner)

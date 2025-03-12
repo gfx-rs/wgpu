@@ -18,12 +18,14 @@ mod writer;
 
 pub use spirv::{Capability, SourceLanguage};
 
-use crate::arena::{Handle, HandleVec};
-use crate::proc::{BoundsCheckPolicies, TypeResolution};
+use alloc::{string::String, vec::Vec};
+use core::ops;
 
 use spirv::Word;
-use std::ops;
 use thiserror::Error;
+
+use crate::arena::{Handle, HandleVec};
+use crate::proc::{BoundsCheckPolicies, TypeResolution};
 
 #[derive(Clone)]
 struct PhysicalLayout {
@@ -147,12 +149,17 @@ struct Function {
     /// List of local variables used as a counters to ensure that all loops are bounded.
     force_loop_bounding_vars: Vec<LocalVariable>,
 
-    /// A map taking an expression that yields a composite value (array, matrix)
-    /// to the temporary variables we have spilled it to, if any. Spilling
-    /// allows us to render an arbitrary chain of [`Access`] and [`AccessIndex`]
-    /// expressions as an `OpAccessChain` and an `OpLoad` (plus bounds checks).
-    /// This supports dynamic indexing of by-value arrays and matrices, which
-    /// SPIR-V does not.
+    /// A map from a Naga expression to the temporary SPIR-V variable we have
+    /// spilled its value to, if any.
+    ///
+    /// Naga IR lets us apply [`Access`] expressions to expressions whose value
+    /// is an array or matrix---not a pointer to such---but SPIR-V doesn't have
+    /// instructions that can do the same. So when we encounter such code, we
+    /// spill the expression's value to a generated temporary variable. That, we
+    /// can obtain a pointer to, and then use an `OpAccessChain` instruction to
+    /// do whatever series of [`Access`] and [`AccessIndex`] operations we need
+    /// (with bounds checks). Finally, we generate an `OpLoad` to get the final
+    /// value.
     ///
     /// [`Access`]: crate::Expression::Access
     /// [`AccessIndex`]: crate::Expression::AccessIndex
@@ -481,8 +488,8 @@ impl LocalType {
                 class,
             } => LocalType::Image(LocalImageType::from_inner(dim, arrayed, class)),
             crate::TypeInner::Sampler { comparison: _ } => LocalType::Sampler,
-            crate::TypeInner::AccelerationStructure => LocalType::AccelerationStructure,
-            crate::TypeInner::RayQuery => LocalType::RayQuery,
+            crate::TypeInner::AccelerationStructure { .. } => LocalType::AccelerationStructure,
+            crate::TypeInner::RayQuery { .. } => LocalType::RayQuery,
             crate::TypeInner::Array { .. }
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::BindingArray { .. } => return None,
@@ -852,7 +859,7 @@ pub struct BindingInfo {
 }
 
 // Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = std::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
+pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZeroInitializeWorkgroupMemoryMode {

@@ -8,9 +8,7 @@ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 use glam::{Affine3A, Mat4, Vec3};
 use std::{
     borrow::{Borrow, Cow},
-    iter,
-    mem::size_of,
-    ptr,
+    iter, ptr,
     time::Instant,
 };
 use wgpu_types::Dx12BackendOptions;
@@ -344,7 +342,9 @@ impl<A: hal::Api> Example<A> {
                 wgpu_types::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu_types::ShaderStages::COMPUTE,
-                    ty: wgpu_types::BindingType::AccelerationStructure,
+                    ty: wgpu_types::BindingType::AccelerationStructure {
+                        vertex_return: false,
+                    },
                     count: None,
                 },
             ],

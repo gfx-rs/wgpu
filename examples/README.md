@@ -16,6 +16,7 @@ be cloned out of the repository to serve as a starting point for your own projec
 |--------|-------------|-----------|
 | [hello compute](standalone/01_hello_compute/) | Simplest example and shows how to run a compute shader on a given set of input data and get the results back. | Native-Only |
 | [hello window](standalone/02_hello_window/) | Shows how to create a window and render into it. | Native-Only |
+| [custom backend](standalone/03_custom_backend/) | Shows how to implement and use custom wgpu context | Any |
 
 You can also use [`cargo-generate`](https://github.com/cargo-generate/cargo-generate) to easily use these as a basis for your own projects.
 

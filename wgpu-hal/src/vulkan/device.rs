@@ -2,7 +2,7 @@ use std::{
     borrow::{Cow, ToOwned as _},
     collections::BTreeMap,
     ffi::{CStr, CString},
-    mem::{self, size_of, MaybeUninit},
+    mem::{self, MaybeUninit},
     num::NonZeroU32,
     ptr, slice,
     sync::Arc,
@@ -1446,7 +1446,7 @@ impl crate::Device for super::Device {
                 wgt::BindingType::StorageTexture { .. } => {
                     desc_count.storage_image += count;
                 }
-                wgt::BindingType::AccelerationStructure => {
+                wgt::BindingType::AccelerationStructure { .. } => {
                     desc_count.acceleration_structure += count;
                 }
             }
@@ -2106,6 +2106,237 @@ impl crate::Device for super::Device {
         }
 
         if let Some(raw_module) = compiled_vs.temp_raw_module {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+        if let Some(CompiledStage {
+            temp_raw_module: Some(raw_module),
+            ..
+        }) = compiled_fs
+        {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+
+        self.counters.render_pipelines.add(1);
+
+        Ok(super::RenderPipeline { raw })
+    }
+    unsafe fn create_mesh_pipeline(
+        &self,
+        desc: &crate::MeshPipelineDescriptor<
+            <Self::A as crate::Api>::PipelineLayout,
+            <Self::A as crate::Api>::ShaderModule,
+            <Self::A as crate::Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
+        let dynamic_states = [
+            vk::DynamicState::VIEWPORT,
+            vk::DynamicState::SCISSOR,
+            vk::DynamicState::BLEND_CONSTANTS,
+            vk::DynamicState::STENCIL_REFERENCE,
+        ];
+        let mut compatible_rp_key = super::RenderPassKey {
+            sample_count: desc.multisample.count,
+            multiview: desc.multiview,
+            ..Default::default()
+        };
+        let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
+
+        let vk_input_assembly = vk::PipelineInputAssemblyStateCreateInfo::default()
+            .topology(conv::map_topology(desc.primitive.topology))
+            .primitive_restart_enable(desc.primitive.strip_index_format.is_some());
+
+        let compiled_ts = match desc.task_stage {
+            Some(ref stage) => {
+                // TODO: add proper naga stages
+                let mut compiled = self.compile_stage(
+                    stage,
+                    naga::ShaderStage::Compute,
+                    &desc.layout.binding_arrays,
+                )?;
+                compiled.create_info.stage = vk::ShaderStageFlags::TASK_EXT;
+                stages.push(compiled.create_info);
+                Some(compiled)
+            }
+            None => None,
+        };
+
+        // TODO: add proper naga stages
+        let mut compiled_ms = self.compile_stage(
+            &desc.mesh_stage,
+            naga::ShaderStage::Compute,
+            &desc.layout.binding_arrays,
+        )?;
+        compiled_ms.create_info.stage = vk::ShaderStageFlags::MESH_EXT;
+        stages.push(compiled_ms.create_info);
+        let compiled_fs = match desc.fragment_stage {
+            Some(ref stage) => {
+                let compiled = self.compile_stage(
+                    stage,
+                    naga::ShaderStage::Fragment,
+                    &desc.layout.binding_arrays,
+                )?;
+                stages.push(compiled.create_info);
+                Some(compiled)
+            }
+            None => None,
+        };
+
+        let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::default()
+            .polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode))
+            .front_face(conv::map_front_face(desc.primitive.front_face))
+            .line_width(1.0)
+            .depth_clamp_enable(desc.primitive.unclipped_depth);
+        if let Some(face) = desc.primitive.cull_mode {
+            vk_rasterization = vk_rasterization.cull_mode(conv::map_cull_face(face))
+        }
+        let mut vk_rasterization_conservative_state =
+            vk::PipelineRasterizationConservativeStateCreateInfoEXT::default()
+                .conservative_rasterization_mode(
+                    vk::ConservativeRasterizationModeEXT::OVERESTIMATE,
+                );
+        if desc.primitive.conservative {
+            vk_rasterization = vk_rasterization.push_next(&mut vk_rasterization_conservative_state);
+        }
+
+        let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::default();
+        if let Some(ref ds) = desc.depth_stencil {
+            let vk_format = self.shared.private_caps.map_texture_format(ds.format);
+            let vk_layout = if ds.is_read_only(desc.primitive.cull_mode) {
+                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
+            } else {
+                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            };
+            compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
+                base: super::AttachmentKey::compatible(vk_format, vk_layout),
+                stencil_ops: crate::AttachmentOps::all(),
+            });
+
+            if ds.is_depth_enabled() {
+                vk_depth_stencil = vk_depth_stencil
+                    .depth_test_enable(true)
+                    .depth_write_enable(ds.depth_write_enabled)
+                    .depth_compare_op(conv::map_comparison(ds.depth_compare));
+            }
+            if ds.stencil.is_enabled() {
+                let s = &ds.stencil;
+                let front = conv::map_stencil_face(&s.front, s.read_mask, s.write_mask);
+                let back = conv::map_stencil_face(&s.back, s.read_mask, s.write_mask);
+                vk_depth_stencil = vk_depth_stencil
+                    .stencil_test_enable(true)
+                    .front(front)
+                    .back(back);
+            }
+
+            if ds.bias.is_enabled() {
+                vk_rasterization = vk_rasterization
+                    .depth_bias_enable(true)
+                    .depth_bias_constant_factor(ds.bias.constant as f32)
+                    .depth_bias_clamp(ds.bias.clamp)
+                    .depth_bias_slope_factor(ds.bias.slope_scale);
+            }
+        }
+
+        let vk_viewport = vk::PipelineViewportStateCreateInfo::default()
+            .flags(vk::PipelineViewportStateCreateFlags::empty())
+            .scissor_count(1)
+            .viewport_count(1);
+
+        let vk_sample_mask = [
+            desc.multisample.mask as u32,
+            (desc.multisample.mask >> 32) as u32,
+        ];
+        let vk_multisample = vk::PipelineMultisampleStateCreateInfo::default()
+            .rasterization_samples(vk::SampleCountFlags::from_raw(desc.multisample.count))
+            .alpha_to_coverage_enable(desc.multisample.alpha_to_coverage_enabled)
+            .sample_mask(&vk_sample_mask);
+
+        let mut vk_attachments = Vec::with_capacity(desc.color_targets.len());
+        for cat in desc.color_targets {
+            let (key, attarchment) = if let Some(cat) = cat.as_ref() {
+                let mut vk_attachment = vk::PipelineColorBlendAttachmentState::default()
+                    .color_write_mask(vk::ColorComponentFlags::from_raw(cat.write_mask.bits()));
+                if let Some(ref blend) = cat.blend {
+                    let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
+                    let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
+                    vk_attachment = vk_attachment
+                        .blend_enable(true)
+                        .color_blend_op(color_op)
+                        .src_color_blend_factor(color_src)
+                        .dst_color_blend_factor(color_dst)
+                        .alpha_blend_op(alpha_op)
+                        .src_alpha_blend_factor(alpha_src)
+                        .dst_alpha_blend_factor(alpha_dst);
+                }
+
+                let vk_format = self.shared.private_caps.map_texture_format(cat.format);
+                (
+                    Some(super::ColorAttachmentKey {
+                        base: super::AttachmentKey::compatible(
+                            vk_format,
+                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                        ),
+                        resolve: None,
+                    }),
+                    vk_attachment,
+                )
+            } else {
+                (None, vk::PipelineColorBlendAttachmentState::default())
+            };
+
+            compatible_rp_key.colors.push(key);
+            vk_attachments.push(attarchment);
+        }
+
+        let vk_color_blend =
+            vk::PipelineColorBlendStateCreateInfo::default().attachments(&vk_attachments);
+
+        let vk_dynamic_state =
+            vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
+
+        let raw_pass = self.shared.make_render_pass(compatible_rp_key)?;
+
+        let vk_infos = [{
+            vk::GraphicsPipelineCreateInfo::default()
+                .layout(desc.layout.raw)
+                .stages(&stages)
+                .input_assembly_state(&vk_input_assembly)
+                .rasterization_state(&vk_rasterization)
+                .viewport_state(&vk_viewport)
+                .multisample_state(&vk_multisample)
+                .depth_stencil_state(&vk_depth_stencil)
+                .color_blend_state(&vk_color_blend)
+                .dynamic_state(&vk_dynamic_state)
+                .render_pass(raw_pass)
+        }];
+
+        let pipeline_cache = desc
+            .cache
+            .map(|it| it.raw)
+            .unwrap_or(vk::PipelineCache::null());
+
+        let mut raw_vec = {
+            profiling::scope!("vkCreateGraphicsPipelines");
+            unsafe {
+                self.shared
+                    .raw
+                    .create_graphics_pipelines(pipeline_cache, &vk_infos, None)
+                    .map_err(|(_, e)| super::map_pipeline_err(e))
+            }?
+        };
+
+        let raw = raw_vec.pop().unwrap();
+        if let Some(label) = desc.label {
+            unsafe { self.shared.set_object_name(raw, label) };
+        }
+        // NOTE: this could leak shaders in case of an error.
+        if let Some(CompiledStage {
+            temp_raw_module: Some(raw_module),
+            ..
+        }) = compiled_ts
+        {
+            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
+        }
+        if let Some(raw_module) = compiled_ms.temp_raw_module {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
         if let Some(CompiledStage {

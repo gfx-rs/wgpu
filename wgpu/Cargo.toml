@@ -82,6 +82,8 @@ noop = ["wgpu-core/noop"]
 #! it means that the item is only available when that backend is enabled _and_ the backend
 #! is supported on the current platform.
 
+custom = []
+
 #! ### Shading language support
 # --------------------------------------------------------------------
 #! These features enable support for that input language on all platforms.

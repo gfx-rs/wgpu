@@ -3,7 +3,6 @@ use std::process::ExitCode;
 use anyhow::Context;
 use pico_args::Arguments;
 
-mod check_feature_dependencies;
 mod run_wasm;
 mod test;
 mod util;
@@ -13,9 +12,6 @@ const HELP: &str = "\
 Usage: xtask <COMMAND>
 
 Commands:
-  check-feature-dependencies
-    Check certain dependency invariants are upheld.
-
   run-wasm
     Build and run web examples
 
@@ -77,9 +73,6 @@ fn main() -> anyhow::Result<ExitCode> {
     shell.change_dir(String::from(env!("CARGO_MANIFEST_DIR")) + "/..");
 
     match subcommand.as_deref() {
-        Some("check-feature-dependencies") => {
-            check_feature_dependencies::check_feature_dependencies(shell, args)?
-        }
         Some("run-wasm") => run_wasm::run_wasm(shell, args)?,
         Some("test") => test::run_tests(shell, args)?,
         Some("vendor-web-sys") => vendor_web_sys::run_vendor_web_sys(shell, args)?,
