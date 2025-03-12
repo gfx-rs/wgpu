@@ -693,6 +693,7 @@ impl<'a> ExpressionContext<'a> {
             .choose_policy(pointer, &self.module.types, self.info)
     }
 
+    /// See docs for [`proc::index::access_needs_check`].
     fn access_needs_check(
         &self,
         base: Handle<crate::Expression>,
