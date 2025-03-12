@@ -2,6 +2,8 @@
 Definitions for index bounds checking.
 */
 
+use core::iter;
+
 use crate::arena::{Handle, HandleSet, UniqueArena};
 use crate::valid;
 
@@ -338,6 +340,53 @@ pub fn access_needs_check(
     };
 
     Some(length)
+}
+
+/// Returns an iterator of accesses within the chain of `Access` and
+/// `AccessIndex` expressions starting from `chain` that may need to be
+/// bounds-checked at runtime.
+///
+/// They're yielded as `(base, index)` pairs, where `base` is the type that the
+/// access expression will produce and `index` is the index being used.
+///
+/// Accesses through a struct are omitted, since you never need a bounds check
+/// for accessing a struct field.
+///
+/// If `chain` isn't an `Access` or `AccessIndex` expression at all, the
+/// iterator is empty.
+pub(crate) fn bounds_check_iter<'a>(
+    mut chain: Handle<crate::Expression>,
+    module: &'a crate::Module,
+    function: &'a crate::Function,
+    info: &'a valid::FunctionInfo,
+) -> impl Iterator<Item = (Handle<crate::Expression>, GuardedIndex, IndexableLength)> + 'a {
+    iter::from_fn(move || {
+        let (next_expr, result) = match function.expressions[chain] {
+            crate::Expression::Access { base, index } => {
+                (base, Some((base, GuardedIndex::Expression(index))))
+            }
+            crate::Expression::AccessIndex { base, index } => {
+                // Don't try to check indices into structs. Validation already took
+                // care of them, and access_needs_check doesn't handle that case.
+                let mut base_inner = info[base].ty.inner_with(&module.types);
+                if let crate::TypeInner::Pointer { base, .. } = *base_inner {
+                    base_inner = &module.types[base].inner;
+                }
+                match *base_inner {
+                    crate::TypeInner::Struct { .. } => (base, None),
+                    _ => (base, Some((base, GuardedIndex::Known(index)))),
+                }
+            }
+            _ => return None,
+        };
+        chain = next_expr;
+        Some(result)
+    })
+    .flatten()
+    .filter_map(|(base, index)| {
+        access_needs_check(base, index, module, &function.expressions, info)
+            .map(|length| (base, index, length))
+    })
 }
 
 impl GuardedIndex {
