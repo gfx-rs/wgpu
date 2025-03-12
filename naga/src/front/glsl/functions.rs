@@ -1449,7 +1449,7 @@ impl Context<'_> {
                         location,
                         interpolation,
                         sampling: None,
-                        second_blend_source: false,
+                        blend_src: None,
                     };
                     location += 1;
 
@@ -1485,7 +1485,7 @@ impl Context<'_> {
                                 location,
                                 interpolation,
                                 sampling: None,
-                                second_blend_source: false,
+                                blend_src: None,
                             };
                             location += 1;
                             binding

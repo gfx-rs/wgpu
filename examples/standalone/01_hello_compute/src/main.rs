@@ -66,15 +66,13 @@ fn main() {
     //
     // The `Device` is used to create and manage GPU resources.
     // The `Queue` is a queue used to submit work for the GPU to process.
-    let (device, queue) = pollster::block_on(adapter.request_device(
-        &wgpu::DeviceDescriptor {
-            label: None,
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::downlevel_defaults(),
-            memory_hints: wgpu::MemoryHints::MemoryUsage,
-        },
-        None,
-    ))
+    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        label: None,
+        required_features: wgpu::Features::empty(),
+        required_limits: wgpu::Limits::downlevel_defaults(),
+        memory_hints: wgpu::MemoryHints::MemoryUsage,
+        trace: wgpu::Trace::Off,
+    }))
     .expect("Failed to create device");
 
     // Create a shader module from our shader code. This will parse and validate the shader.

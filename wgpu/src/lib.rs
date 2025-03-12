@@ -85,7 +85,7 @@ pub use wgt::{
     StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
     SurfaceStatus, TexelCopyBufferLayout, TextureAspect, TextureDimension, TextureFormat,
     TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureTransition,
-    TextureUsages, TextureUses, TextureViewDimension, VertexAttribute, VertexFormat,
+    TextureUsages, TextureUses, TextureViewDimension, Trace, VertexAttribute, VertexFormat,
     VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
     COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,

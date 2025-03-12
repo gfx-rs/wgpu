@@ -535,7 +535,6 @@ impl super::Validator {
                             | TypeFlags::COPY
                             | TypeFlags::HOST_SHAREABLE
                             | TypeFlags::ARGUMENT
-                            | TypeFlags::CONSTRUCTIBLE
                     }
                     crate::ArraySize::Dynamic => {
                         // Non-SIZED types may only appear as the last element of a structure.

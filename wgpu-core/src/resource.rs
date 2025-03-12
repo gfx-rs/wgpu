@@ -1016,7 +1016,7 @@ pub struct Texture {
     pub(crate) inner: Snatchable<TextureInner>,
     pub(crate) device: Arc<Device>,
     pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
-    pub(crate) hal_usage: wgt::TextureUses,
+    pub(crate) _hal_usage: wgt::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
     pub(crate) full_range: TextureSelector,
@@ -1042,7 +1042,7 @@ impl Texture {
             inner: Snatchable::new(inner),
             device: device.clone(),
             desc: desc.map_label(|_| ()),
-            hal_usage,
+            _hal_usage: hal_usage,
             format_features,
             initialization_status: RwLock::new(
                 rank::TEXTURE_INITIALIZATION_STATUS,

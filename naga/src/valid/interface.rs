@@ -69,6 +69,8 @@ pub enum VaryingError {
     MemberMissingBinding(u32),
     #[error("Multiple bindings at location {location} are present")]
     BindingCollision { location: u32 },
+    #[error("Multiple bindings use the same `blend_src` {blend_src}")]
+    BindingCollisionBlendSrc { blend_src: u32 },
     #[error("Built-in {0:?} is present more than once")]
     DuplicateBuiltIn(crate::BuiltIn),
     #[error("Capability {0:?} is not supported")]
@@ -77,14 +79,16 @@ pub enum VaryingError {
     InvalidInputAttributeInStage(&'static str, crate::ShaderStage),
     #[error("The attribute {0:?} is not valid for stage {1:?}")]
     InvalidAttributeInStage(&'static str, crate::ShaderStage),
-    #[error(
-        "The location index {location} cannot be used together with the attribute {attribute:?}"
-    )]
-    InvalidLocationAttributeCombination {
-        location: u32,
-        attribute: &'static str,
+    #[error("The `blend_src` attribute can only be used on location 0, only indices 0 and 1 are valid. Location was {location}, index was {blend_src}.")]
+    InvalidBlendSrcIndex { location: u32, blend_src: u32 },
+    #[error("If `blend_src` is used, there must be exactly two outputs both with location 0, one with `blend_src(0)` and the other with `blend_src(1)`.")]
+    IncompleteBlendSrcUsage,
+    #[error("If `blend_src` is used, both outputs must have the same type. `blend_src(0)` has type {blend_src_0_type:?} and `blend_src(1)` has type {blend_src_1_type:?}.")]
+    BlendSrcOutputTypeMismatch {
+        blend_src_0_type: Handle<crate::Type>,
+        blend_src_1_type: Handle<crate::Type>,
     },
-    #[error("Workgroup size is multi dimensional, @builtin(subgroup_id) and @builtin(subgroup_invocation_id) are not supported.")]
+    #[error("Workgroup size is multi dimensional, `@builtin(subgroup_id)` and `@builtin(subgroup_invocation_id)` are not supported.")]
     InvalidMultiDimensionalSubgroupBuiltIn,
 }
 
@@ -117,10 +121,6 @@ pub enum EntryPointError {
     InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
     Function(#[from] FunctionError),
-    #[error(
-        "Invalid locations {location_mask:?} are set while dual source blending. Only location 0 may be set."
-    )]
-    InvalidLocationsWhileDualSourceBlending { location_mask: BitSet },
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -140,10 +140,10 @@ fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
 struct VaryingContext<'a> {
     stage: crate::ShaderStage,
     output: bool,
-    second_blend_source: bool,
     types: &'a UniqueArena<crate::Type>,
     type_info: &'a Vec<super::r#type::TypeInfo>,
     location_mask: &'a mut BitSet,
+    blend_src_mask: &'a mut BitSet,
     built_ins: &'a mut crate::FastHashSet<crate::BuiltIn>,
     capabilities: Capabilities,
     flags: super::ValidationFlags,
@@ -308,7 +308,7 @@ impl VaryingContext<'_> {
                 location,
                 interpolation,
                 sampling,
-                second_blend_source,
+                blend_src,
             } => {
                 // Only IO-shareable types may be stored in locations.
                 if !self.type_info[ty.index()]
@@ -318,7 +318,9 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::NotIOShareableType(ty));
                 }
 
-                if second_blend_source {
+                if let Some(blend_src) = blend_src {
+                    // `blend_src` is only valid if dual source blending was explicitly enabled,
+                    // see https://www.w3.org/TR/WGSL/#extension-dual_source_blending
                     if !self
                         .capabilities
                         .contains(Capabilities::DUAL_SOURCE_BLENDING)
@@ -329,28 +331,29 @@ impl VaryingContext<'_> {
                     }
                     if self.stage != crate::ShaderStage::Fragment {
                         return Err(VaryingError::InvalidAttributeInStage(
-                            "second_blend_source",
+                            "blend_src",
                             self.stage,
                         ));
                     }
                     if !self.output {
                         return Err(VaryingError::InvalidInputAttributeInStage(
-                            "second_blend_source",
+                            "blend_src",
                             self.stage,
                         ));
                     }
-                    if location != 0 {
-                        return Err(VaryingError::InvalidLocationAttributeCombination {
+                    if (blend_src != 0 && blend_src != 1) || location != 0 {
+                        return Err(VaryingError::InvalidBlendSrcIndex {
                             location,
-                            attribute: "second_blend_source",
+                            blend_src,
                         });
                     }
-
-                    self.second_blend_source = true;
-                } else if !self.location_mask.insert(location as usize) {
-                    if self.flags.contains(super::ValidationFlags::BINDINGS) {
-                        return Err(VaryingError::BindingCollision { location });
+                    if !self.blend_src_mask.insert(blend_src as usize) {
+                        return Err(VaryingError::BindingCollisionBlendSrc { blend_src });
                     }
+                } else if !self.location_mask.insert(location as usize)
+                    && self.flags.contains(super::ValidationFlags::BINDINGS)
+                {
+                    return Err(VaryingError::BindingCollision { location });
                 }
 
                 if let Some(interpolation) = interpolation {
@@ -445,6 +448,24 @@ impl VaryingContext<'_> {
                                 Some(ref binding) => self
                                     .validate_impl(ep, member.ty, binding)
                                     .map_err(|e| e.with_span_context(span_context))?,
+                            }
+                        }
+
+                        if !self.blend_src_mask.is_empty() {
+                            let span_context = self.types.get_span_context(ty);
+
+                            // If there's any blend_src usage, it must apply to all members of which there must be exactly 2.
+                            if members.len() != 2 || self.blend_src_mask.len() != 2 {
+                                return Err(VaryingError::IncompleteBlendSrcUsage
+                                    .with_span_context(span_context));
+                            }
+                            // Also, all members must have the same type.
+                            if members[0].ty != members[1].ty {
+                                return Err(VaryingError::BlendSrcOutputTypeMismatch {
+                                    blend_src_0_type: members[0].ty,
+                                    blend_src_1_type: members[1].ty,
+                                }
+                                .with_span_context(span_context));
                             }
                         }
                     }
@@ -673,10 +694,10 @@ impl super::Validator {
             let mut ctx = VaryingContext {
                 stage: ep.stage,
                 output: false,
-                second_blend_source: false,
                 types: &module.types,
                 type_info: &self.types,
                 location_mask: &mut self.location_mask,
+                blend_src_mask: &mut self.blend_src_mask,
                 built_ins: &mut argument_built_ins,
                 capabilities: self.capabilities,
                 flags: self.flags,
@@ -691,32 +712,23 @@ impl super::Validator {
             let mut ctx = VaryingContext {
                 stage: ep.stage,
                 output: true,
-                second_blend_source: false,
                 types: &module.types,
                 type_info: &self.types,
                 location_mask: &mut self.location_mask,
+                blend_src_mask: &mut self.blend_src_mask,
                 built_ins: &mut result_built_ins,
                 capabilities: self.capabilities,
                 flags: self.flags,
             };
             ctx.validate(ep, fr.ty, fr.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
-            if ctx.second_blend_source {
-                // Only the first location may be used when dual source blending
-                if ctx.location_mask.len() == 1 && ctx.location_mask.contains(0) {
-                    info.dual_source_blending = true;
-                } else {
-                    return Err(EntryPointError::InvalidLocationsWhileDualSourceBlending {
-                        location_mask: self.location_mask.clone(),
-                    }
-                    .with_span());
-                }
-            }
-
             if ep.stage == crate::ShaderStage::Vertex
                 && !result_built_ins.contains(&crate::BuiltIn::Position { invariant: false })
             {
                 return Err(EntryPointError::MissingVertexOutputPosition.with_span());
+            }
+            if !self.blend_src_mask.is_empty() {
+                info.dual_source_blending = true;
             }
         } else if ep.stage == crate::ShaderStage::Vertex {
             return Err(EntryPointError::MissingVertexOutputPosition.with_span());

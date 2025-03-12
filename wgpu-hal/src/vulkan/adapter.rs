@@ -1051,6 +1051,16 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::external_memory_win32::NAME);
         }
 
+        // Optional `VK_KHR_external_memory_fd`
+        if self.supports_extension(khr::external_memory_fd::NAME) {
+            extensions.push(khr::external_memory_fd::NAME);
+        }
+
+        // Optional `VK_EXT_external_memory_dma`
+        if self.supports_extension(ext::external_memory_dma_buf::NAME) {
+            extensions.push(ext::external_memory_dma_buf::NAME);
+        }
+
         // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
         // Even though Vulkan 1.2 has promoted the extension to core, we must require the extension to avoid
         // large amounts of spaghetti involved with using PhysicalDeviceVulkan12Features.

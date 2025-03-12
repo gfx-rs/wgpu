@@ -70,15 +70,13 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color
 
     // Create the logical device and command queue
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                memory_hints: wgpu::MemoryHints::MemoryUsage,
-            },
-            None,
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: None,
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            memory_hints: wgpu::MemoryHints::MemoryUsage,
+            trace: wgpu::Trace::Off,
+        })
         .await
         .expect("Failed to create device");
 
