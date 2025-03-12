@@ -929,6 +929,45 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Writes the local variables of the given function.
+    fn put_locals(&mut self, context: &ExpressionContext) -> BackendResult {
+        for (name_key, ty, init) in context
+            .function
+            .local_variables
+            .iter()
+            .map(|(local_handle, local)| {
+                let name_key = NameKey::local(context.origin, local_handle);
+                (name_key, local.ty, local.init)
+            })
+        {
+            let ty_name = TypeContext {
+                handle: ty,
+                gctx: context.module.to_ctx(),
+                names: &self.names,
+                access: crate::StorageAccess::empty(),
+                first_time: false,
+            };
+            write!(
+                self.out,
+                "{}{} {}",
+                back::INDENT,
+                ty_name,
+                self.names[&name_key]
+            )?;
+            match init {
+                Some(value) => {
+                    write!(self.out, " = ")?;
+                    self.put_expression(value, context, true)?;
+                }
+                None => {
+                    write!(self.out, " = {{}}")?;
+                }
+            };
+            writeln!(self.out, ";")?;
+        }
+        Ok(())
+    }
+
     fn put_level_of_detail(
         &mut self,
         level: LevelOfDetail,
@@ -5683,28 +5722,7 @@ template <typename A>
                 result_struct: None,
             };
 
-            for (local_handle, local) in fun.local_variables.iter() {
-                let ty_name = TypeContext {
-                    handle: local.ty,
-                    gctx: module.to_ctx(),
-                    names: &self.names,
-                    access: crate::StorageAccess::empty(),
-                    first_time: false,
-                };
-                let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
-                write!(self.out, "{}{} {}", back::INDENT, ty_name, local_name)?;
-                match local.init {
-                    Some(value) => {
-                        write!(self.out, " = ")?;
-                        self.put_expression(value, &context.expression, true)?;
-                    }
-                    None => {
-                        write!(self.out, " = {{}}")?;
-                    }
-                };
-                writeln!(self.out, ";")?;
-            }
-
+            self.put_locals(&context.expression)?;
             self.update_expressions_to_bake(fun, fun_info, &context.expression);
             self.put_block(back::Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
@@ -6616,28 +6634,7 @@ template <typename A>
 
             // Finally, declare all the local variables that we need
             //TODO: we can postpone this till the relevant expressions are emitted
-            for (local_handle, local) in fun.local_variables.iter() {
-                let name = &self.names[&NameKey::EntryPointLocal(ep_index as _, local_handle)];
-                let ty_name = TypeContext {
-                    handle: local.ty,
-                    gctx: module.to_ctx(),
-                    names: &self.names,
-                    access: crate::StorageAccess::empty(),
-                    first_time: false,
-                };
-                write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;
-                match local.init {
-                    Some(value) => {
-                        write!(self.out, " = ")?;
-                        self.put_expression(value, &context.expression, true)?;
-                    }
-                    None => {
-                        write!(self.out, " = {{}}")?;
-                    }
-                };
-                writeln!(self.out, ";")?;
-            }
-
+            self.put_locals(&context.expression)?;
             self.update_expressions_to_bake(fun, fun_info, &context.expression);
             self.put_block(back::Level(1), &fun.body, &context)?;
             writeln!(self.out, "}}")?;
