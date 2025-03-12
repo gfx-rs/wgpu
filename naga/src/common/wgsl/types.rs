@@ -245,7 +245,13 @@ pub trait TypeContext<W: Write> {
                 let caps = if vertex_return { "<vertex_return>" } else { "" };
                 write!(out, "acceleration_structure{}", caps)?
             }
-            _ => unreachable!("invalid TypeInner"),
+            TypeInner::Struct { .. } => {
+                unreachable!("structs can only be referenced by name in WGSL");
+            }
+            TypeInner::RayQuery { vertex_return } => {
+                let caps = if vertex_return { "<vertex_return>" } else { "" };
+                write!(out, "ray_query{}", caps)?
+            }
         }
 
         Ok(())
