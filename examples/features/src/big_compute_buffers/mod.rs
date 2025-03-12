@@ -1,5 +1,6 @@
+use nanorand::buffer;
 use std::{borrow::Cow, num::NonZeroU32};
-use wgpu::{util::DeviceExt, BufferSlice, Features};
+use wgpu::{util::DeviceExt, BufferSlice, BufferUsages, Features};
 
 // These are set by the minimum required defaults for webgpu.
 const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
@@ -20,10 +21,7 @@ pub async fn execute_gpu(numbers: &[f32]) -> Vec<f32> {
             // Without them your shader may fail to compile.
             required_features: Features::STORAGE_RESOURCE_BINDING_ARRAY
                 | Features::BUFFER_BINDING_ARRAY
-                | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-                | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                /* */
-                ,
+                | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
 
             memory_hints: wgpu::MemoryHints::Performance,
             required_limits: wgpu::Limits {
@@ -85,12 +83,10 @@ pub async fn execute_gpu_inner(
 
     device.poll(wgpu::PollType::Wait).unwrap();
 
-    let Ok(Ok(())) = receiver.recv_async().await else {
-        panic!(
-            "
-        Failed to run compute on GPU!"
-        )
-    };
+    assert_eq!(
+        receiver.into_iter().map(|v| { v.unwrap() }).count(),
+        buffer_slices.len()
+    );
 
     let data: Vec<f32> = buffer_slices
         .iter()

@@ -5,7 +5,11 @@ use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::STORAGE_RESOURCE_BINDING_ARRAY | Features::BUFFER_BINDING_ARRAY)
+            .features(
+                Features::STORAGE_RESOURCE_BINDING_ARRAY
+                    | Features::BUFFER_BINDING_ARRAY
+                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            )
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS),
     )
     .run_async(|ctx| {
