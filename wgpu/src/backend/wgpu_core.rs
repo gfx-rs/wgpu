@@ -99,6 +99,54 @@ impl ContextWgpuCore {
         }
     }
 
+    pub unsafe fn request_device_with_callback<A: wgc::hal_api::HalApi>(
+        &self,
+        adapter: &CoreAdapter,
+        desc: &crate::DeviceDescriptor<'_>,
+        callback: wgpu_hal::DeviceCreateCallback<A>
+    ) -> Pin<Box<dyn dispatch::RequestDeviceWithCallbackFuture>> {
+        if !matches!(desc.trace, wgt::Trace::Off) {
+            log::error!(
+                "
+                Feature 'trace' has been removed temporarily; \
+                see https://github.com/gfx-rs/wgpu/issues/5974. \
+                The `trace` parameter will have no effect."
+            );
+        }
+
+        let res = unsafe {
+            self.0.adapter_request_device_with_callback::<A>(
+                adapter.id,
+                &desc.map_label(|l| l.map(Borrowed)),
+                None,
+                None,
+                callback,
+            )
+        };
+        let (device_id, queue_id) = match res {
+            Ok(Some(ids)) => ids,
+            Ok(None) => {
+                return Box::pin(ready(Ok(None)));
+            }
+            Err(err) => {
+                return Box::pin(ready(Err(err.into())));
+            }
+        };
+        let error_sink = Arc::new(Mutex::new(ErrorSinkRaw::new()));
+        let device = CoreDevice {
+            context: self.clone(),
+            id: device_id,
+            error_sink: error_sink.clone(),
+            features: desc.required_features,
+        };
+        let queue = CoreQueue {
+            context: self.clone(),
+            id: queue_id,
+            error_sink,
+        };
+        Box::pin(ready(Ok(Some((device.into(), queue.into())))))
+    }
+
     pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         adapter: &CoreAdapter,

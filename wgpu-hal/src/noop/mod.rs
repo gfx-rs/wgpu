@@ -56,6 +56,7 @@ impl crate::Api for Api {
     type ShaderModule = Resource;
     type RenderPipeline = Resource;
     type ComputePipeline = Resource;
+    type DeviceCreateCallback = ();
 }
 
 crate::impl_dyn_resource!(Buffer, CommandBuffer, Context, Fence, Resource);
@@ -224,7 +225,8 @@ impl crate::Adapter for Context {
         features: wgt::Features,
         _limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
-    ) -> DeviceResult<crate::OpenDevice<Api>> {
+        _create_properties: Option<alloc::boxed::Box<()>>,
+    ) -> Result<crate::OpenDevice<Api>, crate::DeviceError> {
         Ok(crate::OpenDevice {
             device: Context,
             queue: Context,

@@ -168,6 +168,8 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+
+    type DeviceCreateCallback = ();
 }
 
 crate::impl_dyn_resource!(

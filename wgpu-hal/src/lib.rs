@@ -327,6 +327,9 @@ pub type AtomicFenceValue = portable_atomic::AtomicU64;
 #[cfg(any(gles, vulkan))]
 pub type DropCallback = Box<dyn FnOnce() + Send + Sync + 'static>;
 
+/// Returning `None` will cancel device creation
+pub type DeviceCreateCallback<A> = Box<dyn FnOnce(Option<&<A as Api>::Adapter>) -> Option<<A as Api>::DeviceCreateCallback> + Send + Sync + 'static>;
+
 #[cfg(any(gles, vulkan))]
 pub struct DropGuard {
     callback: Option<DropCallback>,
@@ -507,6 +510,8 @@ pub trait Api: Clone + fmt::Debug + Sized {
     type PipelineCache: DynPipelineCache;
 
     type AccelerationStructure: DynAccelerationStructure + 'static;
+
+    type DeviceCreateCallback: core::any::Any;
 }
 
 pub trait Instance: Sized + WasmNotSendSync {
@@ -629,11 +634,13 @@ pub trait Surface: WasmNotSendSync {
 pub trait Adapter: WasmNotSendSync {
     type A: Api;
 
+    /// The callback will be called before the adapter is used to crate the device.
     unsafe fn open(
         &self,
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        callback: Option<Box<<Self::A as Api>::DeviceCreateCallback>>,
     ) -> Result<OpenDevice<Self::A>, DeviceError>;
 
     /// Return the set of supported capabilities for a texture format.

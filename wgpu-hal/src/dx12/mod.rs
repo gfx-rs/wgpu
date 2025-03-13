@@ -422,6 +422,7 @@ impl crate::Api for Api {
     type PipelineCache = PipelineCache;
 
     type AccelerationStructure = AccelerationStructure;
+    type DeviceCreateCallback = ();
 }
 
 crate::impl_dyn_resource!(

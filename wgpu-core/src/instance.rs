@@ -709,6 +709,53 @@ impl Adapter {
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
     ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
+        self.create_device_pre_create_check(desc)?;
+
+        let open = unsafe {
+            self.raw.adapter.open(
+                desc.required_features,
+                &desc.required_limits,
+                &desc.memory_hints,
+                None,
+            )
+        }
+        .map_err(DeviceError::from_hal)?;
+
+        self.create_device_and_queue_from_hal(open, desc, instance_flags)
+    }
+
+    pub unsafe fn create_device_and_queue_with_callback<A:HalApi>(
+        self: &Arc<Self>,
+        desc: &DeviceDescriptor,
+        instance_flags: wgt::InstanceFlags,
+        callback: hal::DeviceCreateCallback<A>,
+    ) -> Result<Option<(Arc<Device>, Arc<Queue>)>, RequestDeviceError> {
+        self.create_device_pre_create_check(desc)?;
+
+        let hal_adapter = self.raw.adapter.as_any().downcast_ref();
+
+        let callback_options = match callback(hal_adapter) {
+            Some(callback_options) => callback_options,
+            None => return Ok(None),
+        };
+
+        let open = unsafe {
+            self.raw.adapter.open(
+                desc.required_features,
+                &desc.required_limits,
+                &desc.memory_hints,
+                Some(Box::new(callback_options)),
+            )
+        }
+            .map_err(DeviceError::from_hal)?;
+
+        self.create_device_and_queue_from_hal(open, desc, instance_flags).map(|res| Some(res))
+    }
+
+    pub fn create_device_pre_create_check(
+        self: &Arc<Self>,
+        desc: &DeviceDescriptor,
+    ) -> Result<(), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
             return Err(RequestDeviceError::UnsupportedFeature(
@@ -744,17 +791,7 @@ impl Adapter {
         if let Some(failed) = check_limits(&desc.required_limits, &caps.limits).pop() {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
-
-        let open = unsafe {
-            self.raw.adapter.open(
-                desc.required_features,
-                &desc.required_limits,
-                &desc.memory_hints,
-            )
-        }
-        .map_err(DeviceError::from_hal)?;
-
-        self.create_device_and_queue_from_hal(open, desc, instance_flags)
+        Ok(())
     }
 }
 
@@ -1050,6 +1087,41 @@ impl Global {
         resource_log!("Created Queue {:?}", queue_id);
 
         Ok((device_id, queue_id))
+    }
+
+    /// # Safety:
+    ///
+    /// - The callback must not destroy the adapter.
+    /// - The callback must not insert anything that the device does not support.
+    pub unsafe fn adapter_request_device_with_callback<A: HalApi>(
+        &self,
+        adapter_id: AdapterId,
+        desc: &DeviceDescriptor,
+        device_id_in: Option<DeviceId>,
+        queue_id_in: Option<QueueId>,
+        callback: hal::DeviceCreateCallback<A>,
+    ) -> Result<Option<(DeviceId, QueueId)>, RequestDeviceError> {
+        profiling::scope!("Adapter::request_device");
+        api_log!("Adapter::request_device");
+
+        let device_fid = self.hub.devices.prepare(device_id_in);
+        let queue_fid = self.hub.queues.prepare(queue_id_in);
+
+        let adapter = self.hub.adapters.get(adapter_id);
+        let (device, queue) = unsafe {
+            let Some((device, queue)) = adapter.create_device_and_queue_with_callback::<A>(desc, self.instance.flags, callback)? else {
+                return Ok(None)
+            };
+            (device, queue)
+        };
+
+        let device_id = device_fid.assign(device);
+        resource_log!("Created Device {:?}", device_id);
+
+        let queue_id = queue_fid.assign(queue);
+        resource_log!("Created Queue {:?}", queue_id);
+
+        Ok(Some((device_id, queue_id)))
     }
 
     /// # Safety

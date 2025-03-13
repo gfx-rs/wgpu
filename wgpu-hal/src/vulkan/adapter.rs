@@ -2,7 +2,6 @@ use std::{borrow::ToOwned as _, collections::BTreeMap, ffi::CStr, sync::Arc, vec
 
 use ash::{amd, ext, google, khr, vk};
 use parking_lot::Mutex;
-
 use super::conv;
 
 fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
@@ -2223,8 +2222,9 @@ impl crate::Adapter for super::Adapter {
         features: wgt::Features,
         _limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        mut callback_options: Option<alloc::boxed::Box<super::DeviceCallbackOptions>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let enabled_extensions = self.required_device_extensions(features);
+        let mut enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
 
         let family_index = 0; //TODO
@@ -2232,6 +2232,15 @@ impl crate::Adapter for super::Adapter {
             .queue_family_index(family_index)
             .queue_priorities(&[1.0]);
         let family_infos = [family_info];
+
+        let mut pre_info = vk::DeviceCreateInfo::default();
+
+        if let Some(callback_options) = callback_options.as_mut() {
+            enabled_extensions.append(&mut callback_options.extensions);
+            for append in callback_options.append_create.iter_mut() {
+                pre_info = pre_info.push_next(append.as_mut())
+            }
+        }
 
         let str_pointers = enabled_extensions
             .iter()
@@ -2241,7 +2250,7 @@ impl crate::Adapter for super::Adapter {
             })
             .collect::<Vec<_>>();
 
-        let pre_info = vk::DeviceCreateInfo::default()
+        let pre_info = pre_info
             .queue_create_infos(&family_infos)
             .enabled_extension_names(&str_pointers);
         let info = enabled_phd_features.add_to_device_create(pre_info);

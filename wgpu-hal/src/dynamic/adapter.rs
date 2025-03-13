@@ -1,9 +1,6 @@
+use crate::{Adapter, Api, DeviceError, OpenDevice, SurfaceCapabilities, TextureFormatCapabilities};
 use alloc::boxed::Box;
-
-use crate::{
-    Adapter, Api, DeviceError, OpenDevice, SurfaceCapabilities, TextureFormatCapabilities,
-};
-
+use std::any::Any;
 use super::{DynDevice, DynQueue, DynResource, DynResourceExt, DynSurface};
 
 pub struct DynOpenDevice {
@@ -26,6 +23,7 @@ pub trait DynAdapter: DynResource {
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        callback: Option<Box<dyn Any>>,
     ) -> Result<DynOpenDevice, DeviceError>;
 
     unsafe fn texture_format_capabilities(
@@ -44,8 +42,9 @@ impl<A: Adapter + DynResource> DynAdapter for A {
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        callback: Option<Box<dyn Any>>,
     ) -> Result<DynOpenDevice, DeviceError> {
-        unsafe { A::open(self, features, limits, memory_hints) }.map(|open_device| DynOpenDevice {
+        unsafe { A::open(self, features, limits, memory_hints, callback.map(|callback| callback.downcast().unwrap())) }.map(|open_device| DynOpenDevice {
             device: Box::new(open_device.device),
             queue: Box::new(open_device.queue),
         })

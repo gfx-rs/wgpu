@@ -56,6 +56,15 @@ use wgt::InternalCounter;
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
 
+trait Appendable: vk::ExtendsDeviceCreateInfo {}
+
+impl<T: vk::ExtendsDeviceCreateInfo> Appendable for T {}
+
+pub struct DeviceCallbackOptions {
+    extensions: Vec<&'static CStr>,
+    append_create: Vec<Box<dyn Appendable>>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Api;
 
@@ -85,6 +94,7 @@ impl crate::Api for Api {
     type ShaderModule = ShaderModule;
     type RenderPipeline = RenderPipeline;
     type ComputePipeline = ComputePipeline;
+    type DeviceCreateCallback = DeviceCallbackOptions;
 }
 
 crate::impl_dyn_resource!(
