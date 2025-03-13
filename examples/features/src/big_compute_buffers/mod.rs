@@ -84,9 +84,10 @@ pub async fn execute_gpu_inner(
 
     assert_eq!(
         receiver.into_iter().map(|v| { v.unwrap() }).count(),
-        buffer_slices.len()
+        buffer_slices.len(), "The number of buffers we receive, shoudl be the same number we send..."
     );
 
+    log::debug!("Buffers sent == Buffers recv");
     let data: Vec<f32> = buffer_slices
         .iter()
         .flat_map(|bs| {
@@ -100,6 +101,7 @@ pub async fn execute_gpu_inner(
     for sb in staging_buffers.iter() {
         sb.unmap()
     }
+    log::trace!("All Staging buffers released.");
 
     data
 }
@@ -113,10 +115,7 @@ fn setup(
     wgpu::BindGroup,
     wgpu::ComputePipeline,
 ) {
-    let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
-    });
+    let cs_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
     // Gets the size in bytes of the input.
     let staging_buffers = create_staging_buffers(device, numbers);
