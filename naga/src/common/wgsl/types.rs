@@ -34,6 +34,26 @@ pub trait TypeContext<W: Write> {
     fn write_override(&self, r#override: Handle<crate::Override>, out: &mut W)
         -> core::fmt::Result;
 
+    /// Write a [`TypeInner`] that has no representation as WGSL source,
+    /// even including Naga extensions.
+    ///
+    /// A backend might implement this with a call to the [`unreachable!`]
+    /// macro, since backends are allowed to assume that the module has passed
+    /// validation, whereas something generating type names to appear in error messages
+    /// might punt to `TypeInner`'s [`core::fmt::Debug`] implementation, since it's
+    /// probably better to show the user something they can act on.
+    fn write_non_wgsl_inner(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result;
+
+    /// Write a [`Scalar`] that has no representation as WGSL source,
+    /// even including Naga extensions.
+    ///
+    /// A backend might implement this with a call to the [`unreachable!`]
+    /// macro, since backends are allowed to assume that the module has passed
+    /// validation, whereas something generating type names to appear in error messages
+    /// might punt to `Scalar`'s [`core::fmt::Debug`] implementation, since it's
+    /// probably better to show the user something they can act on.
+    fn write_non_wgsl_scalar(&self, scalar: Scalar, out: &mut W) -> core::fmt::Result;
+
     /// Write the type `ty` as it would appear in a value's declaration.
     ///
     /// Write the type referred to by `ty` in `module` as it would appear in
@@ -59,19 +79,23 @@ pub trait TypeContext<W: Write> {
     ///
     /// [`Struct`]: TypeInner::Struct
     fn write_type_inner(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result {
-        try_write_type_inner(self, inner, out)
+        match try_write_type_inner(self, inner, out) {
+            Ok(()) => Ok(()),
+            Err(WriteTypeError::Format(err)) => Err(err),
+            Err(WriteTypeError::NonWgsl) => self.write_non_wgsl_inner(inner, out),
+        }
     }
 
     /// Write the [`Scalar`] `scalar` as a WGSL type.
     fn write_scalar(&self, scalar: Scalar, out: &mut W) -> core::fmt::Result {
         match scalar.try_to_wgsl() {
             Some(string) => out.write_str(string),
-            None => unreachable!("validation should have forbidden Scalar: {scalar:?}"),
+            None => self.write_non_wgsl_scalar(scalar, out),
         }
     }
 }
 
-fn try_write_type_inner<C, W>(ctx: &C, inner: &TypeInner, out: &mut W) -> core::fmt::Result
+fn try_write_type_inner<C, W>(ctx: &C, inner: &TypeInner, out: &mut W) -> Result<(), WriteTypeError>
 where
     C: TypeContext<W> + ?Sized,
     W: Write,
@@ -224,7 +248,7 @@ where
                 }
                 write!(out, ">")?;
             } else {
-                unreachable!("ValuePointer to AddressSpace::Handle {inner:?}");
+                return Err(WriteTypeError::NonWgsl);
             }
         }
         TypeInner::ValuePointer {
@@ -242,7 +266,7 @@ where
                 }
                 write!(out, ">")?;
             } else {
-                unreachable!("ValuePointer to AddressSpace::Handle {inner:?}");
+                return Err(WriteTypeError::NonWgsl);
             }
             write!(out, ">")?;
         }
@@ -260,4 +284,18 @@ where
     }
 
     Ok(())
+}
+
+/// Error type returned by `try_write_type_inner`.
+///
+/// This type is private to the module.
+enum WriteTypeError {
+    Format(core::fmt::Error),
+    NonWgsl,
+}
+
+impl From<core::fmt::Error> for WriteTypeError {
+    fn from(err: core::fmt::Error) -> Self {
+        Self::Format(err)
+    }
 }
