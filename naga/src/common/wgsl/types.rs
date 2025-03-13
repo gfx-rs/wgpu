@@ -91,21 +91,25 @@ pub trait TypeContext<W: Write> {
 
                 let dim_str = dim.to_wgsl();
                 let arrayed_str = if arrayed { "_array" } else { "" };
-                let (class_str, multisampled_str, format_str, storage_str) = match class {
-                    Ic::Sampled { kind, multi } => (
-                        "",
-                        if multi { "multisampled_" } else { "" },
-                        unwrap_to_wgsl(crate::Scalar { kind, width: 4 }),
-                        "",
-                    ),
-                    Ic::Depth { multi } => {
-                        ("depth_", if multi { "multisampled_" } else { "" }, "", "")
+                match class {
+                    Ic::Sampled { kind, multi } => {
+                        let multisampled_str = if multi { "multisampled_" } else { "" };
+                        let type_str = unwrap_to_wgsl(crate::Scalar { kind, width: 4 });
+                        write!(
+                            out,
+                            "texture_{multisampled_str}{dim_str}{arrayed_str}<{type_str}>"
+                        )?;
                     }
-                    Ic::Storage { format, access } => (
-                        "storage_",
-                        "",
-                        format.to_wgsl(),
-                        if access.contains(crate::StorageAccess::ATOMIC) {
+                    Ic::Depth { multi } => {
+                        let multisampled_str = if multi { "multisampled_" } else { "" };
+                        write!(
+                            out,
+                            "texture_depth_{multisampled_str}{dim_str}{arrayed_str}"
+                        )?;
+                    }
+                    Ic::Storage { format, access } => {
+                        let format_str = format.to_wgsl();
+                        let access_str = if access.contains(crate::StorageAccess::ATOMIC) {
                             ",atomic"
                         } else if access
                             .contains(crate::StorageAccess::LOAD | crate::StorageAccess::STORE)
@@ -115,16 +119,12 @@ pub trait TypeContext<W: Write> {
                             ",read"
                         } else {
                             ",write"
-                        },
-                    ),
-                };
-                write!(
-                    out,
-                    "texture_{class_str}{multisampled_str}{dim_str}{arrayed_str}"
-                )?;
-
-                if !format_str.is_empty() {
-                    write!(out, "<{format_str}{storage_str}>")?;
+                        };
+                        write!(
+                            out,
+                            "texture_storage_{dim_str}{arrayed_str}<{format_str}{access_str}>"
+                        )?;
+                    }
                 }
             }
             TypeInner::Scalar(scalar) => {
