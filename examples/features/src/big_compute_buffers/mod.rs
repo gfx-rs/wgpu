@@ -1,5 +1,10 @@
+//! This example shows you a potential course for when your 'data' is too large
+//! for a single Buffer.
+//! 
+//! A lot of things aren't explained here via comments. See hello-compute and
+//! repeated-compute for code that is more thoroughly commented.
 use std::num::NonZeroU32;
-use wgpu::{util::DeviceExt, BufferSlice, Features};
+use wgpu::{util::DeviceExt, Features};
 
 // These are set by the minimum required defaults for webgpu.
 const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
@@ -69,43 +74,12 @@ pub async fn execute_gpu_inner(
 
     queue.submit(Some(encoder.finish()));
 
-    let buffer_slices: Vec<BufferSlice> = staging_buffers.iter().map(|sb| sb.slice(..)).collect();
-
-    // let (sender, receiver) = flume::bounded(buffer_slices.len());
-
-    // for bs in buffer_slices.iter() {
-    //     let sender = sender.clone();
-    //     bs.map_async(wgpu::MapMode::Read, move |v| {
-    //         sender.send(v).unwrap();
-    //     })
-    // }
-
-    // device.poll(wgpu::PollType::Wait).unwrap();
-
-    // _ = receiver.recv_async().await.unwrap();
-
-    // let data: Vec<f32> = buffer_slices
-    //     .iter()
-    //     .flat_map(|bs| {
-    //         let data = bs.get_mapped_range();
-    //         let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
-    //         drop(data); // Drop to free buffer before unmap
-    //         result
-    //     })
-    //     .collect();
-
-    // for sb in staging_buffers.iter() {
-    //     sb.unmap()
-    // }
-    // log::trace!("All Staging buffers released.");
-
-    // Map all staging buffers
     for staging_buffer in &staging_buffers {
         let slice = staging_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| {});
     }
 
-    device.poll(wgpu::PollType::Wait);
+    device.poll(wgpu::PollType::Wait).unwrap();
 
     let mut data = Vec::new();
     for staging_buffer in &staging_buffers {
@@ -113,7 +87,7 @@ pub async fn execute_gpu_inner(
         let mapped = slice.get_mapped_range();
         data.extend_from_slice(bytemuck::cast_slice(&mapped));
         drop(mapped);
-        staging_buffer.unmap(); // Unmap explicitly if needed
+        staging_buffer.unmap();
     }
 
     data
@@ -130,7 +104,6 @@ fn setup(
 ) {
     let cs_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-    // Gets the size in bytes of the input.
     let staging_buffers = create_staging_buffers(device, numbers);
     let storage_buffers = create_storage_buffers(device, numbers);
 
@@ -207,7 +180,7 @@ fn setup_binds(
 }
 
 fn calculate_chunks(numbers: &[f32], max_buffer_size: u64) -> Vec<&[f32]> {
-    let max_elements_per_chunk = max_buffer_size as usize / std::mem::size_of::<f32>(); // Calculate max f32 elements per buffer
+    let max_elements_per_chunk = max_buffer_size as usize / std::mem::size_of::<f32>();
     numbers.chunks(max_elements_per_chunk).collect()
 }
 
@@ -261,12 +234,6 @@ async fn run() {
     log::info!("GPU RUNTIME: {}ms", t1.elapsed().as_millis());
 
     assert_eq!(numbers.len(), results.len());
-    results.iter().enumerate().for_each(|(e, r)| {
-        if *r != 1.0 {
-            dbg!(e, r);
-            panic!("{}", results.len());
-        }
-    });
     assert!(results.iter().all(|n| *n == 1.0));
     log::info!("All 1.0s");
 }
