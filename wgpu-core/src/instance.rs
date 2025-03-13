@@ -25,6 +25,7 @@ use wgt::{Backend, Backends, PowerPreference};
 use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
+pub type RequestDeviceWithCallbackResult = Result<Option<(Arc<Device>, Arc<Queue>)>, RequestDeviceError>;
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -724,12 +725,16 @@ impl Adapter {
         self.create_device_and_queue_from_hal(open, desc, instance_flags)
     }
 
+    /// # Safety
+    ///
+    /// - The callback must not destroy the adapter.
+    /// - The callback must not insert anything that the device does not support.
     pub unsafe fn create_device_and_queue_with_callback<A: HalApi>(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
         callback: hal::DeviceCreateCallback<A>,
-    ) -> Result<Option<(Arc<Device>, Arc<Queue>)>, RequestDeviceError> {
+    ) -> RequestDeviceWithCallbackResult {
         self.create_device_pre_create_check(desc)?;
 
         let hal_adapter = self.raw.adapter.as_any().downcast_ref();
@@ -750,7 +755,7 @@ impl Adapter {
         .map_err(DeviceError::from_hal)?;
 
         self.create_device_and_queue_from_hal(open, desc, instance_flags)
-            .map(|res| Some(res))
+            .map(Some)
     }
 
     pub fn create_device_pre_create_check(
@@ -1090,7 +1095,7 @@ impl Global {
         Ok((device_id, queue_id))
     }
 
-    /// # Safety:
+    /// # Safety
     ///
     /// - The callback must not destroy the adapter.
     /// - The callback must not insert anything that the device does not support.

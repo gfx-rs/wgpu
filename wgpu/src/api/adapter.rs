@@ -69,7 +69,7 @@ impl Adapter {
         }
     }
 
-    /// # Safety:
+    /// # Safety
     ///
     /// - The callback must not destroy the adapter.
     /// - The callback must not insert anything that the device does not support.
