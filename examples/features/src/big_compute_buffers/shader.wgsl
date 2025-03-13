@@ -1,6 +1,6 @@
 const OFFSET: u32 = 1u << 8u;
 const BUFFER_MAX_ELEMENTS: u32 = 1u << 25u; // Think `buffer.len()`
-const NUM_BUFFERS: u32 = 2u;
+const NUM_BUFFERS: u32 = 8u;
 const TOTAL_SIZE: u32 = BUFFER_MAX_ELEMENTS * NUM_BUFFERS;
 
 
