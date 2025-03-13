@@ -1,8 +1,9 @@
 //! This example shows you a potential course for when your 'data' is too large
 //! for a single Buffer.
-//! 
+//!
 //! A lot of things aren't explained here via comments. See hello-compute and
 //! repeated-compute for code that is more thoroughly commented.
+
 use std::num::NonZeroU32;
 use wgpu::{util::DeviceExt, Features};
 
