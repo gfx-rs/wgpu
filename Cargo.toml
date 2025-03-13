@@ -82,7 +82,7 @@ wgpu-core-deps-apple = { version = "24.0.0", path = "./wgpu-core/platform-deps/a
 wgpu-core-deps-wasm = { version = "24.0.0", path = "./wgpu-core/platform-deps/wasm" }
 wgpu-core-deps-emscripten = { version = "24.0.0", path = "./wgpu-core/platform-deps/emscripten" }
 
-anyhow = { version = "1.0.96", default-features = false }
+anyhow = { version = "1.0.97", default-features = false }
 approx = "0.5"
 argh = "0.1.13"
 arrayvec = { version = "0.7.6", default-features = false }
@@ -90,7 +90,7 @@ bincode = "1"
 bit-set = { version = "0.8", default-features = false }
 bit-vec = { version = "0.8", default-features = false }
 bitflags = "2.9"
-bytemuck = { version = "1.21", features = [
+bytemuck = { version = "1.22", features = [
     "derive",
     "extern_crate_alloc",
     "min_const_generics",
@@ -147,7 +147,7 @@ ron = "0.8"
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1", default-features = false }
-serde_json = "1.0.139"
+serde_json = "1.0.140"
 serde = { version = "1", default-features = false }
 smallvec = "1"
 static_assertions = "1.1.0"
@@ -205,7 +205,7 @@ deno_webidl = "0.190.0"
 deno_webgpu = { version = "0.157.0", path = "./deno_webgpu" }
 deno_unsync = "0.4.2"
 deno_error = "0.5.5"
-tokio = "1.41.1"
+tokio = "1.44.0"
 termcolor = "1.4.1"
 
 # android dependencies

@@ -531,16 +531,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, " : {builtin_str}")?;
             }
             Some(crate::Binding::Location {
-                second_blend_source: true,
-                ..
+                blend_src: Some(1), ..
             }) => {
                 write!(self.out, " : SV_Target1")?;
             }
-            Some(crate::Binding::Location {
-                location,
-                second_blend_source: false,
-                ..
-            }) => {
+            Some(crate::Binding::Location { location, .. }) => {
                 if stage == Some((ShaderStage::Fragment, Io::Output)) {
                     write!(self.out, " : SV_Target{location}")?;
                 } else {

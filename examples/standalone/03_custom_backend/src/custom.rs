@@ -64,7 +64,6 @@ impl AdapterInterface for CustomAdapter {
     fn request_device(
         &self,
         desc: &wgpu::DeviceDescriptor<'_>,
-        _trace_dir: Option<&std::path::Path>,
     ) -> Pin<Box<dyn wgpu::custom::RequestDeviceFuture>> {
         assert_eq!(desc.label, Some("device"));
         let res: Result<_, wgpu::RequestDeviceError> = Ok((
