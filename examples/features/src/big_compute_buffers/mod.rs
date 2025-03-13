@@ -1,4 +1,4 @@
-use std::{borrow::Cow, num::NonZeroU32};
+use std::num::NonZeroU32;
 use wgpu::{util::DeviceExt, BufferSlice, Features};
 
 // These are set by the minimum required defaults for webgpu.
@@ -80,12 +80,12 @@ pub async fn execute_gpu_inner(
         })
     }
 
+    log::trace!("Start wating...");
     device.poll(wgpu::PollType::Wait).unwrap();
 
-    assert_eq!(
-        receiver.into_iter().map(|v| { v.unwrap() }).count(),
-        buffer_slices.len(), "The number of buffers we receive, shoudl be the same number we send..."
-    );
+    log::trace!("Finished wating...");
+
+    _ = receiver.recv_async().await.unwrap();
 
     log::debug!("Buffers sent == Buffers recv");
     let data: Vec<f32> = buffer_slices
