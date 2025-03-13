@@ -276,6 +276,7 @@ impl<A: hal::Api> Example<A> {
                     features,
                     &wgpu_types::Limits::default(),
                     &wgpu_types::MemoryHints::Performance,
+                    None,
                 )
                 .unwrap()
         };

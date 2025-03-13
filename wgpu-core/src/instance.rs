@@ -25,7 +25,8 @@ use wgt::{Backend, Backends, PowerPreference};
 use thiserror::Error;
 
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
-pub type RequestDeviceWithCallbackResult = Result<Option<(Arc<Device>, Arc<Queue>)>, RequestDeviceError>;
+pub type RequestDeviceWithCallbackResult =
+    Result<Option<(Arc<Device>, Arc<Queue>)>, RequestDeviceError>;
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

@@ -26,7 +26,7 @@ impl crate::Adapter for super::Adapter {
         features: wgt::Features,
         _limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
-        _create_properties: Option<()>,
+        _create_properties: Option<alloc::boxed::Box<()>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let queue = self
             .shared

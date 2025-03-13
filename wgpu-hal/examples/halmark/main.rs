@@ -128,6 +128,7 @@ impl<A: hal::Api> Example<A> {
                     wgpu_types::Features::empty(),
                     &wgpu_types::Limits::default(),
                     &wgpu_types::MemoryHints::default(),
+                    None,
                 )
                 .unwrap()
         };
