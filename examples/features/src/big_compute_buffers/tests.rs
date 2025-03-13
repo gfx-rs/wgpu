@@ -13,7 +13,7 @@ static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits {
                 max_buffer_size: MAX_BUFFER_SIZE,
-                max_binding_array_elements_per_shader_stage: 8,
+                max_binding_array_elements_per_shader_stage: 2,
                 ..Default::default()
             }),
     )
