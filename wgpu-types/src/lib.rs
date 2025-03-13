@@ -16,7 +16,9 @@ extern crate alloc;
 
 use alloc::{string::String, vec, vec::Vec};
 use core::{
+    fmt,
     hash::{Hash, Hasher},
+    mem,
     num::NonZeroU32,
     ops::Range,
 };
@@ -146,6 +148,16 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// Array of all [`Backend`] values, corresponding to [`Backends::all()`].
+    pub const ALL: [Backend; Backends::all().bits().count_ones() as usize] = [
+        Self::Noop,
+        Self::Vulkan,
+        Self::Metal,
+        Self::Dx12,
+        Self::Gl,
+        Self::BrowserWebGpu,
+    ];
+
     /// Returns the string name of the backend.
     #[must_use]
     pub const fn to_str(self) -> &'static str {
@@ -345,6 +357,88 @@ impl<S> Default for RequestAdapterOptions<S> {
             force_fallback_adapter: false,
             compatible_surface: None,
         }
+    }
+}
+
+/// Error when [`Instance::request_adapter()`] fails.
+///
+/// This type is not part of the WebGPU standard, where `requestAdapter()` would simply return null.
+///
+/// [`Instance::request_adapter()`]: ../wgpu/struct.Instance.html#method.request_adapter
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum RequestAdapterError {
+    /// No adapter available via the instance’s backends matched the request’s adapter criteria.
+    NotFound {
+        // These fields must be set by wgpu-core and wgpu, but are not intended to be stable API,
+        // only data for the production of the error message.
+        #[doc(hidden)]
+        active_backends: Backends,
+        #[doc(hidden)]
+        requested_backends: Backends,
+        #[doc(hidden)]
+        supported_backends: Backends,
+        #[doc(hidden)]
+        no_fallback_backends: Backends,
+        #[doc(hidden)]
+        no_adapter_backends: Backends,
+        #[doc(hidden)]
+        incompatible_surface_backends: Backends,
+    },
+
+    /// Attempted to obtain adapter specified by environment variable, but the environment variable
+    /// was not set.
+    EnvNotSet,
+}
+
+impl core::error::Error for RequestAdapterError {}
+impl fmt::Display for RequestAdapterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RequestAdapterError::NotFound {
+                active_backends,
+                requested_backends,
+                supported_backends,
+                no_fallback_backends,
+                no_adapter_backends,
+                incompatible_surface_backends,
+            } => {
+                write!(f, "No suitable graphics adapter found; ")?;
+                let mut first = true;
+                for backend in Backend::ALL {
+                    let bit = Backends::from(backend);
+                    let comma = if mem::take(&mut first) { "" } else { ", " };
+                    let explanation = if !requested_backends.contains(bit) {
+                        // We prefer reporting this, because it makes the error most stable with
+                        // respect to what is directly controllable by the caller, as opposed to
+                        // compilation options or the run-time environment.
+                        "not requested"
+                    } else if !supported_backends.contains(bit) {
+                        "support not compiled in"
+                    } else if no_adapter_backends.contains(bit) {
+                        "found no adapters"
+                    } else if incompatible_surface_backends.contains(bit) {
+                        "not compatible with provided surface"
+                    } else if no_fallback_backends.contains(bit) {
+                        "had no fallback adapters"
+                    } else if !active_backends.contains(bit) {
+                        // Backend requested but not active in this instance
+                        if backend == Backend::Noop {
+                            "not explicitly enabled"
+                        } else {
+                            "drivers/libraries could not be loaded"
+                        }
+                    } else {
+                        // This path should be unreachable, but don't crash.
+                        "[unknown reason]"
+                    };
+                    write!(f, "{comma}{backend} {explanation}")?;
+                }
+            }
+            RequestAdapterError::EnvNotSet => f.write_str("WGPU_ADAPTER_NAME not set")?,
+        }
+        Ok(())
     }
 }
 

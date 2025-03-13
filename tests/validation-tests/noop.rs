@@ -10,11 +10,8 @@ fn device_is_not_available_by_default() {
         ..Default::default()
     });
 
-    assert_eq!(
-        pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())),
-        None,
-        "noop backend adapter present when it should not be"
-    );
+    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+        .expect_err("noop backend adapter present when it should not be");
 }
 
 #[test]
