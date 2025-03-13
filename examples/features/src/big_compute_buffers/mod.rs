@@ -1,6 +1,5 @@
-use nanorand::buffer;
 use std::{borrow::Cow, num::NonZeroU32};
-use wgpu::{util::DeviceExt, BufferSlice, BufferUsages, Features};
+use wgpu::{util::DeviceExt, BufferSlice, Features};
 
 // These are set by the minimum required defaults for webgpu.
 const MAX_BUFFER_SIZE: u64 = 1 << 27; // 134_217_728 // 134MB
