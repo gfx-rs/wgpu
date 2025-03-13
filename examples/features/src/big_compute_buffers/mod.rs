@@ -18,11 +18,9 @@ pub async fn execute_gpu(numbers: &[f32]) -> Vec<f32> {
             label: None,
             // These features are required to use `binding_array` in your wgsl.
             // Without them your shader may fail to compile.
-            required_features:
-                Features::BUFFER_BINDING_ARRAY
+            required_features: Features::BUFFER_BINDING_ARRAY
                 | Features::STORAGE_RESOURCE_BINDING_ARRAY
-                | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                | Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             memory_hints: wgpu::MemoryHints::Performance,
             required_limits: wgpu::Limits {
                 max_buffer_size: MAX_BUFFER_SIZE,

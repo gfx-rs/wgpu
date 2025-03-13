@@ -6,11 +6,16 @@ static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .features(
-                Features::STORAGE_RESOURCE_BINDING_ARRAY
-                    | Features::BUFFER_BINDING_ARRAY
-                    | Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+                Features::BUFFER_BINDING_ARRAY
+                    | Features::STORAGE_RESOURCE_BINDING_ARRAY
+                    | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             )
-            .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS),
+            .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+            .limits(wgpu::Limits {
+                max_buffer_size: MAX_BUFFER_SIZE,
+                max_binding_array_elements_per_shader_stage: 8,
+                ..Default::default()
+            }),
     )
     .run_async(|ctx| {
         // The test environment's GPU reports 134MB as the max storage buffer size.https://github.com/gfx-rs/wgpu/actions/runs/11001397782/job/30546188996#step:12:1096
