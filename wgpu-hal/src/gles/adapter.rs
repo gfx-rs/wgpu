@@ -959,7 +959,6 @@ impl crate::Adapter for super::Adapter {
         _memory_hints: &wgt::MemoryHints,
         _create_properties: Option<alloc::boxed::Box<()>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-
         let gl = &self.shared.context.lock();
         unsafe { gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1) };
         unsafe { gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1) };

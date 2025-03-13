@@ -328,7 +328,12 @@ pub type AtomicFenceValue = portable_atomic::AtomicU64;
 pub type DropCallback = Box<dyn FnOnce() + Send + Sync + 'static>;
 
 /// Returning `None` will cancel device creation
-pub type DeviceCreateCallback<A> = Box<dyn FnOnce(Option<&<A as Api>::Adapter>) -> Option<<A as Api>::DeviceCreateCallback> + Send + Sync + 'static>;
+pub type DeviceCreateCallback<A> = Box<
+    dyn FnOnce(Option<&<A as Api>::Adapter>) -> Option<<A as Api>::DeviceCreateCallback>
+        + Send
+        + Sync
+        + 'static,
+>;
 
 #[cfg(any(gles, vulkan))]
 pub struct DropGuard {

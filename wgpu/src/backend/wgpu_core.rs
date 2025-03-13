@@ -103,7 +103,7 @@ impl ContextWgpuCore {
         &self,
         adapter: &CoreAdapter,
         desc: &crate::DeviceDescriptor<'_>,
-        callback: wgpu_hal::DeviceCreateCallback<A>
+        callback: wgpu_hal::DeviceCreateCallback<A>,
     ) -> Pin<Box<dyn dispatch::RequestDeviceWithCallbackFuture>> {
         if !matches!(desc.trace, wgt::Trace::Off) {
             log::error!(

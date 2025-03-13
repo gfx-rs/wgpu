@@ -724,7 +724,7 @@ impl Adapter {
         self.create_device_and_queue_from_hal(open, desc, instance_flags)
     }
 
-    pub unsafe fn create_device_and_queue_with_callback<A:HalApi>(
+    pub unsafe fn create_device_and_queue_with_callback<A: HalApi>(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
@@ -747,9 +747,10 @@ impl Adapter {
                 Some(Box::new(callback_options)),
             )
         }
-            .map_err(DeviceError::from_hal)?;
+        .map_err(DeviceError::from_hal)?;
 
-        self.create_device_and_queue_from_hal(open, desc, instance_flags).map(|res| Some(res))
+        self.create_device_and_queue_from_hal(open, desc, instance_flags)
+            .map(|res| Some(res))
     }
 
     pub fn create_device_pre_create_check(
@@ -1109,8 +1110,13 @@ impl Global {
 
         let adapter = self.hub.adapters.get(adapter_id);
         let (device, queue) = unsafe {
-            let Some((device, queue)) = adapter.create_device_and_queue_with_callback::<A>(desc, self.instance.flags, callback)? else {
-                return Ok(None)
+            let Some((device, queue)) = adapter.create_device_and_queue_with_callback::<A>(
+                desc,
+                self.instance.flags,
+                callback,
+            )?
+            else {
+                return Ok(None);
             };
             (device, queue)
         };

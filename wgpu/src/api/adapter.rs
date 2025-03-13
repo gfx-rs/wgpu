@@ -77,14 +77,19 @@ impl Adapter {
     pub unsafe fn request_device_with_callback<A: wgc::hal_api::HalApi>(
         &self,
         desc: &DeviceDescriptor<'_>,
-        callback: hal::DeviceCreateCallback<A>
-    ) -> impl Future<Output = Result<Option<(Device, Queue)>, RequestDeviceError>> + WasmNotSend {
+        callback: hal::DeviceCreateCallback<A>,
+    ) -> impl Future<Output = Result<Option<(Device, Queue)>, RequestDeviceError>> + WasmNotSend
+    {
         let core_adapter = self.inner.as_core();
-        let device = unsafe { core_adapter.context.request_device_with_callback::<A>(core_adapter, desc, callback) };
+        let device = unsafe {
+            core_adapter
+                .context
+                .request_device_with_callback::<A>(core_adapter, desc, callback)
+        };
         async move {
-            device
-                .await
-                .map(|res| res.map(|(device, queue)| (Device { inner: device }, Queue { inner: queue })))
+            device.await.map(|res| {
+                res.map(|(device, queue)| (Device { inner: device }, Queue { inner: queue }))
+            })
         }
     }
 
