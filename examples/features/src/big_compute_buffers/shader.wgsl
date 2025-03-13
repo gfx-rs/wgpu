@@ -1,11 +1,11 @@
 const OFFSET: u32 = 1u << 8u;
-const BUFF_LENGTH: u32 = 1u << 25u;
+const BUFFER_MAX_ELEMENTS: u32 = 1u << 25u; // Think `buffer.len()`
 const NUM_BUFFERS: u32 = 2u;
-const TOTAL_SIZE: u32 = BUFF_LENGTH * NUM_BUFFERS;
+const TOTAL_SIZE: u32 = BUFFER_MAX_ELEMENTS * NUM_BUFFERS;
 
 
 // `binding_array` requires a custom struct
-struct ContiguousArray{
+struct ContiguousArray {
     inner: array<f32>
 }
 
@@ -20,9 +20,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     for (var i = 0u; i < OFFSET; i++) {
         let index = base_index + i;
 
-        if (index < TOTAL_SIZE) {
-            let buffer_index = index / BUFF_LENGTH;
-            let inner_index = index % BUFF_LENGTH;
+        if index < TOTAL_SIZE {
+            let buffer_index = index / BUFFER_MAX_ELEMENTS;
+            let inner_index = index % BUFFER_MAX_ELEMENTS;
 
             storage_array[buffer_index].inner[inner_index] = add_one(storage_array[buffer_index].inner[inner_index]);
         }
