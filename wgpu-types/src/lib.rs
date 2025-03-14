@@ -4725,13 +4725,16 @@ pub enum VertexStepMode {
 
 /// Vertex inputs (attributes) to shaders.
 ///
-/// Arrays of these can be made with the [`vertex_attr_array`]
-/// macro. Vertex attributes are assumed to be tightly packed.
+/// These are used to specify the individual attributes within a [`VertexBufferLayout`].
+/// See its documentation for an example.
+///
+/// The [`vertex_attr_array!`] macro can help create these with appropriate offsets.
 ///
 /// Corresponds to [WebGPU `GPUVertexAttribute`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexattribute).
 ///
-/// [`vertex_attr_array`]: ../wgpu/macro.vertex_attr_array.html
+/// [`vertex_attr_array!`]: ../wgpu/macro.vertex_attr_array.html
+/// [`VertexBufferLayout`]: ../wgpu/struct.VertexBufferLayout.html
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
