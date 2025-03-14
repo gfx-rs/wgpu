@@ -1,3 +1,21 @@
+//! Formatting WGSL front end error messages.
+
+use crate::diagnostic_filter::ConflictingDiagnosticRuleError;
+use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
+use crate::{Scalar, SourceLocation, Span};
+
+use super::parse::directive::enable_extension::{EnableExtension, UnimplementedEnableExtension};
+use super::parse::directive::language_extension::{
+    LanguageExtension, UnimplementedLanguageExtension,
+};
+use super::parse::lexer::Token;
+
+use codespan_reporting::diagnostic::{Diagnostic, Label};
+use codespan_reporting::files::SimpleFile;
+use codespan_reporting::term;
+use termcolor::{ColorChoice, NoColor, StandardStream};
+use thiserror::Error;
+
 use alloc::{
     borrow::Cow,
     boxed::Box,
@@ -7,24 +25,6 @@ use alloc::{
     vec::Vec,
 };
 use core::ops::Range;
-
-use codespan_reporting::diagnostic::{Diagnostic, Label};
-use codespan_reporting::files::SimpleFile;
-use codespan_reporting::term;
-use termcolor::{ColorChoice, NoColor, StandardStream};
-use thiserror::Error;
-
-use crate::diagnostic_filter::ConflictingDiagnosticRuleError;
-use crate::front::wgsl::parse::directive::enable_extension::{
-    EnableExtension, UnimplementedEnableExtension,
-};
-use crate::front::wgsl::parse::directive::language_extension::{
-    LanguageExtension, UnimplementedLanguageExtension,
-};
-use crate::front::wgsl::parse::lexer::Token;
-use crate::front::wgsl::Scalar;
-use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
-use crate::{SourceLocation, Span};
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
