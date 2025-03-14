@@ -28,6 +28,7 @@ pub(crate) struct TlasShared {
 pub struct Tlas {
     pub(crate) shared: Arc<TlasShared>,
 }
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .shared.inner);
@@ -43,6 +44,7 @@ pub struct TlasBuildEntry<'a> {
     /// Number of instances in the instance buffer.
     pub instance_count: u32,
 }
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(TlasBuildEntry<'_>: WasmNotSendSync);
 
 /// The safe version of [`TlasBuildEntry`], containing [`TlasInstance`]s instead of a raw buffer.
@@ -51,6 +53,7 @@ pub struct TlasPackage {
     pub(crate) instances: Vec<Option<TlasInstance>>,
     pub(crate) lowest_unmodified: u32,
 }
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(TlasPackage: WasmNotSendSync);
 
 impl TlasPackage {

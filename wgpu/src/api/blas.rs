@@ -111,6 +111,7 @@ pub struct BlasTriangleGeometry<'a> {
     /// Transform buffer offset in bytes (optional, required if transform buffer is present).
     pub transform_buffer_offset: Option<wgt::BufferAddress>,
 }
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(BlasTriangleGeometry<'_>: WasmNotSendSync);
 
 /// Contains the sets of geometry that go into a [Blas].
@@ -118,6 +119,7 @@ pub enum BlasGeometries<'a> {
     /// Triangle geometry variant.
     TriangleGeometries(Vec<BlasTriangleGeometry<'a>>),
 }
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(BlasGeometries<'_>: WasmNotSendSync);
 
 /// Builds the given sets of geometry into the given [Blas].
@@ -127,6 +129,7 @@ pub struct BlasBuildEntry<'a> {
     /// Geometries.
     pub geometry: BlasGeometries<'a>,
 }
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(BlasBuildEntry<'_>: WasmNotSendSync);
 
 #[derive(Debug, Clone)]
@@ -141,6 +144,7 @@ pub struct Blas {
     pub(crate) handle: Option<u64>,
     pub(crate) inner: dispatch::DispatchBlas,
 }
+#[cfg(send_sync)]
 static_assertions::assert_impl_all!(Blas: WasmNotSendSync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(Blas => .inner);
