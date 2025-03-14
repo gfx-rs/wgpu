@@ -750,7 +750,8 @@ impl Adapter {
                 desc.required_features,
                 &desc.required_limits,
                 &desc.memory_hints,
-                Some(Box::new(callback_options)),
+                // If this is the wrong backend, don't cancel: the user can do that.
+                hal_adapter.map(Box::new(callback_options)),
             )
         }
         .map_err(DeviceError::from_hal)?;

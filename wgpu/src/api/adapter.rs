@@ -69,6 +69,10 @@ impl Adapter {
         }
     }
 
+    /// Like [`Adapter::request_device`] but with a callback to pass hal arguments in. If you return
+    /// [`None`] in this it will cancel creation and `Ok(None)` will be returned. The device creation
+    /// does not get canceled if the backend here does not match the backend of the adapter.
+    ///
     /// # Safety
     ///
     /// - The callback must not destroy the adapter.
