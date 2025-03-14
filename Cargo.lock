@@ -4602,6 +4602,7 @@ version = "24.0.0"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.0",
+ "bytemuck",
  "cfg_aliases 0.2.1",
  "document-features",
  "hashbrown",
