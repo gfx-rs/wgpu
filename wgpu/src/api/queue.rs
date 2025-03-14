@@ -98,67 +98,82 @@ impl Queue {
         }
     }
 
-    /// Schedule a data write into `buffer` starting at `offset`.
+    /// Copies the bytes of `data` into `buffer` starting at `offset`.
     ///
-    /// This method fails if `data` overruns the size of `buffer` starting at `offset`.
+    /// The data must be written fully in-bounds, that is, `offset + data.len() <= buffer.len()`.
     ///
-    /// This does *not* submit the transfer to the GPU immediately. Calls to
-    /// `write_buffer` begin execution only on the next call to
-    /// [`Queue::submit`]. To get a set of scheduled transfers started
-    /// immediately, it's fine to call `submit` with no command buffers at all:
+    /// # Performance considerations
     ///
-    /// ```no_run
-    /// # let queue: wgpu::Queue = todo!();
-    /// queue.submit([]);
-    /// ```
+    /// * Calls to `write_buffer()` do *not* submit the transfer to the GPU
+    ///   immediately. They begin GPU execution only on the next call to
+    ///   [`Queue::submit()`], just before the explicitly submitted commands.
+    ///   To get a set of scheduled transfers started immediately,
+    ///   it's fine to call `submit` with no command buffers at all:
     ///
-    /// However, `data` will be immediately copied into staging memory, so the
-    /// caller may discard it any time after this call completes.
+    ///   ```no_run
+    ///   # let queue: wgpu::Queue = todo!();
+    ///   # let buffer: wgpu::Buffer = todo!();
+    ///   # let data = [0u8];
+    ///   queue.write_buffer(&buffer, 0, &data);
+    ///   queue.submit([]);
+    ///   ```
     ///
-    /// If possible, consider using [`Queue::write_buffer_with`] instead. That
-    /// method avoids an intermediate copy and is often able to transfer data
-    /// more efficiently than this one.
+    ///   However, `data` will be immediately copied into staging memory, so the
+    ///   caller may discard it any time after this call completes.
     ///
-    /// Currently on native platforms, for both of these methods the staging
-    /// memory will be a new allocation. This will then be released after the
-    /// next submission finishes. To entirely avoid short-lived allocations, you might
-    /// be able to use [`StagingBelt`](crate::util::StagingBelt).
+    /// * Consider using [`Queue::write_buffer_with()`] instead.
+    ///   That method allows you to prepare your data directly within the staging
+    ///   memory, rather than first placing it in a separate `[u8]` to be copied.
+    ///   That is, `queue.write_buffer(b, offset, data)` is approximately equivalent
+    ///   to `queue.write_buffer_with(b, offset, data.len()).copy_from_slice(data)`,
+    ///   so use `write_buffer_with()` if you can do something smarter than that
+    ///   [`copy_from_slice()`](slice::copy_from_slice). However, for small values
+    ///   (e.g. a typical uniform buffer whose contents come from a `struct`),
+    ///   there will likely be no difference, since the compiler will be able to
+    ///   optimize out unnecessary copies regardless.
+    ///
+    /// * Currently on native platforms, for both of these methods, the staging
+    ///   memory will be a new allocation. This will then be released after the
+    ///   next submission finishes. To entirely avoid short-lived allocations, you might
+    ///   be able to use [`StagingBelt`](crate::util::StagingBelt),
+    ///   or buffers you explicitly create, map, and unmap yourself.
     pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
         self.inner.write_buffer(&buffer.inner, offset, data);
     }
 
-    /// Write to a buffer via a directly mapped staging buffer.
+    /// Prepares to write data to a buffer via a mapped staging buffer.
     ///
-    /// Return a [`QueueWriteBufferView`] which, when dropped, schedules a copy
-    /// of its contents into `buffer` at `offset`. The returned view
-    /// dereferences to a `size`-byte long `&mut [u8]`, in which you should
-    /// store the data you would like written to `buffer`.
+    /// This operation allocates a temporary buffer and then returns a
+    /// [`QueueWriteBufferView`], which
     ///
-    /// This method may perform transfers faster than [`Queue::write_buffer`],
-    /// because the returned [`QueueWriteBufferView`] is actually the staging
-    /// buffer for the write, mapped into the caller's address space. Writing
-    /// your data directly into this staging buffer avoids the temporary
-    /// CPU-side buffer needed by `write_buffer`.
+    /// * dereferences to a `[u8]` of length `size`, and
+    /// * when dropped, schedules a copy of its contents into `buffer` at `offset`.
     ///
-    /// Reading from the returned view is slow, and will not yield the current
-    /// contents of `buffer`.
+    /// Therefore, this obtains the same result as [`Queue::write_buffer()`], but may
+    /// allow you to skip one allocation and one copy of your data, if you are able to
+    /// assemble your data directly into the returned [`QueueWriteBufferView`] instead of
+    /// into a separate allocation like a [`Vec`](alloc::vec::Vec) first.
     ///
-    /// Note that dropping the [`QueueWriteBufferView`] does *not* submit the
-    /// transfer to the GPU immediately. The transfer begins only on the next
-    /// call to [`Queue::submit`] after the view is dropped. To get a set of
-    /// scheduled transfers started immediately, it's fine to call `submit` with
-    /// no command buffers at all:
+    /// The data must be written fully in-bounds, that is, `offset + size <= buffer.len()`.
     ///
-    /// ```no_run
-    /// # let queue: wgpu::Queue = todo!();
-    /// queue.submit([]);
-    /// ```
+    /// # Performance considerations
     ///
-    /// This method fails if `size` is greater than the size of `buffer` starting at `offset`.
+    /// * For small data not separately heap-allocated, there is no advantage of this
+    ///   over [`Queue::write_buffer()`].
     ///
-    /// Currently on native platforms, the staging memory will be a new allocation, which will
-    /// then be released after the next submission finishes. To entirely avoid short-lived
-    /// allocations, you might be able to use [`StagingBelt`](crate::util::StagingBelt).
+    /// * Reading from the returned view may be slow, and will not yield the current
+    ///   contents of `buffer`. You should treat it as “write-only”.
+    ///
+    /// * Dropping the [`QueueWriteBufferView`] does *not* submit the
+    ///   transfer to the GPU immediately. The transfer begins only on the next
+    ///   call to [`Queue::submit()`] after the view is dropped, just before the
+    ///   explicitly submitted commands. To get a set of scheduled transfers started
+    ///   immediately, it's fine to call `queue.submit([])` with no command buffers at all.
+    ///
+    /// * Currently on native platforms, the staging memory will be a new allocation, which will
+    ///   then be released after the next submission finishes. To entirely avoid short-lived
+    ///   allocations, you might be able to use [`StagingBelt`](crate::util::StagingBelt),
+    ///   or buffers you explicitly create, map, and unmap yourself.
     #[must_use]
     pub fn write_buffer_with<'a>(
         &'a self,
@@ -178,7 +193,7 @@ impl Queue {
         })
     }
 
-    /// Schedule a write of some data into a texture.
+    /// Copies the bytes of `data` into into a texture.
     ///
     /// * `data` contains the texels to be written, which must be in
     ///   [the same format as the texture](TextureFormat).
@@ -190,18 +205,15 @@ impl Queue {
     ///
     /// This method fails if `size` overruns the size of `texture`, or if `data` is too short.
     ///
-    /// This does *not* submit the transfer to the GPU immediately. Calls to
-    /// `write_texture` begin execution only on the next call to
-    /// [`Queue::submit`]. To get a set of scheduled transfers started
-    /// immediately, it's fine to call `submit` with no command buffers at all:
+    /// # Performance considerations
     ///
-    /// ```no_run
-    /// # let queue: wgpu::Queue = todo!();
-    /// queue.submit([]);
-    /// ```
+    /// This operation has the same performance considerations as [`Queue::write_buffer()`];
+    /// see its documentation for details.
     ///
-    /// However, `data` will be immediately copied into staging memory, so the
-    /// caller may discard it any time after this call completes.
+    /// However, since there is no “mapped texture” like a mapped buffer,
+    /// alternate techniques for writing to textures will generally consist of first copying
+    /// the data to a buffer, then using [`CommandEncoder::copy_buffer_to_texture()`], or in
+    /// some cases a compute shader, to copy texels from that buffer to the texture.
     pub fn write_texture(
         &self,
         texture: TexelCopyTextureInfo<'_>,

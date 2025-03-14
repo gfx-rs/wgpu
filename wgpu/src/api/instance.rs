@@ -236,13 +236,14 @@ impl Instance {
     ///
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
     ///
-    /// If no adapters are found that suffice all the "hard" options, `None` is returned.
+    /// If no adapters are found that satisfy all the "hard" options, an error is returned.
     ///
-    /// A `compatible_surface` is required when targeting WebGL2.
+    /// When targeting WebGL2, a [`compatible_surface`](RequestAdapterOptions::compatible_surface)
+    /// must be specified; using `RequestAdapterOptions::default()` will not succeed.
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions<'_, '_>,
-    ) -> impl Future<Output = Option<Adapter>> + WasmNotSend {
+    ) -> impl Future<Output = Result<Adapter, RequestAdapterError>> + WasmNotSend {
         let future = self.inner.request_adapter(options);
         async move { future.await.map(|adapter| Adapter { inner: adapter }) }
     }
