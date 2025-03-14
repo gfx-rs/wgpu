@@ -140,8 +140,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.names.clear();
         self.namer.reset(
             module,
-            super::keywords::RESERVED,
-            super::keywords::TYPES,
+            &super::keywords::RESERVED_SET,
             super::keywords::RESERVED_CASE_INSENSITIVE,
             super::keywords::RESERVED_PREFIXES,
             &mut self.names,

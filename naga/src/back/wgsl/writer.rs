@@ -99,9 +99,8 @@ impl<W: Write> Writer<W> {
         self.names.clear();
         self.namer.reset(
             module,
-            crate::keywords::wgsl::RESERVED,
+            &crate::keywords::wgsl::RESERVED_SET,
             // an identifier must not start with two underscore
-            &[],
             &[],
             &["__", "_naga"],
             &mut self.names,

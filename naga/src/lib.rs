@@ -251,7 +251,18 @@ An override expression can be evaluated at pipeline creation time.
 )]
 #![no_std]
 
-#[cfg(any(test, spv_out, feature = "spv-in", feature = "wgsl-in"))]
+#[cfg(any(
+    test,
+    spv_out,
+
+    // Need OnceLock
+    hlsl_out,
+    msl_out,
+    wgsl_out,
+
+    feature = "spv-in",
+    feature = "wgsl-in"
+))]
 extern crate std;
 
 extern crate alloc;

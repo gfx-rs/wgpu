@@ -633,8 +633,7 @@ impl<'a, W: Write> Writer<'a, W> {
         let mut namer = proc::Namer::default();
         namer.reset(
             module,
-            keywords::RESERVED_KEYWORDS,
-            &[],
+            &keywords::RESERVED_KEYWORD_SET,
             &[],
             &[
                 "gl_",                     // all GL built-in variables
