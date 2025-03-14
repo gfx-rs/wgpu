@@ -5,7 +5,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-
+use core::any::Any;
 use hashbrown::HashMap;
 
 use crate::{
@@ -736,6 +736,10 @@ impl Adapter {
         instance_flags: wgt::InstanceFlags,
         callback: hal::DeviceCreateCallback<A>,
     ) -> RequestDeviceWithCallbackResult {
+        fn convert_to_any<A: HalApi>(x: Box<<A>::DeviceCreateCallback>) -> Box<dyn Any> {
+            x
+        }
+
         self.create_device_pre_create_check(desc)?;
 
         let hal_adapter = self.raw.adapter.as_any().downcast_ref();
@@ -751,7 +755,7 @@ impl Adapter {
                 &desc.required_limits,
                 &desc.memory_hints,
                 // If this is the wrong backend, don't cancel: the user can do that.
-                hal_adapter.map(|_| Box::new(callback_options)),
+                hal_adapter.map(|_| convert_to_any::<A>(Box::new(callback_options))),
             )
         }
         .map_err(DeviceError::from_hal)?;
