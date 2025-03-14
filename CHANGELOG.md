@@ -183,6 +183,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 - Add `util::StagingBelt::allocate()` so the staging belt can be used to write textures. By @kpreid in [#6900](https://github.com/gfx-rs/wgpu/pull/6900).
 - Added `CommandEncoder::transition_resources()` for native API interop, and allowing users to slightly optimize barriers. By @JMS55 in [#6678](https://github.com/gfx-rs/wgpu/pull/6678).
 - Add `wgpu_hal::vulkan::Adapter::texture_format_as_raw` for native API interop. By @JMS55 in [#7228](https://github.com/gfx-rs/wgpu/pull/7228).
+- Add device creation that also allows adding `hal` features (ex: a Vulkan extension). By @Vecvec in [#7334](https://github.com/gfx-rs/wgpu/pull/7334).
 
 - Support getting vertices of the hit triangle when raytracing. By @Vecvec in [#7183](https://github.com/gfx-rs/wgpu/pull/7183) .
 
