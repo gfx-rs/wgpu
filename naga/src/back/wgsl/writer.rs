@@ -8,7 +8,7 @@ use core::fmt::Write;
 
 use super::Error;
 use super::ToWgslIfImplemented as _;
-use crate::back::wgsl::polyfill::InversePolyfill;
+use crate::{back::wgsl::polyfill::InversePolyfill, common::wgsl::TypeContext};
 use crate::{
     back::{self, Baked},
     common::{
@@ -30,7 +30,7 @@ enum Attribute {
     Invariant,
     Interpolate(Option<crate::Interpolation>, Option<crate::Sampling>),
     Location(u32),
-    SecondBlendSource,
+    BlendSrc(u32),
     Stage(ShaderStage),
     WorkGroupSize([u32; 3]),
 }
@@ -126,6 +126,9 @@ impl<W: Write> Writer<W> {
         }
 
         self.reset(module);
+
+        // Write all needed directives.
+        self.write_enable_dual_source_blending_if_needed(module)?;
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
@@ -320,7 +323,7 @@ impl<W: Write> Writer<W> {
         for attribute in attributes {
             match *attribute {
                 Attribute::Location(id) => write!(self.out, "@location({id}) ")?,
-                Attribute::SecondBlendSource => write!(self.out, "@second_blend_source ")?,
+                Attribute::BlendSrc(blend_src) => write!(self.out, "@blend_src({blend_src}) ")?,
                 Attribute::BuiltIn(builtin_attrib) => {
                     let builtin = builtin_attrib.to_wgsl_if_implemented()?;
                     write!(self.out, "@builtin({builtin}) ")?;
@@ -365,10 +368,42 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Writes all the necessary directives out
+    fn write_enable_dual_source_blending_if_needed(&mut self, module: &Module) -> BackendResult {
+        // Check for dual source blending.
+        if module.types.iter().any(|(_handle, ty)| {
+            if let TypeInner::Struct { ref members, .. } = ty.inner {
+                members.iter().any(|member| {
+                    member.binding.as_ref().is_some_and(|binding| {
+                        matches!(
+                            binding,
+                            &crate::Binding::Location {
+                                blend_src: Some(_),
+                                ..
+                            }
+                        )
+                    })
+                })
+            } else {
+                false
+            }
+        }) {
+            writeln!(self.out, "enable dual_source_blending;")?;
+        }
+
+        Ok(())
+    }
+
     /// Helper method used to write structs
+    /// Write the full declaration of a struct type.
     ///
-    /// # Notes
-    /// Ends in a newline
+    /// Write out a definition of the struct type referred to by
+    /// `handle` in `module`. The output will be an instance of the
+    /// `struct_decl` production in the WGSL grammar.
+    ///
+    /// Use `members` as the list of `handle`'s members. (This
+    /// function is usually called after matching a `TypeInner`, so
+    /// the callers already have the members at hand.)
     fn write_struct(
         &mut self,
         module: &Module,
@@ -392,227 +427,37 @@ impl<W: Write> Writer<W> {
             writeln!(self.out)?;
         }
 
-        write!(self.out, "}}")?;
-
-        writeln!(self.out)?;
+        writeln!(self.out, "}}")?;
 
         Ok(())
     }
 
-    /// Helper method used to write non image/sampler types
-    ///
-    /// # Notes
-    /// Adds no trailing or leading whitespace
     fn write_type(&mut self, module: &Module, ty: Handle<crate::Type>) -> BackendResult {
-        let inner = &module.types[ty].inner;
-        match *inner {
-            TypeInner::Struct { .. } => {
-                write!(self.out, "{}", self.names[&NameKey::Type(ty)])?;
-            }
-            ref other => self.write_value_type(module, other)?,
-        }
+        // This actually can't be factored out into a nice constructor method,
+        // because the borrow checker needs to be able to see that the borrows
+        // of `self.names` and `self.out` are disjoint.
+        let type_context = WriterTypeContext {
+            module,
+            names: &self.names,
+        };
+        type_context.write_type(ty, &mut self.out)?;
 
         Ok(())
     }
 
-    /// Helper method used to write value types
-    ///
-    /// # Notes
-    /// Adds no trailing or leading whitespace
-    fn write_value_type(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
-        match *inner {
-            TypeInner::Vector { size, scalar } => write!(
-                self.out,
-                "vec{}<{}>",
-                common::vector_size_str(size),
-                scalar.to_wgsl_if_implemented()?,
-            )?,
-            TypeInner::Sampler { comparison: false } => {
-                write!(self.out, "sampler")?;
-            }
-            TypeInner::Sampler { comparison: true } => {
-                write!(self.out, "sampler_comparison")?;
-            }
-            TypeInner::Image {
-                dim,
-                arrayed,
-                class,
-            } => {
-                // More about texture types: https://gpuweb.github.io/gpuweb/wgsl/#sampled-texture-type
-                use crate::ImageClass as Ic;
-
-                let dim_str = dim.to_wgsl();
-                let arrayed_str = if arrayed { "_array" } else { "" };
-                let (class_str, multisampled_str, format_str, storage_str) = match class {
-                    Ic::Sampled { kind, multi } => (
-                        "",
-                        if multi { "multisampled_" } else { "" },
-                        crate::Scalar { kind, width: 4 }.to_wgsl_if_implemented()?,
-                        "",
-                    ),
-                    Ic::Depth { multi } => {
-                        ("depth_", if multi { "multisampled_" } else { "" }, "", "")
-                    }
-                    Ic::Storage { format, access } => (
-                        "storage_",
-                        "",
-                        format.to_wgsl(),
-                        if access.contains(crate::StorageAccess::ATOMIC) {
-                            ",atomic"
-                        } else if access
-                            .contains(crate::StorageAccess::LOAD | crate::StorageAccess::STORE)
-                        {
-                            ",read_write"
-                        } else if access.contains(crate::StorageAccess::LOAD) {
-                            ",read"
-                        } else {
-                            ",write"
-                        },
-                    ),
-                };
-                write!(
-                    self.out,
-                    "texture_{class_str}{multisampled_str}{dim_str}{arrayed_str}"
-                )?;
-
-                if !format_str.is_empty() {
-                    write!(self.out, "<{format_str}{storage_str}>")?;
-                }
-            }
-            TypeInner::Scalar(scalar) => {
-                write!(self.out, "{}", scalar.to_wgsl_if_implemented()?)?;
-            }
-            TypeInner::Atomic(scalar) => {
-                write!(self.out, "atomic<{}>", scalar.to_wgsl_if_implemented()?)?;
-            }
-            TypeInner::Array {
-                base,
-                size,
-                stride: _,
-            } => {
-                // More info https://gpuweb.github.io/gpuweb/wgsl/#array-types
-                // array<A, 3> -- Constant array
-                // array<A> -- Dynamic array
-                write!(self.out, "array<")?;
-                match size {
-                    crate::ArraySize::Constant(len) => {
-                        self.write_type(module, base)?;
-                        write!(self.out, ", {len}")?;
-                    }
-                    crate::ArraySize::Pending(_) => {
-                        unreachable!();
-                    }
-                    crate::ArraySize::Dynamic => {
-                        self.write_type(module, base)?;
-                    }
-                }
-                write!(self.out, ">")?;
-            }
-            TypeInner::BindingArray { base, size } => {
-                // More info https://github.com/gpuweb/gpuweb/issues/2105
-                write!(self.out, "binding_array<")?;
-                match size {
-                    crate::ArraySize::Constant(len) => {
-                        self.write_type(module, base)?;
-                        write!(self.out, ", {len}")?;
-                    }
-                    crate::ArraySize::Pending(_) => {
-                        unreachable!();
-                    }
-                    crate::ArraySize::Dynamic => {
-                        self.write_type(module, base)?;
-                    }
-                }
-                write!(self.out, ">")?;
-            }
-            TypeInner::Matrix {
-                columns,
-                rows,
-                scalar,
-            } => {
-                write!(
-                    self.out,
-                    "mat{}x{}<{}>",
-                    common::vector_size_str(columns),
-                    common::vector_size_str(rows),
-                    scalar.to_wgsl_if_implemented()?
-                )?;
-            }
-            TypeInner::Pointer { base, space } => {
-                let (address, maybe_access) = address_space_str(space);
-                // Everything but `AddressSpace::Handle` gives us a `address` name, but
-                // Naga IR never produces pointers to handles, so it doesn't matter much
-                // how we write such a type. Just write it as the base type alone.
-                if let Some(space) = address {
-                    write!(self.out, "ptr<{space}, ")?;
-                }
-                self.write_type(module, base)?;
-                if address.is_some() {
-                    if let Some(access) = maybe_access {
-                        write!(self.out, ", {access}")?;
-                    }
-                    write!(self.out, ">")?;
-                }
-            }
-            TypeInner::ValuePointer {
-                size: None,
-                scalar,
-                space,
-            } => {
-                let (address, maybe_access) = address_space_str(space);
-                if let Some(space) = address {
-                    write!(
-                        self.out,
-                        "ptr<{}, {}",
-                        space,
-                        scalar.to_wgsl_if_implemented()?
-                    )?;
-                    if let Some(access) = maybe_access {
-                        write!(self.out, ", {access}")?;
-                    }
-                    write!(self.out, ">")?;
-                } else {
-                    return Err(Error::Unimplemented(format!(
-                        "ValuePointer to AddressSpace::Handle {inner:?}"
-                    )));
-                }
-            }
-            TypeInner::ValuePointer {
-                size: Some(size),
-                scalar,
-                space,
-            } => {
-                let (address, maybe_access) = address_space_str(space);
-                if let Some(space) = address {
-                    write!(
-                        self.out,
-                        "ptr<{}, vec{}<{}>",
-                        space,
-                        common::vector_size_str(size),
-                        scalar.to_wgsl_if_implemented()?
-                    )?;
-                    if let Some(access) = maybe_access {
-                        write!(self.out, ", {access}")?;
-                    }
-                    write!(self.out, ">")?;
-                } else {
-                    return Err(Error::Unimplemented(format!(
-                        "ValuePointer to AddressSpace::Handle {inner:?}"
-                    )));
-                }
-                write!(self.out, ">")?;
-            }
-            TypeInner::AccelerationStructure { vertex_return } => {
-                let caps = if vertex_return { "<vertex_return>" } else { "" };
-                write!(self.out, "acceleration_structure{}", caps)?
-            }
-            _ => {
-                return Err(Error::Unimplemented(format!("write_value_type {inner:?}")));
-            }
-        }
+    fn write_type_inner(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
+        // This actually can't be factored out into a nice constructor method,
+        // because the borrow checker needs to be able to see that the borrows
+        // of `self.names` and `self.out` are disjoint.
+        let type_context = WriterTypeContext {
+            module,
+            names: &self.names,
+        };
+        type_context.write_type_inner(inner, &mut self.out)?;
 
         Ok(())
     }
+
     /// Helper method used to write statements
     ///
     /// # Notes
@@ -1163,7 +1008,7 @@ impl<W: Write> Writer<W> {
                     self.write_type(module, handle)?;
                 }
                 proc::TypeResolution::Value(ref inner) => {
-                    self.write_value_type(module, inner)?;
+                    self.write_type_inner(module, inner)?;
                 }
             }
         }
@@ -1227,13 +1072,11 @@ impl<W: Write> Writer<W> {
         &mut self,
         module: &Module,
         expr: Handle<crate::Expression>,
+        arena: &crate::Arena<crate::Expression>,
     ) -> BackendResult {
-        self.write_possibly_const_expression(
-            module,
-            expr,
-            &module.global_expressions,
-            |writer, expr| writer.write_const_expression(module, expr),
-        )
+        self.write_possibly_const_expression(module, expr, arena, |writer, expr| {
+            writer.write_const_expression(module, expr, arena)
+        })
     }
 
     fn write_possibly_const_expression<E>(
@@ -1286,7 +1129,7 @@ impl<W: Write> Writer<W> {
                 if constant.name.is_some() {
                     write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
                 } else {
-                    self.write_const_expression(module, constant.init)?;
+                    self.write_const_expression(module, constant.init, &module.global_expressions)?;
                 }
             }
             Expression::ZeroValue(ty) => {
@@ -1482,7 +1325,7 @@ impl<W: Write> Writer<W> {
 
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
-                    self.write_const_expression(module, offset)?;
+                    self.write_const_expression(module, offset, func_ctx.expressions)?;
                 }
 
                 write!(self.out, ")")?;
@@ -1531,7 +1374,7 @@ impl<W: Write> Writer<W> {
 
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
-                    self.write_const_expression(module, offset)?;
+                    self.write_const_expression(module, offset, func_ctx.expressions)?;
                 }
 
                 write!(self.out, ")")?;
@@ -1842,7 +1685,7 @@ impl<W: Write> Writer<W> {
         // Write initializer
         if let Some(init) = global.init {
             write!(self.out, " = ")?;
-            self.write_const_expression(module, init)?;
+            self.write_const_expression(module, init, &module.global_expressions)?;
         }
 
         // End with semicolon
@@ -1866,7 +1709,7 @@ impl<W: Write> Writer<W> {
         self.write_type(module, module.constants[handle].ty)?;
         write!(self.out, " = ")?;
         let init = module.constants[handle].init;
-        self.write_const_expression(module, init)?;
+        self.write_const_expression(module, init, &module.global_expressions)?;
         writeln!(self.out, ";")?;
 
         Ok(())
@@ -1876,6 +1719,25 @@ impl<W: Write> Writer<W> {
     #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> W {
         self.out
+    }
+}
+
+struct WriterTypeContext<'m> {
+    module: &'m Module,
+    names: &'m crate::FastHashMap<NameKey, String>,
+}
+
+impl<W: Write> TypeContext<W> for WriterTypeContext<'_> {
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
+        &self.module.types[handle]
+    }
+
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
+        self.names[&NameKey::Type(handle)].as_str()
+    }
+
+    fn write_override(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
+        unreachable!("overrides should be validated out");
     }
 }
 
@@ -1892,7 +1754,7 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             location,
             interpolation,
             sampling,
-            second_blend_source: false,
+            blend_src: None,
         } => vec![
             Attribute::Location(location),
             Attribute::Interpolate(interpolation, sampling),
@@ -1901,10 +1763,10 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             location,
             interpolation,
             sampling,
-            second_blend_source: true,
+            blend_src: Some(blend_src),
         } => vec![
             Attribute::Location(location),
-            Attribute::SecondBlendSource,
+            Attribute::BlendSrc(blend_src),
             Attribute::Interpolate(interpolation, sampling),
         ],
     }

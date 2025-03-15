@@ -966,10 +966,11 @@ pub enum Binding {
     /// [`Fragment`]: crate::ShaderStage::Fragment
     Location {
         location: u32,
-        /// Indicates the 2nd input to the blender when dual-source blending.
-        second_blend_source: bool,
         interpolation: Option<Interpolation>,
         sampling: Option<Sampling>,
+        /// Optional `blend_src` index used for dual source blending.
+        /// See <https://www.w3.org/TR/WGSL/#attribute-blend_src>
+        blend_src: Option<u32>,
     },
 }
 
@@ -1524,7 +1525,7 @@ pub enum Expression {
         gather: Option<SwizzleComponent>,
         coordinate: Handle<Expression>,
         array_index: Option<Handle<Expression>>,
-        /// This refers to an expression in [`Module::global_expressions`].
+        /// This must be a const-expression.
         offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
@@ -2217,9 +2218,6 @@ pub struct Function {
     ///
     /// - Various expressions hold [`Type`] handles, and [`Type`]s may refer to
     ///   global expressions, for things like array lengths.
-    ///
-    /// - [`Expression::ImageSample::offset`] refers to an expression in
-    ///   [`Module::global_expressions`].
     ///
     /// An [`Expression`] must occur before all other [`Expression`]s that use
     /// its value.

@@ -86,13 +86,8 @@ fn main() {
             log::info!("Picked '{}'", info.name);
             let device_id = wgc::id::Id::zip(0, 1);
             let queue_id = wgc::id::Id::zip(0, 1);
-            let res = global.adapter_request_device(
-                adapter,
-                &desc,
-                None,
-                Some(device_id),
-                Some(queue_id),
-            );
+            let res =
+                global.adapter_request_device(adapter, &desc, Some(device_id), Some(queue_id));
             if let Err(e) = res {
                 panic!("{e:?}");
             }

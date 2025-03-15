@@ -456,7 +456,7 @@ impl GlobalCtx<'_> {
         self.eval_expr_to_literal_from(handle, self.global_expressions)
     }
 
-    fn eval_expr_to_literal_from(
+    pub(super) fn eval_expr_to_literal_from(
         &self,
         handle: crate::Handle<crate::Expression>,
         arena: &crate::Arena<crate::Expression>,

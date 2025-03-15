@@ -18,6 +18,50 @@ void switch_case_break()
     return;
 }
 
+void switch_selector_type_conversion()
+{
+    switch(0u) {
+        case 0u: {
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    switch(0u) {
+        case 0u: {
+            return;
+        }
+        default: {
+            return;
+        }
+    }
+}
+
+void switch_const_expr_case_selectors()
+{
+    switch(int(0)) {
+        case 0: {
+            return;
+        }
+        case 1: {
+            return;
+        }
+        case 2: {
+            return;
+        }
+        case 3: {
+            return;
+        }
+        case 4: {
+            return;
+        }
+        default: {
+            return;
+        }
+    }
+}
+
 void loop_switch_continue(int x)
 {
     uint2 loop_bound = uint2(0u, 0u);

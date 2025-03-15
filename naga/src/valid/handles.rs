@@ -209,7 +209,6 @@ impl super::Validator {
                     handle_and_expr,
                     constants,
                     overrides,
-                    global_expressions,
                     types,
                     local_variables,
                     global_variables,
@@ -386,7 +385,6 @@ impl super::Validator {
         (handle, expression): (Handle<crate::Expression>, &crate::Expression),
         constants: &Arena<crate::Constant>,
         overrides: &Arena<crate::Override>,
-        global_expressions: &Arena<crate::Expression>,
         types: &UniqueArena<crate::Type>,
         local_variables: &Arena<crate::LocalVariable>,
         global_variables: &Arena<crate::GlobalVariable>,
@@ -396,8 +394,6 @@ impl super::Validator {
     ) -> Result<(), InvalidHandleError> {
         let validate_constant = |handle| Self::validate_constant_handle(handle, constants);
         let validate_override = |handle| Self::validate_override_handle(handle, overrides);
-        let validate_const_expr =
-            |handle| Self::validate_expression_handle(handle, global_expressions);
         let validate_type = |handle| Self::validate_type_handle(handle, types);
 
         match *expression {
@@ -447,15 +443,12 @@ impl super::Validator {
                 level,
                 depth_ref,
             } => {
-                if let Some(offset) = offset {
-                    validate_const_expr(offset)?;
-                }
-
                 handle
                     .check_dep(image)?
                     .check_dep(sampler)?
                     .check_dep(coordinate)?
-                    .check_dep_opt(array_index)?;
+                    .check_dep_opt(array_index)?
+                    .check_dep_opt(offset)?;
 
                 match level {
                     crate::SampleLevel::Auto | crate::SampleLevel::Zero => (),

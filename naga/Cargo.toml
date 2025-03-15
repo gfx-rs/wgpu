@@ -90,7 +90,7 @@ log = "0.4"
 strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.218", features = [
+serde = { version = "1.0.219", features = [
     "default",
     "derive",
 ], optional = true }

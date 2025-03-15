@@ -218,7 +218,6 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     /// statements.
     last_end_offset: usize,
 
-    #[allow(dead_code)]
     pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
 }
 

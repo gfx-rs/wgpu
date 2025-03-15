@@ -275,6 +275,7 @@ pub struct Validator {
     types: Vec<r#type::TypeInfo>,
     layouter: Layouter,
     location_mask: BitSet,
+    blend_src_mask: BitSet,
     ep_resource_bindings: FastHashSet<crate::ResourceBinding>,
     #[allow(dead_code)]
     switch_values: FastHashSet<crate::SwitchValue>,
@@ -477,6 +478,7 @@ impl Validator {
             types: Vec::new(),
             layouter: Layouter::default(),
             location_mask: BitSet::new(),
+            blend_src_mask: BitSet::new(),
             ep_resource_bindings: FastHashSet::default(),
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
@@ -502,6 +504,7 @@ impl Validator {
         self.types.clear();
         self.layouter.clear();
         self.location_mask.clear();
+        self.blend_src_mask.clear();
         self.ep_resource_bindings.clear();
         self.switch_values.clear();
         self.valid_expression_list.clear();
@@ -713,7 +716,7 @@ impl Validator {
         }
 
         for (handle, fun) in module.functions.iter() {
-            match self.validate_function(fun, module, &mod_info, false, &global_expr_kind) {
+            match self.validate_function(fun, module, &mod_info, false) {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {
@@ -739,7 +742,7 @@ impl Validator {
                 .with_span()); // TODO: keep some EP span information?
             }
 
-            match self.validate_entry_point(ep, module, &mod_info, &global_expr_kind) {
+            match self.validate_entry_point(ep, module, &mod_info) {
                 Ok(info) => mod_info.entry_points.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {

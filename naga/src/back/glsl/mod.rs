@@ -465,8 +465,7 @@ impl fmt::Display for VaryingName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self.binding {
             crate::Binding::Location {
-                second_blend_source: true,
-                ..
+                blend_src: Some(1), ..
             } => {
                 write!(f, "_fs2p_location1",)
             }
@@ -1261,7 +1260,7 @@ impl<'a, W: Write> Writer<'a, W> {
         if global.space.initializable() && is_value_init_supported(self.module, global.ty) {
             write!(self.out, " = ")?;
             if let Some(init) = global.init {
-                self.write_const_expr(init)?;
+                self.write_const_expr(init, &self.module.global_expressions)?;
             } else {
                 self.write_zero_init_value(global.ty)?;
             }
@@ -1500,13 +1499,13 @@ impl<'a, W: Write> Writer<'a, W> {
             Some(binding) => binding,
         };
 
-        let (location, interpolation, sampling, second_blend_source) = match *binding {
+        let (location, interpolation, sampling, blend_src) = match *binding {
             crate::Binding::Location {
                 location,
                 interpolation,
                 sampling,
-                second_blend_source,
-            } => (location, interpolation, sampling, second_blend_source),
+                blend_src,
+            } => (location, interpolation, sampling, blend_src),
             crate::Binding::BuiltIn(built_in) => {
                 if let crate::BuiltIn::Position { invariant: true } = built_in {
                     match (self.options.version, self.entry_point.stage) {
@@ -1554,8 +1553,11 @@ impl<'a, W: Write> Writer<'a, W> {
             || !emit_interpolation_and_auxiliary
         {
             if self.options.version.supports_io_locations() {
-                if second_blend_source {
-                    write!(self.out, "layout(location = {location}, index = 1) ")?;
+                if let Some(blend_src) = blend_src {
+                    write!(
+                        self.out,
+                        "layout(location = {location}, index = {blend_src}) "
+                    )?;
                 } else {
                     write!(self.out, "layout(location = {location}) ")?;
                 }
@@ -1563,7 +1565,7 @@ impl<'a, W: Write> Writer<'a, W> {
             } else {
                 Some(VaryingLocation {
                     location,
-                    index: second_blend_source as u32,
+                    index: blend_src.unwrap_or(0),
                 })
             }
         } else {
@@ -1604,7 +1606,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 location,
                 interpolation: None,
                 sampling: None,
-                second_blend_source,
+                blend_src,
             },
             stage: self.entry_point.stage,
             options: VaryingOptions::from_writer_options(self.options, output),
@@ -1907,7 +1909,7 @@ impl<'a, W: Write> Writer<'a, W> {
             self.write_array_size(base, size)?;
         }
         write!(self.out, " = ")?;
-        self.write_const_expr(constant.init)?;
+        self.write_const_expr(constant.init, &self.module.global_expressions)?;
         writeln!(self.out, ";")?;
         Ok(())
     }
@@ -2657,12 +2659,16 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// [`Expression`]: crate::Expression
     /// [`Module`]: crate::Module
-    fn write_const_expr(&mut self, expr: Handle<crate::Expression>) -> BackendResult {
+    fn write_const_expr(
+        &mut self,
+        expr: Handle<crate::Expression>,
+        arena: &crate::Arena<crate::Expression>,
+    ) -> BackendResult {
         self.write_possibly_const_expr(
             expr,
-            &self.module.global_expressions,
+            arena,
             |expr| &self.info[expr],
-            |writer, expr| writer.write_const_expr(expr),
+            |writer, expr| writer.write_const_expr(expr, arena),
         )
     }
 
@@ -2729,7 +2735,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 if constant.name.is_some() {
                     write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
                 } else {
-                    self.write_const_expr(constant.init)?;
+                    self.write_const_expr(constant.init, &self.module.global_expressions)?;
                 }
             }
             Expression::ZeroValue(ty) => {
@@ -3036,7 +3042,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     if tex_1d_hack {
                         write!(self.out, "ivec2(")?;
                     }
-                    self.write_const_expr(constant)?;
+                    self.write_const_expr(constant, ctx.expressions)?;
                     if tex_1d_hack {
                         write!(self.out, ", 0)")?;
                     }

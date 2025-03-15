@@ -150,10 +150,7 @@ impl ExpressionTracer<'_> {
                 self.expressions_used
                     .insert_iter([image, sampler, coordinate]);
                 self.expressions_used.insert_iter(array_index);
-                match self.global_expressions_used {
-                    Some(ref mut used) => used.insert_iter(offset),
-                    None => self.expressions_used.insert_iter(offset),
-                }
+                self.expressions_used.insert_iter(offset);
                 use crate::SampleLevel as Sl;
                 match *level {
                     Sl::Auto | Sl::Zero => {}
@@ -324,9 +321,7 @@ impl ModuleMap {
                 adjust(sampler);
                 adjust(coordinate);
                 operand_map.adjust_option(array_index);
-                if let Some(ref mut offset) = *offset {
-                    self.global_expressions.adjust(offset);
-                }
+                operand_map.adjust_option(offset);
                 self.adjust_sample_level(level, operand_map);
                 operand_map.adjust_option(depth_ref);
             }

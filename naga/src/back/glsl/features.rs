@@ -605,7 +605,7 @@ impl<W> Writer<'_, W> {
                     location: _,
                     interpolation,
                     sampling,
-                    second_blend_source,
+                    blend_src,
                 } => {
                     if interpolation == Some(Interpolation::Linear) {
                         self.features.request(Features::NOPERSPECTIVE_QUALIFIER);
@@ -613,7 +613,7 @@ impl<W> Writer<'_, W> {
                     if sampling == Some(Sampling::Sample) {
                         self.features.request(Features::SAMPLE_QUALIFIER);
                     }
-                    if second_blend_source {
+                    if blend_src.is_some() {
                         self.features.request(Features::DUAL_SOURCE_BLENDING);
                     }
                 }
