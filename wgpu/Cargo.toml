@@ -222,5 +222,9 @@ smallvec.workspace = true
 [target.'cfg(not(target_has_atomic = "64"))'.dependencies]
 portable-atomic.workspace = true
 
+[dev-dependencies]
+# Used in doc-tests
+bytemuck.workspace = true
+
 [build-dependencies]
 cfg_aliases.workspace = true

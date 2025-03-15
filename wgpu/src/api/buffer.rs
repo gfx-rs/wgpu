@@ -81,17 +81,22 @@ use crate::*;
 /// If `buffer` was created with [`BufferUsages::MAP_WRITE`], we could fill it
 /// with `f32` values like this:
 ///
-/// ```no_run
-/// # mod bytemuck {
-/// #     pub fn cast_slice_mut(bytes: &mut [u8]) -> &mut [f32] { todo!() }
-/// # }
-/// # let device: wgpu::Device = todo!();
-/// # let buffer: wgpu::Buffer = todo!();
-/// let buffer = std::sync::Arc::new(buffer);
+/// ```
+/// # #[cfg(feature = "noop")]
+/// # let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+/// # #[cfg(not(feature = "noop"))]
+/// # let device: wgpu::Device = { return; };
+/// #
+/// # let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+/// #     label: None,
+/// #     size: 400,
+/// #     usage: wgpu::BufferUsages::MAP_WRITE,
+/// #     mapped_at_creation: false,
+/// # });
 /// let capturable = buffer.clone();
-/// buffer.slice(..).map_async(wgpu::MapMode::Write, move |result| {
+/// buffer.map_async(wgpu::MapMode::Write, .., move |result| {
 ///     if result.is_ok() {
-///         let mut view = capturable.slice(..).get_mapped_range_mut();
+///         let mut view = capturable.get_mapped_range_mut(..);
 ///         let floats: &mut [f32] = bytemuck::cast_slice_mut(&mut view);
 ///         floats.fill(42.0);
 ///         drop(view);
@@ -102,11 +107,11 @@ use crate::*;
 ///
 /// This code takes the following steps:
 ///
-/// - First, it moves `buffer` into an [`Arc`], and makes a clone for capture by
+/// - First, it makes a cloned handle to the buffer for capture by
 ///   the callback passed to [`map_async`]. Since a [`map_async`] callback may be
 ///   invoked from another thread, interaction between the callback and the
 ///   thread calling [`map_async`] generally requires some sort of shared heap
-///   data like this. In real code, the [`Arc`] would probably own some larger
+///   data like this. In real code, there might be an [`Arc`] to some larger
 ///   structure that itself owns `buffer`.
 ///
 /// - Then, it calls [`Buffer::slice`] to make a [`BufferSlice`] referring to

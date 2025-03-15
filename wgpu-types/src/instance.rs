@@ -56,7 +56,7 @@ impl InstanceDescriptor {
 bitflags::bitflags! {
     /// Instance debugging flags.
     ///
-    /// These are not part of the webgpu standard.
+    /// These are not part of the WebGPU standard.
     ///
     /// Defaults to enabling debugging-related flags if the build configuration has `debug_assertions`.
     #[repr(transparent)]
