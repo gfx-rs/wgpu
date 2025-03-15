@@ -95,10 +95,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         &mut self,
         lexer: &mut Lexer<'a>,
         classifier: impl Fn(Token<'a>) -> Option<crate::BinaryOperator>,
-        mut parser: impl FnMut(
-            &mut Lexer<'a>,
-            &mut Self,
-        ) -> Result<'a, Handle<ast::Expression<'a>>>,
+        mut parser: impl FnMut(&mut Lexer<'a>, &mut Self) -> Result<'a, Handle<ast::Expression<'a>>>,
     ) -> Result<'a, Handle<ast::Expression<'a>>> {
         let start = lexer.start_byte_offset();
         let mut accumulator = parser(lexer, self)?;
@@ -117,10 +114,10 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     fn declare_local(&mut self, name: ast::Ident<'a>) -> Result<'a, Handle<ast::Local>> {
         let handle = self.locals.append(ast::Local, name.span);
         if let Some(old) = self.local_table.add(name.name, handle) {
-            Err(Error::Redefinition {
+            Err(Box::new(Error::Redefinition {
                 previous: self.locals.get_span(old),
                 current: name.span,
-            })
+            }))
         } else {
             Ok(handle)
         }
@@ -168,7 +165,7 @@ impl<T> Default for ParsedAttribute<T> {
 impl<T> ParsedAttribute<T> {
     fn set(&mut self, value: T, name_span: Span) -> Result<'static, ()> {
         if self.value.is_some() {
-            return Err(Error::RepeatedAttribute(name_span));
+            return Err(Box::new(Error::RepeatedAttribute(name_span)));
         }
         self.value = Some(value);
         Ok(())
@@ -229,10 +226,10 @@ impl<'a> BindingParser<'a> {
                     .enable_extensions
                     .contains(ImplementedEnableExtension::DualSourceBlending)
                 {
-                    return Err(Error::EnableExtensionNotEnabled {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
                         span: name_span,
                         kind: ImplementedEnableExtension::DualSourceBlending.into(),
-                    });
+                    }));
                 }
 
                 lexer.expect(Token::Paren('('))?;
@@ -240,7 +237,7 @@ impl<'a> BindingParser<'a> {
                     .set(parser.general_expression(lexer, ctx)?, name_span)?;
                 lexer.expect(Token::Paren(')'))?;
             }
-            _ => return Err(Error::UnknownAttribute(name_span)),
+            _ => return Err(Box::new(Error::UnknownAttribute(name_span))),
         }
         Ok(())
     }
@@ -275,7 +272,7 @@ impl<'a> BindingParser<'a> {
             (None, Some(built_in), None, None, false, None) => {
                 Ok(Some(ast::Binding::BuiltIn(built_in)))
             }
-            (_, _, _, _, _, _) => Err(Error::InconsistentBinding(span)),
+            (_, _, _, _, _, _) => Err(Box::new(Error::InconsistentBinding(span))),
         }
     }
 }
@@ -328,7 +325,7 @@ impl Parser {
     {
         self.recursion_depth += 1;
         if self.recursion_depth >= 256 {
-            return Err(Error::Internal("Parser recursion limit exceeded"));
+            return Err(Box::new(Error::Internal("Parser recursion limit exceeded")));
         }
         let ret = f(self);
         self.recursion_depth -= 1;
@@ -575,7 +572,7 @@ impl Parser {
             | "texture_storage_1d_array"
             | "texture_storage_2d"
             | "texture_storage_2d_array"
-            | "texture_storage_3d" => return Err(Error::TypeNotConstructible(span)),
+            | "texture_storage_3d" => return Err(Box::new(Error::TypeNotConstructible(span))),
             _ => return Ok(None),
         };
 
@@ -841,7 +838,12 @@ impl Parser {
                     ast::Expression::Ident(ident)
                 }
             }
-            other => return Err(Error::Unexpected(other.1, ExpectedToken::PrimaryExpression)),
+            other => {
+                return Err(Box::new(Error::Unexpected(
+                    other.1,
+                    ExpectedToken::PrimaryExpression,
+                )))
+            }
         };
 
         let span = self.pop_rule_span(lexer);
@@ -1246,10 +1248,10 @@ impl Parser {
         let mut ready = true;
         while !lexer.skip(Token::Paren('}')) {
             if !ready {
-                return Err(Error::Unexpected(
+                return Err(Box::new(Error::Unexpected(
                     lexer.next().1,
                     ExpectedToken::Token(Token::Separator(',')),
-                ));
+                )));
             }
             let (mut size, mut align) = (ParsedAttribute::default(), ParsedAttribute::default());
             self.push_rule_span(Rule::Attribute, lexer);
@@ -1289,14 +1291,14 @@ impl Parser {
             });
 
             if !member_names.insert(name.name) {
-                return Err(Error::Redefinition {
+                return Err(Box::new(Error::Redefinition {
                     previous: members
                         .iter()
                         .find(|x| x.name.name == name.name)
                         .map(|x| x.name.span)
                         .unwrap(),
                     current: name.span,
-                });
+                }));
             }
         }
 
@@ -1734,7 +1736,7 @@ impl Parser {
         }))
     }
 
-    const fn check_texture_sample_type(scalar: Scalar, span: Span) -> Result<'static, ()> {
+    fn check_texture_sample_type(scalar: Scalar, span: Span) -> Result<'static, ()> {
         use crate::ScalarKind::*;
         // Validate according to https://gpuweb.github.io/gpuweb/wgsl/#sampled-texture-type
         match scalar {
@@ -1746,7 +1748,7 @@ impl Parser {
                 kind: Uint,
                 width: 8,
             } => Ok(()),
-            _ => Err(Error::BadTextureSampleType { span, scalar }),
+            _ => Err(Box::new(Error::BadTextureSampleType { span, scalar })),
         }
     }
 
@@ -1828,7 +1830,7 @@ impl Parser {
                 });
                 return Ok(());
             }
-            _ => return Err(Error::Unexpected(op.1, ExpectedToken::Assignment)),
+            _ => return Err(Box::new(Error::Unexpected(op.1, ExpectedToken::Assignment))),
         };
 
         let span = lexer.span_from(span_start);
@@ -2126,10 +2128,10 @@ impl Parser {
                                     }
                                     (Token::Paren('}'), _) => break,
                                     (_, span) => {
-                                        return Err(Error::Unexpected(
+                                        return Err(Box::new(Error::Unexpected(
                                             span,
                                             ExpectedToken::SwitchItem,
-                                        ))
+                                        )))
                                     }
                                 }
                             }
@@ -2191,7 +2193,11 @@ impl Parser {
                                         ast::StatementKind::Call { .. }
                                         | ast::StatementKind::Assign { .. }
                                         | ast::StatementKind::LocalDecl(_) => {}
-                                        _ => return Err(Error::InvalidForInitializer(span)),
+                                        _ => {
+                                            return Err(Box::new(Error::InvalidForInitializer(
+                                                span,
+                                            )))
+                                        }
                                     }
                                 }
                             };
@@ -2251,7 +2257,7 @@ impl Parser {
                             let (peeked_token, peeked_span) = lexer.peek();
                             if let Token::Word("if") = peeked_token {
                                 let span = span.until(&peeked_span);
-                                return Err(Error::InvalidBreakIf(span));
+                                return Err(Box::new(Error::InvalidBreakIf(span)));
                             }
                             lexer.expect(Token::Separator(';'))?;
                             ast::StatementKind::Break
@@ -2400,21 +2406,25 @@ impl Parser {
             if let Some(DirectiveKind::Diagnostic) = DirectiveKind::from_ident(name) {
                 let filter = self.diagnostic_filter(lexer)?;
                 let span = self.peek_rule_span(lexer);
-                diagnostic_filters.add(filter, span, ShouldConflictOnFullDuplicate::Yes)?;
+                diagnostic_filters
+                    .add(filter, span, ShouldConflictOnFullDuplicate::Yes)
+                    .map_err(|e| Box::new(e.into()))?;
             } else {
-                return Err(Error::Unexpected(
+                return Err(Box::new(Error::Unexpected(
                     name_span,
                     ExpectedToken::DiagnosticAttribute,
-                ));
+                )));
             }
         }
         self.pop_rule_span(lexer);
 
         if !diagnostic_filters.is_empty() {
-            return Err(Error::DiagnosticAttributeNotYetImplementedAtParseSite {
-                site_name_plural: "compound statements",
-                spans: diagnostic_filters.spans().collect(),
-            });
+            return Err(Box::new(
+                Error::DiagnosticAttributeNotYetImplementedAtParseSite {
+                    site_name_plural: "compound statements",
+                    spans: diagnostic_filters.spans().collect(),
+                },
+            ));
         }
 
         let brace_span = lexer.expect_span(Token::Paren('{'))?;
@@ -2478,10 +2488,10 @@ impl Parser {
         let mut ready = true;
         while !lexer.skip(Token::Paren(')')) {
             if !ready {
-                return Err(Error::Unexpected(
+                return Err(Box::new(Error::Unexpected(
                     lexer.next().1,
                     ExpectedToken::Token(Token::Separator(',')),
-                ));
+                )));
             }
             let binding = self.varying_binding(lexer, &mut ctx)?;
 
@@ -2510,10 +2520,10 @@ impl Parser {
                 must_use,
             })
         } else if let Some(must_use) = must_use {
-            return Err(Error::FunctionMustUseReturnsVoid(
+            return Err(Box::new(Error::FunctionMustUseReturnsVoid(
                 must_use,
                 self.peek_rule_span(lexer),
-            ));
+            )));
         } else {
             None
         };
@@ -2565,7 +2575,7 @@ impl Parser {
             };
 
             if !matches!(lexer.next().0, Token::Separator(';')) {
-                return Err(Error::Unexpected(span, expected_token));
+                return Err(Box::new(Error::Unexpected(span, expected_token)));
             }
 
             break Ok(());
@@ -2602,10 +2612,10 @@ impl Parser {
             if filters.is_empty() {
                 Ok(())
             } else {
-                Err(Error::DiagnosticAttributeNotSupported {
+                Err(Box::new(Error::DiagnosticAttributeNotSupported {
                     on_what,
                     spans: filters.spans().collect(),
-                })
+                }))
             }
         };
 
@@ -2615,7 +2625,9 @@ impl Parser {
             if let Some(DirectiveKind::Diagnostic) = DirectiveKind::from_ident(name) {
                 let filter = self.diagnostic_filter(lexer)?;
                 let span = self.peek_rule_span(lexer);
-                diagnostic_filters.add(filter, span, ShouldConflictOnFullDuplicate::Yes)?;
+                diagnostic_filters
+                    .add(filter, span, ShouldConflictOnFullDuplicate::Yes)
+                    .map_err(|e| Box::new(e.into()))?;
                 continue;
             }
             match name {
@@ -2653,10 +2665,10 @@ impl Parser {
                             (Token::Paren(')'), _) => break,
                             (Token::Separator(','), _) if i != 2 => (),
                             other => {
-                                return Err(Error::Unexpected(
+                                return Err(Box::new(Error::Unexpected(
                                     other.1,
                                     ExpectedToken::WorkgroupSizeSeparator,
-                                ))
+                                )))
                             }
                         }
                     }
@@ -2676,7 +2688,7 @@ impl Parser {
                 "must_use" => {
                     must_use.set(name_span, name_span)?;
                 }
-                _ => return Err(Error::UnknownAttribute(name_span)),
+                _ => return Err(Box::new(Error::UnknownAttribute(name_span))),
             }
         }
 
@@ -2688,8 +2700,10 @@ impl Parser {
                     binding: index,
                 });
             }
-            (Some(_), None) => return Err(Error::MissingAttribute("binding", attrib_span)),
-            (None, Some(_)) => return Err(Error::MissingAttribute("group", attrib_span)),
+            (Some(_), None) => {
+                return Err(Box::new(Error::MissingAttribute("binding", attrib_span)))
+            }
+            (None, Some(_)) => return Err(Box::new(Error::MissingAttribute("group", attrib_span))),
             (None, None) => {}
         }
 
@@ -2704,7 +2718,9 @@ impl Parser {
                 None
             }
             (Token::Word(word), directive_span) if DirectiveKind::from_ident(word).is_some() => {
-                return Err(Error::DirectiveAfterFirstGlobalDecl { directive_span });
+                return Err(Box::new(Error::DirectiveAfterFirstGlobalDecl {
+                    directive_span,
+                }));
             }
             (Token::Word("struct"), _) => {
                 ensure_no_diag_attrs("`struct`s".into(), diagnostic_filters)?;
@@ -2792,7 +2808,7 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {
                         if stage == ShaderStage::Compute && workgroup_size.value.is_none() {
-                            return Err(Error::MissingWorkgroupSize(compute_span));
+                            return Err(Box::new(Error::MissingWorkgroupSize(compute_span)));
                         }
                         Some(ast::EntryPoint {
                             stage,
@@ -2820,7 +2836,12 @@ impl Parser {
                 Some(ast::GlobalDeclKind::ConstAssert(condition))
             }
             (Token::End, _) => return Ok(()),
-            other => return Err(Error::Unexpected(other.1, ExpectedToken::GlobalItem)),
+            other => {
+                return Err(Box::new(Error::Unexpected(
+                    other.1,
+                    ExpectedToken::GlobalItem,
+                )))
+            }
         };
 
         if let Some(kind) = kind {
@@ -2833,12 +2854,14 @@ impl Parser {
         if !self.rules.is_empty() {
             log::error!("Reached the end of global decl, but rule stack is not empty");
             log::error!("Rules: {:?}", self.rules);
-            return Err(Error::Internal("rule stack is not empty"));
+            return Err(Box::new(Error::Internal("rule stack is not empty")));
         };
 
         match binding {
             None => Ok(()),
-            Some(_) => Err(Error::Internal("we had the attribute but no var?")),
+            Some(_) => Err(Box::new(Error::Internal(
+                "we had the attribute but no var?",
+            ))),
         }
     }
 
@@ -2859,11 +2882,9 @@ impl Parser {
                     DirectiveKind::Diagnostic => {
                         let diagnostic_filter = self.diagnostic_filter(&mut lexer)?;
                         let span = self.peek_rule_span(&lexer);
-                        diagnostic_filters.add(
-                            diagnostic_filter,
-                            span,
-                            ShouldConflictOnFullDuplicate::No,
-                        )?;
+                        diagnostic_filters
+                            .add(diagnostic_filter, span, ShouldConflictOnFullDuplicate::No)
+                            .map_err(|e| Box::new(e.into()))?;
                         lexer.expect(Token::Separator(';'))?;
                     }
                     DirectiveKind::Enable => {
@@ -2872,10 +2893,10 @@ impl Parser {
                             let extension = match kind {
                                 EnableExtension::Implemented(kind) => kind,
                                 EnableExtension::Unimplemented(kind) => {
-                                    return Err(Error::EnableExtensionNotYetImplemented {
+                                    return Err(Box::new(Error::EnableExtensionNotYetImplemented {
                                         kind,
                                         span,
-                                    })
+                                    }))
                                 }
                             };
                             enable_extensions.add(extension);
@@ -2893,9 +2914,12 @@ impl Parser {
                                     Ok(())
                                 }
                                 Some(LanguageExtension::Unimplemented(kind)) => {
-                                    Err(Error::LanguageExtensionNotYetImplemented { kind, span })
+                                    Err(Box::new(Error::LanguageExtensionNotYetImplemented {
+                                        kind,
+                                        span,
+                                    }))
                                 }
-                                None => Err(Error::UnknownLanguageExtension(span, ident)),
+                                None => Err(Box::new(Error::UnknownLanguageExtension(span, ident))),
                             }
                         })?;
                     }
@@ -2925,10 +2949,7 @@ impl Parser {
         Ok(tu)
     }
 
-    const fn increase_brace_nesting(
-        brace_nesting_level: u8,
-        brace_span: Span,
-    ) -> Result<'static, u8> {
+    fn increase_brace_nesting(brace_nesting_level: u8, brace_span: Span) -> Result<'static, u8> {
         // From [spec.](https://gpuweb.github.io/gpuweb/wgsl/#limits):
         //
         // > § 2.4. Limits
@@ -2943,10 +2964,10 @@ impl Parser {
         // <https://github.com/gpuweb/cts/pull/3389#discussion_r1543742701>
         const BRACE_NESTING_MAXIMUM: u8 = 64;
         if brace_nesting_level + 1 > BRACE_NESTING_MAXIMUM {
-            return Err(Error::ExceededLimitForNestedBraces {
+            return Err(Box::new(Error::ExceededLimitForNestedBraces {
                 span: brace_span,
                 limit: BRACE_NESTING_MAXIMUM,
-            });
+            }));
         }
         Ok(brace_nesting_level + 1)
     }
@@ -2975,7 +2996,7 @@ impl Parser {
                 FilterableTriggeringRule::Standard(triggering_rule)
             } else {
                 diagnostic_filter::Severity::Warning.report_wgsl_parse_diag(
-                    Error::UnknownDiagnosticRuleName(diagnostic_rule_name_span),
+                    Box::new(Error::UnknownDiagnosticRuleName(diagnostic_rule_name_span)),
                     lexer.source,
                 )?;
                 FilterableTriggeringRule::Unknown(diagnostic_rule_name.into())

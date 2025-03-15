@@ -1,6 +1,8 @@
 use crate::front::wgsl::{Error, Result, Scalar};
 use crate::Span;
 
+use alloc::boxed::Box;
+
 pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpace> {
     match word {
         "private" => Ok(crate::AddressSpace::Private),
@@ -11,7 +13,7 @@ pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpa
         }),
         "push_constant" => Ok(crate::AddressSpace::PushConstant),
         "function" => Ok(crate::AddressSpace::Function),
-        _ => Err(Error::UnknownAddressSpace(span)),
+        _ => Err(Box::new(Error::UnknownAddressSpace(span))),
     }
 }
 
@@ -39,7 +41,7 @@ pub fn map_built_in(word: &str, span: Span) -> Result<'_, crate::BuiltIn> {
         "subgroup_id" => crate::BuiltIn::SubgroupId,
         "subgroup_size" => crate::BuiltIn::SubgroupSize,
         "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
-        _ => return Err(Error::UnknownBuiltin(span)),
+        _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     })
 }
 
@@ -48,7 +50,7 @@ pub fn map_interpolation(word: &str, span: Span) -> Result<'_, crate::Interpolat
         "linear" => Ok(crate::Interpolation::Linear),
         "flat" => Ok(crate::Interpolation::Flat),
         "perspective" => Ok(crate::Interpolation::Perspective),
-        _ => Err(Error::UnknownAttribute(span)),
+        _ => Err(Box::new(Error::UnknownAttribute(span))),
     }
 }
 
@@ -59,7 +61,7 @@ pub fn map_sampling(word: &str, span: Span) -> Result<'_, crate::Sampling> {
         "sample" => Ok(crate::Sampling::Sample),
         "first" => Ok(crate::Sampling::First),
         "either" => Ok(crate::Sampling::Either),
-        _ => Err(Error::UnknownAttribute(span)),
+        _ => Err(Box::new(Error::UnknownAttribute(span))),
     }
 }
 
@@ -107,7 +109,7 @@ pub fn map_storage_format(word: &str, span: Span) -> Result<'_, crate::StorageFo
         "rgba32sint" => Sf::Rgba32Sint,
         "rgba32float" => Sf::Rgba32Float,
         "bgra8unorm" => Sf::Bgra8Unorm,
-        _ => return Err(Error::UnknownStorageFormat(span)),
+        _ => return Err(Box::new(Error::UnknownStorageFormat(span))),
     })
 }
 
@@ -260,16 +262,13 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
     })
 }
 
-pub fn map_conservative_depth(
-    word: &str,
-    span: Span,
-) -> Result<'_, crate::ConservativeDepth> {
+pub fn map_conservative_depth(word: &str, span: Span) -> Result<'_, crate::ConservativeDepth> {
     use crate::ConservativeDepth as Cd;
     match word {
         "greater_equal" => Ok(Cd::GreaterEqual),
         "less_equal" => Ok(Cd::LessEqual),
         "unchanged" => Ok(Cd::Unchanged),
-        _ => Err(Error::UnknownConservativeDepth(span)),
+        _ => Err(Box::new(Error::UnknownConservativeDepth(span))),
     }
 }
 

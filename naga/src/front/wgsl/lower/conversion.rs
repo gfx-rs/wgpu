@@ -2,10 +2,10 @@
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 
-use crate::front::wgsl::Result;
 use crate::front::wgsl::error::{
     AutoConversionError, AutoConversionLeafScalarError, ConcretizationFailedError,
 };
+use crate::front::wgsl::Result;
 use crate::{Handle, Span};
 
 impl<'source> super::ExpressionContext<'source, '_, '_> {
@@ -57,14 +57,14 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
                     let source_type = expr_resolution.to_wgsl(gctx).into();
                     let dest_type = goal_ty.to_wgsl(gctx).into();
 
-                    return Err(super::Error::AutoConversion(Box::new(
+                    return Err(Box::new(super::Error::AutoConversion(Box::new(
                         AutoConversionError {
                             dest_span: goal_span,
                             dest_type,
                             source_span: expr_span,
                             source_type,
                         },
-                    )));
+                    ))));
                 }
             };
 
@@ -107,7 +107,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
 
         let expr_scalar = match expr_inner.automatically_convertible_scalar(&self.module.types) {
             Some(scalar) => scalar,
-            None => return Err(make_error()),
+            None => return Err(Box::new(make_error())),
         };
 
         if expr_scalar == goal_scalar {
@@ -115,7 +115,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         }
 
         if !expr_scalar.automatically_converts_to(goal_scalar) {
-            return Err(make_error());
+            return Err(Box::new(make_error()));
         }
 
         assert!(expr_scalar.is_abstract());
@@ -133,7 +133,9 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         if let crate::TypeInner::Array { .. } = *expr_inner {
             self.as_const_evaluator()
                 .cast_array(expr, goal_scalar, expr_span)
-                .map_err(|err| super::Error::ConstantEvaluatorError(err.into(), expr_span))
+                .map_err(|err| {
+                    Box::new(super::Error::ConstantEvaluatorError(err.into(), expr_span))
+                })
         } else {
             let cast = crate::Expression::As {
                 expr,
@@ -196,9 +198,9 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
                 }
                 _ => {
                     let span = self.get_expression_span(*expr);
-                    return Err(super::Error::InvalidConstructorComponentType(
+                    return Err(Box::new(super::Error::InvalidConstructorComponentType(
                         span, i as i32,
-                    ));
+                    )));
                 }
             }
         }

@@ -1,4 +1,4 @@
-use alloc::{vec, vec::Vec};
+use alloc::{boxed::Box, vec, vec::Vec};
 
 use super::{Error, Result};
 use crate::front::wgsl::parse::ast;
@@ -25,12 +25,12 @@ impl<'a> Index<'a> {
             if let Some(ident) = decl_ident(decl) {
                 let name = ident.name;
                 if let Some(old) = globals.insert(name, handle) {
-                    return Err(Error::Redefinition {
+                    return Err(Box::new(Error::Redefinition {
                         previous: decl_ident(&tu.decls[old])
                             .expect("decl should have ident for redefinition")
                             .span,
                         current: ident.span,
-                    });
+                    }));
                 }
             }
         }
@@ -134,10 +134,10 @@ impl<'a> DependencySolver<'a, '_> {
                     // Found a cycle.
                     return if dep_id == id {
                         // A declaration refers to itself directly.
-                        Err(Error::RecursiveDeclaration {
+                        Err(Box::new(Error::RecursiveDeclaration {
                             ident: decl_ident(decl).expect("decl should have ident").span,
                             usage: dep.usage,
-                        })
+                        }))
                     } else {
                         // A declaration refers to itself indirectly, through
                         // one or more other definitions. Report the entire path
@@ -150,7 +150,7 @@ impl<'a> DependencySolver<'a, '_> {
                             .find_map(|(i, dep)| (dep.decl == dep_id).then_some(i))
                             .unwrap_or(0);
 
-                        Err(Error::CyclicDeclaration {
+                        Err(Box::new(Error::CyclicDeclaration {
                             ident: decl_ident(&self.module.decls[dep_id])
                                 .expect("decl should have ident")
                                 .span,
@@ -166,7 +166,7 @@ impl<'a> DependencySolver<'a, '_> {
                                     )
                                 })
                                 .collect(),
-                        })
+                        }))
                     };
                 } else if !self.visited[dep_id_usize] {
                     self.dfs(dep_id)?;

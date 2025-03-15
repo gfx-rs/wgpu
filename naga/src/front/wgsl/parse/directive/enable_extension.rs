@@ -2,8 +2,10 @@
 //!
 //! The focal point of this module is the [`EnableExtension`] API.
 
-use crate::Span;
 use crate::front::wgsl::{Error, Result};
+use crate::Span;
+
+use alloc::boxed::Box;
 
 /// Tracks the status of every enable-extension known to Naga.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -71,7 +73,7 @@ impl EnableExtension {
             Self::DUAL_SOURCE_BLENDING => {
                 Self::Implemented(ImplementedEnableExtension::DualSourceBlending)
             }
-            _ => return Err(Error::UnknownEnableExtension(span, word)),
+            _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
     }
 

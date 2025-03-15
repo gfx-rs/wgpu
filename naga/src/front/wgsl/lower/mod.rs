@@ -1,15 +1,16 @@
 use alloc::{
     borrow::ToOwned,
+    boxed::Box,
     string::{String, ToString},
     vec::Vec,
 };
 use core::num::NonZeroU32;
 
-use crate::front::wgsl::Result;
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
+use crate::front::wgsl::Result;
 use crate::front::Typifier;
 use crate::proc::{
     ensure_block_returns, Alignment, ConstantEvaluator, Emitter, Layouter, ResolveContext,
@@ -472,7 +473,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<'source, Handle<crate::Expression>> {
         let mut eval = self.as_const_evaluator();
         eval.try_eval_and_append(expr, span)
-            .map_err(|e| Error::ConstantEvaluatorError(e.into(), span))
+            .map_err(|e| Box::new(Error::ConstantEvaluatorError(e.into(), span)))
     }
 
     fn const_eval_expr_to_u32(
@@ -531,8 +532,8 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             ExpressionContextType::Runtime(ref ctx) => Ok(ctx.local_table[local].runtime()),
             ExpressionContextType::Constant(Some(ref ctx)) => ctx.local_table[local]
                 .const_time()
-                .ok_or(Error::UnexpectedOperationInConstContext(span)),
-            _ => Err(Error::UnexpectedOperationInConstContext(span)),
+                .ok_or(Box::new(Error::UnexpectedOperationInConstContext(span))),
+            _ => Err(Box::new(Error::UnexpectedOperationInConstContext(span))),
         }
     }
 
@@ -543,7 +544,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref mut ctx) => Ok(ctx),
             ExpressionContextType::Constant(_) | ExpressionContextType::Override => {
-                Err(Error::UnexpectedOperationInConstContext(span))
+                Err(Box::new(Error::UnexpectedOperationInConstContext(span)))
             }
         }
     }
@@ -557,9 +558,9 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref rctx) => {
                 if !rctx.local_expression_kind_tracker.is_const(expr) {
-                    return Err(Error::ExpectedConstExprConcreteIntegerScalar(
+                    return Err(Box::new(Error::ExpectedConstExprConcreteIntegerScalar(
                         component_span,
-                    ));
+                    )));
                 }
 
                 let index = self
@@ -577,13 +578,13 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 crate::SwizzleComponent::XYZW
                     .get(index as usize)
                     .copied()
-                    .ok_or(Error::InvalidGatherComponent(component_span))
+                    .ok_or(Box::new(Error::InvalidGatherComponent(component_span)))
             }
             // This means a `gather` operation appeared in a constant expression.
             // This error refers to the `gather` itself, not its "component" argument.
-            ExpressionContextType::Constant(_) | ExpressionContextType::Override => {
-                Err(Error::UnexpectedOperationInConstContext(gather_span))
-            }
+            ExpressionContextType::Constant(_) | ExpressionContextType::Override => Err(Box::new(
+                Error::UnexpectedOperationInConstContext(gather_span),
+            )),
         }
     }
 
@@ -635,10 +636,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     /// [`TypeResolution`]: crate::proc::TypeResolution
     /// [`register_type`]: Self::register_type
     /// [`Typifier`]: Typifier
-    fn grow_types(
-        &mut self,
-        handle: Handle<crate::Expression>,
-    ) -> Result<'source, &mut Self> {
+    fn grow_types(&mut self, handle: Handle<crate::Expression>) -> Result<'source, &mut Self> {
         let empty_arena = Arena::new();
         let resolve_ctx;
         let typifier;
@@ -674,7 +672,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<'source, (crate::ImageClass, bool)> {
         match *resolve_inner!(self, image) {
             crate::TypeInner::Image { class, arrayed, .. } => Ok((class, arrayed)),
-            _ => Err(Error::BadTexture(span)),
+            _ => Err(Box::new(Error::BadTexture(span))),
         }
     }
 
@@ -800,11 +798,11 @@ impl<'source> ArgumentContext<'_, 'source> {
         if self.args.len() == 0 {
             Ok(())
         } else {
-            Err(Error::WrongArgumentCount {
+            Err(Box::new(Error::WrongArgumentCount {
                 found: self.total_args,
                 expected: self.min_args..self.args_used + 1,
                 span: self.span,
-            })
+            }))
         }
     }
 
@@ -814,11 +812,11 @@ impl<'source> ArgumentContext<'_, 'source> {
                 self.args_used += 1;
                 Ok(arg)
             }
-            None => Err(Error::WrongArgumentCount {
+            None => Err(Box::new(Error::WrongArgumentCount {
                 found: self.total_args,
                 expected: self.min_args..self.args_used + 1,
                 span: self.span,
-            }),
+            })),
         }
     }
 }
@@ -885,7 +883,10 @@ impl<T> Typed<T> {
         }
     }
 
-    fn try_map<U, E>(self, mut f: impl FnMut(T) -> core::result::Result<U, E>) -> core::result::Result<Typed<U>, E> {
+    fn try_map<U, E>(
+        self,
+        mut f: impl FnMut(T) -> core::result::Result<U, E>,
+    ) -> core::result::Result<Typed<U>, E> {
         Ok(match self {
             Self::Reference(expr) => Typed::Reference(f(expr)?),
             Self::Plain(expr) => Typed::Plain(f(expr)?),
@@ -922,7 +923,7 @@ impl Components {
         let ch = name.chars().next().ok_or(Error::BadAccessor(name_span))?;
         match Self::letter_component(ch) {
             Some(sc) => Ok(sc as u32),
-            None => Err(Error::BadAccessor(name_span)),
+            None => Err(Box::new(Error::BadAccessor(name_span))),
         }
     }
 
@@ -935,7 +936,7 @@ impl Components {
             2 => crate::VectorSize::Bi,
             3 => crate::VectorSize::Tri,
             4 => crate::VectorSize::Quad,
-            _ => return Err(Error::BadAccessor(name_span)),
+            _ => return Err(Box::new(Error::BadAccessor(name_span))),
         };
 
         let mut pattern = [crate::SwizzleComponent::X; 4];
@@ -948,7 +949,7 @@ impl Components {
         {
             Ok(Components::Swizzle { size, pattern })
         } else {
-            Err(Error::BadAccessor(name_span))
+            Err(Box::new(Error::BadAccessor(name_span)))
         }
     }
 }
@@ -1053,10 +1054,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         Self { index }
     }
 
-    pub fn lower(
-        &mut self,
-        tu: ast::TranslationUnit<'source>,
-    ) -> Result<'source, crate::Module> {
+    pub fn lower(&mut self, tu: ast::TranslationUnit<'source>) -> Result<'source, crate::Module> {
         let mut module = crate::Module {
             diagnostic_filters: tu.diagnostic_filters,
             diagnostic_filter_leaf: tu.diagnostic_filter_leaf,
@@ -1243,24 +1241,24 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let ty_res = crate::proc::TypeResolution::Handle(explicit_ty);
                 let init = ectx
                     .try_automatic_conversions(init, &ty_res, name.span)
-                    .map_err(|error| match error {
-                        Error::AutoConversion(e) => Error::InitializationTypeMismatch {
+                    .map_err(|error| match *error {
+                        Error::AutoConversion(e) => Box::new(Error::InitializationTypeMismatch {
                             name: name.span,
                             expected: e.dest_type,
                             got: e.source_type,
-                        },
-                        other => other,
+                        }),
+                        _ => error,
                     })?;
 
                 let init_ty = ectx.register_type(init)?;
                 let explicit_inner = &ectx.module.types[explicit_ty].inner;
                 let init_inner = &ectx.module.types[init_ty].inner;
                 if !explicit_inner.equivalent(init_inner, &ectx.module.types) {
-                    return Err(Error::InitializationTypeMismatch {
+                    return Err(Box::new(Error::InitializationTypeMismatch {
                         name: name.span,
                         expected: explicit_inner.to_wgsl(&ectx.module.to_ctx()).into(),
                         got: init_inner.to_wgsl(&ectx.module.to_ctx()).into(),
-                    });
+                    }));
                 }
                 ty = explicit_ty;
                 initializer = Some(init);
@@ -1277,7 +1275,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ty = explicit_ty;
                 initializer = None;
             }
-            (None, None) => return Err(Error::DeclMissingTypeAndInit(name.span)),
+            (None, None) => return Err(Box::new(Error::DeclMissingTypeAndInit(name.span))),
         }
         Ok((ty, initializer))
     }
@@ -1371,8 +1369,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             Ok(value) => {
                                 workgroup_size_out[i] = value.0;
                             }
-                            err => {
-                                if let Err(Error::ConstantEvaluatorError(ref ty, _)) = err {
+                            Err(err) => {
+                                if let Error::ConstantEvaluatorError(ref ty, _) = *err {
                                     match **ty {
                                         crate::proc::ConstantEvaluatorError::OverrideExpr => {
                                             workgroup_size_overrides_out[i] =
@@ -1382,11 +1380,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                                 )?);
                                         }
                                         _ => {
-                                            err?;
+                                            return Err(err);
                                         }
                                     }
                                 } else {
-                                    err?;
+                                    return Err(err);
                                 }
                             }
                         }
@@ -1429,7 +1427,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let expr = self.expression(size_expr, ctx)?;
         match resolve_inner!(ctx, expr).scalar_kind().ok_or(0) {
             Ok(crate::ScalarKind::Sint) | Ok(crate::ScalarKind::Uint) => Ok(expr),
-            _ => Err(Error::ExpectedConstExprConcreteIntegerScalar(span)),
+            _ => Err(Box::new(Error::ExpectedConstExprConcreteIntegerScalar(
+                span,
+            ))),
         }
     }
 
@@ -1488,11 +1488,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             .equivalent(&ctx.module.types[init_ty].inner, &ctx.module.types)
                         {
                             let gctx = &ctx.module.to_ctx();
-                            return Err(Error::InitializationTypeMismatch {
+                            return Err(Box::new(Error::InitializationTypeMismatch {
                                 name: l.name.span,
                                 expected: ty.to_wgsl(gctx).into(),
                                 got: init_ty.to_wgsl(gctx).into(),
-                            });
+                            }));
                         }
                     }
 
@@ -1651,8 +1651,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 | crate::Scalar::ABSTRACT_INT,
                             ) => Ok((expr, span)),
                             _ => match i {
-                                0 => Err(Error::InvalidSwitchSelector { span }),
-                                _ => Err(Error::InvalidSwitchCase { span }),
+                                0 => Err(Box::new(Error::InvalidSwitchSelector { span })),
+                                _ => Err(Box::new(Error::InvalidSwitchCase { span })),
                             },
                         }
                     })
@@ -1700,7 +1700,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                             crate::SwitchValue::U32(value)
                                         }
                                         _ => {
-                                            return Err(Error::InvalidSwitchCase { span });
+                                            return Err(Box::new(Error::InvalidSwitchCase {
+                                                span,
+                                            }));
                                         }
                                     }
                                 }
@@ -1798,10 +1800,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     Typed::Reference(handle) => handle,
                     Typed::Plain(handle) => {
                         let ty = ctx.invalid_assignment_type(handle);
-                        return Err(Error::InvalidAssignment {
+                        return Err(Box::new(Error::InvalidAssignment {
                             span: target_span,
                             ty,
-                        });
+                        }));
                     }
                 };
 
@@ -1864,7 +1866,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     .expression_for_reference(value, &mut ctx.as_expression(block, &mut emitter))?;
                 let target_handle = match target {
                     Typed::Reference(handle) => handle,
-                    Typed::Plain(_) => return Err(Error::BadIncrDecrReferenceType(value_span)),
+                    Typed::Plain(_) => {
+                        return Err(Box::new(Error::BadIncrDecrReferenceType(value_span)))
+                    }
                 };
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
@@ -1874,16 +1878,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     } => scalar,
                     crate::TypeInner::Pointer { base, .. } => match ectx.module.types[base].inner {
                         crate::TypeInner::Scalar(scalar) => scalar,
-                        _ => return Err(Error::BadIncrDecrReferenceType(value_span)),
+                        _ => return Err(Box::new(Error::BadIncrDecrReferenceType(value_span))),
                     },
-                    _ => return Err(Error::BadIncrDecrReferenceType(value_span)),
+                    _ => return Err(Box::new(Error::BadIncrDecrReferenceType(value_span))),
                 };
                 let literal = match scalar.kind {
                     crate::ScalarKind::Sint | crate::ScalarKind::Uint => {
                         crate::Literal::one(scalar)
                             .ok_or(Error::BadIncrDecrReferenceType(value_span))?
                     }
-                    _ => return Err(Error::BadIncrDecrReferenceType(value_span)),
+                    _ => return Err(Box::new(Error::BadIncrDecrReferenceType(value_span))),
                 };
 
                 let right =
@@ -2025,7 +2029,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     LoweredGlobalDecl::Function { .. }
                     | LoweredGlobalDecl::Type(_)
                     | LoweredGlobalDecl::EntryPoint => {
-                        return Err(Error::Unexpected(span, ExpectedToken::Variable));
+                        return Err(Box::new(Error::Unexpected(span, ExpectedToken::Variable)));
                     }
                 };
 
@@ -2052,7 +2056,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         return Ok(Typed::Plain(handle));
                     }
                     Typed::Plain(_) => {
-                        return Err(Error::NotReference("the operand of the `&` operator", span));
+                        return Err(Box::new(Error::NotReference(
+                            "the operand of the `&` operator",
+                            span,
+                        )));
                     }
                 }
             }
@@ -2061,7 +2068,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let pointer = self.expression(expr, ctx)?;
 
                 if resolve_inner!(ctx, pointer).pointer_space().is_none() {
-                    return Err(Error::NotPointer(span));
+                    return Err(Box::new(Error::NotPointer(span)));
                 }
 
                 // No code is generated. We just declare the pointer a reference now.
@@ -2092,7 +2099,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
 
                 lowered_base.try_map(|base| match ctx.const_eval_expr_to_u32(index).ok() {
-                    Some(index) => Ok::<_, Error>(crate::Expression::AccessIndex { base, index }),
+                    Some(index) => {
+                        Ok::<_, Box<Error>>(crate::Expression::AccessIndex { base, index })
+                    }
                     None => {
                         // When an abstract array value e is indexed by an expression
                         // that is not a const-expression, then the array is concretized
@@ -2169,7 +2178,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .map(|base| crate::Expression::AccessIndex { base, index }),
                         }
                     }
-                    _ => return Err(Error::BadAccessor(field.span)),
+                    _ => return Err(Box::new(Error::BadAccessor(field.span))),
                 };
 
                 access
@@ -2184,11 +2193,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     _ => {
                         let ty = resolve!(ctx, expr);
                         let gctx = &ctx.module.to_ctx();
-                        return Err(Error::BadTypeCast {
+                        return Err(Box::new(Error::BadTypeCast {
                             from_type: ty.to_wgsl(gctx).into(),
                             span: ty_span,
                             to_type: to_resolved.to_wgsl(gctx).into(),
-                        });
+                        }));
                     }
                 };
 
@@ -2315,8 +2324,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 &LoweredGlobalDecl::Const(_)
                 | &LoweredGlobalDecl::Override(_)
                 | &LoweredGlobalDecl::Var(_),
-            ) => Err(Error::Unexpected(function_span, ExpectedToken::Function)),
-            Some(&LoweredGlobalDecl::EntryPoint) => Err(Error::CalledEntryPoint(function_span)),
+            ) => Err(Box::new(Error::Unexpected(
+                function_span,
+                ExpectedToken::Function,
+            ))),
+            Some(&LoweredGlobalDecl::EntryPoint) => {
+                Err(Box::new(Error::CalledEntryPoint(function_span)))
+            }
             Some(&LoweredGlobalDecl::Function {
                 handle: function,
                 must_use,
@@ -2347,7 +2361,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let has_result = ctx.module.functions[function].result.is_some();
 
                 if must_use && is_statement {
-                    return Err(Error::FunctionMustUseUnused(function_span));
+                    return Err(Box::new(Error::FunctionMustUseUnused(function_span)));
                 }
 
                 let rctx = ctx.runtime_expression_ctx(span)?;
@@ -2536,7 +2550,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                         comparison: true,
                                     }
                                 }
-                                _ => return Err(Error::InvalidAtomicOperandType(value_span)),
+                                _ => {
+                                    return Err(Box::new(Error::InvalidAtomicOperandType(
+                                        value_span,
+                                    )))
+                                }
                             };
 
                             let result = ctx.interrupt_emitter(expression, span)?;
@@ -2644,7 +2662,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 ref other => {
                                     log::error!("Type {other:?} passed to workgroupUniformLoad");
                                     let span = ctx.ast_expressions.get_span(expr);
-                                    return Err(Error::InvalidWorkGroupUniformLoad(span));
+                                    return Err(Box::new(Error::InvalidWorkGroupUniformLoad(span)));
                                 }
                             };
                             let result = ctx.interrupt_emitter(
@@ -2921,7 +2939,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 .push(crate::Statement::SubgroupBallot { result, predicate }, span);
                             return Ok(Some(result));
                         }
-                        _ => return Err(Error::UnknownIdent(function.span, function.name)),
+                        _ => {
+                            return Err(Box::new(Error::UnknownIdent(function.span, function.name)))
+                        }
                     }
                 };
 
@@ -2944,12 +2964,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 crate::TypeInner::Atomic { .. } => Ok(pointer),
                 ref other => {
                     log::error!("Pointer type to {:?} passed to atomic op", other);
-                    Err(Error::InvalidAtomicPointer(span))
+                    Err(Box::new(Error::InvalidAtomicPointer(span)))
                 }
             },
             ref other => {
                 log::error!("Type {:?} passed to atomic op", other);
-                Err(Error::InvalidAtomicPointer(span))
+                Err(Box::new(Error::InvalidAtomicPointer(span)))
             }
         }
     }
@@ -3224,7 +3244,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             let member_size = if let Some(size_expr) = member.size {
                 let (size, span) = self.const_u32(size_expr, &mut ctx.as_const())?;
                 if size < member_min_size {
-                    return Err(Error::SizeAttributeTooLow(span, member_min_size));
+                    return Err(Box::new(Error::SizeAttributeTooLow(span, member_min_size)));
                 } else {
                     size
                 }
@@ -3236,12 +3256,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let (align, span) = self.const_u32(align_expr, &mut ctx.as_const())?;
                 if let Some(alignment) = Alignment::new(align) {
                     if alignment < member_min_alignment {
-                        return Err(Error::AlignAttributeTooLow(span, member_min_alignment));
+                        return Err(Box::new(Error::AlignAttributeTooLow(
+                            span,
+                            member_min_alignment,
+                        )));
                     } else {
                         alignment
                     }
                 } else {
-                    return Err(Error::NonPowerOfTwoAlignAttribute(span));
+                    return Err(Box::new(Error::NonPowerOfTwoAlignAttribute(span)));
                 }
             } else {
                 member_min_alignment
@@ -3309,20 +3332,22 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let const_expr = self.expression(expr, &mut ctx.as_const());
                 match const_expr {
                     Ok(value) => {
-                        let len = ctx.const_eval_expr_to_u32(value).map_err(|err| match err {
-                            crate::proc::U32EvalError::NonConst => {
-                                Error::ExpectedConstExprConcreteIntegerScalar(span)
-                            }
-                            crate::proc::U32EvalError::Negative => {
-                                Error::ExpectedPositiveArrayLength(span)
-                            }
+                        let len = ctx.const_eval_expr_to_u32(value).map_err(|err| {
+                            Box::new(match err {
+                                crate::proc::U32EvalError::NonConst => {
+                                    Error::ExpectedConstExprConcreteIntegerScalar(span)
+                                }
+                                crate::proc::U32EvalError::Negative => {
+                                    Error::ExpectedPositiveArrayLength(span)
+                                }
+                            })
                         })?;
                         let size =
                             NonZeroU32::new(len).ok_or(Error::ExpectedPositiveArrayLength(span))?;
                         crate::ArraySize::Constant(size)
                     }
-                    err => {
-                        if let Err(Error::ConstantEvaluatorError(ref ty, _)) = err {
+                    Err(err) => {
+                        if let Error::ConstantEvaluatorError(ref ty, _) = *err {
                             match **ty {
                                 crate::proc::ConstantEvaluatorError::OverrideExpr => {
                                     crate::ArraySize::Pending(self.array_size_override(
@@ -3332,13 +3357,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                     )?)
                                 }
                                 _ => {
-                                    err?;
-                                    unreachable!()
+                                    return Err(err);
                                 }
                             }
                         } else {
-                            err?;
-                            unreachable!()
+                            return Err(err);
                         }
                     }
                 }
@@ -3371,7 +3394,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     )
                 }
             }),
-            _ => Err(Error::ExpectedConstExprConcreteIntegerScalar(span)),
+            _ => Err(Box::new(Error::ExpectedConstExprConcreteIntegerScalar(
+                span,
+            ))),
         }
     }
 
@@ -3396,7 +3421,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let ty = self.resolve_ast_type(ty, ctx)?;
                 let scalar = match ctx.module.types[ty].inner {
                     crate::TypeInner::Scalar(sc) => sc,
-                    _ => return Err(Error::UnknownScalarType(ty_span)),
+                    _ => return Err(Box::new(Error::UnknownScalarType(ty_span))),
                 };
                 crate::TypeInner::Vector { size, scalar }
             }
@@ -3409,7 +3434,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let ty = self.resolve_ast_type(ty, ctx)?;
                 let scalar = match ctx.module.types[ty].inner {
                     crate::TypeInner::Scalar(sc) => sc,
-                    _ => return Err(Error::UnknownScalarType(ty_span)),
+                    _ => return Err(Box::new(Error::UnknownScalarType(ty_span))),
                 };
                 match scalar.kind {
                     crate::ScalarKind::Float => crate::TypeInner::Matrix {
@@ -3417,7 +3442,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         rows,
                         scalar,
                     },
-                    _ => return Err(Error::BadMatrixScalarKind(ty_span, scalar)),
+                    _ => return Err(Box::new(Error::BadMatrixScalarKind(ty_span, scalar))),
                 }
             }
             ast::Type::Atomic(scalar) => scalar.to_inner_atomic(),
@@ -3462,8 +3487,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast::Type::User(ref ident) => {
                 return match ctx.globals.get(ident.name) {
                     Some(&LoweredGlobalDecl::Type(handle)) => Ok(handle),
-                    Some(_) => Err(Error::Unexpected(ident.span, ExpectedToken::Type)),
-                    None => Err(Error::UnknownType(ident.span)),
+                    Some(_) => Err(Box::new(Error::Unexpected(ident.span, ExpectedToken::Type))),
+                    None => Err(Box::new(Error::UnknownType(ident.span))),
                 }
             }
         };
@@ -3526,12 +3551,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 crate::TypeInner::RayQuery { .. } => Ok(pointer),
                 ref other => {
                     log::error!("Pointer type to {:?} passed to ray query op", other);
-                    Err(Error::InvalidRayQueryPointer(span))
+                    Err(Box::new(Error::InvalidRayQueryPointer(span)))
                 }
             },
             ref other => {
                 log::error!("Type {:?} passed to ray query op", other);
-                Err(Error::InvalidRayQueryPointer(span))
+                Err(Box::new(Error::InvalidRayQueryPointer(span)))
             }
         }
     }

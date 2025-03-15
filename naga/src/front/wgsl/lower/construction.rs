@@ -1,4 +1,5 @@
 use alloc::{
+    boxed::Box,
     format,
     string::{String, ToString},
     vec,
@@ -6,9 +7,9 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
-use crate::front::wgsl::{Error, Result};
 use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
 use crate::front::wgsl::parse::ast;
+use crate::front::wgsl::{Error, Result};
 use crate::{Handle, Span};
 
 /// A cooked form of `ast::ConstructorType` that uses Naga types whenever
@@ -172,7 +173,7 @@ impl<'source> Lowerer<'source, '_> {
                 | Constructor::PartialArray => {
                     // We have no arguments from which to infer the result type, so
                     // partial constructors aren't acceptable here.
-                    return Err(Error::TypeNotInferable(ty_span));
+                    return Err(Box::new(Error::TypeNotInferable(ty_span)));
                 }
             },
 
@@ -536,11 +537,11 @@ impl<'source> Lowerer<'source, '_> {
             // Bad conversion (type cast)
             (Components::One { span, ty_inner, .. }, constructor) => {
                 let from_type = ty_inner.to_wgsl(&ctx.module.to_ctx()).into();
-                return Err(Error::BadTypeCast {
+                return Err(Box::new(Error::BadTypeCast {
                     span,
                     from_type,
                     to_type: constructor.to_error_string(ctx).into(),
-                });
+                }));
             }
 
             // Too many parameters for scalar constructor
@@ -549,11 +550,11 @@ impl<'source> Lowerer<'source, '_> {
                 Constructor::Type((_, &crate::TypeInner::Scalar { .. })),
             ) => {
                 let span = spans[1].until(spans.last().unwrap());
-                return Err(Error::UnexpectedComponents(span));
+                return Err(Box::new(Error::UnexpectedComponents(span)));
             }
 
             // Other types can't be constructed
-            _ => return Err(Error::TypeNotConstructible(ty_span)),
+            _ => return Err(Box::new(Error::TypeNotConstructible(ty_span))),
         }
 
         let expr = ctx.append_expression(expr, span)?;
@@ -587,7 +588,7 @@ impl<'source> Lowerer<'source, '_> {
                 let ty = self.resolve_ast_type(ty, &mut ctx.as_const())?;
                 let scalar = match ctx.module.types[ty].inner {
                     crate::TypeInner::Scalar(sc) => sc,
-                    _ => return Err(Error::UnknownScalarType(ty_span)),
+                    _ => return Err(Box::new(Error::UnknownScalarType(ty_span))),
                 };
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Vector { size, scalar });
                 Constructor::Type(ty)
@@ -604,7 +605,7 @@ impl<'source> Lowerer<'source, '_> {
                 let ty = self.resolve_ast_type(ty, &mut ctx.as_const())?;
                 let scalar = match ctx.module.types[ty].inner {
                     crate::TypeInner::Scalar(sc) => sc,
-                    _ => return Err(Error::UnknownScalarType(ty_span)),
+                    _ => return Err(Box::new(Error::UnknownScalarType(ty_span))),
                 };
                 let ty = match scalar.kind {
                     crate::ScalarKind::Float => ctx.ensure_type_exists(crate::TypeInner::Matrix {
@@ -612,7 +613,7 @@ impl<'source> Lowerer<'source, '_> {
                         rows,
                         scalar,
                     }),
-                    _ => return Err(Error::BadMatrixScalarKind(ty_span, scalar)),
+                    _ => return Err(Box::new(Error::BadMatrixScalarKind(ty_span, scalar))),
                 };
                 Constructor::Type(ty)
             }

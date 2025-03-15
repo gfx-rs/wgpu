@@ -5,6 +5,8 @@ use crate::front::wgsl::parse::{conv, Number};
 use crate::front::wgsl::Scalar;
 use crate::Span;
 
+use alloc::boxed::Box;
+
 type TokenSpan<'a> = (Token<'a>, Span);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -319,15 +321,15 @@ impl<'a> Lexer<'a> {
         token
     }
 
-    pub(in crate::front::wgsl) fn expect_span(
-        &mut self,
-        expected: Token<'a>,
-    ) -> Result<'a, Span> {
+    pub(in crate::front::wgsl) fn expect_span(&mut self, expected: Token<'a>) -> Result<'a, Span> {
         let next = self.next();
         if next.0 == expected {
             Ok(next.1)
         } else {
-            Err(Error::Unexpected(next.1, ExpectedToken::Token(expected)))
+            Err(Box::new(Error::Unexpected(
+                next.1,
+                ExpectedToken::Token(expected),
+            )))
         }
     }
 
@@ -344,10 +346,10 @@ impl<'a> Lexer<'a> {
         if next.0 == Token::Paren(expected) {
             Ok(())
         } else {
-            Err(Error::Unexpected(
+            Err(Box::new(Error::Unexpected(
                 next.1,
                 ExpectedToken::Token(Token::Paren(expected)),
-            ))
+            )))
         }
     }
 
@@ -366,35 +368,35 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(in crate::front::wgsl) fn next_ident_with_span(
-        &mut self,
-    ) -> Result<'a, (&'a str, Span)> {
+    pub(in crate::front::wgsl) fn next_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {
         match self.next() {
             (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
-            other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+            other => Err(Box::new(Error::Unexpected(
+                other.1,
+                ExpectedToken::Identifier,
+            ))),
         }
     }
 
-    pub(in crate::front::wgsl) fn peek_ident_with_span(
-        &mut self,
-    ) -> Result<'a, (&'a str, Span)> {
+    pub(in crate::front::wgsl) fn peek_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {
         match self.peek() {
             (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
-            other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+            other => Err(Box::new(Error::Unexpected(
+                other.1,
+                ExpectedToken::Identifier,
+            ))),
         }
     }
 
     fn word_as_ident_with_span(word: &'a str, span: Span) -> Result<'a, (&'a str, Span)> {
         match word {
-            "_" => Err(Error::InvalidIdentifierUnderscore(span)),
-            word if word.starts_with("__") => Err(Error::ReservedIdentifierPrefix(span)),
+            "_" => Err(Box::new(Error::InvalidIdentifierUnderscore(span))),
+            word if word.starts_with("__") => Err(Box::new(Error::ReservedIdentifierPrefix(span))),
             word => Ok((word, span)),
         }
     }
 
-    pub(in crate::front::wgsl) fn next_ident(
-        &mut self,
-    ) -> Result<'a, super::ast::Ident<'a>> {
+    pub(in crate::front::wgsl) fn next_ident(&mut self) -> Result<'a, super::ast::Ident<'a>> {
         self.next_ident_with_span()
             .and_then(|(word, span)| Self::word_as_ident(word, span))
             .map(|(name, span)| super::ast::Ident { name, span })
@@ -402,7 +404,7 @@ impl<'a> Lexer<'a> {
 
     fn word_as_ident(word: &'a str, span: Span) -> Result<'a, (&'a str, Span)> {
         if crate::keywords::wgsl::RESERVED.contains(&word) {
-            Err(Error::ReservedKeyword(span))
+            Err(Box::new(Error::ReservedKeyword(span)))
         } else {
             Ok((word, span))
         }
@@ -449,7 +451,7 @@ impl<'a> Lexer<'a> {
             "atomic" => Ok(crate::StorageAccess::ATOMIC
                 | crate::StorageAccess::LOAD
                 | crate::StorageAccess::STORE),
-            _ => Err(Error::UnknownAccess(span)),
+            _ => Err(Box::new(Error::UnknownAccess(span))),
         }
     }
 
@@ -465,16 +467,14 @@ impl<'a> Lexer<'a> {
         Ok((format, access))
     }
 
-    pub(in crate::front::wgsl) fn next_acceleration_structure_flags(
-        &mut self,
-    ) -> Result<'a, bool> {
+    pub(in crate::front::wgsl) fn next_acceleration_structure_flags(&mut self) -> Result<'a, bool> {
         Ok(if self.skip(Token::Paren('<')) {
             if !self.skip(Token::Paren('>')) {
                 let (name, span) = self.next_ident_with_span()?;
                 let ret = if name == "vertex_return" {
                     true
                 } else {
-                    return Err(Error::UnknownAttribute(span));
+                    return Err(Box::new(Error::UnknownAttribute(span)));
                 };
                 self.skip(Token::Separator(','));
                 self.expect(Token::Paren('>'))?;

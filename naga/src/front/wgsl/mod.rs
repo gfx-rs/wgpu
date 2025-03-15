@@ -17,6 +17,7 @@ pub use crate::front::wgsl::parse::directive::language_extension::{
     ImplementedLanguageExtension, LanguageExtension, UnimplementedLanguageExtension,
 };
 
+use alloc::boxed::Box;
 use thiserror::Error;
 
 use crate::front::wgsl::error::Error;
@@ -27,7 +28,7 @@ use crate::Scalar;
 #[cfg(test)]
 use std::println;
 
-pub(crate) type Result<'a, T> = core::result::Result<T, Error<'a>>;
+pub(crate) type Result<'a, T> = core::result::Result<T, Box<Error<'a>>>;
 
 pub struct Frontend {
     parser: Parser,
