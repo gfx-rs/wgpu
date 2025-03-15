@@ -54,8 +54,8 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
                 Some(scalars) => scalars,
                 None => {
                     let gctx = &self.module.to_ctx();
-                    let source_type = expr_resolution.to_wgsl(gctx).into();
-                    let dest_type = goal_ty.to_wgsl(gctx).into();
+                    let source_type = expr_resolution.to_wgsl(gctx);
+                    let dest_type = goal_ty.to_wgsl(gctx);
 
                     return Err(Box::new(super::Error::AutoConversion(Box::new(
                         AutoConversionError {
@@ -96,10 +96,10 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
 
         let make_error = || {
             let gctx = &self.module.to_ctx();
-            let source_type = expr_resolution.to_wgsl(gctx).into();
+            let source_type = expr_resolution.to_wgsl(gctx);
             super::Error::AutoConversionLeafScalar(Box::new(AutoConversionLeafScalarError {
                 dest_span: goal_span,
-                dest_scalar: goal_scalar.to_wgsl().into(),
+                dest_scalar: goal_scalar.to_wgsl(),
                 source_span: expr_span,
                 source_type,
             }))
@@ -275,8 +275,8 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
                         let expr_type = &self.typifier()[expr];
                         super::Error::ConcretizationFailed(Box::new(ConcretizationFailedError {
                             expr_span,
-                            expr_type: expr_type.to_wgsl(&self.module.to_ctx()).into(),
-                            scalar: concretized.to_wgsl().into(),
+                            expr_type: expr_type.to_wgsl(&self.module.to_ctx()),
+                            scalar: concretized.to_wgsl(),
                             inner: err,
                         }))
                     })?;

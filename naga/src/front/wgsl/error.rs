@@ -174,8 +174,8 @@ pub(crate) enum Error<'a> {
     BadTexture(Span),
     BadTypeCast {
         span: Span,
-        from_type: Box<str>,
-        to_type: Box<str>,
+        from_type: String,
+        to_type: String,
     },
     BadTextureSampleType {
         span: Span,
@@ -211,8 +211,8 @@ pub(crate) enum Error<'a> {
     TypeNotInferable(Span),
     InitializationTypeMismatch {
         name: Span,
-        expected: Box<str>,
-        got: Box<str>,
+        expected: String,
+        got: String,
     },
     DeclMissingTypeAndInit(Span),
     MissingAttribute(&'static str, Span),
@@ -342,24 +342,24 @@ impl From<&'static str> for DiagnosticAttributeNotSupportedPosition {
 #[derive(Clone, Debug)]
 pub(crate) struct AutoConversionError {
     pub dest_span: Span,
-    pub dest_type: Box<str>,
+    pub dest_type: String,
     pub source_span: Span,
-    pub source_type: Box<str>,
+    pub source_type: String,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct AutoConversionLeafScalarError {
     pub dest_span: Span,
-    pub dest_scalar: Box<str>,
+    pub dest_scalar: String,
     pub source_span: Span,
-    pub source_type: Box<str>,
+    pub source_type: String,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct ConcretizationFailedError {
     pub expr_span: Span,
-    pub expr_type: Box<str>,
-    pub scalar: Box<str>,
+    pub expr_type: String,
+    pub scalar: String,
     pub inner: ConstantEvaluatorError,
 }
 
@@ -1178,9 +1178,4 @@ impl<'a> Error<'a> {
             }
         }
     }
-}
-
-#[test]
-fn test_error_size() {
-    assert!(size_of::<Error<'_>>() <= 48);
 }

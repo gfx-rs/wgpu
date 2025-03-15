@@ -1256,8 +1256,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 if !explicit_inner.equivalent(init_inner, &ectx.module.types) {
                     return Err(Box::new(Error::InitializationTypeMismatch {
                         name: name.span,
-                        expected: explicit_inner.to_wgsl(&ectx.module.to_ctx()).into(),
-                        got: init_inner.to_wgsl(&ectx.module.to_ctx()).into(),
+                        expected: explicit_inner.to_wgsl(&ectx.module.to_ctx()),
+                        got: init_inner.to_wgsl(&ectx.module.to_ctx()),
                     }));
                 }
                 ty = explicit_ty;
@@ -1490,8 +1490,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let gctx = &ctx.module.to_ctx();
                             return Err(Box::new(Error::InitializationTypeMismatch {
                                 name: l.name.span,
-                                expected: ty.to_wgsl(gctx).into(),
-                                got: init_ty.to_wgsl(gctx).into(),
+                                expected: ty.to_wgsl(gctx),
+                                got: init_ty.to_wgsl(gctx),
                             }));
                         }
                     }
@@ -2194,9 +2194,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         let ty = resolve!(ctx, expr);
                         let gctx = &ctx.module.to_ctx();
                         return Err(Box::new(Error::BadTypeCast {
-                            from_type: ty.to_wgsl(gctx).into(),
+                            from_type: ty.to_wgsl(gctx),
                             span: ty_span,
-                            to_type: to_resolved.to_wgsl(gctx).into(),
+                            to_type: to_resolved.to_wgsl(gctx),
                         }));
                     }
                 };
