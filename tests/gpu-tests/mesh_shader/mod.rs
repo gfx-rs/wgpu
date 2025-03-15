@@ -122,7 +122,7 @@ pub enum DrawType {
     MultiIndirectCount,
 }
 
-fn mesh_draw(ctx: &TestingContext, typ: DrawType) {
+fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
     let task = bytes_to_shader(device, BASIC_TASK);
@@ -161,7 +161,7 @@ fn mesh_draw(ctx: &TestingContext, typ: DrawType) {
         multiview: None,
         cache: None,
     });
-    let buffer = match typ {
+    let buffer = match draw_type {
         DrawType::Standard => None,
         DrawType::Indirect | DrawType::MultiIndirect | DrawType::MultiIndirectCount => Some(
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -171,7 +171,7 @@ fn mesh_draw(ctx: &TestingContext, typ: DrawType) {
             }),
         ),
     };
-    let count_buffer = match typ {
+    let count_buffer = match draw_type {
         DrawType::MultiIndirectCount => Some(device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: None,
@@ -199,7 +199,7 @@ fn mesh_draw(ctx: &TestingContext, typ: DrawType) {
             occlusion_query_set: None,
         });
         pass.set_pipeline(&pipeline);
-        match typ {
+        match draw_type {
             DrawType::Standard => pass.draw_mesh_tasks(1, 1, 1),
             DrawType::Indirect => pass.draw_mesh_tasks_indirect(buffer.as_ref().unwrap(), 0),
             DrawType::MultiIndirect => {
