@@ -42,6 +42,40 @@ impl Device {
         }
     }
 
+    /// Constructs a stub device for testing using [`Backend::Noop`].
+    ///
+    /// This is a convenience function which avoids the configuration, `async`, and fallibility
+    /// aspects of constructing a device through `Instance`.
+    #[cfg(feature = "noop")]
+    pub fn noop(desc: &DeviceDescriptor<'_>) -> (Device, Queue) {
+        use core::future::Future as _;
+        use core::pin::pin;
+        use core::task;
+        let ctx = &mut task::Context::from_waker(task::Waker::noop());
+
+        let instance = Instance::new(&InstanceDescriptor {
+            backends: Backends::NOOP,
+            backend_options: BackendOptions {
+                noop: NoopBackendOptions { enable: true },
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        // Both of these futures are trivial and should complete instantaneously,
+        // so we do not need an executor and can just poll them once.
+        let task::Poll::Ready(Ok(adapter)) =
+            pin!(instance.request_adapter(&RequestAdapterOptions::default())).poll(ctx)
+        else {
+            unreachable!()
+        };
+        let task::Poll::Ready(Ok(device_and_queue)) = pin!(adapter.request_device(desc)).poll(ctx)
+        else {
+            unreachable!()
+        };
+        device_and_queue
+    }
+
     /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue

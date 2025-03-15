@@ -108,6 +108,8 @@ impl RenderPass<'_> {
     ///
     /// Subsequent calls to [`draw`] and [`draw_indexed`] on this
     /// [`RenderPass`] will use `buffer` as one of the source vertex buffers.
+    /// The format of the data in the buffer is specified by the [`VertexBufferLayout`] in the
+    /// pipeline's [`VertexState`].
     ///
     /// The `slot` refers to the index of the matching descriptor in
     /// [`VertexState::buffers`].

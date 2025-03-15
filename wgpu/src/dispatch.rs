@@ -35,7 +35,7 @@ macro_rules! trait_alias {
 }
 
 // Various return futures in the API.
-trait_alias!(RequestAdapterFuture: Future<Output = Option<DispatchAdapter>> + WasmNotSend + 'static);
+trait_alias!(RequestAdapterFuture: Future<Output = Result<DispatchAdapter, wgt::RequestAdapterError>> + WasmNotSend + 'static);
 trait_alias!(RequestDeviceFuture: Future<Output = Result<(DispatchDevice, DispatchQueue), crate::RequestDeviceError>> + WasmNotSend + 'static);
 trait_alias!(PopErrorScopeFuture: Future<Output = Option<crate::Error>> + WasmNotSend + 'static);
 trait_alias!(ShaderCompilationInfoFuture: Future<Output = crate::CompilationInfo> + WasmNotSend + 'static);

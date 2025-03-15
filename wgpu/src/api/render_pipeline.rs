@@ -30,12 +30,42 @@ impl RenderPipeline {
     }
 }
 
-/// Describes how the vertex buffer is interpreted.
+/// Specifies an interpretation of the bytes of a vertex buffer as vertex attributes.
 ///
-/// For use in [`VertexState`].
+/// Use this in a [`RenderPipelineDescriptor`] to describe the format of the vertex buffers that
+/// are passed to [`RenderPass::set_vertex_buffer()`].
 ///
 /// Corresponds to [WebGPU `GPUVertexBufferLayout`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexbufferlayout).
+///
+/// # Example
+///
+/// The following example defines a `struct` with three fields,
+/// and a [`VertexBufferLayout`] that contains [`VertexAttribute`]s for each field,
+/// using the [`vertex_attr_array!`] macro to compute attribute offsets:
+///
+/// ```
+/// #[repr(C, packed)]
+/// struct Vertex {
+///     foo: [f32; 2],
+///     bar: f32,
+///     baz: [u16; 4],
+/// }
+///
+/// impl Vertex {
+///     /// Layout to use with a buffer whose contents are a `[Vertex]`.
+///     pub const LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+///         array_stride: size_of::<Self>() as wgpu::BufferAddress,
+///         step_mode: wgpu::VertexStepMode::Vertex,
+///         attributes: &wgpu::vertex_attr_array![
+///             0 => Float32x2,
+///             1 => Float32,
+///             2 => Uint16x4,
+///         ],
+///     };
+/// }
+///
+/// # assert_eq!(Vertex::LAYOUT.attributes[2].offset, Vertex::LAYOUT.array_stride - 2 * 4);
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer (between vertices).
@@ -71,7 +101,11 @@ pub struct VertexState<'a> {
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
     pub compilation_options: PipelineCompilationOptions<'a>,
-    /// The format of any vertex buffers used with this pipeline.
+    /// The format of any vertex buffers used with this pipeline via
+    /// [`RenderPass::set_vertex_buffer()`].
+    ///
+    /// The attribute locations and types specified in this layout must match the
+    /// locations and types of the inputs to the `entry_point` function.`
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
 #[cfg(send_sync)]

@@ -2150,6 +2150,7 @@ impl crate::Device for super::Device {
                 let mut compiled = self.compile_stage(
                     stage,
                     naga::ShaderStage::Task,
+                    naga::ShaderStage::Task,
                     &desc.layout.binding_arrays,
                 )?;
                 compiled.create_info.stage = vk::ShaderStageFlags::TASK_EXT;
@@ -2161,6 +2162,8 @@ impl crate::Device for super::Device {
 
         let mut compiled_ms = self.compile_stage(
             &desc.mesh,
+            naga::ShaderStage::Mesh,
+            &desc.mesh_stage,
             naga::ShaderStage::Mesh,
             &desc.layout.binding_arrays,
         )?;

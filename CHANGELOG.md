@@ -172,9 +172,9 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 
 - It is now possible to create a dummy `wgpu` device even when no GPU is available. This may be useful for testing of code which manages graphics resources. Currently, it supports reading and writing buffers, and other resource types can be created but do nothing.
 
-  To use it, enable the `noop` feature of `wgpu`, and add `NoopBackendOptions { enable: true }` to the backend options; this is an additional safeguard beyond the `Backends` bits.
+  To use it, enable the `noop` feature of `wgpu`, and either call `Device::noop()`, or add `NoopBackendOptions { enable: true }` to the backend options of your `Instance` (this is an additional safeguard beyond the `Backends` bits).
 
-  By @kpreid in [#7063](https://github.com/gfx-rs/wgpu/pull/7063).
+  By @kpreid in [#7063](https://github.com/gfx-rs/wgpu/pull/7063) and [#7342](https://github.com/gfx-rs/wgpu/pull/7342).
 
 - Add `Buffer` methods corresponding to `BufferSlice` methods, so you can skip creating a `BufferSlice` when it offers no benefit, and `BufferSlice::slice()` for sub-slicing a slice. By @kpreid in [#7123](https://github.com/gfx-rs/wgpu/pull/7123).
 - Add `BufferSlice::buffer()`, `BufferSlice::offset()` and `BufferSlice::size()`. By @kpreid in [#7148](https://github.com/gfx-rs/wgpu/pull/7148).
@@ -198,6 +198,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 
 #### General
 
+- `wgpu::Instance::request_adapter()` now returns `Result` instead of `Option`; the error provides information about why no suitable adapter was returned. By @kpreid in [#7330](https://github.com/gfx-rs/wgpu/pull/7330).
 - Support BLAS compaction in wgpu-hal. By @Vecvec in [#7101](https://github.com/gfx-rs/wgpu/pull/7101).
 - Avoid using default features in many dependencies, etc. By Brody in [#7031](https://github.com/gfx-rs/wgpu/pull/7031)
 - Use `hashbrown` to simplify no-std support. By Brody in [#6938](https://github.com/gfx-rs/wgpu/pull/6938) & [#6925](https://github.com/gfx-rs/wgpu/pull/6925).

@@ -8,11 +8,11 @@ use crate::Backends;
 pub fn initialize_adapter_from_env(
     instance: &Instance,
     compatible_surface: Option<&Surface<'_>>,
-) -> Option<Adapter> {
+) -> Result<Adapter, wgt::RequestAdapterError> {
     let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
         .as_deref()
         .map(str::to_lowercase)
-        .ok()?;
+        .map_err(|_| wgt::RequestAdapterError::EnvNotSet)?;
 
     let adapters = instance.enumerate_adapters(crate::Backends::all());
 
@@ -32,7 +32,7 @@ pub fn initialize_adapter_from_env(
         }
     }
 
-    Some(chosen_adapter.expect("WGPU_ADAPTER_NAME set but no matching adapter found!"))
+    Ok(chosen_adapter.expect("WGPU_ADAPTER_NAME set but no matching adapter found!"))
 }
 
 /// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable.
@@ -40,18 +40,18 @@ pub fn initialize_adapter_from_env(
 pub fn initialize_adapter_from_env(
     _instance: &Instance,
     _compatible_surface: Option<&Surface<'_>>,
-) -> Option<Adapter> {
-    None
+) -> Result<Adapter, wgt::RequestAdapterError> {
+    Err(wgt::RequestAdapterError::EnvNotSet)
 }
 
 /// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable and if it doesn't exist fall back on a default adapter.
 pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,
     compatible_surface: Option<&Surface<'_>>,
-) -> Option<Adapter> {
+) -> Result<Adapter, wgt::RequestAdapterError> {
     match initialize_adapter_from_env(instance, compatible_surface) {
-        Some(a) => Some(a),
-        None => {
+        Ok(a) => Ok(a),
+        Err(_) => {
             instance
                 .request_adapter(&RequestAdapterOptions {
                     power_preference: crate::PowerPreference::from_env().unwrap_or_default(),
