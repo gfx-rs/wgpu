@@ -377,6 +377,24 @@ impl GlobalPlay for wgc::global::Global {
                     panic!("{e}");
                 }
             }
+            Action::CreateMeshPipeline {
+                id,
+                desc,
+                implicit_context,
+            } => {
+                let implicit_ids =
+                    implicit_context
+                        .as_ref()
+                        .map(|ic| wgc::device::ImplicitPipelineIds {
+                            root_id: ic.root_id,
+                            group_ids: &ic.group_ids,
+                        });
+                let (_, error) =
+                    self.device_create_mesh_pipeline(device, &desc, Some(id), implicit_ids);
+                if let Some(e) = error {
+                    panic!("{e}");
+                }
+            }
             Action::DestroyRenderPipeline(id) => {
                 self.render_pipeline_drop(id);
             }

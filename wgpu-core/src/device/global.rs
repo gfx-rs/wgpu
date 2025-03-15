@@ -18,8 +18,8 @@ use crate::{
     instance::{self, Adapter, Surface},
     pipeline::{
         self, RenderPipelineVertexProcessor, ResolvedComputePipelineDescriptor,
-        ResolvedFragmentState, ResolvedMeshState, ResolvedProgrammableStageDescriptor,
-        ResolvedRenderPipelineDescriptor, ResolvedTaskState, ResolvedVertexState,
+        ResolvedFragmentState, ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState,
+        ResolvedProgrammableStageDescriptor, ResolvedTaskState, ResolvedVertexState,
     },
     present,
     resource::{
@@ -1191,31 +1191,87 @@ impl Global {
         id::RenderPipelineId,
         Option<pipeline::CreateRenderPipelineError>,
     ) {
-        profiling::scope!("Device::create_render_pipeline");
-
-        let hub = &self.hub;
-
         let missing_implicit_pipeline_ids =
             desc.layout.is_none() && id_in.is_some() && implicit_pipeline_ids.is_none();
 
+        let hub = &self.hub;
+
         let fid = hub.render_pipelines.prepare(id_in);
         let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
+
+        let device = self.hub.devices.get(device_id);
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(trace::Action::CreateRenderPipeline {
+                id: fid.id(),
+                desc: desc.clone(),
+                implicit_context: implicit_context.clone(),
+            });
+        }
+        self.device_create_general_render_pipeline(
+            &desc.clone().into(),
+            missing_implicit_pipeline_ids,
+            device,
+            fid,
+            implicit_context,
+        )
+    }
+
+    pub fn device_create_mesh_pipeline(
+        &self,
+        device_id: DeviceId,
+        desc: &pipeline::MeshPipelineDescriptor,
+        id_in: Option<id::RenderPipelineId>,
+        implicit_pipeline_ids: Option<ImplicitPipelineIds<'_>>,
+    ) -> (
+        id::RenderPipelineId,
+        Option<pipeline::CreateRenderPipelineError>,
+    ) {
+        let missing_implicit_pipeline_ids =
+            desc.layout.is_none() && id_in.is_some() && implicit_pipeline_ids.is_none();
+
+        let hub = &self.hub;
+
+        let fid = hub.render_pipelines.prepare(id_in);
+        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
+
+        let device = self.hub.devices.get(device_id);
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(trace::Action::CreateMeshPipeline {
+                id: fid.id(),
+                desc: desc.clone(),
+                implicit_context: implicit_context.clone(),
+            });
+        }
+        self.device_create_general_render_pipeline(
+            &desc.clone().into(),
+            missing_implicit_pipeline_ids,
+            device,
+            fid,
+            implicit_context,
+        )
+    }
+
+    fn device_create_general_render_pipeline(
+        &self,
+        desc: &pipeline::GeneralRenderPipelineDescriptor,
+        missing_implicit_pipeline_ids: bool,
+        device: Arc<crate::device::resource::Device>,
+        fid: crate::registry::FutureId<Fallible<pipeline::RenderPipeline>>,
+        implicit_context: Option<super::ImplicitPipelineContext>,
+    ) -> (
+        id::RenderPipelineId,
+        Option<pipeline::CreateRenderPipelineError>,
+    ) {
+        profiling::scope!("Device::create_general_render_pipeline");
+
+        let hub = &self.hub;
 
         let error = 'error: {
             if missing_implicit_pipeline_ids {
                 // TODO: categorize this error as API misuse
                 break 'error pipeline::ImplicitLayoutError::MissingImplicitPipelineIds.into();
-            }
-
-            let device = self.hub.devices.get(device_id);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateRenderPipeline {
-                    id: fid.id(),
-                    desc: desc.clone(),
-                    implicit_context: implicit_context.clone(),
-                });
             }
 
             let layout = desc
@@ -1343,7 +1399,7 @@ impl Global {
                 None
             };
 
-            let desc = ResolvedRenderPipelineDescriptor {
+            let desc = ResolvedGeneralRenderPipelineDescriptor {
                 label: desc.label.clone(),
                 layout,
                 vertex,

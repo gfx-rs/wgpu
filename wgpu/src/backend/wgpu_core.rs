@@ -1290,7 +1290,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let descriptor = pipe::RenderPipelineDescriptor {
             label: desc.label.map(Borrowed),
             layout: desc.layout.map(|layout| layout.inner.as_core().id),
-            vertex: pipe::RenderPipelineVertexProcessor::Vertex(pipe::VertexState {
+            vertex: pipe::VertexState {
                 stage: pipe::ProgrammableStageDescriptor {
                     module: desc.vertex.module.inner.as_core().id,
                     entry_point: desc.vertex.entry_point.map(Borrowed),
@@ -1301,7 +1301,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                         .zero_initialize_workgroup_memory,
                 },
                 buffers: Borrowed(&vertex_buffers),
-            }),
+            },
             primitive: desc.primitive,
             depth_stencil: desc.depth_stencil.clone(),
             multisample: desc.multisample,
@@ -1365,40 +1365,38 @@ impl dispatch::DeviceInterface for CoreDevice {
             .iter()
             .map(|&(key, value)| (String::from(key), value))
             .collect();
-        let descriptor = pipe::RenderPipelineDescriptor {
+        let descriptor = pipe::MeshPipelineDescriptor {
             label: desc.label.map(Borrowed),
-            vertex: pipe::RenderPipelineVertexProcessor::Mesh(
-                desc.task.as_ref().map(|task| {
-                    let task_constants = task
-                        .compilation_options
-                        .constants
-                        .iter()
-                        .map(|&(key, value)| (String::from(key), value))
-                        .collect();
-                    pipe::TaskState {
-                        stage: pipe::ProgrammableStageDescriptor {
-                            module: task.module.inner.as_core().id,
-                            entry_point: task.entry_point.map(Borrowed),
-                            constants: task_constants,
-                            zero_initialize_workgroup_memory: desc
-                                .mesh
-                                .compilation_options
-                                .zero_initialize_workgroup_memory,
-                        },
-                    }
-                }),
-                pipe::MeshState {
+            task: desc.task.as_ref().map(|task| {
+                let task_constants = task
+                    .compilation_options
+                    .constants
+                    .iter()
+                    .map(|&(key, value)| (String::from(key), value))
+                    .collect();
+                pipe::TaskState {
                     stage: pipe::ProgrammableStageDescriptor {
-                        module: desc.mesh.module.inner.as_core().id,
-                        entry_point: desc.mesh.entry_point.map(Borrowed),
-                        constants: mesh_constants,
+                        module: task.module.inner.as_core().id,
+                        entry_point: task.entry_point.map(Borrowed),
+                        constants: task_constants,
                         zero_initialize_workgroup_memory: desc
                             .mesh
                             .compilation_options
                             .zero_initialize_workgroup_memory,
                     },
+                }
+            }),
+            mesh: pipe::MeshState {
+                stage: pipe::ProgrammableStageDescriptor {
+                    module: desc.mesh.module.inner.as_core().id,
+                    entry_point: desc.mesh.entry_point.map(Borrowed),
+                    constants: mesh_constants,
+                    zero_initialize_workgroup_memory: desc
+                        .mesh
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
                 },
-            ),
+            },
             layout: desc.layout.map(|layout| layout.inner.as_core().id),
             primitive: desc.primitive,
             depth_stencil: desc.depth_stencil.clone(),
@@ -1429,7 +1427,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let (id, error) =
             self.context
                 .0
-                .device_create_render_pipeline(self.id, &descriptor, None, None);
+                .device_create_mesh_pipeline(self.id, &descriptor, None, None);
         if let Some(cause) = error {
             if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
                 log::error!("Shader translation error for stage {:?}: {}", stage, error);
