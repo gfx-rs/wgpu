@@ -1,8 +1,7 @@
-use super::Error;
-use crate::front::wgsl::Scalar;
+use crate::front::wgsl::{Error, Result, Scalar};
 use crate::Span;
 
-pub fn map_address_space(word: &str, span: Span) -> Result<crate::AddressSpace, Error<'_>> {
+pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpace> {
     match word {
         "private" => Ok(crate::AddressSpace::Private),
         "workgroup" => Ok(crate::AddressSpace::WorkGroup),
@@ -16,7 +15,7 @@ pub fn map_address_space(word: &str, span: Span) -> Result<crate::AddressSpace, 
     }
 }
 
-pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>> {
+pub fn map_built_in(word: &str, span: Span) -> Result<'_, crate::BuiltIn> {
     Ok(match word {
         "position" => crate::BuiltIn::Position { invariant: false },
         // vertex
@@ -44,7 +43,7 @@ pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>>
     })
 }
 
-pub fn map_interpolation(word: &str, span: Span) -> Result<crate::Interpolation, Error<'_>> {
+pub fn map_interpolation(word: &str, span: Span) -> Result<'_, crate::Interpolation> {
     match word {
         "linear" => Ok(crate::Interpolation::Linear),
         "flat" => Ok(crate::Interpolation::Flat),
@@ -53,7 +52,7 @@ pub fn map_interpolation(word: &str, span: Span) -> Result<crate::Interpolation,
     }
 }
 
-pub fn map_sampling(word: &str, span: Span) -> Result<crate::Sampling, Error<'_>> {
+pub fn map_sampling(word: &str, span: Span) -> Result<'_, crate::Sampling> {
     match word {
         "center" => Ok(crate::Sampling::Center),
         "centroid" => Ok(crate::Sampling::Centroid),
@@ -64,7 +63,7 @@ pub fn map_sampling(word: &str, span: Span) -> Result<crate::Sampling, Error<'_>
     }
 }
 
-pub fn map_storage_format(word: &str, span: Span) -> Result<crate::StorageFormat, Error<'_>> {
+pub fn map_storage_format(word: &str, span: Span) -> Result<'_, crate::StorageFormat> {
     use crate::StorageFormat as Sf;
     Ok(match word {
         "r8unorm" => Sf::R8Unorm,
@@ -264,7 +263,7 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
 pub fn map_conservative_depth(
     word: &str,
     span: Span,
-) -> Result<crate::ConservativeDepth, Error<'_>> {
+) -> Result<'_, crate::ConservativeDepth> {
     use crate::ConservativeDepth as Cd;
     match word {
         "greater_equal" => Ok(Cd::GreaterEqual),

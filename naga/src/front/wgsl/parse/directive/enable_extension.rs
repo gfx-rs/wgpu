@@ -2,7 +2,8 @@
 //!
 //! The focal point of this module is the [`EnableExtension`] API.
 
-use crate::{front::wgsl::error::Error, Span};
+use crate::Span;
+use crate::front::wgsl::{Error, Result};
 
 /// Tracks the status of every enable-extension known to Naga.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,7 +62,7 @@ impl EnableExtension {
     const DUAL_SOURCE_BLENDING: &'static str = "dual_source_blending";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
-    pub(crate) fn from_ident(word: &str, span: Span) -> Result<Self, Error<'_>> {
+    pub(crate) fn from_ident(word: &str, span: Span) -> Result<Self> {
         Ok(match word {
             Self::F16 => Self::Unimplemented(UnimplementedEnableExtension::F16),
             Self::CLIP_DISTANCES => {

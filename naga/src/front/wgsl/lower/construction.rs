@@ -6,7 +6,7 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
-use crate::front::wgsl::error::Error;
+use crate::front::wgsl::{Error, Result};
 use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
 use crate::front::wgsl::parse::ast;
 use crate::{Handle, Span};
@@ -119,7 +119,7 @@ impl<'source> Lowerer<'source, '_> {
         ty_span: Span,
         components: &[Handle<ast::Expression<'source>>],
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         use crate::proc::TypeResolution as Tr;
 
         let constructor_h = self.constructor(constructor, ctx)?;
@@ -141,7 +141,7 @@ impl<'source> Lowerer<'source, '_> {
                 let components = ast_components
                     .iter()
                     .map(|&expr| self.expression_for_abstract(expr, ctx))
-                    .collect::<Result<_, _>>()?;
+                    .collect::<Result<_>>()?;
                 let spans = ast_components
                     .iter()
                     .map(|&expr| ctx.ast_expressions.get_span(expr))
@@ -373,7 +373,7 @@ impl<'source> Lowerer<'source, '_> {
                             Default::default(),
                         )
                     })
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .collect::<Result<Vec<_>>>()?;
 
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
                     columns,
@@ -410,7 +410,7 @@ impl<'source> Lowerer<'source, '_> {
                             Default::default(),
                         )
                     })
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .collect::<Result<Vec<_>>>()?;
 
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
                     columns,
@@ -576,7 +576,7 @@ impl<'source> Lowerer<'source, '_> {
         &mut self,
         constructor: &ast::ConstructorType<'source>,
         ctx: &mut ExpressionContext<'source, '_, 'out>,
-    ) -> Result<Constructor<Handle<crate::Type>>, Error<'source>> {
+    ) -> Result<'source, Constructor<Handle<crate::Type>>> {
         let handle = match *constructor {
             ast::ConstructorType::Scalar(scalar) => {
                 let ty = ctx.ensure_type_exists(scalar.to_inner_scalar());

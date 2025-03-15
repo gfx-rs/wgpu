@@ -13,7 +13,7 @@ use crate::front::wgsl::parse::directive::language_extension::LanguageExtension;
 use crate::front::wgsl::parse::directive::DirectiveKind;
 use crate::front::wgsl::parse::lexer::{Lexer, Token};
 use crate::front::wgsl::parse::number::Number;
-use crate::front::wgsl::Scalar;
+use crate::front::wgsl::{Result, Scalar};
 use crate::front::SymbolTable;
 use crate::{Arena, FastHashSet, FastIndexSet, Handle, ShaderStage, Span};
 
@@ -98,8 +98,8 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         mut parser: impl FnMut(
             &mut Lexer<'a>,
             &mut Self,
-        ) -> Result<Handle<ast::Expression<'a>>, Error<'a>>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+        ) -> Result<'a, Handle<ast::Expression<'a>>>,
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         let start = lexer.start_byte_offset();
         let mut accumulator = parser(lexer, self)?;
         while let Some(op) = classifier(lexer.peek().0) {
@@ -114,7 +114,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         Ok(accumulator)
     }
 
-    fn declare_local(&mut self, name: ast::Ident<'a>) -> Result<Handle<ast::Local>, Error<'a>> {
+    fn declare_local(&mut self, name: ast::Ident<'a>) -> Result<'a, Handle<ast::Local>> {
         let handle = self.locals.append(ast::Local, name.span);
         if let Some(old) = self.local_table.add(name.name, handle) {
             Err(Error::Redefinition {
@@ -166,7 +166,7 @@ impl<T> Default for ParsedAttribute<T> {
 }
 
 impl<T> ParsedAttribute<T> {
-    fn set(&mut self, value: T, name_span: Span) -> Result<(), Error<'static>> {
+    fn set(&mut self, value: T, name_span: Span) -> Result<'static, ()> {
         if self.value.is_some() {
             return Err(Error::RepeatedAttribute(name_span));
         }
@@ -193,7 +193,7 @@ impl<'a> BindingParser<'a> {
         name: &'a str,
         name_span: Span,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<(), Error<'a>> {
+    ) -> Result<'a, ()> {
         match name {
             "location" => {
                 lexer.expect(Token::Paren('('))?;
@@ -245,7 +245,7 @@ impl<'a> BindingParser<'a> {
         Ok(())
     }
 
-    fn finish(self, span: Span) -> Result<Option<ast::Binding<'a>>, Error<'a>> {
+    fn finish(self, span: Span) -> Result<'a, Option<ast::Binding<'a>>> {
         match (
             self.location.value,
             self.built_in.value,
@@ -322,9 +322,9 @@ impl Parser {
         )
     }
 
-    fn track_recursion<'a, F, R>(&mut self, f: F) -> Result<R, Error<'a>>
+    fn track_recursion<'a, F, R>(&mut self, f: F) -> Result<'a, R>
     where
-        F: FnOnce(&mut Self) -> Result<R, Error<'a>>,
+        F: FnOnce(&mut Self) -> Result<'a, R>,
     {
         self.recursion_depth += 1;
         if self.recursion_depth >= 256 {
@@ -339,7 +339,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<ast::SwitchValue<'a>, Error<'a>> {
+    ) -> Result<'a, ast::SwitchValue<'a>> {
         if let Token::Word("default") = lexer.peek().0 {
             let _ = lexer.next();
             return Ok(ast::SwitchValue::Default);
@@ -366,7 +366,7 @@ impl Parser {
         word: &'a str,
         span: Span,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Option<ast::ConstructorType<'a>>, Error<'a>> {
+    ) -> Result<'a, Option<ast::ConstructorType<'a>>> {
         if let Some(scalar) = conv::get_scalar_type(word) {
             return Ok(Some(ast::ConstructorType::Scalar(scalar)));
         }
@@ -617,7 +617,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Vec<Handle<ast::Expression<'a>>>, Error<'a>> {
+    ) -> Result<'a, Vec<Handle<ast::Expression<'a>>>> {
         self.push_rule_span(Rule::EnclosedExpr, lexer);
         lexer.open_arguments()?;
         let mut arguments = Vec::new();
@@ -641,7 +641,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.push_rule_span(Rule::EnclosedExpr, lexer);
         let expr = self.general_expression(lexer, ctx)?;
         self.pop_rule_span(lexer);
@@ -656,7 +656,7 @@ impl Parser {
         name: &'a str,
         name_span: Span,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         assert!(self.rules.last().is_some());
 
         let expr = match name {
@@ -718,7 +718,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.push_rule_span(Rule::PrimaryExpr, lexer);
         const fn literal_ray_flag<'b>(flag: crate::RayFlag) -> ast::Expression<'b> {
             ast::Expression::Literal(ast::Literal::Number(Number::U32(flag.bits())))
@@ -855,7 +855,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
         expr: Handle<ast::Expression<'a>>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         let mut expr = expr;
 
         loop {
@@ -887,7 +887,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.push_rule_span(Rule::GenericExpr, lexer);
         let expr = self.general_expression(lexer, ctx)?;
         self.pop_rule_span(lexer);
@@ -899,7 +899,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.track_recursion(|this| {
             this.push_rule_span(Rule::UnaryExpr, lexer);
             //TODO: refactor this to avoid backing up
@@ -964,7 +964,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.track_recursion(|this| {
             this.push_rule_span(Rule::LhsExpr, lexer);
             let start = lexer.start_byte_offset();
@@ -1008,7 +1008,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         let start = lexer.start_byte_offset();
         self.push_rule_span(Rule::SingularExpr, lexer);
         let primary_expr = self.primary_expression(lexer, ctx)?;
@@ -1022,7 +1022,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         context: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         // equality_expression
         context.parse_binary_op(
             lexer,
@@ -1115,7 +1115,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Expression<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.general_expression_with_span(lexer, ctx)
             .map(|(expr, _)| expr)
     }
@@ -1124,7 +1124,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         context: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<(Handle<ast::Expression<'a>>, Span), Error<'a>> {
+    ) -> Result<'a, (Handle<ast::Expression<'a>>, Span)> {
         self.push_rule_span(Rule::GeneralExpr, lexer);
         // logical_or_expression
         let handle = context.parse_binary_op(
@@ -1188,7 +1188,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<ast::GlobalVariable<'a>, Error<'a>> {
+    ) -> Result<'a, ast::GlobalVariable<'a>> {
         self.push_rule_span(Rule::VariableDecl, lexer);
         let mut space = crate::AddressSpace::Handle;
 
@@ -1238,7 +1238,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Vec<ast::StructMember<'a>>, Error<'a>> {
+    ) -> Result<'a, Vec<ast::StructMember<'a>>> {
         let mut members = Vec::new();
         let mut member_names = FastHashSet::default();
 
@@ -1308,7 +1308,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<(Handle<ast::Type<'a>>, Span), Error<'a>> {
+    ) -> Result<'a, (Handle<ast::Type<'a>>, Span)> {
         lexer.expect_generic_paren('<')?;
         let start = lexer.start_byte_offset();
         let ty = self.type_decl(lexer, ctx)?;
@@ -1324,7 +1324,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
         columns: crate::VectorSize,
         rows: crate::VectorSize,
-    ) -> Result<ast::Type<'a>, Error<'a>> {
+    ) -> Result<'a, ast::Type<'a>> {
         let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
         Ok(ast::Type::Matrix {
             columns,
@@ -1339,7 +1339,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         word: &'a str,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Option<ast::Type<'a>>, Error<'a>> {
+    ) -> Result<'a, Option<ast::Type<'a>>> {
         if let Some(scalar) = conv::get_scalar_type(word) {
             return Ok(Some(ast::Type::Scalar(scalar)));
         }
@@ -1734,7 +1734,7 @@ impl Parser {
         }))
     }
 
-    const fn check_texture_sample_type(scalar: Scalar, span: Span) -> Result<(), Error<'static>> {
+    const fn check_texture_sample_type(scalar: Scalar, span: Span) -> Result<'static, ()> {
         use crate::ScalarKind::*;
         // Validate according to https://gpuweb.github.io/gpuweb/wgsl/#sampled-texture-type
         match scalar {
@@ -1755,7 +1755,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Handle<ast::Type<'a>>, Error<'a>> {
+    ) -> Result<'a, Handle<ast::Type<'a>>> {
         self.track_recursion(|this| {
             this.push_rule_span(Rule::TypeDecl, lexer);
 
@@ -1786,7 +1786,7 @@ impl Parser {
         block: &mut ast::Block<'a>,
         target: Handle<ast::Expression<'a>>,
         span_start: usize,
-    ) -> Result<(), Error<'a>> {
+    ) -> Result<'a, ()> {
         use crate::BinaryOperator as Bo;
 
         let op = lexer.next();
@@ -1845,7 +1845,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
-    ) -> Result<(), Error<'a>> {
+    ) -> Result<'a, ()> {
         let span_start = lexer.start_byte_offset();
         let target = self.lhs_expression(lexer, ctx)?;
         self.assignment_op_and_rhs(lexer, ctx, block, target, span_start)
@@ -1861,7 +1861,7 @@ impl Parser {
         span_start: usize,
         context: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
-    ) -> Result<(), Error<'a>> {
+    ) -> Result<'a, ()> {
         self.push_rule_span(Rule::SingularExpr, lexer);
 
         context.unresolved.insert(ast::Dependency {
@@ -1892,7 +1892,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         context: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
-    ) -> Result<(), Error<'a>> {
+    ) -> Result<'a, ()> {
         let span_start = lexer.start_byte_offset();
         match lexer.peek() {
             (Token::Word(name), span) => {
@@ -1919,7 +1919,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
         brace_nesting_level: u8,
-    ) -> Result<(), Error<'a>> {
+    ) -> Result<'a, ()> {
         self.track_recursion(|this| {
             this.push_rule_span(Rule::Statement, lexer);
             match lexer.peek() {
@@ -2199,7 +2199,7 @@ impl Parser {
                             let mut body = ast::Block::default();
                             if !lexer.skip(Token::Separator(';')) {
                                 let (condition, span) =
-                                    lexer.capture_span(|lexer| -> Result<_, Error<'_>> {
+                                    lexer.capture_span(|lexer| -> Result<'_, _> {
                                         let condition = this.general_expression(lexer, ctx)?;
                                         lexer.expect(Token::Separator(';'))?;
                                         Ok(condition)
@@ -2307,7 +2307,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
         brace_nesting_level: u8,
-    ) -> Result<ast::StatementKind<'a>, Error<'a>> {
+    ) -> Result<'a, ast::StatementKind<'a>> {
         let _ = lexer.next();
         let mut body = ast::Block::default();
         let mut continuing = ast::Block::default();
@@ -2387,7 +2387,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
         brace_nesting_level: u8,
-    ) -> Result<(ast::Block<'a>, Span), Error<'a>> {
+    ) -> Result<'a, (ast::Block<'a>, Span)> {
         self.push_rule_span(Rule::Block, lexer);
 
         ctx.local_table.push_scope();
@@ -2434,7 +2434,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<Option<ast::Binding<'a>>, Error<'a>> {
+    ) -> Result<'a, Option<ast::Binding<'a>>> {
         let mut bind_parser = BindingParser::default();
         self.push_rule_span(Rule::Attribute, lexer);
 
@@ -2454,7 +2454,7 @@ impl Parser {
         must_use: Option<Span>,
         out: &mut ast::TranslationUnit<'a>,
         dependencies: &mut FastIndexSet<ast::Dependency<'a>>,
-    ) -> Result<ast::Function<'a>, Error<'a>> {
+    ) -> Result<'a, ast::Function<'a>> {
         self.push_rule_span(Rule::FunctionDecl, lexer);
         // read function name
         let fun_name = lexer.next_ident()?;
@@ -2546,8 +2546,8 @@ impl Parser {
     fn directive_ident_list<'a>(
         &self,
         lexer: &mut Lexer<'a>,
-        handler: impl FnMut(&'a str, Span) -> Result<(), Error<'a>>,
-    ) -> Result<(), Error<'a>> {
+        handler: impl FnMut(&'a str, Span) -> Result<'a, ()>,
+    ) -> Result<'a, ()> {
         let mut handler = handler;
         'next_arg: loop {
             let (ident, span) = lexer.next_ident_with_span()?;
@@ -2576,7 +2576,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         out: &mut ast::TranslationUnit<'a>,
-    ) -> Result<(), Error<'a>> {
+    ) -> Result<'a, ()> {
         // read attributes
         let mut binding = None;
         let mut stage = ParsedAttribute::default();
@@ -2598,7 +2598,7 @@ impl Parser {
             unresolved: &mut dependencies,
         };
         let mut diagnostic_filters = DiagnosticFilterMap::new();
-        let ensure_no_diag_attrs = |on_what, filters: DiagnosticFilterMap| -> Result<(), Error> {
+        let ensure_no_diag_attrs = |on_what, filters: DiagnosticFilterMap| -> Result<()> {
             if filters.is_empty() {
                 Ok(())
             } else {
@@ -2842,7 +2842,7 @@ impl Parser {
         }
     }
 
-    pub fn parse<'a>(&mut self, source: &'a str) -> Result<ast::TranslationUnit<'a>, Error<'a>> {
+    pub fn parse<'a>(&mut self, source: &'a str) -> Result<'a, ast::TranslationUnit<'a>> {
         self.reset();
 
         let mut lexer = Lexer::new(source);
@@ -2928,7 +2928,7 @@ impl Parser {
     const fn increase_brace_nesting(
         brace_nesting_level: u8,
         brace_span: Span,
-    ) -> Result<u8, Error<'static>> {
+    ) -> Result<'static, u8> {
         // From [spec.](https://gpuweb.github.io/gpuweb/wgsl/#limits):
         //
         // > § 2.4. Limits
@@ -2951,7 +2951,7 @@ impl Parser {
         Ok(brace_nesting_level + 1)
     }
 
-    fn diagnostic_filter<'a>(&self, lexer: &mut Lexer<'a>) -> Result<DiagnosticFilter, Error<'a>> {
+    fn diagnostic_filter<'a>(&self, lexer: &mut Lexer<'a>) -> Result<'a, DiagnosticFilter> {
         lexer.expect(Token::Paren('('))?;
 
         let (severity_control_name, severity_control_name_span) = lexer.next_ident_with_span()?;

@@ -2,6 +2,7 @@
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 
+use crate::front::wgsl::Result;
 use crate::front::wgsl::error::{
     AutoConversionError, AutoConversionLeafScalarError, ConcretizationFailedError,
 };
@@ -25,7 +26,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         expr: Handle<crate::Expression>,
         goal_ty: &crate::proc::TypeResolution,
         goal_span: Span,
-    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let expr_span = self.get_expression_span(expr);
         // Keep the TypeResolution so we can get type names for
         // structs in error messages.
@@ -87,7 +88,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         expr: Handle<crate::Expression>,
         goal_scalar: crate::Scalar,
         goal_span: Span,
-    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let expr_span = self.get_expression_span(expr);
         let expr_resolution = super::resolve!(self, expr);
         let types = &self.module.types;
@@ -127,7 +128,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         expr: Handle<crate::Expression>,
         expr_span: Span,
         goal_scalar: crate::Scalar,
-    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let expr_inner = super::resolve_inner!(self, expr);
         if let crate::TypeInner::Array { .. } = *expr_inner {
             self.as_const_evaluator()
@@ -149,7 +150,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         exprs: &mut [Handle<crate::Expression>],
         goal_ty: &crate::proc::TypeResolution,
         goal_span: Span,
-    ) -> Result<(), super::Error<'source>> {
+    ) -> Result<'source, ()> {
         for expr in exprs.iter_mut() {
             *expr = self.try_automatic_conversions(*expr, goal_ty, goal_span)?;
         }
@@ -170,7 +171,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         exprs: &mut [Handle<crate::Expression>],
         goal_scalar: crate::Scalar,
         goal_span: Span,
-    ) -> Result<(), super::Error<'source>> {
+    ) -> Result<'source, ()> {
         use crate::proc::TypeResolution as Tr;
         use crate::TypeInner as Ti;
         let goal_scalar_res = Tr::Value(Ti::Scalar(goal_scalar));
@@ -210,7 +211,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         &mut self,
         expr: &mut Handle<crate::Expression>,
         goal: crate::Scalar,
-    ) -> Result<(), super::Error<'source>> {
+    ) -> Result<'source, ()> {
         let inner = super::resolve_inner!(self, *expr);
         // Do nothing if `inner` doesn't even have leaf scalars;
         // it's a type error that validation will catch.
@@ -241,7 +242,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         &mut self,
         exprs: &mut [Handle<crate::Expression>],
         goal: crate::Scalar,
-    ) -> Result<(), super::Error<'source>> {
+    ) -> Result<'source, ()> {
         for expr in exprs.iter_mut() {
             self.convert_to_leaf_scalar(expr, goal)?;
         }
@@ -255,7 +256,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
     pub fn concretize(
         &mut self,
         mut expr: Handle<crate::Expression>,
-    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let inner = super::resolve_inner!(self, expr);
         if let Some(scalar) = inner.automatically_convertible_scalar(&self.module.types) {
             let concretized = scalar.concretize();
@@ -303,7 +304,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
     pub fn automatic_conversion_consensus<'handle, I>(
         &self,
         components: I,
-    ) -> Result<crate::Scalar, usize>
+    ) -> core::result::Result<crate::Scalar, usize>
     where
         I: IntoIterator<Item = &'handle Handle<crate::Expression>>,
         I::IntoIter: Clone, // for debugging

@@ -5,6 +5,7 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
+use crate::front::wgsl::Result;
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
@@ -468,7 +469,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         &mut self,
         expr: crate::Expression,
         span: Span,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let mut eval = self.as_const_evaluator();
         eval.try_eval_and_append(expr, span)
             .map_err(|e| Error::ConstantEvaluatorError(e.into(), span))
@@ -477,7 +478,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn const_eval_expr_to_u32(
         &self,
         handle: Handle<crate::Expression>,
-    ) -> Result<u32, crate::proc::U32EvalError> {
+    ) -> core::result::Result<u32, crate::proc::U32EvalError> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => {
                 if !ctx.local_expression_kind_tracker.is_const(handle) {
@@ -525,7 +526,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         &mut self,
         local: &Handle<ast::Local>,
         span: Span,
-    ) -> Result<Typed<Handle<crate::Expression>>, Error<'source>> {
+    ) -> Result<'source, Typed<Handle<crate::Expression>>> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => Ok(ctx.local_table[local].runtime()),
             ExpressionContextType::Constant(Some(ref ctx)) => ctx.local_table[local]
@@ -538,7 +539,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn runtime_expression_ctx(
         &mut self,
         span: Span,
-    ) -> Result<&mut LocalExpressionContext<'temp, 'out>, Error<'source>> {
+    ) -> Result<'source, &mut LocalExpressionContext<'temp, 'out>> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref mut ctx) => Ok(ctx),
             ExpressionContextType::Constant(_) | ExpressionContextType::Override => {
@@ -552,7 +553,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         expr: Handle<crate::Expression>,
         component_span: Span,
         gather_span: Span,
-    ) -> Result<crate::SwizzleComponent, Error<'source>> {
+    ) -> Result<'source, crate::SwizzleComponent> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref rctx) => {
                 if !rctx.local_expression_kind_tracker.is_const(expr) {
@@ -599,7 +600,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn register_type(
         &mut self,
         handle: Handle<crate::Expression>,
-    ) -> Result<Handle<crate::Type>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Type>> {
         self.grow_types(handle)?;
         // This is equivalent to calling ExpressionContext::typifier(),
         // except that this lets the borrow checker see that it's okay
@@ -637,7 +638,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn grow_types(
         &mut self,
         handle: Handle<crate::Expression>,
-    ) -> Result<&mut Self, Error<'source>> {
+    ) -> Result<'source, &mut Self> {
         let empty_arena = Arena::new();
         let resolve_ctx;
         let typifier;
@@ -670,7 +671,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         &mut self,
         image: Handle<crate::Expression>,
         span: Span,
-    ) -> Result<(crate::ImageClass, bool), Error<'source>> {
+    ) -> Result<'source, (crate::ImageClass, bool)> {
         match *resolve_inner!(self, image) {
             crate::TypeInner::Image { class, arrayed, .. } => Ok((class, arrayed)),
             _ => Err(Error::BadTexture(span)),
@@ -704,7 +705,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         op: crate::BinaryOperator,
         left: &mut Handle<crate::Expression>,
         right: &mut Handle<crate::Expression>,
-    ) -> Result<(), Error<'source>> {
+    ) -> Result<'source, ()> {
         if matches!(
             op,
             crate::BinaryOperator::Add
@@ -743,7 +744,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         &mut self,
         expression: crate::Expression,
         span: Span,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref mut rctx)
             | ExpressionContextType::Constant(Some(ref mut rctx)) => {
@@ -770,7 +771,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn apply_load_rule(
         &mut self,
         expr: Typed<Handle<crate::Expression>>,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         match expr {
             Typed::Reference(pointer) => {
                 let load = crate::Expression::Load { pointer };
@@ -795,7 +796,7 @@ struct ArgumentContext<'ctx, 'source> {
 }
 
 impl<'source> ArgumentContext<'_, 'source> {
-    pub fn finish(self) -> Result<(), Error<'source>> {
+    pub fn finish(self) -> Result<'source, ()> {
         if self.args.len() == 0 {
             Ok(())
         } else {
@@ -807,7 +808,7 @@ impl<'source> ArgumentContext<'_, 'source> {
         }
     }
 
-    pub fn next(&mut self) -> Result<Handle<ast::Expression<'source>>, Error<'source>> {
+    pub fn next(&mut self) -> Result<'source, Handle<ast::Expression<'source>>> {
         match self.args.next().copied() {
             Some(arg) => {
                 self.args_used += 1;
@@ -884,7 +885,7 @@ impl<T> Typed<T> {
         }
     }
 
-    fn try_map<U, E>(self, mut f: impl FnMut(T) -> Result<U, E>) -> Result<Typed<U>, E> {
+    fn try_map<U, E>(self, mut f: impl FnMut(T) -> core::result::Result<U, E>) -> core::result::Result<Typed<U>, E> {
         Ok(match self {
             Self::Reference(expr) => Typed::Reference(f(expr)?),
             Self::Plain(expr) => Typed::Plain(f(expr)?),
@@ -917,7 +918,7 @@ impl Components {
         }
     }
 
-    fn single_component(name: &str, name_span: Span) -> Result<u32, Error> {
+    fn single_component(name: &str, name_span: Span) -> Result<u32> {
         let ch = name.chars().next().ok_or(Error::BadAccessor(name_span))?;
         match Self::letter_component(ch) {
             Some(sc) => Ok(sc as u32),
@@ -928,7 +929,7 @@ impl Components {
     /// Construct a `Components` value from a 'member' name, like `"wzy"` or `"x"`.
     ///
     /// Use `name_span` for reporting errors in parsing the component string.
-    fn new(name: &str, name_span: Span) -> Result<Self, Error> {
+    fn new(name: &str, name_span: Span) -> Result<Self> {
         let size = match name.len() {
             1 => return Ok(Components::Single(Self::single_component(name, name_span)?)),
             2 => crate::VectorSize::Bi,
@@ -1055,7 +1056,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     pub fn lower(
         &mut self,
         tu: ast::TranslationUnit<'source>,
-    ) -> Result<crate::Module, Error<'source>> {
+    ) -> Result<'source, crate::Module> {
         let mut module = crate::Module {
             diagnostic_filters: tu.diagnostic_filters,
             diagnostic_filter_leaf: tu.diagnostic_filter_leaf,
@@ -1233,7 +1234,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         explicit_ty: Option<Handle<crate::Type>>,
         abstract_rule: AbstractRule,
         ectx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<(Handle<crate::Type>, Option<Handle<crate::Expression>>), Error<'source>> {
+    ) -> Result<'source, (Handle<crate::Type>, Option<Handle<crate::Expression>>)> {
         let ty;
         let initializer;
         match (init, explicit_ty) {
@@ -1286,7 +1287,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         f: &ast::Function<'source>,
         span: Span,
         ctx: &mut GlobalContext<'source, '_, '_>,
-    ) -> Result<LoweredGlobalDecl, Error<'source>> {
+    ) -> Result<'source, LoweredGlobalDecl> {
         let mut local_table = FastHashMap::default();
         let mut expressions = Arena::new();
         let mut named_expressions = FastIndexMap::default();
@@ -1296,7 +1297,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .arguments
             .iter()
             .enumerate()
-            .map(|(i, arg)| -> Result<_, Error<'_>> {
+            .map(|(i, arg)| -> Result<'_, _> {
                 let ty = self.resolve_ast_type(arg.ty, &mut ctx.as_const())?;
                 let expr = expressions
                     .append(crate::Expression::FunctionArgument(i as u32), arg.name.span);
@@ -1310,12 +1311,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     binding: self.binding(&arg.binding, ty, ctx)?,
                 })
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
         let result = f
             .result
             .as_ref()
-            .map(|res| -> Result<_, Error<'_>> {
+            .map(|res| -> Result<'_, _> {
                 let ty = self.resolve_ast_type(res.ty, &mut ctx.as_const())?;
                 Ok(crate::FunctionResult {
                     ty,
@@ -1423,7 +1424,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         size_expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let span = ctx.ast_expressions.get_span(size_expr);
         let expr = self.expression(size_expr, ctx)?;
         match resolve_inner!(ctx, expr).scalar_kind().ok_or(0) {
@@ -1437,7 +1438,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         b: &ast::Block<'source>,
         is_inside_loop: bool,
         ctx: &mut StatementContext<'source, '_, '_>,
-    ) -> Result<crate::Block, Error<'source>> {
+    ) -> Result<'source, crate::Block> {
         let mut block = crate::Block::default();
 
         for stmt in b.stmts.iter() {
@@ -1453,7 +1454,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         block: &mut crate::Block,
         is_inside_loop: bool,
         ctx: &mut StatementContext<'source, '_, '_>,
-    ) -> Result<(), Error<'source>> {
+    ) -> Result<'source, ()> {
         let out = match stmt.kind {
             ast::StatementKind::Block(ref block) => {
                 let block = self.block(block, is_inside_loop, ctx)?;
@@ -1655,7 +1656,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             },
                         }
                     })
-                    .collect::<Result<(Vec<_>, Vec<_>), _>>()?;
+                    .collect::<Result<(Vec<_>, Vec<_>)>>()?;
 
                 let mut consensus =
                     ectx.automatic_conversion_consensus(&exprs)
@@ -1709,7 +1710,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             fall_through: case.fall_through,
                         })
                     })
-                    .collect::<Result<_, _>>()?;
+                    .collect::<Result<_>>()?;
 
                 crate::Statement::Switch { selector, cases }
             }
@@ -1959,7 +1960,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let expr = self.expression_for_abstract(expr, ctx)?;
         ctx.concretize(expr)
     }
@@ -1968,7 +1969,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let expr = self.expression_for_reference(expr, ctx)?;
         ctx.apply_load_rule(expr)
     }
@@ -1977,7 +1978,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Typed<Handle<crate::Expression>>, Error<'source>> {
+    ) -> Result<'source, Typed<Handle<crate::Expression>>> {
         let span = ctx.ast_expressions.get_span(expr);
         let expr = &ctx.ast_expressions[expr];
 
@@ -2209,7 +2210,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         right: Handle<ast::Expression<'source>>,
         span: Span,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Typed<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Typed<crate::Expression>> {
         // Load both operands.
         let mut left = self.expression_for_abstract(left, ctx)?;
         let mut right = self.expression_for_abstract(right, ctx)?;
@@ -2297,7 +2298,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         arguments: &[Handle<ast::Expression<'source>>],
         ctx: &mut ExpressionContext<'source, '_, '_>,
         is_statement: bool,
-    ) -> Result<Option<Handle<crate::Expression>>, Error<'source>> {
+    ) -> Result<'source, Option<Handle<crate::Expression>>> {
         let function_span = function.span;
         match ctx.globals.get(function.name) {
             Some(&LoweredGlobalDecl::Type(ty)) => {
@@ -2341,7 +2342,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             ctx.ast_expressions.get_span(arg),
                         )
                     })
-                    .collect::<Result<Vec<_>, _>>()?;
+                    .collect::<Result<Vec<_>>>()?;
 
                 let has_result = ctx.module.functions[function].result.is_some();
 
@@ -2934,7 +2935,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let span = ctx.ast_expressions.get_span(expr);
         let pointer = self.expression(expr, ctx)?;
 
@@ -2960,7 +2961,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         args: &[Handle<ast::Expression<'source>>],
         is_statement: bool,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Option<Handle<crate::Expression>>, Error<'source>> {
+    ) -> Result<'source, Option<Handle<crate::Expression>>> {
         let mut args = ctx.prepare_args(args, 2, span);
 
         let pointer = self.atomic_pointer(args.next()?, ctx)?;
@@ -3013,14 +3014,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         args: &[Handle<ast::Expression<'source>>],
         span: Span,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<crate::Expression, Error<'source>> {
+    ) -> Result<'source, crate::Expression> {
         let mut args = ctx.prepare_args(args, fun.min_argument_count(), span);
 
         fn get_image_and_span<'source>(
             lowerer: &mut Lowerer<'source, '_>,
             args: &mut ArgumentContext<'_, 'source>,
             ctx: &mut ExpressionContext<'source, '_, '_>,
-        ) -> Result<(Handle<crate::Expression>, Span), Error<'source>> {
+        ) -> Result<'source, (Handle<crate::Expression>, Span)> {
             let image = args.next()?;
             let image_span = ctx.ast_expressions.get_span(image);
             let image = lowerer.expression(image, ctx)?;
@@ -3135,7 +3136,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         collective_op: crate::CollectiveOperation,
         arguments: &[Handle<ast::Expression<'source>>],
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let mut args = ctx.prepare_args(arguments, 1, span);
 
         let argument = self.expression(args.next()?, ctx)?;
@@ -3164,7 +3165,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         mode: SubgroupGather,
         arguments: &[Handle<ast::Expression<'source>>],
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let mut args = ctx.prepare_args(arguments, 2, span);
 
         let argument = self.expression(args.next()?, ctx)?;
@@ -3207,7 +3208,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         s: &ast::Struct<'source>,
         span: Span,
         ctx: &mut GlobalContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Type>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Type>> {
         let mut offset = 0;
         let mut struct_alignment = Alignment::ONE;
         let mut members = Vec::with_capacity(s.members.len());
@@ -3281,7 +3282,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<(u32, Span), Error<'source>> {
+    ) -> Result<'source, (u32, Span)> {
         let span = ctx.ast_expressions.get_span(expr);
         let expr = self.expression(expr, ctx)?;
         let value = ctx
@@ -3301,7 +3302,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         size: ast::ArraySize<'source>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<crate::ArraySize, Error<'source>> {
+    ) -> Result<'source, crate::ArraySize> {
         Ok(match size {
             ast::ArraySize::Constant(expr) => {
                 let span = ctx.ast_expressions.get_span(expr);
@@ -3351,7 +3352,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         size_expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
         span: Span,
-    ) -> Result<Handle<crate::Override>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Override>> {
         let expr = self.expression(size_expr, ctx)?;
         match resolve_inner!(ctx, expr).scalar_kind().ok_or(0) {
             Ok(crate::ScalarKind::Sint) | Ok(crate::ScalarKind::Uint) => Ok({
@@ -3388,7 +3389,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         handle: Handle<ast::Type<'source>>,
         name: Option<String>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Type>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Type>> {
         let inner = match ctx.types[handle] {
             ast::Type::Scalar(scalar) => scalar.to_inner_scalar(),
             ast::Type::Vector { size, ty, ty_span } => {
@@ -3475,7 +3476,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         handle: Handle<ast::Type<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Type>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Type>> {
         self.resolve_named_ast_type(handle, None, ctx)
     }
 
@@ -3484,7 +3485,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         binding: &Option<ast::Binding<'source>>,
         ty: Handle<crate::Type>,
         ctx: &mut GlobalContext<'source, '_, '_>,
-    ) -> Result<Option<crate::Binding>, Error<'source>> {
+    ) -> Result<'source, Option<crate::Binding>> {
         Ok(match *binding {
             Some(ast::Binding::BuiltIn(b)) => Some(crate::Binding::BuiltIn(b)),
             Some(ast::Binding::Location {
@@ -3516,7 +3517,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<Handle<crate::Expression>, Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let span = ctx.ast_expressions.get_span(expr);
         let pointer = self.expression(expr, ctx)?;
 
