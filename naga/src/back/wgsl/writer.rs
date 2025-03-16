@@ -1726,7 +1726,7 @@ struct WriterTypeContext<'m> {
     names: &'m crate::FastHashMap<NameKey, String>,
 }
 
-impl<W: Write> TypeContext<W> for WriterTypeContext<'_> {
+impl TypeContext for WriterTypeContext<'_> {
     fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
         &self.module.types[handle]
     }
@@ -1735,15 +1735,15 @@ impl<W: Write> TypeContext<W> for WriterTypeContext<'_> {
         self.names[&NameKey::Type(handle)].as_str()
     }
 
-    fn write_override(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
+    fn write_override<W: Write>(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
         unreachable!("overrides should be validated out");
     }
 
-    fn write_non_wgsl_inner(&self, _: &TypeInner, _: &mut W) -> core::fmt::Result {
+    fn write_non_wgsl_inner<W: Write>(&self, _: &TypeInner, _: &mut W) -> core::fmt::Result {
         unreachable!("backends should only be passed validated modules");
     }
 
-    fn write_non_wgsl_scalar(&self, _: crate::Scalar, _: &mut W) -> core::fmt::Result {
+    fn write_non_wgsl_scalar<W: Write>(&self, _: crate::Scalar, _: &mut W) -> core::fmt::Result {
         unreachable!("backends should only be passed validated modules");
     }
 }

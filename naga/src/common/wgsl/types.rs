@@ -21,7 +21,7 @@ use core::fmt::Write;
 /// [`write_type`]: TypeContext::write_type
 /// [`write_type_inner`]: TypeContext::write_type_inner
 /// [`type_name`]: TypeContext::type_name
-pub trait TypeContext<W: Write> {
+pub trait TypeContext {
     /// Return the [`Type`] referred to by `handle`.
     ///
     /// [`Type`]: crate::Type
@@ -32,8 +32,11 @@ pub trait TypeContext<W: Write> {
     fn type_name(&self, handle: Handle<crate::Type>) -> &str;
 
     /// Write the WGSL form of `override` to `out`.
-    fn write_override(&self, r#override: Handle<crate::Override>, out: &mut W)
-        -> core::fmt::Result;
+    fn write_override<W: Write>(
+        &self,
+        r#override: Handle<crate::Override>,
+        out: &mut W,
+    ) -> core::fmt::Result;
 
     /// Write a [`TypeInner`] that has no representation as WGSL source,
     /// even including Naga extensions.
@@ -43,7 +46,7 @@ pub trait TypeContext<W: Write> {
     /// validation, whereas something generating type names to appear in error messages
     /// might punt to `TypeInner`'s [`core::fmt::Debug`] implementation, since it's
     /// probably better to show the user something they can act on.
-    fn write_non_wgsl_inner(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result;
+    fn write_non_wgsl_inner<W: Write>(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result;
 
     /// Write a [`Scalar`] that has no representation as WGSL source,
     /// even including Naga extensions.
@@ -53,13 +56,13 @@ pub trait TypeContext<W: Write> {
     /// validation, whereas something generating type names to appear in error messages
     /// might punt to `Scalar`'s [`core::fmt::Debug`] implementation, since it's
     /// probably better to show the user something they can act on.
-    fn write_non_wgsl_scalar(&self, scalar: Scalar, out: &mut W) -> core::fmt::Result;
+    fn write_non_wgsl_scalar<W: Write>(&self, scalar: Scalar, out: &mut W) -> core::fmt::Result;
 
     /// Write the type `ty` as it would appear in a value's declaration.
     ///
     /// Write the type referred to by `ty` in `module` as it would appear in
     /// a `var`, `let`, etc. declaration, or in a function's argument list.
-    fn write_type(&self, handle: Handle<crate::Type>, out: &mut W) -> core::fmt::Result {
+    fn write_type<W: Write>(&self, handle: Handle<crate::Type>, out: &mut W) -> core::fmt::Result {
         let ty = self.lookup_type(handle);
         match ty.inner {
             TypeInner::Struct { .. } => out.write_str(self.type_name(handle))?,
@@ -79,7 +82,7 @@ pub trait TypeContext<W: Write> {
     /// [`TypeInner`].
     ///
     /// [`Struct`]: TypeInner::Struct
-    fn write_type_inner(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result {
+    fn write_type_inner<W: Write>(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result {
         match try_write_type_inner(self, inner, out) {
             Ok(()) => Ok(()),
             Err(WriteTypeError::Format(err)) => Err(err),
@@ -88,7 +91,7 @@ pub trait TypeContext<W: Write> {
     }
 
     /// Write the [`Scalar`] `scalar` as a WGSL type.
-    fn write_scalar(&self, scalar: Scalar, out: &mut W) -> core::fmt::Result {
+    fn write_scalar<W: Write>(&self, scalar: Scalar, out: &mut W) -> core::fmt::Result {
         match scalar.try_to_wgsl() {
             Some(string) => out.write_str(string),
             None => self.write_non_wgsl_scalar(scalar, out),
@@ -96,7 +99,11 @@ pub trait TypeContext<W: Write> {
     }
 
     /// Write the [`TypeResolution`] `resolution` as a WGSL type.
-    fn write_type_resolution(&self, resolution: &TypeResolution, out: &mut W) -> core::fmt::Result {
+    fn write_type_resolution<W: Write>(
+        &self,
+        resolution: &TypeResolution,
+        out: &mut W,
+    ) -> core::fmt::Result {
         match *resolution {
             TypeResolution::Handle(handle) => self.write_type(handle, out),
             TypeResolution::Value(ref inner) => self.write_type_inner(inner, out),
@@ -106,7 +113,7 @@ pub trait TypeContext<W: Write> {
 
 fn try_write_type_inner<C, W>(ctx: &C, inner: &TypeInner, out: &mut W) -> Result<(), WriteTypeError>
 where
-    C: TypeContext<W> + ?Sized,
+    C: TypeContext + ?Sized,
     W: Write,
 {
     match *inner {
