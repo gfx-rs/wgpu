@@ -1142,7 +1142,7 @@ impl PhysicalDeviceProperties {
             max_mesh_work_group_invocations,
         ) = match self._mesh_shader {
             Some(m) => (
-                m.m.max_mesh_work_group_size.min(m.max_task_work_group_size),
+                m.max_mesh_work_group_size.min(m.max_task_work_group_size),
                 m.max_mesh_work_group_count
                     .into_iter()
                     .min()
