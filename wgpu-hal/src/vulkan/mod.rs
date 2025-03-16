@@ -60,6 +60,7 @@ trait Appendable: vk::ExtendsDeviceCreateInfo {}
 
 impl<T: vk::ExtendsDeviceCreateInfo> Appendable for T {}
 
+#[derive(Default)]
 pub struct DeviceCallbackOptions {
     extensions: Vec<&'static CStr>,
     append_create: Vec<Box<dyn Appendable>>,
