@@ -601,21 +601,15 @@ pub struct Limits {
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
 
-    /// Maximum value of the product of the `workgroup_size` dimensions for a compute entry-point.
-    /// Defaults to 256. Higher is "better".
-    pub max_mesh_invocations_per_workgroup: u32,
-    /// The maximum value of the `workgroup_size` X dimension for a compute stage `ShaderModule` entry-point.
-    /// Defaults to 256. Higher is "better".
-    pub max_mesh_workgroup_size_x: u32,
-    /// The maximum value of the `workgroup_size` Y dimension for a compute stage `ShaderModule` entry-point.
-    /// Defaults to 256. Higher is "better".
-    pub max_mesh_workgroup_size_y: u32,
-    /// The maximum value of the `workgroup_size` Z dimension for a compute stage `ShaderModule` entry-point.
-    /// Defaults to 64. Higher is "better".
-    pub max_mesh_workgroup_size_z: u32,
+    /// The maximum total value of x*y*z for a given `draw_mesh_tasks` command
+    pub max_task_workgroup_total_count: u32,
     /// The maximum value for each dimension of a `RenderPass::draw_mesh_tasks(x, y, z)` operation.
     /// Defaults to 65535. Higher is "better".
-    pub max_mesh_workgroups_per_dimension: u32,
+    pub max_task_workgroups_per_dimension: u32,
+    /// The maximum number of layers that can be output from a mesh shader
+    pub max_mesh_output_layers: u32,
+    /// The maximum number of views that can be used by a mesh shader
+    pub max_mesh_multiview_count: u32,
 }
 
 impl Default for Limits {
@@ -665,11 +659,14 @@ impl Limits {
             max_subgroup_size: 0,
             max_push_constant_size: 0,
             max_non_sampler_bindings: 1_000_000,
-            max_mesh_invocations_per_workgroup: 256,
-            max_mesh_workgroup_size_x: 256,
-            max_mesh_workgroup_size_y: 256,
-            max_mesh_workgroup_size_z: 64,
-            max_mesh_workgroups_per_dimension: 65535,
+
+            // Literally just made this up as 1024^2.
+            // My GPU supports 4 times this, and compute shaders don't have this kind of limit.
+            // This very likely is never a real limiter
+            max_task_workgroup_total_count: 1048576,
+            max_task_workgroups_per_dimension: 65535,
+            max_mesh_multiview_count: 1,
+            max_mesh_output_layers: 1024,
         }
     }
 
@@ -716,11 +713,10 @@ impl Limits {
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_non_sampler_bindings: 1_000_000,
     ///
-    ///     max_mesh_invocations_per_workgroup: 0, // *
-    ///     max_mesh_workgroup_size_x: 0, // *
-    ///     max_mesh_workgroup_size_y: 0, // *
-    ///     max_mesh_workgroup_size_z: 0, // *
-    ///     max_mesh_workgroups_per_dimension: 0, // *
+    ///     max_task_workgroup_total_count: 0,
+    ///     max_task_workgroups_per_dimension: 0,
+    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_output_layers: 0,
     /// });
     /// ```
     #[must_use]
@@ -735,11 +731,10 @@ impl Limits {
             // see: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_compute_workgroup_storage_size: 16352,
 
-            max_mesh_invocations_per_workgroup: 0,
-            max_mesh_workgroup_size_x: 0,
-            max_mesh_workgroup_size_y: 0,
-            max_mesh_workgroup_size_z: 0,
-            max_mesh_workgroups_per_dimension: 0,
+            max_task_workgroups_per_dimension: 0,
+            max_task_workgroup_total_count: 0,
+            max_mesh_multiview_count: 0,
+            max_mesh_output_layers: 0,
             ..Self::defaults()
         }
     }
@@ -788,11 +783,10 @@ impl Limits {
     ///     max_buffer_size: 256 << 20, // (256 MiB),
     ///     max_non_sampler_bindings: 1_000_000,
     ///
-    ///     max_mesh_invocations_per_workgroup: 0,
-    ///     max_mesh_workgroup_size_x: 0,
-    ///     max_mesh_workgroup_size_y: 0,
-    ///     max_mesh_workgroup_size_z: 0,
-    ///     max_mesh_workgroups_per_dimension: 0,
+    ///     max_task_workgroup_total_count: 0,
+    ///     max_task_workgroups_per_dimension: 0,
+    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_output_layers: 0,
     /// });
     /// ```
     #[must_use]
@@ -816,11 +810,10 @@ impl Limits {
             // Value supported by Intel Celeron B830 on Windows (OpenGL 3.1)
             max_inter_stage_shader_components: 31,
 
-            max_mesh_invocations_per_workgroup: 0,
-            max_mesh_workgroup_size_x: 0,
-            max_mesh_workgroup_size_y: 0,
-            max_mesh_workgroup_size_z: 0,
-            max_mesh_workgroups_per_dimension: 0,
+            max_task_workgroups_per_dimension: 0,
+            max_task_workgroup_total_count: 0,
+            max_mesh_multiview_count: 0,
+            max_mesh_output_layers: 0,
 
             // Most of the values should be the same as the downlevel defaults
             ..Self::downlevel_defaults()
@@ -933,6 +926,13 @@ impl Limits {
         }
         compare!(max_push_constant_size, Less);
         compare!(max_non_sampler_bindings, Less);
+
+        if self.max_task_workgroup_total_count > 0 {
+            compare!(max_task_workgroup_total_count, Less);
+            compare!(max_task_workgroups_per_dimension, Less);
+            compare!(max_mesh_multiview_count, Less);
+            compare!(max_mesh_output_layers, Less);
+        }
     }
 }
 

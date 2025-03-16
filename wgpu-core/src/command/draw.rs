@@ -62,9 +62,13 @@ pub enum DrawError {
     )]
     WrongPipelineType { wanted_mesh_pipeline: bool },
     #[error(
-        "Each current draw group size dimension ({current:?}) must be less or equal to {limit}"
+        "Each current draw group size dimension ({current:?}) must be less or equal to {limit}, and the product must be less or equal to {max_total}"
     )]
-    InvalidGroupSize { current: [u32; 3], limit: u32 },
+    InvalidGroupSize {
+        current: [u32; 3],
+        limit: u32,
+        max_total: u32,
+    },
 }
 
 /// Error encountered when encoding a render command.

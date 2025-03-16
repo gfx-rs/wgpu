@@ -177,11 +177,10 @@ const CAPABILITIES: crate::Capabilities = {
             max_push_constant_size: ALLOC_MAX_U32,
             max_non_sampler_bindings: ALLOC_MAX_U32,
 
-            max_mesh_invocations_per_workgroup: 0,
-            max_mesh_workgroup_size_x: 0,
-            max_mesh_workgroup_size_y: 0,
-            max_mesh_workgroup_size_z: 0,
-            max_mesh_workgroups_per_dimension: 0,
+            max_task_workgroup_total_count: 0,
+            max_task_workgroups_per_dimension: 0,
+            max_mesh_multiview_count: 0,
+            max_mesh_output_layers: 0,
         },
         alignments: crate::Alignments {
             // All maximally permissive

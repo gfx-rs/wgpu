@@ -160,11 +160,11 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_subgroup_size,
         max_push_constant_size,
         max_non_sampler_bindings,
-        max_mesh_invocations_per_workgroup,
-        max_mesh_workgroup_size_x,
-        max_mesh_workgroup_size_y,
-        max_mesh_workgroup_size_z,
-        max_mesh_workgroups_per_dimension,
+
+        max_task_workgroup_total_count,
+        max_task_workgroups_per_dimension,
+        max_mesh_multiview_count,
+        max_mesh_output_layers,
     } = limits;
     writeln!(output, "\t\t                           Max Texture Dimension 1d: {max_texture_dimension_1d}")?;
     writeln!(output, "\t\t                           Max Texture Dimension 2d: {max_texture_dimension_2d}")?;
@@ -201,11 +201,10 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                       Max Compute Workgroup Size Y: {max_compute_workgroup_size_y}")?;
     writeln!(output, "\t\t                       Max Compute Workgroup Size Z: {max_compute_workgroup_size_z}")?;
     writeln!(output, "\t\t               Max Compute Workgroups Per Dimension: {max_compute_workgroups_per_dimension}")?;
-    writeln!(output, "\t\t                 Max Mesh Invocations Per Workgroup: {max_mesh_invocations_per_workgroup}")?;
-    writeln!(output, "\t\t                          Max Mesh Workgroup Size X: {max_mesh_workgroup_size_x}")?;
-    writeln!(output, "\t\t                          Max Mesh Workgroup Size Y: {max_mesh_workgroup_size_y}")?;
-    writeln!(output, "\t\t                          Max Mesh Workgroup Size Z: {max_mesh_workgroup_size_z}")?;
-    writeln!(output, "\t\t                  Max Mesh Workgroups Per Dimension: {max_mesh_workgroups_per_dimension}")?;
+    writeln!(output, "\t\t                     Max Task Workgroup Total Count: {max_task_workgroup_total_count}")?;
+    writeln!(output, "\t\t                  Max Task Workgroups Per Dimension: {max_task_workgroups_per_dimension}")?;
+    writeln!(output, "\t\t                           Max Mesh Multiview Count: {max_mesh_multiview_count}")?;
+    writeln!(output, "\t\t                             Max Mesh Output Layers: {max_mesh_output_layers}")?;
 
     // This one reflects more of a wgpu implementation limitations than a hardware limit
     // so don't show it here.

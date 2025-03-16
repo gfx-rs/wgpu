@@ -1064,11 +1064,10 @@ impl super::PrivateCapabilities {
                 max_buffer_size: self.max_buffer_size,
                 max_non_sampler_bindings: u32::MAX,
 
-                max_mesh_invocations_per_workgroup: 0,
-                max_mesh_workgroup_size_x: 0,
-                max_mesh_workgroup_size_y: 0,
-                max_mesh_workgroup_size_z: 0,
-                max_mesh_workgroups_per_dimension: 0,
+                max_task_workgroup_total_count: 0,
+                max_task_workgroups_per_dimension: 0,
+                max_mesh_multiview_count: 0,
+                max_mesh_output_layers: 0,
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

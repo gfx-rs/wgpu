@@ -795,14 +795,17 @@ fn draw_mesh_tasks(
     let pipeline = state.pipeline()?;
     let used_bind_groups = pipeline.used_bind_groups;
 
-    let groups_size_limit = state.device.limits.max_mesh_workgroups_per_dimension;
+    let groups_size_limit = state.device.limits.max_task_workgroups_per_dimension;
+    let max_groups = state.device.limits.max_task_workgroup_total_count;
     if group_count_x > groups_size_limit
         || group_count_y > groups_size_limit
         || group_count_z > groups_size_limit
+        || group_count_x * group_count_y * group_count_z > max_groups
     {
         return Err(RenderBundleErrorInner::Draw(DrawError::InvalidGroupSize {
             current: [group_count_x, group_count_y, group_count_z],
             limit: groups_size_limit,
+            max_total: max_groups,
         }));
     }
 

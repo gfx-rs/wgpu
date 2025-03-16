@@ -1137,21 +1137,18 @@ impl PhysicalDeviceProperties {
             .min(limits.max_compute_work_group_count[1])
             .min(limits.max_compute_work_group_count[2]);
         let (
-            max_mesh_workgroup_sizes,
-            max_mesh_workgroups_per_dimension,
-            max_mesh_work_group_invocations,
+            max_task_workgroup_total_count,
+            max_task_workgroups_per_dimension,
+            max_mesh_multiview_count,
+            max_mesh_output_layers,
         ) = match self.mesh_shader {
             Some(m) => (
-                m.max_mesh_work_group_size.min(m.max_task_work_group_size),
-                m.max_mesh_work_group_count
-                    .into_iter()
-                    .min()
-                    .min(m.max_task_work_group_count.into_iter().min())
-                    .unwrap(),
-                m.max_mesh_work_group_invocations
-                    .min(m.max_task_work_group_invocations),
+                m.max_task_work_group_total_count,
+                m.max_task_work_group_count.into_iter().min().unwrap(),
+                m.max_mesh_multiview_view_count,
+                m.max_mesh_output_layers,
             ),
-            None => ([0, 0, 0], 0, 0),
+            None => (0, 0, 0, 0),
         };
 
         // Prevent very large buffers on mesa and most android devices.
@@ -1248,11 +1245,10 @@ impl PhysicalDeviceProperties {
             max_compute_workgroups_per_dimension,
             max_buffer_size,
             max_non_sampler_bindings: u32::MAX,
-            max_mesh_invocations_per_workgroup: max_mesh_work_group_invocations,
-            max_mesh_workgroup_size_x: max_mesh_workgroup_sizes[0],
-            max_mesh_workgroup_size_y: max_mesh_workgroup_sizes[1],
-            max_mesh_workgroup_size_z: max_mesh_workgroup_sizes[2],
-            max_mesh_workgroups_per_dimension,
+            max_task_workgroup_total_count,
+            max_task_workgroups_per_dimension,
+            max_mesh_multiview_count,
+            max_mesh_output_layers,
         }
     }
 
