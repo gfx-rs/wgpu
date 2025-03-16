@@ -3632,79 +3632,47 @@ impl Device {
         };
 
         let is_mesh = mesh_stage.is_some();
-        let raw = match vertex_stage {
-            Some(vertex) => {
-                let pipeline_desc = hal::RenderPipelineDescriptor {
-                    label: desc.label.to_hal(self.instance_flags),
-                    layout: pipeline_layout.raw(),
-                    vertex_stage: vertex,
-                    vertex_buffers: &vertex_buffers,
-                    primitive: desc.primitive,
-                    depth_stencil: desc.depth_stencil.clone(),
-                    multisample: desc.multisample,
-                    fragment_stage,
-                    color_targets,
-                    multiview: desc.multiview,
-                    cache: cache.as_ref().map(|it| it.raw()),
-                };
-                unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(|err| {
-                    match err {
-                        hal::PipelineError::Device(error) => {
-                            pipeline::CreateRenderPipelineError::Device(
-                                self.handle_hal_error(error),
-                            )
-                        }
-                        hal::PipelineError::Linkage(stage, msg) => {
-                            pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
-                        }
-                        hal::PipelineError::EntryPoint(stage) => {
-                            pipeline::CreateRenderPipelineError::Internal {
-                                stage: hal::auxil::map_naga_stage(stage),
-                                error: ENTRYPOINT_FAILURE_ERROR.to_string(),
-                            }
-                        }
-                        hal::PipelineError::PipelineConstants(stage, error) => {
-                            pipeline::CreateRenderPipelineError::PipelineConstants { stage, error }
+        let raw = {
+            let pipeline_desc = hal::RenderPipelineDescriptor {
+                label: desc.label.to_hal(self.instance_flags),
+                layout: pipeline_layout.raw(),
+                vertex_processor: match vertex_stage {
+                    Some(vertex_stage) => hal::VertexProcessor::Standard {
+                        vertex_buffers: &vertex_buffers,
+                        vertex_stage,
+                    },
+                    None => hal::VertexProcessor::Mesh {
+                        task_stage,
+                        mesh_stage: mesh_stage.unwrap(),
+                    },
+                },
+                primitive: desc.primitive,
+                depth_stencil: desc.depth_stencil.clone(),
+                multisample: desc.multisample,
+                fragment_stage,
+                color_targets,
+                multiview: desc.multiview,
+                cache: cache.as_ref().map(|it| it.raw()),
+            };
+            unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(
+                |err| match err {
+                    hal::PipelineError::Device(error) => {
+                        pipeline::CreateRenderPipelineError::Device(self.handle_hal_error(error))
+                    }
+                    hal::PipelineError::Linkage(stage, msg) => {
+                        pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
+                    }
+                    hal::PipelineError::EntryPoint(stage) => {
+                        pipeline::CreateRenderPipelineError::Internal {
+                            stage: hal::auxil::map_naga_stage(stage),
+                            error: ENTRYPOINT_FAILURE_ERROR.to_string(),
                         }
                     }
-                })?
-            }
-            None => {
-                let pipeline_desc = hal::MeshPipelineDescriptor {
-                    label: desc.label.to_hal(self.instance_flags),
-                    layout: pipeline_layout.raw(),
-                    task: task_stage,
-                    mesh: mesh_stage.unwrap(),
-                    primitive: desc.primitive,
-                    depth_stencil: desc.depth_stencil.clone(),
-                    multisample: desc.multisample,
-                    fragment_stage,
-                    color_targets,
-                    multiview: desc.multiview,
-                    cache: cache.as_ref().map(|it| it.raw()),
-                };
-                unsafe { self.raw().create_mesh_pipeline(&pipeline_desc) }.map_err(
-                    |err| match err {
-                        hal::PipelineError::Device(error) => {
-                            pipeline::CreateRenderPipelineError::Device(
-                                self.handle_hal_error(error),
-                            )
-                        }
-                        hal::PipelineError::Linkage(stage, msg) => {
-                            pipeline::CreateRenderPipelineError::Internal { stage, error: msg }
-                        }
-                        hal::PipelineError::EntryPoint(stage) => {
-                            pipeline::CreateRenderPipelineError::Internal {
-                                stage: hal::auxil::map_naga_stage(stage),
-                                error: ENTRYPOINT_FAILURE_ERROR.to_string(),
-                            }
-                        }
-                        hal::PipelineError::PipelineConstants(stage, error) => {
-                            pipeline::CreateRenderPipelineError::PipelineConstants { stage, error }
-                        }
-                    },
-                )?
-            }
+                    hal::PipelineError::PipelineConstants(stage, error) => {
+                        pipeline::CreateRenderPipelineError::PipelineConstants { stage, error }
+                    }
+                },
+            )?
         };
 
         let pass_context = RenderPassContext {

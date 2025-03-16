@@ -901,15 +901,6 @@ pub trait Device: WasmNotSendSync {
             <Self::A as Api>::PipelineCache,
         >,
     ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
-    #[allow(clippy::type_complexity)]
-    unsafe fn create_mesh_pipeline(
-        &self,
-        desc: &MeshPipelineDescriptor<
-            <Self::A as Api>::PipelineLayout,
-            <Self::A as Api>::ShaderModule,
-            <Self::A as Api>::PipelineCache,
-        >,
-    ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
     unsafe fn destroy_render_pipeline(&self, pipeline: <Self::A as Api>::RenderPipeline);
 
     #[allow(clippy::type_complexity)]
@@ -2156,6 +2147,20 @@ pub struct VertexBufferLayout<'a> {
     pub attributes: &'a [wgt::VertexAttribute],
 }
 
+#[derive(Clone, Debug)]
+pub enum VertexProcessor<'a, M: DynShaderModule + ?Sized> {
+    Standard {
+        /// The format of any vertex buffers used with this pipeline.
+        vertex_buffers: &'a [VertexBufferLayout<'a>],
+        /// The vertex stage for this pipeline.
+        vertex_stage: ProgrammableStage<'a, M>,
+    },
+    Mesh {
+        task_stage: Option<ProgrammableStage<'a, M>>,
+        mesh_stage: ProgrammableStage<'a, M>,
+    },
+}
+
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
 pub struct RenderPipelineDescriptor<
@@ -2167,37 +2172,8 @@ pub struct RenderPipelineDescriptor<
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
     pub layout: &'a Pl,
-    /// The format of any vertex buffers used with this pipeline.
-    pub vertex_buffers: &'a [VertexBufferLayout<'a>],
-    /// The vertex stage for this pipeline.
-    pub vertex_stage: ProgrammableStage<'a, M>,
-    /// The properties of the pipeline at the primitive assembly and rasterization level.
-    pub primitive: wgt::PrimitiveState,
-    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil: Option<wgt::DepthStencilState>,
-    /// The multi-sampling properties of the pipeline.
-    pub multisample: wgt::MultisampleState,
-    /// The fragment stage for this pipeline.
-    pub fragment_stage: Option<ProgrammableStage<'a, M>>,
-    /// The effect of draw calls on the color aspect of the output target.
-    pub color_targets: &'a [Option<wgt::ColorTargetState>],
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
-    pub multiview: Option<NonZeroU32>,
-    /// The cache which will be used and filled when compiling this pipeline
-    pub cache: Option<&'a Pc>,
-}
-pub struct MeshPipelineDescriptor<
-    'a,
-    Pl: DynPipelineLayout + ?Sized,
-    M: DynShaderModule + ?Sized,
-    Pc: DynPipelineCache + ?Sized,
-> {
-    pub label: Label<'a>,
-    /// The layout of bind groups for this pipeline.
-    pub layout: &'a Pl,
-    pub task: Option<ProgrammableStage<'a, M>>,
-    pub mesh: ProgrammableStage<'a, M>,
+    /// The vertex processing state(vertex shader + buffers or task + mesh shaders)
+    pub vertex_processor: VertexProcessor<'a, M>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
