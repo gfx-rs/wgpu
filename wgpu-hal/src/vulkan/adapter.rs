@@ -909,7 +909,7 @@ pub struct PhysicalDeviceProperties {
 
     /// Additional `vk::PhysicalDevice` properties from the
     /// `VK_EXT_mesh_shader` extension.
-    _mesh_shader: Option<vk::PhysicalDeviceMeshShaderPropertiesEXT<'static>>,
+    mesh_shader: Option<vk::PhysicalDeviceMeshShaderPropertiesEXT<'static>>,
 
     /// The device API version.
     ///
@@ -1140,7 +1140,7 @@ impl PhysicalDeviceProperties {
             max_mesh_workgroup_sizes,
             max_mesh_workgroups_per_dimension,
             max_mesh_work_group_invocations,
-        ) = match self._mesh_shader {
+        ) = match self.mesh_shader {
             Some(m) => (
                 m.max_mesh_work_group_size.min(m.max_task_work_group_size),
                 m.max_mesh_work_group_count
@@ -1383,7 +1383,7 @@ impl super::InstanceShared {
 
                 if supports_mesh_shader {
                     let next = capabilities
-                        ._mesh_shader
+                        .mesh_shader
                         .insert(vk::PhysicalDeviceMeshShaderPropertiesEXT::default());
                     properties2 = properties2.push_next(next);
                 }

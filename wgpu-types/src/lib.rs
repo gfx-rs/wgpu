@@ -715,6 +715,12 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_non_sampler_bindings: 1_000_000,
+    ///
+    ///     max_mesh_invocations_per_workgroup: 0,
+    ///     max_mesh_workgroup_size_x: 0,
+    ///     max_mesh_workgroup_size_y: 0,
+    ///     max_mesh_workgroup_size_z: 0,
+    ///     max_mesh_workgroups_per_dimension: 0,
     /// });
     /// ```
     #[must_use]
