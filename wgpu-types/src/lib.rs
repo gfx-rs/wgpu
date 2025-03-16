@@ -1305,9 +1305,9 @@ bitflags::bitflags! {
         const COMPUTE = 1 << 2;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
         const VERTEX_FRAGMENT = Self::VERTEX.bits() | Self::FRAGMENT.bits();
-        /// Binding is visible from the task shader of a mesh pipeline
+        /// Binding is visible from the task shader of a mesh pipeline.
         const TASK = 1 << 3;
-        /// Binding is visible from the mesh shader of a mesh pipeline
+        /// Binding is visible from the mesh shader of a mesh pipeline.
         const MESH = 1 << 4;
     }
 }

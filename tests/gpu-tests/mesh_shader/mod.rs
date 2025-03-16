@@ -1,14 +1,23 @@
+use std::{io::Write, process::Stdio};
+
 use wgpu::util::DeviceExt;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
-fn bytes_to_shader(device: &wgpu::Device, bytes: &[u8]) -> wgpu::ShaderModule {
+// Same as in mesh shader example
+fn compile_spv_asm(device: &wgpu::Device, data: &[u8]) -> wgpu::ShaderModule {
+    let cmd = std::process::Command::new("spirv-as")
+        .args(["-", "-o", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to call spirv-as");
+    cmd.stdin.as_ref().unwrap().write_all(data).unwrap();
+    let output = cmd.wait_with_output().expect("Error waiting for spirv-as");
+    assert!(output.status.success());
     unsafe {
-        // May be technically unsafe due to resulting vec possibly not being properly aligned.
-        let vec = bytes.to_owned();
-        let words = bytemuck::cast_slice(&vec);
         device.create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
             label: None,
-            source: words.into(),
+            source: wgpu::util::make_spirv_raw(&output.stdout),
         })
     }
 }
@@ -51,9 +60,9 @@ fn mesh_pipeline_build(
 ) {
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let task = task.map(|a| bytes_to_shader(device, a));
-    let mesh = bytes_to_shader(device, mesh);
-    let frag = frag.map(|a| bytes_to_shader(device, a));
+    let task = task.map(|t| compile_spv_asm(device, t));
+    let mesh = compile_spv_asm(device, mesh);
+    let frag = frag.map(|f| compile_spv_asm(device, f));
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -125,9 +134,9 @@ pub enum DrawType {
 fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let task = bytes_to_shader(device, BASIC_TASK);
-    let mesh = bytes_to_shader(device, BASIC_MESH);
-    let frag = bytes_to_shader(device, NO_WRITE_FRAG);
+    let task = compile_spv_asm(device, BASIC_TASK);
+    let mesh = compile_spv_asm(device, BASIC_MESH);
+    let frag = compile_spv_asm(device, NO_WRITE_FRAG);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -219,10 +228,10 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     ctx.device.poll(wgpu::PollType::Wait).unwrap();
 }
 
-const BASIC_TASK: &[u8] = include_bytes!("basic.task.spv");
-const BASIC_MESH: &[u8] = include_bytes!("basic.mesh.spv");
+const BASIC_TASK: &[u8] = include_bytes!("basic.task.spv.asm");
+const BASIC_MESH: &[u8] = include_bytes!("basic.mesh.spv.asm");
 //const BASIC_FRAG: &[u8] = include_bytes!("basic.frag.spv");
-const NO_WRITE_FRAG: &[u8] = include_bytes!("no-write.frag.spv");
+const NO_WRITE_FRAG: &[u8] = include_bytes!("no-write.frag.spv.asm");
 
 fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
     GpuTestConfiguration::new().parameters(

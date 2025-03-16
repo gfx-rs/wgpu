@@ -1,3 +1,24 @@
+use std::{io::Write, process::Stdio};
+
+// Same as in mesh shader tests
+fn compile_spv_asm(device: &wgpu::Device, data: &[u8]) -> wgpu::ShaderModule {
+    let cmd = std::process::Command::new("spirv-as")
+        .args(["-", "-o", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to call spirv-as");
+    cmd.stdin.as_ref().unwrap().write_all(data).unwrap();
+    let output = cmd.wait_with_output().expect("Error waiting for spirv-as");
+    assert!(output.status.success());
+    unsafe {
+        device.create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
+            label: None,
+            source: wgpu::util::make_spirv_raw(&output.stdout),
+        })
+    }
+}
+
 pub struct Example {
     pipeline: wgpu::RenderPipeline,
 }
@@ -13,13 +34,11 @@ impl crate::framework::Example for Example {
             bind_group_layouts: &[],
             push_constant_ranges: &[],
         });
-        let (ts, ms, fs) = unsafe {
-            (
-                device.create_shader_module_spirv(&wgpu::include_spirv_raw!("shader.task.spv")),
-                device.create_shader_module_spirv(&wgpu::include_spirv_raw!("shader.mesh.spv")),
-                device.create_shader_module_spirv(&wgpu::include_spirv_raw!("shader.frag.spv")),
-            )
-        };
+        let (ts, ms, fs) = (
+            compile_spv_asm(device, include_bytes!("shader.task.spv.asm")),
+            compile_spv_asm(device, include_bytes!("shader.mesh.spv.asm")),
+            compile_spv_asm(device, include_bytes!("shader.frag.spv.asm")),
+        );
         let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
