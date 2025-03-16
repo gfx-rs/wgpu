@@ -235,15 +235,18 @@ const NO_WRITE_FRAG: &[u8] = include_bytes!("no-write.frag.spv.asm");
 
 fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
     GpuTestConfiguration::new().parameters(
-        TestParameters::default().test_features_limits().features(
-            wgpu::Features::EXPERIMENTAL_MESH_SHADER
-                | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
-                | match draw_type {
-                    DrawType::Standard | DrawType::Indirect => wgpu::Features::empty(),
-                    DrawType::MultiIndirect => wgpu::Features::MULTI_DRAW_INDIRECT,
-                    DrawType::MultiIndirectCount => wgpu::Features::MULTI_DRAW_INDIRECT_COUNT,
-                },
-        ),
+        TestParameters::default()
+            .test_features_limits()
+            .features(
+                wgpu::Features::EXPERIMENTAL_MESH_SHADER
+                    | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
+                    | match draw_type {
+                        DrawType::Standard | DrawType::Indirect => wgpu::Features::empty(),
+                        DrawType::MultiIndirect => wgpu::Features::MULTI_DRAW_INDIRECT,
+                        DrawType::MultiIndirectCount => wgpu::Features::MULTI_DRAW_INDIRECT_COUNT,
+                    },
+            )
+            .limits(wgpu::Limits::default()),
     )
 }
 
