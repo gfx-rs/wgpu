@@ -201,11 +201,11 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                       Max Compute Workgroup Size Y: {max_compute_workgroup_size_y}")?;
     writeln!(output, "\t\t                       Max Compute Workgroup Size Z: {max_compute_workgroup_size_z}")?;
     writeln!(output, "\t\t               Max Compute Workgroups Per Dimension: {max_compute_workgroups_per_dimension}")?;
-    writeln!(output, "\t\t                 Max Mesh Invocations Per Workgroup: {max_max_invocations_per_workgroup}")?;
-    writeln!(output, "\t\t                          Max Mesh Workgroup Size X: {max_max_workgroup_size_x}")?;
-    writeln!(output, "\t\t                          Max Mesh Workgroup Size Y: {max_max_workgroup_size_y}")?;
-    writeln!(output, "\t\t                          Max Mesh Workgroup Size Z: {max_max_workgroup_size_z}")?;
-    writeln!(output, "\t\t                  Max Mesh Workgroups Per Dimension: {max_max_workgroups_per_dimension}")?;
+    writeln!(output, "\t\t                 Max Mesh Invocations Per Workgroup: {max_mesh_invocations_per_workgroup}")?;
+    writeln!(output, "\t\t                          Max Mesh Workgroup Size X: {max_mesh_workgroup_size_x}")?;
+    writeln!(output, "\t\t                          Max Mesh Workgroup Size Y: {max_mesh_workgroup_size_y}")?;
+    writeln!(output, "\t\t                          Max Mesh Workgroup Size Z: {max_mesh_workgroup_size_z}")?;
+    writeln!(output, "\t\t                  Max Mesh Workgroups Per Dimension: {max_mesh_workgroups_per_dimension}")?;
 
     // This one reflects more of a wgpu implementation limitations than a hardware limit
     // so don't show it here.
