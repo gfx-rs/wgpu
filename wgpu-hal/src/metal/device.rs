@@ -1006,7 +1006,7 @@ impl crate::Device for super::Device {
             super::PipelineCache,
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
-        let (vertex_stage_desc, vertex_buffers_desc) = match &desc.vertex_processor {
+        let (desc_vertex_stage, desc_vertex_buffers) = match &desc.vertex_processor {
             crate::VertexProcessor::Standard {
                 vertex_buffers,
                 vertex_stage,
