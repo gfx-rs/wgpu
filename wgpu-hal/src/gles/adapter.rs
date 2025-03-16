@@ -790,6 +790,12 @@ impl super::Adapter {
             max_compute_workgroups_per_dimension,
             max_buffer_size: i32::MAX as u64,
             max_non_sampler_bindings: u32::MAX,
+
+            max_mesh_invocations_per_workgroup: 0,
+            max_mesh_workgroup_size_x: 0,
+            max_mesh_workgroup_size_y: 0,
+            max_mesh_workgroup_size_z: 0,
+            max_mesh_workgroups_per_dimension: 0,
         };
 
         let mut workarounds = super::Workarounds::empty();

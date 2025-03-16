@@ -600,6 +600,22 @@ pub struct Limits {
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
+
+    /// Maximum value of the product of the `workgroup_size` dimensions for a compute entry-point.
+    /// Defaults to 256. Higher is "better".
+    pub max_mesh_invocations_per_workgroup: u32,
+    /// The maximum value of the `workgroup_size` X dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256. Higher is "better".
+    pub max_mesh_workgroup_size_x: u32,
+    /// The maximum value of the `workgroup_size` Y dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 256. Higher is "better".
+    pub max_mesh_workgroup_size_y: u32,
+    /// The maximum value of the `workgroup_size` Z dimension for a compute stage `ShaderModule` entry-point.
+    /// Defaults to 64. Higher is "better".
+    pub max_mesh_workgroup_size_z: u32,
+    /// The maximum value for each dimension of a `RenderPass::draw_mesh_tasks(x, y, z)` operation.
+    /// Defaults to 65535. Higher is "better".
+    pub max_mesh_workgroups_per_dimension: u32,
 }
 
 impl Default for Limits {
@@ -649,6 +665,11 @@ impl Limits {
             max_subgroup_size: 0,
             max_push_constant_size: 0,
             max_non_sampler_bindings: 1_000_000,
+            max_mesh_invocations_per_workgroup: 0,
+            max_mesh_workgroup_size_x: 0,
+            max_mesh_workgroup_size_y: 0,
+            max_mesh_workgroup_size_z: 0,
+            max_mesh_workgroups_per_dimension: 0,
         }
     }
 

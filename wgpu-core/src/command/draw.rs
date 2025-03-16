@@ -61,6 +61,10 @@ pub enum DrawError {
         if *wanted_mesh_pipeline {"standard"} else {"mesh shader"},
     )]
     WrongPipelineType { wanted_mesh_pipeline: bool },
+    #[error(
+        "Each current draw group size dimension ({current:?}) must be less or equal to {limit}"
+    )]
+    InvalidGroupSize { current: [u32; 3], limit: u32 },
 }
 
 /// Error encountered when encoding a render command.

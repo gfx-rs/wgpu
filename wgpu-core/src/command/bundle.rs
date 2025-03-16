@@ -795,7 +795,16 @@ fn draw_mesh_tasks(
     let pipeline = state.pipeline()?;
     let used_bind_groups = pipeline.used_bind_groups;
 
-    // I can't think of any validation that must be done here. No buffers to ensure are proper length, etc
+    let groups_size_limit = state.device.limits.max_mesh_workgroups_per_dimension;
+    if group_count_x > groups_size_limit
+        || group_count_y > groups_size_limit
+        || group_count_z > groups_size_limit
+    {
+        return Err(RenderBundleErrorInner::Draw(DrawError::InvalidGroupSize {
+            current: [group_count_x, group_count_y, group_count_z],
+            limit: groups_size_limit,
+        }));
+    }
 
     if group_count_x > 0 && group_count_y > 0 && group_count_z > 0 {
         state.flush_binds(used_bind_groups, dynamic_offsets);

@@ -584,6 +584,12 @@ impl super::Adapter {
                     // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
                     max_buffer_size: i32::MAX as u64,
                     max_non_sampler_bindings: 1_000_000,
+
+                    max_mesh_invocations_per_workgroup: 0,
+                    max_mesh_workgroup_size_x: 0,
+                    max_mesh_workgroup_size_y: 0,
+                    max_mesh_workgroup_size_z: 0,
+                    max_mesh_workgroups_per_dimension: 0,
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
