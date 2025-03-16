@@ -816,6 +816,13 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_push_constant_size: wgt::Limits::default().max_push_constant_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
         max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
+
+        max_mesh_invocations_per_workgroup: wgt::Limits::default()
+            .max_mesh_invocations_per_workgroup,
+        max_mesh_workgroup_size_x: wgt::Limits::default().max_mesh_workgroup_size_x,
+        max_mesh_workgroup_size_y: wgt::Limits::default().max_mesh_workgroup_size_y,
+        max_mesh_workgroup_size_z: wgt::Limits::default().max_mesh_workgroup_size_z,
+        max_mesh_workgroups_per_dimension: wgt::Limits::default().max_mesh_workgroups_per_dimension,
     }
 }
 
