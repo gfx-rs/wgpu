@@ -270,7 +270,7 @@ impl Global {
                     }
                     let blas = hub.blas_s.get(instance.blas_id).get()?;
 
-                    cmd_buf_data.trackers.blas_s.insert_single(blas.clone());
+                    cmd_buf_data.trackers.blas_s.insert_single(&blas);
 
                     instance_buffer_staging_source.extend(device.raw().tlas_instance_to_bytes(
                         hal::TlasInstance {
@@ -587,7 +587,7 @@ fn iter_blas<'a>(
     let mut temp_buffer = Vec::new();
     for entry in blas_iter {
         let blas = hub.blas_s.get(entry.blas_id).get()?;
-        cmd_buf_data.trackers.blas_s.insert_single(blas.clone());
+        cmd_buf_data.trackers.blas_s.insert_single(&blas);
 
         build_command.blas_s_built.push(blas.clone());
 

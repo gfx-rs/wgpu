@@ -25,14 +25,15 @@ impl BlasTracker {
     ///
     /// Returns a reference to the newly inserted resource.
     /// (This allows avoiding a clone/reference count increase in many cases.)
-    pub fn insert_single(&mut self, resource: Arc<Blas>) -> &Arc<Blas> {
+    pub fn insert_single(&mut self, resource: &Arc<Blas>) -> &Arc<Blas> {
         let index = resource.tracker_index().as_usize();
         self.allow_index(index);
 
         unsafe {
             // # SAFETY: we just allowed this resource, which makes the metadata object larger if
             // it's not in bounds
-            self.metadata.insert(index, resource)
+            self.metadata
+                .insert(index, super::ResourceMetadataProvider::Direct { resource })
         }
     }
 

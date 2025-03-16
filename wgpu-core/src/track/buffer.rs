@@ -17,8 +17,8 @@ use crate::{
     resource::{Buffer, Trackable},
     snatch::SnatchGuard,
     track::{
-        invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
-        ResourceUsageCompatibilityError, ResourceUses,
+        invalid_resource_state, metadata::Insertable, skip_barrier, ResourceMetadata,
+        ResourceMetadataProvider, ResourceUsageCompatibilityError, ResourceUses,
     },
 };
 
@@ -585,9 +585,7 @@ impl DeviceBufferTracker {
                 index,
                 BufferStateProvider::Direct { state },
                 None,
-                ResourceMetadataProvider::Direct {
-                    resource: &Arc::downgrade(buffer),
-                },
+                ResourceMetadataProvider::Direct { resource: buffer },
             )
         }
     }
@@ -685,7 +683,7 @@ impl BufferStateProvider<'_> {
 }
 
 #[inline(always)]
-unsafe fn insert<T: Clone>(
+unsafe fn insert<T: Insertable>(
     start_states: Option<&mut [BufferUses]>,
     current_states: &mut [BufferUses],
     resource_metadata: &mut ResourceMetadata<T>,
@@ -709,8 +707,7 @@ unsafe fn insert<T: Clone>(
         }
         *current_states.get_unchecked_mut(index) = new_end_state;
 
-        let resource = metadata_provider.get(index);
-        resource_metadata.insert(index, resource.clone());
+        resource_metadata.insert(index, metadata_provider);
     }
 }
 
@@ -729,7 +726,7 @@ unsafe fn merge(
 
     if invalid_resource_state(merged_state) {
         return Err(ResourceUsageCompatibilityError::from_buffer(
-            unsafe { metadata_provider.get(index) },
+            unsafe { &metadata_provider.get(index) },
             *current_state,
             new_state,
         ));

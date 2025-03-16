@@ -23,8 +23,8 @@ use crate::{
     resource::{RawResourceAccess, Texture, TextureInner, TextureView, Trackable},
     snatch::SnatchGuard,
     track::{
-        invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,
-        ResourceUsageCompatibilityError, ResourceUses,
+        invalid_resource_state, metadata::Insertable, skip_barrier, ResourceMetadata,
+        ResourceMetadataProvider, ResourceUsageCompatibilityError, ResourceUses,
     },
 };
 use hal::TextureBarrier;
@@ -719,9 +719,7 @@ impl DeviceTextureTracker {
                 index,
                 TextureStateProvider::KnownSingle { state: usage },
                 None,
-                ResourceMetadataProvider::Direct {
-                    resource: &Arc::downgrade(texture),
-                },
+                ResourceMetadataProvider::Direct { resource: texture },
             )
         };
     }
@@ -1074,7 +1072,7 @@ unsafe fn insert_or_barrier_update(
 }
 
 #[inline(always)]
-unsafe fn insert<T: Clone>(
+unsafe fn insert<T: Insertable>(
     texture_selector: Option<&TextureSelector>,
     start_state: Option<&mut TextureStateSet>,
     end_state: &mut TextureStateSet,
@@ -1143,8 +1141,7 @@ unsafe fn insert<T: Clone>(
     }
 
     unsafe {
-        let resource = metadata_provider.get(index);
-        resource_metadata.insert(index, resource.clone());
+        resource_metadata.insert(index, metadata_provider);
     }
 }
 
@@ -1166,7 +1163,7 @@ unsafe fn merge(
 
             if invalid_resource_state(merged_state) {
                 return Err(ResourceUsageCompatibilityError::from_texture(
-                    unsafe { metadata_provider.get(index) },
+                    unsafe { &metadata_provider.get(index) },
                     texture_selector.clone(),
                     *current_simple,
                     new_simple,
@@ -1191,7 +1188,7 @@ unsafe fn merge(
 
                 if invalid_resource_state(merged_state) {
                     return Err(ResourceUsageCompatibilityError::from_texture(
-                        unsafe { metadata_provider.get(index) },
+                        unsafe { &metadata_provider.get(index) },
                         selector,
                         *current_simple,
                         new_state,
@@ -1226,7 +1223,7 @@ unsafe fn merge(
 
                     if invalid_resource_state(merged_state) {
                         return Err(ResourceUsageCompatibilityError::from_texture(
-                            unsafe { metadata_provider.get(index) },
+                            unsafe { &metadata_provider.get(index) },
                             TextureSelector {
                                 mips: mip_id..mip_id + 1,
                                 layers: layers.clone(),
@@ -1262,7 +1259,7 @@ unsafe fn merge(
 
                         if invalid_resource_state(merged_state) {
                             return Err(ResourceUsageCompatibilityError::from_texture(
-                                unsafe { metadata_provider.get(index) },
+                                unsafe { &metadata_provider.get(index) },
                                 TextureSelector {
                                     mips: mip_id..mip_id + 1,
                                     layers: layers.clone(),

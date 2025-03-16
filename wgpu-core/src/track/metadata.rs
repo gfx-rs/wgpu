@@ -1,9 +1,123 @@
 //! The `ResourceMetadata` type.
 
-use alloc::vec::Vec;
+use alloc::{sync::Arc, sync::Weak, vec::Vec};
 
 use bit_vec::BitVec;
 use wgt::strict_assert;
+
+#[cold]
+fn cold() {}
+
+/// A trait for abstracting over Arc and Weak metadata when inserting
+/// into a `Option`.
+///
+/// We want to avoid cloning or downgrading the value we're inserting
+/// if it is already present in the `Option`, as refcounting is the
+/// hostest bit of code in the tracker. This allows us to to insert
+/// only if the value is different or not present.
+///
+/// Because [`ResourceMetadata`] is generic over [`Arc`] and [`Weak`],
+/// we need a trait to give us the implementations for each.
+pub trait Insertable: Sized {
+    /// The value owned within the `Option`.
+    ///
+    /// This value is always `Arc<T>` where Self is `Arc<T>` or `Weak<T>`.
+    type OwnedValue: Clone;
+
+    /// Insert into the given option from an [`Arc`].
+    fn insert_from_owned<'a>(option: &'a mut Option<Self>, value: &Self::OwnedValue) -> &'a Self;
+    /// Insert into the given option from Self. This is only different for [`Weak`].
+    fn insert_from_self<'a>(option: &'a mut Option<Self>, value: &Self) -> &'a Self;
+    /// Get the inner value from whatever is in the option.
+    ///
+    /// This always clones the value, but it is only called in the error case.
+    fn get_inner(option: &Self) -> Self::OwnedValue;
+}
+
+impl<T> Insertable for Arc<T> {
+    type OwnedValue = Arc<T>;
+
+    #[inline(always)]
+    fn insert_from_owned<'a>(option: &'a mut Option<Arc<T>>, new_value: &Arc<T>) -> &'a Arc<T> {
+        match option {
+            Some(old_value) => {
+                if !Arc::ptr_eq(old_value, new_value) {
+                    // This should never happen. Because owning trackers keep their
+                    // values alive, the value at a given tracker index should never
+                    // change. We build in this check though to prevent bugs from
+                    // causing silent corruption. However we mark it cold.
+                    cold();
+
+                    // Only clone and insert if the value is different.
+                    *old_value = new_value.clone();
+                }
+                old_value
+            }
+            None => {
+                // If the option is empty, we must clone and insert the new value.
+                option.insert(new_value.clone())
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn insert_from_self<'a>(option: &'a mut Option<Arc<T>>, new_value: &Arc<T>) -> &'a Arc<T> {
+        // `insert_from_owned` is the same as `insert_from_self` for Arc
+        Self::insert_from_owned(option, new_value)
+    }
+
+    #[inline(always)]
+    fn get_inner<'a>(option: &'a Arc<T>) -> Arc<T> {
+        option.clone()
+    }
+}
+
+impl<T> Insertable for Weak<T> {
+    type OwnedValue = Arc<T>;
+
+    #[inline(always)]
+    fn insert_from_owned<'a>(option: &'a mut Option<Weak<T>>, new_value: &Arc<T>) -> &'a Weak<T> {
+        match option {
+            Some(old_value) => {
+                if old_value.as_ptr() != Arc::as_ptr(new_value) {
+                    // Unlike strongly owned trackers, the weak trackers (device tracker)
+                    // never actually gets its items removed. We need to be able to overwrite
+                    // the value in the tracker.
+
+                    // Only downgrade and insert if the value is different.
+                    *old_value = Arc::downgrade(new_value);
+                }
+                old_value
+            }
+            None => {
+                // If the option is empty, we must downgrade and insert the new value.
+                option.insert(Arc::downgrade(new_value))
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn insert_from_self<'a>(option: &'a mut Option<Weak<T>>, new_value: &Weak<T>) -> &'a Weak<T> {
+        match option {
+            Some(old_value) => {
+                if old_value.as_ptr() != new_value.as_ptr() {
+                    // Only clone and insert if the value is different.
+                    *old_value = new_value.clone();
+                }
+                old_value
+            }
+            None => {
+                // If the option is empty, we must clone and insert the new value.
+                option.insert(new_value.clone())
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn get_inner<'a>(option: &'a Weak<T>) -> Arc<T> {
+        option.upgrade().unwrap()
+    }
+}
 
 /// A set of resources, holding a `Arc<T>` and epoch for each member.
 ///
@@ -13,7 +127,7 @@ use wgt::strict_assert;
 /// members, but a bit vector tracks occupancy, so iteration touches
 /// only occupied elements.
 #[derive(Debug)]
-pub(super) struct ResourceMetadata<T: Clone> {
+pub(super) struct ResourceMetadata<T> {
     /// If the resource with index `i` is a member, `owned[i]` is `true`.
     owned: BitVec<usize>,
 
@@ -21,7 +135,7 @@ pub(super) struct ResourceMetadata<T: Clone> {
     resources: Vec<Option<T>>,
 }
 
-impl<T: Clone> ResourceMetadata<T> {
+impl<T: Insertable> ResourceMetadata<T> {
     pub(super) fn new() -> Self {
         Self {
             owned: BitVec::default(),
@@ -30,7 +144,7 @@ impl<T: Clone> ResourceMetadata<T> {
     }
 
     pub(super) fn set_size(&mut self, size: usize) {
-        self.resources.resize(size, None);
+        self.resources.resize_with(size, || None);
         resize_bitvec(&mut self.owned, size);
     }
 
@@ -90,10 +204,24 @@ impl<T: Clone> ResourceMetadata<T> {
     /// The given `index` must be in bounds for this `ResourceMetadata`'s
     /// existing tables. See `tracker_assert_in_bounds`.
     #[inline(always)]
-    pub(super) unsafe fn insert(&mut self, index: usize, resource: T) -> &T {
+    pub(super) unsafe fn insert(
+        &mut self,
+        index: usize,
+        resource: ResourceMetadataProvider<'_, T>,
+    ) -> &T {
         self.owned.set(index, true);
+
         let resource_dst = unsafe { self.resources.get_unchecked_mut(index) };
-        resource_dst.insert(resource)
+
+        match resource {
+            ResourceMetadataProvider::Direct { resource } => {
+                T::insert_from_owned(resource_dst, resource)
+            }
+            ResourceMetadataProvider::Indirect { metadata } => {
+                let resource = unsafe { metadata.get_resource_unchecked(index) };
+                T::insert_from_self(resource_dst, resource)
+            }
+        }
     }
 
     /// Get the resource with the given index.
@@ -144,29 +272,30 @@ impl<T: Clone> ResourceMetadata<T> {
 ///
 /// This is used to abstract over the various places
 /// trackers can get new resource metadata from.
-pub(super) enum ResourceMetadataProvider<'a, T: Clone> {
+pub(super) enum ResourceMetadataProvider<'a, T: Insertable> {
     /// Comes directly from explicit values.
-    Direct { resource: &'a T },
+    Direct { resource: &'a T::OwnedValue },
     /// Comes from another metadata tracker.
     Indirect { metadata: &'a ResourceMetadata<T> },
 }
-impl<T: Clone> ResourceMetadataProvider<'_, T> {
-    /// Get a reference to the resource from this.
+impl<T> ResourceMetadataProvider<'_, T>
+where
+    T: Insertable,
+{
+    /// Get a reference to the resource from this. This clones the resource in all pathways
+    /// and should not be called unless required. Currently this is only used in error paths
+    /// which do not need to be fast.
     ///
     /// # Safety
     ///
     /// - The index must be in bounds of the metadata tracker if this uses an indirect source.
     #[inline(always)]
-    pub(super) unsafe fn get(&self, index: usize) -> &T {
-        match self {
-            ResourceMetadataProvider::Direct { resource } => resource,
-            ResourceMetadataProvider::Indirect { metadata } => {
-                metadata.tracker_assert_in_bounds(index);
-                {
-                    let resource = unsafe { metadata.resources.get_unchecked(index) }.as_ref();
-                    unsafe { resource.unwrap_unchecked() }
-                }
-            }
+    pub(super) unsafe fn get(&self, index: usize) -> T::OwnedValue {
+        match *self {
+            ResourceMetadataProvider::Direct { resource } => resource.clone(),
+            ResourceMetadataProvider::Indirect { metadata } => unsafe {
+                T::get_inner(metadata.get_resource_unchecked(index))
+            },
         }
     }
 }
