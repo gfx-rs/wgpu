@@ -205,7 +205,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 - If you use Binding Arrays in a bind group, you may not use Dynamic Offset Buffers or Uniform Buffers in that bind group. By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811)
 - Rename `instance_id` and `instance_custom_index` to `instance_index` and `instance_custom_data` by @Vecvec in
   [#6780](https://github.com/gfx-rs/wgpu/pull/6780)
-- Add mesh shader support to `wgpu`(currently vulkan + spirv-passthrough only)
+- Add mesh shader support to `wgpu` (currently vulkan + spirv-passthrough only). By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345)
 
 
 #### Naga
