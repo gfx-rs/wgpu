@@ -315,11 +315,12 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
             .into_iter()
             .map(|&c| self.typifier()[c].inner_with(types));
         log::debug!(
-            "wgsl automatic_conversion_consensus: {:?}",
+            "wgsl automatic_conversion_consensus: {}",
             inners
                 .clone()
                 .map(|inner| self.type_inner_to_string(inner))
                 .collect::<Vec<String>>()
+                .join(", ")
         );
         let mut best = inners.next().unwrap().scalar().ok_or(0_usize)?;
         for (inner, i) in inners.zip(1..) {
@@ -332,7 +333,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
             }
         }
 
-        log::debug!("    consensus: {:?}", best.to_wgsl_for_diagnostics());
+        log::debug!("    consensus: {}", best.to_wgsl_for_diagnostics());
         Ok(best)
     }
 }
