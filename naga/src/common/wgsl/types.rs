@@ -44,20 +44,42 @@ pub trait TypeContext {
     ///
     /// A backend might implement this with a call to the [`unreachable!`]
     /// macro, since backends are allowed to assume that the module has passed
-    /// validation, whereas something generating type names to appear in error messages
-    /// might punt to `TypeInner`'s [`core::fmt::Debug`] implementation, since it's
-    /// probably better to show the user something they can act on.
-    fn write_non_wgsl_inner<W: Write>(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result;
+    /// validation.
+    ///
+    /// The default implementation is appropriate for generating type names to
+    /// appear in error messages. It punts to `TypeInner`'s [`core::fmt::Debug`]
+    /// implementation, since it's probably best to show the user something they
+    /// can act on.
+    fn write_non_wgsl_inner<W: Write>(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result {
+        write!(out, "{{non-WGSL Naga type {inner:?}}}")
+    }
 
     /// Write a [`Scalar`] that has no representation as WGSL source,
     /// even including Naga extensions.
     ///
     /// A backend might implement this with a call to the [`unreachable!`]
     /// macro, since backends are allowed to assume that the module has passed
-    /// validation, whereas something generating type names to appear in error messages
-    /// might punt to `Scalar`'s [`core::fmt::Debug`] implementation, since it's
-    /// probably better to show the user something they can act on.
-    fn write_non_wgsl_scalar<W: Write>(&self, scalar: Scalar, out: &mut W) -> core::fmt::Result;
+    /// validation.
+    ///
+    /// The default implementation is appropriate for generating type names to
+    /// appear in error messages. It punts to `Scalar`'s [`core::fmt::Debug`]
+    /// implementation, since it's probably best to show the user something they
+    /// can act on.
+    fn write_non_wgsl_scalar<W: Write>(&self, scalar: Scalar, out: &mut W) -> core::fmt::Result {
+        match scalar.kind {
+            crate::ScalarKind::Sint
+            | crate::ScalarKind::Uint
+            | crate::ScalarKind::Float
+            | crate::ScalarKind::Bool => write!(out, "{{non-WGSL Naga scalar {scalar:?}}}"),
+
+            // The abstract types are kind of an odd quasi-WGSL category:
+            // they are definitely part of the spec, but they are not expressible
+            // in WGSL itself. So we want to call them out by name in error messages,
+            // but the WGSL backend should never generate these.
+            crate::ScalarKind::AbstractInt => out.write_str("{AbstractInt}"),
+            crate::ScalarKind::AbstractFloat => out.write_str("{AbstractFloat}"),
+        }
+    }
 
     /// Write the type `ty` as it would appear in a value's declaration.
     ///
