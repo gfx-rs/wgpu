@@ -1707,8 +1707,16 @@ impl crate::Device for super::Device {
         let (topology_class, topology) = conv::map_topology(desc.primitive.topology);
         let mut shader_stages = wgt::ShaderStages::VERTEX;
 
+        let (vertex_stage_desc, vertex_buffers_desc) = match &desc.vertex_processor {
+            crate::VertexProcessor::Standard {
+                vertex_buffers,
+                vertex_stage,
+            } => (vertex_stage, vertex_buffers),
+            crate::VertexProcessor::Mesh { .. } => unreachable!(),
+        };
+
         let blob_vs = self.load_shader(
-            &desc.vertex_stage,
+            vertex_stage_desc,
             desc.layout,
             naga::ShaderStage::Vertex,
             desc.fragment_stage.as_ref(),
@@ -1725,7 +1733,7 @@ impl crate::Device for super::Device {
         let mut input_element_descs = Vec::new();
         for (i, (stride, vbuf)) in vertex_strides
             .iter_mut()
-            .zip(desc.vertex_buffers)
+            .zip(vertex_buffers_desc)
             .enumerate()
         {
             *stride = NonZeroU32::new(vbuf.array_stride as u32);
@@ -1883,17 +1891,6 @@ impl crate::Device for super::Device {
             topology,
             vertex_strides,
         })
-    }
-
-    unsafe fn create_mesh_pipeline(
-        &self,
-        _desc: &crate::MeshPipelineDescriptor<
-            <Self::A as crate::Api>::PipelineLayout,
-            <Self::A as crate::Api>::ShaderModule,
-            <Self::A as crate::Api>::PipelineCache,
-        >,
-    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
-        unreachable!()
     }
 
     unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {
