@@ -1010,7 +1010,7 @@ impl crate::Device for super::Device {
             crate::VertexProcessor::Standard {
                 vertex_buffers,
                 vertex_stage,
-            } => (vertex_stage, vertex_buffers),
+            } => (vertex_stage, *vertex_buffers),
             crate::VertexProcessor::Mesh { .. } => unreachable!(),
         };
 
