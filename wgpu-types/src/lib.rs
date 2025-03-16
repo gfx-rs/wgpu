@@ -716,11 +716,11 @@ impl Limits {
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_non_sampler_bindings: 1_000_000,
     ///
-    ///     max_mesh_invocations_per_workgroup: 0,
-    ///     max_mesh_workgroup_size_x: 0,
-    ///     max_mesh_workgroup_size_y: 0,
-    ///     max_mesh_workgroup_size_z: 0,
-    ///     max_mesh_workgroups_per_dimension: 0,
+    ///     max_mesh_invocations_per_workgroup: 0, // *
+    ///     max_mesh_workgroup_size_x: 0, // *
+    ///     max_mesh_workgroup_size_y: 0, // *
+    ///     max_mesh_workgroup_size_z: 0, // *
+    ///     max_mesh_workgroups_per_dimension: 0, // *
     /// });
     /// ```
     #[must_use]
@@ -734,6 +734,12 @@ impl Limits {
             max_color_attachments: 4,
             // see: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_compute_workgroup_storage_size: 16352,
+
+            max_mesh_invocations_per_workgroup: 0,
+            max_mesh_workgroup_size_x: 0,
+            max_mesh_workgroup_size_y: 0,
+            max_mesh_workgroup_size_z: 0,
+            max_mesh_workgroups_per_dimension: 0,
             ..Self::defaults()
         }
     }
@@ -809,6 +815,12 @@ impl Limits {
 
             // Value supported by Intel Celeron B830 on Windows (OpenGL 3.1)
             max_inter_stage_shader_components: 31,
+
+            max_mesh_invocations_per_workgroup: 0,
+            max_mesh_workgroup_size_x: 0,
+            max_mesh_workgroup_size_y: 0,
+            max_mesh_workgroup_size_z: 0,
+            max_mesh_workgroups_per_dimension: 0,
 
             // Most of the values should be the same as the downlevel defaults
             ..Self::downlevel_defaults()
