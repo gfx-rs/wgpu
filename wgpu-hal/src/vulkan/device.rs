@@ -1907,35 +1907,33 @@ impl crate::Device for super::Device {
             ..Default::default()
         };
         let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
-        let mut vertex_buffers;
+        let mut vertex_buffers = Vec::new();
         let mut vertex_attributes = Vec::new();
 
-        match &desc.vertex_processor {
-            crate::VertexProcessor::Standard {
-                vertex_buffers: desc_vertex_buffers,
-                vertex_stage: _,
-            } => {
-                vertex_buffers = Vec::with_capacity(desc_vertex_buffers.len());
-                for (i, vb) in desc_vertex_buffers.iter().enumerate() {
-                    vertex_buffers.push(vk::VertexInputBindingDescription {
+        if let crate::VertexProcessor::Standard {
+            vertex_buffers: desc_vertex_buffers,
+            vertex_stage: _,
+        } = &desc.vertex_processor
+        {
+            vertex_buffers = Vec::with_capacity(desc_vertex_buffers.len());
+            for (i, vb) in desc_vertex_buffers.iter().enumerate() {
+                vertex_buffers.push(vk::VertexInputBindingDescription {
+                    binding: i as u32,
+                    stride: vb.array_stride as u32,
+                    input_rate: match vb.step_mode {
+                        wgt::VertexStepMode::Vertex => vk::VertexInputRate::VERTEX,
+                        wgt::VertexStepMode::Instance => vk::VertexInputRate::INSTANCE,
+                    },
+                });
+                for at in vb.attributes {
+                    vertex_attributes.push(vk::VertexInputAttributeDescription {
+                        location: at.shader_location,
                         binding: i as u32,
-                        stride: vb.array_stride as u32,
-                        input_rate: match vb.step_mode {
-                            wgt::VertexStepMode::Vertex => vk::VertexInputRate::VERTEX,
-                            wgt::VertexStepMode::Instance => vk::VertexInputRate::INSTANCE,
-                        },
+                        format: conv::map_vertex_format(at.format),
+                        offset: at.offset as u32,
                     });
-                    for at in vb.attributes {
-                        vertex_attributes.push(vk::VertexInputAttributeDescription {
-                            location: at.shader_location,
-                            binding: i as u32,
-                            format: conv::map_vertex_format(at.format),
-                            offset: at.offset as u32,
-                        });
-                    }
                 }
             }
-            crate::VertexProcessor::Mesh { .. } => vertex_buffers = Vec::new(),
         }
 
         let vk_vertex_input = vk::PipelineVertexInputStateCreateInfo::default()
