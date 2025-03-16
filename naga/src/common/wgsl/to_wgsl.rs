@@ -1,5 +1,8 @@
 //! Generating WGSL source code for Naga IR types.
 
+use alloc::format;
+use alloc::string::{String, ToString};
+
 /// Types that can return the WGSL source representation of their
 /// values as a `'static` string.
 ///
@@ -39,6 +42,26 @@ pub trait TryToWgsl: Sized {
 
     /// What kind of WGSL thing `Self` represents.
     const DESCRIPTION: &'static str;
+
+    /// Return the WGSL form of `self` as appropriate for diagnostics.
+    ///
+    /// If `self` can be expressed in WGSL, return that form as a
+    /// [`String`]. Otherwise, return some representation of `self`
+    /// that is appropriate for use in diagnostic messages.
+    ///
+    /// The default implementation of this function falls back to
+    /// `self`'s [`Debug`] form.
+    ///
+    /// [`Debug`]: core::fmt::Debug
+    fn to_wgsl_for_diagnostics(self) -> String
+    where
+        Self: core::fmt::Debug + Copy,
+    {
+        match self.try_to_wgsl() {
+            Some(static_string) => static_string.to_string(),
+            None => format!("{{non-WGSL {} {self:?}}}", Self::DESCRIPTION),
+        }
+    }
 }
 
 impl TryToWgsl for crate::MathFunction {
@@ -254,6 +277,20 @@ impl TryToWgsl for crate::Scalar {
             Scalar::BOOL => "bool",
             _ => return None,
         })
+    }
+
+    fn to_wgsl_for_diagnostics(self) -> String {
+        match self.try_to_wgsl() {
+            Some(static_string) => static_string.to_string(),
+            None => match self.kind {
+                crate::ScalarKind::Sint
+                | crate::ScalarKind::Uint
+                | crate::ScalarKind::Float
+                | crate::ScalarKind::Bool => format!("{{non-WGSL scalar {self:?}}}"),
+                crate::ScalarKind::AbstractInt => "{AbstractInt}".to_string(),
+                crate::ScalarKind::AbstractFloat => "{AbstractFloat}".to_string(),
+            },
+        }
     }
 }
 
