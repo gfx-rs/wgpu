@@ -5,6 +5,7 @@ use crate::common;
 use crate::proc::TypeResolution;
 use crate::{Handle, Scalar, TypeInner};
 
+use alloc::string::String;
 use core::fmt::Write;
 
 /// A context for printing Naga IR types as WGSL.
@@ -108,6 +109,24 @@ pub trait TypeContext {
             TypeResolution::Handle(handle) => self.write_type(handle, out),
             TypeResolution::Value(ref inner) => self.write_type_inner(inner, out),
         }
+    }
+
+    fn type_to_string(&self, handle: Handle<crate::Type>) -> String {
+        let mut buf = String::new();
+        self.write_type(handle, &mut buf).unwrap();
+        buf
+    }
+
+    fn type_inner_to_string(&self, inner: &TypeInner) -> String {
+        let mut buf = String::new();
+        self.write_type_inner(inner, &mut buf).unwrap();
+        buf
+    }
+
+    fn type_resolution_to_string(&self, resolution: &TypeResolution) -> String {
+        let mut buf = String::new();
+        self.write_type_resolution(resolution, &mut buf).unwrap();
+        buf
     }
 }
 
