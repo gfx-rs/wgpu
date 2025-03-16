@@ -1,5 +1,6 @@
 //! Formatting WGSL front end error messages.
 
+use crate::common::wgsl::TryToWgsl;
 use crate::diagnostic_filter::ConflictingDiagnosticRuleError;
 use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
 use crate::{Scalar, SourceLocation, Span};
@@ -446,7 +447,7 @@ impl<'a> Error<'a> {
             Error::BadMatrixScalarKind(span, scalar) => ParseError {
                 message: format!(
                     "matrix scalar type must be floating-point, but found `{}`",
-                    scalar.to_wgsl()
+                    scalar.to_wgsl_for_diagnostics()
                 ),
                 labels: vec![(span, "must be floating-point (e.g. `f32`)".into())],
                 notes: vec![],
@@ -469,7 +470,7 @@ impl<'a> Error<'a> {
             Error::BadTextureSampleType { span, scalar } => ParseError {
                 message: format!(
                     "texture sample type must be one of f32, i32 or u32, but found {}",
-                    scalar.to_wgsl()
+                    scalar.to_wgsl_for_diagnostics()
                 ),
                 labels: vec![(span, "must be one of f32, i32 or u32".into())],
                 notes: vec![],

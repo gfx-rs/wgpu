@@ -10,7 +10,6 @@ mod lower;
 mod parse;
 #[cfg(test)]
 mod tests;
-mod to_wgsl;
 
 pub use crate::front::wgsl::error::ParseError;
 pub use crate::front::wgsl::parse::directive::language_extension::{

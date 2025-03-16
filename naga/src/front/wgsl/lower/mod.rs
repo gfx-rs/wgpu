@@ -6,6 +6,7 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
+use crate::common::wgsl::TypeContext;
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
@@ -386,6 +387,30 @@ pub struct ExpressionContext<'source, 'temp, 'out> {
     /// Whether we are lowering a constant expression or a general
     /// runtime expression, and the data needed in each case.
     expr_type: ExpressionContextType<'temp, 'out>,
+}
+
+impl TypeContext for ExpressionContext<'_, '_, '_> {
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
+        &self.module.types[handle]
+    }
+
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
+        self.module.types[handle]
+            .name
+            .as_deref()
+            .unwrap_or("{anonymous type}")
+    }
+
+    fn write_override<W: core::fmt::Write>(
+        &self,
+        handle: Handle<crate::Override>,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        match self.module.overrides[handle].name {
+            Some(ref name) => out.write_str(name),
+            None => write!(out, "{{anonymous override {handle:?}}}"),
+        }
+    }
 }
 
 impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
@@ -1256,8 +1281,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 if !explicit_inner.equivalent(init_inner, &ectx.module.types) {
                     return Err(Box::new(Error::InitializationTypeMismatch {
                         name: name.span,
-                        expected: explicit_inner.to_wgsl(&ectx.module.to_ctx()),
-                        got: init_inner.to_wgsl(&ectx.module.to_ctx()),
+                        expected: ectx.type_inner_to_string(explicit_inner),
+                        got: ectx.type_inner_to_string(init_inner),
                     }));
                 }
                 ty = explicit_ty;
@@ -1487,11 +1512,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             .inner
                             .equivalent(&ctx.module.types[init_ty].inner, &ctx.module.types)
                         {
-                            let gctx = &ctx.module.to_ctx();
                             return Err(Box::new(Error::InitializationTypeMismatch {
                                 name: l.name.span,
-                                expected: ty.to_wgsl(gctx),
-                                got: init_ty.to_wgsl(gctx),
+                                expected: ctx.type_to_string(ty),
+                                got: ctx.type_to_string(init_ty),
                             }));
                         }
                     }
@@ -2192,11 +2216,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     crate::TypeInner::Vector { scalar, .. } => scalar,
                     _ => {
                         let ty = resolve!(ctx, expr);
-                        let gctx = &ctx.module.to_ctx();
                         return Err(Box::new(Error::BadTypeCast {
-                            from_type: ty.to_wgsl(gctx),
+                            from_type: ctx.type_resolution_to_string(ty),
                             span: ty_span,
-                            to_type: to_resolved.to_wgsl(gctx),
+                            to_type: ctx.type_to_string(to_resolved),
                         }));
                     }
                 };

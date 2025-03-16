@@ -2,6 +2,7 @@
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 
+use crate::common::wgsl::{TryToWgsl, TypeContext};
 use crate::front::wgsl::error::{
     AutoConversionError, AutoConversionLeafScalarError, ConcretizationFailedError,
 };
@@ -53,9 +54,8 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
             match expr_inner.automatically_converts_to(goal_inner, types) {
                 Some(scalars) => scalars,
                 None => {
-                    let gctx = &self.module.to_ctx();
-                    let source_type = expr_resolution.to_wgsl(gctx);
-                    let dest_type = goal_ty.to_wgsl(gctx);
+                    let source_type = self.type_resolution_to_string(expr_resolution);
+                    let dest_type = self.type_resolution_to_string(goal_ty);
 
                     return Err(Box::new(super::Error::AutoConversion(Box::new(
                         AutoConversionError {
@@ -95,11 +95,10 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         let expr_inner = expr_resolution.inner_with(types);
 
         let make_error = || {
-            let gctx = &self.module.to_ctx();
-            let source_type = expr_resolution.to_wgsl(gctx);
+            let source_type = self.type_resolution_to_string(expr_resolution);
             super::Error::AutoConversionLeafScalar(Box::new(AutoConversionLeafScalarError {
                 dest_span: goal_span,
-                dest_scalar: goal_scalar.to_wgsl(),
+                dest_scalar: goal_scalar.to_wgsl_for_diagnostics(),
                 source_span: expr_span,
                 source_type,
             }))
@@ -275,8 +274,8 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
                         let expr_type = &self.typifier()[expr];
                         super::Error::ConcretizationFailed(Box::new(ConcretizationFailedError {
                             expr_span,
-                            expr_type: expr_type.to_wgsl(&self.module.to_ctx()),
-                            scalar: concretized.to_wgsl(),
+                            expr_type: self.type_resolution_to_string(expr_type),
+                            scalar: concretized.to_wgsl_for_diagnostics(),
                             inner: err,
                         }))
                     })?;
@@ -319,7 +318,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
             "wgsl automatic_conversion_consensus: {:?}",
             inners
                 .clone()
-                .map(|inner| inner.to_wgsl(&self.module.to_ctx()))
+                .map(|inner| self.type_inner_to_string(inner))
                 .collect::<Vec<String>>()
         );
         let mut best = inners.next().unwrap().scalar().ok_or(0_usize)?;
@@ -333,7 +332,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
             }
         }
 
-        log::debug!("    consensus: {:?}", best.to_wgsl());
+        log::debug!("    consensus: {:?}", best.to_wgsl_for_diagnostics());
         Ok(best)
     }
 }

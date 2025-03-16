@@ -7,6 +7,7 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
+use crate::common::wgsl::TypeContext;
 use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
 use crate::front::wgsl::parse::ast;
 use crate::front::wgsl::{Error, Result};
@@ -71,7 +72,7 @@ impl Constructor<(Handle<crate::Type>, &crate::TypeInner)> {
                 format!("mat{}x{}<?>", columns as u32, rows as u32,)
             }
             Self::PartialArray => "array<?, ?>".to_string(),
-            Self::Type((handle, _inner)) => handle.to_wgsl(&ctx.module.to_ctx()),
+            Self::Type((handle, _inner)) => ctx.type_to_string(handle),
         }
     }
 }
@@ -536,7 +537,7 @@ impl<'source> Lowerer<'source, '_> {
 
             // Bad conversion (type cast)
             (Components::One { span, ty_inner, .. }, constructor) => {
-                let from_type = ty_inner.to_wgsl(&ctx.module.to_ctx());
+                let from_type = ctx.type_inner_to_string(ty_inner);
                 return Err(Box::new(Error::BadTypeCast {
                     span,
                     from_type,
