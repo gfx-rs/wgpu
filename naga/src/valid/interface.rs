@@ -233,6 +233,7 @@ impl VaryingContext<'_> {
                             St::Vertex => self.output,
                             St::Fragment => !self.output,
                             St::Compute => false,
+                            St::Task | St::Mesh => unreachable!(),
                         },
                         *ty_inner
                             == Ti::Vector {
@@ -244,6 +245,7 @@ impl VaryingContext<'_> {
                         match self.stage {
                             St::Vertex | St::Fragment => !self.output,
                             St::Compute => false,
+                            St::Task | St::Mesh => unreachable!(),
                         },
                         *ty_inner == Ti::Scalar(crate::Scalar::I32),
                     ),
@@ -291,6 +293,7 @@ impl VaryingContext<'_> {
                         match self.stage {
                             St::Compute | St::Fragment => !self.output,
                             St::Vertex => false,
+                            St::Task | St::Mesh => unreachable!(),
                         },
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
@@ -385,6 +388,7 @@ impl VaryingContext<'_> {
                     crate::ShaderStage::Vertex => self.output,
                     crate::ShaderStage::Fragment => !self.output,
                     crate::ShaderStage::Compute => false,
+                    crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
                 };
 
                 // It doesn't make sense to specify a sampling when `interpolation` is `Flat`, but
@@ -680,6 +684,7 @@ impl super::Validator {
                 crate::ShaderStage::Vertex => ShaderStages::VERTEX,
                 crate::ShaderStage::Fragment => ShaderStages::FRAGMENT,
                 crate::ShaderStage::Compute => ShaderStages::COMPUTE,
+                crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
             };
 
             if !info.available_stages.contains(stage_bit) {

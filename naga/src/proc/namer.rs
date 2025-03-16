@@ -194,6 +194,7 @@ impl Namer {
                         crate::ShaderStage::Vertex => "VertexOutput",
                         crate::ShaderStage::Fragment => "FragmentOutput",
                         crate::ShaderStage::Compute => "ComputeOutput",
+                        crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
                     };
                     entrypoint_type_fallbacks.insert(result.ty, label);
                 }

@@ -192,6 +192,7 @@ impl<W: Write> Writer<W> {
                     Attribute::Stage(ShaderStage::Compute),
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
+                ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
             };
 
             self.write_attributes(&attributes)?;
@@ -332,6 +333,7 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Vertex => "vertex",
                         ShaderStage::Fragment => "fragment",
                         ShaderStage::Compute => "compute",
+                        ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
                     };
                     write!(self.out, "@{stage_str} ")?;
                 }

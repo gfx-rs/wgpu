@@ -9,7 +9,7 @@ mod encoder;
 mod init;
 mod texture_blitter;
 
-use alloc::{borrow::Cow, format, string::String, sync::Arc, vec};
+use alloc::{borrow::Cow, format, string::String, vec};
 use core::ptr::copy_nonoverlapping;
 
 pub use belt::StagingBelt;
@@ -86,7 +86,7 @@ pub fn make_spirv_raw(data: &[u8]) -> Cow<'_, [u32]> {
 
 /// CPU accessible buffer used to download data back from the GPU.
 pub struct DownloadBuffer {
-    _gpu_buffer: Arc<super::Buffer>,
+    _gpu_buffer: super::Buffer,
     mapped_range: dispatch::DispatchBufferMappedRange,
 }
 
@@ -103,12 +103,12 @@ impl DownloadBuffer {
             None => buffer.buffer.map_context.lock().total_size - buffer.offset,
         };
 
-        let download = Arc::new(device.create_buffer(&super::BufferDescriptor {
+        let download = device.create_buffer(&super::BufferDescriptor {
             size,
             usage: super::BufferUsages::COPY_DST | super::BufferUsages::MAP_READ,
             mapped_at_creation: false,
             label: None,
-        }));
+        });
 
         let mut encoder =
             device.create_command_encoder(&super::CommandEncoderDescriptor { label: None });
