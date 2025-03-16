@@ -2,6 +2,7 @@
 
 use super::{address_space_str, ToWgsl, TryToWgsl};
 use crate::common;
+use crate::proc::TypeResolution;
 use crate::{Handle, Scalar, TypeInner};
 
 use core::fmt::Write;
@@ -91,6 +92,14 @@ pub trait TypeContext<W: Write> {
         match scalar.try_to_wgsl() {
             Some(string) => out.write_str(string),
             None => self.write_non_wgsl_scalar(scalar, out),
+        }
+    }
+
+    /// Write the [`TypeResolution`] `resolution` as a WGSL type.
+    fn write_type_resolution(&self, resolution: &TypeResolution, out: &mut W) -> core::fmt::Result {
+        match *resolution {
+            TypeResolution::Handle(handle) => self.write_type(handle, out),
+            TypeResolution::Value(ref inner) => self.write_type_inner(inner, out),
         }
     }
 }
