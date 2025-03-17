@@ -6,7 +6,7 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
-use crate::common::wgsl::TypeContext;
+use crate::common::wgsl::{TryToWgsl, TypeContext};
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
@@ -489,6 +489,19 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 true,
             ),
         }
+    }
+
+    /// Return a wrapper around `value` suitable for formatting.
+    ///
+    /// Return a wrapper around `value` that implements
+    /// [`core::fmt::Display`] in a form suitable for use in
+    /// diagnostic messages.
+    fn as_diagnostic_display<T>(
+        &self,
+        value: T,
+    ) -> crate::common::DiagnosticDisplay<(T, crate::proc::GlobalCtx)> {
+        let ctx = self.module.to_ctx();
+        crate::common::DiagnosticDisplay((value, ctx))
     }
 
     fn append_expression(
@@ -2439,52 +2452,204 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     crate::Expression::Derivative { axis, ctrl, expr }
                 } else if let Some(fun) = conv::map_standard_fun(function.name) {
-                    let expected = fun.argument_count() as _;
-                    let mut args = ctx.prepare_args(arguments, expected, span);
+                    use crate::proc::OverloadSet as _;
 
-                    let arg = self.expression(args.next()?, ctx)?;
-                    let arg1 = args
-                        .next()
-                        .map(|x| self.expression(x, ctx))
-                        .ok()
-                        .transpose()?;
-                    let arg2 = args
-                        .next()
-                        .map(|x| self.expression(x, ctx))
-                        .ok()
-                        .transpose()?;
-                    let arg3 = args
-                        .next()
-                        .map(|x| self.expression(x, ctx))
-                        .ok()
-                        .transpose()?;
+                    let fun_overloads = fun.overloads();
+                    let mut remaining_overloads = fun_overloads.clone();
+                    let min_arguments = remaining_overloads.min_arguments();
+                    let max_arguments = remaining_overloads.max_arguments();
+                    if arguments.len() < min_arguments {
+                        return Err(Box::new(Error::WrongArgumentCount {
+                            span,
+                            expected: min_arguments as u32..max_arguments as u32,
+                            found: arguments.len() as u32,
+                        }));
+                    }
+                    if arguments.len() > max_arguments {
+                        return Err(Box::new(Error::TooManyArguments {
+                            function: fun.to_wgsl_for_diagnostics(),
+                            call_span: span,
+                            arg_span: ctx.ast_expressions.get_span(arguments[max_arguments]),
+                            max_arguments: max_arguments as _,
+                        }));
+                    }
 
-                    args.finish()?;
+                    log::debug!(
+                        "Initial overloads: {:#?}",
+                        remaining_overloads.for_debug(&ctx.module.types)
+                    );
+                    let mut unconverted_arguments = Vec::with_capacity(arguments.len());
+                    for (arg_index, &arg) in arguments.iter().enumerate() {
+                        let lowered = self.expression_for_abstract(arg, ctx)?;
+                        let ty = resolve_inner!(ctx, lowered);
+                        log::debug!(
+                            "Supplying argument {arg_index} of type {}",
+                            crate::common::DiagnosticDisplay((ty, ctx.module.to_ctx()))
+                        );
+                        let next_remaining_overloads =
+                            remaining_overloads.arg(arg_index, ty, &ctx.module.types);
 
-                    if fun == crate::MathFunction::Modf || fun == crate::MathFunction::Frexp {
-                        if let Some((size, scalar)) = match *resolve_inner!(ctx, arg) {
-                            crate::TypeInner::Scalar(scalar) => Some((None, scalar)),
-                            crate::TypeInner::Vector { size, scalar, .. } => {
-                                Some((Some(size), scalar))
+                        // If any argument is not a constant expression, then no overloads
+                        // that accept abstract values should be considered.
+                        // (`OverloadSet::concrete_only` is supposed to help impose this
+                        // restriction.) However, no `MathFunction` accepts a mix of
+                        // abstract and concrete arguments, so we don't need to worry
+                        // about that here.
+
+                        log::debug!(
+                            "Remaining overloads: {:#?}",
+                            next_remaining_overloads.for_debug(&ctx.module.types)
+                        );
+
+                        // If the set of remaining overloads is empty, then this argument's type
+                        // was unacceptable. Diagnose the problem and produce an error message.
+                        if next_remaining_overloads.is_empty() {
+                            let function = fun.to_wgsl_for_diagnostics();
+                            let call_span = span;
+                            let arg_span = ctx.ast_expressions.get_span(arg);
+                            let arg_ty = ctx.as_diagnostic_display(ty).to_string();
+
+                            // Is this type *ever* permitted for the arg_index'th argument?
+                            // For example, `bool` is never permitted for `max`.
+                            let only_this_argument =
+                                fun_overloads.arg(arg_index, ty, &ctx.module.types);
+                            if only_this_argument.is_empty() {
+                                // No overload of `fun` accepts this type as the
+                                // arg_index'th argument. Determine the set of types that
+                                // would ever be allowed there.
+                                let allowed: Vec<String> = fun_overloads
+                                    .allowed_args(arg_index, &ctx.module.to_ctx())
+                                    .iter()
+                                    .map(|ty| ctx.type_resolution_to_string(ty))
+                                    .collect();
+
+                                if allowed.is_empty() {
+                                    // No overload of `fun` accepts any argument at this
+                                    // index, so it's a simple case of excess arguments.
+                                    // However, since each `MathFunction`'s overloads all
+                                    // have the same arity, we should have detected this
+                                    // earlier.
+                                    unreachable!("expected all overloads to have the same arity");
+                                }
+
+                                // Some overloads of `fun` do accept this many arguments,
+                                // but none accept one of this type.
+                                return Err(Box::new(Error::WrongArgumentType {
+                                    function,
+                                    call_span,
+                                    arg_span,
+                                    arg_index: arg_index as u32,
+                                    arg_ty,
+                                    allowed,
+                                }));
                             }
-                            _ => None,
-                        } {
-                            ctx.module.generate_predeclared_type(
-                                if fun == crate::MathFunction::Modf {
-                                    crate::PredeclaredType::ModfResult { size, scalar }
-                                } else {
-                                    crate::PredeclaredType::FrexpResult { size, scalar }
-                                },
-                            );
+
+                            // This argument's type is accepted by some overloads---just
+                            // not those overloads that remain, given the prior arguments.
+                            // For example, `max` accepts `f32` as its second argument -
+                            // but not if the first was `i32`.
+
+                            // Build a list of the types that would have been accepted here,
+                            // given the prior arguments.
+                            let allowed: Vec<String> = remaining_overloads
+                                .allowed_args(arg_index, &ctx.module.to_ctx())
+                                .iter()
+                                .map(|ty| ctx.type_resolution_to_string(ty))
+                                .collect();
+
+                            // Re-run the argument list to determine which prior argument
+                            // made this one unacceptable.
+                            let mut remaining_overloads = fun_overloads;
+                            for (prior_index, &prior_expr) in
+                                unconverted_arguments.iter().enumerate()
+                            {
+                                let prior_ty =
+                                    ctx.typifier()[prior_expr].inner_with(&ctx.module.types);
+                                remaining_overloads = remaining_overloads.arg(
+                                    prior_index,
+                                    prior_ty,
+                                    &ctx.module.types,
+                                );
+                                if remaining_overloads
+                                    .arg(arg_index, ty, &ctx.module.types)
+                                    .is_empty()
+                                {
+                                    // This is the argument that killed our dreams.
+                                    let inconsistent_span =
+                                        ctx.ast_expressions.get_span(arguments[prior_index]);
+                                    let inconsistent_ty =
+                                        ctx.as_diagnostic_display(prior_ty).to_string();
+
+                                    if allowed.is_empty() {
+                                        // Some overloads did accept `ty` at `arg_index`, but
+                                        // given the arguments up through `prior_expr`, we see
+                                        // no types acceptable at `arg_index`. This means that some
+                                        // overloads expect fewer arguments than others. However,
+                                        // each `MathFunction`'s overloads have the same arity, so this
+                                        // should be impossible.
+                                        unreachable!(
+                                            "expected all overloads to have the same arity"
+                                        );
+                                    }
+
+                                    // Report `arg`'s type as inconsistent with `prior_expr`'s
+                                    return Err(Box::new(Error::InconsistentArgumentType {
+                                        function,
+                                        call_span,
+                                        arg_span,
+                                        arg_index: arg_index as u32,
+                                        arg_ty,
+                                        inconsistent_span,
+                                        inconsistent_index: prior_index as u32,
+                                        inconsistent_ty,
+                                        allowed,
+                                    }));
+                                }
+                            }
+                            unreachable!("Failed to eliminate argument type when re-tried");
                         }
+                        remaining_overloads = next_remaining_overloads;
+                        unconverted_arguments.push(lowered);
+                    }
+
+                    // Select the most preferred type rule for this call,
+                    // given the argument types supplied above.
+                    let rule = remaining_overloads.most_preferred();
+
+                    let mut converted_arguments = Vec::with_capacity(arguments.len());
+                    for (i, (&ast, unconverted)) in
+                        arguments.iter().zip(unconverted_arguments).enumerate()
+                    {
+                        let goal_inner = rule.arguments[i].inner_with(&ctx.module.types);
+                        let converted = match goal_inner.scalar_for_conversions(&ctx.module.types) {
+                            Some(goal_scalar) => {
+                                let arg_span = ctx.ast_expressions.get_span(ast);
+                                ctx.try_automatic_conversion_for_leaf_scalar(
+                                    unconverted,
+                                    goal_scalar,
+                                    arg_span,
+                                )?
+                            }
+                            // No conversion is necessary.
+                            None => unconverted,
+                        };
+
+                        converted_arguments.push(converted);
+                    }
+
+                    // If this function returns a predeclared type, register it
+                    // in `Module::special_types`. The typifier will expect to
+                    // be able to find it there.
+                    if let crate::proc::Conclusion::Predeclared(predeclared) = rule.conclusion {
+                        ctx.module.generate_predeclared_type(predeclared);
                     }
 
                     crate::Expression::Math {
                         fun,
-                        arg,
-                        arg1,
-                        arg2,
-                        arg3,
+                        arg: converted_arguments[0],
+                        arg1: converted_arguments.get(1).cloned(),
+                        arg2: converted_arguments.get(2).cloned(),
+                        arg3: converted_arguments.get(3).cloned(),
                     }
                 } else if let Some(fun) = Texture::map(function.name) {
                     self.texture_sample_helper(fun, arguments, span, ctx)?

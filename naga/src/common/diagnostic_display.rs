@@ -1,6 +1,6 @@
 //! Displaying Naga IR terms in diagnostic output.
 
-use crate::proc::GlobalCtx;
+use crate::proc::{GlobalCtx, Rule};
 use crate::{Handle, Scalar, Type, TypeInner};
 
 #[cfg(any(feature = "wgsl-in", feature = "wgsl-out"))]
@@ -77,6 +77,23 @@ impl fmt::Display for DiagnosticDisplay<(&TypeInner, GlobalCtx<'_>)> {
         {
             let _ = ctx;
             write!(f, "{inner:?}")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Display for DiagnosticDisplay<(&str, &Rule, GlobalCtx<'_>)> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (name, rule, ref ctx) = self.0;
+
+        #[cfg(any(feature = "wgsl-in", feature = "wgsl-out"))]
+        ctx.write_type_rule(name, rule, f)?;
+
+        #[cfg(not(any(feature = "wgsl-in", feature = "wgsl-out")))]
+        {
+            let _ = ctx;
+            write!(f, "{name}({:?}) -> {:?}", rule.arguments, rule.conclusion)?;
         }
 
         Ok(())

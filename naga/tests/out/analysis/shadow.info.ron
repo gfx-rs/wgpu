@@ -868,7 +868,13 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
+                    ty: Value(Vector(
+                        size: Tri,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
                 ),
                 (
                     uniformity: (
@@ -1231,7 +1237,13 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(1),
+                    ty: Value(Vector(
+                        size: Tri,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
                 ),
                 (
                     uniformity: (
@@ -1252,7 +1264,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(0),
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
                 ),
                 (
                     uniformity: (
@@ -1261,7 +1276,10 @@
                     ),
                     ref_count: 1,
                     assignable_global: None,
-                    ty: Handle(0),
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
                 ),
                 (
                     uniformity: (

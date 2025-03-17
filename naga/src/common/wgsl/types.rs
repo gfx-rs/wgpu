@@ -133,6 +133,37 @@ pub trait TypeContext {
         }
     }
 
+    fn write_type_conclusion<W: Write>(
+        &self,
+        conclusion: &crate::proc::Conclusion,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        use crate::proc::Conclusion as Co;
+
+        match *conclusion {
+            Co::Value(ref inner) => self.write_type_inner(inner, out),
+            Co::Predeclared(ref predeclared) => out.write_str(&predeclared.struct_name()),
+        }
+    }
+
+    fn write_type_rule<W: Write>(
+        &self,
+        name: &str,
+        rule: &crate::proc::Rule,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        write!(out, "fn {name}(")?;
+        for (i, arg) in rule.arguments.iter().enumerate() {
+            if i > 0 {
+                out.write_str(", ")?;
+            }
+            self.write_type_resolution(arg, out)?
+        }
+        out.write_str(") -> ")?;
+        self.write_type_conclusion(&rule.conclusion, out)?;
+        Ok(())
+    }
+
     fn type_to_string(&self, handle: Handle<crate::Type>) -> String {
         let mut buf = String::new();
         self.write_type(handle, &mut buf).unwrap();
@@ -148,6 +179,12 @@ pub trait TypeContext {
     fn type_resolution_to_string(&self, resolution: &TypeResolution) -> String {
         let mut buf = String::new();
         self.write_type_resolution(resolution, &mut buf).unwrap();
+        buf
+    }
+
+    fn type_rule_to_string(&self, name: &str, rule: &crate::proc::Rule) -> String {
+        let mut buf = String::new();
+        self.write_type_rule(name, rule, &mut buf).unwrap();
         buf
     }
 }

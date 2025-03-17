@@ -6,6 +6,8 @@ extend-exclude = [
     # spirv-asm isn't real source code
     '*.spvasm',
     'docs/big-picture.xml',
+    # This test has weird pattern-derived variable names.
+    'naga/tests/in/wgsl/abstract-types-builtins.wgsl',
 ]
 
 # Corrections take the form of a key/value pair. The key is the incorrect word
