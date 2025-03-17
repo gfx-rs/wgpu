@@ -5,6 +5,7 @@ Tests for the WGSL front end.
 
 use naga::valid::Capabilities;
 
+#[track_caller]
 fn check(input: &str, snapshot: &str) {
     let output = naga::front::wgsl::parse_str(input)
         .expect_err("expected parser error")
@@ -902,6 +903,7 @@ macro_rules! check_validation {
     }
 }
 
+#[track_caller]
 fn validation_error(
     source: &str,
     caps: naga::valid::Capabilities,

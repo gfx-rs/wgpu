@@ -5,7 +5,7 @@
 #[test]
 #[should_panic = "Texture with 'dst' label has been destroyed"]
 fn destroyed_texture() {
-    let (device, queue) = crate::request_noop_device();
+    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let size = wgpu::Extent3d {
         width: 256,
         height: 256,

@@ -43,7 +43,7 @@ impl InstanceInterface for CustomInstance {
         &self,
         _options: &wgpu::RequestAdapterOptions<'_, '_>,
     ) -> std::pin::Pin<Box<dyn RequestAdapterFuture>> {
-        Box::pin(std::future::ready(Some(DispatchAdapter::custom(
+        Box::pin(std::future::ready(Ok(DispatchAdapter::custom(
             CustomAdapter(self.0.clone()),
         ))))
     }

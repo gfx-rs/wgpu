@@ -105,10 +105,6 @@ impl super::Instruction {
         instruction
     }
 
-    pub(super) const fn no_line() -> Self {
-        Self::new(Op::NoLine)
-    }
-
     //
     //  Annotation Instructions
     //
