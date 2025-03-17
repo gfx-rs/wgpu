@@ -119,6 +119,8 @@ impl crate::Literal {
             (value, crate::ScalarKind::Sint, 8) => Some(Self::I64(value as _)),
             (1, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(true)),
             (0, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(false)),
+            (value, crate::ScalarKind::AbstractInt, 8) => Some(Self::AbstractInt(value as _)),
+            (value, crate::ScalarKind::AbstractFloat, 8) => Some(Self::AbstractFloat(value as _)),
             _ => None,
         }
     }

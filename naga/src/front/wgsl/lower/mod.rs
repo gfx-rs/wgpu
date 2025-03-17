@@ -1490,24 +1490,22 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let mut emitter = Emitter::default();
                     emitter.start(&ctx.function.expressions);
 
-                    let value =
-                        self.expression(l.init, &mut ctx.as_expression(block, &mut emitter))?;
-
-                    // The WGSL spec says that any expression that refers to a
-                    // `let`-bound variable is not a const expression. This
-                    // affects when errors must be reported, so we can't even
-                    // treat suitable `let` bindings as constant as an
-                    // optimization.
-                    ctx.local_expression_kind_tracker.force_non_const(value);
-
                     let explicit_ty = l
                         .ty
                         .map(|ty| self.resolve_ast_type(ty, &mut ctx.as_const(block, &mut emitter)))
                         .transpose()?;
 
-                    if let Some(ty) = explicit_ty {
-                        let mut ctx = ctx.as_expression(block, &mut emitter);
-                        let init_ty = ctx.register_type(value)?;
+                    let mut ectx = ctx.as_expression(block, &mut emitter);
+
+                    let value = if let Some(ty) = explicit_ty {
+                        let (init_ty, lowered_init) = self.type_and_init(
+                            l.name,
+                            Some(l.init),
+                            explicit_ty,
+                            AbstractRule::Concretize,
+                            &mut ectx,
+                        )?;
+
                         if !ctx.module.types[ty]
                             .inner
                             .equivalent(&ctx.module.types[init_ty].inner, &ctx.module.types)
@@ -1518,7 +1516,20 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 got: ctx.type_to_string(init_ty),
                             }));
                         }
-                    }
+
+                        // We passed `Some()` to `type_and_init`, so we
+                        // will get a lowered initializer expression back.
+                        lowered_init.expect("type_and_init did not return an initializer")
+                    } else {
+                        self.expression(l.init, &mut ectx)?
+                    };
+
+                    // The WGSL spec says that any expression that refers to a
+                    // `let`-bound variable is not a const expression. This
+                    // affects when errors must be reported, so we can't even
+                    // treat suitable `let` bindings as constant as an
+                    // optimization.
+                    ctx.local_expression_kind_tracker.force_non_const(value);
 
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table

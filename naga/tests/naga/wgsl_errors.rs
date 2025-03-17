@@ -202,14 +202,14 @@ fn type_not_inferable() {
     check(
         r#"
             fn x() {
-                _ = vec2();
+                _ = mat2x2();
             }
         "#,
         r#"error: type can't be inferred
   ┌─ wgsl:3:21
   │
-3 │                 _ = vec2();
-  │                     ^^^^ type can't be inferred
+3 │                 _ = mat2x2();
+  │                     ^^^^^^ type can't be inferred
 
 "#,
     );
