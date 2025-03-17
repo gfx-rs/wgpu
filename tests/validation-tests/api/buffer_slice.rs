@@ -9,7 +9,7 @@ const ARBITRARY_DESC: &wgpu::BufferDescriptor = &wgpu::BufferDescriptor {
 
 #[test]
 fn reslice_success() {
-    let (device, _queue) = crate::request_noop_device();
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let buffer = device.create_buffer(ARBITRARY_DESC);
 
     assert_eq!(buffer.slice(10..90).slice(10..70), buffer.slice(20..80));
@@ -18,7 +18,7 @@ fn reslice_success() {
 #[test]
 #[should_panic = "slice offset 10 size 80 is out of range for buffer of size 80"]
 fn reslice_out_of_bounds() {
-    let (device, _queue) = crate::request_noop_device();
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let buffer = device.create_buffer(ARBITRARY_DESC);
 
     buffer.slice(10..90).slice(10..90);
@@ -26,7 +26,7 @@ fn reslice_out_of_bounds() {
 
 #[test]
 fn getters() {
-    let (device, _queue) = crate::request_noop_device();
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let buffer = device.create_buffer(ARBITRARY_DESC);
 
     let slice_with_size = buffer.slice(10..90);
@@ -52,7 +52,7 @@ fn getters() {
 
 #[test]
 fn into_buffer_binding() {
-    let (device, _queue) = crate::request_noop_device();
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let buffer = device.create_buffer(ARBITRARY_DESC);
 
     // BindingResource doesn’t implement PartialEq, so use matching

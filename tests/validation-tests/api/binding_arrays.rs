@@ -5,7 +5,7 @@ use wgpu_test::fail;
 
 #[test]
 fn dynamic_offset() {
-    let (device, _queue) = crate::request_noop_device_with_desc(&DeviceDescriptor {
+    let (device, _queue) = wgpu::Device::noop(&DeviceDescriptor {
         required_features: Features::TEXTURE_BINDING_ARRAY,
         required_limits: Limits {
             max_binding_array_elements_per_shader_stage: 4,
@@ -50,7 +50,7 @@ fn dynamic_offset() {
 
 #[test]
 fn uniform_buffer() {
-    let (device, _queue) = crate::request_noop_device_with_desc(&DeviceDescriptor {
+    let (device, _queue) = wgpu::Device::noop(&DeviceDescriptor {
         required_features: Features::TEXTURE_BINDING_ARRAY,
         required_limits: Limits {
             max_binding_array_elements_per_shader_stage: 4,

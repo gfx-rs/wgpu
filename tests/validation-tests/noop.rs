@@ -15,8 +15,23 @@ fn device_is_not_available_by_default() {
 }
 
 #[test]
+fn device_is_available_when_requested() {
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::NOOP,
+        backend_options: wgpu::BackendOptions {
+            noop: wgpu::NoopBackendOptions { enable: true },
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
+        .expect("noop backend adapter absent when it should be");
+}
+
+#[test]
 fn device_and_buffers() {
-    let (device, queue) = crate::request_noop_device();
+    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     // Demonstrate that creating and *writing* to a buffer succeeds.
     // This also involves creation of a staging buffer.

@@ -1,30 +1,66 @@
 //! Convenience macros
 
-/// Macro to produce an array of [`VertexAttribute`](crate::VertexAttribute).
+#[cfg(doc)]
+use crate::{VertexAttribute, VertexBufferLayout, VertexFormat};
+
+/// Macro to produce an array of [`VertexAttribute`].
 ///
-/// Output has type: `[VertexAttribute; _]`. Usage is as follows:
+/// The input is a sequence of pairs of shader locations (expression of type [`u32`]) and
+/// variant names of [`VertexFormat`].
+///
+/// The return value has type `[VertexAttribute; N]`, where `N` is the number of inputs.
+///
+/// Offsets are calculated automatically,
+/// using the assumption that there is no padding or other data between attributes.
+///
+/// # Example
+///
 /// ```
-/// # use wgpu::vertex_attr_array;
-/// let attrs = vertex_attr_array![0 => Float32x2, 1 => Float32, 2 => Uint16x4];
+/// // Suppose that this is our vertex format:
+/// #[repr(C, packed)]
+/// struct Vertex {
+///     foo: [f32; 2],
+///     bar: f32,
+///     baz: [u16; 4],
+/// }
+///
+/// // Then these attributes match it:
+/// let attrs = wgpu::vertex_attr_array![
+///     0 => Float32x2,
+///     1 => Float32,
+///     2 => Uint16x4,
+/// ];
+///
+/// // Here's the full data structure the macro produced:
+/// use wgpu::{VertexAttribute as A, VertexFormat as F};
+/// assert_eq!(attrs, [
+///     A { format: F::Float32x2, offset:  0, shader_location: 0, },
+///     A { format: F::Float32,   offset:  8, shader_location: 1, },
+///     A { format: F::Uint16x4,  offset: 12, shader_location: 2, },
+/// ]);
 /// ```
-/// This example specifies a list of three [`VertexAttribute`](crate::VertexAttribute),
-/// each with the given `shader_location` and `format`.
-/// Offsets are calculated automatically.
+///
+/// See [`VertexBufferLayout`] for an example building on this one.
 #[macro_export]
 macro_rules! vertex_attr_array {
-    ($($loc:expr => $fmt:ident),* $(,)?) => {
-        $crate::vertex_attr_array!([] ; 0; $($loc => $fmt ,)*)
+    ($($location:expr => $format:ident),* $(,)?) => {
+        $crate::_vertex_attr_array_helper!([] ; 0; $($location => $format ,)*)
     };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! _vertex_attr_array_helper {
     ([$($t:expr,)*] ; $off:expr ;) => { [$($t,)*] };
-    ([$($t:expr,)*] ; $off:expr ; $loc:expr => $item:ident, $($ll:expr => $ii:ident ,)*) => {
-        $crate::vertex_attr_array!(
+    ([$($t:expr,)*] ; $off:expr ; $location:expr => $format:ident, $($ll:expr => $ii:ident ,)*) => {
+        $crate::_vertex_attr_array_helper!(
             [$($t,)*
             $crate::VertexAttribute {
-                format: $crate::VertexFormat :: $item,
+                format: $crate::VertexFormat :: $format,
                 offset: $off,
-                shader_location: $loc,
+                shader_location: $location,
             },];
-            $off + $crate::VertexFormat :: $item.size();
+            $off + $crate::VertexFormat :: $format.size();
             $($ll => $ii ,)*
         )
     };
