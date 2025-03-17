@@ -89,6 +89,7 @@ pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 // Must match code in glsl_built_in
 pub const FIRST_INSTANCE_BINDING: &str = "naga_vs_first_instance";
 
+#[cfg(any(feature = "serialize", feature = "deserialize"))]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 struct BindingMapSerialization {
@@ -130,13 +131,6 @@ impl crate::AtomicFunction {
 }
 
 impl crate::AddressSpace {
-    const fn is_buffer(&self) -> bool {
-        match *self {
-            crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. } => true,
-            _ => false,
-        }
-    }
-
     /// Whether a variable with this address space can be initialized
     const fn initializable(&self) -> bool {
         match *self {
