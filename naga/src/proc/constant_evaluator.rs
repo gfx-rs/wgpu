@@ -1198,30 +1198,7 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
             }
             crate::MathFunction::Round => {
-                // TODO: this hit stable on 1.77, but MSRV hasn't caught up yet
-                // This polyfill is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
-                // which has licensing compatible with ours. See also
-                // <https://github.com/rust-lang/rust/issues/96710>.
-                //
-                // [polyfill source]: https://github.com/imeka/ndarray-ndimage/blob/8b14b4d6ecfbc96a8a052f802e342a7049c68d8f/src/lib.rs#L98
-                fn round_ties_even(x: f64) -> f64 {
-                    let i = x as i64;
-                    let f = (x - i as f64).abs();
-                    if f == 0.5 {
-                        if i & 1 == 1 {
-                            // -1.5, 1.5, 3.5, ...
-                            (x.abs() + 0.5).copysign(x)
-                        } else {
-                            (x.abs() - 0.5).copysign(x)
-                        }
-                    } else {
-                        x.round()
-                    }
-                }
-                component_wise_float(self, span, [arg], |e| match e {
-                    Float::Abstract([e]) => Ok(Float::Abstract([round_ties_even(e)])),
-                    Float::F32([e]) => Ok(Float::F32([(round_ties_even(e as f64) as f32)])),
-                })
+                component_wise_float!(self, span, [arg], |e| { Ok([e.round_ties_even()]) })
             }
             crate::MathFunction::Fract => {
                 component_wise_float!(self, span, [arg], |e| {
