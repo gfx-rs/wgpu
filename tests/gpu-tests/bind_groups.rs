@@ -103,7 +103,7 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
             }],
         });
 
-        cpass.set_pipeline(&pipeline);
+        cpass.set_pipeline(pipeline);
         cpass.set_bind_group(0, &bind_group, &[0]);
         cpass.dispatch_workgroups(1, 1, 1);
     }
