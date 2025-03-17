@@ -1060,6 +1060,9 @@ impl super::PrivateCapabilities {
                 max_compute_workgroups_per_dimension: 0xFFFF,
                 max_buffer_size: self.max_buffer_size,
                 max_non_sampler_bindings: u32::MAX,
+                max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
+                max_blas_geometry_count: 0,  // When added: 2^24
+                max_tlas_instance_count: 0,  // When added: 2^24
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

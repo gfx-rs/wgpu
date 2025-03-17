@@ -604,6 +604,27 @@ impl super::Adapter {
                     // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
                     max_buffer_size: i32::MAX as u64,
                     max_non_sampler_bindings: 1_000_000,
+                    max_blas_primitive_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 29 // 2^29
+                    } else {
+                        0
+                    },
+                    max_blas_geometry_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 24 // 2^24
+                    } else {
+                        0
+                    },
+                    max_tlas_instance_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 24 // 2^24
+                    } else {
+                        0
+                    },
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(

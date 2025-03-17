@@ -35,6 +35,12 @@ pub enum CreateBlasError {
     MissingIndexData,
     #[error("Provided format was not within allowed formats. Provided format: {0:?}. Allowed formats: {1:?}")]
     InvalidVertexFormat(VertexFormat, Vec<VertexFormat>),
+    #[error("Limit `max_blas_geometry_count` is {0}, but the BLAS had {1} geometries")]
+    TooManyGeometries(u32, u32),
+    #[error(
+        "Limit `max_blas_primitive_count` is {0}, but the BLAS had a maximum of {1} primitives"
+    )]
+    TooManyPrimitives(u32, u32),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -45,6 +51,8 @@ pub enum CreateTlasError {
     MissingFeatures(#[from] MissingFeatures),
     #[error("Flag {0:?} is not allowed on a TLAS")]
     DisallowedFlag(wgt::AccelerationStructureFlags),
+    #[error("Limit `max_tlas_instance_count` is {0}, but the TLAS had a maximum of {1} instances")]
+    TooManyInstances(u32, u32),
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.

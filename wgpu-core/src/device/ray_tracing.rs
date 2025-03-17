@@ -41,6 +41,13 @@ impl Device {
 
         let size_info = match &sizes {
             wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => {
+                if descriptors.len() as u32 > self.limits.max_blas_geometry_count {
+                    return Err(CreateBlasError::TooManyGeometries(
+                        self.limits.max_blas_geometry_count,
+                        descriptors.len() as u32,
+                    ));
+                }
+
                 let mut entries =
                     Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::with_capacity(
                         descriptors.len(),
@@ -80,6 +87,13 @@ impl Device {
                             buffer: self.zero_buffer.as_ref(),
                             offset: 0,
                         })
+                    }
+
+                    if desc.vertex_count > self.limits.max_blas_primitive_count {
+                        return Err(CreateBlasError::TooManyPrimitives(
+                            self.limits.max_blas_primitive_count,
+                            desc.vertex_count,
+                        ));
                     }
 
                     entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> {
@@ -163,6 +177,13 @@ impl Device {
     ) -> Result<Arc<resource::Tlas>, CreateTlasError> {
         self.check_is_valid()?;
         self.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+
+        if desc.max_instances > self.limits.max_tlas_instance_count {
+            return Err(CreateTlasError::TooManyInstances(
+                self.limits.max_tlas_instance_count,
+                desc.max_instances,
+            ));
+        }
 
         if desc
             .flags

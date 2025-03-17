@@ -828,6 +828,9 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_push_constant_size: wgt::Limits::default().max_push_constant_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
         max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
+        max_blas_primitive_count: wgt::Limits::default().max_blas_primitive_count,
+        max_blas_geometry_count: wgt::Limits::default().max_blas_geometry_count,
+        max_tlas_instance_count: wgt::Limits::default().max_tlas_instance_count,
     }
 }
 
