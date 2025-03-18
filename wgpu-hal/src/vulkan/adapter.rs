@@ -1207,10 +1207,13 @@ impl PhysicalDeviceProperties {
         let mut max_blas_geometry_count = 0;
         let mut max_blas_primitive_count = 0;
         let mut max_tlas_instance_count = 0;
+        let mut max_acceleration_structures_per_shader_stage = 0;
         if let Some(properties) = self.acceleration_structure {
             max_blas_geometry_count = properties.max_geometry_count as u32;
             max_blas_primitive_count = properties.max_primitive_count as u32;
             max_tlas_instance_count = properties.max_instance_count as u32;
+            max_acceleration_structures_per_shader_stage =
+                properties.max_per_stage_descriptor_acceleration_structures;
         }
 
         wgt::Limits {
@@ -1273,6 +1276,7 @@ impl PhysicalDeviceProperties {
             max_blas_primitive_count,
             max_blas_geometry_count,
             max_tlas_instance_count,
+            max_acceleration_structures_per_shader_stage,
         }
     }
 

@@ -614,10 +614,14 @@ pub struct Limits {
     /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
     /// is enabled.
     pub max_blas_geometry_count: u32,
-    /// The maximum number of instances a TLAS is allowed to have  Requesting more than 0 during
+    /// The maximum number of instances a TLAS is allowed to have. Requesting more than 0 during
     /// device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
     /// is enabled.
     pub max_tlas_instance_count: u32,
+    /// The maximum number of acceleration structures allowed to be used in a shader stage.
+    /// Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_acceleration_structures_per_shader_stage: u32,
 }
 
 impl Default for Limits {
@@ -717,6 +721,7 @@ impl Limits {
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
             max_tlas_instance_count: 0,
+            max_acceleration_structures_per_shader_stage: 0,
         }
     }
 
@@ -765,6 +770,7 @@ impl Limits {
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
     /// });
     /// ```
     #[must_use]
@@ -828,6 +834,7 @@ impl Limits {
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
     /// });
     /// ```
     #[must_use]
@@ -890,6 +897,7 @@ impl Limits {
             max_blas_geometry_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
             max_tlas_instance_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
             max_blas_primitive_count: 1 << 28,      // 2^28: Metal's minimum
+            max_acceleration_structures_per_shader_stage: 16, // Vulkan's minimum
             ..self
         }
     }
@@ -902,6 +910,7 @@ impl Limits {
             max_blas_geometry_count: other.max_blas_geometry_count,
             max_tlas_instance_count: other.max_tlas_instance_count,
             max_blas_primitive_count: other.max_blas_primitive_count,
+            max_acceleration_structures_per_shader_stage: other.max_acceleration_structures_per_shader_stage,
             ..self
         }
     }

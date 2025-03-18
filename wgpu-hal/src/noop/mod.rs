@@ -180,6 +180,7 @@ const CAPABILITIES: crate::Capabilities = {
             max_blas_primitive_count: ALLOC_MAX_U32,
             max_blas_geometry_count: ALLOC_MAX_U32,
             max_tlas_instance_count: ALLOC_MAX_U32,
+            max_acceleration_structures_per_shader_stage: ALLOC_MAX_U32,
         },
         alignments: crate::Alignments {
             // All maximally permissive
