@@ -847,13 +847,13 @@ fn float16_requires_enable() {
         r#"
             const a: f16 = 1.0;
         "#,
-        r#"error: the `f16` language extension is not enabled
+        r#"error: the `f16` enable extension is not enabled
   ┌─ wgsl:2:22
   │
 2 │             const a: f16 = 1.0;
-  │                      ^^^ the `f16` language extension is needed for this functionality, but it is not currently enabled.
+  │                      ^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
   │
-  = note: You can enable this extension by adding `enable f16;` at the top of the shader.
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
 
 "#,
     );
@@ -862,13 +862,13 @@ fn float16_requires_enable() {
         r#"
             const a = 1.0h;
         "#,
-        r#"error: the `f16` language extension is not enabled
+        r#"error: the `f16` enable extension is not enabled
   ┌─ wgsl:2:23
   │
 2 │             const a = 1.0h;
-  │                       ^^^^ the `f16` language extension is needed for this functionality, but it is not currently enabled.
+  │                       ^^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
   │
-  = note: You can enable this extension by adding `enable f16;` at the top of the shader.
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
 
 "#,
     );
@@ -1461,11 +1461,13 @@ fn invalid_blend_src() {
         @fragment
         fn main(@builtin(position) position: vec4<f32>) -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(0.0)); }
         ",
-        r###"error: `dual_source_blending` enable-extension is not enabled
+        r###"error: the `dual_source_blending` enable extension is not enabled
   ┌─ wgsl:3:27
   │
 3 │             @location(0) @blend_src(0) output0: vec4<f32>,
-  │                           ^^^^^^^^^ the `dual_source_blending` enable-extension is needed for this functionality, but it is not currently enabled
+  │                           ^^^^^^^^^ the `dual_source_blending` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable dual_source_blending;` at the top of the shader, before any other items.
 
 "###,
     );

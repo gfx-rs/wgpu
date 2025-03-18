@@ -1024,12 +1024,12 @@ impl<'a> Error<'a> {
                 )],
             },
             Error::EnableExtensionNotEnabled { kind, span } => ParseError {
-                message: format!("the `{}` language extension is not enabled", kind.to_ident()),
+                message: format!("the `{}` enable extension is not enabled", kind.to_ident()),
                 labels: vec![(
                     span,
                     format!(
                         concat!(
-                            "the `{0}` language extension is needed for this functionality, ",
+                            "the `{}` \"Enable Extension\" is needed for this functionality, ",
                             "but it is not currently enabled."
                         ),
                         kind.to_ident()
@@ -1039,7 +1039,7 @@ impl<'a> Error<'a> {
                 notes: if let EnableExtension::Unimplemented(kind) = kind {
                     vec![format!(
                         concat!(
-                            "This enable-extension is not yet implemented. ",
+                            "This \"Enable Extension\" is not yet implemented. ",
                             "Let Naga maintainers know that you ran into this at ",
                             "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
                             "so they can prioritize it!"
@@ -1049,7 +1049,7 @@ impl<'a> Error<'a> {
                 } else {
                     vec![
                         format!(
-                            "You can enable this extension by adding `enable {};` at the top of the shader.",
+                            "You can enable this extension by adding `enable {};` at the top of the shader, before any other items.",
                             kind.to_ident()
                         ),
                     ]

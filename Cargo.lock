@@ -1785,16 +1785,6 @@ version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7db2ff139bba50379da6aa0766b52fdcb62cb5b263009b09ed58ba604e14bbd1"
 dependencies = [
- "cfg-if",
- "crunchy",
-]
-
-[[package]]
-name = "half-2"
-version = "2.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c36518ae13d88b7cbdc61401256df5d9fc27921ea66353a16660869b47af8864"
-dependencies = [
  "arbitrary",
  "bytemuck",
  "cfg-if",
@@ -2413,7 +2403,7 @@ dependencies = [
  "codespan-reporting",
  "diff",
  "env_logger",
- "half-2",
+ "half",
  "hashbrown",
  "hexf-parse",
  "hlsl-snapshots",
@@ -4866,7 +4856,7 @@ dependencies = [
  "env_logger",
  "futures-lite",
  "glam",
- "half-2",
+ "half",
  "image",
  "itertools 0.13.0",
  "js-sys",

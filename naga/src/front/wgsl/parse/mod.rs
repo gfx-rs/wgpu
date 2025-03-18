@@ -837,7 +837,7 @@ impl Parser {
                 let _ = lexer.next();
                 let num = res.map_err(|err| Error::BadNumber(span, err))?;
 
-                if let Some(enable_extension) = num.required_enable_extension() {
+                if let Some(enable_extension) = num.requires_enable_extension() {
                     if !lexer.enable_extensions.contains(enable_extension) {
                         return Err(Box::new(Error::EnableExtensionNotEnabled {
                             kind: enable_extension.into(),
