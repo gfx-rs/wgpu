@@ -209,6 +209,9 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 
 #### Naga
 
+- Naga IR types are now available in the module `naga::ir` (e.g. `naga::ir::Module`).
+  The original names (e.g. `naga::Module`) remain present for compatibility.
+  By @kpreid in [#7365](https://github.com/gfx-rs/wgpu/pull/7365).
 - Refactored `use` statements to simplify future `no_std` support. By @bushrat011899 in [#7256](https://github.com/gfx-rs/wgpu/pull/7256)
 
 #### Vulkan
