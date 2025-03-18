@@ -3156,6 +3156,51 @@ fn matrix_vector_pointers() {
 }
 
 #[test]
+fn vector_logical_ops() {
+    // Const context
+    check(
+        "const and = vec2(true, false) && vec2(false, false);",
+        r###"error: Cannot apply the binary op to the arguments
+  ┌─ wgsl:1:13
+  │
+1 │ const and = vec2(true, false) && vec2(false, false);
+  │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ see msg
+
+"###,
+    );
+
+    check(
+        "const or = vec2(true, false) || vec2(false, false);",
+        r###"error: Cannot apply the binary op to the arguments
+  ┌─ wgsl:1:12
+  │
+1 │ const or = vec2(true, false) || vec2(false, false);
+  │            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ see msg
+
+"###,
+    );
+
+    // Runtime context
+    check(
+        "fn foo(a: vec2<bool>, b: vec2<bool>) {
+            let y = a && b;
+        }",
+        r#"error: Incompatible operands: LogicalAnd(Vector { size: Bi, scalar: Scalar { kind: Bool, width: 1 } }, _)
+
+"#,
+    );
+
+    check(
+        "fn foo(a: vec2<bool>, b: vec2<bool>) {
+            let y = a || b;
+        }",
+        r#"error: Incompatible operands: LogicalOr(Vector { size: Bi, scalar: Scalar { kind: Bool, width: 1 } }, _)
+
+"#,
+    );
+}
+
+#[test]
 fn issue7165() {
     // Regression test for https://github.com/gfx-rs/wgpu/issues/7165
     let shader = "

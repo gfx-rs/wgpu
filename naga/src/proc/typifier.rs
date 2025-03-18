@@ -592,9 +592,8 @@ impl<'a> ResolveContext<'a> {
                 | crate::BinaryOperator::Less
                 | crate::BinaryOperator::LessEqual
                 | crate::BinaryOperator::Greater
-                | crate::BinaryOperator::GreaterEqual
-                | crate::BinaryOperator::LogicalAnd
-                | crate::BinaryOperator::LogicalOr => {
+                | crate::BinaryOperator::GreaterEqual => {
+                    // These accept scalars or vectors.
                     let scalar = crate::Scalar::BOOL;
                     let inner = match *past(left)?.inner_with(types) {
                         Ti::Scalar { .. } => Ti::Scalar(scalar),
@@ -606,6 +605,18 @@ impl<'a> ResolveContext<'a> {
                         }
                     };
                     TypeResolution::Value(inner)
+                }
+                crate::BinaryOperator::LogicalAnd | crate::BinaryOperator::LogicalOr => {
+                    // These accept scalars only.
+                    let bool = Ti::Scalar(crate::Scalar::BOOL);
+                    let ty = past(left)?.inner_with(types);
+                    if *ty == bool {
+                        TypeResolution::Value(bool)
+                    } else {
+                        return Err(ResolveError::IncompatibleOperands(format!(
+                            "{op:?}({ty:?}, _)"
+                        )));
+                    }
                 }
                 crate::BinaryOperator::And
                 | crate::BinaryOperator::ExclusiveOr
