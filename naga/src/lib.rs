@@ -1,6 +1,70 @@
-/*! Universal shader translator.
+/*!
+Naga can be used to translate source code written in one shading language to another.
 
+# Example
 
+The following example translates WGSL to GLSL.
+It requires the features `"wgsl-in"` and `"glsl-out"` to be enabled.
+
+*/
+// If we don't have the required front- and backends, don't try to build this example.
+#![cfg_attr(all(feature = "wgsl-in", feature = "glsl-out"), doc = "```")]
+#![cfg_attr(not(all(feature = "wgsl-in", feature = "glsl-out")), doc = "```ignore")]
+/*!
+let wgsl_source = "
+@fragment
+fn main_fs() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+}
+";
+
+// Parse the source into a Module.
+let module: naga::Module = naga::front::wgsl::parse_str(wgsl_source)?;
+
+// Validate the module.
+// Validation can be made less restrictive by changing the ValidationFlags.
+let module_info: naga::valid::ModuleInfo =
+    naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::all(),
+    )
+    .subgroup_stages(naga::valid::ShaderStages::all())
+    .subgroup_operations(naga::valid::SubgroupOperationSet::all())
+    .validate(&module)?;
+
+// Translate the module.
+use naga::back::glsl;
+let mut glsl_source = String::new();
+glsl::Writer::new(
+    &mut glsl_source,
+    &module,
+    &module_info,
+    &glsl::Options::default(),
+    &glsl::PipelineOptions {
+        entry_point: "main_fs".into(),
+        shader_stage: naga::ShaderStage::Fragment,
+        multiview: None,
+    },
+    naga::proc::BoundsCheckPolicies::default(),
+)?.write()?;
+
+assert_eq!(glsl_source, "\
+#version 310 es
+
+precision highp float;
+precision highp int;
+
+layout(location = 0) out vec4 _fs2p_location0;
+
+void main() {
+    _fs2p_location0 = vec4(1.0, 1.0, 1.0, 1.0);
+    return;
+}
+
+");
+
+# Ok::<(), Box<dyn core::error::Error>>(())
+```
 */
 
 #![allow(
