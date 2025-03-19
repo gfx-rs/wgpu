@@ -254,6 +254,58 @@ fn constructor_parameter_type_mismatch() {
 }
 
 #[test]
+fn vector_constructor_incorrect_component_count() {
+    // Too few components
+    check(
+        r#"
+            fn x() {
+                _ = vec4(1, 2, 3);
+            }
+        "#,
+        r#"error: Constructor expects 4 components, found 3
+  ┌─ wgsl:3:21
+  │
+3 │                 _ = vec4(1, 2, 3);
+  │                     ^^^^^^^^^^^^^ see msg
+
+"#,
+    );
+
+    // Too many components
+    check(
+        r#"
+            fn x() {
+                _ = vec4(1, 2, 3, 4, 5);
+            }
+        "#,
+        r#"error: Constructor expects 4 components, found 5
+  ┌─ wgsl:3:21
+  │
+3 │                 _ = vec4(1, 2, 3, 4, 5);
+  │                     ^^^^^^^^^^^^^^^^^^^ see msg
+
+"#,
+    );
+
+    // The outer constructor has the correct number of components, but only
+    // because the inner constructor has too many.
+    check(
+        r#"
+            fn x() {
+                _ = vec4(1, vec2(2, 3, 4));
+            }
+        "#,
+        r#"error: Constructor expects 2 components, found 3
+  ┌─ wgsl:3:29
+  │
+3 │                 _ = vec4(1, vec2(2, 3, 4));
+  │                             ^^^^^^^^^^^^^ see msg
+
+"#,
+    );
+}
+
+#[test]
 fn bad_texture_sample_type() {
     check(
         r#"

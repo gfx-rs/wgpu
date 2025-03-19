@@ -565,6 +565,10 @@ pub enum ConstantEvaluatorError {
     InvalidRelationalArg(RelationalFunction),
     #[error("value of `low` is greater than `high` for clamp built-in function")]
     InvalidClamp,
+    #[error("Constructor expects {expected} components, found {actual}")]
+    InvalidVectorComposeLength { expected: usize, actual: usize },
+    #[error("Constructor must only contain vector or scalar arguments")]
+    InvalidVectorComposeComponent,
     #[error("Splat is defined only on scalar values")]
     SplatScalarOnly,
     #[error("Can only swizzle vector constants")]
@@ -2244,16 +2248,53 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
+    /// Returns the total number of components, after flattening, of a vector compose expression.
+    fn vector_compose_flattened_size(
+        &self,
+        components: &[Handle<Expression>],
+    ) -> Result<usize, ConstantEvaluatorError> {
+        components
+            .iter()
+            .try_fold(0, |acc, c| -> Result<_, ConstantEvaluatorError> {
+                let size = match *self.resolve_type(*c)?.inner_with(self.types) {
+                    TypeInner::Scalar(_) => 1,
+                    // We trust that the vector size of `component` is correct,
+                    // as it will have already been validated when `component`
+                    // was registered.
+                    TypeInner::Vector { size, .. } => size as usize,
+                    _ => return Err(ConstantEvaluatorError::InvalidVectorComposeComponent),
+                };
+                Ok(acc + size)
+            })
+    }
+
     fn register_evaluated_expr(
         &mut self,
         expr: Expression,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        // It suffices to only check literals, since we only register one
-        // expression at a time, `Compose` expressions can only refer to other
-        // expressions, and `ZeroValue` expressions are always okay.
+        // It suffices to only check_literal_value() for `Literal` expressions,
+        // since we only register one expression at a time, `Compose`
+        // expressions can only refer to other expressions, and `ZeroValue`
+        // expressions are always okay.
         if let Expression::Literal(literal) = expr {
             crate::valid::check_literal_value(literal)?;
+        }
+
+        // Ensure vector composes contain the correct number of components. We
+        // do so here when each compose is registered to avoid having to deal
+        // with the mess each time the compose is used in another expression.
+        if let Expression::Compose { ty, ref components } = expr {
+            if let TypeInner::Vector { size, scalar: _ } = self.types[ty].inner {
+                let expected = size as usize;
+                let actual = self.vector_compose_flattened_size(components)?;
+                if expected != actual {
+                    return Err(ConstantEvaluatorError::InvalidVectorComposeLength {
+                        expected,
+                        actual,
+                    });
+                }
+            }
         }
 
         Ok(self.append_expr(expr, span, ExpressionKind::Const))
