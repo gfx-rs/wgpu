@@ -95,7 +95,7 @@ half = { workspace = true, features = ["arbitrary", "num-traits"] }
 rustc-hash.workspace = true
 indexmap.workspace = true
 log = "0.4"
-# We require 0.2.16 to have `FromBytes` and `ToBytes` which `half` require.
+# `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
 num-traits = "0.2.16"
 strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
