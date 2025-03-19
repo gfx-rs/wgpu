@@ -91,7 +91,6 @@ bit-set = { version = "0.8", default-features = false }
 bit-vec = { version = "0.8", default-features = false }
 bitflags = "2.9"
 bytemuck = { version = "1.22", features = [
-    "derive",
     "extern_crate_alloc",
     "min_const_generics",
 ] }

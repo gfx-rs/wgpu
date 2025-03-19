@@ -964,9 +964,7 @@ impl Global {
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
-                let data = trace.make_binary("spv", unsafe {
-                    core::slice::from_raw_parts(source.as_ptr().cast::<u8>(), source.len() * 4)
-                });
+                let data = trace.make_binary("spv", bytemuck::cast_slice(&source));
                 trace.add(trace::Action::CreateShaderModule {
                     id: fid.id(),
                     desc: desc.clone(),

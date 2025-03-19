@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 use alloc::vec;
-use core::{slice, sync::atomic::Ordering};
+use core::sync::atomic::Ordering;
 
 use arrayvec::ArrayVec;
 use glow::HasContext;
@@ -1039,12 +1039,7 @@ impl super::Queue {
                         };
                         temp_query_results.push(result);
                     }
-                    let query_data = unsafe {
-                        slice::from_raw_parts(
-                            temp_query_results.as_ptr().cast::<u8>(),
-                            temp_query_results.len() * size_of::<u64>(),
-                        )
-                    };
+                    let query_data = bytemuck::cast_slice(&temp_query_results);
                     match dst.raw {
                         Some(buffer) => {
                             unsafe { gl.bind_buffer(dst_target, Some(buffer)) };

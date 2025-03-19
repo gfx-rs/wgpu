@@ -4884,6 +4884,7 @@ name = "wgpu-types"
 version = "24.0.0"
 dependencies = [
  "bitflags 2.9.0",
+ "bytemuck",
  "js-sys",
  "log",
  "serde",

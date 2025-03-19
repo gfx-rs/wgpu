@@ -48,6 +48,7 @@ trace = ["std"]
 
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
+bytemuck = { workspace = true, features = ["derive"] }
 log.workspace = true
 thiserror = { workspace = true, optional = true }
 serde = { workspace = true, default-features = false, features = [
