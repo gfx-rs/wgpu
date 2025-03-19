@@ -910,7 +910,8 @@ impl Limits {
             max_blas_geometry_count: other.max_blas_geometry_count,
             max_tlas_instance_count: other.max_tlas_instance_count,
             max_blas_primitive_count: other.max_blas_primitive_count,
-            max_acceleration_structures_per_shader_stage: other.max_acceleration_structures_per_shader_stage,
+            max_acceleration_structures_per_shader_stage: other
+                .max_acceleration_structures_per_shader_stage,
             ..self
         }
     }

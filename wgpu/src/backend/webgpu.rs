@@ -831,6 +831,8 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_blas_primitive_count: wgt::Limits::default().max_blas_primitive_count,
         max_blas_geometry_count: wgt::Limits::default().max_blas_geometry_count,
         max_tlas_instance_count: wgt::Limits::default().max_tlas_instance_count,
+        max_acceleration_structures_per_shader_stage: wgt::Limits::default()
+            .max_acceleration_structures_per_shader_stage,
     }
 }
 

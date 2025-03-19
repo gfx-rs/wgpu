@@ -4,6 +4,7 @@ use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, Tes
 
 use wgpu::util::DeviceExt;
 
+use crate::ray_tracing::acceleration_structure_limits;
 use glam::{Affine3A, Quat, Vec3};
 
 mod mesh_gen;
@@ -101,6 +102,7 @@ static ACCELERATION_STRUCTURE_BUILD_NO_INDEX: GpuTestConfiguration = GpuTestConf
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
             .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
@@ -114,6 +116,7 @@ static ACCELERATION_STRUCTURE_BUILD_WITH_INDEX: GpuTestConfiguration = GpuTestCo
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
             .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
