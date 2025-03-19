@@ -12,14 +12,22 @@
 // - all parameters' types are considered.
 // - all parameters are converted to the consensus type.
 
-const xvupaiai: vec2<u32> = vec2(42, 43);
-const xvfpaiai: vec2<f32> = vec2(44, 45);
+const xvipaiai: vec2<i32> = vec2(42, 43);
+const xvupaiai: vec2<u32> = vec2(44, 45);
+const xvfpaiai: vec2<f32> = vec2(46, 47);
+const xvfpafaf: vec2<f32> = vec2(48.0, 49.0);
+const xvfpaiaf: vec2<f32> = vec2(48, 49.0);
 
 const xvupuai: vec2<u32> = vec2(42u, 43);
 const xvupaiu: vec2<u32> = vec2(42, 43u); 
 
 const xvuuai: vec2<u32> = vec2<u32>(42u, 43);
 const xvuaiu: vec2<u32> = vec2<u32>(42, 43u);
+
+const xvip____: vec2<i32> = vec2();
+const xvup____: vec2<u32> = vec2();
+const xvfp____: vec2<f32> = vec2();
+const xmfp____: mat2x2f = mat2x2(vec2(), vec2());
 
 const xmfpaiaiaiai: mat2x2<f32> = mat2x2(1, 2, 3, 4);
 const xmfpafaiaiai: mat2x2<f32> = mat2x2(1.0, 2, 3, 4);
@@ -41,9 +49,15 @@ const ivfs_af = vec2<f32>(1.0);
 const iafafaf = array<f32, 2>(1.0, 2.0);
 const iafaiai = array<f32, 2>(1, 2);
 
-const iafpafaf = array(1.0, 2.0);
-const iafpaiaf = array(1, 2.0);
+const iaipaiai = array(1,   2);
+const iafpaiaf = array(1,   2.0);
 const iafpafai = array(1.0, 2);
+const iafpafaf = array(1.0, 2.0);
+
+const xaipaiai: array<i32, 2> = array(1, 2);
+const xaupaiai: array<u32, 2> = array(1, 2);
+const xafpaiaf: array<f32, 2> = array(1,   2.0);
+const xafpafai: array<f32, 2> = array(1.0, 2);
 const xafpafaf: array<f32, 2> = array(1.0, 2.0);
 
 struct S {
@@ -60,6 +74,11 @@ const saf_i_u: S = S(1.0,  1i, 1u);
 const saf_iai: S = S(1.0,  1i, 1);
 const safai_u: S = S(1.0,  1,  1u);
 const safaiai: S = S(1.0,  1,  1);
+
+const xvisai: vec2<i32> = vec2(1);
+const xvusai: vec2<u32> = vec2(1);
+const xvfsai: vec2<f32> = vec2(1);
+const xvfsaf: vec2<f32> = vec2(1.0);
 
 // Vector construction with spreads
 const ivfr_f__f = vec3<f32>(vec2<f32>(1.0f, 2.0f), 3.0f);
