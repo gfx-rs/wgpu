@@ -1497,45 +1497,32 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let mut ectx = ctx.as_expression(block, &mut emitter);
 
-                    let value = if let Some(ty) = explicit_ty {
-                        let (init_ty, lowered_init) = self.type_and_init(
-                            l.name,
-                            Some(l.init),
-                            explicit_ty,
-                            AbstractRule::Concretize,
-                            &mut ectx,
-                        )?;
+                    let (_ty, initializer) = self.type_and_init(
+                        l.name,
+                        Some(l.init),
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ectx,
+                    )?;
 
-                        if !ctx.module.types[ty]
-                            .inner
-                            .equivalent(&ctx.module.types[init_ty].inner, &ctx.module.types)
-                        {
-                            return Err(Box::new(Error::InitializationTypeMismatch {
-                                name: l.name.span,
-                                expected: ctx.type_to_string(ty),
-                                got: ctx.type_to_string(init_ty),
-                            }));
-                        }
-
-                        // We passed `Some()` to `type_and_init`, so we
-                        // will get a lowered initializer expression back.
-                        lowered_init.expect("type_and_init did not return an initializer")
-                    } else {
-                        self.expression(l.init, &mut ectx)?
-                    };
+                    // We passed `Some()` to `type_and_init`, so we
+                    // will get a lowered initializer expression back.
+                    let initializer =
+                        initializer.expect("type_and_init did not return an initializer");
 
                     // The WGSL spec says that any expression that refers to a
                     // `let`-bound variable is not a const expression. This
                     // affects when errors must be reported, so we can't even
                     // treat suitable `let` bindings as constant as an
                     // optimization.
-                    ctx.local_expression_kind_tracker.force_non_const(value);
+                    ctx.local_expression_kind_tracker
+                        .force_non_const(initializer);
 
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
-                        .insert(l.handle, Declared::Runtime(Typed::Plain(value)));
+                        .insert(l.handle, Declared::Runtime(Typed::Plain(initializer)));
                     ctx.named_expressions
-                        .insert(value, (l.name.name.to_string(), l.name.span));
+                        .insert(initializer, (l.name.name.to_string(), l.name.span));
 
                     return Ok(());
                 }
