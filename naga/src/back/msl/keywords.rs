@@ -1,3 +1,7 @@
+use std::sync::LazyLock;
+
+use hashbrown::HashSet;
+
 // MSLS - Metal Shading Language Specification:
 // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
 //
@@ -347,3 +351,16 @@ pub const RESERVED: &[&str] = &[
     super::writer::NEG_FUNCTION,
     super::writer::ARGUMENT_BUFFER_WRAPPER_STRUCT,
 ];
+
+/// The above set of reserved keywords, turned into a cached HashSet. This saves
+/// significant time during [`Namer::reset`](crate::proc::Namer::reset).
+///
+/// See <https://github.com/gfx-rs/wgpu/pull/7338> for benchmarks.
+pub static RESERVED_SET: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut set = HashSet::default();
+    set.reserve(RESERVED.len());
+    for &word in RESERVED {
+        set.insert(word);
+    }
+    set
+});

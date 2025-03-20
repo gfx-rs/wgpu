@@ -5,6 +5,7 @@ use alloc::{
     vec::Vec,
 };
 use core::fmt::Write;
+use hashbrown::HashSet;
 
 use super::Error;
 use super::ToWgslIfImplemented as _;
@@ -99,9 +100,8 @@ impl<W: Write> Writer<W> {
         self.names.clear();
         self.namer.reset(
             module,
-            crate::keywords::wgsl::RESERVED,
+            &crate::keywords::wgsl::RESERVED_SET,
             // an identifier must not start with two underscore
-            &[],
             &[],
             &["__", "_naga"],
             &mut self.names,
@@ -129,6 +129,9 @@ impl<W: Write> Writer<W> {
 
         // Write all needed directives.
         self.write_enable_dual_source_blending_if_needed(module)?;
+
+        // Write all `enable` declarations
+        self.write_enable_declarations(module)?;
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
@@ -217,6 +220,41 @@ impl<W: Write> Writer<W> {
         for polyfill in &self.required_polyfills {
             writeln!(self.out)?;
             write!(self.out, "{}", polyfill.source)?;
+            writeln!(self.out)?;
+        }
+
+        Ok(())
+    }
+
+    /// Helper method which writes all the `enable` declarations
+    /// needed for a module.
+    fn write_enable_declarations(&mut self, module: &Module) -> BackendResult {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        enum WrittenDeclarations {
+            F16,
+        }
+
+        let mut written_declarations = HashSet::new();
+
+        // Write all the `enable` declarations
+        for (_, ty) in module.types.iter() {
+            match ty.inner {
+                TypeInner::Scalar(scalar)
+                | TypeInner::Vector { scalar, .. }
+                | TypeInner::Matrix { scalar, .. } => {
+                    if scalar == crate::Scalar::F16
+                        && !written_declarations.contains(&WrittenDeclarations::F16)
+                    {
+                        writeln!(self.out, "enable f16;")?;
+                        written_declarations.insert(WrittenDeclarations::F16);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if !written_declarations.is_empty() {
+            // Empty line for readability
             writeln!(self.out)?;
         }
 
@@ -1093,6 +1131,7 @@ impl<W: Write> Writer<W> {
 
         match expressions[expr] {
             Expression::Literal(literal) => match literal {
+                crate::Literal::F16(value) => write!(self.out, "{value}h")?,
                 crate::Literal::F32(value) => write!(self.out, "{value}f")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
                 crate::Literal::I32(value) => {
@@ -1727,7 +1766,7 @@ struct WriterTypeContext<'m> {
     names: &'m crate::FastHashMap<NameKey, String>,
 }
 
-impl<W: Write> TypeContext<W> for WriterTypeContext<'_> {
+impl TypeContext for WriterTypeContext<'_> {
     fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
         &self.module.types[handle]
     }
@@ -1736,8 +1775,16 @@ impl<W: Write> TypeContext<W> for WriterTypeContext<'_> {
         self.names[&NameKey::Type(handle)].as_str()
     }
 
-    fn write_override(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
+    fn write_override<W: Write>(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
         unreachable!("overrides should be validated out");
+    }
+
+    fn write_non_wgsl_inner<W: Write>(&self, _: &TypeInner, _: &mut W) -> core::fmt::Result {
+        unreachable!("backends should only be passed validated modules");
+    }
+
+    fn write_non_wgsl_scalar<W: Write>(&self, _: crate::Scalar, _: &mut W) -> core::fmt::Result {
+        unreachable!("backends should only be passed validated modules");
     }
 }
 

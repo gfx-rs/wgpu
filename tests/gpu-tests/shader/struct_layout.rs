@@ -5,6 +5,60 @@ use wgpu::{Backends, DownlevelFlags, Features, Limits};
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE};
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
+#[gpu_test]
+static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/wgpu/issues/4371
+            .expect_fail(
+                FailureCase::backend(wgpu::Backends::VULKAN)
+                    .validation_error("a matrix with stride 8 not satisfying alignment to 16"),
+            )
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Uniform,
+            create_struct_layout_tests(InputStorageType::Uniform),
+        )
+    });
+
+#[gpu_test]
+static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_struct_layout_tests(InputStorageType::Storage),
+        )
+    });
+
+#[gpu_test]
+static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::PUSH_CONSTANTS)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits {
+                max_push_constant_size: MAX_BUFFER_SIZE as u32,
+                ..Limits::downlevel_defaults()
+            }),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::PushConstant,
+            create_struct_layout_tests(InputStorageType::PushConstant),
+        )
+    });
+
 fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
 
@@ -253,6 +307,57 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
     tests
 }
 
+#[gpu_test]
+static UNIFORM_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_INT64)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_64bit_struct_layout_tests(),
+        )
+    });
+
+#[gpu_test]
+static STORAGE_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_INT64)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::Storage,
+            create_64bit_struct_layout_tests(),
+        )
+    });
+
+#[gpu_test]
+static PUSH_CONSTANT_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::SHADER_INT64 | Features::PUSH_CONSTANTS)
+            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
+            .limits(Limits {
+                max_push_constant_size: MAX_BUFFER_SIZE as u32,
+                ..Limits::downlevel_defaults()
+            }),
+    )
+    .run_async(|ctx| {
+        shader_input_output_test(
+            ctx,
+            InputStorageType::PushConstant,
+            create_64bit_struct_layout_tests(),
+        )
+    });
+
 fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
     let input_values: Vec<_> = (0..(MAX_BUFFER_SIZE as u32 / 4)).collect();
 
@@ -356,29 +461,10 @@ fn create_64bit_struct_layout_tests() -> Vec<ShaderTest> {
 }
 
 #[gpu_test]
-static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+static UNIFORM_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            // Validation errors thrown by the SPIR-V validator https://github.com/gfx-rs/wgpu/issues/4371
-            .expect_fail(
-                FailureCase::backend(wgpu::Backends::VULKAN)
-                    .validation_error("a matrix with stride 8 not satisfying alignment to 16"),
-            )
-            .limits(Limits::downlevel_defaults()),
-    )
-    .run_async(|ctx| {
-        shader_input_output_test(
-            ctx,
-            InputStorageType::Uniform,
-            create_struct_layout_tests(InputStorageType::Uniform),
-        )
-    });
-
-#[gpu_test]
-static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
+            .features(Features::SHADER_F16)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
     )
@@ -386,34 +472,15 @@ static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
-            create_struct_layout_tests(InputStorageType::Storage),
+            create_16bit_struct_layout_test(),
         )
     });
 
 #[gpu_test]
-static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+static STORAGE_INPUT_F16: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::PUSH_CONSTANTS)
-            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits {
-                max_push_constant_size: MAX_BUFFER_SIZE as u32,
-                ..Limits::downlevel_defaults()
-            }),
-    )
-    .run_async(|ctx| {
-        shader_input_output_test(
-            ctx,
-            InputStorageType::PushConstant,
-            create_struct_layout_tests(InputStorageType::PushConstant),
-        )
-    });
-
-#[gpu_test]
-static UNIFORM_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(Features::SHADER_INT64)
+            .features(Features::SHADER_F16)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits::downlevel_defaults()),
     )
@@ -421,41 +488,138 @@ static UNIFORM_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
         shader_input_output_test(
             ctx,
             InputStorageType::Storage,
-            create_64bit_struct_layout_tests(),
+            create_16bit_struct_layout_test(),
         )
     });
 
-#[gpu_test]
-static STORAGE_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(Features::SHADER_INT64)
-            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults()),
-    )
-    .run_async(|ctx| {
-        shader_input_output_test(
-            ctx,
-            InputStorageType::Storage,
-            create_64bit_struct_layout_tests(),
-        )
-    });
+fn create_16bit_struct_layout_test() -> Vec<ShaderTest> {
+    let mut tests = Vec::new();
 
-#[gpu_test]
-static PUSH_CONSTANT_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .features(Features::SHADER_INT64 | Features::PUSH_CONSTANTS)
-            .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits {
-                max_push_constant_size: MAX_BUFFER_SIZE as u32,
-                ..Limits::downlevel_defaults()
-            }),
-    )
-    .run_async(|ctx| {
-        shader_input_output_test(
-            ctx,
-            InputStorageType::PushConstant,
-            create_64bit_struct_layout_tests(),
-        )
-    });
+    fn f16asu16(f32: f32) -> u16 {
+        half::f16::from_f32(f32).to_bits()
+    }
+
+    // 16 bit alignment tests
+    {
+        let members =
+            "scalar1: f16, scalar2: f16, v3: vec3<f16>, tuck_in: f16, scalar4: f16, larger: u32";
+        let direct = String::from(
+            "\
+            output[0] = u32(input.scalar1);
+            output[1] = u32(input.scalar2);
+            output[2] = u32(input.v3.x);
+            output[3] = u32(input.v3.y);
+            output[4] = u32(input.v3.z);
+            output[5] = u32(input.tuck_in);
+            output[6] = u32(input.scalar4);
+            output[7] = u32(extractBits(input.larger, 0u, 16u));
+            output[8] = u32(extractBits(input.larger, 16u, 16u));
+        ",
+        );
+
+        tests.push(ShaderTest::new(
+            "f16 alignment".into(),
+            members.into(),
+            direct,
+            &[
+                f16asu16(0.0),
+                f16asu16(1.0),
+                f16asu16(2.0),
+                f16asu16(3.0),
+                f16asu16(4.0),
+                f16asu16(5.0),
+                f16asu16(6.0),
+                f16asu16(7.0),
+                f16asu16(8.0),
+                f16asu16(9.0),
+                10_u16,
+                11_u16,
+                // Some extra values to help debug if the test fails.
+                12_u16,
+                13_u16,
+                14_u16,
+                15_u16,
+                16_u16,
+                17_u16,
+                18_u16,
+                19_u16,
+                20_u16,
+            ],
+            &[
+                0, // scalar1
+                1, // scalar2
+                4, 5, 6,  // v3
+                7,  // tuck_in
+                8,  // scalar4
+                10, // larger[0..16]
+                11, // larger[16..32]
+            ],
+        ));
+    }
+
+    // Matrix tests
+    {
+        let members = "m2: mat2x2h, m3: mat3x3h, m4: mat4x4h";
+        let direct = String::from(
+            "\
+            output[0] = u32(input.m2[0].x);
+            output[1] = u32(input.m2[0].y);
+            output[2] = u32(input.m2[1].x);
+            output[3] = u32(input.m2[1].y);
+
+            output[4] = u32(input.m3[0].x);
+            output[5] = u32(input.m3[0].y);
+            output[6] = u32(input.m3[0].z);
+            output[7] = u32(input.m3[1].x);
+            output[8] = u32(input.m3[1].y);
+            output[9] = u32(input.m3[1].z);
+            output[10] = u32(input.m3[2].x);
+            output[11] = u32(input.m3[2].y);
+            output[12] = u32(input.m3[2].z);
+
+            output[13] = u32(input.m4[0].x);
+            output[14] = u32(input.m4[0].y);
+            output[15] = u32(input.m4[0].z);
+            output[16] = u32(input.m4[0].w);
+            output[17] = u32(input.m4[1].x);
+            output[18] = u32(input.m4[1].y);
+            output[19] = u32(input.m4[1].z);
+            output[20] = u32(input.m4[1].w);
+            output[21] = u32(input.m4[2].x);
+            output[22] = u32(input.m4[2].y);
+            output[23] = u32(input.m4[2].z);
+            output[24] = u32(input.m4[2].w);
+            output[25] = u32(input.m4[3].x);
+            output[26] = u32(input.m4[3].y);
+            output[27] = u32(input.m4[3].z);
+            output[28] = u32(input.m4[3].w);
+        ",
+        );
+
+        tests.push(ShaderTest::new(
+            "f16 matrix alignment".into(),
+            members.into(),
+            direct,
+            &(0..32).map(|x| f16asu16(x as f32)).collect::<Vec<_>>(),
+            &[
+                0, 1, // m2[0]
+                2, 3, // m2[1]
+                //
+                4, 5, 6, // m3[0]
+                8, 9, 10, // m3[1]
+                12, 13, 14, // m3[2]
+                //
+                16, 17, 18, 19, // m4[0]
+                20, 21, 22, 23, // m4[1]
+                24, 25, 26, 27, // m4[2]
+                28, 29, 30, 31, // m4[3]
+            ],
+        ));
+    }
+
+    // Insert `enable f16;` header
+    tests
+        .into_iter()
+        .map(|test| test.header("enable f16;".into()))
+        .collect()
+}

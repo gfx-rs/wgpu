@@ -70,7 +70,7 @@ pub type PipelineConstants = hashbrown::HashMap<String, f64>;
 pub struct Level(pub usize);
 
 impl Level {
-    const fn next(&self) -> Self {
+    pub const fn next(&self) -> Self {
         Level(self.0 + 1)
     }
 }

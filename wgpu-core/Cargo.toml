@@ -76,7 +76,14 @@ observe_locks = ["std", "dep:ron", "serde/serde_derive"]
 serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde"]
 
 ## Enable API tracing.
-trace = ["serde", "std", "dep:ron", "naga/serialize", "wgpu-types/trace"]
+trace = [
+    "serde",
+    "std",
+    "dep:ron",
+    "naga/serialize",
+    "wgpu-types/trace",
+    "dep:bytemuck",
+]
 
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]

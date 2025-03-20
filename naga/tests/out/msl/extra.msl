@@ -6,7 +6,7 @@ using metal::uint;
 
 struct PushConstants {
     uint index;
-    char _pad1[12];
+    char _pad1[4];
     metal::float2 double_;
 };
 struct FragmentIn {

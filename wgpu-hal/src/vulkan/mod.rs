@@ -47,6 +47,7 @@ use std::{
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
+use bytemuck::{Pod, Zeroable};
 use hashbrown::HashSet;
 use parking_lot::{Mutex, RwLock};
 
@@ -1489,7 +1490,7 @@ fn get_lost_err() -> crate::DeviceError {
     crate::DeviceError::Lost
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 struct RawTlasInstance {
     transform: [f32; 12],

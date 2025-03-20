@@ -490,10 +490,8 @@ impl Instance {
         };
 
         fn sort(adapters: &mut [hal::DynExposedAdapter], prefer_integrated_gpu: bool) {
-            adapters.sort_by(|a, b| {
-                get_order(a.info.device_type, prefer_integrated_gpu)
-                    .cmp(&get_order(b.info.device_type, prefer_integrated_gpu))
-            });
+            adapters
+                .sort_by_key(|adapter| get_order(adapter.info.device_type, prefer_integrated_gpu));
         }
 
         fn get_order(device_type: wgt::DeviceType, prefer_integrated_gpu: bool) -> u8 {

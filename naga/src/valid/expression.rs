@@ -1794,7 +1794,7 @@ impl super::Validator {
     }
 
     pub fn validate_literal(&self, literal: crate::Literal) -> Result<(), LiteralError> {
-        self.check_width(literal.scalar())?;
+        let _ = self.check_width(literal.scalar())?;
         check_literal_value(literal)?;
 
         Ok(())

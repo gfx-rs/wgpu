@@ -1,5 +1,5 @@
 use arrayvec::ArrayVec;
-use wgpu::{DownlevelCapabilities, DownlevelFlags, Features, Limits};
+use wgpu::{DownlevelCapabilities, DownlevelFlags, Features, InstanceFlags, Limits};
 
 use crate::{
     report::AdapterReport, FailureApplicationReasons, FailureBehavior, FailureCase,
@@ -19,6 +19,8 @@ pub struct TestParameters {
     pub required_downlevel_caps: DownlevelCapabilities,
     pub required_limits: Limits,
 
+    pub required_instance_flags: InstanceFlags,
+
     /// On Dx12, specifically test against the Fxc compiler.
     ///
     /// For testing workarounds to Fxc bugs.
@@ -37,6 +39,7 @@ impl Default for TestParameters {
             required_features: Features::empty(),
             required_downlevel_caps: LOWEST_DOWNLEVEL_PROPERTIES,
             required_limits: Limits::downlevel_webgl2_defaults(),
+            required_instance_flags: InstanceFlags::empty(),
             force_fxc: false,
             skips: Vec::new(),
             failures: Vec::new(),
@@ -66,6 +69,12 @@ impl TestParameters {
     /// Set the limits needed for the test.
     pub fn limits(mut self, limits: Limits) -> Self {
         self.required_limits = limits;
+        self
+    }
+
+    /// Sets the instance flags that the test requires.
+    pub fn instance_flags(mut self, instance_flags: InstanceFlags) -> Self {
+        self.required_instance_flags |= instance_flags;
         self
     }
 
