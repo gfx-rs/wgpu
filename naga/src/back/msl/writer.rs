@@ -851,7 +851,7 @@ impl<W: Write> Writer<W> {
 
         let loop_bound_name = self.namer.call("loop_bound");
         // Count down from u32::MAX rather than up from 0 to avoid hang on
-        // certain Intel drivers. See https://github.com/gfx-rs/wgpu/issues/7319.
+        // certain Intel drivers. See <https://github.com/gfx-rs/wgpu/issues/7319>.
         let decl = format!("{level}uint2 {loop_bound_name} = uint2({}u);", u32::MAX);
         let level = level.next();
         let break_and_inc = format!(
