@@ -1,4 +1,2 @@
-targets = "SPIRV | METAL | GLSL | HLSL | WGSL"
-
 [msl]
 lang_version = [1, 2]

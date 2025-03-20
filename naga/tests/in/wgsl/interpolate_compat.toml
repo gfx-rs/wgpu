@@ -1,5 +1,3 @@
-targets = "SPIRV | METAL | GLSL | HLSL | WGSL"
-
 [glsl]
 version.Desktop = 400
 writer_flags = ""

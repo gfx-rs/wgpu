@@ -1,5 +1,4 @@
 spv_flow_dump_prefix = ""
-targets = "SPIRV | METAL | GLSL | HLSL | WGSL"
 
 [msl]
 fake_missing_bindings = false
