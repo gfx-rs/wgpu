@@ -41,10 +41,17 @@ msl-out = []
 ## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
 msl-out-if-target-apple = []
 
-serialize = ["dep:serde", "bitflags/serde", "hashbrown/serde", "indexmap/serde"]
+serialize = [
+    "dep:serde",
+    "bitflags/serde",
+    "half/serde",
+    "hashbrown/serde",
+    "indexmap/serde",
+]
 deserialize = [
     "dep:serde",
     "bitflags/serde",
+    "half/serde",
     "hashbrown/serde",
     "indexmap/serde",
 ]
@@ -84,9 +91,12 @@ termcolor = { version = "1.4.1" }
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
 codespan-reporting = { version = "0.11.0" }
 hashbrown.workspace = true
+half = { workspace = true, features = ["arbitrary", "num-traits"] }
 rustc-hash.workspace = true
 indexmap.workspace = true
 log = "0.4"
+# `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
+num-traits = "0.2.16"
 strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true

@@ -964,14 +964,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 
 [[package]]
-name = "custom-backend"
-version = "24.0.0"
-dependencies = [
- "pollster",
- "wgpu",
-]
-
-[[package]]
 name = "data-encoding"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1793,8 +1785,12 @@ version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7db2ff139bba50379da6aa0766b52fdcb62cb5b263009b09ed58ba604e14bbd1"
 dependencies = [
+ "arbitrary",
+ "bytemuck",
  "cfg-if",
  "crunchy",
+ "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -2202,6 +2198,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libm"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
+
+[[package]]
 name = "libredox"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2401,12 +2403,14 @@ dependencies = [
  "codespan-reporting",
  "diff",
  "env_logger",
+ "half",
  "hashbrown",
  "hexf-parse",
  "hlsl-snapshots",
  "indexmap",
  "itertools 0.13.0",
  "log",
+ "num-traits",
  "petgraph 0.7.1",
  "pp-rs",
  "ron",
@@ -2582,6 +2586,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+ "libm",
 ]
 
 [[package]]
@@ -4720,6 +4725,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-example-custom-backend"
+version = "0.0.0"
+dependencies = [
+ "pollster",
+ "wgpu",
+]
+
+[[package]]
 name = "wgpu-examples"
 version = "24.0.0"
 dependencies = [
@@ -4843,6 +4856,7 @@ dependencies = [
  "env_logger",
  "futures-lite",
  "glam",
+ "half",
  "image",
  "itertools 0.13.0",
  "js-sys",
@@ -4870,6 +4884,7 @@ name = "wgpu-types"
 version = "24.0.0"
 dependencies = [
  "bitflags 2.9.0",
+ "bytemuck",
  "js-sys",
  "log",
  "serde",

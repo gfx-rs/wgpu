@@ -4,7 +4,7 @@ use bit_set::BitSet;
 
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
-    Capabilities, Disalignment, FunctionError, ModuleInfo,
+    Capabilities, Disalignment, FunctionError, ModuleInfo, PushConstantError,
 };
 use crate::arena::{Handle, UniqueArena};
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
@@ -41,6 +41,8 @@ pub enum GlobalVariableError {
     InitializerNotAllowed(crate::AddressSpace),
     #[error("Storage address space doesn't support write-only access")]
     StorageAddressSpaceWriteOnlyNotSupported,
+    #[error("Type is not valid for use as a push constant")]
+    InvalidPushConstantType(#[source] PushConstantError),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -595,6 +597,9 @@ impl super::Validator {
                     return Err(GlobalVariableError::UnsupportedCapability(
                         Capabilities::PUSH_CONSTANT,
                     ));
+                }
+                if let Err(ref err) = type_info.push_constant_compatibility {
+                    return Err(GlobalVariableError::InvalidPushConstantType(err.clone()));
                 }
                 (
                     TypeFlags::DATA

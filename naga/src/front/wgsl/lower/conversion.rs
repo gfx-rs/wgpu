@@ -2,9 +2,11 @@
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 
+use crate::common::wgsl::{TryToWgsl, TypeContext};
 use crate::front::wgsl::error::{
     AutoConversionError, AutoConversionLeafScalarError, ConcretizationFailedError,
 };
+use crate::front::wgsl::Result;
 use crate::{Handle, Span};
 
 impl<'source> super::ExpressionContext<'source, '_, '_> {
@@ -25,7 +27,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         expr: Handle<crate::Expression>,
         goal_ty: &crate::proc::TypeResolution,
         goal_span: Span,
-    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let expr_span = self.get_expression_span(expr);
         // Keep the TypeResolution so we can get type names for
         // structs in error messages.
@@ -52,18 +54,17 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
             match expr_inner.automatically_converts_to(goal_inner, types) {
                 Some(scalars) => scalars,
                 None => {
-                    let gctx = &self.module.to_ctx();
-                    let source_type = expr_resolution.to_wgsl(gctx).into();
-                    let dest_type = goal_ty.to_wgsl(gctx).into();
+                    let source_type = self.type_resolution_to_string(expr_resolution);
+                    let dest_type = self.type_resolution_to_string(goal_ty);
 
-                    return Err(super::Error::AutoConversion(Box::new(
+                    return Err(Box::new(super::Error::AutoConversion(Box::new(
                         AutoConversionError {
                             dest_span: goal_span,
                             dest_type,
                             source_span: expr_span,
                             source_type,
                         },
-                    )));
+                    ))));
                 }
             };
 
@@ -87,18 +88,17 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         expr: Handle<crate::Expression>,
         goal_scalar: crate::Scalar,
         goal_span: Span,
-    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let expr_span = self.get_expression_span(expr);
         let expr_resolution = super::resolve!(self, expr);
         let types = &self.module.types;
         let expr_inner = expr_resolution.inner_with(types);
 
         let make_error = || {
-            let gctx = &self.module.to_ctx();
-            let source_type = expr_resolution.to_wgsl(gctx).into();
+            let source_type = self.type_resolution_to_string(expr_resolution);
             super::Error::AutoConversionLeafScalar(Box::new(AutoConversionLeafScalarError {
                 dest_span: goal_span,
-                dest_scalar: goal_scalar.to_wgsl().into(),
+                dest_scalar: goal_scalar.to_wgsl_for_diagnostics(),
                 source_span: expr_span,
                 source_type,
             }))
@@ -106,7 +106,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
 
         let expr_scalar = match expr_inner.automatically_convertible_scalar(&self.module.types) {
             Some(scalar) => scalar,
-            None => return Err(make_error()),
+            None => return Err(Box::new(make_error())),
         };
 
         if expr_scalar == goal_scalar {
@@ -114,7 +114,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         }
 
         if !expr_scalar.automatically_converts_to(goal_scalar) {
-            return Err(make_error());
+            return Err(Box::new(make_error()));
         }
 
         assert!(expr_scalar.is_abstract());
@@ -127,12 +127,14 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         expr: Handle<crate::Expression>,
         expr_span: Span,
         goal_scalar: crate::Scalar,
-    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let expr_inner = super::resolve_inner!(self, expr);
         if let crate::TypeInner::Array { .. } = *expr_inner {
             self.as_const_evaluator()
                 .cast_array(expr, goal_scalar, expr_span)
-                .map_err(|err| super::Error::ConstantEvaluatorError(err.into(), expr_span))
+                .map_err(|err| {
+                    Box::new(super::Error::ConstantEvaluatorError(err.into(), expr_span))
+                })
         } else {
             let cast = crate::Expression::As {
                 expr,
@@ -149,7 +151,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         exprs: &mut [Handle<crate::Expression>],
         goal_ty: &crate::proc::TypeResolution,
         goal_span: Span,
-    ) -> Result<(), super::Error<'source>> {
+    ) -> Result<'source, ()> {
         for expr in exprs.iter_mut() {
             *expr = self.try_automatic_conversions(*expr, goal_ty, goal_span)?;
         }
@@ -170,7 +172,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         exprs: &mut [Handle<crate::Expression>],
         goal_scalar: crate::Scalar,
         goal_span: Span,
-    ) -> Result<(), super::Error<'source>> {
+    ) -> Result<'source, ()> {
         use crate::proc::TypeResolution as Tr;
         use crate::TypeInner as Ti;
         let goal_scalar_res = Tr::Value(Ti::Scalar(goal_scalar));
@@ -195,9 +197,9 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
                 }
                 _ => {
                     let span = self.get_expression_span(*expr);
-                    return Err(super::Error::InvalidConstructorComponentType(
+                    return Err(Box::new(super::Error::InvalidConstructorComponentType(
                         span, i as i32,
-                    ));
+                    )));
                 }
             }
         }
@@ -210,7 +212,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         &mut self,
         expr: &mut Handle<crate::Expression>,
         goal: crate::Scalar,
-    ) -> Result<(), super::Error<'source>> {
+    ) -> Result<'source, ()> {
         let inner = super::resolve_inner!(self, *expr);
         // Do nothing if `inner` doesn't even have leaf scalars;
         // it's a type error that validation will catch.
@@ -241,7 +243,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         &mut self,
         exprs: &mut [Handle<crate::Expression>],
         goal: crate::Scalar,
-    ) -> Result<(), super::Error<'source>> {
+    ) -> Result<'source, ()> {
         for expr in exprs.iter_mut() {
             self.convert_to_leaf_scalar(expr, goal)?;
         }
@@ -255,7 +257,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
     pub fn concretize(
         &mut self,
         mut expr: Handle<crate::Expression>,
-    ) -> Result<Handle<crate::Expression>, super::Error<'source>> {
+    ) -> Result<'source, Handle<crate::Expression>> {
         let inner = super::resolve_inner!(self, expr);
         if let Some(scalar) = inner.automatically_convertible_scalar(&self.module.types) {
             let concretized = scalar.concretize();
@@ -272,8 +274,8 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
                         let expr_type = &self.typifier()[expr];
                         super::Error::ConcretizationFailed(Box::new(ConcretizationFailedError {
                             expr_span,
-                            expr_type: expr_type.to_wgsl(&self.module.to_ctx()).into(),
-                            scalar: concretized.to_wgsl().into(),
+                            expr_type: self.type_resolution_to_string(expr_type),
+                            scalar: concretized.to_wgsl_for_diagnostics(),
                             inner: err,
                         }))
                     })?;
@@ -303,7 +305,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
     pub fn automatic_conversion_consensus<'handle, I>(
         &self,
         components: I,
-    ) -> Result<crate::Scalar, usize>
+    ) -> core::result::Result<crate::Scalar, usize>
     where
         I: IntoIterator<Item = &'handle Handle<crate::Expression>>,
         I::IntoIter: Clone, // for debugging
@@ -313,11 +315,12 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
             .into_iter()
             .map(|&c| self.typifier()[c].inner_with(types));
         log::debug!(
-            "wgsl automatic_conversion_consensus: {:?}",
+            "wgsl automatic_conversion_consensus: {}",
             inners
                 .clone()
-                .map(|inner| inner.to_wgsl(&self.module.to_ctx()))
+                .map(|inner| self.type_inner_to_string(inner))
                 .collect::<Vec<String>>()
+                .join(", ")
         );
         let mut best = inners.next().unwrap().scalar().ok_or(0_usize)?;
         for (inner, i) in inners.zip(1..) {
@@ -330,7 +333,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
             }
         }
 
-        log::debug!("    consensus: {:?}", best.to_wgsl());
+        log::debug!("    consensus: {}", best.to_wgsl_for_diagnostics());
         Ok(best)
     }
 }

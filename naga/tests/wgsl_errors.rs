@@ -8,7 +8,8 @@ use naga::valid::Capabilities;
 #[track_caller]
 fn check(input: &str, snapshot: &str) {
     let output = naga::front::wgsl::parse_str(input)
-        .expect_err("expected parser error")
+        .map(|_| panic!("expected parser error, but parsing succeeded!"))
+        .unwrap_err()
         .emit_to_string(input);
     if output != snapshot {
         for diff in diff::lines(snapshot, &output) {
@@ -19,6 +20,19 @@ fn check(input: &str, snapshot: &str) {
             }
         }
         panic!("Error snapshot failed");
+    }
+}
+
+#[track_caller]
+fn check_success(input: &str) {
+    match naga::front::wgsl::parse_str(input) {
+        Ok(_) => {}
+        Err(err) => {
+            panic!(
+                "expected success, but parsing failed with:\n{}",
+                err.emit_to_string(input)
+            );
+        }
     }
 }
 
@@ -234,6 +248,58 @@ fn constructor_parameter_type_mismatch() {
   │                     ^^^^^^^^^^^ ^^^^^^^^^^^ this expression has type array<{AbstractInt}, 2>
   │                     │            
   │                     a value of type vec2<f32> is required here
+
+"#,
+    );
+}
+
+#[test]
+fn vector_constructor_incorrect_component_count() {
+    // Too few components
+    check(
+        r#"
+            fn x() {
+                _ = vec4(1, 2, 3);
+            }
+        "#,
+        r#"error: Constructor expects 4 components, found 3
+  ┌─ wgsl:3:21
+  │
+3 │                 _ = vec4(1, 2, 3);
+  │                     ^^^^^^^^^^^^^ see msg
+
+"#,
+    );
+
+    // Too many components
+    check(
+        r#"
+            fn x() {
+                _ = vec4(1, 2, 3, 4, 5);
+            }
+        "#,
+        r#"error: Constructor expects 4 components, found 5
+  ┌─ wgsl:3:21
+  │
+3 │                 _ = vec4(1, 2, 3, 4, 5);
+  │                     ^^^^^^^^^^^^^^^^^^^ see msg
+
+"#,
+    );
+
+    // The outer constructor has the correct number of components, but only
+    // because the inner constructor has too many.
+    check(
+        r#"
+            fn x() {
+                _ = vec4(1, vec2(2, 3, 4));
+            }
+        "#,
+        r#"error: Constructor expects 2 components, found 3
+  ┌─ wgsl:3:29
+  │
+3 │                 _ = vec4(1, vec2(2, 3, 4));
+  │                             ^^^^^^^^^^^^^ see msg
 
 "#,
     );
@@ -827,6 +893,50 @@ fn matrix_constructor_inferred() {
     );
 }
 
+#[test]
+fn float16_requires_enable() {
+    check(
+        r#"
+            const a: f16 = 1.0;
+        "#,
+        r#"error: the `f16` enable extension is not enabled
+  ┌─ wgsl:2:22
+  │
+2 │             const a: f16 = 1.0;
+  │                      ^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
+
+"#,
+    );
+
+    check(
+        r#"
+            const a = 1.0h;
+        "#,
+        r#"error: the `f16` enable extension is not enabled
+  ┌─ wgsl:2:23
+  │
+2 │             const a = 1.0h;
+  │                       ^^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
+
+"#,
+    );
+}
+
+#[test]
+fn multiple_enables_valid() {
+    check_success(
+        r#"
+            enable f16;
+            enable f16;
+            const a: f16 = 1.0h;
+        "#,
+    );
+}
+
 /// Check the result of validating a WGSL program against a pattern.
 ///
 /// Unless you are generating code programmatically, the
@@ -929,6 +1039,53 @@ fn int64_capability() {
             source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability {flag: "SHADER_INT64",..}),
             ..
         })
+    }
+}
+
+#[test]
+fn float16_capability() {
+    check_validation! {
+        "enable f16; var input: f16;",
+        "enable f16; var input: vec2<f16>;":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability {flag: "FLOAT16",..}),
+            ..
+        })
+    }
+}
+
+#[test]
+fn float16_in_push_constant() {
+    check_validation! {
+        "enable f16; var<push_constant> input: f16;",
+        "enable f16; var<push_constant> input: vec2<f16>;",
+        "enable f16; var<push_constant> input: mat4x4<f16>;",
+        "enable f16; struct S { a: f16 }; var<push_constant> input: S;",
+        "enable f16; struct S1 { a: f16 }; struct S2 { a : S1 } var<push_constant> input: S2;":
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::InvalidPushConstantType(
+                naga::valid::PushConstantError::InvalidScalar(
+                    naga::Scalar::F16
+                )
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_FLOAT16 | naga::valid::Capabilities::PUSH_CONSTANT
+    }
+}
+
+#[test]
+fn float16_in_atomic() {
+    check_validation! {
+        "enable f16; var<storage> a: atomic<f16>;":
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::InvalidAtomicWidth(
+                naga::ScalarKind::Float,
+                2
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_FLOAT16
     }
 }
 
@@ -1356,11 +1513,13 @@ fn invalid_blend_src() {
         @fragment
         fn main(@builtin(position) position: vec4<f32>) -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(0.0)); }
         ",
-        r###"error: `dual_source_blending` enable-extension is not enabled
+        r###"error: the `dual_source_blending` enable extension is not enabled
   ┌─ wgsl:3:27
   │
 3 │             @location(0) @blend_src(0) output0: vec4<f32>,
-  │                           ^^^^^^^^^ the `dual_source_blending` enable-extension is needed for this functionality, but it is not currently enabled
+  │                           ^^^^^^^^^ the `dual_source_blending` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable dual_source_blending;` at the top of the shader, before any other items.
 
 "###,
     );

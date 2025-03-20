@@ -4,6 +4,10 @@ Keywords for [WGSL][wgsl] (WebGPU Shading Language).
 [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
 */
 
+use std::sync::LazyLock;
+
+use hashbrown::HashSet;
+
 // https://gpuweb.github.io/gpuweb/wgsl/#keyword-summary
 // last sync: https://github.com/gpuweb/gpuweb/blob/39f2321f547c8f0b7f473cf1d47fba30b1691303/wgsl/index.bs
 pub const RESERVED: &[&str] = &[
@@ -229,3 +233,16 @@ pub const RESERVED: &[&str] = &[
     "writeonly",
     "yield",
 ];
+
+/// The above set of reserved keywords, turned into a cached HashSet. This saves
+/// significant time during [`Namer::reset`](crate::proc::Namer::reset).
+///
+/// See <https://github.com/gfx-rs/wgpu/pull/7338> for benchmarks.
+pub static RESERVED_SET: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut set = HashSet::default();
+    set.reserve(RESERVED.len());
+    for &word in RESERVED {
+        set.insert(word);
+    }
+    set
+});

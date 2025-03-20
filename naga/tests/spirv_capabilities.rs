@@ -208,3 +208,8 @@ fn int64() {
         "#,
     );
 }
+
+#[test]
+fn float16() {
+    require(&[Ca::Float16], "enable f16; fn f(x: f16) { }");
+}

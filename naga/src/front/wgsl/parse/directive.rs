@@ -5,6 +5,8 @@
 pub mod enable_extension;
 pub(crate) mod language_extension;
 
+use alloc::boxed::Box;
+
 /// A parsed sentinel word indicating the type of directive to be parsed next.
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(test, derive(strum::EnumIter))]
@@ -37,9 +39,9 @@ impl crate::diagnostic_filter::Severity {
     #[cfg(feature = "wgsl-in")]
     pub(crate) fn report_wgsl_parse_diag<'a>(
         self,
-        err: crate::front::wgsl::error::Error<'a>,
+        err: Box<crate::front::wgsl::error::Error<'a>>,
         source: &str,
-    ) -> Result<(), crate::front::wgsl::error::Error<'a>> {
+    ) -> crate::front::wgsl::Result<'a, ()> {
         self.report_diag(err, |e, level| {
             let e = e.as_parse_error(source);
             log::log!(level, "{}", e.emit_to_string(source));

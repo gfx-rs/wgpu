@@ -88,6 +88,7 @@ vulkan = [
     "dep:android_system_properties",
     "dep:arrayvec",
     "dep:ash",
+    "dep:bytemuck",
     "dep:gpu-alloc",
     "dep:gpu-descriptor",
     "dep:hashbrown",
@@ -127,6 +128,7 @@ dx12 = [
     "naga/hlsl-out",
     "dep:arrayvec",
     "dep:bit-set",
+    "dep:bytemuck",
     "dep:hashbrown",
     "dep:libloading",
     "dep:log",
@@ -208,6 +210,7 @@ thiserror.workspace = true
 
 # Target agnostic dependencies used only in backends.
 arrayvec = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true, features = ["derive"] }
 hashbrown = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 once_cell = { workspace = true, optional = true }
@@ -216,7 +219,6 @@ profiling = { workspace = true, optional = true, default-features = false }
 rustc-hash = { workspace = true, optional = true }
 
 # Backend: GLES
-bytemuck = { workspace = true, optional = true }
 glow = { workspace = true, optional = true }
 cfg-if = { workspace = true, optional = true }
 

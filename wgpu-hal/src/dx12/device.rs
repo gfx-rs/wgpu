@@ -2,13 +2,14 @@ use std::{
     borrow::Cow,
     ffi, mem,
     num::NonZeroU32,
-    ptr, slice,
+    ptr,
     string::{String, ToString as _},
     sync::Arc,
     time::{Duration, Instant},
     vec::Vec,
 };
 
+use bytemuck::TransparentWrapper;
 use parking_lot::Mutex;
 use windows::{
     core::Interface as _,
@@ -33,9 +34,11 @@ use crate::{
 const NAGA_LOCATION_SEMANTIC: &[u8] = c"LOC".to_bytes();
 
 impl super::Device {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         raw: Direct3D12::ID3D12Device,
         present_queue: Direct3D12::ID3D12CommandQueue,
+        features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
         private_caps: super::PrivateCapabilities,
@@ -178,6 +181,7 @@ impl super::Device {
                 event: Event::create(false, false)?,
             },
             private_caps,
+            features,
             shared: Arc::new(shared),
             rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(descriptor::CpuPool::new(
@@ -2359,13 +2363,9 @@ impl crate::Device for super::Device {
             _bitfield2: 0,
             AccelerationStructure: instance.blas_address,
         };
-        let temp: *const _ = &temp;
-        unsafe {
-            slice::from_raw_parts(
-                temp.cast::<u8>(),
-                size_of::<Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC>(),
-            )
-            .to_vec()
-        }
+
+        wgt::bytemuck_wrapper!(unsafe struct Desc(Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC));
+
+        bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()
     }
 }

@@ -634,6 +634,7 @@ pub struct Device {
     present_queue: Direct3D12::ID3D12CommandQueue,
     idler: Idler,
     private_caps: PrivateCapabilities,
+    features: wgt::Features,
     shared: Arc<DeviceShared>,
     // CPU only pools
     rtv_pool: Mutex<descriptor::CpuPool>,

@@ -268,7 +268,7 @@ pub(super) fn compile_dxc(
     let raw_ep = OPCWSTR::new(raw_ep);
     let full_stage = OPCWSTR::new(full_stage);
 
-    let mut compile_args = arrayvec::ArrayVec::<PCWSTR, 12>::new_const();
+    let mut compile_args = arrayvec::ArrayVec::<PCWSTR, 13>::new_const();
 
     if let Some(source_name) = source_name.as_ref() {
         compile_args.push(source_name.ptr())
@@ -296,6 +296,10 @@ pub(super) fn compile_dxc(
     {
         compile_args.push(Dxc::DXC_ARG_DEBUG);
         compile_args.push(Dxc::DXC_ARG_SKIP_OPTIMIZATIONS);
+    }
+
+    if device.features.contains(wgt::Features::SHADER_F16) {
+        compile_args.push(windows::core::w!("-enable-16bit-types"));
     }
 
     let buffer = Dxc::DxcBuffer {

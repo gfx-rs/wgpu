@@ -1,0 +1,177 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct UniformCompatible {
+    uint val_u32_;
+    int val_i32_;
+    float val_f32_;
+    half val_f16_;
+    char _pad4[2];
+    metal::half2 val_f16_2_;
+    char _pad5[4];
+    metal::half3 val_f16_3_;
+    metal::half4 val_f16_4_;
+    half final_value;
+    char _pad8[2];
+    metal::half2x2 val_mat2x2_;
+    char _pad9[4];
+    metal::half2x3 val_mat2x3_;
+    metal::half2x4 val_mat2x4_;
+    metal::half3x2 val_mat3x2_;
+    char _pad12[4];
+    metal::half3x3 val_mat3x3_;
+    metal::half3x4 val_mat3x4_;
+    metal::half4x2 val_mat4x2_;
+    metal::half4x3 val_mat4x3_;
+    metal::half4x4 val_mat4x4_;
+};
+struct type_16 {
+    half inner[2];
+};
+struct StorageCompatible {
+    type_16 val_f16_array_2_;
+};
+struct LayoutTest {
+    half scalar1_;
+    half scalar2_;
+    char _pad2[4];
+    metal::packed_half3 v3_;
+    half tuck_in;
+    half scalar4_;
+    char _pad5[2];
+    uint larger;
+};
+constant half constant_variable = 15.203125h;
+
+half f16_function(
+    half x,
+    constant UniformCompatible& input_uniform,
+    device UniformCompatible const& input_storage,
+    device StorageCompatible const& input_arrays,
+    device UniformCompatible& output,
+    device StorageCompatible& output_arrays
+) {
+    half val = 15.203125h;
+    half _e4 = val;
+    val = _e4 + -33344.0h;
+    half _e6 = val;
+    half _e9 = val;
+    val = _e9 + (_e6 + 5.0h);
+    float _e13 = input_uniform.val_f32_;
+    half _e14 = val;
+    half _e18 = val;
+    val = _e18 + static_cast<half>(_e13 + static_cast<float>(_e14));
+    half _e22 = input_uniform.val_f16_;
+    half _e25 = val;
+    val = _e25 + metal::half3(_e22).z;
+    half _e31 = input_uniform.val_f16_;
+    half _e34 = input_storage.val_f16_;
+    output.val_f16_ = _e31 + _e34;
+    metal::half2 _e40 = input_uniform.val_f16_2_;
+    metal::half2 _e43 = input_storage.val_f16_2_;
+    output.val_f16_2_ = _e40 + _e43;
+    metal::half3 _e49 = input_uniform.val_f16_3_;
+    metal::half3 _e52 = input_storage.val_f16_3_;
+    output.val_f16_3_ = _e49 + _e52;
+    metal::half4 _e58 = input_uniform.val_f16_4_;
+    metal::half4 _e61 = input_storage.val_f16_4_;
+    output.val_f16_4_ = _e58 + _e61;
+    metal::half2x2 _e67 = input_uniform.val_mat2x2_;
+    metal::half2x2 _e70 = input_storage.val_mat2x2_;
+    output.val_mat2x2_ = _e67 + _e70;
+    metal::half2x3 _e76 = input_uniform.val_mat2x3_;
+    metal::half2x3 _e79 = input_storage.val_mat2x3_;
+    output.val_mat2x3_ = _e76 + _e79;
+    metal::half2x4 _e85 = input_uniform.val_mat2x4_;
+    metal::half2x4 _e88 = input_storage.val_mat2x4_;
+    output.val_mat2x4_ = _e85 + _e88;
+    metal::half3x2 _e94 = input_uniform.val_mat3x2_;
+    metal::half3x2 _e97 = input_storage.val_mat3x2_;
+    output.val_mat3x2_ = _e94 + _e97;
+    metal::half3x3 _e103 = input_uniform.val_mat3x3_;
+    metal::half3x3 _e106 = input_storage.val_mat3x3_;
+    output.val_mat3x3_ = _e103 + _e106;
+    metal::half3x4 _e112 = input_uniform.val_mat3x4_;
+    metal::half3x4 _e115 = input_storage.val_mat3x4_;
+    output.val_mat3x4_ = _e112 + _e115;
+    metal::half4x2 _e121 = input_uniform.val_mat4x2_;
+    metal::half4x2 _e124 = input_storage.val_mat4x2_;
+    output.val_mat4x2_ = _e121 + _e124;
+    metal::half4x3 _e130 = input_uniform.val_mat4x3_;
+    metal::half4x3 _e133 = input_storage.val_mat4x3_;
+    output.val_mat4x3_ = _e130 + _e133;
+    metal::half4x4 _e139 = input_uniform.val_mat4x4_;
+    metal::half4x4 _e142 = input_storage.val_mat4x4_;
+    output.val_mat4x4_ = _e139 + _e142;
+    type_16 _e148 = input_arrays.val_f16_array_2_;
+    output_arrays.val_f16_array_2_ = _e148;
+    half _e149 = val;
+    half _e151 = val;
+    val = _e151 + metal::abs(_e149);
+    half _e153 = val;
+    half _e154 = val;
+    half _e155 = val;
+    half _e157 = val;
+    val = _e157 + metal::clamp(_e153, _e154, _e155);
+    half _e159 = val;
+    half _e161 = val;
+    half _e164 = val;
+    val = _e164 + metal::dot(metal::half2(_e159), metal::half2(_e161));
+    half _e166 = val;
+    half _e167 = val;
+    half _e169 = val;
+    val = _e169 + metal::max(_e166, _e167);
+    half _e171 = val;
+    half _e172 = val;
+    half _e174 = val;
+    val = _e174 + metal::min(_e171, _e172);
+    half _e176 = val;
+    half _e178 = val;
+    val = _e178 + metal::sign(_e176);
+    half _e181 = val;
+    val = _e181 + 1.0h;
+    metal::half2 _e185 = input_uniform.val_f16_2_;
+    metal::float2 float_vec2_ = static_cast<metal::float2>(_e185);
+    output.val_f16_2_ = static_cast<metal::half2>(float_vec2_);
+    metal::half3 _e192 = input_uniform.val_f16_3_;
+    metal::float3 float_vec3_ = static_cast<metal::float3>(_e192);
+    output.val_f16_3_ = static_cast<metal::half3>(float_vec3_);
+    metal::half4 _e199 = input_uniform.val_f16_4_;
+    metal::float4 float_vec4_ = static_cast<metal::float4>(_e199);
+    output.val_f16_4_ = static_cast<metal::half4>(float_vec4_);
+    metal::half2x2 _e208 = input_uniform.val_mat2x2_;
+    output.val_mat2x2_ = metal::half2x2(metal::float2x2(_e208));
+    metal::half2x3 _e215 = input_uniform.val_mat2x3_;
+    output.val_mat2x3_ = metal::half2x3(metal::float2x3(_e215));
+    metal::half2x4 _e222 = input_uniform.val_mat2x4_;
+    output.val_mat2x4_ = metal::half2x4(metal::float2x4(_e222));
+    metal::half3x2 _e229 = input_uniform.val_mat3x2_;
+    output.val_mat3x2_ = metal::half3x2(metal::float3x2(_e229));
+    metal::half3x3 _e236 = input_uniform.val_mat3x3_;
+    output.val_mat3x3_ = metal::half3x3(metal::float3x3(_e236));
+    metal::half3x4 _e243 = input_uniform.val_mat3x4_;
+    output.val_mat3x4_ = metal::half3x4(metal::float3x4(_e243));
+    metal::half4x2 _e250 = input_uniform.val_mat4x2_;
+    output.val_mat4x2_ = metal::half4x2(metal::float4x2(_e250));
+    metal::half4x3 _e257 = input_uniform.val_mat4x3_;
+    output.val_mat4x3_ = metal::half4x3(metal::float4x3(_e257));
+    metal::half4x4 _e264 = input_uniform.val_mat4x4_;
+    output.val_mat4x4_ = metal::half4x4(metal::float4x4(_e264));
+    half _e267 = val;
+    return _e267;
+}
+
+kernel void main_(
+  constant UniformCompatible& input_uniform [[user(fake0)]]
+, device UniformCompatible const& input_storage [[user(fake0)]]
+, device StorageCompatible const& input_arrays [[user(fake0)]]
+, device UniformCompatible& output [[user(fake0)]]
+, device StorageCompatible& output_arrays [[user(fake0)]]
+) {
+    half _e3 = f16_function(2.0h, input_uniform, input_storage, input_arrays, output, output_arrays);
+    output.final_value = _e3;
+    return;
+}
