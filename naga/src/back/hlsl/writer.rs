@@ -172,7 +172,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let loop_bound_name = self.namer.call("loop_bound");
         let max = u32::MAX;
         // Count down from u32::MAX rather than up from 0 to avoid hang on
-        // certain intel drivers. See https://github.com/gfx-rs/wgpu/issues/7319.
+        // certain Intel drivers. See https://github.com/gfx-rs/wgpu/issues/7319.
         let decl = format!("{level}uint2 {loop_bound_name} = uint2({max}u, {max}u);");
         let level = level.next();
         let break_and_inc = format!(

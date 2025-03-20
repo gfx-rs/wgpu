@@ -364,7 +364,7 @@ impl BlockContext<'_> {
         // the high u32 when the low u32 overflows. ie
         // counter -= vec2(select(0u, 1u, counter.y == 0), 1u);
         // Count down from u32::MAX rather than up from 0 to avoid hang on
-        // certain intel drivers. See https://github.com/gfx-rs/wgpu/issues/7319.
+        // certain Intel drivers. See https://github.com/gfx-rs/wgpu/issues/7319.
         let low_id = self.gen_id();
         block.body.push(Instruction::composite_extract(
             uint_type_id,
