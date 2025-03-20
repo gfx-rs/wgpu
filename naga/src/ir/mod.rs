@@ -1405,12 +1405,7 @@ pub enum Expression {
 
     /// Reference a function parameter, by its index.
     ///
-    /// A `FunctionArgument` expression evaluates to a pointer to the argument's
-    /// value. You must use a [`Load`] expression to retrieve its value, or a
-    /// [`Store`] statement to assign it a new value.
-    ///
-    /// [`Load`]: Expression::Load
-    /// [`Store`]: Statement::Store
+    /// A `FunctionArgument` expression evaluates to the argument's value.
     FunctionArgument(u32),
 
     /// Reference a global variable.
