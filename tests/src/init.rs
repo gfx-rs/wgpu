@@ -1,6 +1,6 @@
 use wgpu::{Adapter, Backends, Device, Features, Instance, Limits, Queue};
 
-use crate::report::AdapterReport;
+use crate::{report::AdapterReport, TestParameters};
 
 /// Initialize the logger for the test runner.
 pub fn init_logger() {
@@ -12,7 +12,7 @@ pub fn init_logger() {
 }
 
 /// Initialize a wgpu instance with the options from the environment.
-pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instance {
+pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) -> Instance {
     // We ignore `WGPU_BACKEND` for now, merely using test filtering to only run a single backend's tests.
     //
     // We can potentially work support back into the test runner in the future, but as the adapters are matched up
@@ -30,14 +30,19 @@ pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instanc
     };
     // Some tests need to be able to force demote to FXC, to specifically test workarounds for FXC
     // behavior.
-    let dx12_shader_compiler = if force_fxc {
+    let dx12_shader_compiler = if params.force_fxc {
         wgpu::Dx12Compiler::Fxc
     } else {
         wgpu::Dx12Compiler::from_env().unwrap_or(wgpu::Dx12Compiler::StaticDxc)
     };
+    // The defaults for debugging, overridden by the environment, overridden by the test parameters.
+    let flags = wgpu::InstanceFlags::debugging()
+        .with_env()
+        .union(params.required_instance_flags);
+
     Instance::new(&wgpu::InstanceDescriptor {
         backends,
-        flags: wgpu::InstanceFlags::debugging().with_env(),
+        flags,
         backend_options: wgpu::BackendOptions {
             dx12: wgpu::Dx12BackendOptions {
                 shader_compiler: dx12_shader_compiler,
@@ -65,13 +70,13 @@ pub fn initialize_instance(backends: wgpu::Backends, force_fxc: bool) -> Instanc
 /// Initialize a wgpu adapter, using the given adapter report to match the adapter.
 pub async fn initialize_adapter(
     adapter_report: Option<&AdapterReport>,
-    force_fxc: bool,
+    params: &TestParameters,
 ) -> (Instance, Adapter, Option<SurfaceGuard>) {
     let backends = adapter_report
         .map(|report| Backends::from(report.info.backend))
         .unwrap_or_default();
 
-    let instance = initialize_instance(backends, force_fxc);
+    let instance = initialize_instance(backends, params);
     #[allow(unused_variables)]
     let surface: Option<wgpu::Surface>;
     let surface_guard: Option<SurfaceGuard>;

@@ -91,7 +91,6 @@ bit-set = { version = "0.8", default-features = false }
 bit-vec = { version = "0.8", default-features = false }
 bitflags = "2.9"
 bytemuck = { version = "1.22", features = [
-    "derive",
     "extern_crate_alloc",
     "min_const_generics",
 ] }
@@ -108,6 +107,7 @@ fern = "0.7"
 flume = "0.11"
 futures-lite = "2"
 glam = "0.29"
+half = "2.5" # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.14.5", default-features = false, features = [
     "ahash",
     "inline-more",
@@ -126,7 +126,7 @@ noise = "0.9"
 nv-flip = "0.1"
 obj = "0.10"
 # NOTE: once_cell/std is *required* for some commonly-used features, selecting this per crate
-once_cell = { version = "1.20.3", default-features = false }
+once_cell = { version = "1.21.1", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3,<=4.6", default-features = false }
 parking_lot = "0.12.1"
@@ -205,7 +205,7 @@ deno_webidl = "0.190.0"
 deno_webgpu = { version = "0.157.0", path = "./deno_webgpu" }
 deno_unsync = "0.4.2"
 deno_error = "0.5.5"
-tokio = "1.44.0"
+tokio = "1.44.1"
 termcolor = "1.4.1"
 
 # android dependencies

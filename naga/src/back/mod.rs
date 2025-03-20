@@ -1,7 +1,13 @@
 /*!
 Backend functions that export shader [`Module`](super::Module)s into binary and text formats.
 */
-#![allow(dead_code)] // can be dead if none of the enabled backends need it
+#![cfg_attr(
+    not(any(dot_out, glsl_out, hlsl_out, msl_out, spv_out, wgsl_out)),
+    allow(
+        dead_code,
+        reason = "shared helpers can be dead if none of the enabled backends need it"
+    )
+)]
 
 use alloc::string::String;
 
@@ -64,7 +70,7 @@ pub type PipelineConstants = hashbrown::HashMap<String, f64>;
 pub struct Level(pub usize);
 
 impl Level {
-    const fn next(&self) -> Self {
+    pub const fn next(&self) -> Self {
         Level(self.0 + 1)
     }
 }

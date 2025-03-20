@@ -4,7 +4,7 @@ use std::{
     ffi::{CStr, CString},
     mem::{self, MaybeUninit},
     num::NonZeroU32,
-    ptr, slice,
+    ptr,
     sync::Arc,
     vec::Vec,
 };
@@ -2867,10 +2867,7 @@ impl crate::Device for super::Device {
             shader_binding_table_record_offset_and_flags: 0,
             acceleration_structure_reference: instance.blas_address,
         };
-        let temp: *const _ = &temp;
-        unsafe {
-            slice::from_raw_parts::<u8>(temp.cast::<u8>(), size_of::<RawTlasInstance>()).to_vec()
-        }
+        bytemuck::bytes_of(&temp).to_vec()
     }
 }
 

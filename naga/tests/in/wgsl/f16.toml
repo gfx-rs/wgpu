@@ -1,0 +1,15 @@
+# No GLSL support for f16
+targets = "SPIRV | METAL | HLSL | WGSL"
+god_mode = true
+
+[spv]
+version = [1, 0]
+
+[hlsl]
+shader_model = "V6_2"
+special_constants_binding = { space = 1, register = 0 }
+push_constants_target = { space = 0, register = 0 }
+
+lang_version = [1, 0]
+per_entry_point_map = {}
+zero_initialize_workgroup_memory = true
