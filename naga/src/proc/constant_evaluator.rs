@@ -590,8 +590,6 @@ pub enum ConstantEvaluatorError {
         value: String,
         to_type: &'static str,
     },
-    #[error("abstract floating-point values cannot be automatically converted to integers")]
-    AutomaticConversionFloatToInt { to_type: &'static str },
     #[error("Division by zero")]
     DivisionByZero,
     #[error("Remainder by zero")]
@@ -1688,11 +1686,9 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F32(v) => v != 0.0,
                         Literal::F16(v) => v != f16::zero(),
                         Literal::Bool(v) => v,
-                        Literal::F64(_)
-                        | Literal::I64(_)
-                        | Literal::U64(_)
-                        | Literal::AbstractInt(_)
-                        | Literal::AbstractFloat(_) => {
+                        Literal::AbstractInt(v) => v != 0,
+                        Literal::AbstractFloat(v) => v != 0.0,
+                        Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
                         }
                     }),
@@ -2533,12 +2529,18 @@ trait TryFromAbstract<T>: Sized {
     /// WGSL, we follow WGSL's conversion rules here:
     ///
     /// - WGSL §6.1.2. Conversion Rank says that automatic conversions
-    ///   to integers are either lossless or an error.
+    ///   from `AbstractInt` to an integer type are either lossless or an
+    ///   error.
     ///
-    /// - WGSL §14.6.4 Floating Point Conversion says that conversions
+    /// - WGSL §15.7.6 Floating Point Conversion says that conversions
     ///   to floating point in constant expressions and override
     ///   expressions are errors if the value is out of range for the
     ///   destination type, but rounding is okay.
+    ///
+    /// - WGSL §17.1.2 i32()/u32() constructors treat AbstractFloat as any
+    ///   other floating point type, following the scalar floating point to
+    ///   integral conversion algorithm (§15.7.6). There is no automatic
+    ///   conversion from AbstractFloat to integer types.
     ///
     /// [`AbstractInt`]: crate::Literal::AbstractInt
     /// [`Float`]: crate::Literal::Float
@@ -2618,26 +2620,46 @@ impl TryFromAbstract<f64> for f64 {
 }
 
 impl TryFromAbstract<f64> for i32 {
-    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
-        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "i32" })
+    fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
+        // https://www.w3.org/TR/WGSL/#floating-point-conversion
+        // To convert a floating point scalar value X to an integer scalar type T:
+        // * If X is a NaN, the result is an indeterminate value in T.
+        // * If X is exactly representable in the target type T, then the
+        //   result is that value.
+        // * Otherwise, the result is the value in T closest to truncate(X) and
+        //   also exactly representable in the original floating point type.
+        //
+        // A rust cast satisfies these requirements apart from "the result
+        // is... exactly representable in the original floating point type".
+        // However, i32::MIN and i32::MAX are exactly representable by f64, so
+        // we're all good.
+        Ok(value as i32)
     }
 }
 
 impl TryFromAbstract<f64> for u32 {
-    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
-        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "u32" })
+    fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
+        // As above, u32::MIN and u32::MAX are exactly representable by f64,
+        // so a simple rust cast is sufficient.
+        Ok(value as u32)
     }
 }
 
 impl TryFromAbstract<f64> for i64 {
-    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
-        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "i64" })
+    fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
+        // As above, except i64::MIN and i64::MAX are not exactly representable
+        // by f64. i64 is not part of the WGSL spec, however, so we're free to
+        // ignore that requirement.
+        Ok(value as i64)
     }
 }
 
 impl TryFromAbstract<f64> for u64 {
-    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
-        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "u64" })
+    fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
+        // As above, except u64::MAX is not exactly representable by f64. u64
+        // is not part of the WGSL spec, however, so we're free to ignore that
+        // requirement.
+        Ok(value as u64)
     }
 }
 
