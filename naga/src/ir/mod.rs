@@ -979,12 +979,12 @@ pub enum UnaryOperator {
 ///     either on the left or the right.
 ///
 /// -   A [`Matrix`] on the left can be multiplied by a [`Vector`] on the right
-///     if the matrix has as many columns as the vector has components (`matCxR
-///     * VecC`).
+///     if the matrix has as many columns as the vector has components
+///     (`matCxR * VecC`).
 ///
 /// -   A [`Vector`] on the left can be multiplied by a [`Matrix`] on the right
-///     if the matrix has as many rows as the vector has components (`VecR *
-///     matCxR`).
+///     if the matrix has as many rows as the vector has components
+///     (`VecR * matCxR`).
 ///
 /// -   Two matrices can be multiplied if the left operand has as many columns
 ///     as the right operand has rows (`matNxR * matCxN`).
@@ -2258,7 +2258,7 @@ pub struct SpecialTypes {
     /// this if needed and return the handle.
     pub ray_intersection: Option<Handle<Type>>,
 
-    /// Type for `RayVertexReturn
+    /// Type for `RayVertexReturn`.
     ///
     /// Call [`Module::generate_vertex_return_type`]
     pub ray_vertex_return: Option<Handle<Type>>,
