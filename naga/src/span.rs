@@ -239,7 +239,7 @@ impl<E> WithSpan<E> {
 
     /// Return a [`SourceLocation`] for our first span, if we have one.
     pub fn location(&self, source: &str) -> Option<SourceLocation> {
-        if self.spans.is_empty() {
+        if self.spans.is_empty() || source.is_empty() {
             return None;
         }
 
