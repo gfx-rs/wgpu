@@ -227,7 +227,7 @@ async fn vertex_formats_10_10_10_2(ctx: TestingContext) {
 async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("draw.vert.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("./vertex_formats/draw.vert.wgsl"));
 
     let bgl = ctx
         .device

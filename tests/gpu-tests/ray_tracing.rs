@@ -11,11 +11,7 @@ use wgpu::{
 };
 use wgpu_test::TestingContext;
 
-mod as_build;
-mod as_create;
-mod as_use_after_free;
-mod scene;
-mod shader;
+automod::dir!("gpu-tests/ray_tracing/");
 
 pub struct AsBuildContext {
     vertices: Buffer,

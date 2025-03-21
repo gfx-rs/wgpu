@@ -34,7 +34,7 @@ async fn scissor_test_impl(
 
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("solid_white.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("scissor_tests/solid_white.wgsl"));
 
     let pipeline = ctx
         .device

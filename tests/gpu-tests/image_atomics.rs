@@ -28,7 +28,7 @@ static IMAGE_64_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
         test_format(
             ctx,
             wgpu::TextureFormat::R64Uint,
-            wgpu::include_wgsl!("image_64_atomics.wgsl"),
+            wgpu::include_wgsl!("./image_atomics/image_64_atomics.wgsl"),
         )
         .await;
     });
@@ -52,7 +52,7 @@ static IMAGE_32_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
         test_format(
             ctx,
             wgpu::TextureFormat::R32Uint,
-            wgpu::include_wgsl!("image_32_atomics.wgsl"),
+            wgpu::include_wgsl!("./image_atomics/image_32_atomics.wgsl"),
         )
         .await;
     });

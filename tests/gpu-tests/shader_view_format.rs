@@ -30,7 +30,7 @@ static REINTERPRET_SRGB: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let shader = ctx
             .device
-            .create_shader_module(wgpu::include_wgsl!("view_format.wgsl"));
+            .create_shader_module(wgpu::include_wgsl!("./shader_view_format/view_format.wgsl"));
 
         // Reinterpret Rgba8Unorm as Rgba8UnormSrgb
         reinterpret(

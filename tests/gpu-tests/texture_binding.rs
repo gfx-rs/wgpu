@@ -36,7 +36,7 @@ fn texture_binding(ctx: TestingContext) {
     });
     let shader = ctx
         .device
-        .create_shader_module(include_wgsl!("shader.wgsl"));
+        .create_shader_module(include_wgsl!("./texture_binding/shader.wgsl"));
     let pipeline = ctx
         .device
         .create_compute_pipeline(&ComputePipelineDescriptor {
@@ -113,7 +113,7 @@ fn single_scalar_load(ctx: TestingContext) {
     });
     let shader = ctx
         .device
-        .create_shader_module(include_wgsl!("single_scalar.wgsl"));
+        .create_shader_module(include_wgsl!("./texture_binding/single_scalar.wgsl"));
     let pipeline = ctx
         .device
         .create_compute_pipeline(&ComputePipelineDescriptor {

@@ -89,9 +89,9 @@ async fn pulling_common(
     expected: &[u8],
     draw_command: impl FnOnce(&mut wgpu::RenderPass<'_>),
 ) {
-    let shader = ctx
-        .device
-        .create_shader_module(wgpu::include_wgsl!("primitive_index.wgsl"));
+    let shader = ctx.device.create_shader_module(wgpu::include_wgsl!(
+        "./shader_primitive_index/primitive_index.wgsl"
+    ));
 
     let two_triangles_xy: [f32; 12] = [
         -1.0, -1.0, 0.0, -1.0, -0.5, 0.0, // left triangle, negative x, negative y

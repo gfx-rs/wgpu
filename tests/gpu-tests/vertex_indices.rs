@@ -227,7 +227,7 @@ async fn vertex_index_common(ctx: TestingContext) {
 
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("draw.vert.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("./vertex_indices/draw.vert.wgsl"));
 
     let bgl = ctx
         .device

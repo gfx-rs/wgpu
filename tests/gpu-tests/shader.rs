@@ -15,13 +15,7 @@ use wgpu::{
 
 use wgpu_test::TestingContext;
 
-pub mod array_size_overrides;
-pub mod compilation_messages;
-pub mod data_builtins;
-pub mod numeric_builtins;
-pub mod struct_layout;
-pub mod workgroup_size_overrides;
-pub mod zero_init_workgroup_mem;
+automod::dir!("gpu-tests/shader/");
 
 #[derive(Clone, Copy, PartialEq)]
 enum InputStorageType {
@@ -192,7 +186,7 @@ async fn shader_input_output_test(
     storage_type: InputStorageType,
     tests: Vec<ShaderTest>,
 ) {
-    let source = String::from(include_str!("shader_test.wgsl"));
+    let source = String::from(include_str!("./shader/shader_test.wgsl"));
 
     let bgl = ctx
         .device

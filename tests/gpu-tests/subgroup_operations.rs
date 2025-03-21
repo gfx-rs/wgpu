@@ -56,7 +56,8 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             }],
         });
 
-        let cs_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+        let cs_module =
+            device.create_shader_module(wgpu::include_wgsl!("./subgroup_operations/shader.wgsl"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),

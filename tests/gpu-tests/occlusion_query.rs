@@ -24,7 +24,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         // Setup pipeline using a simple shader with hardcoded vertices
         let shader = ctx
             .device
-            .create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+            .create_shader_module(wgpu::include_wgsl!("./occlusion_query/shader.wgsl"));
         let pipeline = ctx
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {

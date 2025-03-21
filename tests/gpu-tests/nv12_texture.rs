@@ -15,7 +15,7 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
 
         let shader = ctx
             .device
-            .create_shader_module(wgpu::include_wgsl!("nv12_texture.wgsl"));
+            .create_shader_module(wgpu::include_wgsl!("./nv12_texture/nv12_texture.wgsl"));
         let pipeline = ctx
             .device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
