@@ -40,8 +40,8 @@ wgpu = { workspace = true, features = ["noop"] }
 wgpu-macros.workspace = true
 
 anyhow.workspace = true
-arrayvec.workspace = true
 approx.workspace = true
+arrayvec.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
 cargo_metadata.workspace = true
@@ -50,16 +50,16 @@ ctor.workspace = true
 futures-lite.workspace = true
 glam.workspace = true
 half = { workspace = true, features = ["bytemuck"] }
-itertools.workspace = true
 image.workspace = true
+itertools.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 png.workspace = true
 pollster.workspace = true
 profiling.workspace = true
-serde_json.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 strum = { workspace = true, features = ["derive"] }
 trybuild.workspace = true
 
