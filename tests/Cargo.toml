@@ -14,22 +14,22 @@ publish = false
 
 [[test]]
 name = "wgpu-compile-test"
-path = "compile-tests/root.rs"
+path = "compile-tests/mod.rs"
 harness = true
 
 [[test]]
 name = "wgpu-dependency-test"
-path = "dependency-tests/root.rs"
+path = "dependency-tests/mod.rs"
 harness = true
 
 [[test]]
 name = "wgpu-gpu-test"
-path = "gpu-tests/root.rs"
+path = "gpu-tests/mod.rs"
 harness = false
 
 [[test]]
 name = "wgpu-validation-test"
-path = "validation-tests/root.rs"
+path = "validation-tests/mod.rs"
 harness = true
 
 [features]
