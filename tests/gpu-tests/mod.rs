@@ -1,14 +1,5 @@
 mod regression {
-    mod issue_3349;
-    mod issue_3457;
-    mod issue_4024;
-    mod issue_4122;
-    mod issue_4485;
-    mod issue_4514;
-    mod issue_5553;
-    mod issue_6317;
-    mod issue_6467;
-    mod issue_6827;
+    automod::dir!("gpu-tests/regression/");
 }
 
 mod bgra8unorm_storage;

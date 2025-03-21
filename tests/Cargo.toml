@@ -42,6 +42,7 @@ wgpu-macros.workspace = true
 anyhow.workspace = true
 approx.workspace = true
 arrayvec.workspace = true
+automod = "1.0.15"
 bitflags.workspace = true
 bytemuck.workspace = true
 cargo_metadata.workspace = true
