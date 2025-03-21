@@ -2,7 +2,7 @@
 Type generators.
 */
 
-use alloc::{format, string::ToString, vec};
+use alloc::{string::ToString, vec};
 
 use crate::{arena::Handle, span::Span};
 
@@ -283,12 +283,11 @@ impl crate::Module {
         &mut self,
         special_type: crate::PredeclaredType,
     ) -> Handle<crate::Type> {
-        use core::fmt::Write;
-
         if let Some(value) = self.special_types.predeclared_types.get(&special_type) {
             return *value;
         }
 
+        let name = special_type.struct_name();
         let ty = match special_type {
             crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar) => {
                 let bool_ty = self.types.insert(
@@ -307,10 +306,7 @@ impl crate::Module {
                 );
 
                 crate::Type {
-                    name: Some(format!(
-                        "__atomic_compare_exchange_result<{:?},{}>",
-                        scalar.kind, scalar.width,
-                    )),
+                    name: Some(name),
                     inner: crate::TypeInner::Struct {
                         members: vec![
                             crate::StructMember {
@@ -352,14 +348,8 @@ impl crate::Module {
                     (float_ty, scalar.width as u32)
                 };
 
-                let mut type_name = "__modf_result_".to_string();
-                if let Some(size) = size {
-                    let _ = write!(type_name, "vec{}_", size as u8);
-                }
-                let _ = write!(type_name, "f{}", scalar.width * 8);
-
                 crate::Type {
-                    name: Some(type_name),
+                    name: Some(name),
                     inner: crate::TypeInner::Struct {
                         members: vec![
                             crate::StructMember {
@@ -425,14 +415,8 @@ impl crate::Module {
                     (float_ty, int_ty, scalar.width as u32)
                 };
 
-                let mut type_name = "__frexp_result_".to_string();
-                if let Some(size) = size {
-                    let _ = write!(type_name, "vec{}_", size as u8);
-                }
-                let _ = write!(type_name, "f{}", scalar.width * 8);
-
                 crate::Type {
-                    name: Some(type_name),
+                    name: Some(name),
                     inner: crate::TypeInner::Struct {
                         members: vec![
                             crate::StructMember {

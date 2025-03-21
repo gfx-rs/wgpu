@@ -1,5 +1,6 @@
 //! Code common to the front and backends for specific languages.
 
+pub mod predeclared;
 pub mod wgsl;
 
 /// Helper function that returns the string corresponding to the [`VectorSize`](crate::VectorSize)
