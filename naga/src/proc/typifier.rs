@@ -1,6 +1,8 @@
-use crate::arena::{Arena, Handle, UniqueArena};
+use alloc::{format, string::String};
 
 use thiserror::Error;
+
+use crate::arena::{Arena, Handle, UniqueArena};
 
 /// The result of computing an expression's type.
 ///
@@ -147,6 +149,7 @@ impl Clone for TypeResolution {
                     scalar,
                     space,
                 },
+                Ti::Array { base, size, stride } => Ti::Array { base, size, stride },
                 _ => unreachable!("Unexpected clone type: {:?}", v),
             }),
         }
@@ -898,6 +901,13 @@ impl<'a> ResolveContext<'a> {
                     .ok_or(ResolveError::MissingSpecialType)?;
                 TypeResolution::Handle(result)
             }
+            crate::Expression::RayQueryVertexPositions { .. } => {
+                let result = self
+                    .special_types
+                    .ray_vertex_return
+                    .ok_or(ResolveError::MissingSpecialType)?;
+                TypeResolution::Handle(result)
+            }
             crate::Expression::SubgroupBallotResult => TypeResolution::Value(Ti::Vector {
                 scalar: crate::Scalar::U32,
                 size: crate::VectorSize::Quad,
@@ -908,6 +918,5 @@ impl<'a> ResolveContext<'a> {
 
 #[test]
 fn test_error_size() {
-    use std::mem::size_of;
     assert_eq!(size_of::<ResolveError>(), 32);
 }

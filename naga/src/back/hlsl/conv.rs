@@ -1,8 +1,9 @@
-use std::borrow::Cow;
+use crate::common;
 
-use crate::proc::Alignment;
+use alloc::{borrow::Cow, format, string::String};
 
 use super::Error;
+use crate::proc::Alignment;
 
 impl crate::ScalarKind {
     pub(super) fn to_hlsl_cast(self) -> &'static str {
@@ -53,7 +54,7 @@ impl crate::TypeInner {
         }
     }
 
-    pub(super) fn size_hlsl(&self, gctx: crate::proc::GlobalCtx) -> u32 {
+    pub(super) fn size_hlsl(&self, gctx: crate::proc::GlobalCtx) -> Result<u32, Error> {
         match *self {
             Self::Matrix {
                 columns,
@@ -62,19 +63,18 @@ impl crate::TypeInner {
             } => {
                 let stride = Alignment::from(rows) * scalar.width as u32;
                 let last_row_size = rows as u32 * scalar.width as u32;
-                ((columns as u32 - 1) * stride) + last_row_size
+                Ok(((columns as u32 - 1) * stride) + last_row_size)
             }
             Self::Array { base, size, stride } => {
-                let count = match size {
-                    crate::ArraySize::Constant(size) => size.get(),
+                let count = match size.resolve(gctx)? {
+                    crate::proc::IndexableLength::Known(size) => size,
                     // A dynamically-sized array has to have at least one element
-                    crate::ArraySize::Pending(_) => unreachable!(),
-                    crate::ArraySize::Dynamic => 1,
+                    crate::proc::IndexableLength::Dynamic => 1,
                 };
-                let last_el_size = gctx.types[base].inner.size_hlsl(gctx);
-                ((count - 1) * stride) + last_el_size
+                let last_el_size = gctx.types[base].inner.size_hlsl(gctx)?;
+                Ok(((count - 1) * stride) + last_el_size)
             }
-            _ => self.size(gctx),
+            _ => Ok(self.size(gctx)),
         }
     }
 
@@ -89,7 +89,7 @@ impl crate::TypeInner {
             crate::TypeInner::Vector { size, scalar } => Cow::Owned(format!(
                 "{}{}",
                 scalar.to_hlsl_str()?,
-                crate::back::vector_size_str(size)
+                common::vector_size_str(size)
             )),
             crate::TypeInner::Matrix {
                 columns,
@@ -98,8 +98,8 @@ impl crate::TypeInner {
             } => Cow::Owned(format!(
                 "{}{}x{}",
                 scalar.to_hlsl_str()?,
-                crate::back::vector_size_str(columns),
-                crate::back::vector_size_str(rows),
+                common::vector_size_str(columns),
+                common::vector_size_str(rows),
             )),
             crate::TypeInner::Array {
                 base,

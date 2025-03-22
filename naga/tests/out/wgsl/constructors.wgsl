@@ -3,7 +3,6 @@ struct Foo {
     b: i32,
 }
 
-const const2_: vec3<f32> = vec3<f32>(0f, 1f, 2f);
 const const3_: mat2x2<f32> = mat2x2<f32>(vec2<f32>(0f, 1f), vec2<f32>(2f, 3f));
 const const4_: array<mat2x2<f32>, 1> = array<mat2x2<f32>, 1>(mat2x2<f32>(vec2<f32>(0f, 1f), vec2<f32>(2f, 3f)));
 const cz0_: bool = bool();
@@ -14,7 +13,6 @@ const cz4_: vec2<u32> = vec2<u32>();
 const cz5_: mat2x2<f32> = mat2x2<f32>();
 const cz6_: array<Foo, 3> = array<Foo, 3>();
 const cz7_: Foo = Foo();
-const cp3_: array<i32, 4> = array<i32, 4>(0i, 1i, 2i, 3i);
 
 @compute @workgroup_size(1, 1, 1) 
 fn main() {

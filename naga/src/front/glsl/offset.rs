@@ -11,6 +11,8 @@ The OpenGl spec (the layout rules are defined by the OpenGl spec in section
 equivalent to bytes.
 */
 
+use alloc::vec::Vec;
+
 use super::{
     ast::StructLayout,
     error::{Error, ErrorKind},
@@ -120,11 +122,25 @@ pub fn calculate_offset(
             }
 
             // See comment on the error kind
-            if StructLayout::Std140 == layout && rows == crate::VectorSize::Bi {
-                errors.push(Error {
-                    kind: ErrorKind::UnsupportedMatrixTypeInStd140,
-                    meta,
-                });
+            if StructLayout::Std140 == layout {
+                // Do the f16 test first, as it's more specific
+                if scalar == Scalar::F16 {
+                    errors.push(Error {
+                        kind: ErrorKind::UnsupportedF16MatrixInStd140 {
+                            columns: columns as u8,
+                            rows: rows as u8,
+                        },
+                        meta,
+                    });
+                }
+                if rows == crate::VectorSize::Bi {
+                    errors.push(Error {
+                        kind: ErrorKind::UnsupportedMatrixWithTwoRowsInStd140 {
+                            columns: columns as u8,
+                        },
+                        meta,
+                    });
+                }
             }
 
             (align, align * columns as u32)

@@ -63,3 +63,40 @@ static DEPTH_ONLY_VIEW_CREATION: GpuTestConfiguration =
             });
         }
     });
+
+#[gpu_test]
+static SHARED_USAGE_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().downlevel_flags(DownlevelFlags::VIEW_FORMATS))
+    .run_async(|ctx| async move {
+        {
+            let (texture_format, view_format) =
+                (TextureFormat::Rgba8Unorm, TextureFormat::Rgba8UnormSrgb);
+            let texture = ctx.device.create_texture(&TextureDescriptor {
+                label: None,
+                size: Extent3d {
+                    width: 256,
+                    height: 256,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: texture_format,
+                usage: TextureUsages::COPY_DST
+                    | TextureUsages::STORAGE_BINDING
+                    | TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[TextureFormat::Rgba8UnormSrgb],
+            });
+            let _view = texture.create_view(&TextureViewDescriptor {
+                aspect: TextureAspect::All,
+                format: Some(view_format),
+                usage: Some(
+                    TextureUsages::COPY_DST
+                        | TextureUsages::TEXTURE_BINDING
+                        | TextureUsages::RENDER_ATTACHMENT,
+                ),
+                ..Default::default()
+            });
+        }
+    });

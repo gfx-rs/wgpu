@@ -380,11 +380,11 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     base_test_parameters: wgpu_test::TestParameters {
         required_features: <Example as crate::framework::Example>::required_features(),
         required_limits: <Example as crate::framework::Example>::required_limits(),
-        force_fxc: false,
         skips: vec![],
         failures: Vec::new(),
         required_downlevel_caps:
             <Example as crate::framework::Example>::required_downlevel_capabilities(),
+        ..Default::default()
     },
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,

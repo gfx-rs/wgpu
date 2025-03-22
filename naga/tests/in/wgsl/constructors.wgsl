@@ -64,4 +64,26 @@ fn main() {
     let ic5 = mat2x3<f32>(mat2x3<f32>());
     let ic6 = vec2(vec2<u32>());
     let ic7 = mat2x3(mat2x3<f32>());
+
+    // conversion constructors
+    let cc00 = i32(1u);
+    let cc01 = i32(1f);
+    let cc02 = i32(1);
+    let cc03 = i32(1.0);
+    let cc04 = i32(true);
+    let cc05 = u32(1i);
+    let cc06 = u32(1f);
+    let cc07 = u32(1);
+    let cc08 = u32(1.0);
+    let cc09 = u32(true);
+    let cc10 = f32(1i);
+    let cc11 = f32(1u);
+    let cc12 = f32(1);
+    let cc13 = f32(1.0);
+    let cc14 = f32(true);
+    let cc15 = bool(1i);
+    let cc16 = bool(1u);
+    let cc17 = bool(1f);
+    let cc18 = bool(1);
+    let cc19 = bool(1.0);
 }

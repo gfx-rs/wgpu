@@ -81,17 +81,22 @@ use crate::*;
 /// If `buffer` was created with [`BufferUsages::MAP_WRITE`], we could fill it
 /// with `f32` values like this:
 ///
-/// ```no_run
-/// # mod bytemuck {
-/// #     pub fn cast_slice_mut(bytes: &mut [u8]) -> &mut [f32] { todo!() }
-/// # }
-/// # let device: wgpu::Device = todo!();
-/// # let buffer: wgpu::Buffer = todo!();
-/// let buffer = std::sync::Arc::new(buffer);
+/// ```
+/// # #[cfg(feature = "noop")]
+/// # let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+/// # #[cfg(not(feature = "noop"))]
+/// # let device: wgpu::Device = { return; };
+/// #
+/// # let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+/// #     label: None,
+/// #     size: 400,
+/// #     usage: wgpu::BufferUsages::MAP_WRITE,
+/// #     mapped_at_creation: false,
+/// # });
 /// let capturable = buffer.clone();
-/// buffer.slice(..).map_async(wgpu::MapMode::Write, move |result| {
+/// buffer.map_async(wgpu::MapMode::Write, .., move |result| {
 ///     if result.is_ok() {
-///         let mut view = capturable.slice(..).get_mapped_range_mut();
+///         let mut view = capturable.get_mapped_range_mut(..);
 ///         let floats: &mut [f32] = bytemuck::cast_slice_mut(&mut view);
 ///         floats.fill(42.0);
 ///         drop(view);
@@ -102,11 +107,11 @@ use crate::*;
 ///
 /// This code takes the following steps:
 ///
-/// - First, it moves `buffer` into an [`Arc`], and makes a clone for capture by
+/// - First, it makes a cloned handle to the buffer for capture by
 ///   the callback passed to [`map_async`]. Since a [`map_async`] callback may be
 ///   invoked from another thread, interaction between the callback and the
 ///   thread calling [`map_async`] generally requires some sort of shared heap
-///   data like this. In real code, the [`Arc`] would probably own some larger
+///   data like this. In real code, there might be an [`Arc`] to some larger
 ///   structure that itself owns `buffer`.
 ///
 /// - Then, it calls [`Buffer::slice`] to make a [`BufferSlice`] referring to
@@ -218,7 +223,7 @@ impl Buffer {
         }
     }
 
-    /// Return a [`BufferSlice`] referring to the portion of `self`'s contents
+    /// Returns a [`BufferSlice`] referring to the portion of `self`'s contents
     /// indicated by `bounds`. Regardless of what sort of data `self` stores,
     /// `bounds` start and end are given in bytes.
     ///
@@ -230,6 +235,11 @@ impl Buffer {
     /// `buffer.slice(..)` refers to the entire buffer, and `buffer.slice(n..)`
     /// refers to the portion starting at the `n`th byte and extending to the
     /// end of the buffer.
+    ///
+    /// # Panics
+    ///
+    /// - If `bounds` is outside of the bounds of `self`.
+    /// - If `bounds` has a length less than 1.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
         let (offset, size) = range_to_offset_size(bounds);
         check_buffer_bounds(self.size, offset, size);
@@ -240,7 +250,10 @@ impl Buffer {
         }
     }
 
-    /// Flushes any pending write operations and unmaps the buffer from host memory.
+    /// Unmaps the buffer from host memory.
+    ///
+    /// This terminates the effect of all previous [`map_async()`](Self::map_async) operations and
+    /// makes the buffer available for use by the GPU again.
     pub fn unmap(&self) {
         self.map_context.lock().reset();
         self.inner.unmap();
@@ -265,17 +278,30 @@ impl Buffer {
         self.usage
     }
 
-    /// Map the buffer. Buffer is ready to map once the callback is called.
+    /// Map the buffer to host (CPU) memory, making it available for reading or writing
+    /// via [`get_mapped_range()`](Self::get_mapped_range).
+    /// It is available once the `callback` is called with an [`Ok`] response.
     ///
     /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
     /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
     ///
-    /// The callback will be called on the thread that first calls the above functions after the gpu work
+    /// The callback will be called on the thread that first calls the above functions after the GPU work
     /// has completed. There are no restrictions on the code you can run in the callback, however on native the
     /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
     /// and used to set flags, send messages, etc.
     ///
+    /// As long as a buffer is mapped, it is not available for use by any other commands;
+    /// at all times, either the GPU or the CPU has exclusive access to the contents of the buffer.
+    ///
     /// This can also be performed using [`BufferSlice::map_async()`].
+    ///
+    /// # Panics
+    ///
+    /// - If the buffer is already mapped.
+    /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
+    /// - If `bounds` is outside of the bounds of `self`.
+    /// - If `bounds` has a length less than 1.
+    /// - If the start and end of `bounds` are not be aligned to [`MAP_ALIGNMENT`].
     pub fn map_async<S: RangeBounds<BufferAddress>>(
         &self,
         mode: MapMode,
@@ -287,13 +313,19 @@ impl Buffer {
 
     /// Gain read-only access to the bytes of a [mapped] [`Buffer`].
     ///
-    /// Return a [`BufferView`] referring to the buffer range represented by
+    /// Returns a [`BufferView`] referring to the buffer range represented by
     /// `self`. See the documentation for [`BufferView`] for details.
+    ///
+    /// `bounds` may be less than the bounds passed to [`Self::map_async()`],
+    /// and multiple views may be obtained and used simultaneously as long as they do not overlap.
     ///
     /// This can also be performed using [`BufferSlice::get_mapped_range()`].
     ///
     /// # Panics
     ///
+    /// - If `bounds` is outside of the bounds of `self`.
+    /// - If `bounds` has a length less than 1.
+    /// - If the start and end of `bounds` are not aligned to [`MAP_ALIGNMENT`].
     /// - If the buffer to which `self` refers is not currently [mapped].
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
@@ -311,7 +343,16 @@ impl Buffer {
     ///
     /// This is only available on WebGPU, on any other backends this will return `None`.
     ///
+    /// `bounds` may be less than the bounds passed to [`Self::map_async()`],
+    /// and multiple views may be obtained and used simultaneously as long as they do not overlap.
+    ///
     /// This can also be performed using [`BufferSlice::get_mapped_range_as_array_buffer()`].
+    ///
+    /// # Panics
+    ///
+    /// - If `bounds` is outside of the bounds of `self`.
+    /// - If `bounds` has a length less than 1.
+    /// - If the start and end of `bounds` are not aligned to [`MAP_ALIGNMENT`].
     #[cfg(webgpu)]
     pub fn get_mapped_range_as_array_buffer<S: RangeBounds<BufferAddress>>(
         &self,
@@ -322,13 +363,19 @@ impl Buffer {
 
     /// Gain write access to the bytes of a [mapped] [`Buffer`].
     ///
-    /// Return a [`BufferViewMut`] referring to the buffer range represented by
+    /// Returns a [`BufferViewMut`] referring to the buffer range represented by
     /// `self`. See the documentation for [`BufferViewMut`] for more details.
+    ///
+    /// `bounds` may be less than the bounds passed to [`Self::map_async()`],
+    /// and multiple views may be obtained and used simultaneously as long as they do not overlap.
     ///
     /// This can also be performed using [`BufferSlice::get_mapped_range_mut()`].
     ///
     /// # Panics
     ///
+    /// - If `bounds` is outside of the bounds of `self`.
+    /// - If `bounds` has a length less than 1.
+    /// - If the start and end of `bounds` are not aligned to [`MAP_ALIGNMENT`].
     /// - If the buffer to which `self` refers is not currently [mapped].
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
@@ -398,6 +445,11 @@ impl<'a> BufferSlice<'a> {
     /// `buffer.slice(..)` refers to the entire buffer, and `buffer.slice(n..)`
     /// refers to the portion starting at the `n`th byte and extending to the
     /// end of the buffer.
+    ///
+    /// # Panics
+    ///
+    /// - If `bounds` is outside of the bounds of `self`.
+    /// - If `bounds` has a length less than 1.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'a> {
         let (offset, size) = range_to_offset_size(bounds);
         check_buffer_bounds(
@@ -415,17 +467,28 @@ impl<'a> BufferSlice<'a> {
         }
     }
 
-    /// Map the buffer. Buffer is ready to map once the callback is called.
+    /// Map the buffer to host (CPU) memory, making it available for reading or writing
+    /// via [`get_mapped_range()`](Self::get_mapped_range).
+    /// It is available once the `callback` is called with an [`Ok`] response.
     ///
     /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
     /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
     ///
-    /// The callback will be called on the thread that first calls the above functions after the gpu work
+    /// The callback will be called on the thread that first calls the above functions after the GPU work
     /// has completed. There are no restrictions on the code you can run in the callback, however on native the
     /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
     /// and used to set flags, send messages, etc.
     ///
+    /// As long as a buffer is mapped, it is not available for use by any other commands;
+    /// at all times, either the GPU or the CPU has exclusive access to the contents of the buffer.
+    ///
     /// This can also be performed using [`Buffer::map_async()`].
+    ///
+    /// # Panics
+    ///
+    /// - If the buffer is already mapped.
+    /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
+    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
     pub fn map_async(
         &self,
         mode: MapMode,
@@ -446,13 +509,17 @@ impl<'a> BufferSlice<'a> {
 
     /// Gain read-only access to the bytes of a [mapped] [`Buffer`].
     ///
-    /// Return a [`BufferView`] referring to the buffer range represented by
+    /// Returns a [`BufferView`] referring to the buffer range represented by
     /// `self`. See the documentation for [`BufferView`] for details.
+    ///
+    /// Multiple views may be obtained and used simultaneously as long as they are from
+    /// non-overlapping slices.
     ///
     /// This can also be performed using [`Buffer::get_mapped_range()`].
     ///
     /// # Panics
     ///
+    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
     /// - If the buffer to which `self` refers is not currently [mapped].
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
@@ -475,7 +542,14 @@ impl<'a> BufferSlice<'a> {
     ///
     /// This is only available on WebGPU, on any other backends this will return `None`.
     ///
+    /// Multiple views may be obtained and used simultaneously as long as they are from
+    /// non-overlapping slices.
+    ///
     /// This can also be performed using [`Buffer::get_mapped_range_as_array_buffer()`].
+    ///
+    /// # Panics
+    ///
+    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
     #[cfg(webgpu)]
     pub fn get_mapped_range_as_array_buffer(&self) -> Option<js_sys::ArrayBuffer> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
@@ -487,13 +561,17 @@ impl<'a> BufferSlice<'a> {
 
     /// Gain write access to the bytes of a [mapped] [`Buffer`].
     ///
-    /// Return a [`BufferViewMut`] referring to the buffer range represented by
+    /// Returns a [`BufferViewMut`] referring to the buffer range represented by
     /// `self`. See the documentation for [`BufferViewMut`] for more details.
+    ///
+    /// Multiple views may be obtained and used simultaneously as long as they are from
+    /// non-overlapping slices.
     ///
     /// This can also be performed using [`Buffer::get_mapped_range_mut()`].
     ///
     /// # Panics
     ///
+    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`].
     /// - If the buffer to which `self` refers is not currently [mapped].
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
@@ -803,7 +881,7 @@ fn check_buffer_bounds(
     if let Some(size) = size {
         // Detect integer overflow.
         let end = offset.checked_add(size.get());
-        if end.map_or(true, |end| end > buffer_size) {
+        if end.is_none_or(|end| end > buffer_size) {
             panic!(
                 "slice offset {} size {} is out of range for buffer of size {}",
                 offset, size, buffer_size

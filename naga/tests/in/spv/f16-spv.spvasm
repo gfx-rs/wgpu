@@ -1,0 +1,130 @@
+; SPIR-V
+; Version: 1.0
+; Generator: Google Shaderc over Glslang; 11
+; Bound: 46
+; Schema: 0
+               OpCapability Shader
+               OpCapability StorageBuffer16BitAccess
+               OpCapability UniformAndStorageBuffer16BitAccess
+               OpExtension "SPV_KHR_16bit_storage"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+               OpSource GLSL 460
+               OpSourceExtension "GL_AMD_gpu_shader_half_float"
+               OpSourceExtension "GL_GOOGLE_cpp_style_line_directive"
+               OpSourceExtension "GL_GOOGLE_include_directive"
+               OpName %main "main"
+               OpName %B "B"
+               OpMemberName %B 0 "b_1"
+               OpMemberName %B 1 "b_vec2"
+               OpMemberName %B 2 "b_vec3"
+               OpMemberName %B 3 "b_vec4"
+               OpMemberName %B 4 "b_mat2"
+               OpMemberName %B 5 "b_mat2x3"
+               OpMemberName %B 6 "b_mat2x4"
+               OpMemberName %B 7 "b_mat3x2"
+               OpMemberName %B 8 "b_mat3"
+               OpMemberName %B 9 "b_mat3x4"
+               OpMemberName %B 10 "b_mat4x2"
+               OpMemberName %B 11 "b_mat4x3"
+               OpMemberName %B 12 "b_mat4"
+               OpName %_ ""
+               OpName %A "A"
+               OpMemberName %A 0 "a_1"
+               OpMemberName %A 1 "a_vec2"
+               OpMemberName %A 2 "a_vec3"
+               OpMemberName %A 3 "a_vec4"
+               OpName %__0 ""
+               OpDecorate %B BufferBlock
+               OpMemberDecorate %B 0 Offset 0
+               OpMemberDecorate %B 1 Offset 4
+               OpMemberDecorate %B 2 Offset 8
+               OpMemberDecorate %B 3 Offset 16
+               OpMemberDecorate %B 4 ColMajor
+               OpMemberDecorate %B 4 MatrixStride 4
+               OpMemberDecorate %B 4 Offset 24
+               OpMemberDecorate %B 5 ColMajor
+               OpMemberDecorate %B 5 MatrixStride 8
+               OpMemberDecorate %B 5 Offset 32
+               OpMemberDecorate %B 6 ColMajor
+               OpMemberDecorate %B 6 MatrixStride 8
+               OpMemberDecorate %B 6 Offset 48
+               OpMemberDecorate %B 7 ColMajor
+               OpMemberDecorate %B 7 MatrixStride 4
+               OpMemberDecorate %B 7 Offset 64
+               OpMemberDecorate %B 8 ColMajor
+               OpMemberDecorate %B 8 MatrixStride 8
+               OpMemberDecorate %B 8 Offset 80
+               OpMemberDecorate %B 9 ColMajor
+               OpMemberDecorate %B 9 MatrixStride 8
+               OpMemberDecorate %B 9 Offset 104
+               OpMemberDecorate %B 10 ColMajor
+               OpMemberDecorate %B 10 MatrixStride 4
+               OpMemberDecorate %B 10 Offset 128
+               OpMemberDecorate %B 11 ColMajor
+               OpMemberDecorate %B 11 MatrixStride 8
+               OpMemberDecorate %B 11 Offset 144
+               OpMemberDecorate %B 12 ColMajor
+               OpMemberDecorate %B 12 MatrixStride 8
+               OpMemberDecorate %B 12 Offset 176
+               OpDecorate %_ Binding 1
+               OpDecorate %_ DescriptorSet 0
+               OpDecorate %A Block
+               OpMemberDecorate %A 0 Offset 0
+               OpMemberDecorate %A 1 Offset 4
+               OpMemberDecorate %A 2 Offset 8
+               OpMemberDecorate %A 3 Offset 16
+               OpDecorate %__0 Binding 0
+               OpDecorate %__0 DescriptorSet 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %half = OpTypeFloat 16
+     %v2half = OpTypeVector %half 2
+     %v3half = OpTypeVector %half 3
+     %v4half = OpTypeVector %half 4
+ %mat2v2half = OpTypeMatrix %v2half 2
+ %mat2v3half = OpTypeMatrix %v3half 2
+ %mat2v4half = OpTypeMatrix %v4half 2
+ %mat3v2half = OpTypeMatrix %v2half 3
+ %mat3v3half = OpTypeMatrix %v3half 3
+ %mat3v4half = OpTypeMatrix %v4half 3
+ %mat4v2half = OpTypeMatrix %v2half 4
+ %mat4v3half = OpTypeMatrix %v3half 4
+ %mat4v4half = OpTypeMatrix %v4half 4
+          %B = OpTypeStruct %half %v2half %v3half %v4half %mat2v2half %mat2v3half %mat2v4half %mat3v2half %mat3v3half %mat3v4half %mat4v2half %mat4v3half %mat4v4half
+%_ptr_Uniform_B = OpTypePointer Uniform %B
+          %_ = OpVariable %_ptr_Uniform_B Uniform
+        %int = OpTypeInt 32 1
+      %int_0 = OpConstant %int 0
+          %A = OpTypeStruct %half %v2half %v3half %v4half
+%_ptr_Uniform_A = OpTypePointer Uniform %A
+        %__0 = OpVariable %_ptr_Uniform_A Uniform
+%_ptr_Uniform_half = OpTypePointer Uniform %half
+      %int_1 = OpConstant %int 1
+%_ptr_Uniform_v2half = OpTypePointer Uniform %v2half
+      %int_2 = OpConstant %int 2
+%_ptr_Uniform_v3half = OpTypePointer Uniform %v3half
+      %int_3 = OpConstant %int 3
+%_ptr_Uniform_v4half = OpTypePointer Uniform %v4half
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+         %28 = OpAccessChain %_ptr_Uniform_half %__0 %int_0
+         %29 = OpLoad %half %28
+         %30 = OpAccessChain %_ptr_Uniform_half %_ %int_0
+               OpStore %30 %29
+         %33 = OpAccessChain %_ptr_Uniform_v2half %__0 %int_1
+         %34 = OpLoad %v2half %33
+         %35 = OpAccessChain %_ptr_Uniform_v2half %_ %int_1
+               OpStore %35 %34
+         %38 = OpAccessChain %_ptr_Uniform_v3half %__0 %int_2
+         %39 = OpLoad %v3half %38
+         %40 = OpAccessChain %_ptr_Uniform_v3half %_ %int_2
+               OpStore %40 %39
+         %43 = OpAccessChain %_ptr_Uniform_v4half %__0 %int_3
+         %44 = OpLoad %v4half %43
+         %45 = OpAccessChain %_ptr_Uniform_v4half %_ %int_3
+               OpStore %45 %44
+               OpReturn
+               OpFunctionEnd

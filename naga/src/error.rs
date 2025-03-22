@@ -1,4 +1,5 @@
-use std::{error::Error, fmt};
+use alloc::{boxed::Box, string::String, vec::Vec};
+use core::{error::Error, fmt};
 
 #[derive(Clone, Debug)]
 pub struct ShaderError<E> {

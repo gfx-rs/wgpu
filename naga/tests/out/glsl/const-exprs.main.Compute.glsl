@@ -112,6 +112,16 @@ void relational() {
     return;
 }
 
+void abstract_access(uint i) {
+    float a_1 = 1.0;
+    uint b_1 = 1u;
+    int c_1 = 0;
+    int d = 0;
+    c_1 = int[9](1, 2, 3, 4, 5, 6, 7, 8, 9)[i];
+    d = ivec4(1, 2, 3, 4)[i];
+    return;
+}
+
 void main() {
     swizzle_of_compose();
     index_of_compose();

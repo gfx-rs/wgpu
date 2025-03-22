@@ -1,8 +1,12 @@
-use super::Error;
-use crate::front::wgsl::Scalar;
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtensions, ImplementedEnableExtension,
+};
+use crate::front::wgsl::{Error, Result, Scalar};
 use crate::Span;
 
-pub fn map_address_space(word: &str, span: Span) -> Result<crate::AddressSpace, Error<'_>> {
+use alloc::boxed::Box;
+
+pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpace> {
     match word {
         "private" => Ok(crate::AddressSpace::Private),
         "workgroup" => Ok(crate::AddressSpace::WorkGroup),
@@ -12,11 +16,11 @@ pub fn map_address_space(word: &str, span: Span) -> Result<crate::AddressSpace, 
         }),
         "push_constant" => Ok(crate::AddressSpace::PushConstant),
         "function" => Ok(crate::AddressSpace::Function),
-        _ => Err(Error::UnknownAddressSpace(span)),
+        _ => Err(Box::new(Error::UnknownAddressSpace(span))),
     }
 }
 
-pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>> {
+pub fn map_built_in(word: &str, span: Span) -> Result<'_, crate::BuiltIn> {
     Ok(match word {
         "position" => crate::BuiltIn::Position { invariant: false },
         // vertex
@@ -40,31 +44,31 @@ pub fn map_built_in(word: &str, span: Span) -> Result<crate::BuiltIn, Error<'_>>
         "subgroup_id" => crate::BuiltIn::SubgroupId,
         "subgroup_size" => crate::BuiltIn::SubgroupSize,
         "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
-        _ => return Err(Error::UnknownBuiltin(span)),
+        _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     })
 }
 
-pub fn map_interpolation(word: &str, span: Span) -> Result<crate::Interpolation, Error<'_>> {
+pub fn map_interpolation(word: &str, span: Span) -> Result<'_, crate::Interpolation> {
     match word {
         "linear" => Ok(crate::Interpolation::Linear),
         "flat" => Ok(crate::Interpolation::Flat),
         "perspective" => Ok(crate::Interpolation::Perspective),
-        _ => Err(Error::UnknownAttribute(span)),
+        _ => Err(Box::new(Error::UnknownAttribute(span))),
     }
 }
 
-pub fn map_sampling(word: &str, span: Span) -> Result<crate::Sampling, Error<'_>> {
+pub fn map_sampling(word: &str, span: Span) -> Result<'_, crate::Sampling> {
     match word {
         "center" => Ok(crate::Sampling::Center),
         "centroid" => Ok(crate::Sampling::Centroid),
         "sample" => Ok(crate::Sampling::Sample),
         "first" => Ok(crate::Sampling::First),
         "either" => Ok(crate::Sampling::Either),
-        _ => Err(Error::UnknownAttribute(span)),
+        _ => Err(Box::new(Error::UnknownAttribute(span))),
     }
 }
 
-pub fn map_storage_format(word: &str, span: Span) -> Result<crate::StorageFormat, Error<'_>> {
+pub fn map_storage_format(word: &str, span: Span) -> Result<'_, crate::StorageFormat> {
     use crate::StorageFormat as Sf;
     Ok(match word {
         "r8unorm" => Sf::R8Unorm,
@@ -108,14 +112,21 @@ pub fn map_storage_format(word: &str, span: Span) -> Result<crate::StorageFormat
         "rgba32sint" => Sf::Rgba32Sint,
         "rgba32float" => Sf::Rgba32Float,
         "bgra8unorm" => Sf::Bgra8Unorm,
-        _ => return Err(Error::UnknownStorageFormat(span)),
+        _ => return Err(Box::new(Error::UnknownStorageFormat(span))),
     })
 }
 
-pub fn get_scalar_type(word: &str) -> Option<Scalar> {
+pub fn get_scalar_type(
+    enable_extensions: &EnableExtensions,
+    span: Span,
+    word: &str,
+) -> Result<'static, Option<Scalar>> {
     use crate::ScalarKind as Sk;
-    match word {
-        // "f16" => Some(Scalar { kind: Sk::Float, width: 2 }),
+    let scalar = match word {
+        "f16" => Some(Scalar {
+            kind: Sk::Float,
+            width: 2,
+        }),
         "f32" => Some(Scalar {
             kind: Sk::Float,
             width: 4,
@@ -145,7 +156,18 @@ pub fn get_scalar_type(word: &str) -> Option<Scalar> {
             width: crate::BOOL_WIDTH,
         }),
         _ => None,
+    };
+
+    if matches!(scalar, Some(Scalar::F16))
+        && !enable_extensions.contains(ImplementedEnableExtension::F16)
+    {
+        return Err(Box::new(Error::EnableExtensionNotEnabled {
+            span,
+            kind: ImplementedEnableExtension::F16.into(),
+        }));
     }
+
+    Ok(scalar)
 }
 
 pub fn map_derivative(word: &str) -> Option<(crate::DerivativeAxis, crate::DerivativeControl)> {
@@ -261,16 +283,13 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
     })
 }
 
-pub fn map_conservative_depth(
-    word: &str,
-    span: Span,
-) -> Result<crate::ConservativeDepth, Error<'_>> {
+pub fn map_conservative_depth(word: &str, span: Span) -> Result<'_, crate::ConservativeDepth> {
     use crate::ConservativeDepth as Cd;
     match word {
         "greater_equal" => Ok(Cd::GreaterEqual),
         "less_equal" => Ok(Cd::LessEqual),
         "unchanged" => Ok(Cd::Unchanged),
-        _ => Err(Error::UnknownConservativeDepth(span)),
+        _ => Err(Box::new(Error::UnknownConservativeDepth(span))),
     }
 }
 

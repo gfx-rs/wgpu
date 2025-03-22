@@ -34,6 +34,48 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 
 impl Device {
+    #[cfg(custom)]
+    /// Creates Device from custom implementation
+    pub fn from_custom<T: custom::DeviceInterface>(device: T) -> Self {
+        Self {
+            inner: dispatch::DispatchDevice::custom(device),
+        }
+    }
+
+    /// Constructs a stub device for testing using [`Backend::Noop`].
+    ///
+    /// This is a convenience function which avoids the configuration, `async`, and fallibility
+    /// aspects of constructing a device through `Instance`.
+    #[cfg(feature = "noop")]
+    pub fn noop(desc: &DeviceDescriptor<'_>) -> (Device, Queue) {
+        use core::future::Future as _;
+        use core::pin::pin;
+        use core::task;
+        let ctx = &mut task::Context::from_waker(task::Waker::noop());
+
+        let instance = Instance::new(&InstanceDescriptor {
+            backends: Backends::NOOP,
+            backend_options: BackendOptions {
+                noop: NoopBackendOptions { enable: true },
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        // Both of these futures are trivial and should complete instantaneously,
+        // so we do not need an executor and can just poll them once.
+        let task::Poll::Ready(Ok(adapter)) =
+            pin!(instance.request_adapter(&RequestAdapterOptions::default())).poll(ctx)
+        else {
+            unreachable!()
+        };
+        let task::Poll::Ready(Ok(device_and_queue)) = pin!(adapter.request_device(desc)).poll(ctx)
+        else {
+            unreachable!()
+        };
+        device_and_queue
+    }
+
     /// Check for resource cleanups and mapping callbacks. Will block if [`PollType::Wait`] is passed.
     ///
     /// Return `true` if the queue is empty, or `false` if there are more queue
@@ -470,15 +512,15 @@ impl Device {
     /// # Validation
     /// If any of the following is not satisfied a validation error is generated
     ///
-    /// The device ***must*** have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled.
-    /// if `sizes` is [BlasGeometrySizeDescriptors::Triangles] then the following must be satisfied
+    /// The device ***must*** have [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] enabled.
+    /// if `sizes` is [`BlasGeometrySizeDescriptors::Triangles`] then the following must be satisfied
     /// - For every geometry descriptor (for the purposes this is called `geo_desc`) of `sizes.descriptors` the following must be satisfied:
     ///     - `geo_desc.vertex_format` must be within allowed formats (allowed formats for a given feature set
-    ///       may be queried with [Features::allowed_vertex_formats_for_blas]).
+    ///       may be queried with [`Features::allowed_vertex_formats_for_blas`]).
     ///     - Both or neither of `geo_desc.index_format` and `geo_desc.index_count` must be provided.
     ///
-    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-    /// [Features::allowed_vertex_formats_for_blas]: wgt::Features::allowed_vertex_formats_for_blas
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::allowed_vertex_formats_for_blas`]: wgt::Features::allowed_vertex_formats_for_blas
     #[must_use]
     pub fn create_blas(
         &self,
@@ -499,9 +541,9 @@ impl Device {
     /// # Validation
     /// If any of the following is not satisfied a validation error is generated
     ///
-    /// The device ***must*** have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled.
+    /// The device ***must*** have [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] enabled.
     ///
-    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     #[must_use]
     pub fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas {
         let tlas = self.inner.create_tlas(desc);
@@ -577,7 +619,7 @@ impl From<wgc::instance::RequestDeviceError> for RequestDeviceError {
 pub trait UncapturedErrorHandler: Fn(Error) + Send + 'static {}
 impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + 'static {}
 
-/// Filter for error scopes.
+/// Kinds of [`Error`]s a [`Device::push_error_scope()`] may be configured to catch.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]
 pub enum ErrorFilter {
     /// Catch only out-of-memory errors.
@@ -602,15 +644,19 @@ pub type ErrorSource = Box<dyn error::Error + Send + Sync + 'static>;
 #[cfg_attr(docsrs, doc(cfg(all())))]
 pub type ErrorSource = Box<dyn error::Error + 'static>;
 
-/// Error type
+/// Errors resulting from usage of GPU APIs.
+///
+/// By default, errors translate into panics. Depending on the backend and circumstances,
+/// errors may occur synchronously or asynchronously. When errors need to be handled, use
+/// [`Device::push_error_scope()`] or [`Device::on_uncaptured_error()`].
 #[derive(Debug)]
 pub enum Error {
-    /// Out of memory error
+    /// Out of memory.
     OutOfMemory {
         /// Lower level source of the error.
         source: ErrorSource,
     },
-    /// Validation error, signifying a bug in code or data
+    /// Validation error, signifying a bug in code or data provided to `wgpu`.
     Validation {
         /// Lower level source of the error.
         source: ErrorSource,

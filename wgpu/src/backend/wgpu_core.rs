@@ -17,7 +17,7 @@ use wgt::WasmNotSendSync;
 
 use crate::{
     api,
-    dispatch::{self, BufferMappedRangeInterface, InterfaceTypes},
+    dispatch::{self, BufferMappedRangeInterface},
     BindingResource, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor,
@@ -104,17 +104,21 @@ impl ContextWgpuCore {
         adapter: &CoreAdapter,
         hal_device: hal::OpenDevice<A>,
         desc: &crate::DeviceDescriptor<'_>,
-        trace_dir: Option<&std::path::Path>,
     ) -> Result<(CoreDevice, CoreQueue), crate::RequestDeviceError> {
-        if trace_dir.is_some() {
-            log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
+        if !matches!(desc.trace, wgt::Trace::Off) {
+            log::error!(
+                "
+                Feature 'trace' has been removed temporarily; \
+                see https://github.com/gfx-rs/wgpu/issues/5974. \
+                The `trace` parameter will have no effect."
+            );
         }
+
         let (device_id, queue_id) = unsafe {
             self.0.create_device_from_hal(
                 adapter.id,
                 hal_device.into(),
                 &desc.map_label(|l| l.map(Borrowed)),
-                None,
                 None,
                 None,
             )
@@ -366,6 +370,14 @@ impl ContextWgpuCore {
         print_tree(&mut output, &mut level, err);
 
         format!("Validation Error\n\nCaused by:\n{output}")
+    }
+
+    pub unsafe fn queue_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Queue>) -> R, R>(
+        &self,
+        queue: &CoreQueue,
+        hal_queue_callback: F,
+    ) -> R {
+        unsafe { self.0.queue_as_hal::<A, F, R>(queue.id, hal_queue_callback) }
     }
 }
 
@@ -742,37 +754,6 @@ crate::cmp::impl_eq_ord_hash_proxy!(CoreSurfaceOutputDetail => .surface_id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreQueueWriteBuffer => .mapping.ptr);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreBufferMappedRange => .ptr);
 
-impl InterfaceTypes for ContextWgpuCore {
-    type Instance = ContextWgpuCore;
-    type Adapter = CoreAdapter;
-    type Device = CoreDevice;
-    type Queue = CoreQueue;
-    type ShaderModule = CoreShaderModule;
-    type BindGroupLayout = CoreBindGroupLayout;
-    type BindGroup = CoreBindGroup;
-    type TextureView = CoreTextureView;
-    type Sampler = CoreSampler;
-    type Buffer = CoreBuffer;
-    type Texture = CoreTexture;
-    type Blas = CoreBlas;
-    type Tlas = CoreTlas;
-    type QuerySet = CoreQuerySet;
-    type PipelineLayout = CorePipelineLayout;
-    type RenderPipeline = CoreRenderPipeline;
-    type ComputePipeline = CoreComputePipeline;
-    type PipelineCache = CorePipelineCache;
-    type CommandEncoder = CoreCommandEncoder;
-    type ComputePass = CoreComputePass;
-    type RenderPass = CoreRenderPass;
-    type CommandBuffer = CoreCommandBuffer;
-    type RenderBundleEncoder = CoreRenderBundleEncoder;
-    type RenderBundle = CoreRenderBundle;
-    type Surface = CoreSurface;
-    type SurfaceOutputDetail = CoreSurfaceOutputDetail;
-    type QueueWriteBuffer = CoreQueueWriteBuffer;
-    type BufferMappedRange = CoreBufferMappedRange;
-}
-
 impl dispatch::InstanceInterface for ContextWgpuCore {
     fn new(desc: &wgt::InstanceDescriptor) -> Self
     where
@@ -792,6 +773,26 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             } => unsafe {
                 self.0
                     .instance_create_surface(raw_display_handle, raw_window_handle, None)
+            },
+
+            #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+            SurfaceTargetUnsafe::Drm {
+                fd,
+                plane,
+                connector_id,
+                width,
+                height,
+                refresh_rate,
+            } => unsafe {
+                self.0.instance_create_surface_from_drm(
+                    fd,
+                    plane,
+                    connector_id,
+                    width,
+                    height,
+                    refresh_rate,
+                    None,
+                )
             },
 
             #[cfg(metal)]
@@ -849,7 +850,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             let generic: dispatch::DispatchAdapter = core.into();
             generic
         });
-        Box::pin(ready(adapter.ok()))
+        Box::pin(ready(adapter))
     }
 
     fn poll_all_devices(&self, force_wait: bool) -> bool {
@@ -879,15 +880,19 @@ impl dispatch::AdapterInterface for CoreAdapter {
     fn request_device(
         &self,
         desc: &crate::DeviceDescriptor<'_>,
-        trace_dir: Option<&std::path::Path>,
     ) -> Pin<Box<dyn dispatch::RequestDeviceFuture>> {
-        if trace_dir.is_some() {
-            log::error!("Feature 'trace' has been removed temporarily, see https://github.com/gfx-rs/wgpu/issues/5974");
+        if !matches!(desc.trace, wgt::Trace::Off) {
+            log::error!(
+                "
+                Feature 'trace' has been removed temporarily; \
+                see https://github.com/gfx-rs/wgpu/issues/5974. \
+                The `trace` parameter will have no effect."
+            );
         }
+
         let res = self.context.0.adapter_request_device(
             self.id,
             &desc.map_label(|l| l.map(Borrowed)),
-            None,
             None,
             None,
         );

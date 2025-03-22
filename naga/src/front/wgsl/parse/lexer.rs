@@ -1,9 +1,11 @@
-use super::{number::consume_number, Error, ExpectedToken};
+use super::{number::consume_number, Error, ExpectedToken, Result};
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
 use crate::front::wgsl::parse::{conv, Number};
 use crate::front::wgsl::Scalar;
 use crate::Span;
+
+use alloc::boxed::Box;
 
 type TokenSpan<'a> = (Token<'a>, Span);
 
@@ -12,7 +14,7 @@ pub enum Token<'a> {
     Separator(char),
     Paren(char),
     Attribute,
-    Number(Result<Number, NumberError>),
+    Number(core::result::Result<Number, NumberError>),
     Word(&'a str),
     Operation(char),
     LogicalOperation(char),
@@ -218,7 +220,6 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     /// statements.
     last_end_offset: usize,
 
-    #[allow(dead_code)]
     pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
 }
 
@@ -243,8 +244,8 @@ impl<'a> Lexer<'a> {
     #[inline]
     pub fn capture_span<T, E>(
         &mut self,
-        inner: impl FnOnce(&mut Self) -> Result<T, E>,
-    ) -> Result<(T, Span), E> {
+        inner: impl FnOnce(&mut Self) -> core::result::Result<T, E>,
+    ) -> core::result::Result<(T, Span), E> {
         let start = self.current_byte_offset();
         let res = inner(self)?;
         let end = self.current_byte_offset();
@@ -320,19 +321,19 @@ impl<'a> Lexer<'a> {
         token
     }
 
-    pub(in crate::front::wgsl) fn expect_span(
-        &mut self,
-        expected: Token<'a>,
-    ) -> Result<Span, Error<'a>> {
+    pub(in crate::front::wgsl) fn expect_span(&mut self, expected: Token<'a>) -> Result<'a, Span> {
         let next = self.next();
         if next.0 == expected {
             Ok(next.1)
         } else {
-            Err(Error::Unexpected(next.1, ExpectedToken::Token(expected)))
+            Err(Box::new(Error::Unexpected(
+                next.1,
+                ExpectedToken::Token(expected),
+            )))
         }
     }
 
-    pub(in crate::front::wgsl) fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
+    pub(in crate::front::wgsl) fn expect(&mut self, expected: Token<'a>) -> Result<'a, ()> {
         self.expect_span(expected)?;
         Ok(())
     }
@@ -340,15 +341,15 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn expect_generic_paren(
         &mut self,
         expected: char,
-    ) -> Result<(), Error<'a>> {
+    ) -> Result<'a, ()> {
         let next = self.next_generic();
         if next.0 == Token::Paren(expected) {
             Ok(())
         } else {
-            Err(Error::Unexpected(
+            Err(Box::new(Error::Unexpected(
                 next.1,
                 ExpectedToken::Token(Token::Paren(expected)),
-            ))
+            )))
         }
     }
 
@@ -367,59 +368,62 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(in crate::front::wgsl) fn next_ident_with_span(
-        &mut self,
-    ) -> Result<(&'a str, Span), Error<'a>> {
+    pub(in crate::front::wgsl) fn next_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {
         match self.next() {
             (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
-            other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+            other => Err(Box::new(Error::Unexpected(
+                other.1,
+                ExpectedToken::Identifier,
+            ))),
         }
     }
 
-    pub(in crate::front::wgsl) fn peek_ident_with_span(
-        &mut self,
-    ) -> Result<(&'a str, Span), Error<'a>> {
+    pub(in crate::front::wgsl) fn peek_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {
         match self.peek() {
             (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
-            other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+            other => Err(Box::new(Error::Unexpected(
+                other.1,
+                ExpectedToken::Identifier,
+            ))),
         }
     }
 
-    fn word_as_ident_with_span(word: &'a str, span: Span) -> Result<(&'a str, Span), Error<'a>> {
+    fn word_as_ident_with_span(word: &'a str, span: Span) -> Result<'a, (&'a str, Span)> {
         match word {
-            "_" => Err(Error::InvalidIdentifierUnderscore(span)),
-            word if word.starts_with("__") => Err(Error::ReservedIdentifierPrefix(span)),
+            "_" => Err(Box::new(Error::InvalidIdentifierUnderscore(span))),
+            word if word.starts_with("__") => Err(Box::new(Error::ReservedIdentifierPrefix(span))),
             word => Ok((word, span)),
         }
     }
 
-    pub(in crate::front::wgsl) fn next_ident(
-        &mut self,
-    ) -> Result<super::ast::Ident<'a>, Error<'a>> {
+    pub(in crate::front::wgsl) fn next_ident(&mut self) -> Result<'a, super::ast::Ident<'a>> {
         self.next_ident_with_span()
             .and_then(|(word, span)| Self::word_as_ident(word, span))
             .map(|(name, span)| super::ast::Ident { name, span })
     }
 
-    fn word_as_ident(word: &'a str, span: Span) -> Result<(&'a str, Span), Error<'a>> {
+    fn word_as_ident(word: &'a str, span: Span) -> Result<'a, (&'a str, Span)> {
         if crate::keywords::wgsl::RESERVED.contains(&word) {
-            Err(Error::ReservedKeyword(span))
+            Err(Box::new(Error::ReservedKeyword(span)))
         } else {
             Ok((word, span))
         }
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
-    pub(in crate::front::wgsl) fn next_scalar_generic(&mut self) -> Result<Scalar, Error<'a>> {
+    pub(in crate::front::wgsl) fn next_scalar_generic(&mut self) -> Result<'a, Scalar> {
         self.expect_generic_paren('<')?;
-        let pair = match self.next() {
+        let (scalar, _span) = match self.next() {
             (Token::Word(word), span) => {
-                conv::get_scalar_type(word).ok_or(Error::UnknownScalarType(span))
+                conv::get_scalar_type(&self.enable_extensions, span, word)?
+                    .map(|scalar| (scalar, span))
+                    .ok_or(Error::UnknownScalarType(span))?
             }
-            (_, span) => Err(Error::UnknownScalarType(span)),
-        }?;
+            (_, span) => return Err(Box::new(Error::UnknownScalarType(span))),
+        };
+
         self.expect_generic_paren('>')?;
-        Ok(pair)
+        Ok(scalar)
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
@@ -427,21 +431,25 @@ impl<'a> Lexer<'a> {
     /// Returns the span covering the inner type, excluding the brackets.
     pub(in crate::front::wgsl) fn next_scalar_generic_with_span(
         &mut self,
-    ) -> Result<(Scalar, Span), Error<'a>> {
+    ) -> Result<'a, (Scalar, Span)> {
         self.expect_generic_paren('<')?;
-        let pair = match self.next() {
-            (Token::Word(word), span) => conv::get_scalar_type(word)
-                .map(|scalar| (scalar, span))
-                .ok_or(Error::UnknownScalarType(span)),
-            (_, span) => Err(Error::UnknownScalarType(span)),
-        }?;
+
+        let (scalar, span) = match self.next() {
+            (Token::Word(word), span) => {
+                conv::get_scalar_type(&self.enable_extensions, span, word)?
+                    .map(|scalar| (scalar, span))
+                    .ok_or(Error::UnknownScalarType(span))?
+            }
+            (_, span) => return Err(Box::new(Error::UnknownScalarType(span))),
+        };
+
         self.expect_generic_paren('>')?;
-        Ok(pair)
+        Ok((scalar, span))
     }
 
     pub(in crate::front::wgsl) fn next_storage_access(
         &mut self,
-    ) -> Result<crate::StorageAccess, Error<'a>> {
+    ) -> Result<'a, crate::StorageAccess> {
         let (ident, span) = self.next_ident_with_span()?;
         match ident {
             "read" => Ok(crate::StorageAccess::LOAD),
@@ -450,13 +458,13 @@ impl<'a> Lexer<'a> {
             "atomic" => Ok(crate::StorageAccess::ATOMIC
                 | crate::StorageAccess::LOAD
                 | crate::StorageAccess::STORE),
-            _ => Err(Error::UnknownAccess(span)),
+            _ => Err(Box::new(Error::UnknownAccess(span))),
         }
     }
 
     pub(in crate::front::wgsl) fn next_format_generic(
         &mut self,
-    ) -> Result<(crate::StorageFormat, crate::StorageAccess), Error<'a>> {
+    ) -> Result<'a, (crate::StorageFormat, crate::StorageAccess)> {
         self.expect(Token::Paren('<'))?;
         let (ident, ident_span) = self.next_ident_with_span()?;
         let format = conv::map_storage_format(ident, ident_span)?;
@@ -466,16 +474,36 @@ impl<'a> Lexer<'a> {
         Ok((format, access))
     }
 
-    pub(in crate::front::wgsl) fn open_arguments(&mut self) -> Result<(), Error<'a>> {
+    pub(in crate::front::wgsl) fn next_acceleration_structure_flags(&mut self) -> Result<'a, bool> {
+        Ok(if self.skip(Token::Paren('<')) {
+            if !self.skip(Token::Paren('>')) {
+                let (name, span) = self.next_ident_with_span()?;
+                let ret = if name == "vertex_return" {
+                    true
+                } else {
+                    return Err(Box::new(Error::UnknownAttribute(span)));
+                };
+                self.skip(Token::Separator(','));
+                self.expect(Token::Paren('>'))?;
+                ret
+            } else {
+                false
+            }
+        } else {
+            false
+        })
+    }
+
+    pub(in crate::front::wgsl) fn open_arguments(&mut self) -> Result<'a, ()> {
         self.expect(Token::Paren('('))
     }
 
-    pub(in crate::front::wgsl) fn close_arguments(&mut self) -> Result<(), Error<'a>> {
+    pub(in crate::front::wgsl) fn close_arguments(&mut self) -> Result<'a, ()> {
         let _ = self.skip(Token::Separator(','));
         self.expect(Token::Paren(')'))
     }
 
-    pub(in crate::front::wgsl) fn next_argument(&mut self) -> Result<bool, Error<'a>> {
+    pub(in crate::front::wgsl) fn next_argument(&mut self) -> Result<'a, bool> {
         let paren = Token::Paren(')');
         if self.skip(Token::Separator(',')) {
             Ok(!self.skip(paren))
@@ -497,6 +525,7 @@ fn sub_test(source: &str, expected_tokens: &[Token]) {
 
 #[test]
 fn test_numbers() {
+    use half::f16;
     // WGSL spec examples //
 
     // decimal integer
@@ -521,14 +550,16 @@ fn test_numbers() {
             Token::Number(Ok(Number::AbstractFloat(0.01))),
             Token::Number(Ok(Number::AbstractFloat(12.34))),
             Token::Number(Ok(Number::F32(0.))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F16(f16::from_f32(0.)))),
             Token::Number(Ok(Number::AbstractFloat(0.001))),
             Token::Number(Ok(Number::AbstractFloat(43.75))),
             Token::Number(Ok(Number::F32(16.))),
             Token::Number(Ok(Number::AbstractFloat(0.1875))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            // https://github.com/gfx-rs/wgpu/issues/7046
+            Token::Number(Err(NumberError::NotRepresentable)), // Should be 0.75
             Token::Number(Ok(Number::AbstractFloat(0.12109375))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            // https://github.com/gfx-rs/wgpu/issues/7046
+            Token::Number(Err(NumberError::NotRepresentable)), // Should be 12.5
         ],
     );
 

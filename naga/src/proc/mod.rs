@@ -19,6 +19,7 @@ pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, Indexab
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
+use thiserror::Error;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
 
 impl From<super::StorageFormat> for super::Scalar {
@@ -79,6 +80,7 @@ impl From<super::StorageFormat> for super::Scalar {
 pub enum HashableLiteral {
     F64(u64),
     F32(u32),
+    F16(u16),
     U32(u32),
     I32(i32),
     U64(u64),
@@ -93,6 +95,7 @@ impl From<crate::Literal> for HashableLiteral {
         match l {
             crate::Literal::F64(v) => Self::F64(v.to_bits()),
             crate::Literal::F32(v) => Self::F32(v.to_bits()),
+            crate::Literal::F16(v) => Self::F16(v.to_bits()),
             crate::Literal::U32(v) => Self::U32(v),
             crate::Literal::I32(v) => Self::I32(v),
             crate::Literal::U64(v) => Self::U64(v),
@@ -131,6 +134,7 @@ impl crate::Literal {
         match *self {
             Self::F64(_) | Self::I64(_) | Self::U64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
+            Self::F16(_) => 2,
             Self::Bool(_) => crate::BOOL_WIDTH,
             Self::AbstractInt(_) | Self::AbstractFloat(_) => crate::ABSTRACT_WIDTH,
         }
@@ -139,6 +143,7 @@ impl crate::Literal {
         match *self {
             Self::F64(_) => crate::Scalar::F64,
             Self::F32(_) => crate::Scalar::F32,
+            Self::F16(_) => crate::Scalar::F16,
             Self::U32(_) => crate::Scalar::U32,
             Self::I32(_) => crate::Scalar::I32,
             Self::U64(_) => crate::Scalar::U64,
@@ -455,7 +460,7 @@ impl GlobalCtx<'_> {
         self.eval_expr_to_literal_from(handle, self.global_expressions)
     }
 
-    fn eval_expr_to_literal_from(
+    pub(super) fn eval_expr_to_literal_from(
         &self,
         handle: crate::Handle<crate::Expression>,
         arena: &crate::Arena<crate::Expression>,
@@ -479,6 +484,47 @@ impl GlobalCtx<'_> {
                 get(*self, self.constants[c].init, self.global_expressions)
             }
             _ => get(*self, handle, arena),
+        }
+    }
+}
+
+#[derive(Error, Debug, Clone, Copy, PartialEq)]
+pub enum ResolveArraySizeError {
+    #[error("array element count must be positive (> 0)")]
+    ExpectedPositiveArrayLength,
+    #[error("internal: array size override has not been resolved")]
+    NonConstArrayLength,
+}
+
+impl crate::ArraySize {
+    /// Return the number of elements that `size` represents, if known at code generation time.
+    ///
+    /// If `size` is override-based, return an error unless the override's
+    /// initializer is a fully evaluated constant expression. You can call
+    /// [`pipeline_constants::process_overrides`] to supply values for a
+    /// module's overrides and ensure their initializers are fully evaluated, as
+    /// this function expects.
+    ///
+    /// [`pipeline_constants::process_overrides`]: crate::back::pipeline_constants::process_overrides
+    pub fn resolve(&self, gctx: GlobalCtx) -> Result<IndexableLength, ResolveArraySizeError> {
+        match *self {
+            crate::ArraySize::Constant(length) => Ok(IndexableLength::Known(length.get())),
+            crate::ArraySize::Pending(handle) => {
+                let Some(expr) = gctx.overrides[handle].init else {
+                    return Err(ResolveArraySizeError::NonConstArrayLength);
+                };
+                let length = gctx.eval_expr_to_u32(expr).map_err(|err| match err {
+                    U32EvalError::NonConst => ResolveArraySizeError::NonConstArrayLength,
+                    U32EvalError::Negative => ResolveArraySizeError::ExpectedPositiveArrayLength,
+                })?;
+
+                if length == 0 {
+                    return Err(ResolveArraySizeError::ExpectedPositiveArrayLength);
+                }
+
+                Ok(IndexableLength::Known(length))
+            }
+            crate::ArraySize::Dynamic => Ok(IndexableLength::Dynamic),
         }
     }
 }
@@ -527,7 +573,7 @@ pub fn flatten_compose<'arenas>(
                 return subcomponents;
             }
         }
-        std::slice::from_ref(component)
+        core::slice::from_ref(component)
     }
 
     /// Flatten `Splat` expressions if `is_vector` is true.
@@ -544,7 +590,7 @@ pub fn flatten_compose<'arenas>(
                 count = size as usize;
             }
         }
-        std::iter::repeat(expr).take(count)
+        core::iter::repeat_n(expr, count)
     }
 
     // Expressions like `vec4(vec3(vec2(6, 7), 8), 9)` require us to

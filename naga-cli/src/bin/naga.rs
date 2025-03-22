@@ -52,7 +52,7 @@ struct Args {
 
     /// the shader model to use if targeting HLSL
     ///
-    /// May be `50`, 51`, or `60`
+    /// May be `50`, `51`, or `60`
     #[argh(option)]
     shader_model: Option<ShaderModelArg>,
 

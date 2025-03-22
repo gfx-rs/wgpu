@@ -128,6 +128,8 @@ impl GPUAdapter {
         let required_limits =
             serde_json::from_value(serde_json::to_value(descriptor.required_limits)?)?;
 
+        let webgpu_trace = std::env::var_os("DENO_WEBGPU_TRACE").unwrap();
+
         let wgpu_descriptor = wgpu_types::DeviceDescriptor {
             label: crate::transform_label(descriptor.label.clone()),
             required_features: super::webidl::feature_names_to_features(
@@ -135,17 +137,12 @@ impl GPUAdapter {
             ),
             required_limits,
             memory_hints: Default::default(),
+            trace: wgpu_types::Trace::Directory(std::path::PathBuf::from(webgpu_trace)),
         };
 
-        let webgpu_trace = std::env::var("DENO_WEBGPU_TRACE").unwrap();
-
-        let (device, queue) = self.instance.adapter_request_device(
-            self.id,
-            &wgpu_descriptor,
-            Some(webgpu_trace.as_str()),
-            None,
-            None,
-        )?;
+        let (device, queue) =
+            self.instance
+                .adapter_request_device(self.id, &wgpu_descriptor, None, None)?;
 
         let (lost_sender, lost_receiver) = tokio::sync::oneshot::channel();
         let (uncaptured_sender, mut uncaptured_receiver) = tokio::sync::mpsc::unbounded_channel();

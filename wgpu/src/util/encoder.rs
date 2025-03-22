@@ -34,7 +34,7 @@ pub trait RenderEncoder<'a> {
     /// [`RenderEncoder`] will use `buffer` as one of the source vertex buffers.
     ///
     /// The `slot` refers to the index of the matching descriptor in
-    /// [VertexState::buffers](crate::VertexState::buffers).
+    /// [`VertexState::buffers`](crate::VertexState::buffers).
     ///
     /// [`draw`]: RenderEncoder::draw
     /// [`draw_indexed`]: RenderEncoder::draw_indexed
@@ -91,7 +91,7 @@ pub trait RenderEncoder<'a> {
     /// - 4..8 Fragment
     /// ```
     ///
-    /// You would need to upload this in two set_push_constants calls. First for the `Vertex` range, second for the `Fragment` range.
+    /// You would need to upload this in two `set_push_constants` calls. First for the `Vertex` range, second for the `Fragment` range.
     ///
     /// ```text
     /// For the given ranges:
@@ -99,7 +99,7 @@ pub trait RenderEncoder<'a> {
     /// - 4..12 Fragment
     /// ```
     ///
-    /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
+    /// You would need to upload this in three `set_push_constants` calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
     fn set_push_constants(&mut self, stages: wgt::ShaderStages, offset: u32, data: &[u8]);
 }

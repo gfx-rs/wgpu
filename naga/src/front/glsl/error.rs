@@ -1,13 +1,20 @@
-use super::token::TokenValue;
-use crate::SourceLocation;
-use crate::{proc::ConstantEvaluatorError, Span};
+use alloc::{
+    borrow::Cow,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use pp_rs::token::PreprocessorError;
-use std::borrow::Cow;
 use termcolor::{NoColor, WriteColor};
 use thiserror::Error;
+
+use super::token::TokenValue;
+use crate::SourceLocation;
+use crate::{proc::ConstantEvaluatorError, Span};
 
 fn join_with_comma(list: &[ExpectedToken]) -> String {
     let mut string = "".to_string();
@@ -45,8 +52,8 @@ impl From<TokenValue> for ExpectedToken {
         ExpectedToken::Token(token)
     }
 }
-impl std::fmt::Display for ExpectedToken {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ExpectedToken {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
             ExpectedToken::Token(ref token) => write!(f, "{token:?}"),
             ExpectedToken::TypeName => write!(f, "a type"),
@@ -102,9 +109,15 @@ pub enum ErrorKind {
     /// Unsupported matrix of the form matCx2
     ///
     /// Our IR expects matrices of the form matCx2 to have a stride of 8 however
-    /// matrices in the std140 layout have a stride of at least 16
-    #[error("unsupported matrix of the form matCx2 in std140 block layout")]
-    UnsupportedMatrixTypeInStd140,
+    /// matrices in the std140 layout have a stride of at least 16.
+    #[error("unsupported matrix of the form matCx2 (in this case mat{columns}x2) in std140 block layout. See https://github.com/gfx-rs/wgpu/issues/4375")]
+    UnsupportedMatrixWithTwoRowsInStd140 { columns: u8 },
+    /// Unsupported matrix of the form f16matCxR
+    ///
+    /// Our IR expects matrices of the form f16matCxR to have a stride of 4/8/8 depending on row-count,
+    /// however matrices in the std140 layout have a stride of at least 16.
+    #[error("unsupported matrix of the form f16matCxR (in this case f16mat{columns}x{rows}) in std140 block layout. See https://github.com/gfx-rs/wgpu/issues/4375")]
+    UnsupportedF16MatrixInStd140 { columns: u8, rows: u8 },
     /// A variable with the same name already exists in the current scope.
     #[error("Variable already declared: {0}")]
     VariableAlreadyDeclared(String),
@@ -180,14 +193,14 @@ impl ParseErrors {
     }
 }
 
-impl std::fmt::Display for ParseErrors {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Display for ParseErrors {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         self.errors.iter().try_for_each(|e| write!(f, "{e:?}"))
     }
 }
 
-impl std::error::Error for ParseErrors {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl core::error::Error for ParseErrors {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         None
     }
 }

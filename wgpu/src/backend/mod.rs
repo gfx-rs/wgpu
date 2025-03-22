@@ -8,3 +8,6 @@ pub mod wgpu_core;
 
 #[cfg(wgpu_core)]
 pub(crate) use wgpu_core::ContextWgpuCore;
+
+#[cfg(custom)]
+pub mod custom;

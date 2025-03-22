@@ -5,7 +5,7 @@
 #[test]
 #[should_panic = "Buffer with '' label has been destroyed"]
 fn destroyed_buffer() {
-    let (device, queue) = crate::request_noop_device();
+    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: 1024,

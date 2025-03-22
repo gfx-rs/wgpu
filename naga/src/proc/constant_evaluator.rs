@@ -1,12 +1,23 @@
-use std::iter;
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::iter;
 
 use arrayvec::ArrayVec;
+use half::f16;
+use num_traits::{real::Real, FromPrimitive, One, ToPrimitive, Zero};
 
 use crate::{
     arena::{Arena, Handle, HandleVec, UniqueArena},
     ArraySize, BinaryOperator, Constant, Expression, Literal, Override, RelationalFunction,
     ScalarKind, Span, Type, TypeInner, UnaryOperator,
 };
+
+#[cfg(feature = "wgsl-in")]
+use crate::common::wgsl::TryToWgsl;
 
 /// A macro that allows dollar signs (`$`) to be emitted by other macros. Useful for generating
 /// `macro_rules!` items that, in turn, emit their own `macro_rules!` items.
@@ -199,6 +210,7 @@ gen_component_wise_extractor! {
     literals: [
         AbstractFloat => AbstractFloat: f64,
         F32 => F32: f32,
+        F16 => F16: f16,
         AbstractInt => AbstractInt: i64,
         U32 => U32: u32,
         I32 => I32: i32,
@@ -219,6 +231,7 @@ gen_component_wise_extractor! {
     literals: [
         AbstractFloat => Abstract: f64,
         F32 => F32: f32,
+        F16 => F16: f16,
     ],
     scalar_kinds: [
         Float,
@@ -244,6 +257,7 @@ gen_component_wise_extractor! {
         AbstractFloat => AbstractFloat: f64,
         AbstractInt => AbstractInt: i64,
         F32 => F32: f32,
+        F16 => F16: f16,
         I32 => I32: i32,
     ],
     scalar_kinds: [
@@ -551,6 +565,10 @@ pub enum ConstantEvaluatorError {
     InvalidRelationalArg(RelationalFunction),
     #[error("value of `low` is greater than `high` for clamp built-in function")]
     InvalidClamp,
+    #[error("Constructor expects {expected} components, found {actual}")]
+    InvalidVectorComposeLength { expected: usize, actual: usize },
+    #[error("Constructor must only contain vector or scalar arguments")]
+    InvalidVectorComposeComponent,
     #[error("Splat is defined only on scalar values")]
     SplatScalarOnly,
     #[error("Can only swizzle vector constants")]
@@ -572,8 +590,6 @@ pub enum ConstantEvaluatorError {
         value: String,
         to_type: &'static str,
     },
-    #[error("abstract floating-point values cannot be automatically converted to integers")]
-    AutomaticConversionFloatToInt { to_type: &'static str },
     #[error("Division by zero")]
     DivisionByZero,
     #[error("Remainder by zero")]
@@ -957,7 +973,9 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::ImageSample { .. }
             | Expression::ImageLoad { .. }
             | Expression::ImageQuery { .. } => Err(ConstantEvaluatorError::ImageExpression),
-            Expression::RayQueryProceedResult | Expression::RayQueryGetIntersection { .. } => {
+            Expression::RayQueryProceedResult
+            | Expression::RayQueryGetIntersection { .. }
+            | Expression::RayQueryVertexPositions { .. } => {
                 Err(ConstantEvaluatorError::RayQueryExpression)
             }
             Expression::SubgroupBallotResult => Err(ConstantEvaluatorError::SubgroupExpression),
@@ -1103,6 +1121,7 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_scalar(self, span, [arg], |args| match args {
                     Scalar::AbstractFloat([e]) => Ok(Scalar::AbstractFloat([e.abs()])),
                     Scalar::F32([e]) => Ok(Scalar::F32([e.abs()])),
+                    Scalar::F16([e]) => Ok(Scalar::F16([e.abs()])),
                     Scalar::AbstractInt([e]) => Ok(Scalar::AbstractInt([e.abs()])),
                     Scalar::I32([e]) => Ok(Scalar::I32([e.wrapping_abs()])),
                     Scalar::U32([e]) => Ok(Scalar::U32([e])), // TODO: just re-use the expression, ezpz
@@ -1134,9 +1153,13 @@ impl<'a> ConstantEvaluator<'a> {
                     }
                 )
             }
-            crate::MathFunction::Saturate => {
-                component_wise_float!(self, span, [arg], |e| { Ok([e.clamp(0., 1.)]) })
-            }
+            crate::MathFunction::Saturate => component_wise_float(self, span, [arg], |e| match e {
+                Float::F16([e]) => Ok(Float::F16(
+                    [e.clamp(f16::from_f32(0.0), f16::from_f32(1.0))],
+                )),
+                Float::F32([e]) => Ok(Float::F32([e.clamp(0., 1.)])),
+                Float::Abstract([e]) => Ok(Float::Abstract([e.clamp(0., 1.)])),
+            }),
 
             // trigonometry
             crate::MathFunction::Cos => {
@@ -1190,29 +1213,34 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.floor()]) })
             }
             crate::MathFunction::Round => {
-                // TODO: this hit stable on 1.77, but MSRV hasn't caught up yet
-                // This polyfill is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
-                // which has licensing compatible with ours. See also
-                // <https://github.com/rust-lang/rust/issues/96710>.
-                //
-                // [polyfill source]: https://github.com/imeka/ndarray-ndimage/blob/8b14b4d6ecfbc96a8a052f802e342a7049c68d8f/src/lib.rs#L98
-                fn round_ties_even(x: f64) -> f64 {
-                    let i = x as i64;
-                    let f = (x - i as f64).abs();
-                    if f == 0.5 {
-                        if i & 1 == 1 {
-                            // -1.5, 1.5, 3.5, ...
-                            (x.abs() + 0.5).copysign(x)
-                        } else {
-                            (x.abs() - 0.5).copysign(x)
-                        }
-                    } else {
-                        x.round()
-                    }
-                }
                 component_wise_float(self, span, [arg], |e| match e {
-                    Float::Abstract([e]) => Ok(Float::Abstract([round_ties_even(e)])),
-                    Float::F32([e]) => Ok(Float::F32([(round_ties_even(e as f64) as f32)])),
+                    Float::Abstract([e]) => Ok(Float::Abstract([e.round_ties_even()])),
+                    Float::F32([e]) => Ok(Float::F32([e.round_ties_even()])),
+                    Float::F16([e]) => {
+                        // TODO: `round_ties_even` is not available on `half::f16` yet.
+                        //
+                        // This polyfill is shamelessly [~~stolen from~~ inspired by `ndarray-image`][polyfill source],
+                        // which has licensing compatible with ours. See also
+                        // <https://github.com/rust-lang/rust/issues/96710>.
+                        //
+                        // [polyfill source]: https://github.com/imeka/ndarray-ndimage/blob/8b14b4d6ecfbc96a8a052f802e342a7049c68d8f/src/lib.rs#L98
+                        fn round_ties_even(x: f64) -> f64 {
+                            let i = x as i64;
+                            let f = (x - i as f64).abs();
+                            if f == 0.5 {
+                                if i & 1 == 1 {
+                                    // -1.5, 1.5, 3.5, ...
+                                    (x.abs() + 0.5).copysign(x)
+                                } else {
+                                    (x.abs() - 0.5).copysign(x)
+                                }
+                            } else {
+                                x.round()
+                            }
+                        }
+
+                        Ok(Float::F16([(f16::from_f64(round_ties_even(f64::from(e))))]))
+                    }
                 })
             }
             crate::MathFunction::Fract => {
@@ -1258,15 +1286,27 @@ impl<'a> ConstantEvaluator<'a> {
                 )
             }
             crate::MathFunction::Step => {
-                component_wise_float!(self, span, [arg, arg1.unwrap()], |edge, x| {
-                    Ok([if edge <= x { 1.0 } else { 0.0 }])
+                component_wise_float(self, span, [arg, arg1.unwrap()], |x| match x {
+                    Float::Abstract([edge, x]) => {
+                        Ok(Float::Abstract([if edge <= x { 1.0 } else { 0.0 }]))
+                    }
+                    Float::F32([edge, x]) => Ok(Float::F32([if edge <= x { 1.0 } else { 0.0 }])),
+                    Float::F16([edge, x]) => Ok(Float::F16([if edge <= x {
+                        f16::one()
+                    } else {
+                        f16::zero()
+                    }])),
                 })
             }
             crate::MathFunction::Sqrt => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.sqrt()]) })
             }
             crate::MathFunction::InverseSqrt => {
-                component_wise_float!(self, span, [arg], |e| { Ok([1. / e.sqrt()]) })
+                component_wise_float(self, span, [arg], |e| match e {
+                    Float::Abstract([e]) => Ok(Float::Abstract([1. / e.sqrt()])),
+                    Float::F32([e]) => Ok(Float::F32([1. / e.sqrt()])),
+                    Float::F16([e]) => Ok(Float::F16([f16::from_f32(1. / f32::from(e).sqrt())])),
+                })
             }
 
             // bits
@@ -1546,7 +1586,7 @@ impl<'a> ConstantEvaluator<'a> {
             let from = format!("{:?} {:?}", expr, self.expressions[expr]);
 
             #[cfg(feature = "wgsl-in")]
-            let to = target.to_wgsl();
+            let to = target.to_wgsl_for_diagnostics();
 
             #[cfg(not(feature = "wgsl-in"))]
             let to = format!("{target:?}");
@@ -1561,6 +1601,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::I32(v) => v,
                         Literal::U32(v) => v as i32,
                         Literal::F32(v) => v as i32,
+                        Literal::F16(v) => f16::to_i32(&v).unwrap(), //Only None on NaN or Inf
                         Literal::Bool(v) => v as i32,
                         Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
@@ -1572,6 +1613,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::I32(v) => v as u32,
                         Literal::U32(v) => v,
                         Literal::F32(v) => v as u32,
+                        Literal::F16(v) => f16::to_u32(&v).unwrap(), //Only None on NaN or Inf
                         Literal::Bool(v) => v as u32,
                         Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
@@ -1587,6 +1629,7 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F64(v) => v as i64,
                         Literal::I64(v) => v,
                         Literal::U64(v) => v as i64,
+                        Literal::F16(v) => f16::to_i64(&v).unwrap(), //Only None on NaN or Inf
                         Literal::AbstractInt(v) => i64::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => i64::try_from_abstract(v)?,
                     }),
@@ -1598,8 +1641,21 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F64(v) => v as u64,
                         Literal::I64(v) => v as u64,
                         Literal::U64(v) => v,
+                        Literal::F16(v) => f16::to_u64(&v).unwrap(), //Only None on NaN or Inf
                         Literal::AbstractInt(v) => u64::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => u64::try_from_abstract(v)?,
+                    }),
+                    Sc::F16 => Literal::F16(match literal {
+                        Literal::F16(v) => v,
+                        Literal::F32(v) => f16::from_f32(v),
+                        Literal::F64(v) => f16::from_f64(v),
+                        Literal::Bool(v) => f16::from_u32(v as u32).unwrap(),
+                        Literal::I64(v) => f16::from_i64(v).unwrap(),
+                        Literal::U64(v) => f16::from_u64(v).unwrap(),
+                        Literal::I32(v) => f16::from_i32(v).unwrap(),
+                        Literal::U32(v) => f16::from_u32(v).unwrap(),
+                        Literal::AbstractFloat(v) => f16::try_from_abstract(v)?,
+                        Literal::AbstractInt(v) => f16::try_from_abstract(v)?,
                     }),
                     Sc::F32 => Literal::F32(match literal {
                         Literal::I32(v) => v as f32,
@@ -1609,12 +1665,14 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
                         }
+                        Literal::F16(v) => f16::to_f32(v),
                         Literal::AbstractInt(v) => f32::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => f32::try_from_abstract(v)?,
                     }),
                     Sc::F64 => Literal::F64(match literal {
                         Literal::I32(v) => v as f64,
                         Literal::U32(v) => v as f64,
+                        Literal::F16(v) => f16::to_f64(v),
                         Literal::F32(v) => v as f64,
                         Literal::F64(v) => v,
                         Literal::Bool(v) => v as u32 as f64,
@@ -1626,12 +1684,11 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::I32(v) => v != 0,
                         Literal::U32(v) => v != 0,
                         Literal::F32(v) => v != 0.0,
+                        Literal::F16(v) => v != f16::zero(),
                         Literal::Bool(v) => v,
-                        Literal::F64(_)
-                        | Literal::I64(_)
-                        | Literal::U64(_)
-                        | Literal::AbstractInt(_)
-                        | Literal::AbstractFloat(_) => {
+                        Literal::AbstractInt(v) => v != 0,
+                        Literal::AbstractFloat(v) => v != 0.0,
+                        Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
                         }
                     }),
@@ -1717,6 +1774,8 @@ impl<'a> ConstantEvaluator<'a> {
         target: crate::Scalar,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let expr = self.check_and_get(expr)?;
+
         let Expression::Compose { ty, ref components } = self.expressions[expr] else {
             return self.cast(expr, target, span);
         };
@@ -1742,7 +1801,7 @@ impl<'a> ConstantEvaluator<'a> {
                 self.types.insert(Type { name: None, inner }, span)
             }
         };
-        let mut layouter = std::mem::take(self.layouter);
+        let mut layouter = core::mem::take(self.layouter);
         layouter.update(self.to_ctx()).unwrap();
         *self.layouter = layouter;
 
@@ -1780,6 +1839,7 @@ impl<'a> ConstantEvaluator<'a> {
                     Literal::I32(v) => Literal::I32(v.wrapping_neg()),
                     Literal::I64(v) => Literal::I64(v.wrapping_neg()),
                     Literal::F32(v) => Literal::F32(-v),
+                    Literal::F16(v) => Literal::F16(-v),
                     Literal::AbstractInt(v) => Literal::AbstractInt(v.wrapping_neg()),
                     Literal::AbstractFloat(v) => Literal::AbstractFloat(-v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
@@ -1928,6 +1988,14 @@ impl<'a> ConstantEvaluator<'a> {
                                 _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                             })
                         }
+                        (Literal::F16(a), Literal::F16(b)) => Literal::F16(match op {
+                            BinaryOperator::Add => a + b,
+                            BinaryOperator::Subtract => a - b,
+                            BinaryOperator::Multiply => a * b,
+                            BinaryOperator::Divide => a / b,
+                            BinaryOperator::Modulo => a % b,
+                            _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
+                        }),
                         (Literal::AbstractInt(a), Literal::AbstractInt(b)) => {
                             Literal::AbstractInt(match op {
                                 BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
@@ -2176,16 +2244,53 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
+    /// Returns the total number of components, after flattening, of a vector compose expression.
+    fn vector_compose_flattened_size(
+        &self,
+        components: &[Handle<Expression>],
+    ) -> Result<usize, ConstantEvaluatorError> {
+        components
+            .iter()
+            .try_fold(0, |acc, c| -> Result<_, ConstantEvaluatorError> {
+                let size = match *self.resolve_type(*c)?.inner_with(self.types) {
+                    TypeInner::Scalar(_) => 1,
+                    // We trust that the vector size of `component` is correct,
+                    // as it will have already been validated when `component`
+                    // was registered.
+                    TypeInner::Vector { size, .. } => size as usize,
+                    _ => return Err(ConstantEvaluatorError::InvalidVectorComposeComponent),
+                };
+                Ok(acc + size)
+            })
+    }
+
     fn register_evaluated_expr(
         &mut self,
         expr: Expression,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        // It suffices to only check literals, since we only register one
-        // expression at a time, `Compose` expressions can only refer to other
-        // expressions, and `ZeroValue` expressions are always okay.
+        // It suffices to only check_literal_value() for `Literal` expressions,
+        // since we only register one expression at a time, `Compose`
+        // expressions can only refer to other expressions, and `ZeroValue`
+        // expressions are always okay.
         if let Expression::Literal(literal) = expr {
             crate::valid::check_literal_value(literal)?;
+        }
+
+        // Ensure vector composes contain the correct number of components. We
+        // do so here when each compose is registered to avoid having to deal
+        // with the mess each time the compose is used in another expression.
+        if let Expression::Compose { ty, ref components } = expr {
+            if let TypeInner::Vector { size, scalar: _ } = self.types[ty].inner {
+                let expected = size as usize;
+                let actual = self.vector_compose_flattened_size(components)?;
+                if expected != actual {
+                    return Err(ConstantEvaluatorError::InvalidVectorComposeLength {
+                        expected,
+                        actual,
+                    });
+                }
+            }
         }
 
         Ok(self.append_expr(expr, span, ExpressionKind::Const))
@@ -2424,12 +2529,18 @@ trait TryFromAbstract<T>: Sized {
     /// WGSL, we follow WGSL's conversion rules here:
     ///
     /// - WGSL §6.1.2. Conversion Rank says that automatic conversions
-    ///   to integers are either lossless or an error.
+    ///   from `AbstractInt` to an integer type are either lossless or an
+    ///   error.
     ///
-    /// - WGSL §14.6.4 Floating Point Conversion says that conversions
+    /// - WGSL §15.7.6 Floating Point Conversion says that conversions
     ///   to floating point in constant expressions and override
     ///   expressions are errors if the value is out of range for the
     ///   destination type, but rounding is okay.
+    ///
+    /// - WGSL §17.1.2 i32()/u32() constructors treat AbstractFloat as any
+    ///   other floating point type, following the scalar floating point to
+    ///   integral conversion algorithm (§15.7.6). There is no automatic
+    ///   conversion from AbstractFloat to integer types.
     ///
     /// [`AbstractInt`]: crate::Literal::AbstractInt
     /// [`Float`]: crate::Literal::Float
@@ -2509,32 +2620,78 @@ impl TryFromAbstract<f64> for f64 {
 }
 
 impl TryFromAbstract<f64> for i32 {
-    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
-        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "i32" })
+    fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
+        // https://www.w3.org/TR/WGSL/#floating-point-conversion
+        // To convert a floating point scalar value X to an integer scalar type T:
+        // * If X is a NaN, the result is an indeterminate value in T.
+        // * If X is exactly representable in the target type T, then the
+        //   result is that value.
+        // * Otherwise, the result is the value in T closest to truncate(X) and
+        //   also exactly representable in the original floating point type.
+        //
+        // A rust cast satisfies these requirements apart from "the result
+        // is... exactly representable in the original floating point type".
+        // However, i32::MIN and i32::MAX are exactly representable by f64, so
+        // we're all good.
+        Ok(value as i32)
     }
 }
 
 impl TryFromAbstract<f64> for u32 {
-    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
-        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "u32" })
+    fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
+        // As above, u32::MIN and u32::MAX are exactly representable by f64,
+        // so a simple rust cast is sufficient.
+        Ok(value as u32)
     }
 }
 
 impl TryFromAbstract<f64> for i64 {
-    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
-        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "i64" })
+    fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
+        // As above, except i64::MIN and i64::MAX are not exactly representable
+        // by f64. i64 is not part of the WGSL spec, however, so we're free to
+        // ignore that requirement.
+        Ok(value as i64)
     }
 }
 
 impl TryFromAbstract<f64> for u64 {
-    fn try_from_abstract(_: f64) -> Result<Self, ConstantEvaluatorError> {
-        Err(ConstantEvaluatorError::AutomaticConversionFloatToInt { to_type: "u64" })
+    fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
+        // As above, except u64::MAX is not exactly representable by f64. u64
+        // is not part of the WGSL spec, however, so we're free to ignore that
+        // requirement.
+        Ok(value as u64)
+    }
+}
+
+impl TryFromAbstract<f64> for f16 {
+    fn try_from_abstract(value: f64) -> Result<f16, ConstantEvaluatorError> {
+        let f = f16::from_f64(value);
+        if f.is_infinite() {
+            return Err(ConstantEvaluatorError::AutomaticConversionLossy {
+                value: format!("{value:?}"),
+                to_type: "f16",
+            });
+        }
+        Ok(f)
+    }
+}
+
+impl TryFromAbstract<i64> for f16 {
+    fn try_from_abstract(value: i64) -> Result<f16, ConstantEvaluatorError> {
+        let f = f16::from_i64(value);
+        if f.is_none() {
+            return Err(ConstantEvaluatorError::AutomaticConversionLossy {
+                value: format!("{value:?}"),
+                to_type: "f16",
+            });
+        }
+        Ok(f.unwrap())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::vec;
+    use alloc::{vec, vec::Vec};
 
     use crate::{
         Arena, Constant, Expression, Literal, ScalarKind, Type, TypeInner, UnaryOperator,

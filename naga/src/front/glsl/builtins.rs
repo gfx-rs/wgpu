@@ -1,3 +1,5 @@
+use alloc::{vec, vec::Vec};
+
 use super::{
     ast::{
         BuiltinVariations, FunctionDeclaration, FunctionKind, Overload, ParameterInfo,
@@ -1698,13 +1700,7 @@ impl MacroCall {
                     true => {
                         let offset_arg = args[num_args];
                         num_args += 1;
-                        match ctx.lift_up_const_expression(offset_arg) {
-                            Ok(v) => Some(v),
-                            Err(e) => {
-                                frontend.errors.push(e);
-                                None
-                            }
-                        }
+                        Some(offset_arg)
                     }
                     false => None,
                 };

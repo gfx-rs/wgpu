@@ -17,6 +17,7 @@ pub mod msaa_line;
 pub mod multiple_render_targets;
 pub mod ray_cube_compute;
 pub mod ray_cube_fragment;
+pub mod ray_cube_normals;
 pub mod ray_scene;
 pub mod ray_shadows;
 pub mod ray_traced_triangle;

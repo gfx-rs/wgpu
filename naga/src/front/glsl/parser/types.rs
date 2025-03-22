@@ -1,4 +1,5 @@
-use std::num::NonZeroU32;
+use alloc::{vec, vec::Vec};
+use core::num::NonZeroU32;
 
 use crate::{
     front::glsl::{
@@ -343,6 +344,13 @@ impl ParsingContext<'_> {
                         QualifierKey::Layout,
                         QualifierValue::Layout(StructLayout::Std430),
                     ),
+                    "index" => {
+                        self.expect(frontend, TokenValue::Assign)?;
+                        let (value, end_meta) = self.parse_uint_constant(frontend, ctx)?;
+                        token.meta.subsume(end_meta);
+
+                        (QualifierKey::Index, QualifierValue::Uint(value))
+                    }
                     word => {
                         if let Some(format) = map_image_format(word) {
                             (QualifierKey::Format, QualifierValue::Format(format))

@@ -9,7 +9,7 @@ struct gen_gl_PerVertex {
     float gen_gl_ClipDistance[1];
     float gen_gl_CullDistance[1];
 };
-struct type_4 {
+struct VertexOutput {
     vec2 member;
     vec4 gen_gl_Position;
 };
@@ -41,7 +41,7 @@ void main() {
     main_1();
     vec2 _e7 = v_uv;
     vec4 _e8 = unnamed.gen_gl_Position;
-    type_4 _tmp_return = type_4(_e7, _e8);
+    VertexOutput _tmp_return = VertexOutput(_e7, _e8);
     _vs2fs_location0 = _tmp_return.member;
     gl_Position = _tmp_return.gen_gl_Position;
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);

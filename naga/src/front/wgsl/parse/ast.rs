@@ -1,9 +1,11 @@
+use alloc::vec::Vec;
+use core::hash::Hash;
+
 use crate::diagnostic_filter::DiagnosticFilterNode;
 use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::Scalar;
 use crate::{Arena, FastIndexSet, Handle, Span};
-use std::hash::Hash;
 
 #[derive(Debug, Default)]
 pub struct TranslationUnit<'a> {
@@ -68,7 +70,7 @@ pub struct Dependency<'a> {
 }
 
 impl Hash for Dependency<'_> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.ident.hash(state);
     }
 }
@@ -142,9 +144,9 @@ pub enum Binding<'a> {
     BuiltIn(crate::BuiltIn),
     Location {
         location: Handle<Expression<'a>>,
-        second_blend_source: bool,
         interpolation: Option<crate::Interpolation>,
         sampling: Option<crate::Sampling>,
+        blend_src: Option<Handle<Expression<'a>>>,
     },
 }
 
@@ -241,8 +243,12 @@ pub enum Type<'a> {
     Sampler {
         comparison: bool,
     },
-    AccelerationStructure,
-    RayQuery,
+    AccelerationStructure {
+        vertex_return: bool,
+    },
+    RayQuery {
+        vertex_return: bool,
+    },
     RayDesc,
     RayIntersection,
     BindingArray {

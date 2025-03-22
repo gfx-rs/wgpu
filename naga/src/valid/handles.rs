@@ -1,17 +1,18 @@
 //! Implementation of `Validator::validate_module_handles`.
 
+use core::{convert::TryInto, hash::Hash};
+
+use super::ValidationError;
+use crate::non_max_u32::NonMaxU32;
 use crate::{
     arena::{BadHandle, BadRangeError},
     diagnostic_filter::DiagnosticFilterNode,
     Handle,
 };
-
-use crate::non_max_u32::NonMaxU32;
 use crate::{Arena, UniqueArena};
 
-use super::ValidationError;
-
-use std::{convert::TryInto, hash::Hash};
+#[cfg(test)]
+use alloc::string::ToString;
 
 impl super::Validator {
     /// Validates that all handles within `module` are:
@@ -208,7 +209,6 @@ impl super::Validator {
                     handle_and_expr,
                     constants,
                     overrides,
-                    global_expressions,
                     types,
                     local_variables,
                     global_variables,
@@ -243,6 +243,9 @@ impl super::Validator {
             validate_type(ty)?;
         }
         if let Some(ty) = special_types.ray_intersection {
+            validate_type(ty)?;
+        }
+        if let Some(ty) = special_types.ray_vertex_return {
             validate_type(ty)?;
         }
 
@@ -309,8 +312,8 @@ impl super::Validator {
             | crate::TypeInner::Atomic { .. }
             | crate::TypeInner::Image { .. }
             | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure
-            | crate::TypeInner::RayQuery => None,
+            | crate::TypeInner::AccelerationStructure { .. }
+            | crate::TypeInner::RayQuery { .. } => None,
             crate::TypeInner::Pointer { base, space: _ } => {
                 handle.check_dep(base)?;
                 None
@@ -319,15 +322,12 @@ impl super::Validator {
             | crate::TypeInner::BindingArray { base, size, .. } => {
                 handle.check_dep(base)?;
                 match size {
-                    crate::ArraySize::Pending(pending) => match pending {
-                        crate::PendingArraySize::Expression(expr) => Some(expr),
-                        crate::PendingArraySize::Override(h) => {
-                            Self::validate_override_handle(h, overrides)?;
-                            let r#override = &overrides[h];
-                            handle.check_dep(r#override.ty)?;
-                            r#override.init
-                        }
-                    },
+                    crate::ArraySize::Pending(h) => {
+                        Self::validate_override_handle(h, overrides)?;
+                        let r#override = &overrides[h];
+                        handle.check_dep(r#override.ty)?;
+                        r#override.init
+                    }
                     crate::ArraySize::Constant(_) | crate::ArraySize::Dynamic => None,
                 }
             }
@@ -385,7 +385,6 @@ impl super::Validator {
         (handle, expression): (Handle<crate::Expression>, &crate::Expression),
         constants: &Arena<crate::Constant>,
         overrides: &Arena<crate::Override>,
-        global_expressions: &Arena<crate::Expression>,
         types: &UniqueArena<crate::Type>,
         local_variables: &Arena<crate::LocalVariable>,
         global_variables: &Arena<crate::GlobalVariable>,
@@ -395,8 +394,6 @@ impl super::Validator {
     ) -> Result<(), InvalidHandleError> {
         let validate_constant = |handle| Self::validate_constant_handle(handle, constants);
         let validate_override = |handle| Self::validate_override_handle(handle, overrides);
-        let validate_const_expr =
-            |handle| Self::validate_expression_handle(handle, global_expressions);
         let validate_type = |handle| Self::validate_type_handle(handle, types);
 
         match *expression {
@@ -446,15 +443,12 @@ impl super::Validator {
                 level,
                 depth_ref,
             } => {
-                if let Some(offset) = offset {
-                    validate_const_expr(offset)?;
-                }
-
                 handle
                     .check_dep(image)?
                     .check_dep(sampler)?
                     .check_dep(coordinate)?
-                    .check_dep_opt(array_index)?;
+                    .check_dep_opt(array_index)?
+                    .check_dep_opt(offset)?;
 
                 match level {
                     crate::SampleLevel::Auto | crate::SampleLevel::Zero => (),
@@ -556,6 +550,10 @@ impl super::Validator {
                 handle.check_dep(array)?;
             }
             crate::Expression::RayQueryGetIntersection {
+                query,
+                committed: _,
+            }
+            | crate::Expression::RayQueryVertexPositions {
                 query,
                 committed: _,
             } => {
@@ -838,9 +836,9 @@ impl<T> Handle<T> {
             };
             Err(FwdDepError {
                 subject: erase_handle_type(self),
-                subject_kind: std::any::type_name::<T>(),
+                subject_kind: core::any::type_name::<T>(),
                 depends_on: erase_handle_type(depends_on),
-                depends_on_kind: std::any::type_name::<T>(),
+                depends_on_kind: core::any::type_name::<T>(),
             })
         }
     }
@@ -915,7 +913,7 @@ fn constant_deps() {
 #[test]
 fn array_size_deps() {
     use super::Validator;
-    use crate::{ArraySize, Expression, PendingArraySize, Scalar, Span, Type, TypeInner};
+    use crate::{ArraySize, Expression, Override, Scalar, Span, Type, TypeInner};
 
     let nowhere = Span::default();
 
@@ -931,12 +929,21 @@ fn array_size_deps() {
     let ex_zero = m
         .global_expressions
         .append(Expression::ZeroValue(ty_u32), nowhere);
+    let ty_handle = m.overrides.append(
+        Override {
+            name: None,
+            id: None,
+            ty: ty_u32,
+            init: Some(ex_zero),
+        },
+        nowhere,
+    );
     let ty_arr = m.types.insert(
         Type {
             name: Some("bad_array".to_string()),
             inner: TypeInner::Array {
                 base: ty_u32,
-                size: ArraySize::Pending(PendingArraySize::Expression(ex_zero)),
+                size: ArraySize::Pending(ty_handle),
                 stride: 4,
             },
         },
@@ -955,7 +962,7 @@ fn array_size_deps() {
 #[test]
 fn array_size_override() {
     use super::Validator;
-    use crate::{ArraySize, Override, PendingArraySize, Scalar, Span, Type, TypeInner};
+    use crate::{ArraySize, Override, Scalar, Span, Type, TypeInner};
 
     let nowhere = Span::default();
 
@@ -975,7 +982,7 @@ fn array_size_override() {
             name: Some("bad_array".to_string()),
             inner: TypeInner::Array {
                 base: ty_u32,
-                size: ArraySize::Pending(PendingArraySize::Override(bad_override)),
+                size: ArraySize::Pending(bad_override),
                 stride: 4,
             },
         },
@@ -988,7 +995,7 @@ fn array_size_override() {
 #[test]
 fn override_init_deps() {
     use super::Validator;
-    use crate::{ArraySize, Expression, Override, PendingArraySize, Scalar, Span, Type, TypeInner};
+    use crate::{ArraySize, Expression, Override, Scalar, Span, Type, TypeInner};
 
     let nowhere = Span::default();
 
@@ -1018,7 +1025,7 @@ fn override_init_deps() {
             name: Some("bad_array".to_string()),
             inner: TypeInner::Array {
                 base: ty_u32,
-                size: ArraySize::Pending(PendingArraySize::Override(r#override)),
+                size: ArraySize::Pending(r#override),
                 stride: 4,
             },
         },

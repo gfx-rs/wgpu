@@ -1,5 +1,4 @@
 god_mode = true
-targets = "SPIRV | METAL | GLSL | HLSL | WGSL"
 
 [msl]
 fake_missing_bindings = true

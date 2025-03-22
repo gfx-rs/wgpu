@@ -13,7 +13,7 @@ env:
   #
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.83"
+  REPO_MSRV: "1.85"
   RUSTFLAGS: -D warnings
 
 jobs:
@@ -30,16 +30,19 @@ jobs:
             path: "examples/standalone/01_hello_compute"
           - name: "02-hello-window"
             path: "examples/standalone/02_hello_window"
+          - name: "custom_backend"
+            path: "examples/standalone/custom_backend"
 
     name: "${{ matrix.name }}"
 
     steps:
       - uses: actions/checkout@v4
 
+      # We can't rely on an override here, as that would only set
+      # the toolchain for the current directory, not the newly generated project.
       - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
-          rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
       - name: Disable debug symbols
@@ -74,4 +77,4 @@ jobs:
             [patch.crates-io]
             wgpu = { path = "../wgpu/wgpu" }
           EOF
-          cargo check
+          cargo +${{ env.REPO_MSRV }} check

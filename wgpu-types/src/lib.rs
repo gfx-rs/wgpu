@@ -16,11 +16,14 @@ extern crate alloc;
 
 use alloc::{string::String, vec, vec::Vec};
 use core::{
+    fmt,
     hash::{Hash, Hasher},
-    mem::size_of,
+    mem,
     num::NonZeroU32,
     ops::Range,
 };
+
+use bytemuck::{Pod, Zeroable};
 
 #[cfg(any(feature = "serde", test))]
 use {
@@ -29,6 +32,7 @@ use {
 };
 
 pub mod assertions;
+mod cast_utils;
 mod counters;
 mod env;
 mod features;
@@ -39,35 +43,71 @@ pub use counters::*;
 pub use features::*;
 pub use instance::*;
 
-/// Integral type used for buffer offsets.
+/// Integral type used for [`Buffer`] offsets and sizes.
+///
+/// [`Buffer`]: ../wgpu/struct.Buffer.html
 pub type BufferAddress = u64;
-/// Integral type used for buffer slice sizes.
+
+/// Integral type used for [`BufferSlice`] sizes.
+///
+/// Note that while this type is non-zero, a [`Buffer`] *per se* can have a size of zero,
+/// but no slice or mapping can be created from it.
+///
+/// [`Buffer`]: ../wgpu/struct.Buffer.html
+/// [`BufferSlice`]: ../wgpu/struct.BufferSlice.html
 pub type BufferSize = core::num::NonZeroU64;
+
 /// Integral type used for binding locations in shaders.
+///
+/// Used in [`VertexAttribute`]s and errors.
+///
+/// [`VertexAttribute`]: ../wgpu/struct.VertexAttribute.html
 pub type ShaderLocation = u32;
-/// Integral type used for dynamic bind group offsets.
+
+/// Integral type used for
+/// [dynamic bind group offsets](../wgpu/struct.RenderPass.html#method.set_bind_group).
 pub type DynamicOffset = u32;
 
-/// Buffer-Texture copies must have [`bytes_per_row`] aligned to this number.
+/// Buffer-to-texture copies must have [`bytes_per_row`] aligned to this number.
 ///
-/// This doesn't apply to [`Queue::write_texture`][Qwt].
+/// This doesn't apply to [`Queue::write_texture`][Qwt], only to [`copy_buffer_to_texture()`].
 ///
 /// [`bytes_per_row`]: TexelCopyBufferLayout::bytes_per_row
+/// [`copy_buffer_to_texture()`]: ../wgpu/struct.Queue.html#method.copy_buffer_to_texture
 /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
-/// An offset into the query resolve buffer has to be aligned to this.
+
+/// An [offset into the query resolve buffer] has to be aligned to this.
+///
+/// [offset into the query resolve buffer]: ../wgpu/struct.CommandEncoder.html#method.resolve_query_set
 pub const QUERY_RESOLVE_BUFFER_ALIGNMENT: BufferAddress = 256;
+
 /// Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
-/// Size to align mappings.
+
+/// Minimum alignment of buffer mappings.
+///
+/// The range passed to [`map_async()`] or [`get_mapped_range()`] must be at least this aligned.
+///
+/// [`map_async()`]: ../wgpu/struct.Buffer.html#method.map_async
+/// [`get_mapped_range()`]: ../wgpu/struct.Buffer.html#method.get_mapped_range
 pub const MAP_ALIGNMENT: BufferAddress = 8;
-/// Vertex buffer strides have to be aligned to this number.
+
+/// [Vertex buffer strides] have to be a multiple of this number.
+///
+/// [Vertex buffer strides]: ../wgpu/struct.VertexBufferLayout.html#structfield.array_stride
 pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
-/// Alignment all push constants need
+/// Ranges of [writes to push constant storage] must be at least this aligned.
+///
+/// [writes to push constant storage]: ../wgpu/struct.RenderPass.html#method.set_push_constants
 pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
-/// Maximum queries in a query set
+
+/// Maximum queries in a [`QuerySetDescriptor`].
 pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
-/// Size of a single piece of query data.
+
+/// Size in bytes of a single piece of [query] data.
+///
+/// [query]: ../wgpu/struct.QuerySet.html
 pub const QUERY_SIZE: u32 = 8;
 
 /// Backends supported by wgpu.
@@ -111,6 +151,16 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// Array of all [`Backend`] values, corresponding to [`Backends::all()`].
+    pub const ALL: [Backend; Backends::all().bits().count_ones() as usize] = [
+        Self::Noop,
+        Self::Vulkan,
+        Self::Metal,
+        Self::Dx12,
+        Self::Gl,
+        Self::BrowserWebGpu,
+    ];
+
     /// Returns the string name of the backend.
     #[must_use]
     pub const fn to_str(self) -> &'static str {
@@ -310,6 +360,88 @@ impl<S> Default for RequestAdapterOptions<S> {
             force_fallback_adapter: false,
             compatible_surface: None,
         }
+    }
+}
+
+/// Error when [`Instance::request_adapter()`] fails.
+///
+/// This type is not part of the WebGPU standard, where `requestAdapter()` would simply return null.
+///
+/// [`Instance::request_adapter()`]: ../wgpu/struct.Instance.html#method.request_adapter
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum RequestAdapterError {
+    /// No adapter available via the instance’s backends matched the request’s adapter criteria.
+    NotFound {
+        // These fields must be set by wgpu-core and wgpu, but are not intended to be stable API,
+        // only data for the production of the error message.
+        #[doc(hidden)]
+        active_backends: Backends,
+        #[doc(hidden)]
+        requested_backends: Backends,
+        #[doc(hidden)]
+        supported_backends: Backends,
+        #[doc(hidden)]
+        no_fallback_backends: Backends,
+        #[doc(hidden)]
+        no_adapter_backends: Backends,
+        #[doc(hidden)]
+        incompatible_surface_backends: Backends,
+    },
+
+    /// Attempted to obtain adapter specified by environment variable, but the environment variable
+    /// was not set.
+    EnvNotSet,
+}
+
+impl core::error::Error for RequestAdapterError {}
+impl fmt::Display for RequestAdapterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RequestAdapterError::NotFound {
+                active_backends,
+                requested_backends,
+                supported_backends,
+                no_fallback_backends,
+                no_adapter_backends,
+                incompatible_surface_backends,
+            } => {
+                write!(f, "No suitable graphics adapter found; ")?;
+                let mut first = true;
+                for backend in Backend::ALL {
+                    let bit = Backends::from(backend);
+                    let comma = if mem::take(&mut first) { "" } else { ", " };
+                    let explanation = if !requested_backends.contains(bit) {
+                        // We prefer reporting this, because it makes the error most stable with
+                        // respect to what is directly controllable by the caller, as opposed to
+                        // compilation options or the run-time environment.
+                        "not requested"
+                    } else if !supported_backends.contains(bit) {
+                        "support not compiled in"
+                    } else if no_adapter_backends.contains(bit) {
+                        "found no adapters"
+                    } else if incompatible_surface_backends.contains(bit) {
+                        "not compatible with provided surface"
+                    } else if no_fallback_backends.contains(bit) {
+                        "had no fallback adapters"
+                    } else if !active_backends.contains(bit) {
+                        // Backend requested but not active in this instance
+                        if backend == Backend::Noop {
+                            "not explicitly enabled"
+                        } else {
+                            "drivers/libraries could not be loaded"
+                        }
+                    } else {
+                        // This path should be unreachable, but don't crash.
+                        "[unknown reason]"
+                    };
+                    write!(f, "{comma}{backend} {explanation}")?;
+                }
+            }
+            RequestAdapterError::EnvNotSet => f.write_str("WGPU_ADAPTER_NAME not set")?,
+        }
+        Ok(())
     }
 }
 
@@ -1113,6 +1245,9 @@ pub struct DeviceDescriptor<L> {
     pub required_limits: Limits,
     /// Hints for memory allocation strategies.
     pub memory_hints: MemoryHints,
+    /// Whether API tracing for debugging is enabled,
+    /// and where the trace is written if so.
+    pub trace: Trace,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -1124,8 +1259,29 @@ impl<L> DeviceDescriptor<L> {
             required_features: self.required_features,
             required_limits: self.required_limits.clone(),
             memory_hints: self.memory_hints.clone(),
+            trace: self.trace.clone(),
         }
     }
+}
+
+/// Controls API call tracing and specifies where the trace is written.
+///
+/// **Note:** Tracing is currently unavailable.
+/// See [issue 5974](https://github.com/gfx-rs/wgpu/issues/5974) for updates.
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+// This enum must be non-exhaustive so that enabling the "trace" feature is not a semver break.
+#[non_exhaustive]
+pub enum Trace {
+    /// Tracing disabled.
+    #[default]
+    Off,
+
+    /// Tracing enabled.
+    #[cfg(feature = "trace")]
+    // This must be owned rather than `&'a Path`, because if it were that, then the lifetime
+    // parameter would be unused when the "trace" feature is disabled, which is prohibited.
+    Directory(std::path::PathBuf),
 }
 
 bitflags::bitflags! {
@@ -1152,6 +1308,10 @@ bitflags::bitflags! {
         const COMPUTE = 1 << 2;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
         const VERTEX_FRAGMENT = Self::VERTEX.bits() | Self::FRAGMENT.bits();
+        /// Binding is visible from the task shader of a mesh pipeline
+        const TASK = 1 << 3;
+        /// Binding is visible from the mesh shader of a mesh pipeline
+        const MESH = 1 << 4;
     }
 }
 
@@ -1740,20 +1900,35 @@ pub enum AstcChannel {
     Hdr,
 }
 
-/// Underlying texture data format.
+/// Format in which a texture’s texels are stored in GPU memory.
 ///
-/// If there is a conversion in the format (such as srgb -> linear), the conversion listed here is for
-/// loading from texture in a shader. When writing to the texture, the opposite conversion takes place.
+/// Certain formats additionally specify a conversion.
+/// When these formats are used in a shader, the conversion automatically takes place when loading
+/// from or storing to the texture.
+///
+/// * `Unorm` formats linearly scale the integer range of the storage format to a floating-point
+///   range of 0 to 1, inclusive.
+/// * `Snorm` formats linearly scale the integer range of the storage format to a floating-point
+///   range of &minus;1 to 1, inclusive, except that the most negative value
+///   (&minus;128 for 8-bit, &minus;32768 for 16-bit) is excluded; on conversion,
+///   it is treated as identical to the second most negative
+///   (&minus;127 for 8-bit, &minus;32767 for 16-bit),
+///   so that the positive and negative ranges are symmetric.
+/// * `UnormSrgb` formats apply the [sRGB transfer function] so that the storage is sRGB encoded
+///   while the shader works with linear intensity values.
+/// * `Uint`, `Sint`, and `Float` formats perform no conversion.
 ///
 /// Corresponds to [WebGPU `GPUTextureFormat`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureformat).
+///
+/// [sRGB transfer function]: https://en.wikipedia.org/wiki/SRGB#Transfer_function_(%22gamma%22)
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     R8Unorm,
-    /// Red channel only. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red channel only. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     R8Snorm,
     /// Red channel only. 8 bit integer per channel. Unsigned in shader.
     R8Uint,
@@ -1769,7 +1944,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     R16Unorm,
-    /// Red channel only. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red channel only. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     R16Snorm,
@@ -1777,7 +1952,7 @@ pub enum TextureFormat {
     R16Float,
     /// Red and green channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     Rg8Unorm,
-    /// Red and green channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red and green channels. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     Rg8Snorm,
     /// Red and green channels. 8 bit integer per channel. Unsigned in shader.
     Rg8Uint,
@@ -1799,7 +1974,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rg16Unorm,
-    /// Red and green channels. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red and green channels. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rg16Snorm,
@@ -1809,7 +1984,7 @@ pub enum TextureFormat {
     Rgba8Unorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     Rgba8UnormSrgb,
-    /// Red, green, blue, and alpha channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red, green, blue, and alpha channels. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     Rgba8Snorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Unsigned in shader.
     Rgba8Uint,
@@ -1849,7 +2024,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rgba16Unorm,
-    /// Red, green, blue, and alpha. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red, green, blue, and alpha. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rgba16Snorm,
@@ -1953,7 +2128,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_BC_SLICED_3D`] must be enabled to use this texture format with 3D dimension.
     Bc4RUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// Also known as RGTC1.
     ///
@@ -1969,7 +2144,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_BC_SLICED_3D`] must be enabled to use this texture format with 3D dimension.
     Bc5RgUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// Also known as RGTC2.
     ///
@@ -2042,7 +2217,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacR11Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 11 bit integer R.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacR11Snorm,
@@ -2052,7 +2227,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacRg11Unorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 11 bit integer R + 11 bit integer G.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacRg11Snorm,
@@ -4086,7 +4261,7 @@ pub enum PollStatus {
 }
 
 impl PollStatus {
-    /// Returns true if the result is [`Self::QueueEmpty`]`.
+    /// Returns true if the result is [`Self::QueueEmpty`].
     #[must_use]
     pub fn is_queue_empty(&self) -> bool {
         matches!(self, Self::QueueEmpty)
@@ -4557,13 +4732,16 @@ pub enum VertexStepMode {
 
 /// Vertex inputs (attributes) to shaders.
 ///
-/// Arrays of these can be made with the [`vertex_attr_array`]
-/// macro. Vertex attributes are assumed to be tightly packed.
+/// These are used to specify the individual attributes within a [`VertexBufferLayout`].
+/// See its documentation for an example.
+///
+/// The [`vertex_attr_array!`] macro can help create these with appropriate offsets.
 ///
 /// Corresponds to [WebGPU `GPUVertexAttribute`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexattribute).
 ///
-/// [`vertex_attr_array`]: ../wgpu/macro.vertex_attr_array.html
+/// [`vertex_attr_array!`]: ../wgpu/macro.vertex_attr_array.html
+/// [`VertexBufferLayout`]: ../wgpu/struct.VertexBufferLayout.html
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -4604,11 +4782,11 @@ pub enum VertexFormat {
     Unorm8x2 = 7,
     /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm8x4 = 8,
-    /// One signed byte (i8). [-127, 127] converted to float [-1, 1] `f32` in shaders.
+    /// One signed byte (i8). [&minus;127, 127] converted to float [&minus;1, 1] `f32` in shaders.
     Snorm8 = 9,
-    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2<f32>` in shaders.
+    /// Two signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec2<f32>` in shaders.
     Snorm8x2 = 10,
-    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4<f32>` in shaders.
+    /// Four signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec4<f32>` in shaders.
     Snorm8x4 = 11,
     /// One unsigned short (u16). `u32` in shaders.
     Uint16 = 12,
@@ -4628,11 +4806,11 @@ pub enum VertexFormat {
     Unorm16x2 = 19,
     /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm16x4 = 20,
-    /// One signed short (i16). [-32767, 32767] converted to float [-1, 1] `f32` in shaders.
+    /// One signed short (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `f32` in shaders.
     Snorm16 = 21,
-    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2<f32>` in shaders.
+    /// Two signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec2<f32>` in shaders.
     Snorm16x2 = 22,
-    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4<f32>` in shaders.
+    /// Four signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec4<f32>` in shaders.
     Snorm16x4 = 23,
     /// One half-precision float (no Rust equiv). `f32` in shaders.
     Float16 = 24,
@@ -5677,12 +5855,15 @@ fn test_max_mips() {
     );
 }
 
-/// Describes a `TextureView`.
+/// Describes a [`TextureView`].
 ///
-/// For use with `Texture::create_view`.
+/// For use with [`Texture::create_view()`].
 ///
 /// Corresponds to [WebGPU `GPUTextureViewDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
+///
+/// [`TextureView`]: ../wgpu/struct.TextureView.html
+/// [`Texture::create_view()`]: ../wgpu/struct.Texture.html#method.create_view
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TextureViewDescriptor<L> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
@@ -5902,10 +6083,15 @@ impl<L: Default> Default for SamplerDescriptor<L> {
     }
 }
 
-/// Kind of data the texture holds.
+/// Selects a subset of the data a [`Texture`] holds.
+///
+/// Used in [texture views](TextureViewDescriptor) and
+/// [texture copy operations](TexelCopyTextureInfo).
 ///
 /// Corresponds to [WebGPU `GPUTextureAspect`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureaspect).
+///
+/// [`Texture`]: ../wgpu/struct.Texture.html
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -6364,12 +6550,16 @@ pub enum SamplerBindingType {
     Comparison,
 }
 
-/// Specific type of a binding.
+/// Type of a binding in a [bind group layout][`BindGroupLayoutEntry`].
 ///
-/// For use in [`BindGroupLayoutEntry`].
+/// For each binding in a layout, a [`BindGroup`] must provide a [`BindingResource`] of the
+/// corresponding type.
 ///
 /// Corresponds to WebGPU's mutually exclusive fields within [`GPUBindGroupLayoutEntry`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry).
+///
+/// [`BindingResource`]: ../wgpu/enum.BindingResource.html
+/// [`BindGroup`]: ../wgpu/struct.BindGroup.html
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BindingType {
@@ -6496,12 +6686,24 @@ pub enum BindingType {
     /// var as: acceleration_structure;
     /// ```
     ///
+    /// or with vertex return enabled
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var as: acceleration_structure<vertex_return>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
     /// uniform accelerationStructureEXT as;
     /// ```
-    AccelerationStructure,
+    AccelerationStructure {
+        /// Whether this acceleration structure can be used to
+        /// create a ray query that has flag vertex return in the shader
+        ///
+        /// If enabled requires [`Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`]
+        vertex_return: bool,
+    },
 }
 
 impl BindingType {
@@ -6942,10 +7144,12 @@ impl<L> QuerySetDescriptor<L> {
     }
 }
 
-/// Type of query contained in a `QuerySet`.
+/// Type of query contained in a [`QuerySet`].
 ///
 /// Corresponds to [WebGPU `GPUQueryType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuquerytype).
+///
+/// [`QuerySet`]: ../wgpu/struct.QuerySet.html
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QueryType {
@@ -6973,14 +7177,16 @@ pub enum QueryType {
 }
 
 bitflags::bitflags! {
-    /// Flags for which pipeline data should be recorded.
+    /// Flags for which pipeline data should be recorded in a query.
+    ///
+    /// Used in [`QueryType`].
     ///
     /// The amount of values written when resolved depends
-    /// on the amount of flags. If 3 flags are enabled, 3
-    /// 64-bit values will be written per-query.
+    /// on the amount of flags set. For example, if 3 flags are set, 3
+    /// 64-bit values will be written per query.
     ///
     /// The order they are written is the order they are declared
-    /// in this bitflags. If you enabled `CLIPPER_PRIMITIVES_OUT`
+    /// in these bitflags. For example, if you enabled `CLIPPER_PRIMITIVES_OUT`
     /// and `COMPUTE_SHADER_INVOCATIONS`, it would write 16 bytes,
     /// the first 8 bytes being the primitive out value, the last 8
     /// bytes being the compute shader invocation count.
@@ -7011,7 +7217,7 @@ bitflags::bitflags! {
 
 /// Argument buffer layout for `draw_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DrawIndirectArgs {
     /// The number of vertices to draw.
     pub vertex_count: u32,
@@ -7029,18 +7235,13 @@ impl DrawIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written in a buffer.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            core::mem::transmute(core::slice::from_raw_parts(
-                core::ptr::from_ref(self).cast::<u8>(),
-                size_of::<Self>(),
-            ))
-        }
+        bytemuck::bytes_of(self)
     }
 }
 
 /// Argument buffer layout for `draw_indexed_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DrawIndexedIndirectArgs {
     /// The number of indices to draw.
     pub index_count: u32,
@@ -7060,18 +7261,13 @@ impl DrawIndexedIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written in a buffer.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            core::mem::transmute(core::slice::from_raw_parts(
-                core::ptr::from_ref(self).cast::<u8>(),
-                size_of::<Self>(),
-            ))
-        }
+        bytemuck::bytes_of(self)
     }
 }
 
 /// Argument buffer layout for `dispatch_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DispatchIndirectArgs {
     /// The number of work groups in X dimension.
     pub x: u32,
@@ -7085,12 +7281,7 @@ impl DispatchIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written into a buffer.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            core::mem::transmute(core::slice::from_raw_parts(
-                core::ptr::from_ref(self).cast::<u8>(),
-                size_of::<Self>(),
-            ))
-        }
+        bytemuck::bytes_of(self)
     }
 }
 
@@ -7284,6 +7475,8 @@ bitflags::bitflags!(
         /// Use `BlasTriangleGeometry::transform_buffer` when building a BLAS (only allowed in
         /// BLAS creation)
         const USE_TRANSFORM = 1 << 5;
+        /// Allow retrieval of the vertices of the triangle hit by a ray.
+        const ALLOW_RAY_HIT_VERTEX_RETURN = 1 << 6;
     }
 );
 

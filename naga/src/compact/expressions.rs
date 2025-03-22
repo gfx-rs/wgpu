@@ -150,10 +150,7 @@ impl ExpressionTracer<'_> {
                 self.expressions_used
                     .insert_iter([image, sampler, coordinate]);
                 self.expressions_used.insert_iter(array_index);
-                match self.global_expressions_used {
-                    Some(ref mut used) => used.insert_iter(offset),
-                    None => self.expressions_used.insert_iter(offset),
-                }
+                self.expressions_used.insert_iter(offset);
                 use crate::SampleLevel as Sl;
                 match *level {
                     Sl::Auto | Sl::Zero => {}
@@ -184,6 +181,12 @@ impl ExpressionTracer<'_> {
                     Iq::Size { level } => self.expressions_used.insert_iter(level),
                     Iq::NumLevels | Iq::NumLayers | Iq::NumSamples => {}
                 }
+            }
+            Ex::RayQueryVertexPositions {
+                query,
+                committed: _,
+            } => {
+                self.expressions_used.insert(query);
             }
             Ex::Unary { op: _, expr } => {
                 self.expressions_used.insert(expr);
@@ -318,9 +321,7 @@ impl ModuleMap {
                 adjust(sampler);
                 adjust(coordinate);
                 operand_map.adjust_option(array_index);
-                if let Some(ref mut offset) = *offset {
-                    self.global_expressions.adjust(offset);
-                }
+                operand_map.adjust_option(offset);
                 self.adjust_sample_level(level, operand_map);
                 operand_map.adjust_option(depth_ref);
             }
@@ -399,6 +400,10 @@ impl ModuleMap {
             Ex::SubgroupOperationResult { ref mut ty } => self.types.adjust(ty),
             Ex::ArrayLength(ref mut expr) => adjust(expr),
             Ex::RayQueryGetIntersection {
+                ref mut query,
+                committed: _,
+            } => adjust(query),
+            Ex::RayQueryVertexPositions {
                 ref mut query,
                 committed: _,
             } => adjust(query),

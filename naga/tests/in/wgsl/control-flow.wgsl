@@ -3,6 +3,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     //TODO: execution-only barrier?
     storageBarrier();
     workgroupBarrier();
+    textureBarrier();
 
     var pos: i32;
     // switch without cases
@@ -76,6 +77,41 @@ fn switch_case_break() {
         default: {}
     }
     return;
+}
+
+fn switch_selector_type_conversion() {
+    switch (0u) {
+        case 0: {
+        }
+        default: {
+        }
+    }
+
+    switch (0) {
+        case 0u: {
+        }
+        default: {
+        }
+    }
+}
+
+const ONE = 1;
+fn switch_const_expr_case_selectors() {
+    const TWO = 2;
+    switch (0) {
+        case i32(): {
+        }
+        case ONE: {
+        }
+        case TWO: {
+        }
+        case 1 + 2: {
+        }
+        case vec4(4).x: {
+        }
+        default: {
+        }
+    }
 }
 
 fn loop_switch_continue(x: i32) {

@@ -1,24 +1,31 @@
+//! Formatting WGSL front end error messages.
+
+use crate::common::wgsl::TryToWgsl;
 use crate::diagnostic_filter::ConflictingDiagnosticRuleError;
-use crate::front::wgsl::parse::directive::enable_extension::{
-    EnableExtension, UnimplementedEnableExtension,
-};
-use crate::front::wgsl::parse::directive::language_extension::{
+use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
+use crate::{Scalar, SourceLocation, Span};
+
+use super::parse::directive::enable_extension::{EnableExtension, UnimplementedEnableExtension};
+use super::parse::directive::language_extension::{
     LanguageExtension, UnimplementedLanguageExtension,
 };
-use crate::front::wgsl::parse::lexer::Token;
-use crate::front::wgsl::Scalar;
-use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
-use crate::{SourceLocation, Span};
+use super::parse::lexer::Token;
+
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
-use std::borrow::Cow;
-use std::ops::Range;
 use termcolor::{ColorChoice, NoColor, StandardStream};
 use thiserror::Error;
 
-#[cfg(test)]
-use std::mem::size_of;
+use alloc::{
+    borrow::Cow,
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::ops::Range;
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
@@ -102,14 +109,14 @@ impl ParseError {
     }
 }
 
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.message)
     }
 }
 
-impl std::error::Error for ParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl core::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         None
     }
 }
@@ -146,8 +153,6 @@ pub enum NumberError {
     Invalid,
     #[error("numeric literal not representable by target type")]
     NotRepresentable,
-    #[error("unimplemented f16 type")]
-    UnimplementedF16,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -168,8 +173,8 @@ pub(crate) enum Error<'a> {
     BadTexture(Span),
     BadTypeCast {
         span: Span,
-        from_type: Box<str>,
-        to_type: Box<str>,
+        from_type: String,
+        to_type: String,
     },
     BadTextureSampleType {
         span: Span,
@@ -205,8 +210,8 @@ pub(crate) enum Error<'a> {
     TypeNotInferable(Span),
     InitializationTypeMismatch {
         name: Span,
-        expected: Box<str>,
-        got: Box<str>,
+        expected: String,
+        got: String,
     },
     DeclMissingTypeAndInit(Span),
     MissingAttribute(&'static str, Span),
@@ -250,8 +255,13 @@ pub(crate) enum Error<'a> {
         /// the same identifier as `ident`, above.
         path: Box<[(Span, Span)]>,
     },
-    InvalidSwitchValue {
-        uint: bool,
+    InvalidSwitchSelector {
+        span: Span,
+    },
+    InvalidSwitchCase {
+        span: Span,
+    },
+    SwitchCaseTypeMismatch {
         span: Span,
     },
     CalledEntryPoint(Span),
@@ -331,24 +341,24 @@ impl From<&'static str> for DiagnosticAttributeNotSupportedPosition {
 #[derive(Clone, Debug)]
 pub(crate) struct AutoConversionError {
     pub dest_span: Span,
-    pub dest_type: Box<str>,
+    pub dest_type: String,
     pub source_span: Span,
-    pub source_type: Box<str>,
+    pub source_type: String,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct AutoConversionLeafScalarError {
     pub dest_span: Span,
-    pub dest_scalar: Box<str>,
+    pub dest_scalar: String,
     pub source_span: Span,
-    pub source_type: Box<str>,
+    pub source_type: String,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct ConcretizationFailedError {
     pub expr_span: Span,
-    pub expr_type: Box<str>,
-    pub scalar: Box<str>,
+    pub expr_type: String,
+    pub scalar: String,
     pub inner: ConstantEvaluatorError,
 }
 
@@ -435,7 +445,7 @@ impl<'a> Error<'a> {
             Error::BadMatrixScalarKind(span, scalar) => ParseError {
                 message: format!(
                     "matrix scalar type must be floating-point, but found `{}`",
-                    scalar.to_wgsl()
+                    scalar.to_wgsl_for_diagnostics()
                 ),
                 labels: vec![(span, "must be floating-point (e.g. `f32`)".into())],
                 notes: vec![],
@@ -458,7 +468,7 @@ impl<'a> Error<'a> {
             Error::BadTextureSampleType { span, scalar } => ParseError {
                 message: format!(
                     "texture sample type must be one of f32, i32 or u32, but found {}",
-                    scalar.to_wgsl()
+                    scalar.to_wgsl_for_diagnostics()
                 ),
                 labels: vec![(span, "must be one of f32, i32 or u32".into())],
                 notes: vec![],
@@ -712,7 +722,7 @@ impl<'a> Error<'a> {
 
                 ParseError {
                     message: "invalid left-hand side of assignment".into(),
-                    labels: std::iter::once((span, "cannot assign to this expression".into()))
+                    labels: core::iter::once((span, "cannot assign to this expression".into()))
                         .chain(extra_label)
                         .collect(),
                     notes,
@@ -766,26 +776,32 @@ impl<'a> Error<'a> {
                     .collect(),
                 notes: vec![],
             },
-            Error::InvalidSwitchValue { uint, span } => ParseError {
-                message: "invalid switch value".to_string(),
+            Error::InvalidSwitchSelector { span } => ParseError {
+                message: "invalid `switch` selector".to_string(),
                 labels: vec![(
                     span,
-                    if uint {
-                        "expected unsigned integer"
-                    } else {
-                        "expected signed integer"
-                    }
+                    "`switch` selector must be a scalar integer"
                     .into(),
                 )],
-                notes: vec![if uint {
-                    format!("suffix the integer with a `u`: `{}u`", &source[span])
-                } else {
-                    let span = span.to_range().unwrap();
-                    format!(
-                        "remove the `u` suffix: `{}`",
-                        &source[span.start..span.end - 1]
-                    )
-                }],
+                notes: vec![],
+            },
+            Error::InvalidSwitchCase { span } => ParseError {
+                message: "invalid `switch` case selector value".to_string(),
+                labels: vec![(
+                    span,
+                    "`switch` case selector must be a scalar integer const expression"
+                    .into(),
+                )],
+                notes: vec![],
+            },
+            Error::SwitchCaseTypeMismatch { span } => ParseError {
+                message: "invalid `switch` case selector value".to_string(),
+                labels: vec![(
+                    span,
+                    "`switch` case selector must have the same type as the `switch` selector expression"
+                    .into(),
+                )],
+                notes: vec![],
             },
             Error::CalledEntryPoint(span) => ParseError {
                 message: "entry point cannot be called".to_string(),
@@ -1008,23 +1024,22 @@ impl<'a> Error<'a> {
                 )],
             },
             Error::EnableExtensionNotEnabled { kind, span } => ParseError {
-                message: format!("`{}` enable-extension is not enabled", kind.to_ident()),
+                message: format!("the `{}` enable extension is not enabled", kind.to_ident()),
                 labels: vec![(
                     span,
                     format!(
                         concat!(
-                            "the `{}` enable-extension is needed for this functionality, ",
-                            "but it is not currently enabled"
+                            "the `{}` \"Enable Extension\" is needed for this functionality, ",
+                            "but it is not currently enabled."
                         ),
                         kind.to_ident()
                     )
                     .into(),
                 )],
-                #[allow(irrefutable_let_patterns)]
                 notes: if let EnableExtension::Unimplemented(kind) = kind {
                     vec![format!(
                         concat!(
-                            "This enable-extension is not yet implemented. ",
+                            "This \"Enable Extension\" is not yet implemented. ",
                             "Let Naga maintainers know that you ran into this at ",
                             "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
                             "so they can prioritize it!"
@@ -1032,7 +1047,12 @@ impl<'a> Error<'a> {
                         kind.tracking_issue_num()
                     )]
                 } else {
-                    vec![]
+                    vec![
+                        format!(
+                            "You can enable this extension by adding `enable {};` at the top of the shader, before any other items.",
+                            kind.to_ident()
+                        ),
+                    ]
                 },
             },
             Error::LanguageExtensionNotYetImplemented { kind, span } => ParseError {
@@ -1100,7 +1120,7 @@ impl<'a> Error<'a> {
                             )
                         })
                         .expect("internal error: diag. attr. rejection on empty map");
-                    std::iter::once(first)
+                    core::iter::once(first)
                         .chain(spans.map(|span| (span, "".into())))
                         .collect()
                 },
@@ -1161,9 +1181,4 @@ impl<'a> Error<'a> {
             }
         }
     }
-}
-
-#[test]
-fn test_error_size() {
-    assert!(size_of::<Error<'_>>() <= 48);
 }

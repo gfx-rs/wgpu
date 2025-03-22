@@ -1,3 +1,10 @@
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{fmt, mem};
+
 use super::{
     help,
     help::{
@@ -9,10 +16,10 @@ use super::{
 };
 use crate::{
     back::{self, Baked},
+    common,
     proc::{self, index, ExpressionKindTracker, NameKey},
     valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
-use std::{fmt, mem};
 
 const LOCATION_SEMANTIC: &str = "LOC";
 const SPECIAL_CBUF_TYPE: &str = "NagaConstants";
@@ -133,8 +140,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.names.clear();
         self.namer.reset(
             module,
-            super::keywords::RESERVED,
-            super::keywords::TYPES,
+            &super::keywords::RESERVED_SET,
             super::keywords::RESERVED_CASE_INSENSITIVE,
             super::keywords::RESERVED_PREFIXES,
             &mut self.names,
@@ -164,12 +170,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         let loop_bound_name = self.namer.call("loop_bound");
-        let decl = format!("{level}uint2 {loop_bound_name} = uint2(0u, 0u);");
-        let level = level.next();
         let max = u32::MAX;
+        // Count down from u32::MAX rather than up from 0 to avoid hang on
+        // certain Intel drivers. See <https://github.com/gfx-rs/wgpu/issues/7319>.
+        let decl = format!("{level}uint2 {loop_bound_name} = uint2({max}u, {max}u);");
+        let level = level.next();
         let break_and_inc = format!(
-            "{level}if (all({loop_bound_name} == uint2({max}u, {max}u))) {{ break; }}
-{level}{loop_bound_name} += uint2({loop_bound_name}.y == {max}u, 1u);"
+            "{level}if (all({loop_bound_name} == uint2(0u, 0u))) {{ break; }}
+{level}{loop_bound_name} -= uint2({loop_bound_name}.y == 0u, 1u);"
         );
 
         Some((decl, break_and_inc))
@@ -261,10 +269,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module_info: &valid::ModuleInfo,
         fragment_entry_point: Option<&FragmentEntryPoint<'_>>,
     ) -> Result<super::ReflectionInfo, Error> {
-        if !module.overrides.is_empty() {
-            return Err(Error::Override);
-        }
-
         self.reset(module);
 
         // Write special constants, if needed
@@ -528,16 +532,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, " : {builtin_str}")?;
             }
             Some(crate::Binding::Location {
-                second_blend_source: true,
-                ..
+                blend_src: Some(1), ..
             }) => {
                 write!(self.out, " : SV_Target1")?;
             }
-            Some(crate::Binding::Location {
-                location,
-                second_blend_source: false,
-                ..
-            }) => {
+            Some(crate::Binding::Location { location, .. }) => {
                 if stage == Some((ShaderStage::Fragment, Io::Output)) {
                     write!(self.out, " : SV_Target{location}")?;
                 } else {
@@ -999,7 +998,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             if global.space == crate::AddressSpace::Private {
                 write!(self.out, " = ")?;
                 if let Some(init) = global.init {
-                    self.write_const_expression(module, init)?;
+                    self.write_const_expression(module, init, &module.global_expressions)?;
                 } else {
                     self.write_default_init(module, global.ty)?;
                 }
@@ -1109,7 +1108,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             self.write_array_size(module, base, size)?;
         }
         write!(self.out, " = ")?;
-        self.write_const_expression(module, constant.init)?;
+        self.write_const_expression(module, constant.init, &module.global_expressions)?;
         writeln!(self.out, ";")?;
         Ok(())
     }
@@ -1122,12 +1121,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         write!(self.out, "[")?;
 
-        match size {
-            crate::ArraySize::Constant(size) => {
+        match size.resolve(module.to_ctx())? {
+            proc::IndexableLength::Known(size) => {
                 write!(self.out, "{size}")?;
             }
-            crate::ArraySize::Pending(_) => unreachable!(),
-            crate::ArraySize::Dynamic => unreachable!(),
+            proc::IndexableLength::Dynamic => unreachable!(),
         }
 
         write!(self.out, "]")?;
@@ -1172,7 +1170,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             let ty_inner = &module.types[member.ty].inner;
-            last_offset = member.offset + ty_inner.size_hlsl(module.to_ctx());
+            last_offset = member.offset + ty_inner.size_hlsl(module.to_ctx())?;
 
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
@@ -1315,7 +1313,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.out,
                     "{}{}",
                     scalar.to_hlsl_str()?,
-                    back::vector_size_str(size)
+                    common::vector_size_str(size)
                 )?;
             }
             TypeInner::Matrix {
@@ -1331,8 +1329,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     self.out,
                     "{}{}x{}",
                     scalar.to_hlsl_str()?,
-                    back::vector_size_str(columns),
-                    back::vector_size_str(rows),
+                    common::vector_size_str(columns),
+                    common::vector_size_str(rows),
                 )?;
             }
             TypeInner::Image {
@@ -1356,10 +1354,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             TypeInner::Array { base, size, .. } | TypeInner::BindingArray { base, size } => {
                 self.write_array_size(module, base, size)?;
             }
-            TypeInner::AccelerationStructure => {
+            TypeInner::AccelerationStructure { .. } => {
                 write!(self.out, "RaytracingAccelerationStructure")?;
             }
-            TypeInner::RayQuery => {
+            TypeInner::RayQuery { .. } => {
                 // these are constant flags, there are dynamic flags also but constant flags are not supported by naga
                 write!(self.out, "RayQuery<RAY_FLAG_NONE>")?;
             }
@@ -1534,7 +1532,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             match module.types[local.ty].inner {
                 // from https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#tracerayinline-example-1 it seems that ray queries shouldn't be zeroed
-                TypeInner::RayQuery => {}
+                TypeInner::RayQuery { .. } => {}
                 _ => {
                     write!(self.out, " = ")?;
                     // Write the local initializer if needed
@@ -1715,14 +1713,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
 
                     let last_case = &cases[end_case_idx];
-                    if last_case.body.last().map_or(true, |s| !s.is_terminator()) {
+                    if last_case.body.last().is_none_or(|s| !s.is_terminator()) {
                         writeln!(self.out, "{indent_level_2}break;")?;
                     }
                 } else {
                     for sta in case.body.iter() {
                         self.write_stmt(module, sta, func_ctx, indent_level_2)?;
                     }
-                    if !case.fall_through && case.body.last().map_or(true, |s| !s.is_terminator()) {
+                    if !case.fall_through && case.body.last().is_none_or(|s| !s.is_terminator()) {
                         writeln!(self.out, "{indent_level_2}break;")?;
                     }
                 }
@@ -2607,13 +2605,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         module: &Module,
         expr: Handle<crate::Expression>,
+        arena: &crate::Arena<crate::Expression>,
     ) -> BackendResult {
-        self.write_possibly_const_expression(
-            module,
-            expr,
-            &module.global_expressions,
-            |writer, expr| writer.write_const_expression(module, expr),
-        )
+        self.write_possibly_const_expression(module, expr, arena, |writer, expr| {
+            writer.write_const_expression(module, expr, arena)
+        })
     }
 
     fn write_possibly_const_expression<E>(
@@ -2634,6 +2630,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // decimal part even it's zero
                 crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
                 crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
+                crate::Literal::F16(value) => write!(self.out, "{value:?}h")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
                 // HLSL has no suffix for explicit i32 literals, but not using any suffix
                 // makes the type ambiguous which prevents overload resolution from
@@ -2653,7 +2650,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if constant.name.is_some() {
                     write!(self.out, "{}", self.names[&NameKey::Constant(handle)])?;
                 } else {
-                    self.write_const_expression(module, constant.init)?;
+                    self.write_const_expression(module, constant.init, &module.global_expressions)?;
                 }
             }
             Expression::ZeroValue(ty) => {
@@ -2694,7 +2691,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write_expression(self, value)?;
                 write!(self.out, ").{number_of_components}")?
             }
-            _ => unreachable!(),
+            _ => {
+                return Err(Error::Override);
+            }
         }
 
         Ok(())
@@ -2964,7 +2963,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             index::IndexableLength::Known(limit) => {
                                 write!(self.out, "{}u", limit - 1)?;
                             }
-                            index::IndexableLength::Pending => unreachable!(),
                             index::IndexableLength::Dynamic => unreachable!(),
                         }
                         write!(self.out, ")")?;
@@ -3175,7 +3173,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 if let Some(offset) = offset {
                     write!(self.out, ", ")?;
                     write!(self.out, "int2(")?; // work around https://github.com/microsoft/DirectXShaderCompiler/issues/5082#issuecomment-1540147807
-                    self.write_const_expression(module, offset)?;
+                    self.write_const_expression(module, offset, func_ctx.expressions)?;
                     write!(self.out, ")")?;
                 }
 
@@ -3334,7 +3332,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.out,
                                     "{}{}(",
                                     scalar.to_hlsl_str()?,
-                                    back::vector_size_str(size)
+                                    common::vector_size_str(size)
                                 )?;
                             }
                             TypeInner::Scalar(_) => {
@@ -3345,8 +3343,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     self.out,
                                     "{}{}x{}(",
                                     scalar.to_hlsl_str()?,
-                                    back::vector_size_str(columns),
-                                    back::vector_size_str(rows)
+                                    common::vector_size_str(columns),
+                                    common::vector_size_str(rows)
                                 )?;
                             }
                             _ => {
@@ -3947,6 +3945,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, ")")?;
                 }
             }
+            // Not supported yet
+            Expression::RayQueryVertexPositions { .. } => unreachable!(),
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }
@@ -4129,6 +4129,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
         if barrier.contains(crate::Barrier::SUB_GROUP) {
             // Does not exist in DirectX
+        }
+        if barrier.contains(crate::Barrier::TEXTURE) {
+            writeln!(self.out, "{level}DeviceMemoryBarrierWithGroupSync();")?;
         }
         Ok(())
     }

@@ -114,6 +114,17 @@ fn relational() {
     return;
 }
 
+fn abstract_access(i: u32) {
+    var a_1: f32 = 1f;
+    var b_1: u32 = 1u;
+    var c_1: i32;
+    var d: i32;
+
+    c_1 = array<i32, 9>(1i, 2i, 3i, 4i, 5i, 6i, 7i, 8i, 9i)[i];
+    d = vec4<i32>(1i, 2i, 3i, 4i)[i];
+    return;
+}
+
 @compute @workgroup_size(2, 3, 1) 
 fn main() {
     swizzle_of_compose();

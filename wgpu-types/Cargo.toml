@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.82.0"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -43,9 +43,12 @@ fragile-send-sync-non-atomic-wasm = []
 serde = ["dep:serde", "bitflags/serde"]
 # Enables some internal instrumentation for debugging purposes.
 counters = []
+# Enables variants of `Trace` other than `Trace::Off`
+trace = ["std"]
 
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
+bytemuck = { workspace = true, features = ["derive"] }
 log.workspace = true
 thiserror = { workspace = true, optional = true }
 serde = { workspace = true, default-features = false, features = [

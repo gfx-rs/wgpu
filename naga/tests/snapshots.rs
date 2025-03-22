@@ -34,9 +34,15 @@ bitflags::bitflags! {
     }
 }
 
-impl Default for Targets {
-    fn default() -> Self {
+impl Targets {
+    /// Defaults for `spv` and `glsl` snapshots.
+    fn non_wgsl_default() -> Self {
         Targets::WGSL
+    }
+
+    /// Defaults for `wgsl` snapshots.
+    fn wgsl_default() -> Self {
+        Targets::HLSL | Targets::SPIRV | Targets::GLSL | Targets::METAL | Targets::WGSL
     }
 }
 
@@ -72,6 +78,12 @@ where
 
 #[derive(Default, serde::Deserialize)]
 #[serde(default)]
+struct SpirvInParameters {
+    adjust_coordinate_space: bool,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct SpirvOutParameters {
     version: SpvOutVersion,
     capabilities: naga::FastHashSet<spirv::Capability>,
@@ -103,10 +115,16 @@ struct Parameters {
     // -- GOD MODE --
     god_mode: bool,
 
+    // -- spirv-in options --
+    #[serde(rename = "spv-in")]
+    spv_in: SpirvInParameters,
+
     // -- SPIR-V options --
     spv: SpirvOutParameters,
 
-    targets: Targets,
+    /// Defaults to [`Targets::non_wgsl_default()`] for `spv` and `glsl` snapshots,
+    /// and [`Targets::wgsl_default()`] for `wgsl` snapshots.
+    targets: Option<Targets>,
 
     // -- MSL options --
     #[cfg(all(feature = "deserialize", msl_out))]
@@ -120,12 +138,11 @@ struct Parameters {
     glsl: naga::back::glsl::Options,
     glsl_exclude_list: naga::FastHashSet<String>,
     #[cfg(all(feature = "deserialize", glsl_out))]
-    glsl_multiview: Option<std::num::NonZeroU32>,
+    glsl_multiview: Option<core::num::NonZeroU32>,
 
     // -- HLSL options --
     #[cfg(all(feature = "deserialize", hlsl_out))]
     hlsl: naga::back::hlsl::Options,
-    hlsl_module_path: Option<String>,
 
     // -- WGSL options --
     wgsl: WgslOutParameters,
@@ -298,7 +315,7 @@ impl Input {
     fn read_parameters(&self) -> Parameters {
         let mut param_path = self.input_path();
         param_path.set_extension("toml");
-        match fs::read_to_string(&param_path) {
+        let mut params = match fs::read_to_string(&param_path) {
             Ok(string) => match toml::de::from_str(&string) {
                 Ok(params) => params,
                 Err(e) => panic!(
@@ -307,7 +324,20 @@ impl Input {
                 ),
             },
             Err(_) => Parameters::default(),
+        };
+
+        if params.targets.is_none() {
+            match self.input_path().extension().unwrap().to_str().unwrap() {
+                "wgsl" => params.targets = Some(Targets::wgsl_default()),
+                "spvasm" => params.targets = Some(Targets::non_wgsl_default()),
+                "vert" | "frag" | "comp" => params.targets = Some(Targets::non_wgsl_default()),
+                e => {
+                    panic!("Unknown extension: {}", e);
+                }
+            }
         }
+
+        params
     }
 
     /// Write `data` to a file corresponding to this input file in
@@ -331,7 +361,7 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
     let params = input.read_parameters();
     let name = &input.file_name;
 
-    let targets = params.targets;
+    let targets = params.targets.unwrap();
 
     let (capabilities, subgroup_stages, subgroup_operations) = if params.god_mode {
         (
@@ -556,6 +586,7 @@ fn write_output_spv(
         bounds_check_policies,
         binding_map: params.binding_map.clone(),
         zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
+        force_loop_bounding: true,
         debug_info,
     };
 
@@ -651,7 +682,7 @@ fn write_output_glsl(
     ep_name: &str,
     options: &naga::back::glsl::Options,
     bounds_check_policies: naga::proc::BoundsCheckPolicies,
-    multiview: Option<std::num::NonZeroU32>,
+    multiview: Option<core::num::NonZeroU32>,
     pipeline_constants: &naga::back::PipelineConstants,
 ) {
     use naga::back::glsl;
@@ -692,8 +723,8 @@ fn write_output_hlsl(
     pipeline_constants: &naga::back::PipelineConstants,
     frag_ep: Option<naga::back::hlsl::FragmentEntryPoint>,
 ) {
+    use core::fmt::Write as _;
     use naga::back::hlsl;
-    use std::fmt::Write as _;
 
     println!("generating HLSL");
 
@@ -722,6 +753,7 @@ fn write_output_hlsl(
             naga::ShaderStage::Vertex => &mut config.vertex,
             naga::ShaderStage::Fragment => &mut config.fragment,
             naga::ShaderStage::Compute => &mut config.compute,
+            naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
         }
         .push(hlsl_snapshots::ConfigItem {
             entry_point: name.clone(),
@@ -775,72 +807,52 @@ fn convert_snapshots_wgsl() {
 }
 
 #[cfg(feature = "spv-in")]
-fn convert_spv(name: &str, adjust_coordinate_space: bool) {
+#[test]
+fn convert_snapshots_spv() {
     use std::process::Command;
 
     let _ = env_logger::try_init();
 
-    let input = Input::new(Some("spv"), name, "spvasm");
+    for input in Input::files_in_dir(Some("spv"), &["spvasm"]) {
+        println!("Assembling '{}'", input.file_name.display());
 
-    println!("Assembling '{}'", input.file_name.display());
-
-    let command = Command::new("spirv-as")
-        .arg(input.input_path())
-        .arg("-o")
-        .arg("-")
-        .output()
-        .expect(
-            "Failed to execute spirv-as. It can be installed \
+        let command = Command::new("spirv-as")
+            .arg(input.input_path())
+            .arg("-o")
+            .arg("-")
+            .output()
+            .expect(
+                "Failed to execute spirv-as. It can be installed \
             by installing the Vulkan SDK and adding it to your path.",
-        );
+            );
 
-    println!("Processing '{}'", input.file_name.display());
+        println!("Processing '{}'", input.file_name.display());
 
-    if !command.status.success() {
-        panic!(
-            "spirv-as failed: {}\n{}",
-            String::from_utf8_lossy(&command.stdout),
-            String::from_utf8_lossy(&command.stderr)
-        );
-    }
+        if !command.status.success() {
+            panic!(
+                "spirv-as failed: {}\n{}",
+                String::from_utf8_lossy(&command.stdout),
+                String::from_utf8_lossy(&command.stderr)
+            );
+        }
 
-    let mut module = naga::front::spv::parse_u8_slice(
-        &command.stdout,
-        &naga::front::spv::Options {
+        let params = input.read_parameters();
+        let SpirvInParameters {
             adjust_coordinate_space,
-            strict_capabilities: false,
-            block_ctx_dump_prefix: None,
-        },
-    )
-    .unwrap();
+        } = params.spv_in;
 
-    check_targets(&input, &mut module, None);
-}
+        let mut module = naga::front::spv::parse_u8_slice(
+            &command.stdout,
+            &naga::front::spv::Options {
+                adjust_coordinate_space,
+                strict_capabilities: false,
+                block_ctx_dump_prefix: None,
+            },
+        )
+        .unwrap();
 
-#[cfg(feature = "spv-in")]
-#[test]
-fn convert_snapshots_spv() {
-    convert_spv("quad-vert", false);
-    convert_spv("shadow", true);
-    convert_spv("inv-hyperbolic-trig-functions", true);
-    convert_spv("empty-global-name", true);
-    convert_spv("degrees", false);
-    convert_spv("binding-arrays.dynamic", true);
-    convert_spv("binding-arrays.static", true);
-    convert_spv("do-while", true);
-    convert_spv("unnamed-gl-per-vertex", true);
-    convert_spv("builtin-accessed-outside-entrypoint", true);
-    convert_spv("spec-constants", true);
-    convert_spv("spec-constants-issue-5598", true);
-    convert_spv("subgroup-operations-s", false);
-    convert_spv("atomic_i_increment", false);
-    convert_spv("atomic_load_and_store", false);
-    convert_spv("atomic_exchange", false);
-    convert_spv("atomic_compare_exchange", false);
-    convert_spv("atomic_i_decrement", false);
-    convert_spv("atomic_i_add_sub", false);
-    convert_spv("atomic_global_struct_field_vertex", false);
-    convert_spv("fetch_depth", false);
+        check_targets(&input, &mut module, None);
+    }
 }
 
 #[cfg(feature = "glsl-in")]

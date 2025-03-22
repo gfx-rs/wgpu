@@ -170,16 +170,24 @@ fn frontends(c: &mut Criterion) {
 
     // Assemble all the SPIR-V assembly.
     let mut assembled_spirv = Vec::<Vec<u32>>::new();
-    for input in &inputs_spirv.inner {
-        let output = Command::new("spirv-as")
+    'spirv: for input in &inputs_spirv.inner {
+        let output = match Command::new("spirv-as")
             .arg(&input.filename)
             .arg("-o")
             .arg("-")
             .output()
-            .expect(
-                "Failed to execute spirv-as. It can be installed \
-           q by installing the Vulkan SDK and adding it to your path.",
-            );
+        {
+            Ok(output) => output,
+            Err(e) => {
+                eprintln!(
+                    "Failed to execute spirv-as: {e}\n\
+                    spvasm benchmarks will be skipped.\n\
+                    spirv-as can be installed by installing the Vulkan SDK and adding \
+                        it to your PATH.",
+                );
+                break 'spirv;
+            }
+        };
 
         if !output.status.success() {
             panic!(

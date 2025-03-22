@@ -59,8 +59,9 @@
 //! [`Switch`]: crate::Statement::Switch
 //! [`SwitchCase`]: crate::SwitchCase
 
+use alloc::{rc::Rc, string::String, vec::Vec};
+
 use crate::proc::Namer;
-use std::rc::Rc;
 
 /// A summary of the code surrounding a statement.
 enum Nesting {
@@ -184,6 +185,7 @@ impl ContinueCtx {
     /// Resets internal state.
     ///
     /// Use this to reuse memory between writing sessions.
+    #[allow(dead_code, reason = "only used by some backends")]
     pub fn clear(&mut self) {
         self.stack.clear();
     }

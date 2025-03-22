@@ -130,6 +130,10 @@ pub enum BuildAccelerationStructureError {
 
     #[error("Blas {0:?} is missing the flag USE_TRANSFORM but the transform buffer is set")]
     UseTransformMissing(ResourceErrorIdent),
+    #[error(
+        "Tlas {0:?} dependent {1:?} is missing AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN"
+    )]
+    TlasDependentMissingVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
 }
 
 #[derive(Clone, Debug, Error)]

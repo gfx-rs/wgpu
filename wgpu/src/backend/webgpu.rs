@@ -21,6 +21,7 @@ use core::{
     pin::Pin,
     task::{self, Poll},
 };
+use wgt::Backends;
 
 use js_sys::Promise;
 use wasm_bindgen::{prelude::*, JsCast};
@@ -45,11 +46,15 @@ macro_rules! impl_send_sync {
     };
 }
 
-pub(crate) struct ContextWebGpu {
+pub struct ContextWebGpu {
     /// `None` if browser does not advertise support for WebGPU.
     gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
     /// Unique identifier for this context.
     ident: crate::cmp::Identifier,
+    /// Backends requested in the [`crate::InstanceDescriptor`].
+    /// Remembered for error reporting even though this itself is strictly
+    /// [`Backends::BROWSER_WEBGPU`].
+    requested_backends: Backends,
 }
 
 impl fmt::Debug for ContextWebGpu {
@@ -194,36 +199,6 @@ impl<F, M> MakeSendFuture<F, M> {
 
 #[cfg(send_sync)]
 unsafe impl<F, M> Send for MakeSendFuture<F, M> {}
-
-/// Wraps a future that returns `Option<T>` and adds the ability to immediately
-/// return None.
-pub(crate) struct OptionFuture<F>(Option<F>);
-
-impl<F: Future<Output = Option<T>>, T> Future for OptionFuture<F> {
-    type Output = Option<T>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
-        // This is safe because we have no Drop implementation to violate the Pin requirements and
-        // do not provide any means of moving the inner future.
-        unsafe {
-            let this = self.get_unchecked_mut();
-            match &mut this.0 {
-                Some(future) => Pin::new_unchecked(future).poll(cx),
-                None => task::Poll::Ready(None),
-            }
-        }
-    }
-}
-
-impl<F> OptionFuture<F> {
-    fn some(future: F) -> Self {
-        Self(Some(future))
-    }
-
-    fn none() -> Self {
-        Self(None)
-    }
-}
 
 fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuTextureFormat {
     use webgpu_sys::GpuTextureFormat as tf;
@@ -497,15 +472,10 @@ fn map_blend_factor(factor: wgt::BlendFactor) -> webgpu_sys::GpuBlendFactor {
         BlendFactor::SrcAlphaSaturated => bf::SrcAlphaSaturated,
         BlendFactor::Constant => bf::Constant,
         BlendFactor::OneMinusConstant => bf::OneMinusConstant,
-        BlendFactor::Src1
-        | BlendFactor::OneMinusSrc1
-        | BlendFactor::Src1Alpha
-        | BlendFactor::OneMinusSrc1Alpha => {
-            panic!(
-                "{:?} is not enabled for this backend",
-                wgt::Features::DUAL_SOURCE_BLENDING
-            )
-        }
+        BlendFactor::Src1 => bf::Src1,
+        BlendFactor::OneMinusSrc1 => bf::OneMinusSrc1,
+        BlendFactor::Src1Alpha => bf::Src1Alpha,
+        BlendFactor::OneMinusSrc1Alpha => bf::OneMinusSrc1Alpha,
     }
 }
 
@@ -738,8 +708,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 12] = [
-    //TODO: update the name
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 13] = [
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
         webgpu_sys::GpuFeatureName::DepthClipControl,
@@ -787,6 +756,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 12] = [
     (
         wgt::Features::FLOAT32_FILTERABLE,
         webgpu_sys::GpuFeatureName::Float32Filterable,
+    ),
+    (
+        wgt::Features::DUAL_SOURCE_BLENDING,
+        webgpu_sys::GpuFeatureName::DualSourceBlending,
     ),
 ];
 
@@ -902,16 +875,35 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
 
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 
-fn future_request_adapter(result: JsFutureResult) -> Option<dispatch::DispatchAdapter> {
+fn future_request_adapter(
+    result: JsFutureResult,
+    requested_backends: Backends,
+) -> Result<dispatch::DispatchAdapter, wgt::RequestAdapterError> {
     let web_adapter: Option<webgpu_sys::GpuAdapter> =
         result.and_then(wasm_bindgen::JsCast::dyn_into).ok();
-    web_adapter.map(|adapter| {
-        WebAdapter {
-            inner: adapter,
-            ident: crate::cmp::Identifier::create(),
-        }
-        .into()
-    })
+    web_adapter
+        .map(|adapter| {
+            WebAdapter {
+                inner: adapter,
+                ident: crate::cmp::Identifier::create(),
+            }
+            .into()
+        })
+        .ok_or_else(|| request_adapter_null_error(requested_backends))
+}
+
+// Translate WebGPU’s null return into our error.
+fn request_adapter_null_error(requested_backends: Backends) -> wgt::RequestAdapterError {
+    wgt::RequestAdapterError::NotFound {
+        active_backends: Backends::BROWSER_WEBGPU,
+        requested_backends,
+        // TODO: supported_backends should also include wgpu-core-based backends,
+        // if they were compiled in.
+        supported_backends: Backends::BROWSER_WEBGPU,
+        no_fallback_backends: Backends::empty(),
+        no_adapter_backends: Backends::BROWSER_WEBGPU,
+        incompatible_surface_backends: Backends::empty(),
+    }
 }
 
 fn future_request_device(
@@ -1266,13 +1258,13 @@ pub struct WebTexture {
 }
 
 #[derive(Debug)]
-pub(crate) struct WebBlas {
+pub struct WebBlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
 }
 
 #[derive(Debug)]
-pub(crate) struct WebTlas {
+pub struct WebTlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
 }
@@ -1306,7 +1298,7 @@ pub struct WebComputePipeline {
 }
 
 #[derive(Debug)]
-pub(crate) struct WebPipelineCache {
+pub struct WebPipelineCache {
     /// Unique identifier for this PipelineCache.
     ident: crate::cmp::Identifier,
 }
@@ -1363,7 +1355,7 @@ pub struct WebSurface {
 }
 
 #[derive(Debug)]
-pub(crate) struct WebSurfaceOutputDetail {
+pub struct WebSurfaceOutputDetail {
     /// Unique identifier for this SurfaceOutputDetail.
     ident: crate::cmp::Identifier,
 }
@@ -1445,39 +1437,8 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebSurfaceOutputDetail => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebQueueWriteBuffer => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBufferMappedRange => .ident);
 
-impl dispatch::InterfaceTypes for ContextWebGpu {
-    type Instance = ContextWebGpu;
-    type Adapter = WebAdapter;
-    type Device = WebDevice;
-    type Queue = WebQueue;
-    type ShaderModule = WebShaderModule;
-    type BindGroupLayout = WebBindGroupLayout;
-    type BindGroup = WebBindGroup;
-    type TextureView = WebTextureView;
-    type Sampler = WebSampler;
-    type Buffer = WebBuffer;
-    type Texture = WebTexture;
-    type Blas = WebBlas;
-    type Tlas = WebTlas;
-    type QuerySet = WebQuerySet;
-    type PipelineLayout = WebPipelineLayout;
-    type RenderPipeline = WebRenderPipeline;
-    type ComputePipeline = WebComputePipeline;
-    type PipelineCache = WebPipelineCache;
-    type CommandEncoder = WebCommandEncoder;
-    type ComputePass = WebComputePassEncoder;
-    type RenderPass = WebRenderPassEncoder;
-    type CommandBuffer = WebCommandBuffer;
-    type RenderBundleEncoder = WebRenderBundleEncoder;
-    type RenderBundle = WebRenderBundle;
-    type Surface = WebSurface;
-    type SurfaceOutputDetail = WebSurfaceOutputDetail;
-    type QueueWriteBuffer = WebQueueWriteBuffer;
-    type BufferMappedRange = WebBufferMappedRange;
-}
-
 impl dispatch::InstanceInterface for ContextWebGpu {
-    fn new(_desc: &crate::InstanceDescriptor) -> Self
+    fn new(desc: &crate::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {
@@ -1489,6 +1450,7 @@ impl dispatch::InstanceInterface for ContextWebGpu {
 
         ContextWebGpu {
             gpu,
+            requested_backends: desc.backends,
             ident: crate::cmp::Identifier::create(),
         }
     }
@@ -1545,10 +1507,25 @@ impl dispatch::InstanceInterface for ContextWebGpu {
         &self,
         options: &crate::RequestAdapterOptions<'_, '_>,
     ) -> Pin<Box<dyn dispatch::RequestAdapterFuture>> {
+        let requested_backends = self.requested_backends;
+
         //TODO: support this check, return `None` if the flag is not set.
         // It's not trivial, since we need the Future logic to have this check,
         // and currently the Future here has no room for extra parameter `backends`.
-        //assert!(backends.contains(wgt::Backends::BROWSER_WEBGPU));
+        if !(requested_backends.contains(wgt::Backends::BROWSER_WEBGPU)) {
+            return Box::pin(core::future::ready(Err(
+                wgt::RequestAdapterError::NotFound {
+                    active_backends: Backends::BROWSER_WEBGPU,
+                    requested_backends,
+                    // TODO: supported_backends should also include wgpu-core-based backends,
+                    // if they were compiled in.
+                    supported_backends: Backends::BROWSER_WEBGPU,
+                    no_fallback_backends: Backends::default(),
+                    no_adapter_backends: Backends::default(),
+                    incompatible_surface_backends: Backends::default(),
+                },
+            )));
+        }
         let mapped_options = webgpu_sys::GpuRequestAdapterOptions::new();
         let mapped_power_preference = match options.power_preference {
             wgt::PowerPreference::None => None,
@@ -1560,18 +1537,20 @@ impl dispatch::InstanceInterface for ContextWebGpu {
         if let Some(mapped_pref) = mapped_power_preference {
             mapped_options.set_power_preference(mapped_pref);
         }
-        let future = if let Some(gpu) = &self.gpu {
+
+        if let Some(gpu) = &self.gpu {
             let adapter_promise = gpu.request_adapter_with_options(&mapped_options);
-            OptionFuture::some(MakeSendFuture::new(
+            Box::pin(MakeSendFuture::new(
                 wasm_bindgen_futures::JsFuture::from(adapter_promise),
-                future_request_adapter,
+                move |result| future_request_adapter(result, requested_backends),
             ))
         } else {
             // Gpu is undefined; WebGPU is not supported in this browser.
-            OptionFuture::none()
-        };
-
-        Box::pin(future)
+            // Treat this exactly like requestAdapter() returned null.
+            Box::pin(core::future::ready(Err(request_adapter_null_error(
+                requested_backends,
+            ))))
+        }
     }
 
     fn poll_all_devices(&self, _force_wait: bool) -> bool {
@@ -1624,10 +1603,9 @@ impl dispatch::AdapterInterface for WebAdapter {
     fn request_device(
         &self,
         desc: &crate::DeviceDescriptor<'_>,
-        trace_dir: Option<&std::path::Path>,
     ) -> Pin<Box<dyn dispatch::RequestDeviceFuture>> {
-        if trace_dir.is_some() {
-            //Error: Tracing isn't supported on the Web target
+        if !matches!(desc.trace, wgt::Trace::Off) {
+            log::warn!("The `trace` parameter is not supported on the WebGPU backend.");
         }
 
         let mapped_desc = webgpu_sys::GpuDeviceDescriptor::new();
@@ -1961,7 +1939,7 @@ impl dispatch::DeviceInterface for WebDevice {
                             .set_view_dimension(map_texture_view_dimension(view_dimension));
                         mapped_entry.set_storage_texture(&storage_texture);
                     }
-                    wgt::BindingType::AccelerationStructure => todo!(),
+                    wgt::BindingType::AccelerationStructure { .. } => todo!(),
                 }
 
                 mapped_entry

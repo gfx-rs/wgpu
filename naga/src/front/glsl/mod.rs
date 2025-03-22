@@ -16,6 +16,8 @@ pub use ast::{Precision, Profile};
 pub use error::{Error, ErrorKind, ExpectedToken, ParseErrors};
 pub use token::TokenValue;
 
+use alloc::{string::String, vec::Vec};
+
 use crate::{proc::Layouter, FastHashMap, FastHashSet, Handle, Module, ShaderStage, Span, Type};
 use ast::{EntryArg, FunctionDeclaration, GlobalLookup};
 use parser::ParsingContext;
@@ -34,7 +36,7 @@ mod token;
 mod types;
 mod variables;
 
-type Result<T> = std::result::Result<T, Error>;
+type Result<T> = core::result::Result<T, Error>;
 
 /// Per-shader options passed to [`parse`](Frontend::parse).
 ///
@@ -196,7 +198,7 @@ impl Frontend {
         &mut self,
         options: &Options,
         source: &str,
-    ) -> std::result::Result<Module, ParseErrors> {
+    ) -> core::result::Result<Module, ParseErrors> {
         self.reset(options.stage);
 
         let lexer = lex::Lexer::new(source, &options.defines);
@@ -207,12 +209,12 @@ impl Frontend {
                 if self.errors.is_empty() {
                     Ok(module)
                 } else {
-                    Err(std::mem::take(&mut self.errors).into())
+                    Err(core::mem::take(&mut self.errors).into())
                 }
             }
             Err(e) => {
                 self.errors.push(e);
-                Err(std::mem::take(&mut self.errors).into())
+                Err(core::mem::take(&mut self.errors).into())
             }
         }
     }

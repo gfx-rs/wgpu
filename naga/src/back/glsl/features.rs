@@ -1,10 +1,11 @@
+use core::fmt::Write;
+
 use super::{BackendResult, Error, Version, Writer};
 use crate::{
     back::glsl::{Options, WriterFlags},
     AddressSpace, Binding, Expression, Handle, ImageClass, ImageDimension, Interpolation,
     SampleLevel, Sampling, Scalar, ScalarKind, ShaderStage, StorageFormat, Type, TypeInner,
 };
-use std::fmt::Write;
 
 bitflags::bitflags! {
     /// Structure used to encode additions to GLSL that aren't supported by all versions.
@@ -462,7 +463,7 @@ impl<W> Writer<'_, W> {
             .functions
             .iter()
             .map(|(h, f)| (&f.expressions, &info[h]))
-            .chain(std::iter::once((
+            .chain(core::iter::once((
                 &entry_point.function.expressions,
                 info.get_entry_point(entry_point_idx as usize),
             )))
@@ -559,7 +560,7 @@ impl<W> Writer<'_, W> {
             .functions
             .iter()
             .map(|(_, f)| &f.body)
-            .chain(std::iter::once(&entry_point.function.body))
+            .chain(core::iter::once(&entry_point.function.body))
         {
             for (stmt, _) in blocks.span_iter() {
                 match *stmt {
@@ -604,7 +605,7 @@ impl<W> Writer<'_, W> {
                     location: _,
                     interpolation,
                     sampling,
-                    second_blend_source,
+                    blend_src,
                 } => {
                     if interpolation == Some(Interpolation::Linear) {
                         self.features.request(Features::NOPERSPECTIVE_QUALIFIER);
@@ -612,7 +613,7 @@ impl<W> Writer<'_, W> {
                     if sampling == Some(Sampling::Sample) {
                         self.features.request(Features::SAMPLE_QUALIFIER);
                     }
-                    if second_blend_source {
+                    if blend_src.is_some() {
                         self.features.request(Features::DUAL_SOURCE_BLENDING);
                     }
                 }

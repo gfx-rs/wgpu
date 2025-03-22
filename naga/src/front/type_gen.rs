@@ -2,6 +2,8 @@
 Type generators.
 */
 
+use alloc::{format, string::ToString, vec};
+
 use crate::{arena::Handle, span::Span};
 
 impl crate::Module {
@@ -100,6 +102,36 @@ impl crate::Module {
 
         self.special_types.ray_desc = Some(handle);
         handle
+    }
+
+    /// Make sure the types for the vertex return are in the module's type
+    pub fn generate_vertex_return_type(&mut self) -> Handle<crate::Type> {
+        if let Some(handle) = self.special_types.ray_vertex_return {
+            return handle;
+        }
+        let ty_vec3f = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Vector {
+                    size: crate::VectorSize::Tri,
+                    scalar: crate::Scalar::F32,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        let array = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Array {
+                    base: ty_vec3f,
+                    size: crate::ArraySize::Constant(core::num::NonZeroU32::new(3).unwrap()),
+                    stride: 16,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        self.special_types.ray_vertex_return = Some(array);
+        array
     }
 
     /// Populate this module's [`SpecialTypes::ray_intersection`] type.
@@ -251,7 +283,7 @@ impl crate::Module {
         &mut self,
         special_type: crate::PredeclaredType,
     ) -> Handle<crate::Type> {
-        use std::fmt::Write;
+        use core::fmt::Write;
 
         if let Some(value) = self.special_types.predeclared_types.get(&special_type) {
             return *value;

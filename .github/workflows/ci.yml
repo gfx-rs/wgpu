@@ -36,10 +36,10 @@ env:
   CI_BINARY_BUILD: "build20"
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.83"
+  REPO_MSRV: "1.85"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
-  CORE_MSRV: "1.76"
+  CORE_MSRV: "1.82.0"
 
   #
   # Environment variables
@@ -144,6 +144,20 @@ jobs:
             tier: 2
             kind: native
 
+          # Android
+          - name: Android ARMv7
+            os: ubuntu-22.04
+            target: armv7-linux-androideabi
+            tier: 2
+            kind: wgpu-only
+
+          # Android
+          - name: Android x86_64
+            os: ubuntu-22.04
+            target: x86_64-linux-android
+            tier: 2
+            kind: wgpu-only
+
           # OpenHarmony
           - name: OpenHarmony aarch64
             os: ubuntu-22.04
@@ -164,20 +178,9 @@ jobs:
             tier: 2
             kind: wgpu-only
 
-          # TODO: Uncomment once web-sys updates past 0.3.76
-          # See https://github.com/rustwasm/wasm-bindgen/pull/4378 for details
-          # - name: WebAssembly Core 1.0
-          #   os: ubuntu-22.04
-          #   target: wasm32v1-none
-          #   tier: 2
-          #   kind: no_std
-
-          # Bare-metal x86-64
-          # TODO: Remove once web-sys updates past 0.3.76
-          # Included while wasm32v1-none is failing to ensure `no_std` does not regress
-          - name: no_std x86_64
+          - name: WebAssembly Core 1.0
             os: ubuntu-22.04
-            target: x86_64-unknown-none
+            target: wasm32v1-none
             tier: 2
             kind: no_std
 
@@ -747,7 +750,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.29.9
+        uses: crate-ci/typos@v1.30.2
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -820,22 +823,3 @@ jobs:
           command: check bans licenses sources
           arguments: --all-features --workspace
           rust-version: ${{ env.REPO_MSRV }}
-
-  check-feature-dependencies:
-    # runtime is normally 1 minute
-    timeout-minutes: 5
-
-    name: "Feature Dependencies"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Install repo MSRV toolchain
-        run: |
-          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
-          rustup override set ${{ env.REPO_MSRV }}
-          cargo -V
-
-      - name: Run `cargo feature-dependencies`
-        run: cargo xtask check-feature-dependencies

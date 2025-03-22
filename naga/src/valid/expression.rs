@@ -1,6 +1,5 @@
 use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
-
 use crate::{
     arena::Handle,
     proc::{IndexableLengthError, ResolveError},
@@ -177,7 +176,7 @@ struct ExpressionTypeResolver<'a> {
     info: &'a FunctionInfo,
 }
 
-impl std::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'_> {
+impl core::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'_> {
     type Output = crate::TypeInner;
 
     #[allow(clippy::panic)]
@@ -224,7 +223,7 @@ impl super::Validator {
                 crate::TypeInner::Scalar { .. } => {}
                 _ => return Err(ConstExpressionError::InvalidSplatType(value)),
             },
-            _ if global_expr_kind.is_const(handle) || !self.allow_overrides => {
+            _ if global_expr_kind.is_const(handle) || self.overrides_resolved => {
                 return Err(ConstExpressionError::NonFullyEvaluatedConst)
             }
             // the constant evaluator will report errors about override-expressions
@@ -243,7 +242,7 @@ impl super::Validator {
         module: &crate::Module,
         info: &FunctionInfo,
         mod_info: &ModuleInfo,
-        global_expr_kind: &crate::proc::ExpressionKindTracker,
+        expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<ShaderStages, ExpressionError> {
         use crate::{Expression as E, Scalar as Sc, ScalarKind as Sk, TypeInner as Ti};
 
@@ -286,11 +285,14 @@ impl super::Validator {
                     .eval_expr_to_u32_from(index, &function.expressions)
                 {
                     Ok(value) => {
+                        let length = if self.overrides_resolved {
+                            base_type.indexable_length_resolved(module)
+                        } else {
+                            base_type.indexable_length_pending(module)
+                        }?;
                         // If we know both the length and the index, we can do the
                         // bounds check now.
-                        if let crate::proc::IndexableLength::Known(known_length) =
-                            base_type.indexable_length(module)?
-                        {
+                        if let crate::proc::IndexableLength::Known(known_length) = length {
                             if value >= known_length {
                                 return Err(ExpressionError::IndexOutOfBounds(base, value));
                             }
@@ -487,11 +489,11 @@ impl super::Validator {
 
                 // check constant offset
                 if let Some(const_expr) = offset {
-                    if !global_expr_kind.is_const(const_expr) {
+                    if !expr_kind.is_const(const_expr) {
                         return Err(ExpressionError::InvalidSampleOffsetExprType);
                     }
 
-                    match *mod_info[const_expr].inner_with(&module.types) {
+                    match resolver[const_expr] {
                         Ti::Scalar(Sc { kind: Sk::Sint, .. }) if num_components == 1 => {}
                         Ti::Vector {
                             size,
@@ -1727,7 +1729,28 @@ impl super::Validator {
                     base,
                     space: crate::AddressSpace::Function,
                 } => match resolver.types[base].inner {
-                    Ti::RayQuery => ShaderStages::all(),
+                    Ti::RayQuery { .. } => ShaderStages::all(),
+                    ref other => {
+                        log::error!("Intersection result of a pointer to {:?}", other);
+                        return Err(ExpressionError::InvalidRayQueryType(query));
+                    }
+                },
+                ref other => {
+                    log::error!("Intersection result of {:?}", other);
+                    return Err(ExpressionError::InvalidRayQueryType(query));
+                }
+            },
+            E::RayQueryVertexPositions {
+                query,
+                committed: _,
+            } => match resolver[query] {
+                Ti::Pointer {
+                    base,
+                    space: crate::AddressSpace::Function,
+                } => match resolver.types[base].inner {
+                    Ti::RayQuery {
+                        vertex_return: true,
+                    } => ShaderStages::all(),
                     ref other => {
                         log::error!("Intersection result of a pointer to {:?}", other);
                         return Err(ExpressionError::InvalidRayQueryType(query));
@@ -1771,7 +1794,7 @@ impl super::Validator {
     }
 
     pub fn validate_literal(&self, literal: crate::Literal) -> Result<(), LiteralError> {
-        self.check_width(literal.scalar())?;
+        let _ = self.check_width(literal.scalar())?;
         check_literal_value(literal)?;
 
         Ok(())

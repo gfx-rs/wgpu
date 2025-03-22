@@ -20,6 +20,10 @@ impl crate::ScalarKind {
 }
 
 impl crate::Scalar {
+    pub const F16: Self = Self {
+        kind: crate::ScalarKind::Float,
+        width: 2,
+    };
     pub const I32: Self = Self {
         kind: crate::ScalarKind::Sint,
         width: 4,
@@ -135,7 +139,7 @@ impl crate::TypeInner {
     }
 
     /// Get the size of this type.
-    pub fn size(&self, _gctx: super::GlobalCtx) -> u32 {
+    pub fn size(&self, gctx: super::GlobalCtx) -> u32 {
         match *self {
             Self::Scalar(scalar) | Self::Atomic(scalar) => scalar.width as u32,
             Self::Vector { size, scalar } => size as u32 * scalar.width as u32,
@@ -151,21 +155,21 @@ impl crate::TypeInner {
                 size,
                 stride,
             } => {
-                let count = match size {
-                    crate::ArraySize::Constant(count) => count.get(),
+                let count = match size.resolve(gctx) {
+                    Ok(crate::proc::IndexableLength::Known(count)) => count,
                     // any struct member or array element needing a size at pipeline-creation time
                     // must have a creation-fixed footprint
-                    crate::ArraySize::Pending(_) => 0,
+                    Err(_) => 0,
                     // A dynamically-sized array has to have at least one element
-                    crate::ArraySize::Dynamic => 1,
+                    Ok(crate::proc::IndexableLength::Dynamic) => 1,
                 };
                 count * stride
             }
             Self::Struct { span, .. } => span,
             Self::Image { .. }
             | Self::Sampler { .. }
-            | Self::AccelerationStructure
-            | Self::RayQuery
+            | Self::AccelerationStructure { .. }
+            | Self::RayQuery { .. }
             | Self::BindingArray { .. } => 0,
         }
     }
@@ -276,9 +280,31 @@ impl crate::TypeInner {
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::Image { .. }
             | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure
-            | crate::TypeInner::RayQuery
+            | crate::TypeInner::AccelerationStructure { .. }
+            | crate::TypeInner::RayQuery { .. }
             | crate::TypeInner::BindingArray { .. } => None,
+        }
+    }
+
+    /// Return true if `self` is an abstract type.
+    ///
+    /// Use `types` to look up type handles. This is necessary to
+    /// recognize abstract arrays.
+    pub fn is_abstract(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
+        match *self {
+            crate::TypeInner::Scalar(scalar)
+            | crate::TypeInner::Vector { scalar, .. }
+            | crate::TypeInner::Matrix { scalar, .. }
+            | crate::TypeInner::Atomic(scalar) => scalar.is_abstract(),
+            crate::TypeInner::Array { base, .. } => types[base].inner.is_abstract(types),
+            crate::TypeInner::ValuePointer { .. }
+            | crate::TypeInner::Pointer { .. }
+            | crate::TypeInner::Struct { .. }
+            | crate::TypeInner::Image { .. }
+            | crate::TypeInner::Sampler { .. }
+            | crate::TypeInner::AccelerationStructure { .. }
+            | crate::TypeInner::RayQuery { .. }
+            | crate::TypeInner::BindingArray { .. } => false,
         }
     }
 }

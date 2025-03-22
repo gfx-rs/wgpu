@@ -21,12 +21,12 @@ struct Globals {
 }
 
 #[repr(C, align(256))]
-#[derive(Clone, Copy, Zeroable)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 struct Bunny {
     position: [f32; 2],
     velocity: [f32; 2],
     color: u32,
-    _pad: u32,
+    _pad: [u32; (256 - 20) / 4],
 }
 
 impl Bunny {
@@ -81,7 +81,7 @@ impl Example {
                 position: [0.0, 0.5 * (self.extent[1] as f32)],
                 velocity: [speed, 0.0],
                 color,
-                _pad: 0,
+                _pad: Zeroable::zeroed(),
             });
         }
     }
@@ -98,12 +98,7 @@ impl Example {
         }
 
         let uniform_alignment = device.limits().min_uniform_buffer_offset_alignment;
-        queue.write_buffer(&self.local_buffer, 0, unsafe {
-            std::slice::from_raw_parts(
-                self.bunnies.as_ptr() as *const u8,
-                self.bunnies.len() * uniform_alignment as usize,
-            )
-        });
+        queue.write_buffer(&self.local_buffer, 0, bytemuck::cast_slice(&self.bunnies));
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {

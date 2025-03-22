@@ -1,3 +1,5 @@
+use alloc::format;
+
 use super::parse_str;
 
 #[test]
@@ -320,9 +322,9 @@ fn parse_parentheses_switch() {
     parse_str(
         "
         fn main() {
-            var pos: f32;
-            switch pos > 1.0 {
-                default: { pos = 3.0; }
+            var pos: i32;
+            switch pos + 1 {
+                default: { pos = 3; }
             }
         }
     ",
@@ -416,6 +418,42 @@ fn parse_expressions() {
         let y: vec2<f32> = select(vec2<f32>(1.0, 1.0), vec2<f32>(x, x), vec2<bool>(x < 0.5, x > 0.5));
         let z: bool = !(0.0 == 1.0);
     }").unwrap();
+}
+
+#[test]
+fn parse_assignment_statements() {
+    parse_str(
+        "
+        struct Foo { x: i32 };
+
+        fn foo() {
+            var x: u32 = 0u;
+            x++;
+            x--;
+            x = 1u;
+            x += 1u;
+            var v: vec2<f32> = vec2<f32>(1.0, 1.0);
+            v[0] += 1.0;
+            (v)[0] += 1.0;
+            var s: Foo = Foo(0);
+            s.x -= 1;
+            (s.x) -= 1;
+            (s).x -= 1;
+            _ = 5u;
+    }",
+    )
+    .unwrap();
+
+    let error = parse_str(
+        "fn foo() {
+        x|x++;
+    }",
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.message(),
+        "expected assignment or increment/decrement, found \"|\"",
+    );
 }
 
 #[test]
@@ -646,7 +684,7 @@ fn parse_repeated_attributes() {
 
         let result = Frontend::new().inner(&shader);
         assert!(matches!(
-            result.unwrap_err(),
+            *result.unwrap_err(),
             Error::RepeatedAttribute(span) if span == expected_span
         ));
     }
@@ -662,7 +700,7 @@ fn parse_missing_workgroup_size() {
     let shader = "@compute fn vs() -> vec4<f32> { return vec4<f32>(0.0); }";
     let result = Frontend::new().inner(shader);
     assert!(matches!(
-        result.unwrap_err(),
+        *result.unwrap_err(),
         Error::MissingWorkgroupSize(span) if span == Span::new(1, 8)
     ));
 }

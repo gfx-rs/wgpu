@@ -19,7 +19,11 @@ static UNBUILT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(unbuilt_blas);
 
 fn unbuilt_blas(ctx: TestingContext) {
-    let as_ctx = AsBuildContext::new(&ctx);
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
 
     // Build the TLAS package with an unbuilt BLAS.
     let mut encoder = ctx
@@ -49,7 +53,11 @@ static OUT_OF_ORDER_AS_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(out_of_order_as_build);
 
 fn out_of_order_as_build(ctx: TestingContext) {
-    let as_ctx = AsBuildContext::new(&ctx);
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
 
     //
     // Encode the TLAS build before the BLAS build, but submit them in the right order.
@@ -80,7 +88,11 @@ fn out_of_order_as_build(ctx: TestingContext) {
     // Create a clean `AsBuildContext`
     //
 
-    let as_ctx = AsBuildContext::new(&ctx);
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
 
     //
     // Encode the BLAS build before the TLAS build, but submit them in the wrong order.
@@ -131,7 +143,11 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
     // Create a clean `AsBuildContext`
     //
 
-    let as_ctx = AsBuildContext::new(&ctx);
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
 
     //
     // Build in the right order, then rebuild the BLAS so the TLAS is invalid, then use the TLAS.
@@ -339,4 +355,178 @@ fn build_with_transform(ctx: TestingContext) {
         [&tlas_package],
     );
     ctx.queue.submit([encoder_build.finish()]);
+}
+
+#[gpu_test]
+static ONLY_BLAS_VERTEX_RETURN: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(
+                wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                    | wgpu::Features::EXPERIMENTAL_RAY_QUERY
+                    | wgpu::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN,
+            )
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+    )
+    .run_sync(only_blas_vertex_return);
+
+fn only_blas_vertex_return(ctx: TestingContext) {
+    // Set up BLAS with TLAS
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+        AccelerationStructureFlags::empty(),
+    );
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 1"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    let mut encoder_tlas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("TLAS 1"),
+        });
+
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+
+    ctx.queue
+        .submit([encoder_blas.finish(), encoder_tlas.finish()]);
+
+    // Create a bind-group containing a TLAS with a bind-group layout that requires vertex return,
+    // because only the BLAS and not the TLAS has `AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`
+    // this is invalid.
+    {
+        let bind_group_layout = ctx
+            .device
+            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: None,
+                entries: &[BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::COMPUTE,
+                    ty: BindingType::AccelerationStructure {
+                        vertex_return: true,
+                    },
+                    count: None,
+                }],
+            });
+        fail(
+            &ctx.device,
+            || {
+                let _ = ctx.device.create_bind_group(&BindGroupDescriptor {
+                    label: None,
+                    layout: &bind_group_layout,
+                    entries: &[BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::AccelerationStructure(
+                            as_ctx.tlas_package.tlas(),
+                        ),
+                    }],
+                });
+            },
+            None,
+        );
+        // drop these
+    }
+
+    // We then use it with a shader that does not require vertex return which should succeed.
+    {
+        //
+        // Create shader to use tlas with
+        //
+
+        let shader = ctx
+            .device
+            .create_shader_module(include_wgsl!("shader.wgsl"));
+        let compute_pipeline = ctx
+            .device
+            .create_compute_pipeline(&ComputePipelineDescriptor {
+                label: None,
+                layout: None,
+                module: &shader,
+                entry_point: Some("basic_usage"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+
+        let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &compute_pipeline.get_bind_group_layout(0),
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+            }],
+        });
+
+        //
+        // Use TLAS
+        //
+
+        let mut encoder_compute = ctx
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+        {
+            let mut pass = encoder_compute.begin_compute_pass(&ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&compute_pipeline);
+            pass.set_bind_group(0, Some(&bind_group), &[]);
+            pass.dispatch_workgroups(1, 1, 1)
+        }
+
+        ctx.queue.submit(Some(encoder_compute.finish()));
+    }
+}
+
+#[gpu_test]
+static ONLY_TLAS_VERTEX_RETURN: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(
+                wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                    | wgpu::Features::EXPERIMENTAL_RAY_QUERY
+                    | wgpu::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN,
+            )
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+    )
+    .run_sync(only_tlas_vertex_return);
+
+fn only_tlas_vertex_return(ctx: TestingContext) {
+    // Set up BLAS with TLAS
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
+    );
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 1"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    let mut encoder_tlas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("TLAS 1"),
+        });
+
+    fail(
+        &ctx.device,
+        || {
+            encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+        },
+        None,
+    );
 }

@@ -192,7 +192,9 @@ impl crate::framework::Example for Example {
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::AccelerationStructure,
+                    ty: wgpu::BindingType::AccelerationStructure {
+                        vertex_return: false,
+                    },
                     count: None,
                 },
             ],
@@ -378,7 +380,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
         failures: Vec::new(),
         required_downlevel_caps:
             <Example as crate::framework::Example>::required_downlevel_capabilities(),
-        force_fxc: false,
+        ..Default::default()
     },
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,

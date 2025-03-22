@@ -26,7 +26,8 @@
     rust_2018_idioms,
     unsafe_op_in_unsafe_fn
 )]
-#![allow(clippy::arc_with_non_send_sync)]
+// NOTE: Keep this in sync with `wgpu-core`.
+#![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
 #![cfg_attr(not(any(wgpu_core, webgpu)), allow(unused))]
 
 extern crate alloc;
@@ -62,12 +63,15 @@ pub mod util;
 //
 //
 
+#[cfg(custom)]
+pub use backend::custom;
+
 pub use api::*;
 pub use wgt::{
-    AdapterInfo, AddressMode, AstcBlock, AstcChannel, Backend, BackendOptions, Backends,
-    BindGroupLayoutEntry, BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState,
-    BufferAddress, BufferBindingType, BufferSize, BufferTransition, BufferUsages, BufferUses,
-    Color, ColorTargetState, ColorWrites, CommandBufferDescriptor, CompareFunction,
+    AdapterInfo, AddressMode, AllocatorReport, AstcBlock, AstcChannel, Backend, BackendOptions,
+    Backends, BindGroupLayoutEntry, BindingType, BlendComponent, BlendFactor, BlendOperation,
+    BlendState, BufferAddress, BufferBindingType, BufferSize, BufferTransition, BufferUsages,
+    BufferUses, Color, ColorTargetState, ColorWrites, CommandBufferDescriptor, CompareFunction,
     CompositeAlphaMode, CopyExternalImageDestInfo, CoreCounters, DepthBiasState, DepthStencilState,
     DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags, DownlevelLimits,
     Dx12BackendOptions, Dx12Compiler, DxcShaderModel, DynamicOffset, Extent3d, Face, Features,
@@ -76,13 +80,13 @@ pub use wgt::{
     InstanceFlags, InternalCounters, Limits, MemoryHints, MultisampleState, NoopBackendOptions,
     Origin2d, Origin3d, PipelineStatisticsTypes, PollError, PollStatus, PolygonMode,
     PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState,
-    PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil, SamplerBindingType,
-    SamplerBorderColor, ShaderLocation, ShaderModel, ShaderRuntimeChecks, ShaderStages,
-    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
-    SurfaceStatus, TexelCopyBufferLayout, TextureAspect, TextureDimension, TextureFormat,
-    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureTransition,
-    TextureUsages, TextureUses, TextureViewDimension, VertexAttribute, VertexFormat,
-    VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
+    PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil, RequestAdapterError,
+    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderRuntimeChecks,
+    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
+    SurfaceCapabilities, SurfaceStatus, TexelCopyBufferLayout, TextureAspect, TextureDimension,
+    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
+    TextureTransition, TextureUsages, TextureUses, TextureViewDimension, Trace, VertexAttribute,
+    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
     COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_STRIDE_ALIGNMENT,
 };

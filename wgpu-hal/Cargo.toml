@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 # copy the crates it actually uses out of the workspace, so it's meaningful for
 # them to have less restrictive MSRVs individually than the workspace as a
 # whole, if their code permits. See `../README.md` for details.
-rust-version = "1.76"
+rust-version = "1.82.0"
 
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
@@ -35,7 +35,9 @@ targets = [
 ignored = ["cfg_aliases"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(web_sys_unstable_apis)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(web_sys_unstable_apis)', # web-sys uses this
+] }
 
 [lib]
 
@@ -86,6 +88,7 @@ vulkan = [
     "dep:android_system_properties",
     "dep:arrayvec",
     "dep:ash",
+    "dep:bytemuck",
     "dep:gpu-alloc",
     "dep:gpu-descriptor",
     "dep:hashbrown",
@@ -102,6 +105,7 @@ gles = [
     "naga/glsl-out",
     "dep:arrayvec",
     "dep:bytemuck",
+    "dep:cfg-if",
     "dep:glow",
     "dep:glutin_wgl_sys",
     "dep:hashbrown",
@@ -110,10 +114,10 @@ gles = [
     "dep:libloading",
     "dep:log",
     "dep:ndk-sys",
+    "dep:objc",
     "dep:profiling",
     "dep:wasm-bindgen",
     "dep:web-sys",
-    "once_cell/std",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_System_LibraryLoader",
@@ -124,6 +128,7 @@ dx12 = [
     "naga/hlsl-out",
     "dep:arrayvec",
     "dep:bit-set",
+    "dep:bytemuck",
     "dep:hashbrown",
     "dep:libloading",
     "dep:log",
@@ -174,6 +179,14 @@ device_lost_panic = []
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
 
+###################
+### Workarounds ###
+###################
+
+# objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
+# You shouldn't ever enable this feature.
+cargo-clippy = []
+
 [[example]]
 name = "halmark"
 
@@ -197,6 +210,7 @@ thiserror.workspace = true
 
 # Target agnostic dependencies used only in backends.
 arrayvec = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true, features = ["derive"] }
 hashbrown = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 once_cell = { workspace = true, optional = true }
@@ -205,8 +219,8 @@ profiling = { workspace = true, optional = true, default-features = false }
 rustc-hash = { workspace = true, optional = true }
 
 # Backend: GLES
-bytemuck = { workspace = true, optional = true }
 glow = { workspace = true, optional = true }
+cfg-if = { workspace = true, optional = true }
 
 ########################
 ### Platform: Native ###

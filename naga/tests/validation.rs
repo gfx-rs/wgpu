@@ -273,7 +273,7 @@ error: Entry point main at Compute is invalid
   ┌─ wgsl:3:13
   │
 3 │     let a = cross(vec2(0., 1.), vec2(0., 1.));
-  │             ^^^^^ naga::Expression [6]
+  │             ^^^^^ naga::ir::Expression [6]
   │
   = Expression [6] is invalid
   = Argument [0] to Cross as expression [2] has an invalid type.
@@ -287,7 +287,7 @@ error: Entry point main at Compute is invalid
   ┌─ wgsl:3:13
   │
 3 │     let a = cross(vec4(0., 1., 2., 3.), vec4(0., 1., 2., 3.));
-  │             ^^^^^ naga::Expression [10]
+  │             ^^^^^ naga::ir::Expression [10]
   │
   = Expression [10] is invalid
   = Argument [0] to Cross as expression [4] has an invalid type.
@@ -307,7 +307,7 @@ fn main() {{
         );
         let module = naga::front::wgsl::parse_str(&source).unwrap();
         let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
-            .validate_no_overrides(&module)
+            .validate(&module)
             .expect_err("module should be invalid");
         assert_eq!(err.emit_to_string(&source), expected_err);
     }
@@ -381,7 +381,7 @@ fn incompatible_interpolation_and_sampling_types() {
     for (invalid_source, invalid_module, interpolation, sampling, interpolate_attr) in invalid_cases
     {
         let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
-            .validate_no_overrides(&invalid_module)
+            .validate(&invalid_module)
             .expect_err(&format!(
                 "module should be invalid for {interpolate_attr:?}"
             ));
@@ -523,7 +523,7 @@ impl BindingArrayFixture {
                 name: Some("array<u32, 10>".into()),
                 inner: naga::TypeInner::Array {
                     base: ty_u32,
-                    size: naga::ArraySize::Constant(std::num::NonZeroU32::new(10).unwrap()),
+                    size: naga::ArraySize::Constant(core::num::NonZeroU32::new(10).unwrap()),
                     stride: 4,
                 },
             },
@@ -628,7 +628,7 @@ error: Function [1] 'main' is invalid
   │  \n7 │ ╭                 fn main() {
 8 │ │                     foo();
   │ │                     ^^^^ invalid function call
-  │ ╰──────────────────────────^ naga::Function [1]
+  │ ╰──────────────────────────^ naga::ir::Function [1]
   │  \n  = Call to [0] is invalid
   = Requires 1 arguments, but 0 are provided
 
@@ -647,7 +647,7 @@ error: Entry point main at Compute is invalid
   ┌─ wgsl:4:9
   │
 4 │     _ = select(1, 2, 9001);
-  │         ^^^^^^ naga::Expression [3]
+  │         ^^^^^^ naga::ir::Expression [3]
   │
   = Expression [3] is invalid
   = Expected selection condition to be a boolean value, got Scalar(Scalar { kind: Sint, width: 4 })
@@ -667,7 +667,7 @@ error: Entry point main at Compute is invalid
   ┌─ wgsl:4:9
   │
 4 │     _ = select(true, 1, false);
-  │         ^^^^^^ naga::Expression [3]
+  │         ^^^^^^ naga::ir::Expression [3]
   │
   = Expression [3] is invalid
   = Expected selection argument types to match, but reject value of type Scalar(Scalar { kind: Bool, width: 1 }) does not match accept value of value Scalar(Scalar { kind: Sint, width: 4 })
@@ -679,7 +679,7 @@ error: Entry point main at Compute is invalid
     for (source, expected_err) in cases {
         let module = naga::front::wgsl::parse_str(source).unwrap();
         let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
-            .validate_no_overrides(&module)
+            .validate(&module)
             .expect_err("module should be invalid");
         println!("{}", err.emit_to_string(source));
         assert_eq!(err.emit_to_string(source), expected_err);
