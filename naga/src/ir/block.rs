@@ -23,9 +23,7 @@ impl Block {
     }
 
     pub fn from_vec(body: Vec<Statement>) -> Self {
-        let span_info = core::iter::repeat(Span::default())
-            .take(body.len())
-            .collect();
+        let span_info = core::iter::repeat_n(Span::default(), body.len()).collect();
         Self { body, span_info }
     }
 
