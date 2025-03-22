@@ -439,10 +439,8 @@ impl Buffer {
     ) -> Result<SubmissionIndex, (BufferMapOperation, BufferAccessError)> {
         let range_size = if let Some(size) = size {
             size
-        } else if offset > self.size {
-            0
         } else {
-            self.size - offset
+            self.size.saturating_sub(offset)
         };
 
         if offset % wgt::MAP_ALIGNMENT != 0 {
