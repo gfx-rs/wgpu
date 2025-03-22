@@ -49,6 +49,9 @@ var<uniform> baz: Baz;
 var<storage,read_write> qux: vec2<i32>;
 
 fn test_matrix_within_struct_accesses() {
+    // Test HLSL accesses to Cx2 matrices. There are additional tests
+    // in `hlsl_mat_cx2.wgsl`.
+
     var idx = 1;
 
     idx--;
@@ -576,91 +579,91 @@ OpDecorate %388 Location 0
 %69 = OpAccessChain  %68  %56 %48
 OpBranch %98
 %98 = OpLabel
-OpLine %3 40 5
+OpLine %3 43 5
 %99 = OpLoad  %6  %94
 %100 = OpISub  %6  %99 %70
-OpLine %3 40 5
+OpLine %3 43 5
 OpStore %94 %100
-OpLine %3 43 14
+OpLine %3 46 14
 %102 = OpAccessChain  %101  %69 %48
 %103 = OpLoad  %22  %102
-OpLine %3 44 14
-OpLine %3 44 14
+OpLine %3 47 14
+OpLine %3 47 14
 %105 = OpAccessChain  %104  %69 %48 %48
 %106 = OpLoad  %13  %105
-OpLine %3 45 14
+OpLine %3 48 14
 %107 = OpLoad  %6  %94
 %108 = OpAccessChain  %104  %69 %48 %107
 %109 = OpLoad  %13  %108
-OpLine %3 46 14
-OpLine %3 46 14
-OpLine %3 46 14
+OpLine %3 49 14
+OpLine %3 49 14
+OpLine %3 49 14
 %111 = OpAccessChain  %110  %69 %48 %48 %44
 %112 = OpLoad  %9  %111
-OpLine %3 47 14
-OpLine %3 47 14
+OpLine %3 50 14
+OpLine %3 50 14
 %113 = OpLoad  %6  %94
 %114 = OpAccessChain  %110  %69 %48 %48 %113
 %115 = OpLoad  %9  %114
-OpLine %3 48 14
+OpLine %3 51 14
 %116 = OpLoad  %6  %94
-OpLine %3 48 14
+OpLine %3 51 14
 %117 = OpAccessChain  %110  %69 %48 %116 %44
 %118 = OpLoad  %9  %117
-OpLine %3 49 14
+OpLine %3 52 14
 %119 = OpLoad  %6  %94
 %120 = OpLoad  %6  %94
 %121 = OpAccessChain  %110  %69 %48 %119 %120
 %122 = OpLoad  %9  %121
-OpLine %3 51 29
-OpLine %3 51 45
-OpLine %3 51 13
-OpLine %3 53 5
+OpLine %3 54 29
+OpLine %3 54 45
+OpLine %3 54 13
+OpLine %3 56 5
 %123 = OpLoad  %6  %94
 %124 = OpIAdd  %6  %123 %70
-OpLine %3 53 5
+OpLine %3 56 5
 OpStore %94 %124
-OpLine %3 56 5
-OpLine %3 56 23
-OpLine %3 56 39
-OpLine %3 56 11
-OpLine %3 56 5
+OpLine %3 59 5
+OpLine %3 59 23
+OpLine %3 59 39
+OpLine %3 59 11
+OpLine %3 59 5
 %126 = OpAccessChain  %125  %96 %48
 OpStore %126 %85
-OpLine %3 57 5
-OpLine %3 57 5
-OpLine %3 57 14
-OpLine %3 57 5
+OpLine %3 60 5
+OpLine %3 60 5
+OpLine %3 60 14
+OpLine %3 60 5
 %128 = OpAccessChain  %127  %96 %48 %48
 OpStore %128 %87
-OpLine %3 58 5
+OpLine %3 61 5
 %129 = OpLoad  %6  %94
-OpLine %3 58 16
-OpLine %3 58 5
+OpLine %3 61 16
+OpLine %3 61 5
 %130 = OpAccessChain  %127  %96 %48 %129
 OpStore %130 %89
-OpLine %3 59 5
-OpLine %3 59 5
-OpLine %3 59 5
-OpLine %3 59 5
+OpLine %3 62 5
+OpLine %3 62 5
+OpLine %3 62 5
+OpLine %3 62 5
 %131 = OpAccessChain  %28  %96 %48 %48 %44
 OpStore %131 %90
-OpLine %3 60 5
-OpLine %3 60 5
+OpLine %3 63 5
+OpLine %3 63 5
 %132 = OpLoad  %6  %94
-OpLine %3 60 5
+OpLine %3 63 5
 %133 = OpAccessChain  %28  %96 %48 %48 %132
 OpStore %133 %91
-OpLine %3 61 5
+OpLine %3 64 5
 %134 = OpLoad  %6  %94
-OpLine %3 61 5
-OpLine %3 61 5
+OpLine %3 64 5
+OpLine %3 64 5
 %135 = OpAccessChain  %28  %96 %48 %134 %44
 OpStore %135 %92
-OpLine %3 62 5
+OpLine %3 65 5
 %136 = OpLoad  %6  %94
 %137 = OpLoad  %6  %94
-OpLine %3 62 5
+OpLine %3 65 5
 %138 = OpAccessChain  %28  %96 %48 %136 %137
 OpStore %138 %93
 OpReturn
@@ -672,111 +675,111 @@ OpFunctionEnd
 %142 = OpAccessChain  %141  %62 %48
 OpBranch %153
 %153 = OpLabel
-OpLine %3 75 5
+OpLine %3 78 5
 %154 = OpLoad  %6  %150
 %155 = OpISub  %6  %154 %70
-OpLine %3 75 5
+OpLine %3 78 5
 OpStore %150 %155
-OpLine %3 78 14
+OpLine %3 81 14
 %157 = OpAccessChain  %156  %142 %48
 %158 = OpLoad  %26  %157
-OpLine %3 79 14
-OpLine %3 79 14
+OpLine %3 82 14
+OpLine %3 82 14
 %160 = OpAccessChain  %159  %142 %48 %48
 %161 = OpLoad  %25  %160
-OpLine %3 80 14
-OpLine %3 80 14
-OpLine %3 80 14
+OpLine %3 83 14
+OpLine %3 83 14
+OpLine %3 83 14
 %162 = OpAccessChain  %104  %142 %48 %48 %48
 %163 = OpLoad  %13  %162
-OpLine %3 81 14
-OpLine %3 81 14
+OpLine %3 84 14
+OpLine %3 84 14
 %164 = OpLoad  %6  %150
 %165 = OpAccessChain  %104  %142 %48 %48 %164
 %166 = OpLoad  %13  %165
-OpLine %3 82 14
-OpLine %3 82 14
-OpLine %3 82 14
-OpLine %3 82 14
+OpLine %3 85 14
+OpLine %3 85 14
+OpLine %3 85 14
+OpLine %3 85 14
 %167 = OpAccessChain  %110  %142 %48 %48 %48 %44
 %168 = OpLoad  %9  %167
-OpLine %3 83 14
-OpLine %3 83 14
-OpLine %3 83 14
+OpLine %3 86 14
+OpLine %3 86 14
+OpLine %3 86 14
 %169 = OpLoad  %6  %150
 %170 = OpAccessChain  %110  %142 %48 %48 %48 %169
 %171 = OpLoad  %9  %170
-OpLine %3 84 14
-OpLine %3 84 14
+OpLine %3 87 14
+OpLine %3 87 14
 %172 = OpLoad  %6  %150
-OpLine %3 84 14
+OpLine %3 87 14
 %173 = OpAccessChain  %110  %142 %48 %48 %172 %44
 %174 = OpLoad  %9  %173
-OpLine %3 85 14
-OpLine %3 85 14
+OpLine %3 88 14
+OpLine %3 88 14
 %175 = OpLoad  %6  %150
 %176 = OpLoad  %6  %150
 %177 = OpAccessChain  %110  %142 %48 %48 %175 %176
 %178 = OpLoad  %9  %177
-OpLine %3 87 13
-OpLine %3 89 5
+OpLine %3 90 13
+OpLine %3 92 5
 %179 = OpLoad  %6  %150
 %180 = OpIAdd  %6  %179 %70
-OpLine %3 89 5
+OpLine %3 92 5
 OpStore %150 %180
-OpLine %3 92 5
-OpLine %3 92 5
+OpLine %3 95 5
+OpLine %3 95 5
 %182 = OpAccessChain  %181  %151 %48
 OpStore %182 %143
-OpLine %3 93 5
-OpLine %3 93 5
-OpLine %3 93 27
-OpLine %3 93 43
-OpLine %3 93 59
-OpLine %3 93 15
-OpLine %3 93 5
+OpLine %3 96 5
+OpLine %3 96 5
+OpLine %3 96 27
+OpLine %3 96 43
+OpLine %3 96 59
+OpLine %3 96 15
+OpLine %3 96 5
 %184 = OpAccessChain  %183  %151 %48 %48
 OpStore %184 %149
-OpLine %3 94 5
-OpLine %3 94 5
-OpLine %3 94 5
-OpLine %3 94 18
-OpLine %3 94 5
+OpLine %3 97 5
+OpLine %3 97 5
+OpLine %3 97 5
+OpLine %3 97 18
+OpLine %3 97 5
 %185 = OpAccessChain  %127  %151 %48 %48 %48
 OpStore %185 %87
-OpLine %3 95 5
-OpLine %3 95 5
+OpLine %3 98 5
+OpLine %3 98 5
 %186 = OpLoad  %6  %150
-OpLine %3 95 20
-OpLine %3 95 5
+OpLine %3 98 20
+OpLine %3 98 5
 %187 = OpAccessChain  %127  %151 %48 %48 %186
 OpStore %187 %89
-OpLine %3 96 5
-OpLine %3 96 5
-OpLine %3 96 5
-OpLine %3 96 5
-OpLine %3 96 5
+OpLine %3 99 5
+OpLine %3 99 5
+OpLine %3 99 5
+OpLine %3 99 5
+OpLine %3 99 5
 %188 = OpAccessChain  %28  %151 %48 %48 %48 %44
 OpStore %188 %90
-OpLine %3 97 5
-OpLine %3 97 5
-OpLine %3 97 5
+OpLine %3 100 5
+OpLine %3 100 5
+OpLine %3 100 5
 %189 = OpLoad  %6  %150
-OpLine %3 97 5
+OpLine %3 100 5
 %190 = OpAccessChain  %28  %151 %48 %48 %48 %189
 OpStore %190 %91
-OpLine %3 98 5
-OpLine %3 98 5
+OpLine %3 101 5
+OpLine %3 101 5
 %191 = OpLoad  %6  %150
-OpLine %3 98 5
-OpLine %3 98 5
+OpLine %3 101 5
+OpLine %3 101 5
 %192 = OpAccessChain  %28  %151 %48 %48 %191 %44
 OpStore %192 %92
-OpLine %3 99 5
-OpLine %3 99 5
+OpLine %3 102 5
+OpLine %3 102 5
 %193 = OpLoad  %6  %150
 %194 = OpLoad  %6  %150
-OpLine %3 99 5
+OpLine %3 102 5
 %195 = OpAccessChain  %28  %151 %48 %48 %193 %194
 OpStore %195 %93
 OpReturn
@@ -786,7 +789,7 @@ OpFunctionEnd
 %196 = OpLabel
 OpBranch %200
 %200 = OpLabel
-OpLine %3 102 22
+OpLine %3 105 22
 %201 = OpLoad  %9  %197
 OpReturnValue %201
 OpFunctionEnd
@@ -795,9 +798,9 @@ OpFunctionEnd
 %202 = OpLabel
 OpBranch %206
 %206 = OpLabel
-OpLine %3 107 12
+OpLine %3 110 12
 %207 = OpCompositeExtract  %29  %203 4
-OpLine %3 107 12
+OpLine %3 110 12
 %208 = OpCompositeExtract  %9  %207 9
 OpReturnValue %208
 OpFunctionEnd
@@ -806,7 +809,7 @@ OpFunctionEnd
 %209 = OpLabel
 OpBranch %214
 %214 = OpLabel
-OpLine %3 156 5
+OpLine %3 159 5
 OpStore %210 %213
 OpReturn
 OpFunctionEnd
@@ -815,11 +818,11 @@ OpFunctionEnd
 %215 = OpLabel
 OpBranch %222
 %222 = OpLabel
-OpLine %3 160 32
-OpLine %3 160 43
-OpLine %3 160 32
-OpLine %3 160 12
-OpLine %3 160 5
+OpLine %3 163 32
+OpLine %3 163 43
+OpLine %3 163 32
+OpLine %3 163 12
+OpLine %3 163 5
 OpStore %216 %221
 OpReturn
 OpFunctionEnd
@@ -829,13 +832,13 @@ OpFunctionEnd
 %230 = OpVariable  %36  Function %228
 OpBranch %231
 %231 = OpLabel
-OpLine %3 165 5
-%232 = OpFunctionCall  %2  %211 %229
-OpLine %3 167 35
-OpLine %3 167 46
-OpLine %3 167 35
-OpLine %3 167 15
 OpLine %3 168 5
+%232 = OpFunctionCall  %2  %211 %229
+OpLine %3 170 35
+OpLine %3 170 46
+OpLine %3 170 35
+OpLine %3 170 15
+OpLine %3 171 5
 %233 = OpFunctionCall  %2  %217 %230
 OpReturn
 OpFunctionEnd
@@ -844,7 +847,7 @@ OpFunctionEnd
 %234 = OpLabel
 OpBranch %238
 %238 = OpLabel
-OpLine %3 176 10
+OpLine %3 179 10
 %239 = OpAccessChain  %34  %235 %48
 %240 = OpLoad  %4  %239
 OpReturnValue %240
@@ -854,8 +857,8 @@ OpFunctionEnd
 %241 = OpLabel
 OpBranch %245
 %245 = OpLabel
-OpLine %3 180 3
-OpLine %3 180 3
+OpLine %3 183 3
+OpLine %3 183 3
 %246 = OpAccessChain  %34  %242 %48
 OpStore %246 %17
 OpReturn
@@ -865,7 +868,7 @@ OpFunctionEnd
 %247 = OpLabel
 OpBranch %251
 %251 = OpLabel
-OpLine %3 184 10
+OpLine %3 187 10
 %252 = OpAccessChain  %34  %248 %44
 %253 = OpLoad  %4  %252
 OpReturnValue %253
@@ -875,8 +878,8 @@ OpFunctionEnd
 %254 = OpLabel
 OpBranch %258
 %258 = OpLabel
-OpLine %3 188 3
-OpLine %3 188 3
+OpLine %3 191 3
+OpLine %3 191 3
 %259 = OpAccessChain  %34  %255 %44
 OpStore %259 %17
 OpReturn
@@ -887,13 +890,13 @@ OpFunctionEnd
 %264 = OpVariable  %41  Function %265
 OpBranch %266
 %266 = OpLabel
-OpLine %3 193 4
+OpLine %3 196 4
 %267 = OpFunctionCall  %2  %243 %262
-OpLine %3 194 4
-%268 = OpFunctionCall  %4  %236 %262
 OpLine %3 197 4
+%268 = OpFunctionCall  %4  %236 %262
+OpLine %3 200 4
 %269 = OpFunctionCall  %2  %256 %264
-OpLine %3 198 4
+OpLine %3 201 4
 %270 = OpFunctionCall  %4  %249 %264
 OpReturn
 OpFunctionEnd
@@ -903,11 +906,11 @@ OpFunctionEnd
 %275 = OpVariable  %276  Function %277
 OpBranch %278
 %278 = OpLabel
-OpLine %3 202 13
+OpLine %3 205 13
 %279 = OpCompositeConstruct  %43  %272
-OpLine %3 202 5
+OpLine %3 205 5
 OpStore %275 %279
-OpLine %3 204 12
+OpLine %3 207 12
 %281 = OpAccessChain  %280  %275 %48
 %282 = OpLoad  %42  %281
 OpReturnValue %282
@@ -917,8 +920,8 @@ OpFunctionEnd
 %288 = OpVariable  %289  Function %287
 OpBranch %290
 %290 = OpLabel
-OpLine %3 210 16
-OpLine %3 212 12
+OpLine %3 213 16
+OpLine %3 215 12
 %291 = OpAccessChain  %95  %288 %48
 %292 = OpLoad  %6  %291
 OpReturnValue %292
@@ -927,19 +930,19 @@ OpFunctionEnd
 %293 = OpLabel
 OpBranch %296
 %296 = OpLabel
-OpLine %3 222 17
+OpLine %3 225 17
 %297 = OpCompositeExtract  %46  %295 0
-OpLine %3 223 20
+OpLine %3 226 20
 %298 = OpCompositeExtract  %6  %297 0
-OpLine %3 225 9
+OpLine %3 228 9
 %299 = OpCompositeExtract  %4  %295 1
 %300 = OpBitcast  %4  %298
 %301 = OpINotEqual  %42  %299 %300
-OpLine %3 225 5
+OpLine %3 228 5
 OpSelectionMerge %302 None
 OpBranchConditional %301 %302 %302
 %302 = OpLabel
-OpLine %3 229 12
+OpLine %3 232 12
 %303 = OpCompositeExtract  %46  %295 0
 %304 = OpCompositeExtract  %6  %303 0
 OpReturnValue %304
@@ -951,27 +954,27 @@ OpFunctionEnd
 %312 = OpVariable  %95  Function %313
 OpBranch %314
 %314 = OpLabel
-OpLine %3 235 17
+OpLine %3 238 17
 %315 = OpAccessChain  %310  %307 %48
 %316 = OpLoad  %46  %315
-OpLine %3 235 5
+OpLine %3 238 5
 OpStore %309 %316
-OpLine %3 236 20
+OpLine %3 239 20
 %317 = OpAccessChain  %95  %309 %48
 %318 = OpLoad  %6  %317
-OpLine %3 236 5
+OpLine %3 239 5
 OpStore %312 %318
-OpLine %3 238 9
+OpLine %3 241 9
 %319 = OpAccessChain  %34  %307 %44
 %320 = OpLoad  %4  %319
 %321 = OpLoad  %6  %312
 %322 = OpBitcast  %4  %321
 %323 = OpINotEqual  %42  %320 %322
-OpLine %3 238 5
+OpLine %3 241 5
 OpSelectionMerge %324 None
 OpBranchConditional %323 %324 %324
 %324 = OpLabel
-OpLine %3 242 12
+OpLine %3 245 12
 %325 = OpAccessChain  %95  %307 %48 %48
 %326 = OpLoad  %6  %325
 OpReturnValue %326
@@ -988,58 +991,58 @@ OpBranch %348
 %348 = OpLabel
 OpLine %3 1 1
 %349 = OpLoad  %9  %344
-OpLine %3 115 5
-OpStore %344 %71
-OpLine %3 117 9
-%350 = OpLoad  %7  %52
 OpLine %3 118 5
+OpStore %344 %71
+OpLine %3 120 9
+%350 = OpLoad  %7  %52
+OpLine %3 121 5
 %351 = OpFunctionCall  %2  %66
-OpLine %3 119 5
+OpLine %3 122 5
 %352 = OpFunctionCall  %2  %140
-OpLine %3 122 19
+OpLine %3 125 19
 %354 = OpAccessChain  %353  %54 %48
 %355 = OpLoad  %10  %354
-OpLine %3 123 15
+OpLine %3 126 15
 %357 = OpAccessChain  %356  %54 %40
 %358 = OpLoad  %19  %357
-OpLine %3 125 13
+OpLine %3 128 13
 %361 = OpAccessChain  %360  %54 %48 %339 %48
 %362 = OpLoad  %9  %361
-OpLine %3 126 13
-OpLine %3 126 22
+OpLine %3 129 13
+OpLine %3 129 22
 %364 = OpArrayLength  %4  %54 5
-OpLine %3 126 13
+OpLine %3 129 13
 %365 = OpISub  %4  %364 %15
 %368 = OpAccessChain  %367  %54 %31 %365 %48
 %369 = OpLoad  %6  %368
-OpLine %3 127 13
+OpLine %3 130 13
 %370 = OpLoad  %24  %336
-OpLine %3 130 56
-OpLine %3 130 56
-OpLine %3 131 21
+OpLine %3 133 56
+OpLine %3 133 56
+OpLine %3 134 21
 %371 = OpFunctionCall  %9  %198 %344
-OpLine %3 134 31
+OpLine %3 137 31
 %374 = OpExtInst  %9  %1 FClamp %362 %372 %373
 %375 = OpConvertFToS  %6  %374
-OpLine %3 134 14
+OpLine %3 137 14
 %376 = OpCompositeConstruct  %33  %369 %375 %340 %341 %342
-OpLine %3 134 5
+OpLine %3 137 5
 OpStore %345 %376
-OpLine %3 135 5
+OpLine %3 138 5
 %377 = OpIAdd  %4  %330 %44
-OpLine %3 135 5
+OpLine %3 138 5
 %378 = OpAccessChain  %95  %345 %377
 OpStore %378 %286
-OpLine %3 136 17
+OpLine %3 139 17
 %379 = OpAccessChain  %95  %345 %330
 %380 = OpLoad  %6  %379
-OpLine %3 138 5
+OpLine %3 141 5
 %381 = OpFunctionCall  %9  %204 %343
-OpLine %3 140 22
+OpLine %3 143 22
 %383 = OpCompositeConstruct  %382  %380 %380 %380 %380
 %384 = OpConvertSToF  %32  %383
 %385 = OpMatrixTimesVector  %11  %355 %384
-OpLine %3 140 12
+OpLine %3 143 12
 %386 = OpCompositeConstruct  %32  %385 %73
 OpStore %331 %386
 OpReturn
@@ -1049,33 +1052,33 @@ OpFunctionEnd
 %390 = OpAccessChain  %335  %59 %48
 OpBranch %401
 %401 = OpLabel
-OpLine %3 146 5
-OpLine %3 146 5
-OpLine %3 146 5
+OpLine %3 149 5
+OpLine %3 149 5
+OpLine %3 149 5
 %402 = OpAccessChain  %360  %54 %48 %44 %15
 OpStore %402 %71
-OpLine %3 147 5
-OpLine %3 147 31
-OpLine %3 147 47
-OpLine %3 147 63
-OpLine %3 147 19
-OpLine %3 147 5
+OpLine %3 150 5
+OpLine %3 150 31
+OpLine %3 150 47
+OpLine %3 150 63
+OpLine %3 150 19
+OpLine %3 150 5
 %403 = OpAccessChain  %353  %54 %48
 OpStore %403 %395
-OpLine %3 148 5
-OpLine %3 148 35
-OpLine %3 148 15
-OpLine %3 148 5
+OpLine %3 151 5
+OpLine %3 151 35
+OpLine %3 151 15
+OpLine %3 151 5
 %404 = OpAccessChain  %356  %54 %40
 OpStore %404 %398
-OpLine %3 149 5
-OpLine %3 149 5
-OpLine %3 149 5
+OpLine %3 152 5
+OpLine %3 152 5
+OpLine %3 152 5
 %405 = OpAccessChain  %367  %54 %31 %44 %48
 OpStore %405 %70
-OpLine %3 150 5
+OpLine %3 153 5
 OpStore %390 %399
-OpLine %3 152 12
+OpLine %3 155 12
 OpStore %388 %400
 OpReturn
 OpFunctionEnd
@@ -1083,17 +1086,17 @@ OpFunctionEnd
 %406 = OpLabel
 OpBranch %409
 %409 = OpLabel
-OpLine %3 247 5
-%410 = OpFunctionCall  %2  %224
-OpLine %3 248 5
-%411 = OpFunctionCall  %2  %261
-OpLine %3 249 5
-%412 = OpFunctionCall  %42  %273 %408
 OpLine %3 250 5
-%413 = OpFunctionCall  %6  %284
+%410 = OpFunctionCall  %2  %224
 OpLine %3 251 5
-%414 = OpFunctionCall  %6  %294
+%411 = OpFunctionCall  %2  %261
 OpLine %3 252 5
+%412 = OpFunctionCall  %42  %273 %408
+OpLine %3 253 5
+%413 = OpFunctionCall  %6  %284
+OpLine %3 254 5
+%414 = OpFunctionCall  %6  %294
+OpLine %3 255 5
 %415 = OpFunctionCall  %6  %306
 OpReturn
 OpFunctionEnd

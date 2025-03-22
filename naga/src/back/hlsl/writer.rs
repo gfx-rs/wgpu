@@ -1945,6 +1945,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         StoreValue::Expression(value),
                         func_ctx,
                         level,
+                        None,
                     )?;
                 } else {
                     // We treat matrices of the form `matCx2` as a sequence of C `vec2`s.
@@ -2963,6 +2964,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         rows: crate::VectorSize::Bi,
                         width: 4,
                     }) = get_inner_matrix_of_struct_array_member(module, base, func_ctx, true)
+                        .or_else(|| get_global_uniform_matrix(module, base, func_ctx))
                     {
                         write!(self.out, "__get_col_of_mat{}x2(", columns as u8)?;
                         self.write_expr(module, base, func_ctx)?;
@@ -3075,13 +3077,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 {
                     // do nothing, the chain is written on `Load`/`Store`
                 } else {
-                    // We write the matrix column access in a special way since
-                    // the type of `base` is our special __matCx2 struct.
+                    // See if we need to write the matrix column access in a
+                    // special way since the type of `base` is our special
+                    // __matCx2 struct.
                     if let Some(MatrixType {
                         rows: crate::VectorSize::Bi,
                         width: 4,
                         ..
                     }) = get_inner_matrix_of_struct_array_member(module, base, func_ctx, true)
+                        .or_else(|| get_global_uniform_matrix(module, base, func_ctx))
                     {
                         self.write_expr(module, base, func_ctx)?;
                         write!(self.out, "._{index}")?;
@@ -3381,8 +3385,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         .or_else(|| get_inner_matrix_of_global_uniform(module, pointer, func_ctx))
                         {
                             let mut resolved = func_ctx.resolve_type(pointer, &module.types);
-                            if let TypeInner::Pointer { base, .. } = *resolved {
-                                resolved = &module.types[base].inner;
+                            let ptr_tr = resolved.pointer_base_type();
+                            if let Some(ptr_ty) =
+                                ptr_tr.as_ref().map(|tr| tr.inner_with(&module.types))
+                            {
+                                resolved = ptr_ty;
                             }
 
                             write!(self.out, "((")?;
@@ -4416,6 +4423,32 @@ pub(super) fn get_inner_matrix_data(
     }
 }
 
+fn find_matrix_in_access_chain(
+    module: &Module,
+    base: Handle<crate::Expression>,
+    func_ctx: &back::FunctionCtx<'_>,
+) -> Option<Handle<crate::Expression>> {
+    let mut current_base = base;
+    loop {
+        let resolved_tr = func_ctx
+            .resolve_type(current_base, &module.types)
+            .pointer_base_type();
+        let resolved = resolved_tr.as_ref()?.inner_with(&module.types);
+
+        match *resolved {
+            TypeInner::Scalar(_) | TypeInner::Vector { .. } => {}
+            TypeInner::Matrix { .. } => return Some(current_base),
+            _ => return None,
+        }
+
+        current_base = match func_ctx.expressions[current_base] {
+            crate::Expression::Access { base, .. } => base,
+            crate::Expression::AccessIndex { base, .. } => base,
+            _ => return None,
+        }
+    }
+}
+
 /// Returns the matrix data if the access chain starting at `base`:
 /// - starts with an expression with resolved type of [`TypeInner::Matrix`] if `direct = true`
 /// - contains one or more expressions with resolved type of [`TypeInner::Array`] of [`TypeInner::Matrix`]
@@ -4472,6 +4505,36 @@ pub(super) fn get_inner_matrix_of_struct_array_member(
         };
     }
     None
+}
+
+/// Simpler version of get_inner_matrix_of_global_uniform that only looks at the
+/// immediate expression, rather than traversing an access chain.
+fn get_global_uniform_matrix(
+    module: &Module,
+    base: Handle<crate::Expression>,
+    func_ctx: &back::FunctionCtx<'_>,
+) -> Option<MatrixType> {
+    let base_tr = func_ctx
+        .resolve_type(base, &module.types)
+        .pointer_base_type();
+    let base_ty = base_tr.as_ref().map(|tr| tr.inner_with(&module.types));
+    match (&func_ctx.expressions[base], base_ty) {
+        (
+            &crate::Expression::GlobalVariable(handle),
+            Some(&TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            }),
+        ) if module.global_variables[handle].space == crate::AddressSpace::Uniform => {
+            Some(MatrixType {
+                columns,
+                rows,
+                width: scalar.width,
+            })
+        }
+        _ => None,
+    }
 }
 
 /// Returns the matrix data if the access chain starting at `base`:
