@@ -3036,7 +3036,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 }
                 Op::FunctionCall => {
                     inst.expect_at_least(4)?;
-                    block.extend(emitter.finish(ctx.expressions));
 
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
@@ -3048,6 +3047,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         let lexp = self.lookup_expression.lookup(arg_id)?;
                         arguments.push(get_expr_handle!(arg_id, lexp));
                     }
+
+                    block.extend(emitter.finish(ctx.expressions));
 
                     // We just need an unique handle here, nothing more.
                     let function = self.add_call(ctx.function_id, func_id);
