@@ -462,6 +462,7 @@ pub struct Instance {
     supports_allow_tearing: bool,
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
+    options: wgt::Dx12BackendOptions,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
@@ -601,6 +602,7 @@ pub struct Adapter {
     workarounds: Workarounds,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     compiler_container: Arc<shader_compilation::CompilerContainer>,
+    options: wgt::Dx12BackendOptions,
 }
 
 unsafe impl Send for Adapter {}
@@ -659,6 +661,7 @@ pub struct Device {
     idler: Idler,
     features: wgt::Features,
     shared: Arc<DeviceShared>,
+    options: wgt::Dx12BackendOptions,
     // CPU only pools
     rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
     dsv_pool: Mutex<descriptor::CpuPool>,
@@ -1178,7 +1181,7 @@ impl crate::DynAccelerationStructure for AccelerationStructure {}
 
 impl SwapChain {
     unsafe fn release_resources(mut self) -> Dxgi::IDXGISwapChain3 {
-        if let Some(waitable) = self.waitable.take() {
+        if let Some(mut waitable) = self.waitable.take() {
             Foundation::HANDLE::free(&mut waitable);
         }
         self.raw
@@ -1374,7 +1377,12 @@ impl crate::Surface for Surface {
 
         unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) }
             .into_device_result("SetMaximumFrameLatency")?;
-        let waitable = unsafe { swap_chain.GetFrameLatencyWaitableObject() };
+
+        let waitable = if device.options.use_latency_waitable_object {
+            Some(unsafe { swap_chain.GetFrameLatencyWaitableObject() })
+        } else {
+            None
+        };
 
         let mut resources = Vec::with_capacity(swap_chain_buffer as usize);
         for i in 0..swap_chain_buffer {

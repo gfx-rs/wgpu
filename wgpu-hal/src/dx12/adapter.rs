@@ -58,6 +58,7 @@ impl super::Adapter {
         instance_flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         compiler_container: Arc<shader_compilation::CompilerContainer>,
+        backend_options: wgt::Dx12BackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
@@ -534,6 +535,7 @@ impl super::Adapter {
                 workarounds,
                 memory_budget_thresholds,
                 compiler_container,
+                options: backend_options,
             },
             info,
             features,
@@ -697,6 +699,7 @@ impl crate::Adapter for super::Adapter {
             &self.library,
             self.memory_budget_thresholds,
             self.compiler_container.clone(),
+            self.options.clone(),
         )?;
         Ok(crate::OpenDevice {
             device,
