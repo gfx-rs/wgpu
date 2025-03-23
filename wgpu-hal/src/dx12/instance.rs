@@ -126,6 +126,7 @@ impl crate::Instance for super::Instance {
                 target: SurfaceTarget::WndHandle(Foundation::HWND(handle.hwnd.get() as *mut _)),
                 supports_allow_tearing: self.supports_allow_tearing,
                 swap_chain: RwLock::new(None),
+                options: self.options.clone(),
             }),
             _ => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Win32 handle"
