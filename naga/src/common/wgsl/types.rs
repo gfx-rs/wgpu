@@ -356,3 +356,70 @@ impl From<core::fmt::Error> for WriteTypeError {
         Self::Format(err)
     }
 }
+
+/// Format types as WGSL based on a [`GlobalCtx`].
+///
+/// This is probably good enough for diagnostic output, but it has some
+/// limitations:
+///
+/// - It does not apply [`Namer`] renamings, to avoid collisions.
+///
+/// - It generates invalid WGSL for anonymous struct types.
+///
+/// - It doesn't write the lengths of override-expression-sized arrays
+///   correctly, unless the expression is just the override identifier.
+///
+/// [`GlobalCtx`]: crate::proc::GlobalCtx
+/// [`Namer`]: crate::proc::Namer
+impl TypeContext for crate::proc::GlobalCtx<'_> {
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
+        &self.types[handle]
+    }
+
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
+        self.types[handle]
+            .name
+            .as_deref()
+            .unwrap_or("{anonymous type}")
+    }
+
+    fn write_override<W: Write>(
+        &self,
+        handle: Handle<crate::Override>,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        match self.overrides[handle].name {
+            Some(ref name) => out.write_str(name),
+            None => write!(out, "{{anonymous override {handle:?}}}"),
+        }
+    }
+}
+
+/// Format types as WGSL based on a `UniqueArena<Type>`.
+///
+/// This is probably only good enough for logging:
+///
+/// - It does not apply any kind of [`Namer`] renamings.
+///
+/// - It generates invalid WGSL for anonymous struct types.
+///
+/// - It doesn't write override-sized arrays properly.
+///
+/// [`Namer`]: crate::proc::Namer
+impl TypeContext for crate::UniqueArena<crate::Type> {
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
+        &self[handle]
+    }
+
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
+        self[handle].name.as_deref().unwrap_or("{anonymous type}")
+    }
+
+    fn write_override<W: Write>(
+        &self,
+        handle: Handle<crate::Override>,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        write!(out, "{{override {handle:?}}}")
+    }
+}
