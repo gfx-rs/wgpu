@@ -355,10 +355,21 @@ impl GlBackendOptions {
 /// Configuration for the DX12 backend.
 ///
 /// Part of [`BackendOptions`].
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Dx12BackendOptions {
     /// Which DX12 shader compiler to use.
     pub shader_compiler: Dx12Compiler,
+    /// Whether to wait for the latency waitable object before acquiring the next swapchain image.
+    pub use_latency_waitable_object: bool,
+}
+
+impl Default for Dx12BackendOptions {
+    fn default() -> Self {
+        Self {
+            shader_compiler: Dx12Compiler::default(),
+            use_latency_waitable_object: true,
+        }
+    }
 }
 
 impl Dx12BackendOptions {
@@ -368,8 +379,12 @@ impl Dx12BackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let compiler = Dx12Compiler::from_env().unwrap_or_default();
+        let use_latency_waitable_object = crate::env::var("WGPU_DX12_USE_LATENCY_WAITABLE_OBJECT")
+            .as_deref()
+            .map_or(true, |s| s != "0");
         Self {
             shader_compiler: compiler,
+            use_latency_waitable_object,
         }
     }
 
@@ -379,7 +394,14 @@ impl Dx12BackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let shader_compiler = self.shader_compiler.with_env();
-        Self { shader_compiler }
+        let use_latency_waitable_object = crate::env::var("WGPU_DX12_USE_LATENCY_WAITABLE_OBJECT")
+            .as_deref()
+            .map_or(self.use_latency_waitable_object, |s| s != "0");
+
+        Self {
+            shader_compiler,
+            use_latency_waitable_object,
+        }
     }
 }
 
