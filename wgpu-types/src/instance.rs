@@ -379,9 +379,8 @@ impl Dx12BackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let compiler = Dx12Compiler::from_env().unwrap_or_default();
-        let use_latency_waitable_object = crate::env::var("WGPU_DX12_USE_LATENCY_WAITABLE_OBJECT")
-            .as_deref()
-            .map_or(true, |s| s != "0");
+        let use_latency_waitable_object =
+            crate::env::var("WGPU_DX12_USE_LATENCY_WAITABLE_OBJECT").as_deref() != Some("0");
         Self {
             shader_compiler: compiler,
             use_latency_waitable_object,
