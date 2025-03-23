@@ -1378,10 +1378,12 @@ impl crate::Surface for Surface {
         unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) }
             .into_device_result("SetMaximumFrameLatency")?;
 
-        let waitable = if device.options.use_latency_waitable_object {
-            Some(unsafe { swap_chain.GetFrameLatencyWaitableObject() })
-        } else {
-            None
+        let waitable = match device.options.latency_waitable_object {
+            wgt::Dx12UseFrameLatencyWaitableObject::None => None,
+            wgt::Dx12UseFrameLatencyWaitableObject::Wait
+            | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {
+                Some(unsafe { swap_chain.GetFrameLatencyWaitableObject() })
+            }
         };
 
         let mut resources = Vec::with_capacity(swap_chain_buffer as usize);
