@@ -569,15 +569,9 @@ impl Surface {
         &self,
         timeout: Option<std::time::Duration>,
     ) -> Result<bool, crate::SurfaceError> {
-        match self.options.latency_waitable_object {
-            wgt::Dx12UseFrameLatencyWaitableObject::None => Ok(false),
-            wgt::Dx12UseFrameLatencyWaitableObject::Wait
-            | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {
-                let mut swapchain = self.swap_chain.write();
-                let sc = swapchain.as_mut().unwrap();
-                unsafe { sc.wait(timeout) }
-            }
-        }
+        let mut swapchain = self.swap_chain.write();
+        let sc = swapchain.as_mut().unwrap();
+        unsafe { sc.wait(timeout) }
     }
 }
 
@@ -1451,9 +1445,9 @@ impl crate::Surface for Surface {
         let sc = swapchain.as_mut().unwrap();
 
         match self.options.latency_waitable_object {
-            wgt::Dx12UseFrameLatencyWaitableObject::None => {}
-            wgt::Dx12UseFrameLatencyWaitableObject::Wait
-            | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {
+            wgt::Dx12UseFrameLatencyWaitableObject::None
+            | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {}
+            wgt::Dx12UseFrameLatencyWaitableObject::Wait => {
                 unsafe { sc.wait(timeout) }?;
             }
         }
