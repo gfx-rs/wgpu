@@ -355,21 +355,12 @@ impl GlBackendOptions {
 /// Configuration for the DX12 backend.
 ///
 /// Part of [`BackendOptions`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Dx12BackendOptions {
     /// Which DX12 shader compiler to use.
     pub shader_compiler: Dx12Compiler,
     /// Whether to wait for the latency waitable object before acquiring the next swapchain image.
-    pub use_latency_waitable_object: bool,
-}
-
-impl Default for Dx12BackendOptions {
-    fn default() -> Self {
-        Self {
-            shader_compiler: Dx12Compiler::default(),
-            use_latency_waitable_object: true,
-        }
-    }
+    pub latency_waitable_object: Dx12UseFrameLatencyWaitableObject,
 }
 
 impl Dx12BackendOptions {
@@ -379,11 +370,11 @@ impl Dx12BackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let compiler = Dx12Compiler::from_env().unwrap_or_default();
-        let use_latency_waitable_object =
-            crate::env::var("WGPU_DX12_USE_LATENCY_WAITABLE_OBJECT").as_deref() != Some("0");
+        let latency_waitable_object =
+            Dx12UseFrameLatencyWaitableObject::from_env().unwrap_or_default();
         Self {
             shader_compiler: compiler,
-            use_latency_waitable_object,
+            latency_waitable_object,
         }
     }
 
@@ -393,13 +384,11 @@ impl Dx12BackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let shader_compiler = self.shader_compiler.with_env();
-        let use_latency_waitable_object = crate::env::var("WGPU_DX12_USE_LATENCY_WAITABLE_OBJECT")
-            .as_deref()
-            .map_or(self.use_latency_waitable_object, |s| s != "0");
+        let latency_waitable_object = self.latency_waitable_object.with_env();
 
         Self {
             shader_compiler,
-            use_latency_waitable_object,
+            latency_waitable_object,
         }
     }
 }
@@ -524,6 +513,54 @@ impl Dx12Compiler {
     }
 
     /// Takes the given compiler, modifies it based on the `WGPU_DX12_COMPILER` environment variable, and returns the result.
+    ///
+    /// See `from_env` for more information.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        if let Some(compiler) = Self::from_env() {
+            compiler
+        } else {
+            self
+        }
+    }
+}
+
+/// Whether and how to use a waitable handle obtained from `GetFrameLatencyWaitableObject`.
+#[derive(Clone, Debug, Default)]
+pub enum Dx12UseFrameLatencyWaitableObject {
+    /// Do not obtain a waitable handle and do not wait for it. The swapchain will
+    /// be created without the `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` flag.
+    None,
+    /// Obtain a waitable handle and wait for it before acquiring the next swapchain image.
+    #[default]
+    Wait,
+    /// Create the swapchain with the `DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT` flag and
+    /// obtain a waitable handle, but do not wait for it before acquiring the next swapchain image.
+    /// This is useful if the application wants to wait for the waitable object itself.
+    DontWait,
+}
+
+impl Dx12UseFrameLatencyWaitableObject {
+    /// Choose whether to use a frame latency waitable object from the environment variable `WGPU_DX12_USE_FRAME_LATENCY_WAITABLE_OBJECT`.
+    ///
+    /// Valid values, case insensitive:
+    /// - `None`
+    /// - `Wait`
+    /// - `DontWait`
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        let value = crate::env::var("WGPU_DX12_USE_FRAME_LATENCY_WAITABLE_OBJECT")
+            .as_deref()?
+            .to_lowercase();
+        match value.as_str() {
+            "none" => Some(Self::None),
+            "wait" => Some(Self::Wait),
+            "dontwait" => Some(Self::DontWait),
+            _ => None,
+        }
+    }
+
+    /// Takes the given setting, modifies it based on the `WGPU_DX12_USE_FRAME_LATENCY_WAITABLE_OBJECT` environment variable, and returns the result.
     ///
     /// See `from_env` for more information.
     #[must_use]
