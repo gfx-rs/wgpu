@@ -1182,7 +1182,7 @@ impl crate::DynAccelerationStructure for AccelerationStructure {}
 impl SwapChain {
     unsafe fn release_resources(mut self) -> Dxgi::IDXGISwapChain3 {
         if let Some(mut waitable) = self.waitable.take() {
-            Foundation::HANDLE::free(&mut waitable);
+            unsafe { Foundation::HANDLE::free(&mut waitable) };
         }
         self.raw
     }
