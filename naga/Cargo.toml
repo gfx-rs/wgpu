@@ -85,11 +85,10 @@ arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
-termcolor = { version = "1.4.1" }
-# remove termcolor dep when updating to the next version of codespan-reporting
-# termcolor minimum version was wrong and was fixed in
-# https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
-codespan-reporting = { version = "0.11.0" }
+codespan-reporting = { workspace = true, default-features = false, features = [
+    "std",
+    "termcolor",
+] }
 hashbrown.workspace = true
 half = { workspace = true, features = ["arbitrary", "num-traits"] }
 rustc-hash.workspace = true
