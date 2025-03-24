@@ -37,7 +37,8 @@ OpDecorate %509 BuiltIn WorkgroupId
 %30 = OpConstantFalse  %8
 %31 = OpConstantComposite  %7  %30 %30 %30 %30
 %32 = OpConstant  %3  0.1
-%33 = OpConstantComposite  %6  %29 %29 %29 %29
+%33 = OpConstantComposite  %4  %32 %32 %32 %32
+%34 = OpConstantComposite  %6  %29 %29 %29 %29
 %54 = OpTypeFunction %6 %6 %6
 %58 = OpConstantComposite  %6  %29 %29 %29 %29
 %60 = OpConstant  %5  -2147483648
@@ -106,23 +107,22 @@ OpDecorate %509 BuiltIn WorkgroupId
 %513 = OpConstantComposite  %10  %17 %17 %17
 %26 = OpFunction  %4  None %27
 %25 = OpLabel
-OpBranch %34
-%34 = OpLabel
-%35 = OpSelect  %5  %28 %23 %29
-%37 = OpCompositeConstruct  %7  %28 %28 %28 %28
-%36 = OpSelect  %4  %37 %18 %20
-%38 = OpSelect  %4  %31 %20 %18
-%39 = OpExtInst  %4  %1 FMix %20 %18 %22
-%41 = OpCompositeConstruct  %4  %32 %32 %32 %32
-%40 = OpExtInst  %4  %1 FMix %20 %18 %41
+OpBranch %35
+%35 = OpLabel
+%36 = OpSelect  %5  %28 %23 %29
+%38 = OpCompositeConstruct  %7  %28 %28 %28 %28
+%37 = OpSelect  %4  %38 %18 %20
+%39 = OpSelect  %4  %31 %20 %18
+%40 = OpExtInst  %4  %1 FMix %20 %18 %22
+%41 = OpExtInst  %4  %1 FMix %20 %18 %33
 %42 = OpBitcast  %3  %23
 %43 = OpBitcast  %4  %24
-%44 = OpCompositeConstruct  %6  %35 %35 %35 %35
-%45 = OpIAdd  %6  %44 %33
+%44 = OpCompositeConstruct  %6  %36 %36 %36 %36
+%45 = OpIAdd  %6  %44 %34
 %46 = OpConvertSToF  %4  %45
-%47 = OpFAdd  %4  %46 %36
-%48 = OpFAdd  %4  %47 %39
-%49 = OpFAdd  %4  %48 %40
+%47 = OpFAdd  %4  %46 %37
+%48 = OpFAdd  %4  %47 %40
+%49 = OpFAdd  %4  %48 %41
 %50 = OpCompositeConstruct  %4  %42 %42 %42 %42
 %51 = OpFAdd  %4  %49 %50
 %52 = OpFAdd  %4  %51 %43

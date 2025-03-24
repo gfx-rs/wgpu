@@ -8,7 +8,7 @@ fn builtins() -> vec4<f32> {
     let s2_ = select(v_f32_zero, v_f32_one, true);
     let s3_ = select(v_f32_one, v_f32_zero, vec4<bool>(false, false, false, false));
     let m1_ = mix(v_f32_zero, v_f32_one, v_f32_half);
-    let m2_ = mix(v_f32_zero, v_f32_one, 0.1f);
+    let m2_ = mix(v_f32_zero, v_f32_one, vec4(0.1f));
     let b1_ = bitcast<f32>(1i);
     let b2_ = bitcast<vec4<f32>>(v_i32_one);
     const v_i32_zero = vec4<i32>(0i, 0i, 0i, 0i);

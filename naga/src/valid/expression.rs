@@ -1372,19 +1372,19 @@ impl super::Validator {
                             (Some(ty1), Some(ty2), None) => (ty1, ty2),
                             _ => return Err(ExpressionError::WrongArgumentCount(fun)),
                         };
-                        let arg_width = match *arg_ty {
+                        match *arg_ty {
                             Ti::Scalar(Sc {
                                 kind: Sk::Float,
-                                width,
+                                width: _,
                             })
                             | Ti::Vector {
                                 scalar:
                                     Sc {
                                         kind: Sk::Float,
-                                        width,
+                                        width: _,
                                     },
                                 ..
-                            } => width,
+                            } => {}
                             _ => return Err(ExpressionError::InvalidArgumentType(fun, 0, arg)),
                         };
                         if arg1_ty != arg_ty {
@@ -1394,20 +1394,12 @@ impl super::Validator {
                                 arg1.unwrap(),
                             ));
                         }
-                        // the last argument can always be a scalar
-                        match *arg2_ty {
-                            Ti::Scalar(Sc {
-                                kind: Sk::Float,
-                                width,
-                            }) if width == arg_width => {}
-                            _ if arg2_ty == arg_ty => {}
-                            _ => {
-                                return Err(ExpressionError::InvalidArgumentType(
-                                    fun,
-                                    2,
-                                    arg2.unwrap(),
-                                ));
-                            }
+                        if arg2_ty != arg_ty {
+                            return Err(ExpressionError::InvalidArgumentType(
+                                fun,
+                                2,
+                                arg2.unwrap(),
+                            ));
                         }
                     }
                     Mf::Inverse | Mf::Determinant => {
