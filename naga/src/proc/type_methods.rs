@@ -102,6 +102,12 @@ impl crate::TypeInner {
     ///
     /// If `inner` is a scalar, vector, or matrix type, return
     /// its scalar type. Otherwise, return `None`.
+    ///
+    /// Note that this doesn't inspect [`Array`] types, as required
+    /// for automatic conversions. For that, see [`scalar_for_conversions`].
+    ///
+    /// [`Array`]: crate::TypeInner::Array
+    /// [`scalar_for_conversions`]: crate::TypeInner::scalar_for_conversions
     pub const fn scalar(&self) -> Option<crate::Scalar> {
         use crate::TypeInner as Ti;
         match *self {
@@ -118,6 +124,31 @@ impl crate::TypeInner {
     /// Returns the scalar width in bytes
     pub fn scalar_width(&self) -> Option<u8> {
         self.scalar().map(|scalar| scalar.width)
+    }
+
+    /// Return the leaf scalar type of `self`, as needed for automatic conversions.
+    ///
+    /// Unlike the [`scalar`] method, which only retrieves scalars for
+    /// [`Scalar`], [`Vector`], and [`Matrix`] this also looks into
+    /// [`Array`] types to find the leaf scalar.
+    ///
+    /// [`scalar`]: crate::TypeInner::scalar
+    /// [`Scalar`]: crate::TypeInner::Scalar
+    /// [`Vector`]: crate::TypeInner::Vector
+    /// [`Matrix`]: crate::TypeInner::Matrix
+    /// [`Array`]: crate::TypeInner::Array
+    pub fn scalar_for_conversions(
+        &self,
+        types: &crate::UniqueArena<crate::Type>,
+    ) -> Option<crate::Scalar> {
+        use crate::TypeInner as Ti;
+        match *self {
+            Ti::Scalar(scalar) | Ti::Vector { scalar, .. } | Ti::Matrix { scalar, .. } => {
+                Some(scalar)
+            }
+            Ti::Array { base, .. } => types[base].inner.scalar_for_conversions(types),
+            _ => None,
+        }
     }
 
     pub const fn pointer_space(&self) -> Option<crate::AddressSpace> {
