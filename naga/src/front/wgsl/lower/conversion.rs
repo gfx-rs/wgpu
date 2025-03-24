@@ -71,7 +71,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         self.convert_leaf_scalar(expr, expr_span, goal_scalar)
     }
 
-    /// Try to convert `expr`'s leaf scalar to `goal` using automatic conversions.
+    /// Try to convert `expr`'s leaf scalar to `goal_scalar` using automatic conversions.
     ///
     /// If no conversions are necessary, return `expr` unchanged.
     ///
