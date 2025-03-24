@@ -283,8 +283,8 @@ jobs:
         run: |
           set -e
 
-          # check with no features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu -p wgpu-hal --no-default-features
+          # check with core feature
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu -p wgpu-hal --no-default-features --features "core"
 
           # Don't check samples since we use winit in our samples which has dropped support for Emscripten.
 

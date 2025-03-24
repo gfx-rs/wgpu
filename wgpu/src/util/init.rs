@@ -4,7 +4,7 @@ use crate::{Adapter, Instance, RequestAdapterOptions, Surface};
 use crate::Backends;
 
 /// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable.
-#[cfg(native)]
+#[cfg(wgpu_core)]
 pub fn initialize_adapter_from_env(
     instance: &Instance,
     compatible_surface: Option<&Surface<'_>>,
@@ -36,7 +36,7 @@ pub fn initialize_adapter_from_env(
 }
 
 /// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable.
-#[cfg(not(native))]
+#[cfg(not(wgpu_core))]
 pub fn initialize_adapter_from_env(
     _instance: &Instance,
     _compatible_surface: Option<&Surface<'_>>,

@@ -96,7 +96,7 @@ fn get_all_wgpu_features() -> Vec<String> {
 fn wasm32_without_webgl_or_noop_does_not_depend_on_wgpu_core() {
     let all_features = get_all_wgpu_features();
 
-    let removed_features = ["webgl", "noop", "wgpu-core"];
+    let removed_features = ["webgl", "noop", "wgpu-core", "core"];
 
     let features_no_webgl: Vec<&str> = all_features
         .iter()
@@ -110,6 +110,18 @@ fn wasm32_without_webgl_or_noop_does_not_depend_on_wgpu_core() {
         target: "wasm32-unknown-unknown",
         packages: &["wgpu"],
         features: &features_no_webgl,
+        default_features: false,
+        search_terms: &[Search::Negative("wgpu-core")],
+    });
+}
+
+#[test]
+fn wgpu_example_custom_backend_does_not_depend_on_wgpu_core() {
+    check_feature_dependency(Requirement {
+        human_readable_name: "wgpu-example-custom-backend does not depend on `wgpu-core`",
+        target: "x86_64-unknown-linux-gnu",
+        packages: &["wgpu-example-custom-backend"],
+        features: &[],
         default_features: false,
         search_terms: &[Search::Negative("wgpu-core")],
     });
@@ -232,10 +244,10 @@ fn windows_with_no_features_does_not_depend_on_glow_windows_or_ash() {
 #[test]
 fn windows_with_no_features_depends_on_renderdoc_sys() {
     check_feature_dependency(Requirement {
-        human_readable_name: "windows with no features depends on renderdoc-sys",
+        human_readable_name: "windows with only core should depends on renderdoc-sys",
         target: "x86_64-pc-windows-msvc",
         packages: &["wgpu"],
-        features: &[],
+        features: &["core"],
         default_features: false,
         search_terms: &[Search::Positive("renderdoc-sys")],
     });

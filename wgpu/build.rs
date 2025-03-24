@@ -32,10 +32,8 @@ fn main() {
 
         wgpu_core: {
             any(
-                // On native, wgpu_core is currently always enabled, even if there's no backend enabled at all.
-                native,
+                feature = "core",
                 // `wgpu_core` is implied if any backend other than WebGPU is enabled.
-                // (this is redundant except for `gles` and `noop`)
                 webgl, dx12, metal, vulkan, gles, noop
             )
         },
