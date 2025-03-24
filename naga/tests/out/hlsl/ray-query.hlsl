@@ -84,10 +84,10 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
     RayQuery<RAY_FLAG_NONE> rq_1;
 
     rq_1.TraceRayInline(acs, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir).flags, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir).cull_mask, RayDescFromRayDesc_(ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir)));
-    uint2 loop_bound = uint2(0u, 0u);
+    uint2 loop_bound = uint2(4294967295u, 4294967295u);
     while(true) {
-        if (all(loop_bound == uint2(4294967295u, 4294967295u))) { break; }
-        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
+        if (all(loop_bound == uint2(0u, 0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         const bool _e9 = rq_1.Proceed();
         if (_e9) {
         } else {

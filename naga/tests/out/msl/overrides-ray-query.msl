@@ -33,10 +33,10 @@ kernel void main_(
     rq.intersector.force_opacity((desc.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (desc.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none);
     rq.intersector.accept_any_intersection((desc.flags & 4) != 0);
     rq.intersection = rq.intersector.intersect(metal::raytracing::ray(desc.origin, desc.dir, desc.tmin, desc.tmax), acc_struct, desc.cull_mask);    rq.ready = true;
-    uint2 loop_bound = uint2(0u);
+    uint2 loop_bound = uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound == uint2(4294967295u))) { break; }
-        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
+        if (metal::all(loop_bound == uint2(0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         bool _e31 = rq.ready;
         if (_e31) {
         } else {

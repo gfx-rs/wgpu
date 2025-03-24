@@ -765,7 +765,7 @@ fn set_pipeline(
         {
             // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
             let len = push_constant_range.len() / wgt::PUSH_CONSTANT_ALIGNMENT as usize;
-            state.push_constants.extend(core::iter::repeat(0).take(len));
+            state.push_constants.extend(core::iter::repeat_n(0, len));
         }
 
         // Clear push constant ranges

@@ -310,7 +310,7 @@ impl BlockContext<'_> {
                 uint2_ptr_type_id,
                 loop_counter_var_id,
                 spirv::StorageClass::Function,
-                Some(zero_uint2_const_id),
+                Some(max_uint2_const_id),
             ),
         };
         self.function.force_loop_bounding_vars.push(var);
@@ -331,14 +331,14 @@ impl BlockContext<'_> {
             None,
         ));
 
-        // If both the high and low u32s have reached u32::MAX then break. ie
-        // if (all(eq(loop_counter, vec2(u32::MAX)))) { break; }
+        // If both the high and low u32s have reached 0 then break. ie
+        // if (all(eq(loop_counter, vec2(0)))) { break; }
         let eq_id = self.gen_id();
         block.body.push(Instruction::binary(
             spirv::Op::IEqual,
             bool2_type_id,
             eq_id,
-            max_uint2_const_id,
+            zero_uint2_const_id,
             load_id,
         ));
         let all_eq_id = self.gen_id();
@@ -360,9 +360,11 @@ impl BlockContext<'_> {
         );
         block = Block::new(inc_counter_block_id);
 
-        // To simulate a 64-bit counter we always increment the low u32, and increment
+        // To simulate a 64-bit counter we always decrement the low u32, and decrement
         // the high u32 when the low u32 overflows. ie
-        // counter += vec2(select(0u, 1u, counter.y == u32::MAX), 1u);
+        // counter -= vec2(select(0u, 1u, counter.y == 0), 1u);
+        // Count down from u32::MAX rather than up from 0 to avoid hang on
+        // certain Intel drivers. See <https://github.com/gfx-rs/wgpu/issues/7319>.
         let low_id = self.gen_id();
         block.body.push(Instruction::composite_extract(
             uint_type_id,
@@ -376,7 +378,7 @@ impl BlockContext<'_> {
             bool_type_id,
             low_overflow_id,
             low_id,
-            max_uint_const_id,
+            zero_uint_const_id,
         ));
         let carry_bit_id = self.gen_id();
         block.body.push(Instruction::select(
@@ -386,19 +388,19 @@ impl BlockContext<'_> {
             one_uint_const_id,
             zero_uint_const_id,
         ));
-        let increment_id = self.gen_id();
+        let decrement_id = self.gen_id();
         block.body.push(Instruction::composite_construct(
             uint2_type_id,
-            increment_id,
+            decrement_id,
             &[carry_bit_id, one_uint_const_id],
         ));
         let result_id = self.gen_id();
         block.body.push(Instruction::binary(
-            spirv::Op::IAdd,
+            spirv::Op::ISub,
             uint2_type_id,
             result_id,
             load_id,
-            increment_id,
+            decrement_id,
         ));
         block
             .body

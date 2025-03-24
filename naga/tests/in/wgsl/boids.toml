@@ -1,5 +1,3 @@
-targets = "SPIRV | METAL | GLSL | HLSL | WGSL"
-
 [msl]
 fake_missing_bindings = false
 lang_version = [1, 0]

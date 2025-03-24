@@ -7,11 +7,11 @@ using metal::uint;
 
 void breakIfEmpty(
 ) {
-    uint2 loop_bound = uint2(0u);
+    uint2 loop_bound = uint2(4294967295u);
     bool loop_init = true;
     while(true) {
-        if (metal::all(loop_bound == uint2(4294967295u))) { break; }
-        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
+        if (metal::all(loop_bound == uint2(0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
             if (true) {
                 break;
@@ -27,11 +27,11 @@ void breakIfEmptyBody(
 ) {
     bool b = {};
     bool c = {};
-    uint2 loop_bound_1 = uint2(0u);
+    uint2 loop_bound_1 = uint2(4294967295u);
     bool loop_init_1 = true;
     while(true) {
-        if (metal::all(loop_bound_1 == uint2(4294967295u))) { break; }
-        loop_bound_1 += uint2(loop_bound_1.y == 4294967295u, 1u);
+        if (metal::all(loop_bound_1 == uint2(0u))) { break; }
+        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
         if (!loop_init_1) {
             b = a;
             bool _e2 = b;
@@ -51,11 +51,11 @@ void breakIf(
 ) {
     bool d = {};
     bool e = {};
-    uint2 loop_bound_2 = uint2(0u);
+    uint2 loop_bound_2 = uint2(4294967295u);
     bool loop_init_2 = true;
     while(true) {
-        if (metal::all(loop_bound_2 == uint2(4294967295u))) { break; }
-        loop_bound_2 += uint2(loop_bound_2.y == 4294967295u, 1u);
+        if (metal::all(loop_bound_2 == uint2(0u))) { break; }
+        loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
         if (!loop_init_2) {
             bool _e5 = e;
             if (a_1 == e) {
@@ -73,11 +73,11 @@ void breakIf(
 void breakIfSeparateVariable(
 ) {
     uint counter = 0u;
-    uint2 loop_bound_3 = uint2(0u);
+    uint2 loop_bound_3 = uint2(4294967295u);
     bool loop_init_3 = true;
     while(true) {
-        if (metal::all(loop_bound_3 == uint2(4294967295u))) { break; }
-        loop_bound_3 += uint2(loop_bound_3.y == 4294967295u, 1u);
+        if (metal::all(loop_bound_3 == uint2(0u))) { break; }
+        loop_bound_3 -= uint2(loop_bound_3.y == 0u, 1u);
         if (!loop_init_3) {
             uint _e5 = counter;
             if (counter == 5u) {

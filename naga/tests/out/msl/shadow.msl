@@ -100,11 +100,11 @@ fragment fs_mainOutput fs_main(
     metal::float3 color = c_ambient;
     uint i = 0u;
     metal::float3 normal_1 = metal::normalize(in.world_normal);
-    uint2 loop_bound = uint2(0u);
+    uint2 loop_bound = uint2(4294967295u);
     bool loop_init = true;
     while(true) {
-        if (metal::all(loop_bound == uint2(4294967295u))) { break; }
-        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
+        if (metal::all(loop_bound == uint2(0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
             uint _e40 = i;
             i = _e40 + 1u;
@@ -153,11 +153,11 @@ fragment fs_main_without_storageOutput fs_main_without_storage(
     metal::float3 color_1 = c_ambient;
     uint i_1 = 0u;
     metal::float3 normal_2 = metal::normalize(in_1.world_normal);
-    uint2 loop_bound_1 = uint2(0u);
+    uint2 loop_bound_1 = uint2(4294967295u);
     bool loop_init_1 = true;
     while(true) {
-        if (metal::all(loop_bound_1 == uint2(4294967295u))) { break; }
-        loop_bound_1 += uint2(loop_bound_1.y == 4294967295u, 1u);
+        if (metal::all(loop_bound_1 == uint2(0u))) { break; }
+        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
         if (!loop_init_1) {
             uint _e40 = i_1;
             i_1 = _e40 + 1u;

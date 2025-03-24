@@ -42,11 +42,11 @@ use core::num::NonZeroU32;
 ///
 /// Although this should not be observable to its users, a `NonMaxU32` whose
 /// value is `n` is a newtype around a [`NonZeroU32`] whose value is `n + 1`.
-/// This way, the range of values that `NonMaxU32` can represent, `0..=u32::MAX
-/// - 1`, is mapped to the range `1..=u32::MAX`, which is the range that
-/// [`NonZeroU32`] can represent. (And conversely, since [`u32`] addition wraps
-/// around, the value unrepresentable in `NonMaxU32`, [`u32::MAX`], becomes the
-/// value unrepresentable in [`NonZeroU32`], `0`.)
+/// This way, the range of values that `NonMaxU32` can represent,
+/// `0..=u32::MAX - 1`, is mapped to the range `1..=u32::MAX`, which is the
+/// range that /// [`NonZeroU32`] can represent. (And conversely, since
+/// [`u32`] addition wraps around, the value unrepresentable in `NonMaxU32`,
+/// [`u32::MAX`], becomes the value unrepresentable in [`NonZeroU32`], `0`.)
 ///
 /// [`NonZeroU32`]: core::num::NonZeroU32
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
