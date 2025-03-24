@@ -513,10 +513,13 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             || unsafe {
                 let _ = ctx
                     .device
-                    .create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
-                        label: None,
-                        source: std::borrow::Cow::Borrowed(&[]),
-                    });
+                    .create_shader_module_passthrough(
+                        &wgpu::ShaderModuleDescriptorPassthrough::SpirV(
+                            &wgpu::ShaderModuleDescriptorSpirV {
+                                label: None,
+                                source: std::borrow::Cow::Borrowed(&[]),
+                            })
+                        );
             },
             Some("device with '' label is invalid"),
         );

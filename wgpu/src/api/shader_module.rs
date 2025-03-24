@@ -223,8 +223,19 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 static_assertions::assert_impl_all!(ShaderModuleDescriptor<'_>: Send, Sync);
 
-/// Descriptor for a shader module given by SPIR-V binary, for use with
-/// [`Device::create_shader_module_spirv`].
+/// Descriptor for a pre-compiled shader module passthrough, for use with
+/// [`Device::create_shader_module_passthrough`].
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+pub enum ShaderModuleDescriptorPassthrough<'a> {
+    /// Passthrough for SPIR-V binaries.
+    SpirV(&'a ShaderModuleDescriptorSpirV<'a>),
+    /// Passthrough for MSL source code.
+    Msl(&'a ShaderModuleDescriptorMsl<'a>),
+}
+
+/// Descriptor for a shader module given by SPIR-V binary.
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
@@ -237,8 +248,7 @@ pub struct ShaderModuleDescriptorSpirV<'a> {
 }
 static_assertions::assert_impl_all!(ShaderModuleDescriptorSpirV<'_>: Send, Sync);
 
-/// Descriptor for a shader module given by Metal MSL source, for use with
-/// [`Device::create_shader_module_msl`].
+/// Descriptor for a shader module given by Metal MSL source.
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.

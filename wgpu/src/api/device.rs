@@ -172,35 +172,25 @@ impl Device {
         ShaderModule { inner: module }
     }
 
-    /// Creates a shader module from SPIR-V binary directly.
+    /// Creates a shader module for passthrough to bypass naga and validations.
     ///
     /// # Safety
     ///
-    /// This function passes binary data to the backend as-is and can potentially result in a
-    /// driver crash or bogus behaviour. No attempt is made to ensure that data is valid SPIR-V.
-    ///
-    /// See also [`include_spirv_raw!`] and [`util::make_spirv_raw`].
+    /// This function passes data to the backend as-is and can potentially result in a
+    /// driver crash or bogus behaviour. No attempt is made to ensure that data is valid.
     #[must_use]
-    pub unsafe fn create_shader_module_spirv(
+    pub unsafe fn create_shader_module_passthrough(
         &self,
-        desc: &ShaderModuleDescriptorSpirV<'_>,
+        desc: &ShaderModuleDescriptorPassthrough<'_>,
     ) -> ShaderModule {
-        let module = unsafe { self.inner.create_shader_module_spirv(desc) };
-        ShaderModule { inner: module }
-    }
-
-    /// Creates a shader module from Metal MSL shader directly.
-    ///
-    /// # Safety
-    ///
-    /// This function passes the source to the backend as-is and can potentially result in a
-    /// driver crash or bogus behaviour. No attempt is made to ensure that source code is valid.
-    #[must_use]
-    pub unsafe fn create_shader_module_msl(
-        &self,
-        desc: &ShaderModuleDescriptorMsl<'_>,
-    ) -> ShaderModule {
-        let module = unsafe { self.inner.create_shader_module_msl(desc) };
+        let module = match desc {
+            ShaderModuleDescriptorPassthrough::SpirV(desc) => {
+                unsafe { self.inner.create_shader_module_spirv(desc) }
+            },
+            ShaderModuleDescriptorPassthrough::Msl(desc) => {
+                unsafe { self.inner.create_shader_module_msl(desc) }
+            },
+        };
         ShaderModule { inner: module }
     }
 
