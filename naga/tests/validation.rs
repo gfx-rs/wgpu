@@ -261,56 +261,86 @@ fn emit_workgroup_uniform_load_result() {
     assert!(variant(false).is_err());
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
-fn bad_cross_builtin_args() {
-    // NOTE: Things we expect to actually compile are in the `cross` snapshot test.
-    let cases = [
-        (
-            "vec2(0., 1.)",
-            "\
-error: Entry point main at Compute is invalid
-  ┌─ wgsl:3:13
-  │
-3 │     let a = cross(vec2(0., 1.), vec2(0., 1.));
-  │             ^^^^^ naga::ir::Expression [6]
-  │
-  = Expression [6] is invalid
-  = Argument [0] to Cross as expression [2] has an invalid type.
+fn builtin_cross_product_args() {
+    use naga::{MathFunction, Module, Type, TypeInner, VectorSize};
 
-",
-        ),
-        (
-            "vec4(0., 1., 2., 3.)",
-            "\
-error: Entry point main at Compute is invalid
-  ┌─ wgsl:3:13
-  │
-3 │     let a = cross(vec4(0., 1., 2., 3.), vec4(0., 1., 2., 3.));
-  │             ^^^^^ naga::ir::Expression [10]
-  │
-  = Expression [10] is invalid
-  = Argument [0] to Cross as expression [4] has an invalid type.
-
-",
-        ),
-    ];
-
-    for (invalid_arg, expected_err) in cases {
-        let source = format!(
-            "\
-@compute @workgroup_size(1)
-fn main() {{
-    let a = cross({invalid_arg}, {invalid_arg});
-}}
-"
+    // We want to ensure that the *only* problem with the code is the
+    // arity of the vectors passed to `cross`. So validate two
+    // versions of the module varying only in that aspect.
+    //
+    // Looking at uses of the `wg_load` makes it easy to identify the
+    // differences between the two variants.
+    fn variant(
+        size: VectorSize,
+    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+        let span = naga::Span::default();
+        let mut module = Module::default();
+        let ty_vec3f = module.types.insert(
+            Type {
+                name: Some("vecnf".into()),
+                inner: TypeInner::Vector {
+                    size: VectorSize::Tri,
+                    scalar: Scalar::F32,
+                },
+            },
+            span,
         );
-        let module = naga::front::wgsl::parse_str(&source).unwrap();
-        let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
-            .validate(&module)
-            .expect_err("module should be invalid");
-        assert_eq!(err.emit_to_string(&source), expected_err);
+        let ty_vecnf = module.types.insert(
+            Type {
+                name: Some("vecnf".into()),
+                inner: TypeInner::Vector {
+                    size,
+                    scalar: Scalar::F32,
+                },
+            },
+            span,
+        );
+
+        let mut fun = Function {
+            result: Some(naga::ir::FunctionResult {
+                ty: ty_vec3f,
+                binding: None,
+            }),
+            ..Function::default()
+        };
+        let ex_zero = fun
+            .expressions
+            .append(Expression::ZeroValue(ty_vecnf), span);
+        let ex_cross = fun.expressions.append(
+            Expression::Math {
+                fun: MathFunction::Cross,
+                arg: ex_zero,
+                arg1: Some(ex_zero),
+                arg2: None,
+                arg3: None,
+            },
+            span,
+        );
+
+        fun.body.push(
+            naga::Statement::Emit(naga::Range::new_from_bounds(ex_cross, ex_cross)),
+            span,
+        );
+        fun.body.push(
+            naga::Statement::Return {
+                value: Some(ex_cross),
+            },
+            span,
+        );
+
+        module.functions.append(fun, span);
+
+        valid::Validator::new(
+            valid::ValidationFlags::default(),
+            valid::Capabilities::all(),
+        )
+        .validate(&module)
     }
+
+    assert!(variant(VectorSize::Bi).is_err());
+    variant(VectorSize::Tri).expect("module should validate");
+    assert!(variant(VectorSize::Quad).is_err());
 }
 
 #[cfg(feature = "wgsl-in")]

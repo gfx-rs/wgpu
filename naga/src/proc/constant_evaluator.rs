@@ -474,7 +474,6 @@ impl ExpressionKindTracker {
                         fun,
                         Mf::Dot
                             | Mf::Outer
-                            | Mf::Cross
                             | Mf::Distance
                             | Mf::Length
                             | Mf::Normalize
@@ -1347,10 +1346,114 @@ impl<'a> ConstantEvaluator<'a> {
                 component_wise_concrete_int(self, span, [arg], |ci| Ok(first_leading_bit(ci)))
             }
 
+            // vector
+            crate::MathFunction::Cross => self.cross_product(arg, arg1.unwrap(), span),
+
             fun => Err(ConstantEvaluatorError::NotImplemented(format!(
                 "{fun:?} built-in function"
             ))),
         }
+    }
+
+    /// Vector cross product.
+    fn cross_product(
+        &mut self,
+        a: Handle<Expression>,
+        b: Handle<Expression>,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        use Literal as Li;
+
+        let (a, ty) = self.extract_vec::<3>(a)?;
+        let (b, _) = self.extract_vec::<3>(b)?;
+
+        let product = match (a, b) {
+            (
+                [Li::AbstractInt(a0), Li::AbstractInt(a1), Li::AbstractInt(a2)],
+                [Li::AbstractInt(b0), Li::AbstractInt(b1), Li::AbstractInt(b2)],
+            ) => {
+                // `cross` has no overload for AbstractInt, so AbstractInt
+                // arguments are automatically converted to AbstractFloat. Since
+                // `f64` has a much wider range than `i64`, there's no danger of
+                // overflow here.
+                let p = cross_product(
+                    [a0 as f64, a1 as f64, a2 as f64],
+                    [b0 as f64, b1 as f64, b2 as f64],
+                );
+                [
+                    Li::AbstractFloat(p[0]),
+                    Li::AbstractFloat(p[1]),
+                    Li::AbstractFloat(p[2]),
+                ]
+            }
+            (
+                [Li::AbstractFloat(a0), Li::AbstractFloat(a1), Li::AbstractFloat(a2)],
+                [Li::AbstractFloat(b0), Li::AbstractFloat(b1), Li::AbstractFloat(b2)],
+            ) => {
+                let p = cross_product([a0, a1, a2], [b0, b1, b2]);
+                [
+                    Li::AbstractFloat(p[0]),
+                    Li::AbstractFloat(p[1]),
+                    Li::AbstractFloat(p[2]),
+                ]
+            }
+            ([Li::F16(a0), Li::F16(a1), Li::F16(a2)], [Li::F16(b0), Li::F16(b1), Li::F16(b2)]) => {
+                let p = cross_product([a0, a1, a2], [b0, b1, b2]);
+                [Li::F16(p[0]), Li::F16(p[1]), Li::F16(p[2])]
+            }
+            ([Li::F32(a0), Li::F32(a1), Li::F32(a2)], [Li::F32(b0), Li::F32(b1), Li::F32(b2)]) => {
+                let p = cross_product([a0, a1, a2], [b0, b1, b2]);
+                [Li::F32(p[0]), Li::F32(p[1]), Li::F32(p[2])]
+            }
+            ([Li::F64(a0), Li::F64(a1), Li::F64(a2)], [Li::F64(b0), Li::F64(b1), Li::F64(b2)]) => {
+                let p = cross_product([a0, a1, a2], [b0, b1, b2]);
+                [Li::F64(p[0]), Li::F64(p[1]), Li::F64(p[2])]
+            }
+            _ => return Err(ConstantEvaluatorError::InvalidMathArg),
+        };
+
+        let p0 = self.register_evaluated_expr(Expression::Literal(product[0]), span)?;
+        let p1 = self.register_evaluated_expr(Expression::Literal(product[1]), span)?;
+        let p2 = self.register_evaluated_expr(Expression::Literal(product[2]), span)?;
+
+        self.register_evaluated_expr(
+            Expression::Compose {
+                ty,
+                components: vec![p0, p1, p2],
+            },
+            span,
+        )
+    }
+
+    /// Extract the values of a `vecN` from `expr`.
+    ///
+    /// Return the value of `expr`, whose type is `vecN<S>` for some
+    /// vector size `N` and scalar `S`, as an array of `N` [`Literal`]
+    /// values.
+    ///
+    /// Also return the type handle from the `Compose` expression.
+    fn extract_vec<const N: usize>(
+        &mut self,
+        expr: Handle<Expression>,
+    ) -> Result<([Literal; N], Handle<Type>), ConstantEvaluatorError> {
+        let span = self.expressions.get_span(expr);
+        let expr = self.eval_zero_value_and_splat(expr, span)?;
+        let Expression::Compose { ty, ref components } = self.expressions[expr] else {
+            return Err(ConstantEvaluatorError::InvalidMathArg);
+        };
+
+        let mut value = [Literal::Bool(false); N];
+        for (component, elt) in
+            crate::proc::flatten_compose(ty, components, self.expressions, self.types)
+                .zip(value.iter_mut())
+        {
+            let Expression::Literal(literal) = self.expressions[component] else {
+                return Err(ConstantEvaluatorError::InvalidMathArg);
+            };
+            *elt = literal;
+        }
+
+        Ok((value, ty))
     }
 
     fn array_length(
@@ -2687,6 +2790,19 @@ impl TryFromAbstract<i64> for f16 {
         }
         Ok(f.unwrap())
     }
+}
+
+fn cross_product<T>(a: [T; 3], b: [T; 3]) -> [T; 3]
+where
+    T: Copy,
+    T: core::ops::Mul<T, Output = T>,
+    T: core::ops::Sub<T, Output = T>,
+{
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
 }
 
 #[cfg(test)]

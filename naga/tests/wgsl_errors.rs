@@ -7,10 +7,10 @@ use naga::valid::Capabilities;
 
 #[track_caller]
 fn check(input: &str, snapshot: &str) {
-    let output = naga::front::wgsl::parse_str(input)
-        .map(|_| panic!("expected parser error, but parsing succeeded!"))
-        .unwrap_err()
-        .emit_to_string(input);
+    let output = match naga::front::wgsl::parse_str(input) {
+        Ok(_) => panic!("expected parser error, but parsing succeeded!"),
+        Err(err) => err.emit_to_string(input),
+    };
     if output != snapshot {
         for diff in diff::lines(snapshot, &output) {
             match diff {
