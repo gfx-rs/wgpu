@@ -12,18 +12,20 @@ fn main() {
     var u4 = vec4<u32>(0u);
     var f2 = vec2<f32>(0.0);
     var f4 = vec4<f32>(0.0);
-    u = pack4x8snorm(f4);
-    u = pack4x8unorm(f4);
-    u = pack2x16snorm(f2);
-    u = pack2x16unorm(f2);
-    u = pack2x16float(f2);
+    // No polyfill for these yet
+    // u = pack4x8snorm(f4);
+    // u = pack4x8unorm(f4);
+    // u = pack2x16snorm(f2);
+    // u = pack2x16unorm(f2);
+    // u = pack2x16float(f2);
     u = pack4xI8(i4);
     u = pack4xU8(u4);
     f4 = unpack4x8snorm(u);
     f4 = unpack4x8unorm(u);
     f2 = unpack2x16snorm(u);
     f2 = unpack2x16unorm(u);
-    f2 = unpack2x16float(u);
+    // No polyfill for this yet
+    // f2 = unpack2x16float(u);
     i4 = unpack4xI8(u);
     u4 = unpack4xU8(u);
     i = insertBits(i, i, 5u, 10u);
