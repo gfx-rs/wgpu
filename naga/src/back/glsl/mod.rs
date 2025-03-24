@@ -230,6 +230,31 @@ impl Version {
     fn supports_derivative_control(&self) -> bool {
         *self >= Version::Desktop(450)
     }
+
+    // For supports_pack_unpack_4x8, supports_pack_unpack_snorm_2x16, supports_pack_unpack_unorm_2x16
+    // see:
+    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/unpackUnorm.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/es3/html/unpackUnorm.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/packUnorm.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/es3/html/packUnorm.xhtml
+    fn supports_pack_unpack_4x8(&self) -> bool {
+        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
+    }
+    fn supports_pack_unpack_snorm_2x16(&self) -> bool {
+        *self >= Version::Desktop(420) || *self >= Version::new_gles(310)
+    }
+    fn supports_pack_unpack_unorm_2x16(&self) -> bool {
+        // Same as `supports_pack_unpack_4x8`; different method for clarity in usage.
+        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
+    }
+
+    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/unpackHalf2x16.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/packHalf2x16.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/es3/html/unpackHalf2x16.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/es3/html/packHalf2x16.xhtml
+    fn supports_pack_unpack_half_2x16(&self) -> bool {
+        *self >= Version::Desktop(420) || *self >= Version::new_gles(300)
+    }
 }
 
 impl PartialOrd for Version {
@@ -3756,11 +3781,46 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::FirstTrailingBit => "findLSB",
                     Mf::FirstLeadingBit => "findMSB",
                     // data packing
-                    Mf::Pack4x8snorm => "packSnorm4x8",
-                    Mf::Pack4x8unorm => "packUnorm4x8",
-                    Mf::Pack2x16snorm => "packSnorm2x16",
-                    Mf::Pack2x16unorm => "packUnorm2x16",
-                    Mf::Pack2x16float => "packHalf2x16",
+                    Mf::Pack4x8snorm => {
+                        let name = "packSnorm4x8";
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            name
+                        } else {
+                            return Err(Error::UnsupportedExternal(name.into()));
+                        }
+                    }
+                    Mf::Pack4x8unorm => {
+                        let name = "packUnorm4x8";
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            name
+                        } else {
+                            return Err(Error::UnsupportedExternal(name.into()));
+                        }
+                    }
+                    Mf::Pack2x16snorm => {
+                        let name = "packSnorm2x16";
+                        if self.options.version.supports_pack_unpack_snorm_2x16() {
+                            name
+                        } else {
+                            return Err(Error::UnsupportedExternal(name.into()));
+                        }
+                    }
+                    Mf::Pack2x16unorm => {
+                        let name = "packUnorm2x16";
+                        if self.options.version.supports_pack_unpack_unorm_2x16() {
+                            name
+                        } else {
+                            return Err(Error::UnsupportedExternal(name.into()));
+                        }
+                    }
+                    Mf::Pack2x16float => {
+                        let name = "packHalf2x16";
+                        if self.options.version.supports_pack_unpack_half_2x16() {
+                            name
+                        } else {
+                            return Err(Error::UnsupportedExternal(name.into()));
+                        }
+                    }
                     fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
                         let was_signed = match fun {
                             Mf::Pack4xI8 => true,
@@ -3787,11 +3847,46 @@ impl<'a, W: Write> Writer<'a, W> {
                         return Ok(());
                     }
                     // data unpacking
-                    Mf::Unpack4x8snorm => "unpackSnorm4x8",
-                    Mf::Unpack4x8unorm => "unpackUnorm4x8",
-                    Mf::Unpack2x16snorm => "unpackSnorm2x16",
-                    Mf::Unpack2x16unorm => "unpackUnorm2x16",
-                    Mf::Unpack2x16float => "unpackHalf2x16",
+                    Mf::Unpack4x8snorm => {
+                        let name = "unpackSnorm4x8";
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            name
+                        } else {
+                            return Err(Error::UnsupportedExternal(name.into()));
+                        }
+                    }
+                    Mf::Unpack4x8unorm => {
+                        let name = "unpackUnorm4x8";
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            name
+                        } else {
+                            return Err(Error::UnsupportedExternal(name.into()));
+                        }
+                    }
+                    Mf::Unpack2x16snorm => {
+                        let name = "unpackSnorm2x16";
+                        if self.options.version.supports_pack_unpack_snorm_2x16() {
+                            name
+                        } else {
+                            return Err(Error::UnsupportedExternal(name.into()));
+                        }
+                    }
+                    Mf::Unpack2x16unorm => {
+                        let name = "unpackUnorm2x16";
+                        if self.options.version.supports_pack_unpack_unorm_2x16() {
+                            name
+                        } else {
+                            return Err(Error::UnsupportedExternal(name.into()));
+                        }
+                    }
+                    Mf::Unpack2x16float => {
+                        let name = "unpackHalf2x16";
+                        if self.options.version.supports_pack_unpack_half_2x16() {
+                            name
+                        } else {
+                            return Err(Error::UnsupportedExternal(name.into()));
+                        }
+                    }
                     fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
                         let sign_prefix = match fun {
                             Mf::Unpack4xI8 => 'i',

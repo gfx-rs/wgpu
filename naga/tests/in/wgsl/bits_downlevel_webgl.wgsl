@@ -1,6 +1,6 @@
-// Keep in sync with `bits_downlevel` and `bits_downlevel_webgl`
+// Keep in sync with bits.wgsl
 
-@compute @workgroup_size(1)
+@fragment
 fn main() {
     var i = 0;
     var i2 = vec2<i32>(0);
