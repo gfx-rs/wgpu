@@ -26,7 +26,7 @@ OpMemoryModel Logical GLSL450
 %5 = OpFunction  %2  None %6
 %4 = OpLabel
 %10 = OpVariable  %11  Function %7
-%27 = OpVariable  %19  Function %23
+%27 = OpVariable  %19  Function %26
 OpBranch %12
 %12 = OpLabel
 OpBranch %13
@@ -35,16 +35,16 @@ OpLoopMerge %14 %16 None
 OpBranch %28
 %28 = OpLabel
 %29 = OpLoad  %18  %27
-%30 = OpIEqual  %21  %26 %29
+%30 = OpIEqual  %21  %23 %29
 %31 = OpAll  %20  %30
 OpSelectionMerge %32 None
 OpBranchConditional %31 %14 %32
 %32 = OpLabel
 %33 = OpCompositeExtract  %17  %29 1
-%34 = OpIEqual  %20  %33 %25
+%34 = OpIEqual  %20  %33 %22
 %35 = OpSelect  %17  %34 %24 %22
 %36 = OpCompositeConstruct  %18  %35 %24
-%37 = OpIAdd  %18  %29 %36
+%37 = OpISub  %18  %29 %36
 OpStore %27 %37
 OpBranch %15
 %15 = OpLabel

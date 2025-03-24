@@ -2188,10 +2188,8 @@ impl Global {
 
         let range_size = if let Some(size) = size {
             size
-        } else if offset > buffer.size {
-            0
         } else {
-            buffer.size - offset
+            buffer.size.saturating_sub(offset)
         };
 
         if offset % wgt::MAP_ALIGNMENT != 0 {

@@ -53,10 +53,10 @@ RayIntersection query_loop(
     rq_1.intersector.force_opacity((_e8.flags & 1) != 0 ? metal::raytracing::forced_opacity::opaque : (_e8.flags & 2) != 0 ? metal::raytracing::forced_opacity::non_opaque : metal::raytracing::forced_opacity::none);
     rq_1.intersector.accept_any_intersection((_e8.flags & 4) != 0);
     rq_1.intersection = rq_1.intersector.intersect(metal::raytracing::ray(_e8.origin, _e8.dir, _e8.tmin, _e8.tmax), acs, _e8.cull_mask);    rq_1.ready = true;
-    uint2 loop_bound = uint2(0u);
+    uint2 loop_bound = uint2(4294967295u);
     while(true) {
-        if (metal::all(loop_bound == uint2(4294967295u))) { break; }
-        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
+        if (metal::all(loop_bound == uint2(0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         bool _e9 = rq_1.ready;
         if (_e9) {
         } else {

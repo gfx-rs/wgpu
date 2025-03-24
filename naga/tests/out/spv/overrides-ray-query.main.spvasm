@@ -52,7 +52,7 @@ OpDecorate %10 Binding 0
 %13 = OpFunction  %2  None %14
 %12 = OpLabel
 %27 = OpVariable  %28  Function
-%49 = OpVariable  %41  Function %45
+%49 = OpVariable  %41  Function %48
 %15 = OpLoad  %4  %10
 OpBranch %29
 %29 = OpLabel
@@ -69,16 +69,16 @@ OpLoopMerge %37 %39 None
 OpBranch %50
 %50 = OpLabel
 %51 = OpLoad  %40  %49
-%52 = OpIEqual  %43  %48 %51
+%52 = OpIEqual  %43  %45 %51
 %53 = OpAll  %42  %52
 OpSelectionMerge %54 None
 OpBranchConditional %53 %37 %54
 %54 = OpLabel
 %55 = OpCompositeExtract  %6  %51 1
-%56 = OpIEqual  %42  %55 %47
+%56 = OpIEqual  %42  %55 %44
 %57 = OpSelect  %6  %56 %46 %44
 %58 = OpCompositeConstruct  %40  %57 %46
-%59 = OpIAdd  %40  %51 %58
+%59 = OpISub  %40  %51 %58
 OpStore %49 %59
 OpBranch %38
 %38 = OpLabel

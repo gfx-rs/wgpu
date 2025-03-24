@@ -105,7 +105,7 @@ pub struct VertexState<'a> {
     /// [`RenderPass::set_vertex_buffer()`].
     ///
     /// The attribute locations and types specified in this layout must match the
-    /// locations and types of the inputs to the `entry_point` function.`
+    /// locations and types of the inputs to the `entry_point` function.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
 #[cfg(send_sync)]

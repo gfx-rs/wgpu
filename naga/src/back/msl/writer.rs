@@ -850,12 +850,13 @@ impl<W: Write> Writer<W> {
         }
 
         let loop_bound_name = self.namer.call("loop_bound");
-        let decl = format!("{level}uint2 {loop_bound_name} = uint2(0u);");
+        // Count down from u32::MAX rather than up from 0 to avoid hang on
+        // certain Intel drivers. See <https://github.com/gfx-rs/wgpu/issues/7319>.
+        let decl = format!("{level}uint2 {loop_bound_name} = uint2({}u);", u32::MAX);
         let level = level.next();
-        let max = u32::MAX;
         let break_and_inc = format!(
-            "{level}if ({NAMESPACE}::all({loop_bound_name} == uint2({max}u))) {{ break; }}
-{level}{loop_bound_name} += uint2({loop_bound_name}.y == {max}u, 1u);"
+            "{level}if ({NAMESPACE}::all({loop_bound_name} == uint2(0u))) {{ break; }}
+{level}{loop_bound_name} -= uint2({loop_bound_name}.y == 0u, 1u);"
         );
 
         Some((decl, break_and_inc))

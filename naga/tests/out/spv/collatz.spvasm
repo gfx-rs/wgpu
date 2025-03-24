@@ -114,7 +114,7 @@ OpFunctionEnd
 %28 = OpLabel
 %34 = OpVariable  %35  Function %36
 %37 = OpVariable  %35  Function %16
-%49 = OpVariable  %44  Function %46
+%49 = OpVariable  %44  Function %48
 OpBranch %38
 %38 = OpLabel
 OpLine %3 15 5
@@ -126,16 +126,16 @@ OpLoopMerge %40 %42 None
 OpBranch %50
 %50 = OpLabel
 %51 = OpLoad  %43  %49
-%52 = OpIEqual  %45  %48 %51
+%52 = OpIEqual  %45  %46 %51
 %53 = OpAll  %15  %52
 OpSelectionMerge %54 None
 OpBranchConditional %53 %40 %54
 %54 = OpLabel
 %55 = OpCompositeExtract  %4  %51 1
-%56 = OpIEqual  %15  %55 %47
+%56 = OpIEqual  %15  %55 %16
 %57 = OpSelect  %4  %56 %18 %16
 %58 = OpCompositeConstruct  %43  %57 %18
-%59 = OpIAdd  %43  %51 %58
+%59 = OpISub  %43  %51 %58
 OpStore %49 %59
 OpBranch %41
 %41 = OpLabel
