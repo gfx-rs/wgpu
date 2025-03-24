@@ -89,7 +89,7 @@ termcolor = { version = "1.4.1" }
 # remove termcolor dep when updating to the next version of codespan-reporting
 # termcolor minimum version was wrong and was fixed in
 # https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
-codespan-reporting = { version = "0.11.0" }
+codespan-reporting = { version = "0.12.0" }
 hashbrown.workspace = true
 half = { workspace = true, features = ["arbitrary", "num-traits"] }
 rustc-hash.workspace = true
@@ -124,7 +124,7 @@ itertools.workspace = true
 # Require at least version 0.7.1 of ron, this version changed how floating points are
 # serialized by forcing them to always have the decimal part, this makes it backwards
 # incompatible with our tests because we do a syntactic diff and not a semantic one.
-ron = "0.8.0"
+ron = "0.9.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 serde = { workspace = true, features = ["default", "derive"] }
 spirv = { version = "0.3", features = ["deserialize"] }
