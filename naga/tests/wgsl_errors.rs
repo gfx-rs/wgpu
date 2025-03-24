@@ -2699,12 +2699,12 @@ fn limit_braced_statement_nesting() {
     let too_many_braces = "fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{";
 
     let expected_diagnostic = r###"error: brace nesting limit reached
-  ┌─ wgsl:1:72
+  ┌─ wgsl:1:135
   │
 1 │ fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
-  │                                                                        ^ limit reached at this brace
+  │                                                                                                                                       ^ limit reached at this brace
   │
-  = note: nesting limit is currently set to 64
+  = note: nesting limit is currently set to 127
 
 "###;
 
@@ -2797,15 +2797,68 @@ fn too_many_unclosed_loops() {
        loop {
        loop {
        loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
            ";
 
     let expected_diagnostic = r###"error: brace nesting limit reached
-   ┌─ wgsl:65:13
-   │
-65 │        loop {
-   │             ^ limit reached at this brace
-   │
-   = note: nesting limit is currently set to 64
+    ┌─ wgsl:128:13
+    │
+128 │        loop {
+    │             ^ limit reached at this brace
+    │
+    = note: nesting limit is currently set to 127
 
 "###;
 
