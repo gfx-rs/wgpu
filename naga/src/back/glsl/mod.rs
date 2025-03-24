@@ -3910,7 +3910,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::Unpack4x8snorm => {
                         let scale = 127;
 
-                        write!(self.out, "(float4(ivec2(")?;
+                        write!(self.out, "(vec4(ivec4(")?;
                         self.write_expr(arg, ctx)?;
                         write!(self.out, " << 24, ")?;
                         self.write_expr(arg, ctx)?;

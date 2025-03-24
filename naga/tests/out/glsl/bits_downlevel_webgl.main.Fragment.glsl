@@ -20,13 +20,13 @@ void main() {
     uvec4 _e30 = u4_;
     u = (_e30[0] & 0xFFu) | ((_e30[1] & 0xFFu) << 8) | ((_e30[2] & 0xFFu) << 16) | ((_e30[3] & 0xFFu) << 24);
     uint _e32 = u;
-    f4_ = (float4(ivec2(_e32 << 24, _e32 << 16, _e32 << 8, _e32) >> 24) / 127.0);
+    f4_ = (vec4(ivec4(_e32 << 24, _e32 << 16, _e32 << 8, _e32) >> 24) / 127.0);
     uint _e34 = u;
-    f4_ = (vec4(_e34 & 0xFF, _e34 >> 8 & 0xFF, _e34 >> 16 & 0xFF, _e34 >> 24) / 255.0);
+    f4_ = (vec4(_e34 & 0xFFu, _e34 >> 8 & 0xFFu, _e34 >> 16 & 0xFFu, _e34 >> 24) / 255.0);
     uint _e36 = u;
     f2_ = (vec2(ivec2(_e36 << 16, _e36) >> 16) / 32767.0);
     uint _e38 = u;
-    f2_ = (vec2(_e38 & 0xFFFF, _e38 >> 16) / 65535.0);
+    f2_ = (vec2(_e38 & 0xFFFFu, _e38 >> 16) / 65535.0);
     uint _e40 = u;
     i4_ = ivec4(bitfieldExtract(int(_e40), 0, 8), bitfieldExtract(int(_e40), 8, 8), bitfieldExtract(int(_e40), 16, 8), bitfieldExtract(int(_e40), 24, 8));
     uint _e42 = u;
