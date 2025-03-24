@@ -3902,7 +3902,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
                         write!(self.out, "(vec2(")?;
                         self.write_expr(arg, ctx)?;
-                        write!(self.out, " & 0xFFFF, ")?;
+                        write!(self.out, " & 0xFFFFu, ")?;
                         self.write_expr(arg, ctx)?;
                         write!(self.out, " >> 16) / {scale}.0)")?;
                         return Ok(());
@@ -3926,11 +3926,11 @@ impl<'a, W: Write> Writer<'a, W> {
 
                         write!(self.out, "(vec4(")?;
                         self.write_expr(arg, ctx)?;
-                        write!(self.out, " & 0xFF, ")?;
+                        write!(self.out, " & 0xFFu, ")?;
                         self.write_expr(arg, ctx)?;
-                        write!(self.out, " >> 8 & 0xFF, ")?;
+                        write!(self.out, " >> 8 & 0xFFu, ")?;
                         self.write_expr(arg, ctx)?;
-                        write!(self.out, " >> 16 & 0xFF, ")?;
+                        write!(self.out, " >> 16 & 0xFFu, ")?;
                         self.write_expr(arg, ctx)?;
                         write!(self.out, " >> 24) / {scale}.0)")?;
                         return Ok(());
