@@ -526,6 +526,19 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
+    /// Return `true` if `handle` is a constant expression.
+    fn is_const(&self, handle: Handle<crate::Expression>) -> bool {
+        use ExpressionContextType as Ect;
+        match self.expr_type {
+            Ect::Runtime(ref ctx) | Ect::Constant(Some(ref ctx)) => {
+                ctx.local_expression_kind_tracker.is_const(handle)
+            }
+            Ect::Constant(None) | Ect::Override => {
+                self.global_expression_kind_tracker.is_const(handle)
+            }
+        }
+    }
+
     fn get_expression_span(&self, handle: Handle<crate::Expression>) -> Span {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx)
@@ -2262,16 +2275,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 // We only have to explicitly do so for shifts as their operands may be
                 // of different types - for other binary ops this is achieved by finding
                 // the conversion consensus for both operands.
-                let expr_kind_tracker = match ctx.expr_type {
-                    ExpressionContextType::Runtime(ref ctx)
-                    | ExpressionContextType::Constant(Some(ref ctx)) => {
-                        &ctx.local_expression_kind_tracker
-                    }
-                    ExpressionContextType::Constant(None) | ExpressionContextType::Override => {
-                        &ctx.global_expression_kind_tracker
-                    }
-                };
-                if !expr_kind_tracker.is_const(right) {
+                if !ctx.is_const(right) {
                     left = ctx.concretize(left)?;
                 }
             }

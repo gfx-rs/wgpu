@@ -27,6 +27,7 @@ ANDed = "ANDed"
 D3DCOLORtoUBYTE4 = "D3DCOLORtoUBYTE4"
 Derivate = "Derivate"
 inout = "inout"
+Ect = "Ect"
 
 [type.wgsl]
 extend-glob = ["*.wgsl"]
