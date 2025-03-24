@@ -55,8 +55,10 @@ vertex render_vertexOutput render_vertex(
     metal::float3 normal_1 = {};
     if (v_existing_id < (_buffer_sizes.buffer_size1 / 20)) {
         const vb_1_type vb_1_elem = vb_1_in[v_existing_id];
+        // metal::float4 <- Float32
         position_1 = metal::float4(unpackFloat32_(vb_1_elem.data[0], vb_1_elem.data[1], vb_1_elem.data[2], vb_1_elem.data[3]), 0.0, 0.0, 1.0);
-        normal_1 = metal::float3(unpackFloat32x4_(vb_1_elem.data[4], vb_1_elem.data[5], vb_1_elem.data[6], vb_1_elem.data[7], vb_1_elem.data[8], vb_1_elem.data[9], vb_1_elem.data[10], vb_1_elem.data[11], vb_1_elem.data[12], vb_1_elem.data[13], vb_1_elem.data[14], vb_1_elem.data[15], vb_1_elem.data[16], vb_1_elem.data[17], vb_1_elem.data[18], vb_1_elem.data[19]));
+        // metal::float3 <- Float32x4
+        normal_1 = unpackFloat32x4_(vb_1_elem.data[4], vb_1_elem.data[5], vb_1_elem.data[6], vb_1_elem.data[7], vb_1_elem.data[8], vb_1_elem.data[9], vb_1_elem.data[10], vb_1_elem.data[11], vb_1_elem.data[12], vb_1_elem.data[13], vb_1_elem.data[14], vb_1_elem.data[15], vb_1_elem.data[16], vb_1_elem.data[17], vb_1_elem.data[18], vb_1_elem.data[19]).xyz;
     }
     metal::float2 texcoord = {};
     if (i_id < (_buffer_sizes.buffer_size2 / 16)) {
