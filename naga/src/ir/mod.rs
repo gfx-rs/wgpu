@@ -979,12 +979,12 @@ pub enum UnaryOperator {
 ///     either on the left or the right.
 ///
 /// -   A [`Matrix`] on the left can be multiplied by a [`Vector`] on the right
-///     if the matrix has as many columns as the vector has components (`matCxR
-///     * VecC`).
+///     if the matrix has as many columns as the vector has components
+///     (`matCxR * VecC`).
 ///
 /// -   A [`Vector`] on the left can be multiplied by a [`Matrix`] on the right
-///     if the matrix has as many rows as the vector has components (`VecR *
-///     matCxR`).
+///     if the matrix has as many rows as the vector has components
+///     (`VecR * matCxR`).
 ///
 /// -   Two matrices can be multiplied if the left operand has as many columns
 ///     as the right operand has rows (`matNxR * matCxN`).
@@ -1405,12 +1405,7 @@ pub enum Expression {
 
     /// Reference a function parameter, by its index.
     ///
-    /// A `FunctionArgument` expression evaluates to a pointer to the argument's
-    /// value. You must use a [`Load`] expression to retrieve its value, or a
-    /// [`Store`] statement to assign it a new value.
-    ///
-    /// [`Load`]: Expression::Load
-    /// [`Store`]: Statement::Store
+    /// A `FunctionArgument` expression evaluates to the argument's value.
     FunctionArgument(u32),
 
     /// Reference a global variable.
@@ -2263,7 +2258,7 @@ pub struct SpecialTypes {
     /// this if needed and return the handle.
     pub ray_intersection: Option<Handle<Type>>,
 
-    /// Type for `RayVertexReturn
+    /// Type for `RayVertexReturn`.
     ///
     /// Call [`Module::generate_vertex_return_type`]
     pub ray_vertex_return: Option<Handle<Type>>,

@@ -1258,7 +1258,7 @@ impl<'a> Context<'a> {
                         right = self.add_expression(
                             Expression::Compose {
                                 ty,
-                                components: core::iter::repeat(right).take(cols as usize).collect(),
+                                components: core::iter::repeat_n(right, cols as usize).collect(),
                             },
                             meta,
                         )?;

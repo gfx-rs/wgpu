@@ -34,9 +34,15 @@ bitflags::bitflags! {
     }
 }
 
-impl Default for Targets {
-    fn default() -> Self {
+impl Targets {
+    /// Defaults for `spv` and `glsl` snapshots.
+    fn non_wgsl_default() -> Self {
         Targets::WGSL
+    }
+
+    /// Defaults for `wgsl` snapshots.
+    fn wgsl_default() -> Self {
+        Targets::HLSL | Targets::SPIRV | Targets::GLSL | Targets::METAL | Targets::WGSL
     }
 }
 
@@ -116,7 +122,9 @@ struct Parameters {
     // -- SPIR-V options --
     spv: SpirvOutParameters,
 
-    targets: Targets,
+    /// Defaults to [`Targets::non_wgsl_default()`] for `spv` and `glsl` snapshots,
+    /// and [`Targets::wgsl_default()`] for `wgsl` snapshots.
+    targets: Option<Targets>,
 
     // -- MSL options --
     #[cfg(all(feature = "deserialize", msl_out))]
@@ -307,7 +315,7 @@ impl Input {
     fn read_parameters(&self) -> Parameters {
         let mut param_path = self.input_path();
         param_path.set_extension("toml");
-        match fs::read_to_string(&param_path) {
+        let mut params = match fs::read_to_string(&param_path) {
             Ok(string) => match toml::de::from_str(&string) {
                 Ok(params) => params,
                 Err(e) => panic!(
@@ -316,7 +324,20 @@ impl Input {
                 ),
             },
             Err(_) => Parameters::default(),
+        };
+
+        if params.targets.is_none() {
+            match self.input_path().extension().unwrap().to_str().unwrap() {
+                "wgsl" => params.targets = Some(Targets::wgsl_default()),
+                "spvasm" => params.targets = Some(Targets::non_wgsl_default()),
+                "vert" | "frag" | "comp" => params.targets = Some(Targets::non_wgsl_default()),
+                e => {
+                    panic!("Unknown extension: {}", e);
+                }
+            }
         }
+
+        params
     }
 
     /// Write `data` to a file corresponding to this input file in
@@ -340,7 +361,7 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
     let params = input.read_parameters();
     let name = &input.file_name;
 
-    let targets = params.targets;
+    let targets = params.targets.unwrap();
 
     let (capabilities, subgroup_stages, subgroup_operations) = if params.god_mode {
         (
