@@ -698,6 +698,7 @@ impl fmt::Display for Error {
 
 // Copied from [`futures::task::noop_waker`].
 // Needed until MSRV is 1.85 with `task::Waker::noop()` available
+#[cfg(feature = "noop")]
 mod waker {
     use core::ptr::null;
     use core::task::{RawWaker, RawWakerVTable, Waker};
