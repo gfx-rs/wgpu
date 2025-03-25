@@ -41,6 +41,10 @@ kernel void main_(
     return;
 }
 
+uint naga_f2u32(float value) {
+    return static_cast<uint>(metal::clamp(value, 0.0, 4294967000.0));
+}
+
 
 struct depth_loadInput {
 };
@@ -53,7 +57,7 @@ kernel void depth_load(
     metal::uint2 dim_1 = metal::uint2(image_storage_src.get_width(), image_storage_src.get_height());
     metal::int2 itc_1 = naga_mod(static_cast<metal::int2>(dim_1 * local_id_1.xy), metal::int2(10, 20));
     float val = image_depth_multisampled_src.read(metal::uint2(itc_1), static_cast<int>(local_id_1.z));
-    image_dst.write(metal::uint4(static_cast<uint>(val)), uint(itc_1.x));
+    image_dst.write(metal::uint4(naga_f2u32(val)), uint(itc_1.x));
     return;
 }
 

@@ -34,6 +34,10 @@ struct StorageCompatible {
 };
 constant ulong constant_variable = 20uL;
 
+long naga_f2i64(float value) {
+    return static_cast<long>(metal::clamp(value, -9223372000000000000.0, 9223371500000000000.0));
+}
+
 long naga_abs(long val) {
     return metal::select(as_type<long>(-as_type<ulong>(val)), val, val >= 0);
 }
@@ -63,7 +67,7 @@ long int64_function(
     float _e35 = input_uniform.val_f32_;
     long _e36 = val;
     long _e40 = val;
-    val = as_type<long>(as_type<ulong>(_e40) + as_type<ulong>(static_cast<long>(_e35 + static_cast<float>(_e36))));
+    val = as_type<long>(as_type<ulong>(_e40) + as_type<ulong>(naga_f2i64(_e35 + static_cast<float>(_e36))));
     long _e44 = input_uniform.val_i64_;
     long _e47 = val;
     val = as_type<long>(as_type<ulong>(_e47) + as_type<ulong>(metal::long3(_e44).z));
@@ -124,6 +128,10 @@ long int64_function(
     return _e153;
 }
 
+ulong naga_f2u64(float value) {
+    return static_cast<ulong>(metal::clamp(value, 0.0, 18446743000000000000.0));
+}
+
 ulong uint64_function(
     ulong x_1,
     constant UniformCompatible& input_uniform,
@@ -149,7 +157,7 @@ ulong uint64_function(
     float _e35 = input_uniform.val_f32_;
     ulong _e36 = val_1;
     ulong _e40 = val_1;
-    val_1 = _e40 + static_cast<ulong>(_e35 + static_cast<float>(_e36));
+    val_1 = _e40 + naga_f2u64(_e35 + static_cast<float>(_e36));
     ulong _e44 = input_uniform.val_u64_;
     ulong _e47 = val_1;
     val_1 = _e47 + metal::ulong3(_e44).z;

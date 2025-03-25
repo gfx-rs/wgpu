@@ -38,6 +38,10 @@ pub(crate) const ABS_FUNCTION: &str = "naga_abs";
 pub(crate) const DIV_FUNCTION: &str = "naga_div";
 pub(crate) const MOD_FUNCTION: &str = "naga_mod";
 pub(crate) const NEG_FUNCTION: &str = "naga_neg";
+pub(crate) const F2I32_FUNCTION: &str = "naga_f2i32";
+pub(crate) const F2U32_FUNCTION: &str = "naga_f2u32";
+pub(crate) const F2I64_FUNCTION: &str = "naga_f2i64";
+pub(crate) const F2U64_FUNCTION: &str = "naga_f2u64";
 
 struct EpStructMember {
     name: String,
@@ -2612,6 +2616,28 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         })
     }
 
+    pub(super) fn write_literal(&mut self, literal: crate::Literal) -> BackendResult {
+        match literal {
+            crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
+            crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
+            crate::Literal::F16(value) => write!(self.out, "{value:?}h")?,
+            crate::Literal::U32(value) => write!(self.out, "{value}u")?,
+            // HLSL has no suffix for explicit i32 literals, but not using any suffix
+            // makes the type ambiguous which prevents overload resolution from
+            // working. So we explicitly use the int() constructor syntax.
+            crate::Literal::I32(value) => write!(self.out, "int({value})")?,
+            crate::Literal::U64(value) => write!(self.out, "{value}uL")?,
+            crate::Literal::I64(value) => write!(self.out, "{value}L")?,
+            crate::Literal::Bool(value) => write!(self.out, "{value}")?,
+            crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                return Err(Error::Custom(
+                    "Abstract types should not appear in IR presented to backends".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     fn write_possibly_const_expression<E>(
         &mut self,
         module: &Module,
@@ -2625,26 +2651,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         use crate::Expression;
 
         match expressions[expr] {
-            Expression::Literal(literal) => match literal {
-                // Floats are written using `Debug` instead of `Display` because it always appends the
-                // decimal part even it's zero
-                crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
-                crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
-                crate::Literal::F16(value) => write!(self.out, "{value:?}h")?,
-                crate::Literal::U32(value) => write!(self.out, "{value}u")?,
-                // HLSL has no suffix for explicit i32 literals, but not using any suffix
-                // makes the type ambiguous which prevents overload resolution from
-                // working. So we explicitly use the int() constructor syntax.
-                crate::Literal::I32(value) => write!(self.out, "int({value})")?,
-                crate::Literal::U64(value) => write!(self.out, "{value}uL")?,
-                crate::Literal::I64(value) => write!(self.out, "{value}L")?,
-                crate::Literal::Bool(value) => write!(self.out, "{value}")?,
-                crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
-                    return Err(Error::Custom(
-                        "Abstract types should not appear in IR presented to backends".into(),
-                    ));
-                }
-            },
+            Expression::Literal(literal) => {
+                self.write_literal(literal)?;
+            }
             Expression::Constant(handle) => {
                 let constant = &module.constants[handle];
                 if constant.name.is_some() {
@@ -3320,53 +3329,72 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 convert,
             } => {
                 let inner = func_ctx.resolve_type(expr, &module.types);
-                let close_paren = match convert {
-                    Some(dst_width) => {
-                        let scalar = Scalar {
-                            kind,
-                            width: dst_width,
-                        };
-                        match *inner {
-                            TypeInner::Vector { size, .. } => {
-                                write!(
-                                    self.out,
-                                    "{}{}(",
-                                    scalar.to_hlsl_str()?,
-                                    common::vector_size_str(size)
-                                )?;
-                            }
-                            TypeInner::Scalar(_) => {
-                                write!(self.out, "{}(", scalar.to_hlsl_str()?,)?;
-                            }
-                            TypeInner::Matrix { columns, rows, .. } => {
-                                write!(
-                                    self.out,
-                                    "{}{}x{}(",
-                                    scalar.to_hlsl_str()?,
-                                    common::vector_size_str(columns),
-                                    common::vector_size_str(rows)
-                                )?;
-                            }
-                            _ => {
-                                return Err(Error::Unimplemented(format!(
-                                    "write_expr expression::as {inner:?}"
-                                )));
-                            }
-                        };
-                        true
-                    }
-                    None => {
-                        if inner.scalar_width() == Some(8) {
-                            false
-                        } else {
-                            write!(self.out, "{}(", kind.to_hlsl_cast(),)?;
+                if inner.scalar_kind() == Some(ScalarKind::Float)
+                    && (kind == ScalarKind::Sint || kind == ScalarKind::Uint)
+                    && convert.is_some()
+                {
+                    // Use helper functions for float to int casts in order to
+                    // avoid undefined behaviour when value is out of range for
+                    // the target type.
+                    let fun_name = match (kind, convert) {
+                        (ScalarKind::Sint, Some(4)) => F2I32_FUNCTION,
+                        (ScalarKind::Uint, Some(4)) => F2U32_FUNCTION,
+                        (ScalarKind::Sint, Some(8)) => F2I64_FUNCTION,
+                        (ScalarKind::Uint, Some(8)) => F2U64_FUNCTION,
+                        _ => unreachable!(),
+                    };
+                    write!(self.out, "{fun_name}(")?;
+                    self.write_expr(module, expr, func_ctx)?;
+                    write!(self.out, ")")?;
+                } else {
+                    let close_paren = match convert {
+                        Some(dst_width) => {
+                            let scalar = Scalar {
+                                kind,
+                                width: dst_width,
+                            };
+                            match *inner {
+                                TypeInner::Vector { size, .. } => {
+                                    write!(
+                                        self.out,
+                                        "{}{}(",
+                                        scalar.to_hlsl_str()?,
+                                        common::vector_size_str(size)
+                                    )?;
+                                }
+                                TypeInner::Scalar(_) => {
+                                    write!(self.out, "{}(", scalar.to_hlsl_str()?,)?;
+                                }
+                                TypeInner::Matrix { columns, rows, .. } => {
+                                    write!(
+                                        self.out,
+                                        "{}{}x{}(",
+                                        scalar.to_hlsl_str()?,
+                                        common::vector_size_str(columns),
+                                        common::vector_size_str(rows)
+                                    )?;
+                                }
+                                _ => {
+                                    return Err(Error::Unimplemented(format!(
+                                        "write_expr expression::as {inner:?}"
+                                    )));
+                                }
+                            };
                             true
                         }
+                        None => {
+                            if inner.scalar_width() == Some(8) {
+                                false
+                            } else {
+                                write!(self.out, "{}(", kind.to_hlsl_cast(),)?;
+                                true
+                            }
+                        }
+                    };
+                    self.write_expr(module, expr, func_ctx)?;
+                    if close_paren {
+                        write!(self.out, ")")?;
                     }
-                };
-                self.write_expr(module, expr, func_ctx)?;
-                if close_paren {
-                    write!(self.out, ")")?;
                 }
             }
             Expression::Math {

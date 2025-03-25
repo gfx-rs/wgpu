@@ -1697,13 +1697,15 @@ impl<'a> ConstantEvaluator<'a> {
             Err(ConstantEvaluatorError::InvalidCastArg { from, to })
         };
 
+        use crate::proc::type_methods::IntFloatLimits;
+
         let expr = match self.expressions[expr] {
             Expression::Literal(literal) => {
                 let literal = match target {
                     Sc::I32 => Literal::I32(match literal {
                         Literal::I32(v) => v,
                         Literal::U32(v) => v as i32,
-                        Literal::F32(v) => v as i32,
+                        Literal::F32(v) => v.clamp(i32::min_float(), i32::max_float()) as i32,
                         Literal::F16(v) => f16::to_i32(&v).unwrap(), //Only None on NaN or Inf
                         Literal::Bool(v) => v as i32,
                         Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
@@ -1715,7 +1717,7 @@ impl<'a> ConstantEvaluator<'a> {
                     Sc::U32 => Literal::U32(match literal {
                         Literal::I32(v) => v as u32,
                         Literal::U32(v) => v,
-                        Literal::F32(v) => v as u32,
+                        Literal::F32(v) => v.clamp(u32::min_float(), u32::max_float()) as u32,
                         // max(0) avoids None due to negative, therefore only None on NaN or Inf
                         Literal::F16(v) => f16::to_u32(&v.max(f16::ZERO)).unwrap(),
                         Literal::Bool(v) => v as u32,
@@ -1728,9 +1730,9 @@ impl<'a> ConstantEvaluator<'a> {
                     Sc::I64 => Literal::I64(match literal {
                         Literal::I32(v) => v as i64,
                         Literal::U32(v) => v as i64,
-                        Literal::F32(v) => v as i64,
+                        Literal::F32(v) => v.clamp(i64::min_float(), i64::max_float()) as i64,
                         Literal::Bool(v) => v as i64,
-                        Literal::F64(v) => v as i64,
+                        Literal::F64(v) => v.clamp(i64::min_float(), i64::max_float()) as i64,
                         Literal::I64(v) => v,
                         Literal::U64(v) => v as i64,
                         Literal::F16(v) => f16::to_i64(&v).unwrap(), //Only None on NaN or Inf
@@ -1740,9 +1742,9 @@ impl<'a> ConstantEvaluator<'a> {
                     Sc::U64 => Literal::U64(match literal {
                         Literal::I32(v) => v as u64,
                         Literal::U32(v) => v as u64,
-                        Literal::F32(v) => v as u64,
+                        Literal::F32(v) => v.clamp(u64::min_float(), u64::max_float()) as u64,
                         Literal::Bool(v) => v as u64,
-                        Literal::F64(v) => v as u64,
+                        Literal::F64(v) => v.clamp(u64::min_float(), u64::max_float()) as u64,
                         Literal::I64(v) => v as u64,
                         Literal::U64(v) => v,
                         // max(0) avoids None due to negative, therefore only None on NaN or Inf
@@ -2753,19 +2755,19 @@ impl TryFromAbstract<f64> for u32 {
 
 impl TryFromAbstract<f64> for i64 {
     fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
-        // As above, except i64::MIN and i64::MAX are not exactly representable
-        // by f64. i64 is not part of the WGSL spec, however, so we're free to
-        // ignore that requirement.
-        Ok(value as i64)
+        // As above, except we clamp to the minimum and maximum values
+        // representable by both f64 and i64.
+        use crate::proc::type_methods::IntFloatLimits;
+        Ok(value.clamp(i64::min_float(), i64::max_float()) as i64)
     }
 }
 
 impl TryFromAbstract<f64> for u64 {
     fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
-        // As above, except u64::MAX is not exactly representable by f64. u64
-        // is not part of the WGSL spec, however, so we're free to ignore that
-        // requirement.
-        Ok(value as u64)
+        // As above, this time clamping to the minimum and maximum values
+        // representable by both f64 and u64.
+        use crate::proc::type_methods::IntFloatLimits;
+        Ok(value.clamp(u64::min_float(), u64::max_float()) as u64)
     }
 }
 

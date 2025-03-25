@@ -20,6 +20,7 @@ pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayou
 pub use namer::{EntryPointIndex, NameKey, Namer};
 pub use terminator::ensure_block_returns;
 use thiserror::Error;
+pub use type_methods::min_max_float_representable_by;
 pub use typifier::{ResolveContext, ResolveError, TypeResolution};
 
 impl From<super::StorageFormat> for super::Scalar {

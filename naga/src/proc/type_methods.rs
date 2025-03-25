@@ -308,3 +308,114 @@ impl crate::TypeInner {
         }
     }
 }
+
+/// Helper trait for providing the min and max values exactly representable by
+/// the integer type `Self` and floating point type `F`.
+pub trait IntFloatLimits<F>
+where
+    F: num_traits::Float,
+{
+    /// Returns the minimum value exactly representable by the integer type
+    /// `Self` and floating point type `F`.
+    fn min_float() -> F;
+    /// Returns the maximum value exactly representable by the integer type
+    /// `Self` and floating point type `F`.
+    fn max_float() -> F;
+}
+
+macro_rules! define_int_float_limits {
+    ($int:ty, $float:ty, $min:expr, $max:expr) => {
+        impl IntFloatLimits<$float> for $int {
+            fn min_float() -> $float {
+                $min
+            }
+            fn max_float() -> $float {
+                $max
+            }
+        }
+    };
+}
+
+define_int_float_limits!(i32, half::f16, half::f16::MIN, half::f16::MAX);
+define_int_float_limits!(u32, half::f16, half::f16::ZERO, half::f16::MAX);
+define_int_float_limits!(i64, half::f16, half::f16::MIN, half::f16::MAX);
+define_int_float_limits!(u64, half::f16, half::f16::ZERO, half::f16::MAX);
+define_int_float_limits!(i32, f32, -2147483648.0f32, 2147483520.0f32);
+define_int_float_limits!(u32, f32, 0.0f32, 4294967040.0f32);
+define_int_float_limits!(
+    i64,
+    f32,
+    -9223372036854775808.0f32,
+    9223371487098961920.0f32
+);
+define_int_float_limits!(u64, f32, 0.0f32, 18446742974197923840.0f32);
+define_int_float_limits!(i32, f64, -2147483648.0f64, 2147483647.0f64);
+define_int_float_limits!(u32, f64, 0.0f64, 4294967295.0f64);
+define_int_float_limits!(
+    i64,
+    f64,
+    -9223372036854775808.0f64,
+    9223372036854774784.0f64
+);
+define_int_float_limits!(u64, f64, 0.0f64, 18446744073709549568.0f64);
+
+/// Returns a tuple of [`crate::Literal`]s representing the minimum and maximum
+/// float values exactly representable by the provided float and integer types.
+/// Panics if `float` is not one of `F16`, `F32`, or `F64`, or `int` is
+/// not one of `I32`, `U32`, `I64`, or `U64`.
+pub fn min_max_float_representable_by(
+    float: crate::Scalar,
+    int: crate::Scalar,
+) -> (crate::Literal, crate::Literal) {
+    match (float, int) {
+        (crate::Scalar::F16, crate::Scalar::I32) => (
+            crate::Literal::F16(i32::min_float()),
+            crate::Literal::F16(i32::max_float()),
+        ),
+        (crate::Scalar::F16, crate::Scalar::U32) => (
+            crate::Literal::F16(u32::min_float()),
+            crate::Literal::F16(u32::max_float()),
+        ),
+        (crate::Scalar::F16, crate::Scalar::I64) => (
+            crate::Literal::F16(i64::min_float()),
+            crate::Literal::F16(i64::max_float()),
+        ),
+        (crate::Scalar::F16, crate::Scalar::U64) => (
+            crate::Literal::F16(u64::min_float()),
+            crate::Literal::F16(u64::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::I32) => (
+            crate::Literal::F32(i32::min_float()),
+            crate::Literal::F32(i32::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::U32) => (
+            crate::Literal::F32(u32::min_float()),
+            crate::Literal::F32(u32::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::I64) => (
+            crate::Literal::F32(i64::min_float()),
+            crate::Literal::F32(i64::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::U64) => (
+            crate::Literal::F32(u64::min_float()),
+            crate::Literal::F32(u64::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::I32) => (
+            crate::Literal::F64(i32::min_float()),
+            crate::Literal::F64(i32::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::U32) => (
+            crate::Literal::F64(u32::min_float()),
+            crate::Literal::F64(u32::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::I64) => (
+            crate::Literal::F64(i64::min_float()),
+            crate::Literal::F64(i64::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::U64) => (
+            crate::Literal::F64(u64::min_float()),
+            crate::Literal::F64(u64::max_float()),
+        ),
+        _ => unreachable!(),
+    }
+}

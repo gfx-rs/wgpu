@@ -342,6 +342,10 @@ ret_ZeroValuearray5_array10_float__ ZeroValuearray5_array10_float__() {
     return (float[5][10])0;
 }
 
+int naga_f2i32(float value) {
+    return int(clamp(value, -2147483600.0, 2147483500.0));
+}
+
 typedef uint2 ret_Constructarray2_uint2_[2];
 ret_Constructarray2_uint2_ Constructarray2_uint2_(uint2 arg0, uint2 arg1) {
     uint2 ret[2] = { arg0, arg1 };
@@ -370,7 +374,7 @@ float4 foo_vert(uint vi : SV_VertexID) : SV_Position
     int a_2 = asint(bar.Load(0+(((NagaBufferLengthRW(bar) - 160) / 8) - 2u)*8+160));
     int2 c = asint(qux.Load2(0));
     const float _e33 = read_from_private(foo);
-    c2_ = Constructarray5_int_(a_2, int(b), int(3), int(4), int(5));
+    c2_ = Constructarray5_int_(a_2, naga_f2i32(b), int(3), int(4), int(5));
     c2_[min(uint((vi + 1u)), 4u)] = int(42);
     int value_1 = c2_[min(uint(vi), 4u)];
     const float _e47 = test_arr_as_arg(ZeroValuearray5_array10_float__());

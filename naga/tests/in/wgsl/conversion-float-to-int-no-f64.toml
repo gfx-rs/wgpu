@@ -1,0 +1,4 @@
+# Other backends are tested by conversion-float-to-int.wgsl which is a
+# superset of this test.
+targets = "METAL"
+god_mode = true
