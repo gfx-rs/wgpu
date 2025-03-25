@@ -717,14 +717,6 @@ mod waker {
 
     /// Get a static reference to a [`Waker`] which
     /// does nothing when `wake()` is called on it.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use futures::task::noop_waker_ref;
-    /// let waker = noop_waker_ref();
-    /// waker.wake_by_ref();
-    /// ```
     #[inline]
     pub fn noop_waker_ref() -> &'static Waker {
         struct SyncRawWaker(RawWaker);
