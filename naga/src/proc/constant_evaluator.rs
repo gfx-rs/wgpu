@@ -1716,7 +1716,8 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::I32(v) => v as u32,
                         Literal::U32(v) => v,
                         Literal::F32(v) => v as u32,
-                        Literal::F16(v) => f16::to_u32(&v).unwrap(), //Only None on NaN or Inf
+                        // max(0) avoids None due to negative, therefore only None on NaN or Inf
+                        Literal::F16(v) => f16::to_u32(&v.max(f16::ZERO)).unwrap(),
                         Literal::Bool(v) => v as u32,
                         Literal::F64(_) | Literal::I64(_) | Literal::U64(_) => {
                             return make_error();
@@ -1744,7 +1745,8 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::F64(v) => v as u64,
                         Literal::I64(v) => v as u64,
                         Literal::U64(v) => v,
-                        Literal::F16(v) => f16::to_u64(&v).unwrap(), //Only None on NaN or Inf
+                        // max(0) avoids None due to negative, therefore only None on NaN or Inf
+                        Literal::F16(v) => f16::to_u64(&v.max(f16::ZERO)).unwrap(),
                         Literal::AbstractInt(v) => u64::try_from_abstract(v)?,
                         Literal::AbstractFloat(v) => u64::try_from_abstract(v)?,
                     }),
