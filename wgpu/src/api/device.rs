@@ -51,7 +51,7 @@ impl Device {
         use core::future::Future as _;
         use core::pin::pin;
         use core::task;
-        let ctx = &mut task::Context::from_waker(task::Waker::noop());
+        let ctx = &mut task::Context::from_waker(waker::noop_waker_ref());
 
         let instance = Instance::new(&InstanceDescriptor {
             backends: Backends::NOOP,
@@ -693,5 +693,62 @@ impl fmt::Display for Error {
             Error::Validation { description, .. } => f.write_str(description),
             Error::Internal { description, .. } => f.write_str(description),
         }
+    }
+}
+
+// Copied from [`futures::task::noop_waker`].
+// Needed until MSRV is 1.85 with `task::Waker::noop()` available
+mod waker {
+    use core::ptr::null;
+    use core::task::{RawWaker, RawWakerVTable, Waker};
+
+    unsafe fn noop_clone(_data: *const ()) -> RawWaker {
+        noop_raw_waker()
+    }
+
+    unsafe fn noop(_data: *const ()) {}
+
+    const NOOP_WAKER_VTABLE: RawWakerVTable = RawWakerVTable::new(noop_clone, noop, noop, noop);
+
+    const fn noop_raw_waker() -> RawWaker {
+        RawWaker::new(null(), &NOOP_WAKER_VTABLE)
+    }
+
+    /// Create a new [`Waker`] which does
+    /// nothing when `wake()` is called on it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use futures::task::noop_waker;
+    /// let waker = noop_waker();
+    /// waker.wake();
+    /// ```
+    #[inline]
+    #[allow(unused)]
+    pub fn noop_waker() -> Waker {
+        // FIXME: Since 1.46.0 we can use transmute in consts, allowing this function to be const.
+        unsafe { Waker::from_raw(noop_raw_waker()) }
+    }
+
+    /// Get a static reference to a [`Waker`] which
+    /// does nothing when `wake()` is called on it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use futures::task::noop_waker_ref;
+    /// let waker = noop_waker_ref();
+    /// waker.wake_by_ref();
+    /// ```
+    #[inline]
+    pub fn noop_waker_ref() -> &'static Waker {
+        struct SyncRawWaker(RawWaker);
+        unsafe impl Sync for SyncRawWaker {}
+
+        static NOOP_WAKER_INSTANCE: SyncRawWaker = SyncRawWaker(noop_raw_waker());
+
+        // SAFETY: `Waker` is #[repr(transparent)] over its `RawWaker`.
+        unsafe { &*(&NOOP_WAKER_INSTANCE.0 as *const RawWaker as *const Waker) }
     }
 }
