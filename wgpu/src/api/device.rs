@@ -715,23 +715,6 @@ mod waker {
         RawWaker::new(null(), &NOOP_WAKER_VTABLE)
     }
 
-    /// Create a new [`Waker`] which does
-    /// nothing when `wake()` is called on it.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use futures::task::noop_waker;
-    /// let waker = noop_waker();
-    /// waker.wake();
-    /// ```
-    #[inline]
-    #[allow(unused)]
-    pub fn noop_waker() -> Waker {
-        // FIXME: Since 1.46.0 we can use transmute in consts, allowing this function to be const.
-        unsafe { Waker::from_raw(noop_raw_waker()) }
-    }
-
     /// Get a static reference to a [`Waker`] which
     /// does nothing when `wake()` is called on it.
     ///
