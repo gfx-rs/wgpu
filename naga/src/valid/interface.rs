@@ -4,7 +4,7 @@ use bit_set::BitSet;
 
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
-    Capabilities, Disalignment, FunctionError, ModuleInfo,
+    Capabilities, Disalignment, FunctionError, ModuleInfo, PushConstantError,
 };
 use crate::arena::{Handle, UniqueArena};
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
@@ -41,6 +41,8 @@ pub enum GlobalVariableError {
     InitializerNotAllowed(crate::AddressSpace),
     #[error("Storage address space doesn't support write-only access")]
     StorageAddressSpaceWriteOnlyNotSupported,
+    #[error("Type is not valid for use as a push constant")]
+    InvalidPushConstantType(#[source] PushConstantError),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -233,6 +235,7 @@ impl VaryingContext<'_> {
                             St::Vertex => self.output,
                             St::Fragment => !self.output,
                             St::Compute => false,
+                            St::Task | St::Mesh => unreachable!(),
                         },
                         *ty_inner
                             == Ti::Vector {
@@ -244,6 +247,7 @@ impl VaryingContext<'_> {
                         match self.stage {
                             St::Vertex | St::Fragment => !self.output,
                             St::Compute => false,
+                            St::Task | St::Mesh => unreachable!(),
                         },
                         *ty_inner == Ti::Scalar(crate::Scalar::I32),
                     ),
@@ -291,6 +295,7 @@ impl VaryingContext<'_> {
                         match self.stage {
                             St::Compute | St::Fragment => !self.output,
                             St::Vertex => false,
+                            St::Task | St::Mesh => unreachable!(),
                         },
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
@@ -385,6 +390,7 @@ impl VaryingContext<'_> {
                     crate::ShaderStage::Vertex => self.output,
                     crate::ShaderStage::Fragment => !self.output,
                     crate::ShaderStage::Compute => false,
+                    crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
                 };
 
                 // It doesn't make sense to specify a sampling when `interpolation` is `Flat`, but
@@ -592,6 +598,9 @@ impl super::Validator {
                         Capabilities::PUSH_CONSTANT,
                     ));
                 }
+                if let Err(ref err) = type_info.push_constant_compatibility {
+                    return Err(GlobalVariableError::InvalidPushConstantType(err.clone()));
+                }
                 (
                     TypeFlags::DATA
                         | TypeFlags::COPY
@@ -680,6 +689,7 @@ impl super::Validator {
                 crate::ShaderStage::Vertex => ShaderStages::VERTEX,
                 crate::ShaderStage::Fragment => ShaderStages::FRAGMENT,
                 crate::ShaderStage::Compute => ShaderStages::COMPUTE,
+                crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
             };
 
             if !info.available_stages.contains(stage_bit) {

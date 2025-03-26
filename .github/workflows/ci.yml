@@ -389,6 +389,14 @@ jobs:
         with:
           key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
 
+      - name: Reduce MSRV on dependencies
+        shell: bash
+        run: |
+          set -e
+
+          # 1.9.0 requires MSRV 1.84
+          cargo update -p bytemuck_derive --precise 1.8.1
+
       - name: Check native
         shell: bash
         run: |
@@ -750,7 +758,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.30.1
+        uses: crate-ci/typos@v1.30.2
 
   check-cts-runner:
     # runtime is normally 2 minutes

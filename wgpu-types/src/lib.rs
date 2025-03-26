@@ -16,10 +16,14 @@ extern crate alloc;
 
 use alloc::{string::String, vec, vec::Vec};
 use core::{
+    fmt,
     hash::{Hash, Hasher},
+    mem,
     num::NonZeroU32,
     ops::Range,
 };
+
+use bytemuck::{Pod, Zeroable};
 
 #[cfg(any(feature = "serde", test))]
 use {
@@ -28,6 +32,7 @@ use {
 };
 
 pub mod assertions;
+mod cast_utils;
 mod counters;
 mod env;
 mod features;
@@ -146,6 +151,16 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// Array of all [`Backend`] values, corresponding to [`Backends::all()`].
+    pub const ALL: [Backend; Backends::all().bits().count_ones() as usize] = [
+        Self::Noop,
+        Self::Vulkan,
+        Self::Metal,
+        Self::Dx12,
+        Self::Gl,
+        Self::BrowserWebGpu,
+    ];
+
     /// Returns the string name of the backend.
     #[must_use]
     pub const fn to_str(self) -> &'static str {
@@ -345,6 +360,88 @@ impl<S> Default for RequestAdapterOptions<S> {
             force_fallback_adapter: false,
             compatible_surface: None,
         }
+    }
+}
+
+/// Error when [`Instance::request_adapter()`] fails.
+///
+/// This type is not part of the WebGPU standard, where `requestAdapter()` would simply return null.
+///
+/// [`Instance::request_adapter()`]: ../wgpu/struct.Instance.html#method.request_adapter
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum RequestAdapterError {
+    /// No adapter available via the instance’s backends matched the request’s adapter criteria.
+    NotFound {
+        // These fields must be set by wgpu-core and wgpu, but are not intended to be stable API,
+        // only data for the production of the error message.
+        #[doc(hidden)]
+        active_backends: Backends,
+        #[doc(hidden)]
+        requested_backends: Backends,
+        #[doc(hidden)]
+        supported_backends: Backends,
+        #[doc(hidden)]
+        no_fallback_backends: Backends,
+        #[doc(hidden)]
+        no_adapter_backends: Backends,
+        #[doc(hidden)]
+        incompatible_surface_backends: Backends,
+    },
+
+    /// Attempted to obtain adapter specified by environment variable, but the environment variable
+    /// was not set.
+    EnvNotSet,
+}
+
+impl core::error::Error for RequestAdapterError {}
+impl fmt::Display for RequestAdapterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RequestAdapterError::NotFound {
+                active_backends,
+                requested_backends,
+                supported_backends,
+                no_fallback_backends,
+                no_adapter_backends,
+                incompatible_surface_backends,
+            } => {
+                write!(f, "No suitable graphics adapter found; ")?;
+                let mut first = true;
+                for backend in Backend::ALL {
+                    let bit = Backends::from(backend);
+                    let comma = if mem::take(&mut first) { "" } else { ", " };
+                    let explanation = if !requested_backends.contains(bit) {
+                        // We prefer reporting this, because it makes the error most stable with
+                        // respect to what is directly controllable by the caller, as opposed to
+                        // compilation options or the run-time environment.
+                        "not requested"
+                    } else if !supported_backends.contains(bit) {
+                        "support not compiled in"
+                    } else if no_adapter_backends.contains(bit) {
+                        "found no adapters"
+                    } else if incompatible_surface_backends.contains(bit) {
+                        "not compatible with provided surface"
+                    } else if no_fallback_backends.contains(bit) {
+                        "had no fallback adapters"
+                    } else if !active_backends.contains(bit) {
+                        // Backend requested but not active in this instance
+                        if backend == Backend::Noop {
+                            "not explicitly enabled"
+                        } else {
+                            "drivers/libraries could not be loaded"
+                        }
+                    } else {
+                        // This path should be unreachable, but don't crash.
+                        "[unknown reason]"
+                    };
+                    write!(f, "{comma}{backend} {explanation}")?;
+                }
+            }
+            RequestAdapterError::EnvNotSet => f.write_str("WGPU_ADAPTER_NAME not set")?,
+        }
+        Ok(())
     }
 }
 
@@ -868,6 +965,8 @@ bitflags::bitflags! {
         const FRAGMENT_WRITABLE_STORAGE = 1 << 1;
         /// Supports indirect drawing and dispatching.
         ///
+        /// [`Self::COMPUTE_SHADERS`] must be present for this flag.
+        ///
         /// WebGL2, GLES 3.0, and Metal on Apple1/Apple2 GPUs do not support indirect.
         const INDIRECT_EXECUTION = 1 << 2;
         /// Supports non-zero `base_vertex` parameter to direct indexed draw calls.
@@ -1211,6 +1310,10 @@ bitflags::bitflags! {
         const COMPUTE = 1 << 2;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
         const VERTEX_FRAGMENT = Self::VERTEX.bits() | Self::FRAGMENT.bits();
+        /// Binding is visible from the task shader of a mesh pipeline
+        const TASK = 1 << 3;
+        /// Binding is visible from the mesh shader of a mesh pipeline
+        const MESH = 1 << 4;
     }
 }
 
@@ -4631,13 +4734,16 @@ pub enum VertexStepMode {
 
 /// Vertex inputs (attributes) to shaders.
 ///
-/// Arrays of these can be made with the [`vertex_attr_array`]
-/// macro. Vertex attributes are assumed to be tightly packed.
+/// These are used to specify the individual attributes within a [`VertexBufferLayout`].
+/// See its documentation for an example.
+///
+/// The [`vertex_attr_array!`] macro can help create these with appropriate offsets.
 ///
 /// Corresponds to [WebGPU `GPUVertexAttribute`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexattribute).
 ///
-/// [`vertex_attr_array`]: ../wgpu/macro.vertex_attr_array.html
+/// [`vertex_attr_array!`]: ../wgpu/macro.vertex_attr_array.html
+/// [`VertexBufferLayout`]: ../wgpu/struct.VertexBufferLayout.html
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -7113,7 +7219,7 @@ bitflags::bitflags! {
 
 /// Argument buffer layout for `draw_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DrawIndirectArgs {
     /// The number of vertices to draw.
     pub vertex_count: u32,
@@ -7131,18 +7237,13 @@ impl DrawIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written in a buffer.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            core::mem::transmute(core::slice::from_raw_parts(
-                core::ptr::from_ref(self).cast::<u8>(),
-                size_of::<Self>(),
-            ))
-        }
+        bytemuck::bytes_of(self)
     }
 }
 
 /// Argument buffer layout for `draw_indexed_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DrawIndexedIndirectArgs {
     /// The number of indices to draw.
     pub index_count: u32,
@@ -7162,18 +7263,13 @@ impl DrawIndexedIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written in a buffer.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            core::mem::transmute(core::slice::from_raw_parts(
-                core::ptr::from_ref(self).cast::<u8>(),
-                size_of::<Self>(),
-            ))
-        }
+        bytemuck::bytes_of(self)
     }
 }
 
 /// Argument buffer layout for `dispatch_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DispatchIndirectArgs {
     /// The number of work groups in X dimension.
     pub x: u32,
@@ -7187,12 +7283,7 @@ impl DispatchIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written into a buffer.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            core::mem::transmute(core::slice::from_raw_parts(
-                core::ptr::from_ref(self).cast::<u8>(),
-                size_of::<Self>(),
-            ))
-        }
+        bytemuck::bytes_of(self)
     }
 }
 

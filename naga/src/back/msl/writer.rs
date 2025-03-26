@@ -8,6 +8,9 @@ use core::{
     fmt::{Display, Error as FmtError, Formatter, Write},
     iter,
 };
+use num_traits::real::Real as _;
+
+use half::f16;
 
 use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
 use crate::{
@@ -149,7 +152,6 @@ struct TypeContext<'a> {
     gctx: proc::GlobalCtx<'a>,
     names: &'a FastHashMap<NameKey, String>,
     access: crate::StorageAccess,
-    binding: Option<&'a super::ResolvedBinding>,
     first_time: bool,
 }
 
@@ -183,9 +185,11 @@ impl Display for TypeContext<'_> {
                 write!(out, "{}::atomic_{}", NAMESPACE, scalar.to_msl_name())
             }
             crate::TypeInner::Vector { size, scalar } => put_numeric_type(out, scalar, &[size]),
-            crate::TypeInner::Matrix { columns, rows, .. } => {
-                put_numeric_type(out, crate::Scalar::F32, &[rows, columns])
-            }
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => put_numeric_type(out, scalar, &[rows, columns]),
             crate::TypeInner::Pointer { base, space } => {
                 let sub = Self {
                     handle: base,
@@ -323,7 +327,6 @@ struct TypedGlobalVariable<'a> {
     names: &'a FastHashMap<NameKey, String>,
     handle: Handle<crate::GlobalVariable>,
     usage: valid::GlobalUse,
-    binding: Option<&'a super::ResolvedBinding>,
     reference: bool,
 }
 
@@ -356,7 +359,6 @@ impl TypedGlobalVariable<'_> {
             gctx: self.module.to_ctx(),
             names: self.names,
             access: storage_access,
-            binding: self.binding,
             first_time: false,
         };
 
@@ -428,8 +430,12 @@ impl crate::Scalar {
         match self {
             Self {
                 kind: Sk::Float,
-                width: _,
+                width: 4,
             } => "float",
+            Self {
+                kind: Sk::Float,
+                width: 2,
+            } => "half",
             Self {
                 kind: Sk::Sint,
                 width: 4,
@@ -486,7 +492,7 @@ fn should_pack_struct_member(
     match *ty_inner {
         crate::TypeInner::Vector {
             size: crate::VectorSize::Tri,
-            scalar: scalar @ crate::Scalar { width: 4, .. },
+            scalar: scalar @ crate::Scalar { width: 4 | 2, .. },
         } if is_tight => Some(scalar),
         _ => None,
     }
@@ -844,12 +850,13 @@ impl<W: Write> Writer<W> {
         }
 
         let loop_bound_name = self.namer.call("loop_bound");
-        let decl = format!("{level}uint2 {loop_bound_name} = uint2(0u);");
+        // Count down from u32::MAX rather than up from 0 to avoid hang on
+        // certain Intel drivers. See <https://github.com/gfx-rs/wgpu/issues/7319>.
+        let decl = format!("{level}uint2 {loop_bound_name} = uint2({}u);", u32::MAX);
         let level = level.next();
-        let max = u32::MAX;
         let break_and_inc = format!(
-            "{level}if ({NAMESPACE}::all({loop_bound_name} == uint2({max}u))) {{ break; }}
-{level}{loop_bound_name} += uint2({loop_bound_name}.y == {max}u, 1u);"
+            "{level}if ({NAMESPACE}::all({loop_bound_name} == uint2(0u))) {{ break; }}
+{level}{loop_bound_name} -= uint2({loop_bound_name}.y == 0u, 1u);"
         );
 
         Some((decl, break_and_inc))
@@ -1462,6 +1469,21 @@ impl<W: Write> Writer<W> {
                 crate::Literal::F64(_) => {
                     return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
                 }
+                crate::Literal::F16(value) => {
+                    if value.is_infinite() {
+                        let sign = if value.is_sign_negative() { "-" } else { "" };
+                        write!(self.out, "{sign}INFINITY")?;
+                    } else if value.is_nan() {
+                        write!(self.out, "NAN")?;
+                    } else {
+                        let suffix = if value.fract() == f16::from_f32(0.0) {
+                            ".0h"
+                        } else {
+                            "h"
+                        };
+                        write!(self.out, "{value}{suffix}")?;
+                    }
+                }
                 crate::Literal::F32(value) => {
                     if value.is_infinite() {
                         let sign = if value.is_sign_negative() { "-" } else { "" };
@@ -1513,7 +1535,6 @@ impl<W: Write> Writer<W> {
                     gctx: module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
-                    binding: None,
                     first_time: false,
                 };
                 write!(self.out, "{ty_name} {{}}")?;
@@ -1524,7 +1545,6 @@ impl<W: Write> Writer<W> {
                     gctx: module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
-                    binding: None,
                     first_time: false,
                 };
                 write!(self.out, "{ty_name}")?;
@@ -3050,7 +3070,6 @@ impl<W: Write> Writer<W> {
                     gctx: context.module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
-                    binding: None,
                     first_time: false,
                 };
                 write!(self.out, "{ty_name}")?;
@@ -3804,8 +3823,7 @@ impl<W: Write> Writer<W> {
         self.names.clear();
         self.namer.reset(
             module,
-            super::keywords::RESERVED,
-            &[],
+            &super::keywords::RESERVED_SET,
             &[],
             &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
@@ -3993,7 +4011,6 @@ impl<W: Write> Writer<W> {
                         gctx: module.to_ctx(),
                         names: &self.names,
                         access: crate::StorageAccess::empty(),
-                        binding: None,
                         first_time: false,
                     };
 
@@ -4049,7 +4066,6 @@ impl<W: Write> Writer<W> {
                                     gctx: module.to_ctx(),
                                     names: &self.names,
                                     access: crate::StorageAccess::empty(),
-                                    binding: None,
                                     first_time: false,
                                 };
                                 writeln!(
@@ -4079,7 +4095,6 @@ impl<W: Write> Writer<W> {
                         gctx: module.to_ctx(),
                         names: &self.names,
                         access: crate::StorageAccess::empty(),
-                        binding: None,
                         first_time: true,
                     };
                     writeln!(self.out, "typedef {ty_name} {name};")?;
@@ -4179,7 +4194,6 @@ template <typename A>
                 gctx: module.to_ctx(),
                 names: &self.names,
                 access: crate::StorageAccess::empty(),
-                binding: None,
                 first_time: false,
             };
             let name = &self.names[&NameKey::Constant(handle)];
@@ -5479,7 +5493,6 @@ template <typename A>
                         gctx: module.to_ctx(),
                         names: &self.names,
                         access: crate::StorageAccess::empty(),
-                        binding: None,
                         first_time: false,
                     };
                     write!(self.out, "{ty_name}")?;
@@ -5497,7 +5510,6 @@ template <typename A>
                     gctx: module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
-                    binding: None,
                     first_time: false,
                 };
                 let separator = separate(
@@ -5520,7 +5532,7 @@ template <typename A>
                     names: &self.names,
                     handle,
                     usage: fun_info[handle],
-                    binding: None,
+
                     reference: true,
                 };
                 let separator =
@@ -5565,7 +5577,6 @@ template <typename A>
                     gctx: module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
-                    binding: None,
                     first_time: false,
                 };
                 let local_name = &self.names[&NameKey::FunctionLocal(fun_handle, local_handle)];
@@ -5637,6 +5648,7 @@ template <typename A>
                     LocationMode::Uniform,
                     false,
                 ),
+                crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
             };
 
             // Should this entry point be modified to do vertex pulling?
@@ -5793,7 +5805,6 @@ template <typename A>
                         gctx: module.to_ctx(),
                         names: &self.names,
                         access: crate::StorageAccess::empty(),
-                        binding: None,
                         first_time: false,
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
@@ -5853,7 +5864,6 @@ template <typename A>
                             gctx: module.to_ctx(),
                             names: &self.names,
                             access: crate::StorageAccess::empty(),
-                            binding: None,
                             first_time: true,
                         };
                         let binding = binding.ok_or_else(|| {
@@ -5954,7 +5964,6 @@ template <typename A>
                     gctx: module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
-                    binding: None,
                     first_time: false,
                 };
 
@@ -6139,7 +6148,6 @@ template <typename A>
                     names: &self.names,
                     handle,
                     usage,
-                    binding: resolved.as_ref(),
                     reference: true,
                 };
                 let separator = if is_first_argument {
@@ -6352,7 +6360,7 @@ template <typename A>
                         names: &self.names,
                         handle,
                         usage,
-                        binding: None,
+
                         reference: false,
                     };
                     write!(self.out, "{}", back::INDENT)?;
@@ -6480,7 +6488,6 @@ template <typename A>
                     gctx: module.to_ctx(),
                     names: &self.names,
                     access: crate::StorageAccess::empty(),
-                    binding: None,
                     first_time: false,
                 };
                 write!(self.out, "{}{} {}", back::INDENT, ty_name, name)?;

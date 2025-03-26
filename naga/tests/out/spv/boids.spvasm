@@ -235,7 +235,7 @@ OpDecorate %21 BuiltIn GlobalInvocationId
 %50 = OpVariable  %38  Function %51
 %45 = OpVariable  %46  Function %31
 %42 = OpVariable  %38  Function %30
-%77 = OpVariable  %72  Function %74
+%77 = OpVariable  %72  Function %76
 %23 = OpLoad  %11  %21
 %28 = OpAccessChain  %26  %14 %27
 OpBranch %54
@@ -270,16 +270,16 @@ OpLoopMerge %68 %70 None
 OpBranch %78
 %78 = OpLabel
 %79 = OpLoad  %71  %77
-%80 = OpIEqual  %73  %76 %79
+%80 = OpIEqual  %73  %74 %79
 %81 = OpAll  %56  %80
 OpSelectionMerge %82 None
 OpBranchConditional %81 %68 %82
 %82 = OpLabel
 %83 = OpCompositeExtract  %4  %79 1
-%84 = OpIEqual  %56  %83 %75
+%84 = OpIEqual  %56  %83 %27
 %85 = OpSelect  %4  %84 %33 %27
 %86 = OpCompositeConstruct  %71  %85 %33
-%87 = OpIAdd  %71  %79 %86
+%87 = OpISub  %71  %79 %86
 OpStore %77 %87
 OpBranch %69
 %69 = OpLabel

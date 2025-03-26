@@ -105,10 +105,6 @@ impl super::Instruction {
         instruction
     }
 
-    pub(super) const fn no_line() -> Self {
-        Self::new(Op::NoLine)
-    }
-
     //
     //  Annotation Instructions
     //
@@ -407,6 +403,10 @@ impl super::Instruction {
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction
+    }
+
+    pub(super) fn constant_16bit(result_type_id: Word, id: Word, low: Word) -> Self {
+        Self::constant(result_type_id, id, &[low])
     }
 
     pub(super) fn constant_32bit(result_type_id: Word, id: Word, value: Word) -> Self {

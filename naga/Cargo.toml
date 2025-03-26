@@ -41,10 +41,17 @@ msl-out = []
 ## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
 msl-out-if-target-apple = []
 
-serialize = ["dep:serde", "bitflags/serde", "hashbrown/serde", "indexmap/serde"]
+serialize = [
+    "dep:serde",
+    "bitflags/serde",
+    "half/serde",
+    "hashbrown/serde",
+    "indexmap/serde",
+]
 deserialize = [
     "dep:serde",
     "bitflags/serde",
+    "half/serde",
     "hashbrown/serde",
     "indexmap/serde",
 ]
@@ -78,15 +85,17 @@ arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
-termcolor = { version = "1.4.1" }
-# remove termcolor dep when updating to the next version of codespan-reporting
-# termcolor minimum version was wrong and was fixed in
-# https://github.com/brendanzab/codespan/commit/e99c867339a877731437e7ee6a903a3d03b5439e
-codespan-reporting = { version = "0.11.0" }
+codespan-reporting = { workspace = true, default-features = false, features = [
+    "std",
+    "termcolor",
+] }
 hashbrown.workspace = true
+half = { workspace = true, features = ["arbitrary", "num-traits"] }
 rustc-hash.workspace = true
 indexmap.workspace = true
 log = "0.4"
+# `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
+num-traits = "0.2.16"
 strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
@@ -111,10 +120,7 @@ hashbrown = { workspace = true, features = ["serde"] }
 # are allowed through though.
 hlsl-snapshots = { path = "./hlsl-snapshots" }
 itertools.workspace = true
-# Require at least version 0.7.1 of ron, this version changed how floating points are
-# serialized by forcing them to always have the decimal part, this makes it backwards
-# incompatible with our tests because we do a syntactic diff and not a semantic one.
-ron = "0.8.0"
+ron.workspace = true
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 serde = { workspace = true, features = ["default", "derive"] }
 spirv = { version = "0.3", features = ["deserialize"] }

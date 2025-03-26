@@ -765,7 +765,7 @@ fn set_pipeline(
         {
             // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
             let len = push_constant_range.len() / wgt::PUSH_CONSTANT_ALIGNMENT as usize;
-            state.push_constants.extend(core::iter::repeat(0).take(len));
+            state.push_constants.extend(core::iter::repeat_n(0, len));
         }
 
         // Clear push constant ranges
@@ -891,13 +891,10 @@ fn dispatch_indirect(
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-    #[cfg(feature = "indirect-validation")]
-    {
-        let params = state.device.indirect_validation.as_ref().unwrap().params(
-            &state.device.limits,
-            offset,
-            buffer.size,
-        );
+    if let Some(ref indirect_validation) = state.device.indirect_validation {
+        let params = indirect_validation
+            .dispatch
+            .params(&state.device.limits, offset, buffer.size);
 
         unsafe {
             state.raw_encoder.set_compute_pipeline(params.pipeline);
@@ -926,9 +923,10 @@ fn dispatch_indirect(
                 1,
                 Some(
                     buffer
-                        .raw_indirect_validation_bind_group
+                        .indirect_validation_bind_groups
                         .get(&state.snatch_guard)
                         .unwrap()
+                        .dispatch
                         .as_ref(),
                 ),
                 &[params.aligned_offset as u32],
@@ -1006,9 +1004,7 @@ fn dispatch_indirect(
         unsafe {
             state.raw_encoder.dispatch_indirect(params.dst_buffer, 0);
         }
-    };
-    #[cfg(not(feature = "indirect-validation"))]
-    {
+    } else {
         state
             .scope
             .buffers

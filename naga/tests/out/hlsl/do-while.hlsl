@@ -1,10 +1,10 @@
 void fb1_(inout bool cond)
 {
-    uint2 loop_bound = uint2(0u, 0u);
+    uint2 loop_bound = uint2(4294967295u, 4294967295u);
     bool loop_init = true;
     while(true) {
-        if (all(loop_bound == uint2(4294967295u, 4294967295u))) { break; }
-        loop_bound += uint2(loop_bound.y == 4294967295u, 1u);
+        if (all(loop_bound == uint2(0u, 0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
         if (!loop_init) {
             bool _e1 = cond;
             if (!(_e1)) {

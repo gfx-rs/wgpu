@@ -61,7 +61,7 @@ impl ContextWgpuCore {
         Self(unsafe { Arc::new(wgc::global::Global::from_instance(core_instance)) })
     }
 
-    #[cfg(native)]
+    #[cfg(wgpu_core)]
     pub fn enumerate_adapters(&self, backends: wgt::Backends) -> Vec<wgc::id::AdapterId> {
         self.0.enumerate_adapters(backends)
     }
@@ -850,7 +850,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             let generic: dispatch::DispatchAdapter = core.into();
             generic
         });
-        Box::pin(ready(adapter.ok()))
+        Box::pin(ready(adapter))
     }
 
     fn poll_all_devices(&self, force_wait: bool) -> bool {

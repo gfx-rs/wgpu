@@ -129,7 +129,6 @@ pub struct Device {
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
-    #[cfg(feature = "indirect-validation")]
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // needs to be dropped last
     #[cfg(feature = "trace")]
@@ -160,7 +159,6 @@ impl Drop for Device {
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        #[cfg(feature = "indirect-validation")]
         if let Some(indirect_validation) = self.indirect_validation.take() {
             indirect_validation.dispose(self.raw.as_ref());
         }
@@ -248,21 +246,18 @@ impl Device {
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
 
-        #[cfg(feature = "indirect-validation")]
-        let indirect_validation = if downlevel
-            .flags
-            .contains(wgt::DownlevelFlags::INDIRECT_EXECUTION)
-        {
-            match crate::indirect_validation::IndirectValidation::new(
+        let enable_indirect_validation = instance_flags
+            .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
+            && downlevel
+                .flags
+                .contains(wgt::DownlevelFlags::INDIRECT_EXECUTION);
+
+        let indirect_validation = if enable_indirect_validation {
+            Some(crate::indirect_validation::IndirectValidation::new(
                 raw_device.as_ref(),
                 &desc.required_limits,
-            ) {
-                Ok(indirect_validation) => Some(indirect_validation),
-                Err(e) => {
-                    log::error!("indirect-validation error: {e:?}");
-                    return Err(DeviceError::Lost);
-                }
-            }
+                &desc.required_features,
+            )?)
         } else {
             None
         };
@@ -312,7 +307,6 @@ impl Device {
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
             // By starting at one, we can put the result in a NonZeroU64.
             last_acceleration_structure_build_command_index: AtomicU64::new(1),
-            #[cfg(feature = "indirect-validation")]
             indirect_validation,
         })
     }
@@ -651,9 +645,8 @@ impl Device {
         let buffer =
             unsafe { self.raw().create_buffer(&hal_desc) }.map_err(|e| self.handle_hal_error(e))?;
 
-        #[cfg(feature = "indirect-validation")]
-        let raw_indirect_validation_bind_group =
-            self.create_indirect_validation_bind_group(buffer.as_ref(), desc.size, desc.usage)?;
+        let indirect_validation_bind_groups =
+            self.create_indirect_validation_bind_groups(buffer.as_ref(), desc.size, desc.usage)?;
 
         let buffer = Buffer {
             raw: Snatchable::new(buffer),
@@ -668,8 +661,7 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
-            #[cfg(feature = "indirect-validation")]
-            raw_indirect_validation_bind_group,
+            indirect_validation_bind_groups,
         };
 
         let buffer = Arc::new(buffer);
@@ -751,8 +743,7 @@ impl Device {
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> (Fallible<Buffer>, Option<resource::CreateBufferError>) {
-        #[cfg(feature = "indirect-validation")]
-        let raw_indirect_validation_bind_group = match self.create_indirect_validation_bind_group(
+        let indirect_validation_bind_groups = match self.create_indirect_validation_bind_groups(
             hal_buffer.as_ref(),
             desc.size,
             desc.usage,
@@ -776,8 +767,7 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
-            #[cfg(feature = "indirect-validation")]
-            raw_indirect_validation_bind_group,
+            indirect_validation_bind_groups,
         };
 
         let buffer = Arc::new(buffer);
@@ -790,22 +780,31 @@ impl Device {
         (Fallible::Valid(buffer), None)
     }
 
-    #[cfg(feature = "indirect-validation")]
-    fn create_indirect_validation_bind_group(
+    fn create_indirect_validation_bind_groups(
         &self,
         raw_buffer: &dyn hal::DynBuffer,
         buffer_size: u64,
         usage: wgt::BufferUsages,
-    ) -> Result<Snatchable<Box<dyn hal::DynBindGroup>>, resource::CreateBufferError> {
-        if usage.contains(wgt::BufferUsages::INDIRECT) {
-            let indirect_validation = self.indirect_validation.as_ref().unwrap();
-            let bind_group = indirect_validation
-                .create_src_bind_group(self.raw(), &self.limits, buffer_size, raw_buffer)
-                .map_err(resource::CreateBufferError::IndirectValidationBindGroup)?;
-            match bind_group {
-                Some(bind_group) => Ok(Snatchable::new(bind_group)),
-                None => Ok(Snatchable::empty()),
-            }
+    ) -> Result<Snatchable<crate::indirect_validation::BindGroups>, resource::CreateBufferError>
+    {
+        if !usage.contains(wgt::BufferUsages::INDIRECT) {
+            return Ok(Snatchable::empty());
+        }
+
+        let Some(ref indirect_validation) = self.indirect_validation else {
+            return Ok(Snatchable::empty());
+        };
+
+        let bind_groups = crate::indirect_validation::BindGroups::new(
+            indirect_validation,
+            self,
+            buffer_size,
+            raw_buffer,
+        )
+        .map_err(resource::CreateBufferError::IndirectValidationBindGroup)?;
+
+        if let Some(bind_groups) = bind_groups {
+            Ok(Snatchable::new(bind_groups))
         } else {
             Ok(Snatchable::empty())
         }
@@ -2762,7 +2761,7 @@ impl Device {
             .map(|bgl| bgl.raw())
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
-        let additional_flags = if cfg!(feature = "indirect-validation") {
+        let additional_flags = if self.indirect_validation.is_some() {
             hal::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE
         } else {
             hal::PipelineLayoutFlags::empty()

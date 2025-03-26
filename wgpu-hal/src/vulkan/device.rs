@@ -4,7 +4,7 @@ use std::{
     ffi::{CStr, CString},
     mem::{self, MaybeUninit},
     num::NonZeroU32,
-    ptr, slice,
+    ptr,
     sync::Arc,
     vec::Vec,
 };
@@ -2147,10 +2147,9 @@ impl crate::Device for super::Device {
 
         let compiled_ts = match desc.task_stage {
             Some(ref stage) => {
-                // TODO: add proper naga stages
                 let mut compiled = self.compile_stage(
                     stage,
-                    naga::ShaderStage::Compute,
+                    naga::ShaderStage::Task,
                     &desc.layout.binding_arrays,
                 )?;
                 compiled.create_info.stage = vk::ShaderStageFlags::TASK_EXT;
@@ -2160,10 +2159,9 @@ impl crate::Device for super::Device {
             None => None,
         };
 
-        // TODO: add proper naga stages
         let mut compiled_ms = self.compile_stage(
             &desc.mesh_stage,
-            naga::ShaderStage::Compute,
+            naga::ShaderStage::Mesh,
             &desc.layout.binding_arrays,
         )?;
         compiled_ms.create_info.stage = vk::ShaderStageFlags::MESH_EXT;
@@ -2869,10 +2867,7 @@ impl crate::Device for super::Device {
             shader_binding_table_record_offset_and_flags: 0,
             acceleration_structure_reference: instance.blas_address,
         };
-        let temp: *const _ = &temp;
-        unsafe {
-            slice::from_raw_parts::<u8>(temp.cast::<u8>(), size_of::<RawTlasInstance>()).to_vec()
-        }
+        bytemuck::bytes_of(&temp).to_vec()
     }
 }
 

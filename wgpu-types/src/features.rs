@@ -1340,17 +1340,19 @@ bitflags_array! {
         /// This is a web and native feature.
         const INDIRECT_FIRST_INSTANCE = WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE;
 
-        /// Allows shaders to acquire the FP16 ability
+        /// Allows shaders to use 16-bit floating point types. You may use them uniform buffers,
+        /// storage buffers, and local variables. You may not use them in push constants.
         ///
-        /// Note: this is not supported in `naga` yet, only through `spirv-passthrough` right now.
+        /// In order to use this in WGSL shaders, you must add `enable f16;` to the top of your shader,
+        /// before any global items.
         ///
         /// Supported Platforms:
         /// - Vulkan
         /// - Metal
+        /// - DX12
         ///
         /// This is a web and native feature.
         const SHADER_F16 = WEBGPU_FEATURE_SHADER_F16;
-
 
         /// Allows for usage of textures of format [`TextureFormat::Rg11b10Ufloat`] as a render target
         ///

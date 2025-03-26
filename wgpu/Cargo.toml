@@ -180,7 +180,7 @@ static_assertions.workspace = true
 wgpu-core = { workspace = true, features = [
     "raw-window-handle",
     "renderdoc",
-    "indirect-validation",
+    "wgsl",              # needed for indirect draw/dispatch validation
     "portable-atomic",
 ] }
 wgpu-hal.workspace = true
@@ -221,6 +221,10 @@ smallvec.workspace = true
 
 [target.'cfg(not(target_has_atomic = "64"))'.dependencies]
 portable-atomic.workspace = true
+
+[dev-dependencies]
+# Used in doc-tests
+bytemuck.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true

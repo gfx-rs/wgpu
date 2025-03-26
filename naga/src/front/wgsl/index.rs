@@ -1,6 +1,6 @@
-use alloc::{vec, vec::Vec};
+use alloc::{boxed::Box, vec, vec::Vec};
 
-use super::Error;
+use super::{Error, Result};
 use crate::front::wgsl::parse::ast;
 use crate::{FastHashMap, Handle, Span};
 
@@ -17,7 +17,7 @@ impl<'a> Index<'a> {
     ///
     /// Return an error if the graph of references between declarations contains
     /// any cycles.
-    pub fn generate(tu: &ast::TranslationUnit<'a>) -> Result<Self, Error<'a>> {
+    pub fn generate(tu: &ast::TranslationUnit<'a>) -> Result<'a, Self> {
         // Produce a map from global definitions' names to their `Handle<GlobalDecl>`s.
         // While doing so, reject conflicting definitions.
         let mut globals = FastHashMap::with_capacity_and_hasher(tu.decls.len(), Default::default());
@@ -25,12 +25,12 @@ impl<'a> Index<'a> {
             if let Some(ident) = decl_ident(decl) {
                 let name = ident.name;
                 if let Some(old) = globals.insert(name, handle) {
-                    return Err(Error::Redefinition {
+                    return Err(Box::new(Error::Redefinition {
                         previous: decl_ident(&tu.decls[old])
                             .expect("decl should have ident for redefinition")
                             .span,
                         current: ident.span,
-                    });
+                    }));
                 }
             }
         }
@@ -103,7 +103,7 @@ struct DependencySolver<'source, 'temp> {
 
 impl<'a> DependencySolver<'a, '_> {
     /// Produce the sorted list of declaration handles, and check for cycles.
-    fn solve(mut self) -> Result<Vec<Handle<ast::GlobalDecl<'a>>>, Error<'a>> {
+    fn solve(mut self) -> Result<'a, Vec<Handle<ast::GlobalDecl<'a>>>> {
         for (id, _) in self.module.decls.iter() {
             if self.visited[id.index()] {
                 continue;
@@ -117,7 +117,7 @@ impl<'a> DependencySolver<'a, '_> {
 
     /// Ensure that all declarations used by `id` have been added to the
     /// ordering, and then append `id` itself.
-    fn dfs(&mut self, id: Handle<ast::GlobalDecl<'a>>) -> Result<(), Error<'a>> {
+    fn dfs(&mut self, id: Handle<ast::GlobalDecl<'a>>) -> Result<'a, ()> {
         let decl = &self.module.decls[id];
         let id_usize = id.index();
 
@@ -134,10 +134,10 @@ impl<'a> DependencySolver<'a, '_> {
                     // Found a cycle.
                     return if dep_id == id {
                         // A declaration refers to itself directly.
-                        Err(Error::RecursiveDeclaration {
+                        Err(Box::new(Error::RecursiveDeclaration {
                             ident: decl_ident(decl).expect("decl should have ident").span,
                             usage: dep.usage,
-                        })
+                        }))
                     } else {
                         // A declaration refers to itself indirectly, through
                         // one or more other definitions. Report the entire path
@@ -150,7 +150,7 @@ impl<'a> DependencySolver<'a, '_> {
                             .find_map(|(i, dep)| (dep.decl == dep_id).then_some(i))
                             .unwrap_or(0);
 
-                        Err(Error::CyclicDeclaration {
+                        Err(Box::new(Error::CyclicDeclaration {
                             ident: decl_ident(&self.module.decls[dep_id])
                                 .expect("decl should have ident")
                                 .span,
@@ -166,7 +166,7 @@ impl<'a> DependencySolver<'a, '_> {
                                     )
                                 })
                                 .collect(),
-                        })
+                        }))
                     };
                 } else if !self.visited[dep_id_usize] {
                     self.dfs(dep_id)?;

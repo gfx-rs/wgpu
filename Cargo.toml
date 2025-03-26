@@ -91,7 +91,6 @@ bit-set = { version = "0.8", default-features = false }
 bit-vec = { version = "0.8", default-features = false }
 bitflags = "2.9"
 bytemuck = { version = "1.22", features = [
-    "derive",
     "extern_crate_alloc",
     "min_const_generics",
 ] }
@@ -99,7 +98,7 @@ cargo_metadata = "0.19"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.5"
-codespan-reporting = "0.11"
+codespan-reporting = { version = "0.12", default-features = false }
 ctor = "0.2"
 document-features = "0.2.11"
 encase = "0.10.0"
@@ -108,6 +107,7 @@ fern = "0.7"
 flume = "0.11"
 futures-lite = "2"
 glam = "0.29"
+half = "2.5" # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.14.5", default-features = false, features = [
     "ahash",
     "inline-more",
@@ -126,7 +126,7 @@ noise = "0.9"
 nv-flip = "0.1"
 obj = "0.10"
 # NOTE: once_cell/std is *required* for some commonly-used features, selecting this per crate
-once_cell = { version = "1.20.3", default-features = false }
+once_cell = { version = "1.21.1", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3,<=4.6", default-features = false }
 parking_lot = "0.12.1"
@@ -142,7 +142,7 @@ profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.6", default-features = false }
 rayon = "1"
 renderdoc-sys = "1.1.0"
-ron = "0.8"
+ron = "0.9"
 # NOTE: rustc-hash v2 is a completely different hasher with different performance characteristics
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
@@ -205,7 +205,7 @@ deno_webidl = "0.190.0"
 deno_webgpu = { version = "0.157.0", path = "./deno_webgpu" }
 deno_unsync = "0.4.2"
 deno_error = "0.5.5"
-tokio = "1.44.0"
+tokio = "1.44.1"
 termcolor = "1.4.1"
 
 # android dependencies

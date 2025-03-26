@@ -68,6 +68,7 @@ pub struct BindTarget {
     pub mutable: bool,
 }
 
+#[cfg(any(feature = "serialize", feature = "deserialize"))]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 struct BindingMapSerialization {
@@ -584,13 +585,6 @@ impl ResolvedBinding {
                 sampler: Some(BindSamplerTarget::Inline(index)),
                 ..
             }) => Some(&options.inline_samplers[index as usize]),
-            _ => None,
-        }
-    }
-
-    const fn as_bind_target(&self) -> Option<&BindTarget> {
-        match *self {
-            Self::Resource(ref target) => Some(target),
             _ => None,
         }
     }

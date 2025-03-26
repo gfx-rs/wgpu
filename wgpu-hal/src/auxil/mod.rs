@@ -60,6 +60,8 @@ pub fn map_naga_stage(stage: naga::ShaderStage) -> wgt::ShaderStages {
         naga::ShaderStage::Vertex => wgt::ShaderStages::VERTEX,
         naga::ShaderStage::Fragment => wgt::ShaderStages::FRAGMENT,
         naga::ShaderStage::Compute => wgt::ShaderStages::COMPUTE,
+        naga::ShaderStage::Task => wgt::ShaderStages::TASK,
+        naga::ShaderStage::Mesh => wgt::ShaderStages::MESH,
     }
 }
 

@@ -140,8 +140,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.names.clear();
         self.namer.reset(
             module,
-            super::keywords::RESERVED,
-            super::keywords::TYPES,
+            &super::keywords::RESERVED_SET,
             super::keywords::RESERVED_CASE_INSENSITIVE,
             super::keywords::RESERVED_PREFIXES,
             &mut self.names,
@@ -171,12 +170,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         let loop_bound_name = self.namer.call("loop_bound");
-        let decl = format!("{level}uint2 {loop_bound_name} = uint2(0u, 0u);");
-        let level = level.next();
         let max = u32::MAX;
+        // Count down from u32::MAX rather than up from 0 to avoid hang on
+        // certain Intel drivers. See <https://github.com/gfx-rs/wgpu/issues/7319>.
+        let decl = format!("{level}uint2 {loop_bound_name} = uint2({max}u, {max}u);");
+        let level = level.next();
         let break_and_inc = format!(
-            "{level}if (all({loop_bound_name} == uint2({max}u, {max}u))) {{ break; }}
-{level}{loop_bound_name} += uint2({loop_bound_name}.y == {max}u, 1u);"
+            "{level}if (all({loop_bound_name} == uint2(0u, 0u))) {{ break; }}
+{level}{loop_bound_name} -= uint2({loop_bound_name}.y == 0u, 1u);"
         );
 
         Some((decl, break_and_inc))
@@ -2629,6 +2630,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // decimal part even it's zero
                 crate::Literal::F64(value) => write!(self.out, "{value:?}L")?,
                 crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
+                crate::Literal::F16(value) => write!(self.out, "{value:?}h")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
                 // HLSL has no suffix for explicit i32 literals, but not using any suffix
                 // makes the type ambiguous which prevents overload resolution from

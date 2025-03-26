@@ -89,6 +89,7 @@ pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 // Must match code in glsl_built_in
 pub const FIRST_INSTANCE_BINDING: &str = "naga_vs_first_instance";
 
+#[cfg(any(feature = "serialize", feature = "deserialize"))]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 struct BindingMapSerialization {
@@ -130,13 +131,6 @@ impl crate::AtomicFunction {
 }
 
 impl crate::AddressSpace {
-    const fn is_buffer(&self) -> bool {
-        match *self {
-            crate::AddressSpace::Uniform | crate::AddressSpace::Storage { .. } => true,
-            _ => false,
-        }
-    }
-
     /// Whether a variable with this address space can be initialized
     const fn initializable(&self) -> bool {
         match *self {
@@ -478,6 +472,7 @@ impl fmt::Display for VaryingName<'_> {
                     (ShaderStage::Vertex, true) | (ShaderStage::Fragment, false) => "vs2fs",
                     // fragment to pipeline
                     (ShaderStage::Fragment, true) => "fs2p",
+                    (ShaderStage::Task | ShaderStage::Mesh, _) => unreachable!(),
                 };
                 write!(f, "_{prefix}_location{location}",)
             }
@@ -494,6 +489,7 @@ impl ShaderStage {
             ShaderStage::Compute => "cs",
             ShaderStage::Fragment => "fs",
             ShaderStage::Vertex => "vs",
+            ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
         }
     }
 }
@@ -633,8 +629,7 @@ impl<'a, W: Write> Writer<'a, W> {
         let mut namer = proc::Namer::default();
         namer.reset(
             module,
-            keywords::RESERVED_KEYWORDS,
-            &[],
+            &keywords::RESERVED_KEYWORD_SET,
             &[],
             &[
                 "gl_",                     // all GL built-in variables
@@ -1543,6 +1538,7 @@ impl<'a, W: Write> Writer<'a, W> {
             ShaderStage::Vertex => output,
             ShaderStage::Fragment => !output,
             ShaderStage::Compute => false,
+            ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
         };
 
         // Write the I/O locations, if allowed
@@ -2707,6 +2703,9 @@ impl<'a, W: Write> Writer<'a, W> {
                     // decimal part even it's zero which is needed for a valid glsl float constant
                     crate::Literal::F64(value) => write!(self.out, "{value:?}LF")?,
                     crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
+                    crate::Literal::F16(_) => {
+                        return Err(Error::Custom("GLSL has no 16-bit float type".into()));
+                    }
                     // Unsigned integers need a `u` at the end
                     //
                     // While `core` doesn't necessarily need it, it's allowed and since `es` needs it we

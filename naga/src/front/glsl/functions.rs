@@ -348,7 +348,7 @@ impl Frontend {
                 }
             }
             _ => {
-                components = iter::repeat(value).take(columns as usize).collect();
+                components = iter::repeat_n(value, columns as usize).collect();
             }
         }
 

@@ -5,6 +5,7 @@ use alloc::{
     vec::Vec,
 };
 use core::hash::{Hash, Hasher};
+use hashbrown::HashSet;
 
 use crate::{arena::Handle, FastHashMap, FastHashSet};
 
@@ -27,13 +28,27 @@ pub enum NameKey {
 
 /// This processor assigns names to all the things in a module
 /// that may need identifiers in a textual backend.
-#[derive(Default)]
 pub struct Namer {
     /// The last numeric suffix used for each base name. Zero means "no suffix".
     unique: FastHashMap<String, u32>,
-    keywords: FastHashSet<&'static str>,
+    keywords: &'static HashSet<&'static str>,
     keywords_case_insensitive: FastHashSet<AsciiUniCase<&'static str>>,
     reserved_prefixes: Vec<&'static str>,
+}
+
+#[cfg(any(wgsl_out, glsl_out, msl_out, hlsl_out, test))]
+impl Default for Namer {
+    fn default() -> Self {
+        use std::sync::LazyLock;
+        static DEFAULT_KEYWORDS: LazyLock<HashSet<&'static str>> = LazyLock::new(HashSet::default);
+
+        Self {
+            unique: Default::default(),
+            keywords: &DEFAULT_KEYWORDS,
+            keywords_case_insensitive: Default::default(),
+            reserved_prefixes: Default::default(),
+        }
+    }
 }
 
 impl Namer {
@@ -157,8 +172,7 @@ impl Namer {
     pub fn reset(
         &mut self,
         module: &crate::Module,
-        reserved_keywords: &[&'static str],
-        extra_reserved_keywords: &[&'static str],
+        reserved_keywords: &'static HashSet<&'static str>,
         reserved_keywords_case_insensitive: &[&'static str],
         reserved_prefixes: &[&'static str],
         output: &mut FastHashMap<NameKey, String>,
@@ -167,9 +181,7 @@ impl Namer {
         self.reserved_prefixes.extend(reserved_prefixes.iter());
 
         self.unique.clear();
-        self.keywords.clear();
-        self.keywords.extend(reserved_keywords.iter());
-        self.keywords.extend(extra_reserved_keywords.iter());
+        self.keywords = reserved_keywords;
 
         debug_assert!(reserved_keywords_case_insensitive
             .iter()
@@ -194,6 +206,7 @@ impl Namer {
                         crate::ShaderStage::Vertex => "VertexOutput",
                         crate::ShaderStage::Fragment => "FragmentOutput",
                         crate::ShaderStage::Compute => "ComputeOutput",
+                        crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
                     };
                     entrypoint_type_fallbacks.insert(result.ty, label);
                 }

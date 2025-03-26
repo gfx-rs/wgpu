@@ -33,9 +33,6 @@
     clippy::needless_update,
     // Need many arguments for some core functions to be able to re-use code in many situations.
     clippy::too_many_arguments,
-    // For some reason `rustc` can warn about these in const generics even
-    // though they are required.
-    unused_braces,
     // It gets in the way a lot and does not prevent bugs in practice.
     clippy::pattern_type_mismatch,
     // `wgpu-core` isn't entirely user-facing, so it's useful to document internal items.
@@ -79,7 +76,6 @@ mod hash_utils;
 pub mod hub;
 pub mod id;
 pub mod identity;
-#[cfg(feature = "indirect-validation")]
 mod indirect_validation;
 mod init_tracker;
 pub mod instance;

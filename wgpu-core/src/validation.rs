@@ -1191,7 +1191,7 @@ impl Interface {
             ];
             let total_invocations = entry_point.workgroup_size.iter().product::<u32>();
 
-            if entry_point.workgroup_size.iter().any(|&s| s == 0)
+            if entry_point.workgroup_size.contains(&0)
                 || total_invocations > self.limits.max_compute_invocations_per_workgroup
                 || entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
                 || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
@@ -1241,6 +1241,9 @@ impl Interface {
                                         )
                                     }
                                     naga::ShaderStage::Compute => (false, 0),
+                                    naga::ShaderStage::Task | naga::ShaderStage::Mesh => {
+                                        unreachable!()
+                                    }
                                 };
                                 if compatible {
                                     Ok(num_components)

@@ -30,6 +30,8 @@ jobs:
             path: "examples/standalone/01_hello_compute"
           - name: "02-hello-window"
             path: "examples/standalone/02_hello_window"
+          - name: "custom_backend"
+            path: "examples/standalone/custom_backend"
 
     name: "${{ matrix.name }}"
 
