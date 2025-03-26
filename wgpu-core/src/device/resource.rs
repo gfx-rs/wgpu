@@ -35,7 +35,7 @@ use crate::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
     },
-    instance::Adapter,
+    instance::{Adapter, RequestDeviceError},
     lock::{rank, Mutex, RwLock},
     pipeline,
     pool::ResourcePool,
@@ -45,6 +45,7 @@ use crate::{
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
+    timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation::{self, validate_color_attachment_bytes_per_sample},
     weak_vec::WeakVec,
@@ -130,6 +131,9 @@ pub struct Device {
     pub(crate) usage_scopes: UsageScopePool,
     pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+    // Optional so that we can late-initialize this after the queue is created.
+    pub(crate) timestamp_normalizer:
+        OnceCellOrLock<crate::timestamp_normalization::TimestampNormalizer>,
     // needs to be dropped last
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
@@ -161,6 +165,9 @@ impl Drop for Device {
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
         if let Some(indirect_validation) = self.indirect_validation.take() {
             indirect_validation.dispose(self.raw.as_ref());
+        }
+        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
+            timestamp_normalizer.dispose(self.raw.as_ref());
         }
         unsafe {
             self.raw.destroy_buffer(zero_buffer);
@@ -307,8 +314,24 @@ impl Device {
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
             // By starting at one, we can put the result in a NonZeroU64.
             last_acceleration_structure_build_command_index: AtomicU64::new(1),
+            timestamp_normalizer: OnceCellOrLock::new(),
             indirect_validation,
         })
+    }
+
+    pub fn late_init_resources_with_queue(&self) -> Result<(), RequestDeviceError> {
+        let queue = self.get_queue().unwrap();
+
+        let timestamp_normalizer = crate::timestamp_normalization::TimestampNormalizer::new(
+            self,
+            queue.get_timestamp_period(),
+        )?;
+
+        self.timestamp_normalizer
+            .set(timestamp_normalizer)
+            .unwrap_or_else(|_| panic!("Called late_init_resources_with_queue twice"));
+
+        Ok(())
     }
 
     /// Returns the backend this device is using.
@@ -606,6 +629,10 @@ impl Device {
             usage |= wgt::BufferUses::STORAGE_READ_ONLY | wgt::BufferUses::STORAGE_READ_WRITE;
         }
 
+        if desc.usage.contains(wgt::BufferUsages::QUERY_RESOLVE) {
+            usage |= TIMESTAMP_NORMALIZATION_BUFFER_USES;
+        }
+
         if desc.mapped_at_creation {
             if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
                 return Err(resource::CreateBufferError::UnalignedSize);
@@ -645,6 +672,18 @@ impl Device {
         let buffer =
             unsafe { self.raw().create_buffer(&hal_desc) }.map_err(|e| self.handle_hal_error(e))?;
 
+        let timestamp_normalization_bind_group = Snatchable::new(
+            self.timestamp_normalizer
+                .get()
+                .unwrap()
+                .create_normalization_bind_group(
+                    self,
+                    &*buffer,
+                    desc.label.as_deref(),
+                    desc.usage,
+                )?,
+        );
+
         let indirect_validation_bind_groups =
             self.create_indirect_validation_bind_groups(buffer.as_ref(), desc.size, desc.usage)?;
 
@@ -661,6 +700,7 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
+            timestamp_normalization_bind_group,
             indirect_validation_bind_groups,
         };
 
@@ -743,6 +783,21 @@ impl Device {
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> (Fallible<Buffer>, Option<resource::CreateBufferError>) {
+        let timestamp_normalization_bind_group = match self
+            .timestamp_normalizer
+            .get()
+            .unwrap()
+            .create_normalization_bind_group(self, &*hal_buffer, desc.label.as_deref(), desc.usage)
+        {
+            Ok(bg) => Snatchable::new(bg),
+            Err(e) => {
+                return (
+                    Fallible::Invalid(Arc::new(desc.label.to_string())),
+                    Some(e.into()),
+                )
+            }
+        };
+
         let indirect_validation_bind_groups = match self.create_indirect_validation_bind_groups(
             hal_buffer.as_ref(),
             desc.size,
@@ -767,6 +822,7 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
+            timestamp_normalization_bind_group,
             indirect_validation_bind_groups,
         };
 

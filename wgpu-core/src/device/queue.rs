@@ -1488,6 +1488,11 @@ impl Global {
 
     pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> f32 {
         let queue = self.hub.queues.get(queue_id);
+
+        if queue.device.timestamp_normalizer.get().unwrap().enabled() {
+            return 1.0;
+        }
+
         queue.get_timestamp_period()
     }
 

@@ -49,6 +49,7 @@ itertools.workspace = true
 image.workspace = true
 libtest-mimic.workspace = true
 log.workspace = true
+nanorand.workspace = true
 parking_lot.workspace = true
 png.workspace = true
 pollster.workspace = true
