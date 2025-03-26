@@ -160,6 +160,14 @@ fn arithmetic() {
     let mul_vector1 = vec3f(two_f) * mat4x3f();
 
     let mul = mat4x3<f32>() * mat3x4<f32>();
+
+    // Arithmetic involving the minimum value i32 literal. What we're really testing here
+    // is how this literal is expressed by Naga backends. eg in Metal, `-2147483648` is
+    // silently promoted to a `long` which we don't want. The addition ensures this would
+    // be caught as a compiler error, as we bitcast the operands to unsigned which fails
+    // if the expression's type has an unexpected width.
+    var prevent_const_eval: i32;
+    var wgpu_7437 = prevent_const_eval + -2147483648;
 }
 
 fn bit() {

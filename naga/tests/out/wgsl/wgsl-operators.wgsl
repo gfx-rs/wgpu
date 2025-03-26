@@ -52,6 +52,9 @@ fn logical() {
 }
 
 fn arithmetic() {
+    var prevent_const_eval: i32;
+    var wgpu_7437_: i32;
+
     let neg0_1 = -(1f);
     let neg1_1 = -(vec2(1i));
     let neg2_ = -(vec2(1f));
@@ -124,6 +127,8 @@ fn arithmetic() {
     let mul_vector0_ = (mat4x3<f32>() * vec4(1f));
     let mul_vector1_ = (vec3(2f) * mat4x3<f32>());
     let mul = (mat4x3<f32>() * mat3x4<f32>());
+    let _e175 = prevent_const_eval;
+    wgpu_7437_ = (_e175 + i32(-2147483648));
     return;
 }
 

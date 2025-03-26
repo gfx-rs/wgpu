@@ -59,6 +59,8 @@ void logical() {
 }
 
 void arithmetic() {
+    int prevent_const_eval = 0;
+    int wgpu_7437_ = 0;
     float neg0_1 = -(1.0);
     ivec2 neg1_1 = -(ivec2(1));
     vec2 neg2_ = -(vec2(1.0));
@@ -131,6 +133,8 @@ void arithmetic() {
     vec3 mul_vector0_ = (mat4x3(0.0) * vec4(1.0));
     vec4 mul_vector1_ = (vec3(2.0) * mat4x3(0.0));
     mat3x3 mul = (mat4x3(0.0) * mat3x4(0.0));
+    int _e175 = prevent_const_eval;
+    wgpu_7437_ = (_e175 + -2147483648);
     return;
 }
 

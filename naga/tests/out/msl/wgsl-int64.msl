@@ -84,7 +84,7 @@ long int64_function(
     long _e74 = val;
     val = as_type<long>(as_type<ulong>(_e74) + as_type<ulong>(as_type<metal::long4>(_e71).w));
     long _e77 = val;
-    val = as_type<long>(as_type<ulong>(_e77) + as_type<ulong>(-9223372036854775808L));
+    val = as_type<long>(as_type<ulong>(_e77) + as_type<ulong>((-9223372036854775807L - 1L)));
     long _e83 = input_uniform.val_i64_;
     long _e86 = input_storage.val_i64_;
     output.val_i64_ = as_type<long>(as_type<ulong>(_e83) + as_type<ulong>(_e86));

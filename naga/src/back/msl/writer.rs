@@ -1494,13 +1494,31 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{value}u")?;
             }
             crate::Literal::I32(value) => {
-                write!(self.out, "{value}")?;
+                // `-2147483648` is parsed as unary negation of positive 2147483648.
+                // 2147483648 is too large for int32_t meaning the expression gets
+                // promoted to a int64_t which is not our intention. Avoid this by instead
+                // using `-2147483647 - 1`.
+                if value == i32::MIN {
+                    write!(self.out, "({} - 1)", value + 1)?;
+                } else {
+                    write!(self.out, "{value}")?;
+                }
             }
             crate::Literal::U64(value) => {
                 write!(self.out, "{value}uL")?;
             }
             crate::Literal::I64(value) => {
-                write!(self.out, "{value}L")?;
+                // `-9223372036854775808` is parsed as unary negation of positive
+                // 9223372036854775808. 9223372036854775808 is too large for int64_t
+                // causing Metal to emit a `-Wconstant-conversion` warning, and change the
+                // value to `-9223372036854775808`. Which would then be negated, possibly
+                // causing undefined behaviour. Avoid this by instead using
+                // `-9223372036854775808L - 1L`.
+                if value == i64::MIN {
+                    write!(self.out, "({}L - 1L)", value + 1)?;
+                } else {
+                    write!(self.out, "{value}L")?;
+                }
             }
             crate::Literal::Bool(value) => {
                 write!(self.out, "{value}")?;
