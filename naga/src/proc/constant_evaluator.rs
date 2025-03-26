@@ -1945,6 +1945,7 @@ impl<'a> ConstantEvaluator<'a> {
                     Literal::I64(v) => Literal::I64(v.wrapping_neg()),
                     Literal::F32(v) => Literal::F32(-v),
                     Literal::F16(v) => Literal::F16(-v),
+                    Literal::F64(v) => Literal::F64(-v),
                     Literal::AbstractInt(v) => Literal::AbstractInt(v.wrapping_neg()),
                     Literal::AbstractFloat(v) => Literal::AbstractFloat(-v),
                     _ => return Err(ConstantEvaluatorError::InvalidUnaryOpArg),
