@@ -36,7 +36,7 @@ use std::{
     fs::File,
     panic::Location,
     path::{Path, PathBuf},
-    vec::Vec,
+    string::String,
 };
 
 use super::rank::{LockRank, LockRankSet};
@@ -337,7 +337,7 @@ struct ObservationLog {
     locations_seen: FastHashSet<*const Location<'static>>,
 
     /// Buffer for serializing events, retained for allocation reuse.
-    buffer: Vec<u8>,
+    buffer: String,
 }
 
 #[allow(trivial_casts)]
@@ -354,7 +354,7 @@ impl ObservationLog {
         Ok(ObservationLog {
             log_file,
             locations_seen: FastHashSet::default(),
-            buffer: Vec::new(),
+            buffer: String::new(),
         })
     }
 
@@ -404,9 +404,9 @@ impl ObservationLog {
         self.buffer.clear();
         ron::ser::to_writer(&mut self.buffer, &action)
             .expect("error serializing `lock::observing::Action`");
-        self.buffer.push(b'\n');
+        self.buffer.push('\n');
         self.log_file
-            .write_all(&self.buffer)
+            .write_all(self.buffer.as_bytes())
             .expect("error writing `lock::observing::Action`");
     }
 }

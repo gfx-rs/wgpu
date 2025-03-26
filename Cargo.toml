@@ -142,7 +142,7 @@ profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.6", default-features = false }
 rayon = "1"
 renderdoc-sys = "1.1.0"
-ron = "0.8"
+ron = "0.9"
 # NOTE: rustc-hash v2 is a completely different hasher with different performance characteristics
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
