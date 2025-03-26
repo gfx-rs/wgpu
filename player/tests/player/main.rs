@@ -246,5 +246,5 @@ impl Corpus {
 fn test_api() {
     env_logger::init();
 
-    Corpus::run_from(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data/all.ron"))
+    Corpus::run_from(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/player/data/all.ron"))
 }

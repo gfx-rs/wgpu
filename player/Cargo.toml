@@ -12,18 +12,11 @@ rust-version.workspace = true
 publish = false
 
 [lib]
-name = "player"
-path = "src/lib.rs"
 test = false
 
 [[bin]]
 name = "play"
-path = "src/bin/play.rs"
 test = false
-
-[[test]]
-name = "player-test"
-path = "tests/root.rs"
 
 [dependencies]
 wgpu-types = { workspace = true, features = ["serde"] }
