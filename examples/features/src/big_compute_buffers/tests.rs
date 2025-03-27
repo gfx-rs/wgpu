@@ -27,9 +27,16 @@ static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 async fn assert_execute_gpu(device: &wgpu::Device, queue: &wgpu::Queue, input: &[f32]) {
-    let expected_len = input.len();
-    let produced = execute_gpu_inner(device, queue, input).await;
+    // This is a native (vulkan) only feature.
+    #[cfg(target_arch = "wasm32")]
+    return ();
 
-    assert_eq!(produced.len(), expected_len);
-    assert!(produced.into_iter().all(|v| v == 1.0));
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let expected_len = input.len();
+        let produced = execute_gpu_inner(device, queue, input).await;
+
+        assert_eq!(produced.len(), expected_len);
+        assert!(produced.into_iter().all(|v| v == 1.0));
+    }
 }
