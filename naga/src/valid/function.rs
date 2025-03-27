@@ -120,8 +120,11 @@ pub enum FunctionError {
     ContinueOutsideOfLoop,
     #[error("The `return` is called within a `continuing` block")]
     InvalidReturnSpot,
-    #[error("The `return` value {0:?} does not match the function return value")]
-    InvalidReturnType(Option<Handle<crate::Expression>>),
+    #[error("The `return` expression {expression:?} does not match the declared return type {expected_ty:?}")]
+    InvalidReturnType {
+        expression: Option<Handle<crate::Expression>>,
+        expected_ty: Option<Handle<crate::Type>>,
+    },
     #[error("The `if` condition {0:?} is not a boolean scalar")]
     InvalidIfType(Handle<crate::Expression>),
     #[error("The `switch` value {0:?} is not an integer scalar")]
@@ -310,8 +313,8 @@ impl<'a> BlockContext<'a> {
         self.info[handle].ty.inner_with(self.types)
     }
 
-    fn inner_type<'t>(&'t self, ty: &'t TypeResolution) -> &'t crate::TypeInner {
-        ty.inner_with(self.types)
+    fn compare_types(&self, lhs: &TypeResolution, rhs: &TypeResolution) -> bool {
+        crate::proc::compare_types(lhs, rhs, self.types)
     }
 }
 
@@ -338,8 +341,7 @@ impl super::Validator {
                     CallError::Argument { index, source }
                         .with_span_handle(expr, context.expressions)
                 })?;
-            let arg_inner = &context.types[arg.ty].inner;
-            if !ty.inner_with(context.types).non_struct_equivalent(arg_inner, context.types) {
+            if !context.compare_types(&TypeResolution::Handle(arg.ty), ty) {
                 return Err(CallError::ArgumentType {
                     index,
                     required: arg.ty,
@@ -964,13 +966,12 @@ impl super::Validator {
                     let value_ty = value
                         .map(|expr| context.resolve_type(expr, &self.valid_expression_set))
                         .transpose()?;
-                    let expected_ty = context.return_type.map(|ty| &context.types[ty].inner);
                     // We can't return pointers, but it seems best not to embed that
                     // assumption here, so use `TypeInner::equivalent` for comparison.
-                    let okay = match (value_ty, expected_ty) {
+                    let okay = match (value_ty, context.return_type) {
                         (None, None) => true,
-                        (Some(value_inner), Some(expected_inner)) => {
-                            value_inner.inner_with(context.types).non_struct_equivalent(expected_inner, context.types)
+                        (Some(value_inner), Some(expected_ty)) => {
+                            context.compare_types(value_inner, &TypeResolution::Handle(expected_ty))
                         }
                         (_, _) => false,
                     };
@@ -979,14 +980,20 @@ impl super::Validator {
                         log::error!(
                             "Returning {:?} where {:?} is expected",
                             value_ty,
-                            expected_ty
+                            context.return_type,
                         );
                         if let Some(handle) = value {
-                            return Err(FunctionError::InvalidReturnType(value)
-                                .with_span_handle(handle, context.expressions));
+                            return Err(FunctionError::InvalidReturnType {
+                                expression: value,
+                                expected_ty: context.return_type,
+                            }
+                            .with_span_handle(handle, context.expressions));
                         } else {
-                            return Err(FunctionError::InvalidReturnType(value)
-                                .with_span_static(span, "invalid return"));
+                            return Err(FunctionError::InvalidReturnType {
+                                expression: value,
+                                expected_ty: context.return_type,
+                            }
+                            .with_span_static(span, "invalid return"));
                         }
                     }
                     finished = true;
@@ -1036,7 +1043,8 @@ impl super::Validator {
                         }
                     }
 
-                    let value_ty = context.resolve_type_inner(value, &self.valid_expression_set)?;
+                    let value_tr = context.resolve_type(value, &self.valid_expression_set)?;
+                    let value_ty = value_tr.inner_with(context.types);
                     match *value_ty {
                         Ti::Image { .. } | Ti::Sampler { .. } => {
                             return Err(FunctionError::InvalidStoreTexture {
@@ -1053,16 +1061,19 @@ impl super::Validator {
                     }
 
                     let pointer_ty = context.resolve_pointer_type(pointer);
-                    let good = match pointer_ty
-                        .pointer_base_type()
+                    let pointer_base_tr = pointer_ty.pointer_base_type();
+                    let pointer_base_ty = pointer_base_tr
                         .as_ref()
-                        .map(|ty| context.inner_type(ty))
-                    {
+                        .map(|ty| ty.inner_with(context.types));
+                    let good = if let Some(&Ti::Atomic(ref scalar)) = pointer_base_ty {
                         // The Naga IR allows storing a scalar to an atomic.
-                        Some(&Ti::Atomic(ref scalar)) => *value_ty == Ti::Scalar(*scalar),
-                        Some(other) => *value_ty == *other,
-                        None => false,
+                        *value_ty == Ti::Scalar(*scalar)
+                    } else if let Some(tr) = pointer_base_tr {
+                        context.compare_types(value_tr, &tr)
+                    } else {
+                        false
                     };
+
                     if !good {
                         return Err(FunctionError::InvalidStoreTypes { pointer, value }
                             .with_span()
@@ -1640,9 +1651,7 @@ impl super::Validator {
         }
 
         if let Some(init) = var.init {
-            let decl_ty = &gctx.types[var.ty].inner;
-            let init_ty = fun_info[init].ty.inner_with(gctx.types);
-            if !decl_ty.non_struct_equivalent(init_ty, gctx.types) {
+            if !gctx.compare_types(&TypeResolution::Handle(var.ty), &fun_info[init].ty) {
                 return Err(LocalVariableError::InitializerType);
             }
 

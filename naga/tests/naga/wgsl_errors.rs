@@ -291,15 +291,15 @@ fn constructor_parameter_type_mismatch() {
                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
             }
         "#,
-        r#"error: automatic conversions cannot convert `array<{AbstractInt}, 2>` to `vec2<f32>`
+        "error: automatic conversions cannot convert `array<{AbstractInt}, 2>` to `vec2<f32>`
   ┌─ wgsl:3:21
   │
 3 │                 _ = mat2x2<f32>(array(0, 1), vec2(2, 3));
   │                     ^^^^^^^^^^^ ^^^^^^^^^^^ this expression has type array<{AbstractInt}, 2>
-  │                     │            
+  │                     │\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20
   │                     a value of type vec2<f32> is required here
 
-"#,
+",
     );
 }
 
@@ -1290,6 +1290,127 @@ fn invalid_structs() {
 }
 
 #[test]
+fn struct_type_mismatch_in_assignment() {
+    check_validation!(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+        fn main() {
+            var x: Bar = Bar(1);
+            x = Foo(1);
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            handle: _,
+            name: function_name,
+            source: naga::valid::FunctionError::InvalidStoreTypes { .. },
+        })
+        // The validation error is reported at the call, i.e., in `main`
+        if function_name == "main"
+    );
+}
+
+#[test]
+fn struct_type_mismatch_in_let_decl() {
+    check(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+        fn main() {
+            let x: Bar = Foo(1);
+        }
+        ",
+        "error: the type of `x` is expected to be `Bar`, but got `Foo`
+  ┌─ wgsl:5:17
+  │
+5 │             let x: Bar = Foo(1);
+  │                 ^ definition of `x`
+
+",
+    );
+}
+
+#[test]
+fn struct_type_mismatch_in_return_value() {
+    check_validation!(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+        fn bar() -> Bar {
+            return Foo(1);
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            handle: _,
+            name: function_name,
+            source: naga::valid::FunctionError::InvalidReturnType { .. }
+        }) if function_name == "bar"
+    );
+}
+
+#[test]
+fn struct_type_mismatch_in_argument() {
+    check_validation!(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+        fn bar(a: Bar) {}
+        fn main() {
+            bar(Foo(1));
+        }
+        ":
+        Err(naga::valid::ValidationError::Function {
+            name: function_name,
+            source: naga::valid::FunctionError::InvalidCall {
+                function: _,
+                error: naga::valid::CallError::ArgumentType { index, .. },
+            },
+            ..
+        })
+        // The validation error is reported at the call, i.e., in `main`
+        if function_name == "main" && *index == 0
+    );
+}
+
+#[test]
+fn struct_type_mismatch_in_global_var() {
+    check(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+
+        var<uniform> foo: Foo = Bar(1);
+        ",
+        "error: the type of `foo` is expected to be `Foo`, but got `Bar`
+  ┌─ wgsl:5:22
+  │
+5 │         var<uniform> foo: Foo = Bar(1);
+  │                      ^^^ definition of `foo`
+
+",
+    );
+}
+
+#[test]
+fn struct_type_mismatch_in_global_const() {
+    check(
+        "
+        struct Foo { a: u32 };
+        struct Bar { a: u32 };
+
+        const foo: Foo = Bar(1);
+        ",
+        "error: the type of `foo` is expected to be `Foo`, but got `Bar`
+  ┌─ wgsl:5:15
+  │
+5 │         const foo: Foo = Bar(1);
+  │               ^^^ definition of `foo`
+
+",
+    );
+}
+
+#[test]
 fn invalid_functions() {
     check_validation! {
         "fn unacceptable_unsized(arg: array<f32>) { }",
@@ -1408,7 +1529,7 @@ fn invalid_return_type() {
     check_validation! {
         "fn invalid_return_type() -> i32 { return 0u; }":
         Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InvalidReturnType(Some(_)),
+            source: naga::valid::FunctionError::InvalidReturnType { .. },
             ..
         })
     };
@@ -2576,15 +2697,15 @@ fn function_param_redefinition_as_param() {
         "
         fn x(a: f32, a: vec2<f32>) {}
     ",
-        r###"error: redefinition of `a`
+        "error: redefinition of `a`
   ┌─ wgsl:2:14
   │
 2 │         fn x(a: f32, a: vec2<f32>) {}
   │              ^       ^ redefinition of `a`
-  │              │        
+  │              │\x20\x20\x20\x20\x20\x20\x20\x20
   │              previous definition of `a`
 
-"###,
+",
     )
 }
 
@@ -2606,6 +2727,25 @@ fn function_param_redefinition_as_local() {
 
 "###,
     )
+}
+
+#[test]
+fn struct_redefinition() {
+    check(
+        "
+        struct Foo { a: u32 };
+        struct Foo { a: u32 };
+    ",
+        "error: redefinition of `Foo`
+  ┌─ wgsl:2:16
+  │
+2 │         struct Foo { a: u32 };
+  │                ^^^ previous definition of `Foo`
+3 │         struct Foo { a: u32 };
+  │                ^^^ redefinition of `Foo`
+
+",
+    );
 }
 
 #[test]
@@ -2635,7 +2775,7 @@ fn function_must_return_value() {
         "fn func() -> i32 {
         }":
         Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InvalidReturnType(_),
+            source: naga::valid::FunctionError::InvalidReturnType { .. },
             ..
         })
     );
@@ -2644,7 +2784,7 @@ fn function_must_return_value() {
             let y = x + 10;
         }":
         Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InvalidReturnType(_),
+            source: naga::valid::FunctionError::InvalidReturnType { .. },
             ..
         })
     );
@@ -2658,15 +2798,15 @@ fn constructor_type_error_span() {
             var a: array<i32, 1> = array<i32, 1>(1.0);
         }
     ",
-        r###"error: automatic conversions cannot convert `{AbstractFloat}` to `i32`
+        "error: automatic conversions cannot convert `{AbstractFloat}` to `i32`
   ┌─ wgsl:3:36
   │
 3 │             var a: array<i32, 1> = array<i32, 1>(1.0);
   │                                    ^^^^^^^^^^^^^ ^^^ this expression has type {AbstractFloat}
-  │                                    │              
+  │                                    │\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20
   │                                    a value of type i32 is required here
 
-"###,
+",
     )
 }
 

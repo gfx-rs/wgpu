@@ -2,8 +2,11 @@ use alloc::{format, string::String};
 
 use thiserror::Error;
 
-use crate::arena::{Arena, Handle, UniqueArena};
-use crate::common::ForDebugWithTypes;
+use crate::{
+    arena::{Arena, Handle, UniqueArena},
+    common::ForDebugWithTypes,
+    ir,
+};
 
 /// The result of computing an expression's type.
 ///
@@ -770,6 +773,44 @@ impl<'a> ResolveContext<'a> {
                 size: crate::VectorSize::Quad,
             }),
         })
+    }
+}
+
+/// Compare two types.
+///
+/// This is the most general way of comparing two types, as it can distinguish
+/// two structs with different names but the same members. For other ways, see
+/// [`TypeInner::non_struct_equivalent`] and [`TypeInner::eq`].
+///
+/// In Naga code, this is usually called via the like-named methods on [`Module`],
+/// [`GlobalCtx`], and `BlockContext`.
+///
+/// [`TypeInner::non_struct_equivalent`]: crate::ir::TypeInner::non_struct_equivalent
+/// [`TypeInner::eq`]: crate::ir::TypeInner
+/// [`Module`]: crate::ir::Module
+/// [`GlobalCtx`]: crate::proc::GlobalCtx
+pub fn compare_types(
+    lhs: &TypeResolution,
+    rhs: &TypeResolution,
+    types: &UniqueArena<crate::Type>,
+) -> bool {
+    match lhs {
+        &TypeResolution::Handle(lhs_handle)
+            if matches!(
+                types[lhs_handle],
+                ir::Type {
+                    inner: ir::TypeInner::Struct { .. },
+                    ..
+                }
+            ) =>
+        {
+            // Structs can only be in the arena, not in a TypeResolution::Value
+            rhs.handle()
+                .is_some_and(|rhs_handle| lhs_handle == rhs_handle)
+        }
+        _ => lhs
+            .inner_with(types)
+            .non_struct_equivalent(rhs.inner_with(types), types),
     }
 }
 
