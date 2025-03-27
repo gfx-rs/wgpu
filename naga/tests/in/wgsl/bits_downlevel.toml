@@ -1,0 +1,4 @@
+targets = "GLSL"
+
+[glsl]
+version.Desktop = 330

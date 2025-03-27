@@ -239,7 +239,7 @@ impl<E> WithSpan<E> {
 
     /// Return a [`SourceLocation`] for our first span, if we have one.
     pub fn location(&self, source: &str) -> Option<SourceLocation> {
-        if self.spans.is_empty() {
+        if self.spans.is_empty() || source.is_empty() {
             return None;
         }
 
@@ -285,8 +285,8 @@ impl<E> WithSpan<E> {
     where
         E: Error,
     {
+        use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
         use codespan_reporting::{files, term};
-        use term::termcolor::{ColorChoice, StandardStream};
 
         let files = files::SimpleFile::new(path, source);
         let config = term::Config::default();
@@ -308,8 +308,8 @@ impl<E> WithSpan<E> {
     where
         E: Error,
     {
+        use codespan_reporting::term::termcolor::NoColor;
         use codespan_reporting::{files, term};
-        use term::termcolor::NoColor;
 
         let files = files::SimpleFile::new(path, source);
         let config = term::Config::default();

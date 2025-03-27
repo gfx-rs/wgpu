@@ -5,6 +5,7 @@ static double v = 1.0L;
 double f(double x)
 {
     double z = (double)0;
+    double w = -1.0L;
 
     double y = (30.0L + 400.0L);
     z = (y + 5.0L);

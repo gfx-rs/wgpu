@@ -377,8 +377,9 @@ impl super::Adapter {
         } else {
             vertex_shader_storage_textures.min(fragment_shader_storage_textures)
         };
-        let indirect_execution =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect");
+        // NOTE: GL_ARB_compute_shader adds support for indirect dispatch
+        let indirect_execution = supported((3, 1), (4, 3))
+            || (extensions.contains("GL_ARB_draw_indirect") && supports_compute);
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES

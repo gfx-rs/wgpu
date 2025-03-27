@@ -79,12 +79,16 @@ float index_twice(
     return _e6;
 }
 
+int naga_f2i32(float value) {
+    return static_cast<int>(metal::clamp(value, -2147483600.0, 2147483500.0));
+}
+
 float index_expensive(
     int i_6,
     device Globals const& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    int _e9 = static_cast<int>(metal::sin(static_cast<float>(i_6) / 100.0) * 100.0);
+    int _e9 = naga_f2i32(metal::sin(static_cast<float>(i_6) / 100.0) * 100.0);
     float _e11 = uint(_e9) < 10 ? globals.a.inner[_e9] : DefaultConstructible();
     return _e11;
 }
@@ -166,7 +170,7 @@ void set_expensive(
     device Globals& globals,
     constant _mslBufferSizes& _buffer_sizes
 ) {
-    int _e10 = static_cast<int>(metal::sin(static_cast<float>(i_12) / 100.0) * 100.0);
+    int _e10 = naga_f2i32(metal::sin(static_cast<float>(i_12) / 100.0) * 100.0);
     if (uint(_e10) < 10) {
         globals.a.inner[_e10] = v_6;
     }

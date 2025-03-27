@@ -891,13 +891,10 @@ fn dispatch_indirect(
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-    #[cfg(feature = "indirect-validation")]
-    {
-        let params = state.device.indirect_validation.as_ref().unwrap().params(
-            &state.device.limits,
-            offset,
-            buffer.size,
-        );
+    if let Some(ref indirect_validation) = state.device.indirect_validation {
+        let params = indirect_validation
+            .dispatch
+            .params(&state.device.limits, offset, buffer.size);
 
         unsafe {
             state.raw_encoder.set_compute_pipeline(params.pipeline);
@@ -926,9 +923,10 @@ fn dispatch_indirect(
                 1,
                 Some(
                     buffer
-                        .raw_indirect_validation_bind_group
+                        .indirect_validation_bind_groups
                         .get(&state.snatch_guard)
                         .unwrap()
+                        .dispatch
                         .as_ref(),
                 ),
                 &[params.aligned_offset as u32],
@@ -1006,9 +1004,7 @@ fn dispatch_indirect(
         unsafe {
             state.raw_encoder.dispatch_indirect(params.dst_buffer, 0);
         }
-    };
-    #[cfg(not(feature = "indirect-validation"))]
-    {
+    } else {
         state
             .scope
             .buffers

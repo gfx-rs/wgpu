@@ -180,7 +180,7 @@ static_assertions.workspace = true
 wgpu-core = { workspace = true, features = [
     "raw-window-handle",
     "renderdoc",
-    "indirect-validation",
+    "wgsl",              # needed for indirect draw/dispatch validation
     "portable-atomic",
 ] }
 wgpu-hal.workspace = true

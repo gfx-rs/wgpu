@@ -1,4 +1,4 @@
-#[cfg(native)]
+#[cfg(wgpu_core)]
 use alloc::vec::Vec;
 use core::future::Future;
 
@@ -213,7 +213,7 @@ impl Instance {
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(native)]
+    #[cfg(wgpu_core)]
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
         let Some(core_instance) = self.inner.as_core_opt() else {
             return Vec::new();

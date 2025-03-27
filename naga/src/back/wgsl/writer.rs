@@ -1147,11 +1147,12 @@ impl<W: Write> Writer<W> {
                 crate::Literal::Bool(value) => write!(self.out, "{value}")?,
                 crate::Literal::F64(value) => write!(self.out, "{value:?}lf")?,
                 crate::Literal::I64(value) => {
-                    // `-9223372036854775808li` is not valid WGSL. The most negative `i64`
-                    // value can only be expressed in WGSL using AbstractInt and
-                    // a unary negation operator.
+                    // `-9223372036854775808li` is not valid WGSL. Nor can we use the AbstractInt
+                    // trick above, as AbstractInt also cannot represent `9223372036854775808`.
+                    // The most negative `i64` value can only be expressed in WGSL using
+                    // subtracting 1 from the second most negative value.
                     if value == i64::MIN {
-                        write!(self.out, "i64({value})")?;
+                        write!(self.out, "{}li - 1li", value + 1)?;
                     } else {
                         write!(self.out, "{value}li")?;
                     }

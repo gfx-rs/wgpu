@@ -3120,12 +3120,7 @@ impl Parser {
         // > …
         // >
         // > Maximum nesting depth of brace-enclosed statements in a function[:] 127
-        //
-        // _However_, we choose 64 instead because (a) it avoids stack overflows in CI and
-        // (b) we expect the limit to be decreased to 63 based on this conversation in
-        // WebGPU CTS upstream:
-        // <https://github.com/gpuweb/cts/pull/3389#discussion_r1543742701>
-        const BRACE_NESTING_MAXIMUM: u8 = 64;
+        const BRACE_NESTING_MAXIMUM: u8 = 127;
         if brace_nesting_level + 1 > BRACE_NESTING_MAXIMUM {
             return Err(Box::new(Error::ExceededLimitForNestedBraces {
                 span: brace_span,
