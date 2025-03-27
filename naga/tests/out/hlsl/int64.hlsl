@@ -53,6 +53,10 @@ ByteAddressBuffer input_arrays : register(t2);
 RWByteAddressBuffer output : register(u3);
 RWByteAddressBuffer output_arrays : register(u4);
 
+int64_t naga_f2i64(float value) {
+    return int64_t(clamp(value, -9.223372e18, 9.2233715e18));
+}
+
 typedef int64_t ret_Constructarray2_int64_t_[2];
 ret_Constructarray2_int64_t_ Constructarray2_int64_t_(int64_t arg0, int64_t arg1) {
     int64_t ret[2] = { arg0, arg1 };
@@ -79,7 +83,7 @@ int64_t int64_function(int64_t x)
     float _e35 = input_uniform.val_f32_;
     int64_t _e36 = val;
     int64_t _e40 = val;
-    val = (_e40 + int64_t((_e35 + float(_e36))));
+    val = (_e40 + naga_f2i64((_e35 + float(_e36))));
     int64_t _e44 = input_uniform.val_i64_;
     int64_t _e47 = val;
     val = (_e47 + (_e44).xxx.z);
@@ -142,6 +146,10 @@ int64_t int64_function(int64_t x)
     return _e153;
 }
 
+uint64_t naga_f2u64(float value) {
+    return uint64_t(clamp(value, 0.0, 1.8446743e19));
+}
+
 typedef uint64_t ret_Constructarray2_uint64_t_[2];
 ret_Constructarray2_uint64_t_ Constructarray2_uint64_t_(uint64_t arg0, uint64_t arg1) {
     uint64_t ret[2] = { arg0, arg1 };
@@ -168,7 +176,7 @@ uint64_t uint64_function(uint64_t x_1)
     float _e35 = input_uniform.val_f32_;
     uint64_t _e36 = val_1;
     uint64_t _e40 = val_1;
-    val_1 = (_e40 + uint64_t((_e35 + float(_e36))));
+    val_1 = (_e40 + naga_f2u64((_e35 + float(_e36))));
     uint64_t _e44 = input_uniform.val_u64_;
     uint64_t _e47 = val_1;
     val_1 = (_e47 + (_e44).xxx.z);

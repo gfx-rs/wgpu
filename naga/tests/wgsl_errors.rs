@@ -940,7 +940,7 @@ fn multiple_enables_valid() {
 /// Check the result of validating a WGSL program against a pattern.
 ///
 /// Unless you are generating code programmatically, the
-/// `check_validation_error` macro will probably be more convenient to
+/// `check_validation` macro will probably be more convenient to
 /// use.
 macro_rules! check_one_validation {
     ( $source:expr, $pattern:pat $( if $guard:expr )? ) => {
@@ -1351,6 +1351,17 @@ fn invalid_functions() {
         })
         if function_name == "return_atomic"
     }
+}
+
+#[test]
+fn invalid_return_type() {
+    check_validation! {
+        "fn invalid_return_type() -> i32 { return 0u; }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidReturnType(Some(_)),
+            ..
+        })
+    };
 }
 
 #[test]
@@ -3092,4 +3103,36 @@ fn matrix_vector_pointers() {
 
 "#,
     );
+}
+
+#[test]
+fn issue7165() {
+    // Regression test for https://github.com/gfx-rs/wgpu/issues/7165
+    let shader = "
+        struct Struct { a: u32 }
+        fn invalid_return_type(a: Struct) -> i32 { return a; }
+    ";
+
+    let module = naga::front::wgsl::parse_str(shader).unwrap();
+    let err = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::default(),
+    )
+    .validate(&module)
+    .unwrap_err();
+
+    // This is a proxy for doing the following (with an error
+    // handler installed so it doesn't immediately panic):
+    //
+    // ```
+    // device.create_shader_module(wgpu::ShaderModuleDescriptor {
+    //     label,
+    //     source: wgpu::ShaderSource::Naga(module),
+    // });
+    // ```
+    //
+    // `ShaderSource::Naga` causes the implementation to proceed with an empty
+    // module source, which (prior to the fix for #7165) could panic when
+    // rendering an error if the module contained spans.
+    let _location = err.location("");
 }

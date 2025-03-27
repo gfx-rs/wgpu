@@ -715,3 +715,45 @@ error: Entry point main at Compute is invalid
         assert_eq!(err.emit_to_string(source), expected_err);
     }
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn bad_texture_dimensions_level() {
+    fn validate(level: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
+        let source = format!(
+            r#"
+            @group(0) @binding(0)
+            var t: texture_1d<f32>;
+            fn f() -> u32 {{
+              return textureDimensions(t, {level});
+            }}
+       "#
+        );
+        let module = naga::front::wgsl::parse_str(&source).expect("module should parse");
+        valid::Validator::new(Default::default(), valid::Capabilities::all())
+            .validate(&module)
+            .map_err(|err| err.into_inner()) // discard spans
+    }
+
+    fn is_bad_level_error(
+        result: Result<naga::valid::ModuleInfo, naga::valid::ValidationError>,
+    ) -> bool {
+        matches!(
+            result,
+            Err(naga::valid::ValidationError::Function {
+                handle: _,
+                name: _,
+                source: naga::valid::FunctionError::Expression {
+                    handle: _,
+                    source: naga::valid::ExpressionError::InvalidImageOtherIndexType(_),
+                },
+            })
+        )
+    }
+
+    assert!(is_bad_level_error(validate("true")));
+    assert!(is_bad_level_error(validate("1.0")));
+    assert!(validate("1").is_ok());
+    assert!(validate("1i").is_ok());
+    assert!(validate("1").is_ok());
+}

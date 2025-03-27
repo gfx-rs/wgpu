@@ -389,6 +389,14 @@ jobs:
         with:
           key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
 
+      - name: Reduce MSRV on dependencies
+        shell: bash
+        run: |
+          set -e
+
+          # 1.9.0 requires MSRV 1.84
+          cargo update -p bytemuck_derive --precise 1.8.1
+
       - name: Check native
         shell: bash
         run: |

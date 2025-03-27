@@ -230,6 +230,30 @@ impl Version {
     fn supports_derivative_control(&self) -> bool {
         *self >= Version::Desktop(450)
     }
+
+    // For supports_pack_unpack_4x8, supports_pack_unpack_snorm_2x16, supports_pack_unpack_unorm_2x16
+    // see:
+    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/unpackUnorm.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/es3/html/unpackUnorm.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/packUnorm.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/es3/html/packUnorm.xhtml
+    fn supports_pack_unpack_4x8(&self) -> bool {
+        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
+    }
+    fn supports_pack_unpack_snorm_2x16(&self) -> bool {
+        *self >= Version::Desktop(420) || *self >= Version::new_gles(300)
+    }
+    fn supports_pack_unpack_unorm_2x16(&self) -> bool {
+        *self >= Version::Desktop(400) || *self >= Version::new_gles(300)
+    }
+
+    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/unpackHalf2x16.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/packHalf2x16.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/es3/html/unpackHalf2x16.xhtml
+    // https://registry.khronos.org/OpenGL-Refpages/es3/html/packHalf2x16.xhtml
+    fn supports_pack_unpack_half_2x16(&self) -> bool {
+        *self >= Version::Desktop(420) || *self >= Version::new_gles(300)
+    }
 }
 
 impl PartialOrd for Version {
@@ -1367,6 +1391,31 @@ impl<'a, W: Write> Writer<'a, W> {
                     | crate::MathFunction::Unpack4xI8
                     | crate::MathFunction::Unpack4xU8
                     | crate::MathFunction::QuantizeToF16 => {
+                        self.need_bake_expressions.insert(arg);
+                    }
+                    /* crate::MathFunction::Pack4x8unorm | */
+                    crate::MathFunction::Unpack4x8snorm
+                        if !self.options.version.supports_pack_unpack_4x8() =>
+                    {
+                        // We have a fallback if the platform doesn't natively support these
+                        self.need_bake_expressions.insert(arg);
+                    }
+                    /* crate::MathFunction::Pack4x8unorm | */
+                    crate::MathFunction::Unpack4x8unorm
+                        if !self.options.version.supports_pack_unpack_4x8() =>
+                    {
+                        self.need_bake_expressions.insert(arg);
+                    }
+                    /* crate::MathFunction::Pack2x16snorm |  */
+                    crate::MathFunction::Unpack2x16snorm
+                        if !self.options.version.supports_pack_unpack_snorm_2x16() =>
+                    {
+                        self.need_bake_expressions.insert(arg);
+                    }
+                    /* crate::MathFunction::Pack2x16unorm | */
+                    crate::MathFunction::Unpack2x16unorm
+                        if !self.options.version.supports_pack_unpack_unorm_2x16() =>
+                    {
                         self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::ExtractBits => {
@@ -3756,11 +3805,43 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::FirstTrailingBit => "findLSB",
                     Mf::FirstLeadingBit => "findMSB",
                     // data packing
-                    Mf::Pack4x8snorm => "packSnorm4x8",
-                    Mf::Pack4x8unorm => "packUnorm4x8",
-                    Mf::Pack2x16snorm => "packSnorm2x16",
-                    Mf::Pack2x16unorm => "packUnorm2x16",
-                    Mf::Pack2x16float => "packHalf2x16",
+                    Mf::Pack4x8snorm => {
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            "packSnorm4x8"
+                        } else {
+                            // polyfill should go here. Needs a corresponding entry in `need_bake_expression`
+                            return Err(Error::UnsupportedExternal("packSnorm4x8".into()));
+                        }
+                    }
+                    Mf::Pack4x8unorm => {
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            "packUnorm4x8"
+                        } else {
+                            return Err(Error::UnsupportedExternal("packUnorm4x8".to_owned()));
+                        }
+                    }
+                    Mf::Pack2x16snorm => {
+                        if self.options.version.supports_pack_unpack_snorm_2x16() {
+                            "packSnorm2x16"
+                        } else {
+                            return Err(Error::UnsupportedExternal("packSnorm2x16".to_owned()));
+                        }
+                    }
+                    Mf::Pack2x16unorm => {
+                        if self.options.version.supports_pack_unpack_unorm_2x16() {
+                            "packUnorm2x16"
+                        } else {
+                            return Err(Error::UnsupportedExternal("packUnorm2x16".to_owned()));
+                        }
+                    }
+                    Mf::Pack2x16float => {
+                        if self.options.version.supports_pack_unpack_half_2x16() {
+                            "packHalf2x16"
+                        } else {
+                            return Err(Error::UnsupportedExternal("packHalf2x16".to_owned()));
+                        }
+                    }
+
                     fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
                         let was_signed = match fun {
                             Mf::Pack4xI8 => true,
@@ -3787,11 +3868,77 @@ impl<'a, W: Write> Writer<'a, W> {
                         return Ok(());
                     }
                     // data unpacking
-                    Mf::Unpack4x8snorm => "unpackSnorm4x8",
-                    Mf::Unpack4x8unorm => "unpackUnorm4x8",
-                    Mf::Unpack2x16snorm => "unpackSnorm2x16",
-                    Mf::Unpack2x16unorm => "unpackUnorm2x16",
-                    Mf::Unpack2x16float => "unpackHalf2x16",
+                    Mf::Unpack2x16float => {
+                        if self.options.version.supports_pack_unpack_half_2x16() {
+                            "unpackHalf2x16"
+                        } else {
+                            return Err(Error::UnsupportedExternal("unpackHalf2x16".into()));
+                        }
+                    }
+                    Mf::Unpack2x16snorm => {
+                        if self.options.version.supports_pack_unpack_snorm_2x16() {
+                            "unpackSnorm2x16"
+                        } else {
+                            let scale = 32767;
+
+                            write!(self.out, "(vec2(ivec2(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " << 16, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, ") >> 16) / {scale}.0)")?;
+                            return Ok(());
+                        }
+                    }
+                    Mf::Unpack2x16unorm => {
+                        if self.options.version.supports_pack_unpack_unorm_2x16() {
+                            "unpackUnorm2x16"
+                        } else {
+                            let scale = 65535;
+
+                            write!(self.out, "(vec2(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " & 0xFFFFu, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " >> 16) / {scale}.0)")?;
+                            return Ok(());
+                        }
+                    }
+                    Mf::Unpack4x8snorm => {
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            "unpackSnorm4x8"
+                        } else {
+                            let scale = 127;
+
+                            write!(self.out, "(vec4(ivec4(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " << 24, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " << 16, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " << 8, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, ") >> 24) / {scale}.0)")?;
+                            return Ok(());
+                        }
+                    }
+                    Mf::Unpack4x8unorm => {
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            "unpackUnorm4x8"
+                        } else {
+                            let scale = 255;
+
+                            write!(self.out, "(vec4(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " & 0xFFu, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " >> 8 & 0xFFu, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " >> 16 & 0xFFu, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " >> 24) / {scale}.0)")?;
+                            return Ok(());
+                        }
+                    }
                     fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
                         let sign_prefix = match fun {
                             Mf::Unpack4xI8 => 'i',

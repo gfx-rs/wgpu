@@ -40,7 +40,10 @@ naga = { workspace = true, features = [
 ] }
 
 bincode.workspace = true
-codespan-reporting.workspace = true
+codespan-reporting = { workspace = true, default-features = false, features = [
+    "std",
+    "termcolor",
+] }
 env_logger.workspace = true
 argh.workspace = true
 anyhow = { workspace = true, features = ["std"] }
