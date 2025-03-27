@@ -26,6 +26,7 @@ static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
         async move { assert_execute_gpu(&ctx.device, &ctx.queue, input).await }
     });
 
+#[cfg_attr(target_arch = "wasm32", allow(clippy::allow_attributes, dead_code))]
 async fn assert_execute_gpu(device: &wgpu::Device, queue: &wgpu::Queue, input: &[f32]) {
     // This is a native (vulkan) only feature.
     #[cfg(target_arch = "wasm32")]
