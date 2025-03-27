@@ -241,11 +241,10 @@ impl Version {
         *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
     }
     fn supports_pack_unpack_snorm_2x16(&self) -> bool {
-        *self >= Version::Desktop(420) || *self >= Version::new_gles(310)
+        *self >= Version::Desktop(420) || *self >= Version::new_gles(300)
     }
     fn supports_pack_unpack_unorm_2x16(&self) -> bool {
-        // Same as `supports_pack_unpack_4x8`; different method for clarity in usage.
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
+        *self >= Version::Desktop(400) || *self >= Version::new_gles(300)
     }
 
     // https://registry.khronos.org/OpenGL-Refpages/gl4/html/unpackHalf2x16.xhtml
