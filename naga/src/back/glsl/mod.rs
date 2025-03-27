@@ -3805,37 +3805,43 @@ impl<'a, W: Write> Writer<'a, W> {
                     Mf::FirstTrailingBit => "findLSB",
                     Mf::FirstLeadingBit => "findMSB",
                     // data packing
-                    Mf::Pack4x8snorm if self.options.version.supports_pack_unpack_4x8() => {
-                        "packSnorm4x8"
-                    }
-                    Mf::Pack4x8unorm if self.options.version.supports_pack_unpack_4x8() => {
-                        "packUnorm4x8"
-                    }
-                    Mf::Pack2x16snorm if self.options.version.supports_pack_unpack_snorm_2x16() => {
-                        "packSnorm2x16"
-                    }
-                    Mf::Pack2x16unorm if self.options.version.supports_pack_unpack_unorm_2x16() => {
-                        "packUnorm2x16"
-                    }
-                    Mf::Pack2x16float if self.options.version.supports_pack_unpack_half_2x16() => {
-                        "packHalf2x16"
-                    }
-                    // data packing; polyfills should go here. Need a corresponding entry in need_bake_expression
                     Mf::Pack4x8snorm => {
-                        return Err(Error::UnsupportedExternal("packSnorm4x8".into()));
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            "packSnorm4x8"
+                        } else {
+                            // polyfill should go here. Needs a corresponding entry in `need_bake_expression`
+                            return Err(Error::UnsupportedExternal("packSnorm4x8".into()));
+                        }
                     }
                     Mf::Pack4x8unorm => {
-                        return Err(Error::UnsupportedExternal("packUnorm4x8".into()));
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            "packUnorm4x8"
+                        } else {
+                            return Err(Error::UnsupportedExternal("packUnorm4x8".to_owned()));
+                        }
                     }
                     Mf::Pack2x16snorm => {
-                        return Err(Error::UnsupportedExternal("packSnorm2x16".into()));
+                        if self.options.version.supports_pack_unpack_snorm_2x16() {
+                            "packSnorm2x16"
+                        } else {
+                            return Err(Error::UnsupportedExternal("packSnorm2x16".to_owned()));
+                        }
                     }
                     Mf::Pack2x16unorm => {
-                        return Err(Error::UnsupportedExternal("packUnorm2x16".into()));
+                        if self.options.version.supports_pack_unpack_unorm_2x16() {
+                            "packUnorm2x16"
+                        } else {
+                            return Err(Error::UnsupportedExternal("packUnorm2x16".to_owned()));
+                        }
                     }
                     Mf::Pack2x16float => {
-                        return Err(Error::UnsupportedExternal("packHalf2x16".into()));
+                        if self.options.version.supports_pack_unpack_half_2x16() {
+                            "packHalf2x16"
+                        } else {
+                            return Err(Error::UnsupportedExternal("packHalf2x16".to_owned()));
+                        }
                     }
+
                     fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
                         let was_signed = match fun {
                             Mf::Pack4xI8 => true,
@@ -3862,29 +3868,17 @@ impl<'a, W: Write> Writer<'a, W> {
                         return Ok(());
                     }
                     // data unpacking
-                    Mf::Unpack4x8snorm if self.options.version.supports_pack_unpack_4x8() => {
-                        "unpackSnorm4x8"
-                    }
-                    Mf::Unpack4x8unorm if self.options.version.supports_pack_unpack_4x8() => {
-                        "unpackUnorm4x8"
+                    Mf::Unpack2x16float => {
+                        if self.options.version.supports_pack_unpack_half_2x16() {
+                            "unpackHalf2x16"
+                        } else {
+                            return Err(Error::UnsupportedExternal("unpackHalf2x16".into()));
+                        }
                     }
                     Mf::Unpack2x16snorm
                         if self.options.version.supports_pack_unpack_snorm_2x16() =>
                     {
                         "unpackSnorm2x16"
-                    }
-                    Mf::Unpack2x16unorm
-                        if self.options.version.supports_pack_unpack_unorm_2x16() =>
-                    {
-                        "unpackUnorm2x16"
-                    }
-                    Mf::Unpack2x16float
-                        if self.options.version.supports_pack_unpack_half_2x16() =>
-                    {
-                        "unpackHalf2x16"
-                    }
-                    Mf::Unpack2x16float => {
-                        return Err(Error::UnsupportedExternal("unpackHalf2x16".into()));
                     }
                     Mf::Unpack2x16snorm => {
                         let scale = 32767;
@@ -3896,6 +3890,11 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, ") >> 16) / {scale}.0)")?;
                         return Ok(());
                     }
+                    Mf::Unpack2x16unorm
+                        if self.options.version.supports_pack_unpack_unorm_2x16() =>
+                    {
+                        "unpackUnorm2x16"
+                    }
                     Mf::Unpack2x16unorm => {
                         let scale = 65535;
 
@@ -3905,6 +3904,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(arg, ctx)?;
                         write!(self.out, " >> 16) / {scale}.0)")?;
                         return Ok(());
+                    }
+                    Mf::Unpack4x8snorm if self.options.version.supports_pack_unpack_4x8() => {
+                        "unpackSnorm4x8"
                     }
                     Mf::Unpack4x8snorm => {
                         let scale = 127;
@@ -3919,6 +3921,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(arg, ctx)?;
                         write!(self.out, ") >> 24) / {scale}.0)")?;
                         return Ok(());
+                    }
+                    Mf::Unpack4x8unorm if self.options.version.supports_pack_unpack_4x8() => {
+                        "unpackUnorm4x8"
                     }
                     Mf::Unpack4x8unorm => {
                         let scale = 255;
