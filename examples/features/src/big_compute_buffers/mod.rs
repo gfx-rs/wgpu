@@ -220,6 +220,8 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
         .collect()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
 async fn run() {
     let numbers = {
         const BYTES_PER_GB: usize = 1024 * 1024 * 1024;
