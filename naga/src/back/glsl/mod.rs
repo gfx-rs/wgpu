@@ -1401,9 +1401,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         // We have a fallback if the platform doesn't natively support these
                         self.need_bake_expressions.insert(arg);
                     }
-                    /* crate::MathFunction::Pack2x16float | */
-                    crate::MathFunction::Unpack2x16float
-                        if !self.options.version.supports_pack_unpack_half_2x16() =>
+                    /* crate::MathFunction::Pack4x8unorm | */
+                    crate::MathFunction::Unpack4x8unorm
+                        if !self.options.version.supports_pack_unpack_4x8() =>
                     {
                         self.need_bake_expressions.insert(arg);
                     }
