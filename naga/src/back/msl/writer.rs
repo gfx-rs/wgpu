@@ -52,6 +52,10 @@ pub(crate) const ABS_FUNCTION: &str = "naga_abs";
 pub(crate) const DIV_FUNCTION: &str = "naga_div";
 pub(crate) const MOD_FUNCTION: &str = "naga_mod";
 pub(crate) const NEG_FUNCTION: &str = "naga_neg";
+pub(crate) const F2I32_FUNCTION: &str = "naga_f2i32";
+pub(crate) const F2U32_FUNCTION: &str = "naga_f2u32";
+pub(crate) const F2I64_FUNCTION: &str = "naga_f2i64";
+pub(crate) const F2U64_FUNCTION: &str = "naga_f2u64";
 /// For some reason, Metal does not let you have `metal::texture<..>*` as a buffer argument.
 /// However, if you put that texture inside a struct, everything is totally fine. This
 /// baffles me to no end.
@@ -404,6 +408,11 @@ enum WrappedFunction {
     Math {
         fun: crate::MathFunction,
         arg_ty: (Option<crate::VectorSize>, crate::Scalar),
+    },
+    Cast {
+        src_scalar: crate::Scalar,
+        vector_size: Option<crate::VectorSize>,
+        dst_scalar: crate::Scalar,
     },
 }
 
@@ -1449,6 +1458,61 @@ impl<W: Write> Writer<W> {
         )
     }
 
+    fn put_literal(&mut self, literal: crate::Literal) -> BackendResult {
+        match literal {
+            crate::Literal::F64(_) => {
+                return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
+            }
+            crate::Literal::F16(value) => {
+                if value.is_infinite() {
+                    let sign = if value.is_sign_negative() { "-" } else { "" };
+                    write!(self.out, "{sign}INFINITY")?;
+                } else if value.is_nan() {
+                    write!(self.out, "NAN")?;
+                } else {
+                    let suffix = if value.fract() == f16::from_f32(0.0) {
+                        ".0h"
+                    } else {
+                        "h"
+                    };
+                    write!(self.out, "{value}{suffix}")?;
+                }
+            }
+            crate::Literal::F32(value) => {
+                if value.is_infinite() {
+                    let sign = if value.is_sign_negative() { "-" } else { "" };
+                    write!(self.out, "{sign}INFINITY")?;
+                } else if value.is_nan() {
+                    write!(self.out, "NAN")?;
+                } else {
+                    let suffix = if value.fract() == 0.0 { ".0" } else { "" };
+                    write!(self.out, "{value}{suffix}")?;
+                }
+            }
+            crate::Literal::U32(value) => {
+                write!(self.out, "{value}u")?;
+            }
+            crate::Literal::I32(value) => {
+                write!(self.out, "{value}")?;
+            }
+            crate::Literal::U64(value) => {
+                write!(self.out, "{value}uL")?;
+            }
+            crate::Literal::I64(value) => {
+                write!(self.out, "{value}L")?;
+            }
+            crate::Literal::Bool(value) => {
+                write!(self.out, "{value}")?;
+            }
+            crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
+                return Err(Error::GenericValidation(
+                    "Unsupported abstract literal".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn put_possibly_const_expression<C, I, E>(
         &mut self,
@@ -1465,57 +1529,9 @@ impl<W: Write> Writer<W> {
         E: Fn(&mut Self, &C, Handle<crate::Expression>) -> BackendResult,
     {
         match expressions[expr_handle] {
-            crate::Expression::Literal(literal) => match literal {
-                crate::Literal::F64(_) => {
-                    return Err(Error::CapabilityNotSupported(valid::Capabilities::FLOAT64))
-                }
-                crate::Literal::F16(value) => {
-                    if value.is_infinite() {
-                        let sign = if value.is_sign_negative() { "-" } else { "" };
-                        write!(self.out, "{sign}INFINITY")?;
-                    } else if value.is_nan() {
-                        write!(self.out, "NAN")?;
-                    } else {
-                        let suffix = if value.fract() == f16::from_f32(0.0) {
-                            ".0h"
-                        } else {
-                            "h"
-                        };
-                        write!(self.out, "{value}{suffix}")?;
-                    }
-                }
-                crate::Literal::F32(value) => {
-                    if value.is_infinite() {
-                        let sign = if value.is_sign_negative() { "-" } else { "" };
-                        write!(self.out, "{sign}INFINITY")?;
-                    } else if value.is_nan() {
-                        write!(self.out, "NAN")?;
-                    } else {
-                        let suffix = if value.fract() == 0.0 { ".0" } else { "" };
-                        write!(self.out, "{value}{suffix}")?;
-                    }
-                }
-                crate::Literal::U32(value) => {
-                    write!(self.out, "{value}u")?;
-                }
-                crate::Literal::I32(value) => {
-                    write!(self.out, "{value}")?;
-                }
-                crate::Literal::U64(value) => {
-                    write!(self.out, "{value}uL")?;
-                }
-                crate::Literal::I64(value) => {
-                    write!(self.out, "{value}L")?;
-                }
-                crate::Literal::Bool(value) => {
-                    write!(self.out, "{value}")?;
-                }
-                crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {
-                    return Err(Error::GenericValidation(
-                        "Unsupported abstract literal".into(),
-                    ));
-                }
-            },
+            crate::Expression::Literal(literal) => {
+                self.put_literal(literal)?;
+            }
             crate::Expression::Constant(handle) => {
                 let constant = &module.constants[handle];
                 if constant.name.is_some() {
@@ -2315,24 +2331,43 @@ impl<W: Write> Writer<W> {
                 convert,
             } => match *context.resolve_type(expr) {
                 crate::TypeInner::Scalar(src) | crate::TypeInner::Vector { scalar: src, .. } => {
-                    let target_scalar = crate::Scalar {
-                        kind,
-                        width: convert.unwrap_or(src.width),
-                    };
-                    let op = match convert {
-                        Some(_) => "static_cast",
-                        None => "as_type",
-                    };
-                    write!(self.out, "{op}<")?;
-                    match *context.resolve_type(expr) {
-                        crate::TypeInner::Vector { size, .. } => {
-                            put_numeric_type(&mut self.out, target_scalar, &[size])?
-                        }
-                        _ => put_numeric_type(&mut self.out, target_scalar, &[])?,
-                    };
-                    write!(self.out, ">(")?;
-                    self.put_expression(expr, context, true)?;
-                    write!(self.out, ")")?;
+                    if src.kind == crate::ScalarKind::Float
+                        && (kind == crate::ScalarKind::Sint || kind == crate::ScalarKind::Uint)
+                        && convert.is_some()
+                    {
+                        // Use helper functions for float to int casts in order to avoid
+                        // undefined behaviour when value is out of range for the target
+                        // type.
+                        let fun_name = match (kind, convert) {
+                            (crate::ScalarKind::Sint, Some(4)) => F2I32_FUNCTION,
+                            (crate::ScalarKind::Uint, Some(4)) => F2U32_FUNCTION,
+                            (crate::ScalarKind::Sint, Some(8)) => F2I64_FUNCTION,
+                            (crate::ScalarKind::Uint, Some(8)) => F2U64_FUNCTION,
+                            _ => unreachable!(),
+                        };
+                        write!(self.out, "{fun_name}(")?;
+                        self.put_expression(expr, context, true)?;
+                        write!(self.out, ")")?;
+                    } else {
+                        let target_scalar = crate::Scalar {
+                            kind,
+                            width: convert.unwrap_or(src.width),
+                        };
+                        let op = match convert {
+                            Some(_) => "static_cast",
+                            None => "as_type",
+                        };
+                        write!(self.out, "{op}<")?;
+                        match *context.resolve_type(expr) {
+                            crate::TypeInner::Vector { size, .. } => {
+                                put_numeric_type(&mut self.out, target_scalar, &[size])?
+                            }
+                            _ => put_numeric_type(&mut self.out, target_scalar, &[])?,
+                        };
+                        write!(self.out, ">(")?;
+                        self.put_expression(expr, context, true)?;
+                        write!(self.out, ")")?;
+                    }
                 }
                 crate::TypeInner::Matrix {
                     columns,
@@ -5343,6 +5378,76 @@ template <typename A>
                         }
                         _ => {}
                     }
+                }
+                crate::Expression::As {
+                    expr,
+                    kind,
+                    convert: Some(width),
+                } => {
+                    // Avoid undefined behaviour when casting from a float to integer
+                    // when the value is out of range for the target type. Additionally
+                    // ensure we clamp to the correct value as per the WGSL spec.
+                    //
+                    // https://www.w3.org/TR/WGSL/#floating-point-conversion:
+                    // * If X is exactly representable in the target type T, then the
+                    //   result is that value.
+                    // * Otherwise, the result is the value in T closest to
+                    //   truncate(X) and also exactly representable in the original
+                    //   floating point type.
+                    let src_ty = func_ctx.resolve_type(expr, &module.types);
+                    let Some((vector_size, src_scalar)) = src_ty.vector_size_and_scalar() else {
+                        continue;
+                    };
+                    let dst_scalar = crate::Scalar { kind, width };
+                    if src_scalar.kind != crate::ScalarKind::Float
+                        || (dst_scalar.kind != crate::ScalarKind::Sint
+                            && dst_scalar.kind != crate::ScalarKind::Uint)
+                    {
+                        continue;
+                    }
+                    let wrapped = WrappedFunction::Cast {
+                        src_scalar,
+                        vector_size,
+                        dst_scalar,
+                    };
+                    if !self.wrapped_functions.insert(wrapped) {
+                        continue;
+                    }
+                    let (min, max) = proc::min_max_float_representable_by(src_scalar, dst_scalar);
+
+                    let mut src_type_name = String::new();
+                    match vector_size {
+                        None => put_numeric_type(&mut src_type_name, src_scalar, &[])?,
+                        Some(size) => put_numeric_type(&mut src_type_name, src_scalar, &[size])?,
+                    };
+                    let mut dst_type_name = String::new();
+                    match vector_size {
+                        None => put_numeric_type(&mut dst_type_name, dst_scalar, &[])?,
+                        Some(size) => put_numeric_type(&mut dst_type_name, dst_scalar, &[size])?,
+                    };
+                    let fun_name = match dst_scalar {
+                        crate::Scalar::I32 => F2I32_FUNCTION,
+                        crate::Scalar::U32 => F2U32_FUNCTION,
+                        crate::Scalar::I64 => F2I64_FUNCTION,
+                        crate::Scalar::U64 => F2U64_FUNCTION,
+                        _ => unreachable!(),
+                    };
+
+                    writeln!(
+                        self.out,
+                        "{dst_type_name} {fun_name}({src_type_name} value) {{"
+                    )?;
+                    let level = back::Level(1);
+                    write!(
+                        self.out,
+                        "{level}return static_cast<{dst_type_name}>({NAMESPACE}::clamp(value, "
+                    )?;
+                    self.put_literal(min)?;
+                    write!(self.out, ", ")?;
+                    self.put_literal(max)?;
+                    writeln!(self.out, "));")?;
+                    writeln!(self.out, "}}")?;
+                    writeln!(self.out)?;
                 }
                 _ => {}
             }

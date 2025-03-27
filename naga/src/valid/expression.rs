@@ -698,8 +698,18 @@ impl super::Validator {
                         let good = match query {
                             crate::ImageQuery::NumLayers => arrayed,
                             crate::ImageQuery::Size { level: None } => true,
-                            crate::ImageQuery::Size { level: Some(_) }
-                            | crate::ImageQuery::NumLevels => class.is_mipmapped(),
+                            crate::ImageQuery::Size { level: Some(level) } => {
+                                match resolver[level] {
+                                    Ti::Scalar(Sc::I32 | Sc::U32) => {}
+                                    _ => {
+                                        return Err(ExpressionError::InvalidImageOtherIndexType(
+                                            level,
+                                        ))
+                                    }
+                                }
+                                class.is_mipmapped()
+                            }
+                            crate::ImageQuery::NumLevels => class.is_mipmapped(),
                             crate::ImageQuery::NumSamples => class.is_multisampled(),
                         };
                         if !good {

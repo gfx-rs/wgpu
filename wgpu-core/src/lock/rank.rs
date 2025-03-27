@@ -149,6 +149,7 @@ define_lock_ranks! {
     rank BLAS_COMPACTION_STATE "Blas::compaction_size" followed by { }
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
+    rank BUFFER_POOL "BufferPool::buffers" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

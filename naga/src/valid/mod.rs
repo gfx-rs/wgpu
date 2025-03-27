@@ -566,6 +566,7 @@ impl Validator {
                 crate::Scalar::BOOL
                 | crate::Scalar::I32
                 | crate::Scalar::U32
+                | crate::Scalar::F16
                 | crate::Scalar::F32
                 | crate::Scalar::F64,
             ) => {}

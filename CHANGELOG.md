@@ -193,6 +193,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 - Support for generating the candidate intersections from AABB geometry, and confirming the hits. By @kvark in [#7047](https://github.com/gfx-rs/wgpu/pull/7047).
 - Make naga::back::spv::Function::to_words write the OpFunctionEnd instruction in itself, instead of making another call after it. By @junjunjd in [#7156](https://github.com/gfx-rs/wgpu/pull/7156).
 - Add support for texture memory barriers. By @Devon7925 in [#7173](https://github.com/gfx-rs/wgpu/pull/7173).
+- Add polyfills for `unpackSnorm4x8`, `unpackUnorm4x8`, `unpackSnorm2x16`, `unpackUnorm2x16` for GLSL versions they aren't supported in. By @DJMcNab in [#7408](https://github.com/gfx-rs/wgpu/pull/7408).
 
 ### Changes
 

@@ -7,7 +7,7 @@ use alloc::{
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
-use termcolor::{NoColor, WriteColor};
+use codespan_reporting::term::termcolor::{NoColor, WriteColor};
 
 use super::ModuleState;
 use crate::{arena::Handle, front::atomic_upgrade};

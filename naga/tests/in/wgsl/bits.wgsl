@@ -1,3 +1,5 @@
+// Keep in sync with `bits_downlevel` and `bits_downlevel_webgl`
+
 @compute @workgroup_size(1)
 fn main() {
     var i = 0;

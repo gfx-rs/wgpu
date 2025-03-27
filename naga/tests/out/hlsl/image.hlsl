@@ -59,13 +59,17 @@ void main(uint3 local_id : SV_GroupThreadID)
     return;
 }
 
+uint naga_f2u32(float value) {
+    return uint(clamp(value, 0.0, 4294967000.0));
+}
+
 [numthreads(16, 1, 1)]
 void depth_load(uint3 local_id_1 : SV_GroupThreadID)
 {
     uint2 dim_1 = NagaRWDimensions2D(image_storage_src);
     int2 itc_1 = naga_mod(int2((dim_1 * local_id_1.xy)), int2(int(10), int(20)));
     float val = image_depth_multisampled_src.Load(itc_1, int(local_id_1.z)).x;
-    image_dst[itc_1.x] = (uint(val)).xxxx;
+    image_dst[itc_1.x] = (naga_f2u32(val)).xxxx;
     return;
 }
 

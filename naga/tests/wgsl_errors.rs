@@ -7,10 +7,10 @@ use naga::valid::Capabilities;
 
 #[track_caller]
 fn check(input: &str, snapshot: &str) {
-    let output = naga::front::wgsl::parse_str(input)
-        .map(|_| panic!("expected parser error, but parsing succeeded!"))
-        .unwrap_err()
-        .emit_to_string(input);
+    let output = match naga::front::wgsl::parse_str(input) {
+        Ok(_) => panic!("expected parser error, but parsing succeeded!"),
+        Err(err) => err.emit_to_string(input),
+    };
     if output != snapshot {
         for diff in diff::lines(snapshot, &output) {
             match diff {
@@ -940,7 +940,7 @@ fn multiple_enables_valid() {
 /// Check the result of validating a WGSL program against a pattern.
 ///
 /// Unless you are generating code programmatically, the
-/// `check_validation_error` macro will probably be more convenient to
+/// `check_validation` macro will probably be more convenient to
 /// use.
 macro_rules! check_one_validation {
     ( $source:expr, $pattern:pat $( if $guard:expr )? ) => {
@@ -1351,6 +1351,17 @@ fn invalid_functions() {
         })
         if function_name == "return_atomic"
     }
+}
+
+#[test]
+fn invalid_return_type() {
+    check_validation! {
+        "fn invalid_return_type() -> i32 { return 0u; }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidReturnType(Some(_)),
+            ..
+        })
+    };
 }
 
 #[test]
@@ -2699,12 +2710,12 @@ fn limit_braced_statement_nesting() {
     let too_many_braces = "fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{";
 
     let expected_diagnostic = r###"error: brace nesting limit reached
-  ┌─ wgsl:1:72
+  ┌─ wgsl:1:135
   │
 1 │ fn f() {{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{
-  │                                                                        ^ limit reached at this brace
+  │                                                                                                                                       ^ limit reached at this brace
   │
-  = note: nesting limit is currently set to 64
+  = note: nesting limit is currently set to 127
 
 "###;
 
@@ -2797,15 +2808,68 @@ fn too_many_unclosed_loops() {
        loop {
        loop {
        loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
+       loop {
            ";
 
     let expected_diagnostic = r###"error: brace nesting limit reached
-   ┌─ wgsl:65:13
-   │
-65 │        loop {
-   │             ^ limit reached at this brace
-   │
-   = note: nesting limit is currently set to 64
+    ┌─ wgsl:128:13
+    │
+128 │        loop {
+    │             ^ limit reached at this brace
+    │
+    = note: nesting limit is currently set to 127
 
 "###;
 
@@ -2995,4 +3059,36 @@ fn reject_utf8_bom() {
 
 "#,
     );
+}
+
+#[test]
+fn issue7165() {
+    // Regression test for https://github.com/gfx-rs/wgpu/issues/7165
+    let shader = "
+        struct Struct { a: u32 }
+        fn invalid_return_type(a: Struct) -> i32 { return a; }
+    ";
+
+    let module = naga::front::wgsl::parse_str(shader).unwrap();
+    let err = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::default(),
+    )
+    .validate(&module)
+    .unwrap_err();
+
+    // This is a proxy for doing the following (with an error
+    // handler installed so it doesn't immediately panic):
+    //
+    // ```
+    // device.create_shader_module(wgpu::ShaderModuleDescriptor {
+    //     label,
+    //     source: wgpu::ShaderSource::Naga(module),
+    // });
+    // ```
+    //
+    // `ShaderSource::Naga` causes the implementation to proceed with an empty
+    // module source, which (prior to the fix for #7165) could panic when
+    // rendering an error if the module contained spans.
+    let _location = err.location("");
 }

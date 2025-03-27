@@ -36,7 +36,7 @@ env:
   CI_BINARY_BUILD: "build20"
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.85"
+  REPO_MSRV: "1.84"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
   CORE_MSRV: "1.82.0"
@@ -388,6 +388,14 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+
+      - name: Reduce MSRV on dependencies
+        shell: bash
+        run: |
+          set -e
+
+          # 1.9.0 requires MSRV 1.84
+          cargo update -p bytemuck_derive --precise 1.8.1
 
       - name: Check native
         shell: bash

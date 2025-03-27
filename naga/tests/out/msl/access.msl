@@ -247,6 +247,10 @@ int var_members_of_members(
     int _e15 = thing.om_nom_nom.delicious;
     return _e15;
 }
+int naga_f2i32(float value) {
+    return static_cast<int>(metal::clamp(value, -2147483600.0, 2147483500.0));
+}
+
 
 struct foo_vertInput {
 };
@@ -273,7 +277,7 @@ vertex foo_vertOutput foo_vert(
     int a_2 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
     metal::int2 c = qux;
     float _e33 = read_from_private(foo);
-    c2_ = type_20 {a_2, static_cast<int>(b), 3, 4, 5};
+    c2_ = type_20 {a_2, naga_f2i32(b), 3, 4, 5};
     c2_.inner[vi + 1u] = 42;
     int value_1 = c2_.inner[vi];
     float _e47 = test_arr_as_arg(type_18 {});
