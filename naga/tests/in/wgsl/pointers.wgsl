@@ -1,3 +1,9 @@
+fn f() {
+   var v: mat2x2<f32>;
+   let px = &v[0];
+   *px = vec2<f32>(10.0);
+}
+
 struct DynamicArray {
     arr: array<u32>
 }

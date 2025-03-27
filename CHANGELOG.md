@@ -213,7 +213,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
   The original names (e.g. `naga::Module`) remain present for compatibility.
   By @kpreid in [#7365](https://github.com/gfx-rs/wgpu/pull/7365).
 - Refactored `use` statements to simplify future `no_std` support. By @bushrat011899 in [#7256](https://github.com/gfx-rs/wgpu/pull/7256)
-- Naga's WGSL frontend no longer allows using the `&` operator to take the address of a component of a matrix or vector,
+- Naga's WGSL frontend no longer allows using the `&` operator to take the address of a component of a vector,
   which is not permitted by the WGSL specification. By @andyleiserson in [#7284](https://github.com/gfx-rs/wgpu/pull/7284)
 
 #### Vulkan

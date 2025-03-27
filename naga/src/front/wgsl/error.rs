@@ -678,7 +678,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::InvalidAddrOfOperand(span) => ParseError {
-                message: "cannot take the address of a matrix or vector component".to_string(),
+                message: "cannot take the address of a vector component".to_string(),
                 labels: vec![(span, "invalid operand for address-of".into())],
                 notes: vec![],
             },
