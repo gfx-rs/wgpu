@@ -220,8 +220,7 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
         .collect()
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-#[allow(dead_code)]
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 async fn run() {
     let numbers = {
         const BYTES_PER_GB: usize = 1024 * 1024 * 1024;
@@ -231,11 +230,9 @@ async fn run() {
     };
     assert!(numbers.iter().all(|n| *n == 0.0));
     log::info!("All 0.0s");
-
     let t1 = std::time::Instant::now();
     let results = execute_gpu(&numbers).await;
     log::info!("GPU RUNTIME: {}ms", t1.elapsed().as_millis());
-
     assert_eq!(numbers.len(), results.len());
     assert!(results.iter().all(|n| *n == 1.0));
     log::info!("All 1.0s");
