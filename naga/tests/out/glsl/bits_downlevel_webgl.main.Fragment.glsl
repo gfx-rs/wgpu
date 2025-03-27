@@ -24,9 +24,9 @@ void main() {
     uint _e29 = u;
     f4_ = (vec4(_e29 & 0xFFu, _e29 >> 8 & 0xFFu, _e29 >> 16 & 0xFFu, _e29 >> 24) / 255.0);
     uint _e31 = u;
-    f2_ = (vec2(ivec2(_e31 << 16, _e31) >> 16) / 32767.0);
+    f2_ = unpackSnorm2x16(_e31);
     uint _e33 = u;
-    f2_ = (vec2(_e33 & 0xFFFFu, _e33 >> 16) / 65535.0);
+    f2_ = unpackUnorm2x16(_e33);
     return;
 }
 
