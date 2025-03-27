@@ -3875,69 +3875,69 @@ impl<'a, W: Write> Writer<'a, W> {
                             return Err(Error::UnsupportedExternal("unpackHalf2x16".into()));
                         }
                     }
-                    Mf::Unpack2x16snorm
-                        if self.options.version.supports_pack_unpack_snorm_2x16() =>
-                    {
-                        "unpackSnorm2x16"
-                    }
                     Mf::Unpack2x16snorm => {
-                        let scale = 32767;
+                        if self.options.version.supports_pack_unpack_snorm_2x16() {
+                            "unpackSnorm2x16"
+                        } else {
+                            let scale = 32767;
 
-                        write!(self.out, "(vec2(ivec2(")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, " << 16, ")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, ") >> 16) / {scale}.0)")?;
-                        return Ok(());
-                    }
-                    Mf::Unpack2x16unorm
-                        if self.options.version.supports_pack_unpack_unorm_2x16() =>
-                    {
-                        "unpackUnorm2x16"
+                            write!(self.out, "(vec2(ivec2(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " << 16, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, ") >> 16) / {scale}.0)")?;
+                            return Ok(());
+                        }
                     }
                     Mf::Unpack2x16unorm => {
-                        let scale = 65535;
+                        if self.options.version.supports_pack_unpack_unorm_2x16() {
+                            "unpackUnorm2x16"
+                        } else {
+                            let scale = 65535;
 
-                        write!(self.out, "(vec2(")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, " & 0xFFFFu, ")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, " >> 16) / {scale}.0)")?;
-                        return Ok(());
-                    }
-                    Mf::Unpack4x8snorm if self.options.version.supports_pack_unpack_4x8() => {
-                        "unpackSnorm4x8"
+                            write!(self.out, "(vec2(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " & 0xFFFFu, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " >> 16) / {scale}.0)")?;
+                            return Ok(());
+                        }
                     }
                     Mf::Unpack4x8snorm => {
-                        let scale = 127;
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            "unpackSnorm4x8"
+                        } else {
+                            let scale = 127;
 
-                        write!(self.out, "(vec4(ivec4(")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, " << 24, ")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, " << 16, ")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, " << 8, ")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, ") >> 24) / {scale}.0)")?;
-                        return Ok(());
-                    }
-                    Mf::Unpack4x8unorm if self.options.version.supports_pack_unpack_4x8() => {
-                        "unpackUnorm4x8"
+                            write!(self.out, "(vec4(ivec4(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " << 24, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " << 16, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " << 8, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, ") >> 24) / {scale}.0)")?;
+                            return Ok(());
+                        }
                     }
                     Mf::Unpack4x8unorm => {
-                        let scale = 255;
+                        if self.options.version.supports_pack_unpack_4x8() {
+                            "unpackUnorm4x8"
+                        } else {
+                            let scale = 255;
 
-                        write!(self.out, "(vec4(")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, " & 0xFFu, ")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, " >> 8 & 0xFFu, ")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, " >> 16 & 0xFFu, ")?;
-                        self.write_expr(arg, ctx)?;
-                        write!(self.out, " >> 24) / {scale}.0)")?;
-                        return Ok(());
+                            write!(self.out, "(vec4(")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " & 0xFFu, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " >> 8 & 0xFFu, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " >> 16 & 0xFFu, ")?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, " >> 24) / {scale}.0)")?;
+                            return Ok(());
+                        }
                     }
                     fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
                         let sign_prefix = match fun {
