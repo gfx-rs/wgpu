@@ -76,7 +76,7 @@ webgl = ["wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
 ## but performs no computation.
 ## Because it lacks basic functionality, it is only actually used if explicitly enabled
 ## through `NoopBackendOptions`.
-noop = ["wgpu-core/noop"]
+noop = ["wgpu-core/noop", "dep:wgpu-hal", "dep:smallvec"]
 
 #! **Note:** In the documentation, if you see that an item depends on a backend,
 #! it means that the item is only available when that backend is enabled _and_ the backend
