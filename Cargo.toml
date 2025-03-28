@@ -68,7 +68,6 @@ wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features
     "dx12",
     "metal",
     "static-dxc",
-    "webgl",
     "noop",       # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
 wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
