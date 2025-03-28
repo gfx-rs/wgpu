@@ -88,7 +88,7 @@ pub fn validate_compose(
                 let comp_res_inner = comp_res.inner_with(gctx.types);
                 // We don't support arrays of pointers, but it seems best not to
                 // embed that assumption here, so use `TypeInner::equivalent`.
-                if !base_inner.equivalent(comp_res_inner, gctx.types) {
+                if !base_inner.non_struct_equivalent(comp_res_inner, gctx.types) {
                     log::error!("Array component[{}] type {:?}", index, comp_res);
                     return Err(ComposeError::ComponentType {
                         index: index as u32,
@@ -109,7 +109,7 @@ pub fn validate_compose(
                 let comp_res_inner = comp_res.inner_with(gctx.types);
                 // We don't support pointers in structs, but it seems best not to embed
                 // that assumption here, so use `TypeInner::equivalent`.
-                if !comp_res_inner.equivalent(member_inner, gctx.types) {
+                if !comp_res_inner.non_struct_equivalent(member_inner, gctx.types) {
                     log::error!("Struct component[{}] type {:?}", index, comp_res);
                     return Err(ComposeError::ComponentType {
                         index: index as u32,

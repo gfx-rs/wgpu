@@ -638,7 +638,7 @@ impl super::Validator {
 
             let decl_ty = &gctx.types[var.ty].inner;
             let init_ty = mod_info[init].inner_with(gctx.types);
-            if !decl_ty.equivalent(init_ty, gctx.types) {
+            if !decl_ty.non_struct_equivalent(init_ty, gctx.types) {
                 return Err(GlobalVariableError::InitializerType);
             }
         }

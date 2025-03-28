@@ -258,12 +258,15 @@ impl crate::TypeInner {
     /// Compare `self` and `rhs` as types.
     ///
     /// This is mostly the same as `<TypeInner as Eq>::eq`, but it treats
-    /// `ValuePointer` and `Pointer` types as equivalent.
+    /// `ValuePointer` and `Pointer` types as equivalent. This method
+    /// cannot be used for structs, because it cannot distinguish two
+    /// structs with different names but the same members. For structs,
+    /// use `Module::compare_types`.
     ///
     /// When you know that one side of the comparison is never a pointer, it's
     /// fine to not bother with canonicalization, and just compare `TypeInner`
     /// values with `==`.
-    pub fn equivalent(
+    pub fn non_struct_equivalent(
         &self,
         rhs: &crate::TypeInner,
         types: &crate::UniqueArena<crate::Type>,

@@ -46,7 +46,7 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         }
 
         // If `expr` already has the requested type, we're done.
-        if expr_inner.equivalent(goal_inner, types) {
+        if expr_inner.non_struct_equivalent(goal_inner, types) {
             return Ok(expr);
         }
 

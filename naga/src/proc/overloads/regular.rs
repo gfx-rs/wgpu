@@ -362,7 +362,7 @@ mod test {
         let inner = resolution.inner_with(arena);
 
         assert!(
-            inner.equivalent(expected, arena),
+            inner.non_struct_equivalent(expected, arena),
             "Expected {:?}, got {:?}",
             expected.for_debug(arena),
             inner.for_debug(arena),

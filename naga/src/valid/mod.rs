@@ -534,7 +534,7 @@ impl Validator {
 
         let decl_ty = &gctx.types[con.ty].inner;
         let init_ty = mod_info[con.init].inner_with(gctx.types);
-        if !decl_ty.equivalent(init_ty, gctx.types) {
+        if !decl_ty.non_struct_equivalent(init_ty, gctx.types) {
             return Err(ConstantError::InvalidType);
         }
 
@@ -575,7 +575,7 @@ impl Validator {
 
         if let Some(init) = o.init {
             let init_ty = mod_info[init].inner_with(gctx.types);
-            if !decl_ty.equivalent(init_ty, gctx.types) {
+            if !decl_ty.non_struct_equivalent(init_ty, gctx.types) {
                 return Err(OverrideError::InvalidType);
             }
         } else if self.overrides_resolved {
