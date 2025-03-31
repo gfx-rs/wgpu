@@ -627,6 +627,7 @@ struct CommandSignatures {
 }
 
 struct DeviceShared {
+    adapter: DxgiAdapter,
     zero_buffer: Direct3D12::ID3D12Resource,
     cmd_signatures: CommandSignatures,
     heap_views: descriptor::GeneralHeap,

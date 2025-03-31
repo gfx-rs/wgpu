@@ -39,6 +39,7 @@ const NAGA_LOCATION_SEMANTIC: &[u8] = c"LOC".to_bytes();
 impl super::Device {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
+        adapter: auxil::dxgi::factory::DxgiAdapter,
         raw: Direct3D12::ID3D12Device,
         present_queue: Direct3D12::ID3D12CommandQueue,
         features: wgt::Features,
@@ -113,6 +114,7 @@ impl super::Device {
         let capacity_views = limits.max_non_sampler_bindings as u64;
 
         let shared = super::DeviceShared {
+            adapter,
             zero_buffer,
             cmd_signatures: super::CommandSignatures {
                 draw: Self::create_command_signature(
@@ -1930,6 +1932,19 @@ impl crate::Device for super::Device {
                 Direct3D12::D3D12_QUERY_TYPE_TIMESTAMP,
             ),
         };
+
+        let info = self
+            .shared
+            .adapter
+            .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL)?;
+
+        // Assume each query is 256 bytes.
+        // On an AMD W6800 with driver version 32.0.12030.9, occlusion and pipeline statistics are 256, timestamp is 8.
+
+        // Make sure we don't exceed 90% of the budget
+        if info.CurrentUsage + desc.count as u64 * 256 >= info.Budget / 10 * 9 {
+            return Err(crate::DeviceError::OutOfMemory);
+        }
 
         let mut raw = None::<Direct3D12::ID3D12QueryHeap>;
         unsafe {
