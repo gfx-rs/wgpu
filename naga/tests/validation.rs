@@ -472,6 +472,7 @@ mod dummy_interpolation_shader {
         pub source: String,
         pub module: naga::Module,
         pub interpolate_attr: String,
+        #[cfg_attr(not(feature = "glsl-out"), expect(dead_code))]
         pub entry_point: &'static str,
     }
 
