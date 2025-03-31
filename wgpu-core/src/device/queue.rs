@@ -463,6 +463,8 @@ impl Queue {
         profiling::scope!("Queue::write_buffer");
         api_log!("Queue::write_buffer");
 
+        self.device.check_is_valid()?;
+
         let buffer = buffer.get()?;
 
         let data_size = data.len() as wgt::BufferAddress;
@@ -506,6 +508,8 @@ impl Queue {
         profiling::scope!("Queue::create_staging_buffer");
         resource_log!("Queue::create_staging_buffer");
 
+        self.device.check_is_valid()?;
+
         let staging_buffer = StagingBuffer::new(&self.device, buffer_size)?;
         let ptr = unsafe { staging_buffer.ptr() };
 
@@ -519,6 +523,8 @@ impl Queue {
         staging_buffer: StagingBuffer,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_staging_buffer");
+
+        self.device.check_is_valid()?;
 
         let buffer = buffer.get()?;
 
@@ -548,6 +554,8 @@ impl Queue {
         buffer_size: wgt::BufferSize,
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::validate_write_buffer");
+
+        self.device.check_is_valid()?;
 
         let buffer = buffer.get()?;
 
@@ -588,6 +596,8 @@ impl Queue {
         buffer: Arc<Buffer>,
         buffer_offset: u64,
     ) -> Result<(), QueueWriteError> {
+        self.device.check_is_valid()?;
+
         let transition = {
             let mut trackers = self.device.trackers.lock();
             trackers
@@ -645,6 +655,8 @@ impl Queue {
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::write_texture");
         api_log!("Queue::write_texture");
+
+        self.device.check_is_valid()?;
 
         if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
             log::trace!("Ignoring write_texture of size 0");
@@ -868,6 +880,8 @@ impl Queue {
     ) -> Result<(), QueueWriteError> {
         profiling::scope!("Queue::copy_external_image_to_texture");
 
+        self.device.check_is_valid()?;
+
         if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
             log::trace!("Ignoring write_texture of size 0");
             return Ok(());
@@ -1071,6 +1085,11 @@ impl Queue {
             let mut command_index_guard = self.device.command_indices.write();
             command_index_guard.active_submission_index += 1;
             submit_index = command_index_guard.active_submission_index;
+
+            if let Err(e) = self.device.check_is_valid() {
+                break 'error Err(e.into());
+            }
+
             let mut active_executions = Vec::new();
 
             let mut used_surface_textures = track::TextureUsageScope::default();
