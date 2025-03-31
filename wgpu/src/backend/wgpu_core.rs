@@ -399,10 +399,7 @@ fn map_texture_copy_view(
     }
 }
 
-#[cfg_attr(
-    any(not(target_arch = "wasm32"), target_os = "emscripten"),
-    expect(unused)
-)]
+#[cfg_attr(not(webgl), expect(unused))]
 fn map_texture_tagged_copy_view(
     view: crate::CopyExternalImageDestInfo<&api::Texture>,
 ) -> wgc::command::CopyExternalImageDestInfo {
@@ -1815,13 +1812,17 @@ impl dispatch::QueueInterface for CoreQueue {
         }
     }
 
+    // This method needs to exist if either webgpu or webgl is enabled,
+    // but we only actually have an implementation if webgl is enabled.
     #[cfg(any(webgpu, webgl))]
+    #[cfg_attr(not(webgl), expect(unused_variables))]
     fn copy_external_image_to_texture(
         &self,
         source: &crate::CopyExternalImageSourceInfo,
         dest: crate::CopyExternalImageDestInfo<&crate::api::Texture>,
         size: crate::Extent3d,
     ) {
+        #[cfg(webgl)]
         match self.context.0.queue_copy_external_image_to_texture(
             self.id,
             source,
