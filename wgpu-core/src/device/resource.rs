@@ -363,14 +363,21 @@ impl Device {
 
     pub fn handle_hal_error(&self, error: hal::DeviceError) -> DeviceError {
         match error {
-            hal::DeviceError::OutOfMemory => {}
-            hal::DeviceError::Lost
+            hal::DeviceError::OutOfMemory
+            | hal::DeviceError::Lost
             | hal::DeviceError::ResourceCreationFailed
             | hal::DeviceError::Unexpected => {
                 self.lose(&error.to_string());
             }
         }
         DeviceError::from_hal(error)
+    }
+
+    pub fn handle_hal_error_with_nonfatal_oom(&self, error: hal::DeviceError) -> DeviceError {
+        match error {
+            hal::DeviceError::OutOfMemory => DeviceError::from_hal(error),
+            error => self.handle_hal_error(error),
+        }
     }
 
     /// Run some destroy operations that were deferred.
@@ -679,8 +686,8 @@ impl Device {
             usage,
             memory_flags: hal::MemoryFlags::empty(),
         };
-        let buffer =
-            unsafe { self.raw().create_buffer(&hal_desc) }.map_err(|e| self.handle_hal_error(e))?;
+        let buffer = unsafe { self.raw().create_buffer(&hal_desc) }
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let timestamp_normalization_bind_group = Snatchable::new(
             self.timestamp_normalizer
@@ -1100,7 +1107,7 @@ impl Device {
         };
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let clear_mode = if hal_usage
             .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
@@ -3862,7 +3869,7 @@ impl Device {
         let hal_desc = desc.map_label(|label| label.to_hal(self.instance_flags));
 
         let raw = unsafe { self.raw().create_query_set(&hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let query_set = QuerySet {
             raw: ManuallyDrop::new(raw),
