@@ -512,7 +512,7 @@ impl Instance {
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
-pub struct SwapChain {
+struct SwapChain {
     // TODO: Drop order frees the SWC before the raw image pointers...?
     raw: Dxgi::IDXGISwapChain3,
     // need to associate raw image pointers with the swapchain so they can be properly released
@@ -548,7 +548,7 @@ unsafe impl Sync for Surface {}
 
 impl Surface {
     pub fn swap_chain(&self) -> Option<Dxgi::IDXGISwapChain3> {
-        Some(self.swap_chain.lock().as_ref()?.raw.clone())
+        Some(self.swap_chain.read().as_ref()?.raw.clone())
     }
 }
 
@@ -1145,10 +1145,6 @@ impl SwapChain {
                 Err(crate::SurfaceError::Lost)
             }
         }
-    }
-
-    pub fn as_raw(&self) -> &Dxgi::IDXGISwapChain3 {
-        &self.raw
     }
 }
 
