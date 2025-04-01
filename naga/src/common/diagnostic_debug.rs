@@ -84,3 +84,43 @@ impl fmt::Debug for DiagnosticDebug<Scalar> {
         Ok(())
     }
 }
+
+pub trait ForDebug: Sized {
+    /// Format this type using [`core::fmt::Debug`].
+    ///
+    /// Return a value that implements the [`core::fmt::Debug`] trait
+    /// by displaying `self` in a language-appropriate way. For
+    /// example:
+    ///
+    ///     # use naga::common::ForDebug;
+    ///     # let scalar: naga::Scalar = naga::Scalar::F32;
+    ///     log::debug!("My scalar: {:?}", scalar.for_debug());
+    fn for_debug(self) -> DiagnosticDebug<Self> {
+        DiagnosticDebug(self)
+    }
+}
+
+impl ForDebug for Scalar {}
+
+pub trait ForDebugWithTypes: Sized {
+    /// Format this type using [`core::fmt::Debug`].
+    ///
+    /// Given an arena to look up type handles in, return a value that
+    /// implements the [`core::fmt::Debug`] trait by displaying `self`
+    /// in a language-appropriate way. For example:
+    ///
+    ///     # use naga::{Span, Type, TypeInner, Scalar, UniqueArena};
+    ///     # use naga::common::ForDebugWithTypes;
+    ///     # let mut types = UniqueArena::<Type>::default();
+    ///     # let inner = TypeInner::Scalar(Scalar::F32);
+    ///     # let span = Span::UNDEFINED;
+    ///     # let handle = types.insert(Type { name: None, inner }, span);
+    ///     log::debug!("My type: {:?}", handle.for_debug(&types));
+    fn for_debug(self, types: &UniqueArena<Type>) -> DiagnosticDebug<(Self, &UniqueArena<Type>)> {
+        DiagnosticDebug((self, types))
+    }
+}
+
+impl ForDebugWithTypes for Handle<Type> {}
+impl ForDebugWithTypes for &TypeInner {}
+impl ForDebugWithTypes for &TypeResolution {}
