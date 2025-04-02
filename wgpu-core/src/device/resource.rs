@@ -3916,12 +3916,9 @@ impl Device {
         // since that will prevent any new work from being added to the queues.
         // Future calls to poll_devices will continue to check the work queues
         // until they are cleared, and then drop the device.
-
-        // Eagerly release GPU resources.
-        self.release_gpu_resources();
     }
 
-    pub(crate) fn release_gpu_resources(&self) {
+    fn release_gpu_resources(&self) {
         // This is called when the device is lost, which makes every associated
         // resource invalid and unusable. This is an opportunity to release all of
         // the underlying gpu resources, even though the objects remain visible to
