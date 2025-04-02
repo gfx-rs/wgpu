@@ -2617,13 +2617,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let rule = remaining_overloads.most_preferred();
 
                     let mut converted_arguments = Vec::with_capacity(arguments.len());
-                    for (i, (&ast, unconverted)) in
-                        arguments.iter().zip(unconverted_arguments).enumerate()
-                    {
+                    for (i, &unconverted) in unconverted_arguments.iter().enumerate() {
                         let goal_inner = rule.arguments[i].inner_with(&ctx.module.types);
                         let converted = match goal_inner.scalar_for_conversions(&ctx.module.types) {
                             Some(goal_scalar) => {
-                                let arg_span = ctx.ast_expressions.get_span(ast);
+                                let arg_span = ctx.get_expression_span(unconverted);
                                 ctx.try_automatic_conversion_for_leaf_scalar(
                                     unconverted,
                                     goal_scalar,
