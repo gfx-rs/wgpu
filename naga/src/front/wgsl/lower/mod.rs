@@ -2974,29 +2974,29 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &self,
         span: Span,
         fun: F,
-        fun_overloads: O,
-        lowered_arguments: &[Handle<crate::ir::Expression>],
+        overloads: O,
+        arguments: &[Handle<crate::ir::Expression>],
         ctx: &ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, crate::proc::Rule>
     where
         O: crate::proc::OverloadSet,
         F: TryToWgsl + core::fmt::Debug + Copy,
     {
-        let mut remaining_overloads = fun_overloads.clone();
+        let mut remaining_overloads = overloads.clone();
         let min_arguments = remaining_overloads.min_arguments();
         let max_arguments = remaining_overloads.max_arguments();
-        if lowered_arguments.len() < min_arguments {
+        if arguments.len() < min_arguments {
             return Err(Box::new(Error::WrongArgumentCount {
                 span,
                 expected: min_arguments as u32..max_arguments as u32,
-                found: lowered_arguments.len() as u32,
+                found: arguments.len() as u32,
             }));
         }
-        if lowered_arguments.len() > max_arguments {
+        if arguments.len() > max_arguments {
             return Err(Box::new(Error::TooManyArguments {
                 function: fun.to_wgsl_for_diagnostics(),
                 call_span: span,
-                arg_span: ctx.get_expression_span(lowered_arguments[max_arguments]),
+                arg_span: ctx.get_expression_span(arguments[max_arguments]),
                 max_arguments: max_arguments as _,
             }));
         }
@@ -3006,7 +3006,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             remaining_overloads.for_debug(&ctx.module.types)
         );
 
-        for (arg_index, &arg) in lowered_arguments.iter().enumerate() {
+        for (arg_index, &arg) in arguments.iter().enumerate() {
             let ty = ctx.typifier()[arg].inner_with(&ctx.module.types);
             log::debug!(
                 "Supplying argument {arg_index} of type {}",
@@ -3037,12 +3037,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 // Is this type *ever* permitted for the arg_index'th argument?
                 // For example, `bool` is never permitted for `max`.
-                let only_this_argument = fun_overloads.arg(arg_index, ty, &ctx.module.types);
+                let only_this_argument = overloads.arg(arg_index, ty, &ctx.module.types);
                 if only_this_argument.is_empty() {
                     // No overload of `fun` accepts this type as the
                     // arg_index'th argument. Determine the set of types that
                     // would ever be allowed there.
-                    let allowed: Vec<String> = fun_overloads
+                    let allowed: Vec<String> = overloads
                         .allowed_args(arg_index, &ctx.module.to_ctx())
                         .iter()
                         .map(|ty| ctx.type_resolution_to_string(ty))
@@ -3084,8 +3084,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 // Re-run the argument list to determine which prior argument
                 // made this one unacceptable.
-                let mut remaining_overloads = fun_overloads;
-                for (prior_index, &prior_expr) in lowered_arguments.iter().enumerate() {
+                let mut remaining_overloads = overloads;
+                for (prior_index, &prior_expr) in arguments.iter().enumerate() {
                     let prior_ty = ctx.typifier()[prior_expr].inner_with(&ctx.module.types);
                     remaining_overloads =
                         remaining_overloads.arg(prior_index, prior_ty, &ctx.module.types);
@@ -3094,8 +3094,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .is_empty()
                     {
                         // This is the argument that killed our dreams.
-                        let inconsistent_span =
-                            ctx.get_expression_span(lowered_arguments[prior_index]);
+                        let inconsistent_span = ctx.get_expression_span(arguments[prior_index]);
                         let inconsistent_ty = ctx.as_diagnostic_display(prior_ty).to_string();
 
                         if allowed.is_empty() {
@@ -3140,10 +3139,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     fn apply_automatic_conversions_for_call(
         &self,
         rule: &crate::proc::Rule,
-        lowered_arguments: &mut [Handle<crate::ir::Expression>],
+        arguments: &mut [Handle<crate::ir::Expression>],
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, ()> {
-        for (i, argument) in lowered_arguments.iter_mut().enumerate() {
+        for (i, argument) in arguments.iter_mut().enumerate() {
             let goal_inner = rule.arguments[i].inner_with(&ctx.module.types);
             let converted = match goal_inner.scalar_for_conversions(&ctx.module.types) {
                 Some(goal_scalar) => {
