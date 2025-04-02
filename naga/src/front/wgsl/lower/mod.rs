@@ -2582,7 +2582,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 {
                                     // This is the argument that killed our dreams.
                                     let inconsistent_span =
-                                        ctx.ast_expressions.get_span(arguments[prior_index]);
+                                        ctx.get_expression_span(unconverted_arguments[prior_index]);
                                     let inconsistent_ty =
                                         ctx.as_diagnostic_display(prior_ty).to_string();
 
@@ -2621,7 +2621,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // given the argument types supplied above.
                     let rule = remaining_overloads.most_preferred();
 
-                    let mut converted_arguments = Vec::with_capacity(arguments.len());
+                    let mut converted_arguments = Vec::with_capacity(unconverted_arguments.len());
                     for (i, &unconverted) in unconverted_arguments.iter().enumerate() {
                         let goal_inner = rule.arguments[i].inner_with(&ctx.module.types);
                         let converted = match goal_inner.scalar_for_conversions(&ctx.module.types) {
