@@ -2619,20 +2619,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // given the argument types supplied above.
                     let rule = remaining_overloads.most_preferred();
 
-                    for (i, argument) in lowered_arguments.iter_mut().enumerate() {
-                        let goal_inner = rule.arguments[i].inner_with(&ctx.module.types);
-                        if let Some(goal_scalar) =
-                            goal_inner.scalar_for_conversions(&ctx.module.types)
-                        {
-                            let arg_span = ctx.get_expression_span(*argument);
-                            let converted = ctx.try_automatic_conversion_for_leaf_scalar(
-                                *argument,
-                                goal_scalar,
-                                arg_span,
-                            )?;
-                            *argument = converted;
-                        }
-                    }
+                    self.apply_automatic_conversions_for_call(&rule, &mut lowered_arguments, ctx)?;
 
                     // If this function returns a predeclared type, register it
                     // in `Module::special_types`. The typifier will expect to
@@ -3128,6 +3115,34 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(Some(expr))
             }
         }
+    }
+
+    /// Apply automatic type conversions for a function call.
+    ///
+    /// Apply whatever automatic conversions are needed to pass `arguments` to
+    /// the function overload described by `rule`. Update `arguments` to refer
+    /// to the converted arguments.
+    fn apply_automatic_conversions_for_call(
+        &self,
+        rule: &crate::proc::Rule,
+        lowered_arguments: &mut [Handle<crate::ir::Expression>],
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, ()> {
+        for (i, argument) in lowered_arguments.iter_mut().enumerate() {
+            let goal_inner = rule.arguments[i].inner_with(&ctx.module.types);
+            let converted = match goal_inner.scalar_for_conversions(&ctx.module.types) {
+                Some(goal_scalar) => {
+                    let arg_span = ctx.get_expression_span(*argument);
+                    ctx.try_automatic_conversion_for_leaf_scalar(*argument, goal_scalar, arg_span)?
+                }
+                // No conversion is necessary.
+                None => *argument,
+            };
+
+            *argument = converted;
+        }
+
+        Ok(())
     }
 
     fn atomic_pointer(
