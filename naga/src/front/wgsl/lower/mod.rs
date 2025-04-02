@@ -2619,23 +2619,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // given the argument types supplied above.
                     let rule = remaining_overloads.most_preferred();
 
-                    let mut converted_arguments = Vec::with_capacity(lowered_arguments.len());
-                    for (i, &unconverted) in lowered_arguments.iter().enumerate() {
+                    for (i, argument) in lowered_arguments.iter_mut().enumerate() {
                         let goal_inner = rule.arguments[i].inner_with(&ctx.module.types);
-                        let converted = match goal_inner.scalar_for_conversions(&ctx.module.types) {
-                            Some(goal_scalar) => {
-                                let arg_span = ctx.get_expression_span(unconverted);
-                                ctx.try_automatic_conversion_for_leaf_scalar(
-                                    unconverted,
-                                    goal_scalar,
-                                    arg_span,
-                                )?
-                            }
-                            // No conversion is necessary.
-                            None => unconverted,
-                        };
-
-                        converted_arguments.push(converted);
+                        if let Some(goal_scalar) =
+                            goal_inner.scalar_for_conversions(&ctx.module.types)
+                        {
+                            let arg_span = ctx.get_expression_span(*argument);
+                            let converted = ctx.try_automatic_conversion_for_leaf_scalar(
+                                *argument,
+                                goal_scalar,
+                                arg_span,
+                            )?;
+                            *argument = converted;
+                        }
                     }
 
                     // If this function returns a predeclared type, register it
@@ -2647,10 +2643,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     crate::Expression::Math {
                         fun,
-                        arg: converted_arguments[0],
-                        arg1: converted_arguments.get(1).cloned(),
-                        arg2: converted_arguments.get(2).cloned(),
-                        arg3: converted_arguments.get(3).cloned(),
+                        arg: lowered_arguments[0],
+                        arg1: lowered_arguments.get(1).cloned(),
+                        arg2: lowered_arguments.get(2).cloned(),
+                        arg3: lowered_arguments.get(3).cloned(),
                     }
                 } else if let Some(fun) = Texture::map(function.name) {
                     self.texture_sample_helper(fun, arguments, span, ctx)?
