@@ -1633,7 +1633,7 @@ impl Device {
         };
 
         let raw = unsafe { self.raw().create_sampler(&hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let sampler = Sampler {
             raw: ManuallyDrop::new(raw),
