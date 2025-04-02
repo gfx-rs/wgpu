@@ -10,7 +10,7 @@ use std::{
 };
 
 use arrayvec::ArrayVec;
-use ash::{khr, vk};
+use ash::{ext, khr, vk};
 use hashbrown::hash_map::Entry;
 use parking_lot::Mutex;
 
@@ -2871,6 +2871,49 @@ impl crate::Device for super::Device {
             acceleration_structure_reference: instance.blas_address,
         };
         bytemuck::bytes_of(&temp).to_vec()
+    }
+
+    fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
+        if !self
+            .shared
+            .enabled_extensions
+            .contains(&ext::memory_budget::NAME)
+        {
+            return Ok(());
+        }
+
+        let get_physical_device_properties = self
+            .shared
+            .instance
+            .get_physical_device_properties
+            .as_ref()
+            .unwrap();
+
+        let mut memory_budget_properties = vk::PhysicalDeviceMemoryBudgetPropertiesEXT::default();
+
+        let mut memory_properties =
+            vk::PhysicalDeviceMemoryProperties2::default().push_next(&mut memory_budget_properties);
+
+        unsafe {
+            get_physical_device_properties.get_physical_device_memory_properties2(
+                self.shared.physical_device,
+                &mut memory_properties,
+            );
+        }
+
+        let memory_properties = memory_properties.memory_properties;
+
+        for i in 0..memory_properties.memory_heap_count {
+            let heap_usage = memory_budget_properties.heap_usage[i as usize];
+            let heap_budget = memory_budget_properties.heap_budget[i as usize];
+
+            // Make sure we don't exceed 95% of the budget
+            if heap_usage >= heap_budget / 100 * 95 {
+                return Err(crate::DeviceError::OutOfMemory);
+            }
+        }
+
+        Ok(())
     }
 }
 

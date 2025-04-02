@@ -1356,6 +1356,8 @@ impl Queue {
         // the closures should execute with nothing locked!
         callbacks.fire();
 
+        self.device.lose_if_oom();
+
         api_log!("Queue::submit returned submit index {submit_index}");
 
         Ok(submit_index)

@@ -361,6 +361,19 @@ impl Device {
         }
     }
 
+    /// Checks that we are operating within the memory budget reported by the native APIs.
+    ///
+    /// If we are not, the device gets invalidated.
+    ///
+    /// The budget might fluctuate over the lifetime of the application, so it should be checked
+    /// somewhat frequently.
+    pub fn lose_if_oom(&self) {
+        let _ = self
+            .raw()
+            .check_if_oom()
+            .map_err(|e| self.handle_hal_error(e));
+    }
+
     pub fn handle_hal_error(&self, error: hal::DeviceError) -> DeviceError {
         match error {
             hal::DeviceError::OutOfMemory

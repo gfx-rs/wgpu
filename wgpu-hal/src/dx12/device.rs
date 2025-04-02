@@ -2320,4 +2320,33 @@ impl crate::Device for super::Device {
 
         bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()
     }
+
+    fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
+        let info = self
+            .shared
+            .adapter
+            .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL)?;
+
+        // Make sure we don't exceed 95% of the budget
+        if info.CurrentUsage >= info.Budget / 100 * 95 {
+            return Err(crate::DeviceError::OutOfMemory);
+        }
+
+        if matches!(
+            self.shared.private_caps.memory_architecture,
+            super::MemoryArchitecture::NonUnified
+        ) {
+            let info = self
+                .shared
+                .adapter
+                .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL)?;
+
+            // Make sure we don't exceed 95% of the budget
+            if info.CurrentUsage >= info.Budget / 100 * 95 {
+                return Err(crate::DeviceError::OutOfMemory);
+            }
+        }
+
+        Ok(())
+    }
 }
