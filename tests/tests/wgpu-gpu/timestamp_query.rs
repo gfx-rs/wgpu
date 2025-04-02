@@ -120,13 +120,29 @@ fn timestamp_query(ctx: TestingContext) {
     let query_data: &[u64] = bytemuck::cast_slice(&query_buffer_view);
 
     for i in 0..ITERATIONS {
+        // The byte and query offset for the current iteration
         let byte_offset = i as u64 * QUERY_RESOLVE_BUFFER_ALIGNMENT;
         let query_offset = byte_offset / 8;
+
+        // The byte and query offset for the next iteration
+        let next_byte_offset = (i + 1) as u64 * QUERY_RESOLVE_BUFFER_ALIGNMENT;
+        let next_query_offset = next_byte_offset / 8;
+
+        // The range of queries that should still be the value they were initialized to.
+        let untouched_query_start = query_offset + QUERIES_PER_ITERATION as u64;
+        let untouched_query_end = next_query_offset;
 
         // WebGPU does not define the value of the timestamp queries. They unfortunately
         // can be `0` in some situations. However, we should expect that some value
         // has been written, and the odds of it being exactly `init_constant` are vanishingly low.
-        assert_ne!(query_data[query_offset as usize], init_constant);
-        assert_ne!(query_data[query_offset as usize + 1], init_constant);
+        for query in 0..QUERIES_PER_ITERATION {
+            let query_index = query_offset + query as u64;
+            assert_ne!(query_data[query_index as usize], init_constant);
+        }
+
+        // Validate that the queries that were not written to are still the value they were initialized to.
+        for query in untouched_query_start..untouched_query_end {
+            assert_eq!(query_data[query as usize], init_constant);
+        }
     }
 }

@@ -481,7 +481,8 @@ impl Global {
                         .get(&snatch_guard)
                         .unwrap(),
                     &dst_buffer,
-                    start_query..end_query,
+                    destination_offset,
+                    query_count,
                 );
         }
 

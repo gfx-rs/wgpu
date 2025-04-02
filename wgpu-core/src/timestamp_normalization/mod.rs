@@ -27,6 +27,8 @@
 //! We then multiply the timestamp by the numerator, and shift it right by the
 //! denominator. This gives us the normalized timestamp.
 
+use core::num::NonZeroU64;
+
 use alloc::{boxed::Box, string::String, string::ToString, sync::Arc};
 
 use hashbrown::HashMap;
@@ -118,7 +120,7 @@ impl TimestampNormalizer {
                         ty: wgt::BindingType::Buffer {
                             ty: wgt::BufferBindingType::Storage { read_only: false },
                             has_dynamic_offset: false,
-                            min_binding_size: None,
+                            min_binding_size: Some(NonZeroU64::new(8).unwrap()),
                         },
                         count: None,
                     }],
@@ -245,6 +247,7 @@ impl TimestampNormalizer {
         device: &Device,
         buffer: &dyn hal::DynBuffer,
         buffer_label: Option<&str>,
+        buffer_size: u64,
         buffer_usages: wgt::BufferUsages,
     ) -> Result<TimestampNormalizationBindGroup, DeviceError> {
         unsafe {
@@ -254,6 +257,14 @@ impl TimestampNormalizer {
 
             if !buffer_usages.contains(wgt::BufferUsages::QUERY_RESOLVE) {
                 return Ok(TimestampNormalizationBindGroup { raw: None });
+            }
+
+            // If this buffer is large enough that we wouldn't be able to bind the entire thing
+            // at once to normalize the timestamps, we can't use it. We force the buffer to fail
+            // to allocate. The lowest max binding size is 128MB, and query sets must be small
+            // (no more than 4096), so this should never be hit in practice by sane programs.
+            if buffer_size > device.adapter.limits().max_storage_buffer_binding_size as u64 {
+                return Err(DeviceError::OutOfMemory);
             }
 
             let bg_label_alloc;
@@ -298,7 +309,8 @@ impl TimestampNormalizer {
         tracker: &mut BufferTracker,
         bind_group: &TimestampNormalizationBindGroup,
         buffer: &Arc<Buffer>,
-        range: core::ops::Range<u32>,
+        buffer_offset_bytes: u64,
+        total_timestamps: u32,
     ) {
         let Some(ref state) = &self.state else {
             return;
@@ -308,11 +320,12 @@ impl TimestampNormalizer {
             return;
         };
 
+        let buffer_offset_timestamps: u32 = (buffer_offset_bytes / 8).try_into().unwrap(); // Unreachable as MAX_QUERIES is way less than u32::MAX
+
         let pending_barrier = tracker.set_single(buffer, wgt::BufferUses::STORAGE_READ_WRITE);
 
         let barrier = pending_barrier.map(|pending| pending.into_hal(buffer, snatch_guard));
 
-        let total_timestamps = range.len() as u32;
         let needed_workgroups = total_timestamps.div_ceil(64);
 
         unsafe {
@@ -327,7 +340,7 @@ impl TimestampNormalizer {
                 &*state.pipeline_layout,
                 wgt::ShaderStages::COMPUTE,
                 0,
-                &[range.start, range.len() as u32],
+                &[buffer_offset_timestamps, total_timestamps],
             );
             encoder.dispatch([needed_workgroups, 1, 1]);
             encoder.end_compute_pass();

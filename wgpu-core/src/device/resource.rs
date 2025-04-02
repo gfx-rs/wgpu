@@ -680,6 +680,7 @@ impl Device {
                     self,
                     &*buffer,
                     desc.label.as_deref(),
+                    desc.size,
                     desc.usage,
                 )?,
         );
@@ -787,8 +788,13 @@ impl Device {
             .timestamp_normalizer
             .get()
             .unwrap()
-            .create_normalization_bind_group(self, &*hal_buffer, desc.label.as_deref(), desc.usage)
-        {
+            .create_normalization_bind_group(
+                self,
+                &*hal_buffer,
+                desc.label.as_deref(),
+                desc.size,
+                desc.usage,
+            ) {
             Ok(bg) => Snatchable::new(bg),
             Err(e) => {
                 return (
