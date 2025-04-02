@@ -2454,22 +2454,29 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 } else if let Some(fun) = conv::map_standard_fun(function.name) {
                     use crate::proc::OverloadSet as _;
 
+                    let mut unconverted_arguments = Vec::with_capacity(arguments.len());
+                    for &arg in arguments {
+                        let lowered = self.expression_for_abstract(arg, ctx)?;
+                        ctx.grow_types(lowered)?;
+                        unconverted_arguments.push(lowered);
+                    }
+
                     let fun_overloads = fun.overloads();
                     let mut remaining_overloads = fun_overloads.clone();
                     let min_arguments = remaining_overloads.min_arguments();
                     let max_arguments = remaining_overloads.max_arguments();
-                    if arguments.len() < min_arguments {
+                    if unconverted_arguments.len() < min_arguments {
                         return Err(Box::new(Error::WrongArgumentCount {
                             span,
                             expected: min_arguments as u32..max_arguments as u32,
-                            found: arguments.len() as u32,
+                            found: unconverted_arguments.len() as u32,
                         }));
                     }
-                    if arguments.len() > max_arguments {
+                    if unconverted_arguments.len() > max_arguments {
                         return Err(Box::new(Error::TooManyArguments {
                             function: fun.to_wgsl_for_diagnostics(),
                             call_span: span,
-                            arg_span: ctx.ast_expressions.get_span(arguments[max_arguments]),
+                            arg_span: ctx.get_expression_span(unconverted_arguments[max_arguments]),
                             max_arguments: max_arguments as _,
                         }));
                     }
@@ -2478,13 +2485,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         "Initial overloads: {:#?}",
                         remaining_overloads.for_debug(&ctx.module.types)
                     );
-
-                    let mut unconverted_arguments = Vec::with_capacity(arguments.len());
-                    for &arg in arguments {
-                        let lowered = self.expression_for_abstract(arg, ctx)?;
-                        ctx.grow_types(lowered)?;
-                        unconverted_arguments.push(lowered);
-                    }
 
                     for (arg_index, &arg) in unconverted_arguments.iter().enumerate() {
                         let ty = ctx.typifier()[arg].inner_with(&ctx.module.types);
