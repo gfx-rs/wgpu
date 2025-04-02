@@ -17,7 +17,7 @@ use super::{
 use crate::{
     back::{self, Baked},
     common,
-    proc::{self, index, ExpressionKindTracker, NameKey},
+    proc::{self, index, NameKey},
     valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
 
@@ -426,7 +426,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 info,
                 expressions: &function.expressions,
                 named_expressions: &function.named_expressions,
-                expr_kind_tracker: ExpressionKindTracker::from_arena(&function.expressions),
             };
             let name = self.names[&NameKey::Function(handle)].clone();
 
@@ -467,7 +466,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 info,
                 expressions: &ep.function.expressions,
                 named_expressions: &ep.function.named_expressions,
-                expr_kind_tracker: ExpressionKindTracker::from_arena(&ep.function.expressions),
             };
 
             self.write_wrapped_functions(module, &ctx)?;

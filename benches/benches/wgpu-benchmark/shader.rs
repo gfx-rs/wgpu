@@ -15,6 +15,7 @@ struct Inputs {
 }
 
 impl Inputs {
+    #[track_caller]
     fn from_dir(folder: &str, extension: &str) -> Self {
         let mut inputs = Vec::new();
         let read_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

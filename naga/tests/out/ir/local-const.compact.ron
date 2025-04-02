@@ -58,22 +58,8 @@
             arguments: [],
             result: None,
             local_variables: [],
-            expressions: [
-                Literal(I32(4)),
-                Literal(U32(4)),
-                Literal(F32(4.0)),
-                Constant(0),
-                Constant(1),
-                Constant(2),
-            ],
-            named_expressions: {
-                0: "b",
-                1: "c",
-                2: "d",
-                3: "bg",
-                4: "cg",
-                5: "dg",
-            },
+            expressions: [],
+            named_expressions: {},
             body: [
                 Emit((
                     start: 0,

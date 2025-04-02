@@ -128,6 +128,25 @@ impl crate::TypeInner {
         }
     }
 
+    /// If `self` is a pointer type, return its base type.
+    pub const fn pointer_base_type(&self) -> Option<TypeResolution> {
+        match *self {
+            crate::TypeInner::Pointer { base, .. } => Some(TypeResolution::Handle(base)),
+            crate::TypeInner::ValuePointer {
+                size: None, scalar, ..
+            } => Some(TypeResolution::Value(crate::TypeInner::Scalar(scalar))),
+            crate::TypeInner::ValuePointer {
+                size: Some(size),
+                scalar,
+                ..
+            } => Some(TypeResolution::Value(crate::TypeInner::Vector {
+                size,
+                scalar,
+            })),
+            _ => None,
+        }
+    }
+
     pub fn is_atomic_pointer(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
         match *self {
             crate::TypeInner::Pointer { base, .. } => match types[base].inner {

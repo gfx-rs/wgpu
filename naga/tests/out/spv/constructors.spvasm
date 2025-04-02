@@ -1,84 +1,86 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 68
+; Bound: 70
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %38 "main"
-OpExecutionMode %38 LocalSize 1 1 1
+OpEntryPoint GLCompute %41 "main"
+OpExecutionMode %41 LocalSize 1 1 1
 OpMemberDecorate %6 0 Offset 0
 OpMemberDecorate %6 1 Offset 16
-OpDecorate %9 ArrayStride 16
-OpDecorate %14 ArrayStride 32
-OpDecorate %17 ArrayStride 4
+OpDecorate %10 ArrayStride 16
+OpDecorate %15 ArrayStride 32
+OpDecorate %18 ArrayStride 4
 %2 = OpTypeVoid
 %3 = OpTypeFloat 32
 %4 = OpTypeVector %3 4
 %5 = OpTypeInt 32 1
 %6 = OpTypeStruct %4 %5
-%8 = OpTypeVector %3 2
-%7 = OpTypeMatrix %8 2
-%11 = OpTypeInt 32 0
-%10 = OpConstant  %11  1
-%9 = OpTypeArray %7 %10
-%12 = OpTypeBool
-%13 = OpTypeVector %11 2
-%15 = OpConstant  %11  3
-%14 = OpTypeArray %6 %15
-%16 = OpTypeMatrix %4 4
-%18 = OpConstant  %11  4
-%17 = OpTypeArray %5 %18
-%20 = OpTypeVector %3 3
-%19 = OpTypeMatrix %20 2
+%7 = OpTypeVector %3 3
+%9 = OpTypeVector %3 2
+%8 = OpTypeMatrix %9 2
+%12 = OpTypeInt 32 0
+%11 = OpConstant  %12  1
+%10 = OpTypeArray %8 %11
+%13 = OpTypeBool
+%14 = OpTypeVector %12 2
+%16 = OpConstant  %12  3
+%15 = OpTypeArray %6 %16
+%17 = OpTypeMatrix %4 4
+%19 = OpConstant  %12  4
+%18 = OpTypeArray %5 %19
+%20 = OpTypeMatrix %7 2
 %21 = OpConstant  %3  0.0
-%22 = OpConstant  %3  1.0
-%23 = OpConstant  %3  2.0
-%24 = OpConstant  %3  3.0
-%25 = OpConstantComposite  %8  %21 %22
-%26 = OpConstantComposite  %8  %23 %24
-%27 = OpConstantComposite  %7  %25 %26
-%28 = OpConstantComposite  %9  %27
-%29 = OpConstantNull  %12
-%30 = OpConstantNull  %5
-%31 = OpConstantNull  %11
-%32 = OpConstantNull  %3
-%33 = OpConstantNull  %13
-%34 = OpConstantNull  %7
-%35 = OpConstantNull  %14
-%36 = OpConstantNull  %6
-%39 = OpTypeFunction %2
-%40 = OpConstantComposite  %4  %22 %22 %22 %22
-%41 = OpConstant  %5  1
-%42 = OpConstantComposite  %6  %40 %41
-%43 = OpConstantComposite  %8  %22 %21
-%44 = OpConstantComposite  %7  %43 %25
-%45 = OpConstantComposite  %4  %22 %21 %21 %21
-%46 = OpConstantComposite  %4  %21 %22 %21 %21
-%47 = OpConstantComposite  %4  %21 %21 %22 %21
-%48 = OpConstantComposite  %4  %21 %21 %21 %22
-%49 = OpConstantComposite  %16  %45 %46 %47 %48
-%50 = OpConstant  %11  0
-%51 = OpConstantComposite  %13  %50 %50
-%52 = OpConstantComposite  %8  %21 %21
-%53 = OpConstantComposite  %7  %52 %52
-%54 = OpConstant  %5  0
-%55 = OpConstant  %5  2
-%56 = OpConstant  %5  3
-%57 = OpConstantComposite  %17  %54 %41 %55 %56
-%58 = OpConstantFalse  %12
-%59 = OpConstantComposite  %13  %50 %50
-%60 = OpConstantComposite  %20  %21 %21 %21
-%61 = OpConstantComposite  %19  %60 %60
-%62 = OpConstantNull  %19
-%63 = OpConstantTrue  %12
-%65 = OpTypePointer Function %6
-%66 = OpConstantNull  %6
-%38 = OpFunction  %2  None %39
-%37 = OpLabel
-%64 = OpVariable  %65  Function %66
-OpBranch %67
-%67 = OpLabel
-OpStore %64 %42
+%22 = OpConstantComposite  %7  %21 %21 %21
+%23 = OpConstant  %3  1.0
+%24 = OpConstant  %3  2.0
+%25 = OpConstant  %3  3.0
+%26 = OpConstantComposite  %9  %21 %23
+%27 = OpConstantComposite  %9  %24 %25
+%28 = OpConstantComposite  %8  %26 %27
+%29 = OpConstantComposite  %10  %28
+%30 = OpConstantNull  %13
+%31 = OpConstantNull  %5
+%32 = OpConstantNull  %12
+%33 = OpConstantNull  %3
+%34 = OpConstantNull  %14
+%35 = OpConstantNull  %8
+%36 = OpConstantNull  %15
+%37 = OpConstantNull  %6
+%38 = OpConstant  %12  0
+%39 = OpConstantComposite  %14  %38 %38
+%42 = OpTypeFunction %2
+%43 = OpConstantComposite  %4  %23 %23 %23 %23
+%44 = OpConstant  %5  1
+%45 = OpConstantComposite  %6  %43 %44
+%46 = OpConstantComposite  %9  %23 %21
+%47 = OpConstantComposite  %8  %46 %26
+%48 = OpConstantComposite  %4  %23 %21 %21 %21
+%49 = OpConstantComposite  %4  %21 %23 %21 %21
+%50 = OpConstantComposite  %4  %21 %21 %23 %21
+%51 = OpConstantComposite  %4  %21 %21 %21 %23
+%52 = OpConstantComposite  %17  %48 %49 %50 %51
+%53 = OpConstantComposite  %14  %38 %38
+%54 = OpConstantComposite  %9  %21 %21
+%55 = OpConstantComposite  %9  %21 %21
+%56 = OpConstantComposite  %8  %55 %55
+%57 = OpConstant  %5  0
+%58 = OpConstant  %5  2
+%59 = OpConstant  %5  3
+%60 = OpConstantComposite  %18  %57 %44 %58 %59
+%61 = OpConstantFalse  %13
+%62 = OpConstantComposite  %7  %21 %21 %21
+%63 = OpConstantComposite  %20  %62 %62
+%64 = OpConstantNull  %20
+%65 = OpConstantTrue  %13
+%67 = OpTypePointer Function %6
+%68 = OpConstantNull  %6
+%41 = OpFunction  %2  None %42
+%40 = OpLabel
+%66 = OpVariable  %67  Function %68
+OpBranch %69
+%69 = OpLabel
+OpStore %66 %45
 OpReturn
 OpFunctionEnd

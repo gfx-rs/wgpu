@@ -9,27 +9,22 @@ repository.workspace = true
 keywords.workspace = true
 license.workspace = true
 rust-version.workspace = true
-autotests = false
 publish = false
 
 [[test]]
-name = "wgpu-compile-test"
-path = "compile-tests/root.rs"
+name = "wgpu-compile"
 harness = true
 
 [[test]]
-name = "wgpu-dependency-test"
-path = "dependency-tests/root.rs"
+name = "wgpu-dependency"
 harness = true
 
 [[test]]
-name = "wgpu-gpu-test"
-path = "gpu-tests/root.rs"
+name = "wgpu-gpu"
 harness = false
 
 [[test]]
-name = "wgpu-validation-test"
-path = "validation-tests/root.rs"
+name = "wgpu-validation"
 harness = true
 
 [features]

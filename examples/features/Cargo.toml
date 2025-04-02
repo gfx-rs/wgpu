@@ -44,7 +44,6 @@ obj.workspace = true
 png.workspace = true
 pollster.workspace = true
 web-time.workspace = true
-wgpu.workspace = true
 wgpu-types = { workspace = true, features = [
     "trace", # TODO(#5974): this should be a dep on wgpu/trace and not wgpu-types at all
 ] }
@@ -55,6 +54,7 @@ wgpu-test.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger.workspace = true
+wgpu.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook.workspace = true
@@ -62,6 +62,7 @@ console_log.workspace = true
 fern.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
+wgpu = { path = "../../wgpu", default-features = false, features = ["wgsl"] }
 # We need these features in the framework examples and tests
 web-sys = { workspace = true, features = [
     "Location",

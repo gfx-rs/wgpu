@@ -36,10 +36,10 @@ This is a table of contents, in the form of the repository's directory structure
 - player
    - [tests](#player-tests)
 - tests
-   - [compile-tests](#wgpu-compile-tests)
-   - [dependency-tests](#wgpu-dependency-tests)
-   - [gpu-tests](#wgpu-gpu-tests)
-   - [validation-tests](#wgpu-validation-tests)
+   - [compile](#wgpu-compile-tests)
+   - [dependency](#wgpu-dependency-tests)
+   - [gpu](#wgpu-gpu-tests)
+   - [validation](#wgpu-validation-tests)
 
 And where applicable [unit-tests](#unit-tests)
 are scatteredthroughout the codebase.
@@ -84,16 +84,16 @@ they should be easy to copy into a standalone project.
 
 ## `naga` Example Tests
 
-- Located in: `naga/tests/example_wgsl`
-- Run with `cargo nextest run --test naga-test example_wgsl`
+- Located in: `naga/tests/naga/example_wgsl`
+- Run with `cargo nextest run --test naga example_wgsl`
 
 This simple test ensures that all wgsl files in the `examples`
 directory can be parsed by `naga`'s `wgsl` parser and validate correctly.
 
 ## `naga` Snapshot Tests
 
-- Located in: `naga/tests/snapshot`, `naga/tests/in`, and `naga/tests/out`
-- Run with `cargo nextest run --test naga-test snapshots`
+- Located in: `naga/tests/naga/snapshot`, `naga/tests/in`, and `naga/tests/out`
+- Run with `cargo nextest run --test naga snapshots`
 - Data driven snapshot tests for `naga`'s input/output.
 
 These tests are snapshot tests for `naga`s parsers and code generators.
@@ -118,8 +118,8 @@ will use the respective tool to validate the generated code.
 
 ## `naga` SPIR-V Capabilities Tests
 
-- Located in: `naga/tests/spirv_capabilities`
-- Run with `cargo nextest run --test naga-test spirv_capabilities`
+- Located in: `naga/tests/naga/spirv_capabilities`
+- Run with `cargo nextest run --test naga spirv_capabilities`
 - Uses the standard `#[test]` harness.
 
 These tests convert the given wgsl snippet to spirv and
@@ -127,8 +127,8 @@ then assert that the spirv has enabled the expected capabilities.
 
 ## `naga` Validation Tests
 
-- Located in: `naga/tests/validation`
-- Run with `cargo nextest run --test naga-test validation`
+- Located in: `naga/tests/naga/validation`
+- Run with `cargo nextest run --test naga validation`
 
 These are hand rolled tests against the naga's validator.
 If you don't need to test the validator with a custom module,
@@ -137,8 +137,8 @@ the [wgsl errors](#naga-wgsl-error-tests) tests.
 
 ## `naga` WGSL Error Tests
 
-- Located in: `naga/tests/wgsl_errors`
-- Run with `cargo nextest run --test naga-test wgsl_errors`
+- Located in: `naga/tests/naga/wgsl_errors`
+- Run with `cargo nextest run --test naga wgsl_errors`
 
 These are tests for the error messages that the `wgsl` frontend
 produces. Additionally you can check that a given validation error
@@ -147,7 +147,7 @@ is produced by the validator from a given `wgsl` snippet.
 ## `player` Tests
 
 - Located in: `player/tests`
-- Run with `cargo nextest run --test player-test`
+- Run with `cargo nextest run --test player`
 - Data driven tests using the `player`'s replay system.
 - `wgpu` integration tests.
 
@@ -161,9 +161,9 @@ These tests only run on your system's default GPU.
 
 ## `wgpu` Compile Tests
 
-- Located in: `tests/compile-tests`
-- Run with `cargo nextest run --test wgpu-compile-test`
-- `trybuild` tests of all rust files in `tests/compile-tests/fail` directory.
+- Located in: `tests/tests/wgpu-compile`
+- Run with `cargo nextest run --test wgpu-compile`
+- `trybuild` tests of all rust files in `tests/tests/wgpu-compile/fail` directory.
 
 These use the `trybuild` crate to test a few scenarios where
 the `wgpu` crate is expected to fail to compile. This mainly
@@ -172,8 +172,8 @@ dropping passes, etc.
 
 ## `wgpu` Dependency Tests
 
-- Located in: `tests/dependency-tests`
-- Run with `cargo nextest run --test wgpu-dependency-test`
+- Located in: `tests/tests/wgpu-dependency`
+- Run with `cargo nextest run --test wgpu-dependency`
 - Tests against `cargo tree`.
 
 These tests ensure that the `wgpu` crate has the correct dependency
@@ -184,8 +184,8 @@ This provides a way to ensure that our `toml` files are correct.
 
 ## `wgpu` GPU Tests
 
-- Located in: `tests/gpu-tests`
-- Run with `cargo xtask test --test wgpu-gpu-test`
+- Located in: `tests/tests/wgpu-gpu`
+- Run with `cargo xtask test --test wgpu-gpu`
 - Uses a custom `#[gpu_test]` harness.
 - `wgpu` integration tests, with access to `wgpu_test` helpers.
 
@@ -209,8 +209,8 @@ See also the [example tests](#example-tests) for additional GPU tests.
 
 ## `wgpu` Validation Tests
 
-- Located in: `tests/validation-tests`
-- Run with `cargo nextest run --test wgpu-validation-test`
+- Located in: `tests/tests/wgpu-validation`
+- Run with `cargo nextest run --test wgpu-validation`
 - Use the standard `#[test]` harness.
 - `wgpu` integration tests, with access to `wgpu_test` helpers.
 

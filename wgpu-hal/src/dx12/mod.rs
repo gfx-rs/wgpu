@@ -546,6 +546,12 @@ pub struct Surface {
 unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
 
+impl Surface {
+    pub fn swap_chain(&self) -> Option<Dxgi::IDXGISwapChain3> {
+        Some(self.swap_chain.read().as_ref()?.raw.clone())
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum MemoryArchitecture {
     Unified {

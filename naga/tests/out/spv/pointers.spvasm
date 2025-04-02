@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.2
 ; Generator: rspirv
-; Bound: 43
+; Bound: 46
 OpCapability Shader
 OpCapability Linkage
 OpExtension "SPV_KHR_storage_buffer_storage_class"
@@ -9,9 +9,9 @@ OpExtension "SPV_KHR_storage_buffer_storage_class"
 OpMemoryModel Logical GLSL450
 %3 = OpString "pointers.wgsl"
 OpSource Unknown 0 %3 "fn f() {
-   var v: vec2<i32>;
-   let px = &v.x;
-   *px = 10;
+   var v: mat2x2<f32>;
+   let px = &v[0];
+   *px = vec2<f32>(10.0);
 }
 
 struct DynamicArray {
@@ -35,80 +35,84 @@ fn index_dynamic_array(i: i32, v: u32) {
    (*p)[i] = val + v;
 }
 "
-OpMemberName %8 0 "arr"
-OpName %8 "DynamicArray"
-OpName %9 "dynamic_array"
-OpName %12 "f"
-OpName %15 "v"
-OpName %23 "i"
-OpName %24 "v"
-OpName %25 "index_unsized"
-OpName %35 "i"
-OpName %36 "v"
-OpName %37 "index_dynamic_array"
-OpDecorate %7 ArrayStride 4
-OpMemberDecorate %8 0 Offset 0
-OpDecorate %8 Block
-OpDecorate %9 DescriptorSet 0
-OpDecorate %9 Binding 0
+OpMemberName %9 0 "arr"
+OpName %9 "DynamicArray"
+OpName %11 "dynamic_array"
+OpName %14 "f"
+OpName %18 "v"
+OpName %26 "i"
+OpName %27 "v"
+OpName %28 "index_unsized"
+OpName %38 "i"
+OpName %39 "v"
+OpName %40 "index_dynamic_array"
+OpDecorate %8 ArrayStride 4
+OpMemberDecorate %9 0 Offset 0
+OpDecorate %9 Block
+OpDecorate %11 DescriptorSet 0
+OpDecorate %11 Binding 0
 %2 = OpTypeVoid
-%4 = OpTypeInt 32 1
-%5 = OpTypeVector %4 2
-%6 = OpTypeInt 32 0
-%7 = OpTypeRuntimeArray %6
-%8 = OpTypeStruct %7
-%10 = OpTypePointer StorageBuffer %8
-%9 = OpVariable  %10  StorageBuffer
-%13 = OpTypeFunction %2
-%14 = OpConstant  %4  10
-%16 = OpTypePointer Function %5
-%17 = OpConstantNull  %5
+%6 = OpTypeFloat 32
+%5 = OpTypeVector %6 2
+%4 = OpTypeMatrix %5 2
+%7 = OpTypeInt 32 0
+%8 = OpTypeRuntimeArray %7
+%9 = OpTypeStruct %8
+%10 = OpTypeInt 32 1
+%12 = OpTypePointer StorageBuffer %9
+%11 = OpVariable  %12  StorageBuffer
+%15 = OpTypeFunction %2
+%16 = OpConstant  %6  10.0
+%17 = OpConstantComposite  %5  %16 %16
 %19 = OpTypePointer Function %4
-%20 = OpConstant  %6  0
-%26 = OpTypeFunction %2 %4 %6
-%28 = OpTypePointer StorageBuffer %7
-%29 = OpTypePointer StorageBuffer %6
-%12 = OpFunction  %2  None %13
-%11 = OpLabel
-%15 = OpVariable  %16  Function %17
-OpBranch %18
-%18 = OpLabel
+%20 = OpConstantNull  %4
+%22 = OpTypePointer Function %5
+%23 = OpConstant  %7  0
+%29 = OpTypeFunction %2 %10 %7
+%31 = OpTypePointer StorageBuffer %8
+%32 = OpTypePointer StorageBuffer %7
+%14 = OpFunction  %2  None %15
+%13 = OpLabel
+%18 = OpVariable  %19  Function %20
+OpBranch %21
+%21 = OpLabel
 OpLine %3 3 14
+OpLine %3 4 10
 OpLine %3 4 4
-%21 = OpAccessChain  %19  %15 %20
-OpStore %21 %14
+%24 = OpAccessChain  %22  %18 %23
+OpStore %24 %17
 OpReturn
 OpFunctionEnd
-%25 = OpFunction  %2  None %26
-%23 = OpFunctionParameter  %4
-%24 = OpFunctionParameter  %6
-%22 = OpLabel
-OpBranch %27
-%27 = OpLabel
+%28 = OpFunction  %2  None %29
+%26 = OpFunctionParameter  %10
+%27 = OpFunctionParameter  %7
+%25 = OpLabel
+OpBranch %30
+%30 = OpLabel
 OpLine %3 17 14
-%30 = OpAccessChain  %29  %9 %20 %23
-%31 = OpLoad  %6  %30
+%33 = OpAccessChain  %32  %11 %23 %26
+%34 = OpLoad  %7  %33
 OpLine %3 18 4
-%32 = OpIAdd  %6  %31 %24
+%35 = OpIAdd  %7  %34 %27
 OpLine %3 18 4
-%33 = OpAccessChain  %29  %9 %20 %23
-OpStore %33 %32
+%36 = OpAccessChain  %32  %11 %23 %26
+OpStore %36 %35
 OpReturn
 OpFunctionEnd
-%37 = OpFunction  %2  None %26
-%35 = OpFunctionParameter  %4
-%36 = OpFunctionParameter  %6
-%34 = OpLabel
-OpBranch %38
-%38 = OpLabel
+%40 = OpFunction  %2  None %29
+%38 = OpFunctionParameter  %10
+%39 = OpFunctionParameter  %7
+%37 = OpLabel
+OpBranch %41
+%41 = OpLabel
 OpLine %3 22 51
 OpLine %3 24 14
-%39 = OpAccessChain  %29  %9 %20 %35
-%40 = OpLoad  %6  %39
+%42 = OpAccessChain  %32  %11 %23 %38
+%43 = OpLoad  %7  %42
 OpLine %3 25 4
-%41 = OpIAdd  %6  %40 %36
+%44 = OpIAdd  %7  %43 %39
 OpLine %3 25 4
-%42 = OpAccessChain  %29  %9 %20 %35
-OpStore %42 %41
+%45 = OpAccessChain  %32  %11 %23 %38
+OpStore %45 %44
 OpReturn
 OpFunctionEnd
