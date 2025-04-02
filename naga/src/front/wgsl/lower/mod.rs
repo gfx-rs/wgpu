@@ -2478,10 +2478,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         "Initial overloads: {:#?}",
                         remaining_overloads.for_debug(&ctx.module.types)
                     );
+
                     let mut unconverted_arguments = Vec::with_capacity(arguments.len());
-                    for (arg_index, &arg) in arguments.iter().enumerate() {
+                    for &arg in arguments {
                         let lowered = self.expression_for_abstract(arg, ctx)?;
-                        let ty = resolve_inner!(ctx, lowered);
+                        ctx.grow_types(lowered)?;
+                        unconverted_arguments.push(lowered);
+                    }
+
+                    for (arg_index, &arg) in unconverted_arguments.iter().enumerate() {
+                        let ty = ctx.typifier()[arg].inner_with(&ctx.module.types);
                         log::debug!(
                             "Supplying argument {arg_index} of type {}",
                             crate::common::DiagnosticDisplay((ty, ctx.module.to_ctx()))
@@ -2506,7 +2512,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         if next_remaining_overloads.is_empty() {
                             let function = fun.to_wgsl_for_diagnostics();
                             let call_span = span;
-                            let arg_span = ctx.ast_expressions.get_span(arg);
+                            let arg_span = ctx.get_expression_span(arg);
                             let arg_ty = ctx.as_diagnostic_display(ty).to_string();
 
                             // Is this type *ever* permitted for the arg_index'th argument?
@@ -2609,7 +2615,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             unreachable!("Failed to eliminate argument type when re-tried");
                         }
                         remaining_overloads = next_remaining_overloads;
-                        unconverted_arguments.push(lowered);
                     }
 
                     // Select the most preferred type rule for this call,
