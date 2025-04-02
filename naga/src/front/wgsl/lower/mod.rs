@@ -2452,32 +2452,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     crate::Expression::Derivative { axis, ctrl, expr }
                 } else if let Some(fun) = conv::map_standard_fun(function.name) {
-                    let mut lowered_arguments = Vec::with_capacity(arguments.len());
-                    for &arg in arguments {
-                        let lowered = self.expression_for_abstract(arg, ctx)?;
-                        ctx.grow_types(lowered)?;
-                        lowered_arguments.push(lowered);
-                    }
-
-                    let fun_overloads = fun.overloads();
-                    let rule =
-                        self.resolve_overloads(span, fun, fun_overloads, &lowered_arguments, ctx)?;
-                    self.apply_automatic_conversions_for_call(&rule, &mut lowered_arguments, ctx)?;
-
-                    // If this function returns a predeclared type, register it
-                    // in `Module::special_types`. The typifier will expect to
-                    // be able to find it there.
-                    if let crate::proc::Conclusion::Predeclared(predeclared) = rule.conclusion {
-                        ctx.module.generate_predeclared_type(predeclared);
-                    }
-
-                    crate::Expression::Math {
-                        fun,
-                        arg: lowered_arguments[0],
-                        arg1: lowered_arguments.get(1).cloned(),
-                        arg2: lowered_arguments.get(2).cloned(),
-                        arg3: lowered_arguments.get(3).cloned(),
-                    }
+                    self.math_function_helper(span, fun, arguments, ctx)?
                 } else if let Some(fun) = Texture::map(function.name) {
                     self.texture_sample_helper(fun, arguments, span, ctx)?
                 } else if let Some((op, cop)) = conv::map_subgroup_operation(function.name) {
@@ -2958,6 +2933,50 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(Some(expr))
             }
         }
+    }
+
+    /// Generate a Naga IR [`Math`] expression.
+    ///
+    /// Generate Naga IR for a call to the [`MathFunction`] `fun`, whose
+    /// unlowered arguments are `ast_arguments`.
+    ///
+    /// The `span` argument should give the span of the function name in the
+    /// call expression.
+    ///
+    /// [`Math`]: crate::ir::Expression::Math
+    /// [`MathFunction`]: crate::ir::MathFunction
+    fn math_function_helper(
+        &mut self,
+        span: Span,
+        fun: crate::ir::MathFunction,
+        ast_arguments: &[Handle<ast::Expression<'source>>],
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, crate::ir::Expression> {
+        let mut lowered_arguments = Vec::with_capacity(ast_arguments.len());
+        for &arg in ast_arguments {
+            let lowered = self.expression_for_abstract(arg, ctx)?;
+            ctx.grow_types(lowered)?;
+            lowered_arguments.push(lowered);
+        }
+
+        let fun_overloads = fun.overloads();
+        let rule = self.resolve_overloads(span, fun, fun_overloads, &lowered_arguments, ctx)?;
+        self.apply_automatic_conversions_for_call(&rule, &mut lowered_arguments, ctx)?;
+
+        // If this function returns a predeclared type, register it
+        // in `Module::special_types`. The typifier will expect to
+        // be able to find it there.
+        if let crate::proc::Conclusion::Predeclared(predeclared) = rule.conclusion {
+            ctx.module.generate_predeclared_type(predeclared);
+        }
+
+        Ok(crate::Expression::Math {
+            fun,
+            arg: lowered_arguments[0],
+            arg1: lowered_arguments.get(1).cloned(),
+            arg2: lowered_arguments.get(2).cloned(),
+            arg3: lowered_arguments.get(3).cloned(),
+        })
     }
 
     /// Choose the right overload for a function call.
