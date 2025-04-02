@@ -40,6 +40,9 @@ Bottom level categories:
 
 ## Unreleased
 
+- Added an example that shows how to handle datasets too large to fit in a single `GPUBuffer` by distributing it across many buffers, and then having the shader receive them as a `binding_array` of storage buffers.  By @alphastrata in [#6138](https://github.com/gfx-rs/wgpu/pull/6138)
+
+
 ### Major Features
 
 #### Hashmaps Removed from APIs
@@ -186,6 +189,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 
 - Support getting vertices of the hit triangle when raytracing. By @Vecvec in [#7183](https://github.com/gfx-rs/wgpu/pull/7183) .
 
+
 #### Naga
 
 - Add support for unsigned types when calling textureLoad with the level parameter. By @ygdrasil-io in [#7058](https://github.com/gfx-rs/wgpu/pull/7058).
@@ -214,6 +218,8 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
   The original names (e.g. `naga::Module`) remain present for compatibility.
   By @kpreid in [#7365](https://github.com/gfx-rs/wgpu/pull/7365).
 - Refactored `use` statements to simplify future `no_std` support. By @bushrat011899 in [#7256](https://github.com/gfx-rs/wgpu/pull/7256)
+- Naga's WGSL frontend no longer allows using the `&` operator to take the address of a component of a vector,
+  which is not permitted by the WGSL specification. By @andyleiserson in [#7284](https://github.com/gfx-rs/wgpu/pull/7284)
 
 #### Vulkan
 
@@ -233,6 +239,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 - Allow WGSL const declarations to have abstract types. By @jamienicol in [#7055](https://github.com/gfx-rs/wgpu/pull/7055) and [#7222](https://github.com/gfx-rs/wgpu/pull/7222).
 - Allows override-sized arrays to resolve to the same size without causing the type arena to panic. By @KentSlaney in [#7082](https://github.com/gfx-rs/wgpu/pull/7082).
 - Allow abstract types to be used for WGSL switch statement selector and case selector expressions. By @jamienicol in [#7250](https://github.com/gfx-rs/wgpu/pull/7250).
+- Apply automatic conversions to `let` declarations, and accept `vecN()` as a constructor for vectors (in any context). By @andyleiserson in [#7367](https://github.com/gfx-rs/wgpu/pull/7367).
 
 #### General
 

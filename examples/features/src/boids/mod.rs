@@ -265,9 +265,7 @@ impl crate::framework::Example for Example {
             view,
             resolve_target: None,
             ops: wgpu::Operations {
-                // Not clearing here in order to test wgpu's zero texture initialization on a surface texture.
-                // Users should avoid loading uninitialized memory since this can cause additional overhead.
-                load: wgpu::LoadOp::Load,
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                 store: wgpu::StoreOp::Store,
             },
         })];

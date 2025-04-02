@@ -6,10 +6,10 @@ struct DynamicArray {
 var<storage, read_write> dynamic_array: DynamicArray;
 
 fn f() {
-    var v: vec2<i32>;
+    var v: mat2x2<f32>;
 
-    let px = (&v.x);
-    (*px) = 10i;
+    let px = (&v[0]);
+    (*px) = vec2(10f);
     return;
 }
 

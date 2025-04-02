@@ -179,8 +179,8 @@ fn member_ptr() -> i32 {
 }
 
 fn let_members_of_members() -> i32 {
-    const inner_1 = Outer().om_nom_nom;
-    const delishus_1 = inner_1.delicious;
+    let inner_1 = Outer().om_nom_nom;
+    let delishus_1 = inner_1.delicious;
     if (Outer().thing != u32(delishus_1)) {
     }
     return Outer().om_nom_nom.delicious;

@@ -1490,41 +1490,39 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let mut emitter = Emitter::default();
                     emitter.start(&ctx.function.expressions);
 
-                    let value =
-                        self.expression(l.init, &mut ctx.as_expression(block, &mut emitter))?;
+                    let explicit_ty = l
+                        .ty
+                        .map(|ty| self.resolve_ast_type(ty, &mut ctx.as_const(block, &mut emitter)))
+                        .transpose()?;
+
+                    let mut ectx = ctx.as_expression(block, &mut emitter);
+
+                    let (_ty, initializer) = self.type_and_init(
+                        l.name,
+                        Some(l.init),
+                        explicit_ty,
+                        AbstractRule::Concretize,
+                        &mut ectx,
+                    )?;
+
+                    // We passed `Some()` to `type_and_init`, so we
+                    // will get a lowered initializer expression back.
+                    let initializer =
+                        initializer.expect("type_and_init did not return an initializer");
 
                     // The WGSL spec says that any expression that refers to a
                     // `let`-bound variable is not a const expression. This
                     // affects when errors must be reported, so we can't even
                     // treat suitable `let` bindings as constant as an
                     // optimization.
-                    ctx.local_expression_kind_tracker.force_non_const(value);
-
-                    let explicit_ty = l
-                        .ty
-                        .map(|ty| self.resolve_ast_type(ty, &mut ctx.as_const(block, &mut emitter)))
-                        .transpose()?;
-
-                    if let Some(ty) = explicit_ty {
-                        let mut ctx = ctx.as_expression(block, &mut emitter);
-                        let init_ty = ctx.register_type(value)?;
-                        if !ctx.module.types[ty]
-                            .inner
-                            .equivalent(&ctx.module.types[init_ty].inner, &ctx.module.types)
-                        {
-                            return Err(Box::new(Error::InitializationTypeMismatch {
-                                name: l.name.span,
-                                expected: ctx.type_to_string(ty),
-                                got: ctx.type_to_string(init_ty),
-                            }));
-                        }
-                    }
+                    ctx.local_expression_kind_tracker
+                        .force_non_const(initializer);
 
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
-                        .insert(l.handle, Declared::Runtime(Typed::Plain(value)));
+                        .insert(l.handle, Declared::Runtime(Typed::Plain(initializer)));
                     ctx.named_expressions
-                        .insert(value, (l.name.name.to_string(), l.name.span));
+                        .insert(initializer, (l.name.name.to_string(), l.name.span));
 
                     return Ok(());
                 }
@@ -1604,7 +1602,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_const()))
                             .transpose()?;
 
-                    let (ty, init) = self.type_and_init(
+                    let (_ty, init) = self.type_and_init(
                         c.name,
                         Some(c.init),
                         explicit_ty,
@@ -1616,13 +1614,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     block.extend(emitter.finish(&ctx.function.expressions));
                     ctx.local_table
                         .insert(c.handle, Declared::Const(Typed::Plain(init)));
-                    // Only add constants of non-abstract types to the named expressions
-                    // to prevent abstract types ending up in the IR.
-                    let is_abstract = ctx.module.types[ty].inner.is_abstract(&ctx.module.types);
-                    if !is_abstract {
-                        ctx.named_expressions
-                            .insert(init, (c.name.name.to_string(), c.name.span));
-                    }
                     return Ok(());
                 }
             },
@@ -2077,6 +2068,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 // reference is required, the Load Rule is not applied.
                 match self.expression_for_reference(expr, ctx)? {
                     Typed::Reference(handle) => {
+                        let expr = &ctx.runtime_expression_ctx(span)?.function.expressions[handle];
+                        if let &crate::Expression::Access { base, .. }
+                        | &crate::Expression::AccessIndex { base, .. } = expr
+                        {
+                            if let Some(ty) = resolve_inner!(ctx, base).pointer_base_type() {
+                                if matches!(
+                                    *ty.inner_with(&ctx.module.types),
+                                    crate::TypeInner::Vector { .. },
+                                ) {
+                                    return Err(Box::new(Error::InvalidAddrOfOperand(
+                                        ctx.get_expression_span(handle),
+                                    )));
+                                }
+                            }
+                        }
                         // No code is generated. We just declare the reference a pointer now.
                         return Ok(Typed::Plain(handle));
                     }
@@ -2149,30 +2155,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                 }
 
-                let temp_inner;
+                let temp_ty;
                 let composite_type: &crate::TypeInner = match lowered_base {
                     Typed::Reference(handle) => {
-                        let inner = resolve_inner!(ctx, handle);
-                        match *inner {
-                            crate::TypeInner::Pointer { base, .. } => &ctx.module.types[base].inner,
-                            crate::TypeInner::ValuePointer {
-                                size: None, scalar, ..
-                            } => {
-                                temp_inner = crate::TypeInner::Scalar(scalar);
-                                &temp_inner
-                            }
-                            crate::TypeInner::ValuePointer {
-                                size: Some(size),
-                                scalar,
-                                ..
-                            } => {
-                                temp_inner = crate::TypeInner::Vector { size, scalar };
-                                &temp_inner
-                            }
-                            _ => unreachable!(
-                                "In Typed::Reference(handle), handle must be a Naga pointer"
-                            ),
-                        }
+                        temp_ty = resolve_inner!(ctx, handle)
+                            .pointer_base_type()
+                            .expect("In Typed::Reference(handle), handle must be a Naga pointer");
+                        temp_ty.inner_with(&ctx.module.types)
                     }
 
                     Typed::Plain(handle) => {

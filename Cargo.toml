@@ -68,7 +68,6 @@ wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features
     "dx12",
     "metal",
     "static-dxc",
-    "webgl",
     "noop",       # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
 wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
@@ -108,13 +107,13 @@ flume = "0.11"
 futures-lite = "2"
 glam = "0.29"
 half = "2.5" # We require 2.5 to have `Arbitrary` support.
-hashbrown = { version = "0.14.5", default-features = false, features = [
-    "ahash",
+hashbrown = { version = "0.15.2", default-features = false, features = [
+    "default-hasher",
     "inline-more",
 ] }
 heck = "0.5.0"
 image = { version = "0.24", default-features = false, features = ["png"] }
-indexmap = { version = "2.5.0", default-features = false }
+indexmap = { version = "2.7.1", default-features = false }
 itertools = { version = "0.13.0" }
 ktx2 = "0.3"
 libc = { version = "0.2", default-features = false }
@@ -126,7 +125,7 @@ noise = "0.9"
 nv-flip = "0.1"
 obj = "0.10"
 # NOTE: once_cell/std is *required* for some commonly-used features, selecting this per crate
-once_cell = { version = "1.21.1", default-features = false }
+once_cell = { version = "1.21.3", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3,<=4.6", default-features = false }
 parking_lot = "0.12.1"

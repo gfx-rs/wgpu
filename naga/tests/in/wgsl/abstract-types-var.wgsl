@@ -15,12 +15,19 @@
 var<private> xvipaiai: vec2<i32> = vec2(42, 43);
 var<private> xvupaiai: vec2<u32> = vec2(44, 45);
 var<private> xvfpaiai: vec2<f32> = vec2(46, 47);
+var<private> xvfpafaf: vec2<f32> = vec2(48.0, 49.0);
+var<private> xvfpaiaf: vec2<f32> = vec2(48, 49.0);
 
 var<private> xvupuai: vec2<u32> = vec2(42u, 43);
 var<private> xvupaiu: vec2<u32> = vec2(42, 43u); 
 
 var<private> xvuuai: vec2<u32> = vec2<u32>(42u, 43);
 var<private> xvuaiu: vec2<u32> = vec2<u32>(42, 43u);
+
+var<private> xvip____: vec2<i32> = vec2();
+var<private> xvup____: vec2<u32> = vec2();
+var<private> xvfp____: vec2<f32> = vec2();
+var<private> xmfp____: mat2x2f = mat2x2(vec2(), vec2());
 
 var<private> xmfpaiaiaiai: mat2x2<f32> = mat2x2(1, 2, 3, 4);
 var<private> xmfpafaiaiai: mat2x2<f32> = mat2x2(1.0, 2, 3, 4);
@@ -38,7 +45,8 @@ var<private> xvfs_af: vec2<f32> = vec2<f32>(1.0);
 var<private> xafafaf: array<f32, 2> = array<f32, 2>(1.0, 2.0);
 var<private> xafaiai: array<f32, 2> = array<f32, 2>(1, 2);
 
-var<private> xafpaiai: array<i32, 2> = array(1,   2);
+var<private> xaipaiai: array<i32, 2> = array(1,   2);
+var<private> xaupaiai: array<u32, 2> = array(1,   2);
 var<private> xafpaiaf: array<f32, 2> = array(1,   2.0);
 var<private> xafpafai: array<f32, 2> = array(1.0, 2);
 var<private> xafpafaf: array<f32, 2> = array(1.0, 2.0);
@@ -46,6 +54,12 @@ var<private> xafpafaf: array<f32, 2> = array(1.0, 2.0);
 var<private> xavipai: array<vec3<i32>, 1> = array(vec3(1));
 var<private> xavfpai: array<vec3<f32>, 1> = array(vec3(1));
 var<private> xavfpaf: array<vec3<f32>, 1> = array(vec3(1.0));
+
+// Construction with splats
+var<private> xvisai: vec2<i32> = vec2(1);
+var<private> xvusai: vec2<u32> = vec2(1);
+var<private> xvfsai: vec2<f32> = vec2(1);
+var<private> xvfsaf: vec2<f32> = vec2(1.0);
 
 var<private> ivispai = vec2(1);
 var<private> ivfspaf = vec2(1.0);
@@ -70,12 +84,19 @@ fn all_constant_arguments() {
     var xvipaiai: vec2<i32> = vec2(42, 43);
     var xvupaiai: vec2<u32> = vec2(44, 45);
     var xvfpaiai: vec2<f32> = vec2(46, 47);
+    var xvfpafaf: vec2<f32> = vec2(48.0, 49.0);
+    var xvfpaiaf: vec2<f32> = vec2(48, 49.0);
 
     var xvupuai: vec2<u32> = vec2(42u, 43);
     var xvupaiu: vec2<u32> = vec2(42, 43u);
 
     var xvuuai: vec2<u32> = vec2<u32>(42u, 43);
     var xvuaiu: vec2<u32> = vec2<u32>(42, 43u);
+
+    var xvip____: vec2<i32> = vec2();
+    var xvup____: vec2<u32> = vec2();
+    var xvfp____: vec2<f32> = vec2();
+    var xmfp____: mat2x2f = mat2x2(vec2(), vec2());
 
     var xmfpaiaiaiai: mat2x2<f32> = mat2x2(1, 2, 3, 4);
     var xmfpafaiaiai: mat2x2<f32> = mat2x2(1.0, 2, 3, 4);
@@ -112,6 +133,12 @@ fn all_constant_arguments() {
     var xavfpai: array<vec3<f32>, 1> = array(vec3(1));
     var xavfpaf: array<vec3<f32>, 1> = array(vec3(1.0));
 
+    // Construction with splats
+    var xvisai: vec2<i32> = vec2(1);
+    var xvusai: vec2<u32> = vec2(1);
+    var xvfsai: vec2<f32> = vec2(1);
+    var xvfsaf: vec2<f32> = vec2(1.0);
+
     var iaipaiai = array(1,   2);
     var iafpaiaf = array(1,   2.0);
     var iafpafai = array(1.0, 2);
@@ -121,12 +148,19 @@ fn all_constant_arguments() {
     xvipaiai = vec2(42, 43);
     xvupaiai = vec2(44, 45);
     xvfpaiai = vec2(46, 47);
+    xvfpafaf = vec2(48.0, 49.0);
+    xvfpaiaf = vec2(48, 49.0);
 
     xvupuai = vec2(42u, 43);
     xvupaiu = vec2(42, 43u);
 
     xvuuai = vec2<u32>(42u, 43);
     xvuaiu = vec2<u32>(42, 43u);
+
+    xvip____ = vec2();
+    xvup____ = vec2();
+    xvfp____ = vec2();
+    xmfp____ = mat2x2(vec2(), vec2());
 
     xmfpaiaiaiai = mat2x2(1, 2, 3, 4);
     xmfpafaiaiai = mat2x2(1.0, 2, 3, 4);
@@ -163,6 +197,12 @@ fn all_constant_arguments() {
     xavfpai = array(vec3(1));
     xavfpaf = array(vec3(1.0));
 
+    // Construction with splats
+    xvisai = vec2(1);
+    xvusai = vec2(1);
+    xvfsai = vec2(1);
+    xvfsaf = vec2(1.0);
+
     iaipaiai = array(1,   2);
     iafpaiaf = array(1,   2.0);
     iafpafai = array(1.0, 2);
@@ -176,6 +216,8 @@ fn mixed_constant_and_runtime_arguments() {
 
     var xvupuai: vec2<u32> = vec2(u,  43);
     var xvupaiu: vec2<u32> = vec2(42, u);
+    var xvfpfai: vec2<f32> = vec2(f, 47); // differs slightly from const version
+    var xvfpfaf: vec2<f32> = vec2(f, 49.0);
 
     var xvuuai: vec2<u32> = vec2<u32>(u, 43);
     var xvuaiu: vec2<u32> = vec2<u32>(42, u);
@@ -198,6 +240,10 @@ fn mixed_constant_and_runtime_arguments() {
     var xafpai_f: array<f32, 2> = array(1, f);
     var xaip_iai: array<i32, 2> = array(i, 2);
     var xaipai_i: array<i32, 2> = array(1, i);
+
+    var xvisi: vec2<i32> = vec2(i);
+    var xvusu: vec2<u32> = vec2(u);
+    var xvfsf: vec2<f32> = vec2(f);
 
     // Assignments to all of the above.
     xvupuai = vec2(u,  43);
@@ -224,4 +270,8 @@ fn mixed_constant_and_runtime_arguments() {
     xafpai_f = array(1, f);
     xaip_iai = array(i, 2);
     xaipai_i = array(1, i);
+
+    xvisi = vec2(i);
+    xvusu = vec2(u);
+    xvfsf = vec2(f);
 }

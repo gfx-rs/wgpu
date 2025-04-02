@@ -215,6 +215,7 @@ pub(crate) enum Error<'a> {
     },
     DeclMissingTypeAndInit(Span),
     MissingAttribute(&'static str, Span),
+    InvalidAddrOfOperand(Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
     InvalidRayQueryPointer(Span),
@@ -674,6 +675,11 @@ impl<'a> Error<'a> {
                     name_span,
                     format!("definition of `{}`", &source[name_span]).into(),
                 )],
+                notes: vec![],
+            },
+            Error::InvalidAddrOfOperand(span) => ParseError {
+                message: "cannot take the address of a vector component".to_string(),
+                labels: vec![(span, "invalid operand for address-of".into())],
                 notes: vec![],
             },
             Error::InvalidAtomicPointer(span) => ParseError {

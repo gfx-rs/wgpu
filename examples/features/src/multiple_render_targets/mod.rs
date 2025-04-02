@@ -454,12 +454,12 @@ impl crate::framework::Example for Example {
             // output textures:
             &[
                 Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: config.view_formats[0],
                     blend: None,
                     write_mask: Default::default(),
                 }),
                 Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: config.view_formats[0],
                     blend: None,
                     write_mask: Default::default(),
                 }),
@@ -468,10 +468,11 @@ impl crate::framework::Example for Example {
 
         // create our target textures that will receive the simultaneous rendering:
         let texture_targets =
-            TextureTargets::new(device, config.format, config.width, config.height);
+            TextureTargets::new(device, config.view_formats[0], config.width, config.height);
 
         // helper renderer that displays the results in 2 separate viewports:
-        let drawer = TargetRenderer::init(device, &shader, config.format, &texture_targets);
+        let drawer =
+            TargetRenderer::init(device, &shader, config.view_formats[0], &texture_targets);
 
         Self {
             texture_targets,
@@ -491,7 +492,7 @@ impl crate::framework::Example for Example {
         self.screen_width = config.width;
         self.screen_height = config.height;
         self.texture_targets =
-            TextureTargets::new(device, config.format, config.width, config.height);
+            TextureTargets::new(device, config.view_formats[0], config.width, config.height);
         self.drawer.rebuild_resources(device, &self.texture_targets);
     }
 
