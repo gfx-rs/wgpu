@@ -2452,8 +2452,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     crate::Expression::Derivative { axis, ctrl, expr }
                 } else if let Some(fun) = conv::map_standard_fun(function.name) {
-                    use crate::proc::OverloadSet as _;
-
                     let mut lowered_arguments = Vec::with_capacity(arguments.len());
                     for &arg in arguments {
                         let lowered = self.expression_for_abstract(arg, ctx)?;
@@ -2462,163 +2460,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
 
                     let fun_overloads = fun.overloads();
-                    let mut remaining_overloads = fun_overloads.clone();
-                    let min_arguments = remaining_overloads.min_arguments();
-                    let max_arguments = remaining_overloads.max_arguments();
-                    if lowered_arguments.len() < min_arguments {
-                        return Err(Box::new(Error::WrongArgumentCount {
-                            span,
-                            expected: min_arguments as u32..max_arguments as u32,
-                            found: lowered_arguments.len() as u32,
-                        }));
-                    }
-                    if lowered_arguments.len() > max_arguments {
-                        return Err(Box::new(Error::TooManyArguments {
-                            function: fun.to_wgsl_for_diagnostics(),
-                            call_span: span,
-                            arg_span: ctx.get_expression_span(lowered_arguments[max_arguments]),
-                            max_arguments: max_arguments as _,
-                        }));
-                    }
-
-                    log::debug!(
-                        "Initial overloads: {:#?}",
-                        remaining_overloads.for_debug(&ctx.module.types)
-                    );
-
-                    for (arg_index, &arg) in lowered_arguments.iter().enumerate() {
-                        let ty = ctx.typifier()[arg].inner_with(&ctx.module.types);
-                        log::debug!(
-                            "Supplying argument {arg_index} of type {}",
-                            crate::common::DiagnosticDisplay((ty, ctx.module.to_ctx()))
-                        );
-                        let next_remaining_overloads =
-                            remaining_overloads.arg(arg_index, ty, &ctx.module.types);
-
-                        // If any argument is not a constant expression, then no overloads
-                        // that accept abstract values should be considered.
-                        // (`OverloadSet::concrete_only` is supposed to help impose this
-                        // restriction.) However, no `MathFunction` accepts a mix of
-                        // abstract and concrete arguments, so we don't need to worry
-                        // about that here.
-
-                        log::debug!(
-                            "Remaining overloads: {:#?}",
-                            next_remaining_overloads.for_debug(&ctx.module.types)
-                        );
-
-                        // If the set of remaining overloads is empty, then this argument's type
-                        // was unacceptable. Diagnose the problem and produce an error message.
-                        if next_remaining_overloads.is_empty() {
-                            let function = fun.to_wgsl_for_diagnostics();
-                            let call_span = span;
-                            let arg_span = ctx.get_expression_span(arg);
-                            let arg_ty = ctx.as_diagnostic_display(ty).to_string();
-
-                            // Is this type *ever* permitted for the arg_index'th argument?
-                            // For example, `bool` is never permitted for `max`.
-                            let only_this_argument =
-                                fun_overloads.arg(arg_index, ty, &ctx.module.types);
-                            if only_this_argument.is_empty() {
-                                // No overload of `fun` accepts this type as the
-                                // arg_index'th argument. Determine the set of types that
-                                // would ever be allowed there.
-                                let allowed: Vec<String> = fun_overloads
-                                    .allowed_args(arg_index, &ctx.module.to_ctx())
-                                    .iter()
-                                    .map(|ty| ctx.type_resolution_to_string(ty))
-                                    .collect();
-
-                                if allowed.is_empty() {
-                                    // No overload of `fun` accepts any argument at this
-                                    // index, so it's a simple case of excess arguments.
-                                    // However, since each `MathFunction`'s overloads all
-                                    // have the same arity, we should have detected this
-                                    // earlier.
-                                    unreachable!("expected all overloads to have the same arity");
-                                }
-
-                                // Some overloads of `fun` do accept this many arguments,
-                                // but none accept one of this type.
-                                return Err(Box::new(Error::WrongArgumentType {
-                                    function,
-                                    call_span,
-                                    arg_span,
-                                    arg_index: arg_index as u32,
-                                    arg_ty,
-                                    allowed,
-                                }));
-                            }
-
-                            // This argument's type is accepted by some overloads---just
-                            // not those overloads that remain, given the prior arguments.
-                            // For example, `max` accepts `f32` as its second argument -
-                            // but not if the first was `i32`.
-
-                            // Build a list of the types that would have been accepted here,
-                            // given the prior arguments.
-                            let allowed: Vec<String> = remaining_overloads
-                                .allowed_args(arg_index, &ctx.module.to_ctx())
-                                .iter()
-                                .map(|ty| ctx.type_resolution_to_string(ty))
-                                .collect();
-
-                            // Re-run the argument list to determine which prior argument
-                            // made this one unacceptable.
-                            let mut remaining_overloads = fun_overloads;
-                            for (prior_index, &prior_expr) in lowered_arguments.iter().enumerate() {
-                                let prior_ty =
-                                    ctx.typifier()[prior_expr].inner_with(&ctx.module.types);
-                                remaining_overloads = remaining_overloads.arg(
-                                    prior_index,
-                                    prior_ty,
-                                    &ctx.module.types,
-                                );
-                                if remaining_overloads
-                                    .arg(arg_index, ty, &ctx.module.types)
-                                    .is_empty()
-                                {
-                                    // This is the argument that killed our dreams.
-                                    let inconsistent_span =
-                                        ctx.get_expression_span(lowered_arguments[prior_index]);
-                                    let inconsistent_ty =
-                                        ctx.as_diagnostic_display(prior_ty).to_string();
-
-                                    if allowed.is_empty() {
-                                        // Some overloads did accept `ty` at `arg_index`, but
-                                        // given the arguments up through `prior_expr`, we see
-                                        // no types acceptable at `arg_index`. This means that some
-                                        // overloads expect fewer arguments than others. However,
-                                        // each `MathFunction`'s overloads have the same arity, so this
-                                        // should be impossible.
-                                        unreachable!(
-                                            "expected all overloads to have the same arity"
-                                        );
-                                    }
-
-                                    // Report `arg`'s type as inconsistent with `prior_expr`'s
-                                    return Err(Box::new(Error::InconsistentArgumentType {
-                                        function,
-                                        call_span,
-                                        arg_span,
-                                        arg_index: arg_index as u32,
-                                        arg_ty,
-                                        inconsistent_span,
-                                        inconsistent_index: prior_index as u32,
-                                        inconsistent_ty,
-                                        allowed,
-                                    }));
-                                }
-                            }
-                            unreachable!("Failed to eliminate argument type when re-tried");
-                        }
-                        remaining_overloads = next_remaining_overloads;
-                    }
-
-                    // Select the most preferred type rule for this call,
-                    // given the argument types supplied above.
-                    let rule = remaining_overloads.most_preferred();
-
+                    let rule =
+                        self.resolve_overloads(span, fun, fun_overloads, &lowered_arguments, ctx)?;
                     self.apply_automatic_conversions_for_call(&rule, &mut lowered_arguments, ctx)?;
 
                     // If this function returns a predeclared type, register it
@@ -3115,6 +2958,178 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(Some(expr))
             }
         }
+    }
+
+    /// Choose the right overload for a function call.
+    ///
+    /// Return a [`Rule`] representing the most preferred overload in
+    /// `overloads` to apply to `arguments`, or return an error explaining why
+    /// the call is not valid.
+    ///
+    /// Use `fun` to identify the function being called in error messages;
+    /// `span` should be the span of the function name in the call expression.
+    ///
+    /// [`Rule`]: crate::proc::Rule
+    fn resolve_overloads<O, F>(
+        &self,
+        span: Span,
+        fun: F,
+        fun_overloads: O,
+        lowered_arguments: &[Handle<crate::ir::Expression>],
+        ctx: &ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, crate::proc::Rule>
+    where
+        O: crate::proc::OverloadSet,
+        F: TryToWgsl + core::fmt::Debug + Copy,
+    {
+        let mut remaining_overloads = fun_overloads.clone();
+        let min_arguments = remaining_overloads.min_arguments();
+        let max_arguments = remaining_overloads.max_arguments();
+        if lowered_arguments.len() < min_arguments {
+            return Err(Box::new(Error::WrongArgumentCount {
+                span,
+                expected: min_arguments as u32..max_arguments as u32,
+                found: lowered_arguments.len() as u32,
+            }));
+        }
+        if lowered_arguments.len() > max_arguments {
+            return Err(Box::new(Error::TooManyArguments {
+                function: fun.to_wgsl_for_diagnostics(),
+                call_span: span,
+                arg_span: ctx.get_expression_span(lowered_arguments[max_arguments]),
+                max_arguments: max_arguments as _,
+            }));
+        }
+
+        log::debug!(
+            "Initial overloads: {:#?}",
+            remaining_overloads.for_debug(&ctx.module.types)
+        );
+
+        for (arg_index, &arg) in lowered_arguments.iter().enumerate() {
+            let ty = ctx.typifier()[arg].inner_with(&ctx.module.types);
+            log::debug!(
+                "Supplying argument {arg_index} of type {}",
+                crate::common::DiagnosticDisplay((ty, ctx.module.to_ctx()))
+            );
+            let next_remaining_overloads =
+                remaining_overloads.arg(arg_index, ty, &ctx.module.types);
+
+            // If any argument is not a constant expression, then no overloads
+            // that accept abstract values should be considered.
+            // (`OverloadSet::concrete_only` is supposed to help impose this
+            // restriction.) However, no `MathFunction` accepts a mix of
+            // abstract and concrete arguments, so we don't need to worry
+            // about that here.
+
+            log::debug!(
+                "Remaining overloads: {:#?}",
+                next_remaining_overloads.for_debug(&ctx.module.types)
+            );
+
+            // If the set of remaining overloads is empty, then this argument's type
+            // was unacceptable. Diagnose the problem and produce an error message.
+            if next_remaining_overloads.is_empty() {
+                let function = fun.to_wgsl_for_diagnostics();
+                let call_span = span;
+                let arg_span = ctx.get_expression_span(arg);
+                let arg_ty = ctx.as_diagnostic_display(ty).to_string();
+
+                // Is this type *ever* permitted for the arg_index'th argument?
+                // For example, `bool` is never permitted for `max`.
+                let only_this_argument = fun_overloads.arg(arg_index, ty, &ctx.module.types);
+                if only_this_argument.is_empty() {
+                    // No overload of `fun` accepts this type as the
+                    // arg_index'th argument. Determine the set of types that
+                    // would ever be allowed there.
+                    let allowed: Vec<String> = fun_overloads
+                        .allowed_args(arg_index, &ctx.module.to_ctx())
+                        .iter()
+                        .map(|ty| ctx.type_resolution_to_string(ty))
+                        .collect();
+
+                    if allowed.is_empty() {
+                        // No overload of `fun` accepts any argument at this
+                        // index, so it's a simple case of excess arguments.
+                        // However, since each `MathFunction`'s overloads all
+                        // have the same arity, we should have detected this
+                        // earlier.
+                        unreachable!("expected all overloads to have the same arity");
+                    }
+
+                    // Some overloads of `fun` do accept this many arguments,
+                    // but none accept one of this type.
+                    return Err(Box::new(Error::WrongArgumentType {
+                        function,
+                        call_span,
+                        arg_span,
+                        arg_index: arg_index as u32,
+                        arg_ty,
+                        allowed,
+                    }));
+                }
+
+                // This argument's type is accepted by some overloads---just
+                // not those overloads that remain, given the prior arguments.
+                // For example, `max` accepts `f32` as its second argument -
+                // but not if the first was `i32`.
+
+                // Build a list of the types that would have been accepted here,
+                // given the prior arguments.
+                let allowed: Vec<String> = remaining_overloads
+                    .allowed_args(arg_index, &ctx.module.to_ctx())
+                    .iter()
+                    .map(|ty| ctx.type_resolution_to_string(ty))
+                    .collect();
+
+                // Re-run the argument list to determine which prior argument
+                // made this one unacceptable.
+                let mut remaining_overloads = fun_overloads;
+                for (prior_index, &prior_expr) in lowered_arguments.iter().enumerate() {
+                    let prior_ty = ctx.typifier()[prior_expr].inner_with(&ctx.module.types);
+                    remaining_overloads =
+                        remaining_overloads.arg(prior_index, prior_ty, &ctx.module.types);
+                    if remaining_overloads
+                        .arg(arg_index, ty, &ctx.module.types)
+                        .is_empty()
+                    {
+                        // This is the argument that killed our dreams.
+                        let inconsistent_span =
+                            ctx.get_expression_span(lowered_arguments[prior_index]);
+                        let inconsistent_ty = ctx.as_diagnostic_display(prior_ty).to_string();
+
+                        if allowed.is_empty() {
+                            // Some overloads did accept `ty` at `arg_index`, but
+                            // given the arguments up through `prior_expr`, we see
+                            // no types acceptable at `arg_index`. This means that some
+                            // overloads expect fewer arguments than others. However,
+                            // each `MathFunction`'s overloads have the same arity, so this
+                            // should be impossible.
+                            unreachable!("expected all overloads to have the same arity");
+                        }
+
+                        // Report `arg`'s type as inconsistent with `prior_expr`'s
+                        return Err(Box::new(Error::InconsistentArgumentType {
+                            function,
+                            call_span,
+                            arg_span,
+                            arg_index: arg_index as u32,
+                            arg_ty,
+                            inconsistent_span,
+                            inconsistent_index: prior_index as u32,
+                            inconsistent_ty,
+                            allowed,
+                        }));
+                    }
+                }
+                unreachable!("Failed to eliminate argument type when re-tried");
+            }
+            remaining_overloads = next_remaining_overloads;
+        }
+
+        // Select the most preferred type rule for this call,
+        // given the argument types supplied above.
+        Ok(remaining_overloads.most_preferred())
     }
 
     /// Apply automatic type conversions for a function call.
