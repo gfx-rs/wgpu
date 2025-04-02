@@ -2454,29 +2454,29 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 } else if let Some(fun) = conv::map_standard_fun(function.name) {
                     use crate::proc::OverloadSet as _;
 
-                    let mut unconverted_arguments = Vec::with_capacity(arguments.len());
+                    let mut lowered_arguments = Vec::with_capacity(arguments.len());
                     for &arg in arguments {
                         let lowered = self.expression_for_abstract(arg, ctx)?;
                         ctx.grow_types(lowered)?;
-                        unconverted_arguments.push(lowered);
+                        lowered_arguments.push(lowered);
                     }
 
                     let fun_overloads = fun.overloads();
                     let mut remaining_overloads = fun_overloads.clone();
                     let min_arguments = remaining_overloads.min_arguments();
                     let max_arguments = remaining_overloads.max_arguments();
-                    if unconverted_arguments.len() < min_arguments {
+                    if lowered_arguments.len() < min_arguments {
                         return Err(Box::new(Error::WrongArgumentCount {
                             span,
                             expected: min_arguments as u32..max_arguments as u32,
-                            found: unconverted_arguments.len() as u32,
+                            found: lowered_arguments.len() as u32,
                         }));
                     }
-                    if unconverted_arguments.len() > max_arguments {
+                    if lowered_arguments.len() > max_arguments {
                         return Err(Box::new(Error::TooManyArguments {
                             function: fun.to_wgsl_for_diagnostics(),
                             call_span: span,
-                            arg_span: ctx.get_expression_span(unconverted_arguments[max_arguments]),
+                            arg_span: ctx.get_expression_span(lowered_arguments[max_arguments]),
                             max_arguments: max_arguments as _,
                         }));
                     }
@@ -2486,7 +2486,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         remaining_overloads.for_debug(&ctx.module.types)
                     );
 
-                    for (arg_index, &arg) in unconverted_arguments.iter().enumerate() {
+                    for (arg_index, &arg) in lowered_arguments.iter().enumerate() {
                         let ty = ctx.typifier()[arg].inner_with(&ctx.module.types);
                         log::debug!(
                             "Supplying argument {arg_index} of type {}",
@@ -2566,9 +2566,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             // Re-run the argument list to determine which prior argument
                             // made this one unacceptable.
                             let mut remaining_overloads = fun_overloads;
-                            for (prior_index, &prior_expr) in
-                                unconverted_arguments.iter().enumerate()
-                            {
+                            for (prior_index, &prior_expr) in lowered_arguments.iter().enumerate() {
                                 let prior_ty =
                                     ctx.typifier()[prior_expr].inner_with(&ctx.module.types);
                                 remaining_overloads = remaining_overloads.arg(
@@ -2582,7 +2580,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 {
                                     // This is the argument that killed our dreams.
                                     let inconsistent_span =
-                                        ctx.get_expression_span(unconverted_arguments[prior_index]);
+                                        ctx.get_expression_span(lowered_arguments[prior_index]);
                                     let inconsistent_ty =
                                         ctx.as_diagnostic_display(prior_ty).to_string();
 
@@ -2621,8 +2619,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // given the argument types supplied above.
                     let rule = remaining_overloads.most_preferred();
 
-                    let mut converted_arguments = Vec::with_capacity(unconverted_arguments.len());
-                    for (i, &unconverted) in unconverted_arguments.iter().enumerate() {
+                    let mut converted_arguments = Vec::with_capacity(lowered_arguments.len());
+                    for (i, &unconverted) in lowered_arguments.iter().enumerate() {
                         let goal_inner = rule.arguments[i].inner_with(&ctx.module.types);
                         let converted = match goal_inner.scalar_for_conversions(&ctx.module.types) {
                             Some(goal_scalar) => {
