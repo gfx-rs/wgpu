@@ -1642,7 +1642,7 @@ impl crate::Device for super::Device {
                 panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
             },
             crate::ShaderInput::Msl { .. } => {
-                panic!("MLS_SHADER_PASSTHROUGH is not enabled for this backend")
+                panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
             }
         }
     }
