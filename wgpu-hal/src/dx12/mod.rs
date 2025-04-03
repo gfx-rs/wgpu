@@ -89,6 +89,7 @@ mod view;
 use std::{borrow::ToOwned as _, ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc, vec::Vec};
 
 use arrayvec::ArrayVec;
+use gpu_allocator::d3d12::Allocator;
 use parking_lot::{Mutex, RwLock};
 use windows::{
     core::{Free, Interface},
@@ -651,7 +652,7 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
-    mem_allocator: Arc<Mutex<suballocation::GpuAllocatorWrapper>>,
+    mem_allocator: Arc<Mutex<Allocator>>,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     counters: Arc<wgt::HalCounters>,
 }
@@ -793,7 +794,7 @@ pub struct CommandEncoder {
     allocator: Direct3D12::ID3D12CommandAllocator,
     device: Direct3D12::ID3D12Device,
     shared: Arc<DeviceShared>,
-    mem_allocator: Arc<Mutex<suballocation::GpuAllocatorWrapper>>,
+    mem_allocator: Arc<Mutex<Allocator>>,
 
     null_rtv_handle: descriptor::Handle,
     list: Option<Direct3D12::ID3D12GraphicsCommandList>,

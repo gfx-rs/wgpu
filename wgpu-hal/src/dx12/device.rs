@@ -52,10 +52,7 @@ impl super::Device {
             auxil::dxgi::exception::register_exception_handler();
         }
 
-        let mem_allocator = Arc::new(super::suballocation::create_allocator_wrapper(
-            &raw,
-            memory_hints,
-        )?);
+        let mem_allocator = Arc::new(super::suballocation::create_allocator(&raw, memory_hints)?);
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -2344,7 +2341,7 @@ impl crate::Device for super::Device {
     }
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
-        let mut upstream = self.mem_allocator.lock().allocator.generate_report();
+        let mut upstream = self.mem_allocator.lock().generate_report();
 
         let allocations = upstream
             .allocations

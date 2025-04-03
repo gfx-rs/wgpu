@@ -1,23 +1,21 @@
-use gpu_allocator::{d3d12::AllocationCreateDesc, MemoryLocation};
+use gpu_allocator::{
+    d3d12::{AllocationCreateDesc, Allocator},
+    MemoryLocation,
+};
 use parking_lot::Mutex;
 use windows::Win32::Graphics::Direct3D12;
 
 use crate::auxil::dxgi::result::HResult as _;
 
 #[derive(Debug)]
-pub(crate) struct GpuAllocatorWrapper {
-    pub(crate) allocator: gpu_allocator::d3d12::Allocator,
-}
-
-#[derive(Debug)]
 pub(crate) struct AllocationWrapper {
     pub(crate) allocation: gpu_allocator::d3d12::Allocation,
 }
 
-pub(crate) fn create_allocator_wrapper(
+pub(crate) fn create_allocator(
     raw: &Direct3D12::ID3D12Device,
     memory_hints: &wgt::MemoryHints,
-) -> Result<Mutex<GpuAllocatorWrapper>, crate::DeviceError> {
+) -> Result<Mutex<Allocator>, crate::DeviceError> {
     // TODO: the allocator's configuration should take hardware capability into
     // account.
     let mb = 1024 * 1024;
@@ -35,12 +33,12 @@ pub(crate) fn create_allocator_wrapper(
         }
     };
 
-    match gpu_allocator::d3d12::Allocator::new(&gpu_allocator::d3d12::AllocatorCreateDesc {
+    match Allocator::new(&gpu_allocator::d3d12::AllocatorCreateDesc {
         device: gpu_allocator::d3d12::ID3D12DeviceVersion::Device(raw.clone()),
         debug_settings: Default::default(),
         allocation_sizes,
     }) {
-        Ok(allocator) => Ok(Mutex::new(GpuAllocatorWrapper { allocator })),
+        Ok(allocator) => Ok(Mutex::new(allocator)),
         Err(e) => {
             log::error!("Failed to create d3d12 allocator, error: {}", e);
             Err(e)?
@@ -54,7 +52,7 @@ pub(crate) fn create_allocator_wrapper(
 pub(crate) struct DeviceAllocationContext<'a> {
     pub(crate) raw: &'a Direct3D12::ID3D12Device,
     pub(crate) shared: &'a super::DeviceShared,
-    pub(crate) mem_allocator: &'a Mutex<GpuAllocatorWrapper>,
+    pub(crate) mem_allocator: &'a Mutex<Allocator>,
     pub(crate) counters: &'a wgt::HalCounters,
 }
 
@@ -106,12 +104,12 @@ pub(crate) fn create_buffer_resource(
     let mut allocator = ctx.mem_allocator.lock();
 
     let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-        allocator.allocator.device(),
+        allocator.device(),
         &raw_desc,
         name,
         location,
     );
-    let allocation = allocator.allocator.allocate(&allocation_desc)?;
+    let allocation = allocator.allocate(&allocation_desc)?;
     let mut resource = None;
 
     unsafe {
@@ -150,12 +148,12 @@ pub(crate) fn create_texture_resource(
 
     let mut allocator = ctx.mem_allocator.lock();
     let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-        allocator.allocator.device(),
+        allocator.device(),
         &raw_desc,
         name,
         location,
     );
-    let allocation = allocator.allocator.allocate(&allocation_desc)?;
+    let allocation = allocator.allocate(&allocation_desc)?;
     let mut resource = None;
 
     unsafe {
@@ -195,12 +193,12 @@ pub(crate) fn create_acceleration_structure_resource(
     let mut allocator = ctx.mem_allocator.lock();
 
     let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-        allocator.allocator.device(),
+        allocator.device(),
         &raw_desc,
         name,
         location,
     );
-    let allocation = allocator.allocator.allocate(&allocation_desc)?;
+    let allocation = allocator.allocate(&allocation_desc)?;
     let mut resource = None;
 
     unsafe {
@@ -227,13 +225,13 @@ pub(crate) fn create_acceleration_structure_resource(
 pub(crate) fn free_buffer_allocation(
     device: &crate::dx12::Device,
     allocation: AllocationWrapper,
-    allocator: &Mutex<GpuAllocatorWrapper>,
+    allocator: &Mutex<Allocator>,
 ) {
     device
         .counters
         .buffer_memory
         .sub(allocation.allocation.size() as isize);
-    match allocator.lock().allocator.free(allocation.allocation) {
+    match allocator.lock().free(allocation.allocation) {
         Ok(_) => (),
         // TODO: Don't panic here
         Err(e) => panic!("Failed to destroy dx12 buffer, {e}"),
@@ -243,13 +241,13 @@ pub(crate) fn free_buffer_allocation(
 pub(crate) fn free_texture_allocation(
     device: &crate::dx12::Device,
     allocation: AllocationWrapper,
-    allocator: &Mutex<GpuAllocatorWrapper>,
+    allocator: &Mutex<Allocator>,
 ) {
     device
         .counters
         .texture_memory
         .sub(allocation.allocation.size() as isize);
-    match allocator.lock().allocator.free(allocation.allocation) {
+    match allocator.lock().free(allocation.allocation) {
         Ok(_) => (),
         // TODO: Don't panic here
         Err(e) => panic!("Failed to destroy dx12 texture, {e}"),
@@ -259,13 +257,13 @@ pub(crate) fn free_texture_allocation(
 pub(crate) fn free_acceleration_structure_allocation(
     device: &crate::dx12::Device,
     allocation: AllocationWrapper,
-    allocator: &Mutex<GpuAllocatorWrapper>,
+    allocator: &Mutex<Allocator>,
 ) {
     device
         .counters
         .acceleration_structure_memory
         .sub(allocation.allocation.size() as isize);
-    match allocator.lock().allocator.free(allocation.allocation) {
+    match allocator.lock().free(allocation.allocation) {
         Ok(_) => (),
         // TODO: Don't panic here
         Err(e) => panic!("Failed to destroy dx12 acceleration structure, {e}"),
