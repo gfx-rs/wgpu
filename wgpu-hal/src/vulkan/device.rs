@@ -1021,6 +1021,89 @@ impl super::Device {
     pub fn shared_instance(&self) -> &super::InstanceShared {
         &self.shared.instance
     }
+
+    fn error_if_would_oom_on_resource_allocation(
+        &self,
+        needs_host_access: bool,
+        size: u64,
+    ) -> Result<(), crate::DeviceError> {
+        if !self
+            .shared
+            .enabled_extensions
+            .contains(&ext::memory_budget::NAME)
+        {
+            return Ok(());
+        }
+
+        let get_physical_device_properties = self
+            .shared
+            .instance
+            .get_physical_device_properties
+            .as_ref()
+            .unwrap();
+
+        let mut memory_budget_properties = vk::PhysicalDeviceMemoryBudgetPropertiesEXT::default();
+
+        let mut memory_properties =
+            vk::PhysicalDeviceMemoryProperties2::default().push_next(&mut memory_budget_properties);
+
+        unsafe {
+            get_physical_device_properties.get_physical_device_memory_properties2(
+                self.shared.physical_device,
+                &mut memory_properties,
+            );
+        }
+
+        let mut host_visible_heaps = [false; vk::MAX_MEMORY_HEAPS];
+        let mut device_local_heaps = [false; vk::MAX_MEMORY_HEAPS];
+
+        let memory_properties = memory_properties.memory_properties;
+
+        for i in 0..memory_properties.memory_type_count {
+            let memory_type = memory_properties.memory_types[i as usize];
+            let flags = memory_type.property_flags;
+
+            if flags.intersects(
+                vk::MemoryPropertyFlags::LAZILY_ALLOCATED | vk::MemoryPropertyFlags::PROTECTED,
+            ) {
+                continue; // not used by gpu-alloc
+            }
+
+            if flags.contains(vk::MemoryPropertyFlags::HOST_VISIBLE) {
+                host_visible_heaps[memory_type.heap_index as usize] = true;
+            }
+
+            if flags.contains(vk::MemoryPropertyFlags::DEVICE_LOCAL) {
+                device_local_heaps[memory_type.heap_index as usize] = true;
+            }
+        }
+
+        let heaps = if needs_host_access {
+            host_visible_heaps
+        } else {
+            device_local_heaps
+        };
+
+        // NOTE: We might end up checking multiple heaps since gpu-alloc doesn't have a way
+        // for us to query the heap the resource will end up on. But this is unlikely,
+        // there is usually only one heap on integrated GPUs and two on dedicated GPUs.
+
+        for (i, check) in heaps.iter().enumerate() {
+            if !check {
+                continue;
+            }
+
+            let heap_usage = memory_budget_properties.heap_usage[i];
+            let heap_budget = memory_budget_properties.heap_budget[i];
+
+            // Make sure we don't exceed 90% of the budget
+            if heap_usage + size >= heap_budget / 100 * 90 {
+                return Err(crate::DeviceError::OutOfMemory);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl crate::Device for super::Device {
@@ -1065,6 +1148,10 @@ impl crate::Device for super::Device {
             gpu_alloc::UsageFlags::TRANSIENT,
             desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
         );
+
+        let needs_host_access = alloc_usage.contains(gpu_alloc::UsageFlags::HOST_ACCESS);
+
+        self.error_if_would_oom_on_resource_allocation(needs_host_access, req.size)?;
 
         let alignment_mask = req.alignment - 1;
 
@@ -1175,6 +1262,8 @@ impl crate::Device for super::Device {
         desc: &crate::TextureDescriptor,
     ) -> Result<super::Texture, crate::DeviceError> {
         let image = self.create_image_without_memory(desc, None)?;
+
+        self.error_if_would_oom_on_resource_allocation(false, image.requirements.size)?;
 
         let block = unsafe {
             self.mem_allocator.lock().alloc(
@@ -2438,6 +2527,10 @@ impl crate::Device for super::Device {
         &self,
         desc: &wgt::QuerySetDescriptor<crate::Label>,
     ) -> Result<super::QuerySet, crate::DeviceError> {
+        // Assume each query is 256 bytes.
+        // On an AMD W6800 with driver version 32.0.12030.9, occlusion queries are 256.
+        self.error_if_would_oom_on_resource_allocation(true, desc.count as u64 * 256)?;
+
         let (vk_type, pipeline_statistics) = match desc.ty {
             wgt::QueryType::Occlusion => (
                 vk::QueryType::OCCLUSION,
@@ -2767,6 +2860,8 @@ impl crate::Device for super::Device {
                 .map_err(super::map_host_device_oom_and_ioca_err)?;
             let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
 
+            self.error_if_would_oom_on_resource_allocation(false, req.size)?;
+
             let block = self.mem_allocator.lock().alloc(
                 &*self.shared,
                 gpu_alloc::Request {
@@ -2811,7 +2906,7 @@ impl crate::Device for super::Device {
                     .shared
                     .raw
                     .create_query_pool(&vk_info, None)
-                    .map_err(super::map_host_oom_and_ioca_err)?;
+                    .map_err(super::map_host_device_oom_err)?;
                 Some(raw)
             } else {
                 None
