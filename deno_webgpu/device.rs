@@ -610,14 +610,17 @@ impl GPUDevice {
 
     #[fast]
     fn start_capture(&self) {
-        self.instance.device_start_capture(self.id);
+        unsafe {
+            self.instance
+                .device_start_graphics_debugger_capture(self.id)
+        };
     }
     #[fast]
     fn stop_capture(&self) {
         self.instance
             .device_poll(self.id, wgpu_types::PollType::wait())
             .unwrap();
-        self.instance.device_stop_capture(self.id);
+        unsafe { self.instance.device_stop_graphics_debugger_capture(self.id) };
     }
 }
 

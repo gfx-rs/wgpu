@@ -1491,7 +1491,7 @@ impl crate::Device for super::Device {
         }
     }
 
-    unsafe fn start_capture(&self) -> bool {
+    unsafe fn start_graphics_debugger_capture(&self) -> bool {
         if !self.shared.private_caps.supports_capture_manager {
             return false;
         }
@@ -1503,7 +1503,8 @@ impl crate::Device for super::Device {
         default_capture_scope.begin_scope();
         true
     }
-    unsafe fn stop_capture(&self) {
+
+    unsafe fn stop_graphics_debugger_capture(&self) {
         let shared_capture_manager = metal::CaptureManager::shared();
         if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
             default_capture_scope.end_scope();

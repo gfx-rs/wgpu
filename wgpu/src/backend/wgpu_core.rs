@@ -1646,12 +1646,20 @@ impl dispatch::DeviceInterface for CoreDevice {
         Box::pin(ready(scope.error))
     }
 
-    fn start_capture(&self) {
-        self.context.0.device_start_capture(self.id);
+    unsafe fn start_graphics_debugger_capture(&self) {
+        unsafe {
+            self.context
+                .0
+                .device_start_graphics_debugger_capture(self.id)
+        };
     }
 
-    fn stop_capture(&self) {
-        self.context.0.device_stop_capture(self.id);
+    unsafe fn stop_graphics_debugger_capture(&self) {
+        unsafe {
+            self.context
+                .0
+                .device_stop_graphics_debugger_capture(self.id)
+        };
     }
 
     fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError> {

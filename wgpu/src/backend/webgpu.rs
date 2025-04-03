@@ -2394,11 +2394,11 @@ impl dispatch::DeviceInterface for WebDevice {
         ))
     }
 
-    fn start_capture(&self) {
+    unsafe fn start_graphics_debugger_capture(&self) {
         // No capturing api in webgpu
     }
 
-    fn stop_capture(&self) {
+    unsafe fn stop_graphics_debugger_capture(&self) {
         // No capturing api in webgpu
     }
 

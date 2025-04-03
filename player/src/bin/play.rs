@@ -99,13 +99,13 @@ fn main() {
     log::info!("Executing actions");
     #[cfg(not(feature = "winit"))]
     {
-        global.device_start_capture(device);
+        unsafe { global.device_start_graphics_debugger_capture(device) };
 
         while let Some(action) = actions.pop() {
             global.process(device, queue, action, &dir, &mut command_buffer_id_manager);
         }
 
-        global.device_stop_capture(device);
+        unsafe { global.device_stop_graphics_debugger_capture(device) };
         global.device_poll(device, wgt::PollType::wait()).unwrap();
     }
     #[cfg(feature = "winit")]
