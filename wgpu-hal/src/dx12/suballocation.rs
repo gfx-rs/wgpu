@@ -257,11 +257,15 @@ pub(crate) fn create_acceleration_structure(
     ))
 }
 
-pub(crate) fn free_allocation(
+pub(crate) fn free_resource(
     device: &crate::dx12::Device,
+    resource: Direct3D12::ID3D12Resource,
     allocation: Allocation,
     allocator: &Mutex<Allocator>,
 ) {
+    // Make sure the resource is released before we free the allocation.
+    drop(resource);
+
     let Some(inner) = allocation.inner else {
         return;
     };

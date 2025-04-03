@@ -448,9 +448,12 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
-        // Resource should be dropped before free suballocation
-        drop(buffer.resource);
-        suballocation::free_allocation(self, buffer.allocation, &self.mem_allocator);
+        suballocation::free_resource(
+            self,
+            buffer.resource,
+            buffer.allocation,
+            &self.mem_allocator,
+        );
 
         self.counters.buffers.sub(1);
     }
@@ -533,11 +536,9 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        // Resource should be dropped before free suballocation
-        drop(texture.resource);
-
-        suballocation::free_allocation(
+        suballocation::free_resource(
             self,
+            texture.resource,
             texture.allocation,
             // SAFETY: for allocations to exist, the allocator must exist
             &self.mem_allocator,
@@ -1666,10 +1667,12 @@ impl crate::Device for super::Device {
         }
 
         if let Some(sampler_buffer) = group.sampler_index_buffer {
-            // Make sure the buffer is dropped before the allocation
-            drop(sampler_buffer.buffer);
-
-            suballocation::free_allocation(self, sampler_buffer.allocation, &self.mem_allocator);
+            suballocation::free_resource(
+                self,
+                sampler_buffer.buffer,
+                sampler_buffer.allocation,
+                &self.mem_allocator,
+            );
         }
 
         self.counters.bind_groups.sub(1);
@@ -2311,11 +2314,9 @@ impl crate::Device for super::Device {
         &self,
         acceleration_structure: super::AccelerationStructure,
     ) {
-        // Resource should be dropped before suballocation is freed
-        drop(acceleration_structure.resource);
-
-        suballocation::free_allocation(
+        suballocation::free_resource(
             self,
+            acceleration_structure.resource,
             acceleration_structure.allocation,
             &self.mem_allocator,
         );
