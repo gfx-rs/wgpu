@@ -1481,9 +1481,9 @@ impl<W: Write> super::Writer<'_, W> {
                             &module.global_variables[var_handle]
                         }
                         ref other => {
-                            return Err(super::Error::Unimplemented(format!(
-                                "Array length of base {other:?}"
-                            )))
+                            return Err(super::Error::Unimplemented(
+                                format!("Array length of base {other:?}").into(),
+                            ))
                         }
                     };
                     let storage_access = match global_var.space {

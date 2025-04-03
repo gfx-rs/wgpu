@@ -46,7 +46,6 @@ to output a [`Module`](crate::Module) into glsl
 pub use features::Features;
 
 use alloc::{
-    borrow::ToOwned,
     format,
     string::{String, ToString},
     vec,
@@ -68,6 +67,8 @@ use crate::{
     valid, Handle, ShaderStage, TypeInner,
 };
 use features::FeaturesManager;
+
+use super::ErrorDisplayString;
 
 /// Contains the features related code and the features querying method
 mod features;
@@ -544,7 +545,7 @@ pub enum Error {
     EntryPointNotFound,
     /// A call was made to an unsupported external.
     #[error("A call was made to an unsupported external: {0}")]
-    UnsupportedExternal(String),
+    UnsupportedExternal(ErrorDisplayString),
     /// A scalar with an unsupported width was requested.
     #[error("A scalar with an unsupported width was requested: {0:?}")]
     UnsupportedScalar(crate::Scalar),
@@ -552,7 +553,7 @@ pub enum Error {
     #[error("A image was used with multiple samplers")]
     ImageMultipleSamplers,
     #[error("{0}")]
-    Custom(String),
+    Custom(ErrorDisplayString),
     #[error("overrides should not be present at this stage")]
     Override,
     /// [`crate::Sampling::First`] is unsupported.
@@ -1101,7 +1102,9 @@ impl<'a, W: Write> Writer<'a, W> {
             | TypeInner::AccelerationStructure { .. }
             | TypeInner::RayQuery { .. }
             | TypeInner::BindingArray { .. } => {
-                return Err(Error::Custom(format!("Unable to write type {inner:?}")))
+                return Err(Error::Custom(
+                    format!("Unable to write type {inner:?}").into(),
+                ))
             }
         }
 
@@ -2546,7 +2549,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     crate::AtomicFunction::Exchange { compare: Some(_) } => {
                         return Err(Error::Custom(
-                            "atomic CompareExchange is not implemented".to_string(),
+                            "atomic CompareExchange is not implemented".into(),
                         ));
                     }
                     _ => {}
@@ -2889,7 +2892,9 @@ impl<'a, W: Write> Writer<'a, W> {
                             &self.names[&NameKey::StructMember(ty, index)]
                         )?
                     }
-                    ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
+                    ref other => {
+                        return Err(Error::Custom(format!("Cannot index {other:?}").into()))
+                    }
                 }
             }
             // `Swizzle` adds a few letters behind the dot.
@@ -2952,8 +2957,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 if dim == crate::ImageDimension::Cube {
                     if offset.is_some() {
                         err = Some("gsamplerCube[Array][Shadow] doesn't support texture sampling with offsets");
-                    }
-                    if arrayed
+                    } else if arrayed
                         && matches!(class, crate::ImageClass::Depth { .. })
                         && matches!(level, crate::SampleLevel::Gradient { .. })
                     {
@@ -2964,7 +2968,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     err = Some("textureGather doesn't support LOD parameters");
                 }
                 if let Some(err) = err {
-                    return Err(Error::Custom(String::from(err)));
+                    return Err(Error::Custom(String::from(err).into()));
                 }
 
                 // `textureLod[Offset]` on `sampler2DArrayShadow` and `samplerCubeShadow` does not exist in GLSL,
@@ -3580,12 +3584,12 @@ impl<'a, W: Write> Writer<'a, W> {
                             write!(self.out, " * ")?;
 
                             let arg1 =
-                                arg1.ok_or_else(|| Error::Custom("Missing fma arg1".to_owned()))?;
+                                arg1.ok_or_else(|| Error::Custom("Missing fma arg1".into()))?;
                             self.write_expr(arg1, ctx)?;
                             write!(self.out, " + ")?;
 
                             let arg2 =
-                                arg2.ok_or_else(|| Error::Custom("Missing fma arg2".to_owned()))?;
+                                arg2.ok_or_else(|| Error::Custom("Missing fma arg2".into()))?;
                             self.write_expr(arg2, ctx)?;
                             write!(self.out, ")")?;
 
@@ -3816,28 +3820,28 @@ impl<'a, W: Write> Writer<'a, W> {
                         if self.options.version.supports_pack_unpack_4x8() {
                             "packUnorm4x8"
                         } else {
-                            return Err(Error::UnsupportedExternal("packUnorm4x8".to_owned()));
+                            return Err(Error::UnsupportedExternal("packUnorm4x8".into()));
                         }
                     }
                     Mf::Pack2x16snorm => {
                         if self.options.version.supports_pack_unpack_snorm_2x16() {
                             "packSnorm2x16"
                         } else {
-                            return Err(Error::UnsupportedExternal("packSnorm2x16".to_owned()));
+                            return Err(Error::UnsupportedExternal("packSnorm2x16".into()));
                         }
                     }
                     Mf::Pack2x16unorm => {
                         if self.options.version.supports_pack_unpack_unorm_2x16() {
                             "packUnorm2x16"
                         } else {
-                            return Err(Error::UnsupportedExternal("packUnorm2x16".to_owned()));
+                            return Err(Error::UnsupportedExternal("packUnorm2x16".into()));
                         }
                     }
                     Mf::Pack2x16float => {
                         if self.options.version.supports_pack_unpack_half_2x16() {
                             "packHalf2x16"
                         } else {
-                            return Err(Error::UnsupportedExternal("packHalf2x16".to_owned()));
+                            return Err(Error::UnsupportedExternal("packHalf2x16".into()));
                         }
                     }
 
@@ -4448,7 +4452,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // TODO: Is there even a function for this?
             crate::ImageClass::Depth { multi: _ } => {
                 return Err(Error::Custom(
-                    "WGSL `textureLoad` from depth textures is not supported in GLSL".to_string(),
+                    "WGSL `textureLoad` from depth textures is not supported in GLSL".into(),
                 ))
             }
         };
@@ -4765,7 +4769,7 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::ScalarKind::Sint => write!(self.out, "0")?,
             crate::ScalarKind::AbstractInt | crate::ScalarKind::AbstractFloat => {
                 return Err(Error::Custom(
-                    "Abstract types should not appear in IR presented to backends".to_string(),
+                    "Abstract types should not appear in IR presented to backends".into(),
                 ))
             }
         }

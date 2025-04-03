@@ -31,11 +31,7 @@ holding the result.
 
 */
 
-use alloc::{
-    format,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::{format, string::String, vec::Vec};
 use core::fmt::{Error as FmtError, Write};
 
 use crate::{arena::Handle, proc::index, valid::ModuleInfo};
@@ -45,6 +41,8 @@ pub mod sampler;
 mod writer;
 
 pub use writer::Writer;
+
+use super::ErrorDisplayString;
 
 pub type Slot = u8;
 pub type InlineSamplerIndex = u8;
@@ -154,19 +152,19 @@ pub enum Error {
     #[error("operation {0:?} is not implemented yet")]
     UnsupportedBinaryOp(crate::BinaryOperator),
     #[error("standard function '{0}' is not implemented yet")]
-    UnsupportedCall(String),
+    UnsupportedCall(ErrorDisplayString),
     #[error("feature '{0}' is not implemented yet")]
-    FeatureNotImplemented(String),
+    FeatureNotImplemented(ErrorDisplayString),
     #[error("internal naga error: module should not have validated: {0}")]
-    GenericValidation(String),
+    GenericValidation(ErrorDisplayString),
     #[error("BuiltIn {0:?} is not supported")]
     UnsupportedBuiltIn(crate::BuiltIn),
     #[error("capability {0:?} is not supported")]
     CapabilityNotSupported(crate::valid::Capabilities),
     #[error("attribute '{0}' is not supported for target MSL version")]
-    UnsupportedAttribute(String),
+    UnsupportedAttribute(ErrorDisplayString),
     #[error("function '{0}' is not supported for target MSL version")]
-    UnsupportedFunction(String),
+    UnsupportedFunction(ErrorDisplayString),
     #[error("can not use writeable storage buffers in fragment stage prior to MSL 1.2")]
     UnsupportedWriteableStorageBuffer,
     #[error("can not use writeable storage textures in {0:?} stage prior to MSL 1.2")]
@@ -174,7 +172,7 @@ pub enum Error {
     #[error("can not use read-write storage textures prior to MSL 1.2")]
     UnsupportedRWStorageTexture,
     #[error("array of '{0}' is not supported for target MSL version")]
-    UnsupportedArrayOf(String),
+    UnsupportedArrayOf(ErrorDisplayString),
     #[error("array of type '{0:?}' is not supported")]
     UnsupportedArrayOfType(Handle<crate::Type>),
     #[error("ray tracing is not supported prior to MSL 2.3")]
@@ -192,7 +190,7 @@ pub enum Error {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub enum EntryPointError {
     #[error("global '{0}' doesn't have a binding")]
-    MissingBinding(String),
+    MissingBinding(ErrorDisplayString),
     #[error("mapping of {0:?} is missing")]
     MissingBindTarget(crate::ResourceBinding),
     #[error("mapping for push constants is missing")]
@@ -439,7 +437,7 @@ impl Options {
                 match built_in {
                     crate::BuiltIn::Position { ref mut invariant } => {
                         if *invariant && self.lang_version < (2, 1) {
-                            return Err(Error::UnsupportedAttribute("invariant".to_string()));
+                            return Err(Error::UnsupportedAttribute("invariant".into()));
                         }
 
                         // The 'invariant' attribute may only appear on vertex
@@ -449,15 +447,15 @@ impl Options {
                         }
                     }
                     crate::BuiltIn::BaseInstance if self.lang_version < (1, 2) => {
-                        return Err(Error::UnsupportedAttribute("base_instance".to_string()));
+                        return Err(Error::UnsupportedAttribute("base_instance".into()));
                     }
                     crate::BuiltIn::InstanceIndex if self.lang_version < (1, 2) => {
-                        return Err(Error::UnsupportedAttribute("instance_id".to_string()));
+                        return Err(Error::UnsupportedAttribute("instance_id".into()));
                     }
                     // macOS: Since Metal 2.2
                     // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/naga/issues/2164)
                     crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 2) => {
-                        return Err(Error::UnsupportedAttribute("primitive_id".to_string()));
+                        return Err(Error::UnsupportedAttribute("primitive_id".into()));
                     }
                     _ => {}
                 }
@@ -473,7 +471,7 @@ impl Options {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => {
                     if blend_src.is_some() && self.lang_version < (1, 2) {
-                        return Err(Error::UnsupportedAttribute("blend_src".to_string()));
+                        return Err(Error::UnsupportedAttribute("blend_src".into()));
                     }
                     Ok(ResolvedBinding::Color {
                         location,
@@ -498,9 +496,9 @@ impl Options {
                         },
                     })
                 }
-                LocationMode::Uniform => Err(Error::GenericValidation(format!(
-                    "Unexpected Binding::Location({location}) for the Uniform mode"
-                ))),
+                LocationMode::Uniform => Err(Error::GenericValidation(
+                    format!("Unexpected Binding::Location({location}) for the Uniform mode").into(),
+                )),
             },
         }
     }

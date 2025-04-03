@@ -121,6 +121,8 @@ use thiserror::Error;
 
 use crate::{back, proc};
 
+use super::ErrorDisplayString;
+
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -441,9 +443,9 @@ pub enum Error {
     #[error("A scalar with an unsupported width was requested: {0:?}")]
     UnsupportedScalar(crate::Scalar),
     #[error("{0}")]
-    Unimplemented(String), // TODO: Error used only during development
+    Unimplemented(ErrorDisplayString), // TODO: Error used only during development
     #[error("{0}")]
-    Custom(String),
+    Custom(ErrorDisplayString),
     #[error("overrides should not be present at this stage")]
     Override,
     #[error(transparent)]

@@ -10,7 +10,7 @@ use codespan_reporting::term;
 use codespan_reporting::term::termcolor::{NoColor, WriteColor};
 
 use super::ModuleState;
-use crate::{arena::Handle, front::atomic_upgrade};
+use crate::{arena::Handle, back::ErrorDisplayString, front::atomic_upgrade};
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
@@ -27,9 +27,9 @@ pub enum Error {
     #[error("unsupported capability {0:?}")]
     UnsupportedCapability(spirv::Capability),
     #[error("unsupported extension {0}")]
-    UnsupportedExtension(String),
+    UnsupportedExtension(ErrorDisplayString),
     #[error("unsupported extension set {0}")]
-    UnsupportedExtSet(String),
+    UnsupportedExtSet(ErrorDisplayString),
     #[error("unsupported extension instantiation set %{0}")]
     UnsupportedExtInstSet(spirv::Word),
     #[error("unsupported extension instantiation %{0}")]

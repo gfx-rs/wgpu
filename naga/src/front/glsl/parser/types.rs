@@ -108,7 +108,7 @@ impl ParsingContext<'_> {
                 Some(ty) => *ty,
                 None => {
                     return Err(Error {
-                        kind: ErrorKind::UnknownType(ident),
+                        kind: ErrorKind::UnknownType(ident.into()),
                         meta: token.meta,
                     })
                 }

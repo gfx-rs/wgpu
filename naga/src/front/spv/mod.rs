@@ -4741,7 +4741,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             return Err(Error::InvalidOperand);
         }
         if !SUPPORTED_EXTENSIONS.contains(&name.as_str()) {
-            return Err(Error::UnsupportedExtension(name));
+            return Err(Error::UnsupportedExtension(name.into()));
         }
         Ok(())
     }
@@ -4755,7 +4755,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             return Err(Error::InvalidOperand);
         }
         if !SUPPORTED_EXT_SETS.contains(&name.as_str()) {
-            return Err(Error::UnsupportedExtSet(name));
+            return Err(Error::UnsupportedExtSet(name.into()));
         }
         self.ext_glsl_id = Some(result_id);
         Ok(())

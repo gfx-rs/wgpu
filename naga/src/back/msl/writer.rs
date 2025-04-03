@@ -1330,9 +1330,9 @@ impl<W: Write> Writer<W> {
                 ..
             } => (0, global.ty),
             ref ty => {
-                return Err(Error::GenericValidation(format!(
-                    "Expected type with dynamic array, got {ty:?}"
-                )))
+                return Err(Error::GenericValidation(
+                    format!("Expected type with dynamic array, got {ty:?}").into(),
+                ))
             }
         };
 
@@ -1344,9 +1344,9 @@ impl<W: Write> Writer<W> {
                 stride,
             ),
             ref ty => {
-                return Err(Error::GenericValidation(format!(
-                    "Expected array type, got {ty:?}"
-                )))
+                return Err(Error::GenericValidation(
+                    format!("Expected array type, got {ty:?}").into(),
+                ))
             }
         };
 
@@ -1595,9 +1595,10 @@ impl<W: Write> Writer<W> {
                 let scalar = match *get_expr_ty(ctx, value).inner_with(&module.types) {
                     crate::TypeInner::Scalar(scalar) => scalar,
                     ref ty => {
-                        return Err(Error::GenericValidation(format!(
-                            "Expected splat value type must be a scalar, got {ty:?}",
-                        )))
+                        return Err(Error::GenericValidation(
+                            format!("Expected splat value type must be a scalar, got {ty:?}",)
+                                .into(),
+                        ))
                     }
                 };
                 put_numeric_type(&mut self.out, scalar, &[size])?;
@@ -1965,9 +1966,10 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 }
                 ref ty => {
-                    return Err(Error::GenericValidation(format!(
-                        "Expected select condition to be a non-bool type, got {ty:?}",
-                    )))
+                    return Err(Error::GenericValidation(
+                        format!("Expected select condition to be a non-bool type, got {ty:?}",)
+                            .into(),
+                    ))
                 }
             },
             crate::Expression::Derivative { axis, expr, .. } => {
@@ -2005,7 +2007,7 @@ impl<W: Write> Writer<W> {
                     _ => false,
                 };
 
-                let fun_name = match fun {
+                let fun_name: &'static str = match fun {
                     // comparison
                     Mf::Abs => "abs",
                     Mf::Min => "min",
@@ -2060,7 +2062,7 @@ impl<W: Write> Writer<W> {
                             "Correct TypeInner for dot product should be already validated"
                         ),
                     },
-                    Mf::Outer => return Err(Error::UnsupportedCall(format!("{fun:?}"))),
+                    Mf::Outer => return Err(Error::UnsupportedCall(format!("{fun:?}").into())),
                     Mf::Cross => "cross",
                     Mf::Distance => "distance",
                     Mf::Length if scalar_argument => "abs",
@@ -2082,7 +2084,7 @@ impl<W: Write> Writer<W> {
                     Mf::SmoothStep => "smoothstep",
                     Mf::Sqrt => "sqrt",
                     Mf::InverseSqrt => "rsqrt",
-                    Mf::Inverse => return Err(Error::UnsupportedCall(format!("{fun:?}"))),
+                    Mf::Inverse => return Err(Error::UnsupportedCall(format!("{fun:?}").into())),
                     Mf::Transpose => "transpose",
                     Mf::Determinant => "determinant",
                     Mf::QuantizeToF16 => "",
@@ -2124,7 +2126,7 @@ impl<W: Write> Writer<W> {
                         // functions to extract, insert, and reverse bits, as
                         // described in Integer Functions."
                         if context.lang_version < (1, 2) {
-                            return Err(Error::UnsupportedFunction(fun_name.to_string()));
+                            return Err(Error::UnsupportedFunction(fun_name.into()));
                         }
                     }
                     _ => {}
@@ -2384,9 +2386,9 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ")")?;
                 }
                 ref ty => {
-                    return Err(Error::GenericValidation(format!(
-                        "Unsupported type for As: {ty:?}"
-                    )))
+                    return Err(Error::GenericValidation(
+                        format!("Unsupported type for As: {ty:?}").into(),
+                    ))
                 }
             },
             // has to be a named expression
@@ -2405,17 +2407,18 @@ impl<W: Write> Writer<W> {
                         match context.function.expressions[base] {
                             crate::Expression::GlobalVariable(handle) => handle,
                             ref ex => {
-                                return Err(Error::GenericValidation(format!(
-                                    "Expected global variable in AccessIndex, got {ex:?}"
-                                )))
+                                return Err(Error::GenericValidation(
+                                    format!("Expected global variable in AccessIndex, got {ex:?}")
+                                        .into(),
+                                ))
                             }
                         }
                     }
                     crate::Expression::GlobalVariable(handle) => handle,
                     ref ex => {
-                        return Err(Error::GenericValidation(format!(
-                            "Unexpected expression in ArrayLength, got {ex:?}"
-                        )))
+                        return Err(Error::GenericValidation(
+                            format!("Unexpected expression in ArrayLength, got {ex:?}").into(),
+                        ))
                     }
                 };
 
@@ -3124,7 +3127,7 @@ impl<W: Write> Writer<W> {
             }
             TypeResolution::Value(ref other) => {
                 log::warn!("Type {:?} isn't a known local", other); //TEMP!
-                return Err(Error::FeatureNotImplemented("weird local type".to_string()));
+                return Err(Error::FeatureNotImplemented("weird local type".into()));
             }
         }
 
@@ -5782,8 +5785,9 @@ template <typename A>
                                 Some(ref br) => br,
                                 None => {
                                     let var_name = var.name.clone().unwrap_or_default();
-                                    ep_error =
-                                        Some(super::EntryPointError::MissingBinding(var_name));
+                                    ep_error = Some(super::EntryPointError::MissingBinding(
+                                        var_name.into(),
+                                    ));
                                     break;
                                 }
                             };
@@ -6179,9 +6183,7 @@ template <typename A>
                             match module.types[base].inner {
                                 crate::TypeInner::Sampler { .. } => {
                                     if options.lang_version < (2, 0) {
-                                        return Err(Error::UnsupportedArrayOf(
-                                            "samplers".to_string(),
-                                        ));
+                                        return Err(Error::UnsupportedArrayOf("samplers".into()));
                                     }
                                 }
                                 crate::TypeInner::Image { class, .. } => match class {
@@ -6197,7 +6199,7 @@ template <typename A>
 
                                         if options.lang_version < (2, 0) {
                                             return Err(Error::UnsupportedArrayOf(
-                                                "textures".to_string(),
+                                                "textures".into(),
                                             ));
                                         }
                                     }
@@ -6211,13 +6213,13 @@ template <typename A>
 
                                         if options.lang_version < (2, 0) {
                                             return Err(Error::UnsupportedArrayOf(
-                                                "write-only textures".to_string(),
+                                                "write-only textures".into(),
                                             ));
                                         }
                                     }
                                     crate::ImageClass::Storage { .. } => {
                                         return Err(Error::UnsupportedArrayOf(
-                                            "read-write textures".to_string(),
+                                            "read-write textures".into(),
                                         ));
                                     }
                                 },
@@ -6947,7 +6949,7 @@ impl crate::AtomicFunction {
             Self::Min => "min",
             Self::Max => "max",
             _ => Err(Error::FeatureNotImplemented(
-                "64-bit atomic operation other than min/max".to_string(),
+                "64-bit atomic operation other than min/max".into(),
             ))?,
         })
     }

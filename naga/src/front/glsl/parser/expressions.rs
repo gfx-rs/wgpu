@@ -195,7 +195,7 @@ impl ParsingContext<'_> {
                     Some(var) => var,
                     None => {
                         return Err(Error {
-                            kind: ErrorKind::UnknownVariable(name),
+                            kind: ErrorKind::UnknownVariable(name.into()),
                             meta,
                         })
                     }

@@ -16,14 +16,16 @@ pub use writer::{Writer, WriterFlags};
 
 use crate::common::wgsl;
 
+use super::ErrorDisplayString;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
     FmtError(#[from] core::fmt::Error),
     #[error("{0}")]
-    Custom(String),
+    Custom(ErrorDisplayString),
     #[error("{0}")]
-    Unimplemented(String), // TODO: Error used only during development
+    Unimplemented(ErrorDisplayString), // TODO: Error used only during development
     #[error("Unsupported relational function: {0:?}")]
     UnsupportedRelationalFunction(crate::RelationalFunction),
     #[error("Unsupported {kind}: {value}")]

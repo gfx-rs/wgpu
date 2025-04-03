@@ -9,7 +9,9 @@ Backend functions that export shader [`Module`](super::Module)s into binary and 
     )
 )]
 
-use alloc::string::String;
+use alloc::{borrow::Cow, string::String};
+
+pub(crate) type ErrorDisplayString = Cow<'static, str>;
 
 #[cfg(dot_out)]
 pub mod dot;

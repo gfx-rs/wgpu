@@ -178,10 +178,12 @@ impl crate::BuiltIn {
             | Self::NumSubgroups
             | Self::SubgroupId => unreachable!(),
             Self::BaseInstance | Self::BaseVertex | Self::WorkGroupSize => {
-                return Err(Error::Unimplemented(format!("builtin {self:?}")))
+                return Err(Error::Unimplemented(format!("builtin {self:?}").into()))
             }
             Self::PointSize | Self::ViewIndex | Self::PointCoord | Self::DrawID => {
-                return Err(Error::Custom(format!("Unsupported builtin {self:?}")))
+                return Err(Error::Custom(
+                    format!("Unsupported builtin {self:?}").into(),
+                ))
             }
         })
     }

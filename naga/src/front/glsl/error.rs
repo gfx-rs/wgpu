@@ -13,7 +13,7 @@ use pp_rs::token::PreprocessorError;
 use thiserror::Error;
 
 use super::token::TokenValue;
-use crate::SourceLocation;
+use crate::{back::ErrorDisplayString, SourceLocation};
 use crate::{proc::ConstantEvaluatorError, Span};
 
 fn join_with_comma(list: &[ExpectedToken]) -> String {
@@ -75,7 +75,7 @@ pub enum ErrorKind {
     EndOfFile,
     /// The shader specified an unsupported or invalid profile.
     #[error("Invalid profile: {0}")]
-    InvalidProfile(String),
+    InvalidProfile(ErrorDisplayString),
     /// The shader requested an unsupported or invalid version.
     #[error("Invalid version: {0}")]
     InvalidVersion(u64),
@@ -92,20 +92,20 @@ pub enum ErrorKind {
     NotImplemented(&'static str),
     /// A reference to a variable that wasn't declared was used.
     #[error("Unknown variable: {0}")]
-    UnknownVariable(String),
+    UnknownVariable(ErrorDisplayString),
     /// A reference to a type that wasn't declared was used.
     #[error("Unknown type: {0}")]
-    UnknownType(String),
+    UnknownType(ErrorDisplayString),
     /// A reference to a non existent member of a type was made.
     #[error("Unknown field: {0}")]
-    UnknownField(String),
+    UnknownField(ErrorDisplayString),
     /// An unknown layout qualifier was used.
     ///
     /// If the qualifier does exist please open an issue in the github issue tracker
     /// if none exist already or react to the already existing one to help
     /// prioritize work.
     #[error("Unknown layout qualifier: {0}")]
-    UnknownLayoutQualifier(String),
+    UnknownLayoutQualifier(ErrorDisplayString),
     /// Unsupported matrix of the form matCx2
     ///
     /// Our IR expects matrices of the form matCx2 to have a stride of 8 however

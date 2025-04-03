@@ -280,6 +280,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 #### Naga
 
 - Replace `unicode-xid` with `unicode-ident`. By @CrazyboyQCD in [#7135](https://github.com/gfx-rs/wgpu/pull/7135)
+- Replace `String` variant in `Error` types with `Cow<'static, str>`. By @CrazyboyQCD in [#7467](https://github.com/gfx-rs/wgpu/pull/7467)
 
 ### Documentation
 

@@ -521,7 +521,9 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                     (base, AccessIndex::Constant(index))
                 }
                 ref other => {
-                    return Err(Error::Unimplemented(format!("Pointer access of {other:?}")))
+                    return Err(Error::Unimplemented(
+                        format!("Pointer access of {other:?}").into(),
+                    ))
                 }
             };
 

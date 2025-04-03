@@ -121,7 +121,7 @@ impl<W: Write> Writer<W> {
     pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {
         if !module.overrides.is_empty() {
             return Err(Error::Unimplemented(
-                "Pipeline constants are not yet supported for this back-end".to_string(),
+                "Pipeline constants are not yet supported for this back-end".into(),
             ));
         }
 
@@ -1288,7 +1288,9 @@ impl<W: Write> Writer<W> {
                             &self.names[&NameKey::StructMember(ty, index)]
                         )?
                     }
-                    ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
+                    ref other => {
+                        return Err(Error::Custom(format!("Cannot index {other:?}").into()))
+                    }
                 }
             }
             Expression::ImageSample {
@@ -1510,9 +1512,9 @@ impl<W: Write> Writer<W> {
                         }
                     }
                     _ => {
-                        return Err(Error::Unimplemented(format!(
-                            "write_expr expression::as {inner:?}"
-                        )));
+                        return Err(Error::Unimplemented(
+                            format!("write_expr expression::as {inner:?}").into(),
+                        ));
                     }
                 };
                 write!(self.out, "(")?;

@@ -289,7 +289,7 @@ impl Frontend {
                     }) => match name.as_str() {
                         "core" => self.meta.profile = Profile::Core,
                         _ => self.errors.push(Error {
-                            kind: ErrorKind::InvalidProfile(name),
+                            kind: ErrorKind::InvalidProfile(name.into()),
                             meta: location.into(),
                         }),
                     },

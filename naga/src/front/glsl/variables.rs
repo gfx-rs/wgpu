@@ -1,4 +1,4 @@
-use alloc::{format, string::String, vec::Vec};
+use alloc::{borrow::ToOwned, format, string::String, vec::Vec};
 
 use super::{
     ast::*,
@@ -256,7 +256,7 @@ impl Frontend {
                     .iter()
                     .position(|m| m.name == Some(name.into()))
                     .ok_or_else(|| Error {
-                        kind: ErrorKind::UnknownField(name.into()),
+                        kind: ErrorKind::UnknownField(name.to_owned().into()),
                         meta,
                     })?;
                 let pointer = ctx.add_expression(

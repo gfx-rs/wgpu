@@ -1363,7 +1363,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // these are constant flags, there are dynamic flags also but constant flags are not supported by naga
                 write!(self.out, "RayQuery<RAY_FLAG_NONE>")?;
             }
-            _ => return Err(Error::Unimplemented(format!("write_value_type {inner:?}"))),
+            _ => {
+                return Err(Error::Unimplemented(
+                    format!("write_value_type {inner:?}").into(),
+                ))
+            }
         }
 
         Ok(())
@@ -2362,9 +2366,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.temp_access_chain = chain;
                     }
                     ref other => {
-                        return Err(Error::Custom(format!(
-                            "invalid address space {other:?} for atomic statement"
-                        )))
+                        return Err(Error::Custom(
+                            format!("invalid address space {other:?} for atomic statement").into(),
+                        ))
                     }
                 }
                 write!(self.out, ", ")?;
@@ -2375,7 +2379,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         write!(self.out, "-")?;
                     }
                     crate::AtomicFunction::Exchange { compare: Some(_) } => {
-                        return Err(Error::Unimplemented("atomic CompareExchange".to_string()));
+                        return Err(Error::Unimplemented("atomic CompareExchange".into()));
                     }
                     _ => {}
                 }
@@ -3099,7 +3103,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 &self.names[&NameKey::StructMember(ty, index)]
                             )?
                         }
-                        ref other => return Err(Error::Custom(format!("Cannot index {other:?}"))),
+                        ref other => {
+                            return Err(Error::Custom(format!("Cannot index {other:?}").into()))
+                        }
                     }
 
                     if array_sampler_info.is_some() {
@@ -3373,9 +3379,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                     )?;
                                 }
                                 _ => {
-                                    return Err(Error::Unimplemented(format!(
-                                        "write_expr expression::as {inner:?}"
-                                    )));
+                                    return Err(Error::Unimplemented(
+                                        format!("write_expr expression::as {inner:?}").into(),
+                                    ));
                                 }
                             };
                             true
@@ -3517,7 +3523,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Unpack4x8unorm => Function::Unpack4x8unorm,
                     Mf::Unpack4xI8 => Function::Unpack4xI8,
                     Mf::Unpack4xU8 => Function::Unpack4xU8,
-                    _ => return Err(Error::Unimplemented(format!("write_expr_math {fun:?}"))),
+                    _ => {
+                        return Err(Error::Unimplemented(
+                            format!("write_expr_math {fun:?}").into(),
+                        ))
+                    }
                 };
 
                 match fun {
