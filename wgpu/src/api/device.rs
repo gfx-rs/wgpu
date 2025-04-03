@@ -432,6 +432,8 @@ impl Device {
     ///
     /// [rd]: https://renderdoc.org/docs/in_application_api.html#_CPPv415EndFrameCapture23RENDERDOC_DevicePointer22RENDERDOC_WindowHandle
     /// [xcode]: https://developer.apple.com/documentation/metal/mtlcapturemanager
+    #[doc(alias = "stop_renderdoc_capture")]
+    #[doc(alias = "stop_xcode_capture")]
     pub unsafe fn stop_graphics_debugger_capture(&self) {
         unsafe { self.inner.stop_graphics_debugger_capture() }
     }
