@@ -6403,14 +6403,16 @@ template <typename A>
                         let func_name = &func.name;
 
                         // Check dimensionality of the attribute compared to the unpacking
-                        // function. If attribute dimension is < unpack dimension, then
-                        // we need to explicitly cast down the result. Otherwise, if attribute
-                        // dimension > unpack dimension, we have to pad out the unpack value
-                        // from a vec4(0, 0, 0, 1) of matching scalar type.
+                        // function. If attribute dimension > unpack dimension, we have to
+                        // pad out the unpack value from a vec4(0, 0, 0, 1) of matching
+                        // scalar type. Otherwise, if attribute dimension is < unpack
+                        // dimension, then we need to explicitly truncate the result.
 
                         let needs_padding_or_truncation = am.dimension.cmp(&func.dimension);
 
                         if needs_padding_or_truncation != Ordering::Equal {
+                            // Emit a comment flagging that a conversion is happening,
+                            // since the actual logic can be at the end of a long line.
                             writeln!(
                                 self.out,
                                 "{}// {attribute_ty_name} <- {:?}",
