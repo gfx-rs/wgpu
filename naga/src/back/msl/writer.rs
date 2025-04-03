@@ -18,7 +18,7 @@ use crate::{
     arena::{Handle, HandleSet},
     back::{self, Baked},
     common,
-    proc::{self, index, ExpressionKindTracker, NameKey, TypeResolution},
+    proc::{self, index, NameKey, TypeResolution},
     valid, FastHashMap, FastHashSet,
 };
 
@@ -5573,7 +5573,6 @@ template <typename A>
                 info: &mod_info[fun_handle],
                 expressions: &fun.expressions,
                 named_expressions: &fun.named_expressions,
-                expr_kind_tracker: ExpressionKindTracker::from_arena(&fun.expressions),
             };
 
             writeln!(self.out)?;
@@ -5730,7 +5729,6 @@ template <typename A>
                 info: fun_info,
                 expressions: &fun.expressions,
                 named_expressions: &fun.named_expressions,
-                expr_kind_tracker: ExpressionKindTracker::from_arena(&fun.expressions),
             };
 
             self.write_wrapped_functions(module, &ctx)?;

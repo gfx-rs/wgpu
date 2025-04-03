@@ -465,6 +465,27 @@ impl Global {
             );
         }
 
+        if matches!(query_set.desc.ty, wgt::QueryType::Timestamp) {
+            // Timestamp normalization is only needed for timestamps.
+            cmd_buf
+                .device
+                .timestamp_normalizer
+                .get()
+                .unwrap()
+                .normalize(
+                    &snatch_guard,
+                    raw_encoder,
+                    &mut cmd_buf_data.trackers.buffers,
+                    dst_buffer
+                        .timestamp_normalization_bind_group
+                        .get(&snatch_guard)
+                        .unwrap(),
+                    &dst_buffer,
+                    destination_offset,
+                    query_count,
+                );
+        }
+
         cmd_buf_data.trackers.query_sets.insert_single(query_set);
 
         cmd_buf_data_guard.mark_successful();

@@ -3,7 +3,7 @@ struct Foo {
     b: i32,
 }
 
-// const const1 = vec3<f32>(0.0); // TODO: this is now a splat and we need to const eval it
+const const1 = vec3<f32>(0.0);
 const const2 = vec3(0.0, 1.0, 2.0);
 const const3 = mat2x2<f32>(0.0, 1.0, 2.0, 3.0);
 const const4 = array<mat2x2<f32>, 1>(mat2x2<f32>(0.0, 1.0, 2.0, 3.0));
@@ -19,9 +19,8 @@ const cz6 = array<Foo, 3>();
 const cz7 = Foo();
 
 // constructors that infer their type from their parameters
-// TODO: these also contain splats
-// const cp1 = vec2(0u);
-// const cp2 = mat2x2(vec2(0.), vec2(0.));
+const cp1 = vec2(0u);
+const cp2 = mat2x2(vec2(0.), vec2(0.));
 const cp3 = array(0, 1, 2, 3);
 
 @compute @workgroup_size(1)
@@ -49,6 +48,8 @@ fn main() {
     let zvc5 = mat2x2<f32>();
     let zvc6 = array<Foo, 3>();
     let zvc7 = Foo();
+    let zvc8: vec2<u32> = vec2();
+    let zvc9: vec2<f32> = vec2();
 
     // constructors that infer their type from their parameters
     let cit0 = vec2(0u);

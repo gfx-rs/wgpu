@@ -9,13 +9,11 @@ repository.workspace = true
 keywords.workspace = true
 license.workspace = true
 rust-version.workspace = true
-autobenches = false
 publish = false
 
 [[bench]]
 name = "wgpu-benchmark"
 harness = false
-path = "benches/root.rs"
 
 [features]
 # Uncomment these features to enable tracy and superluminal profiling.

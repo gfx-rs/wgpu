@@ -7,6 +7,7 @@ mod emitter;
 pub mod index;
 mod layouter;
 mod namer;
+mod overloads;
 mod terminator;
 mod type_methods;
 mod typifier;
@@ -18,6 +19,7 @@ pub use emitter::Emitter;
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
+pub use overloads::{Conclusion, MissingSpecialType, OverloadSet, Rule};
 pub use terminator::ensure_block_returns;
 use thiserror::Error;
 pub use type_methods::min_max_float_representable_by;
@@ -119,6 +121,8 @@ impl crate::Literal {
             (value, crate::ScalarKind::Sint, 8) => Some(Self::I64(value as _)),
             (1, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(true)),
             (0, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(false)),
+            (value, crate::ScalarKind::AbstractInt, 8) => Some(Self::AbstractInt(value as _)),
+            (value, crate::ScalarKind::AbstractFloat, 8) => Some(Self::AbstractFloat(value as _)),
             _ => None,
         }
     }
