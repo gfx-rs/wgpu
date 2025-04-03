@@ -835,7 +835,7 @@ unsafe impl Sync for CommandBuffer {}
 pub struct Buffer {
     resource: Direct3D12::ID3D12Resource,
     size: wgt::BufferAddress,
-    allocation: Option<suballocation::Allocation>,
+    allocation: suballocation::Allocation,
 }
 
 unsafe impl Send for Buffer {}
@@ -865,7 +865,7 @@ pub struct Texture {
     size: wgt::Extent3d,
     mip_level_count: u32,
     sample_count: u32,
-    allocation: Option<suballocation::Allocation>,
+    allocation: suballocation::Allocation,
 }
 
 impl Texture {
@@ -984,7 +984,7 @@ enum DynamicBuffer {
 #[derive(Debug)]
 struct SamplerIndexBuffer {
     buffer: Direct3D12::ID3D12Resource,
-    allocation: Option<suballocation::Allocation>,
+    allocation: suballocation::Allocation,
 }
 
 #[derive(Debug)]
@@ -1121,7 +1121,7 @@ impl crate::DynPipelineCache for PipelineCache {}
 #[derive(Debug)]
 pub struct AccelerationStructure {
     resource: Direct3D12::ID3D12Resource,
-    allocation: Option<suballocation::Allocation>,
+    allocation: suballocation::Allocation,
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
@@ -1375,7 +1375,7 @@ impl crate::Surface for Surface {
             size: sc.size,
             mip_level_count: 1,
             sample_count: 1,
-            allocation: None,
+            allocation: suballocation::Allocation::none(suballocation::AllocationType::Texture),
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,

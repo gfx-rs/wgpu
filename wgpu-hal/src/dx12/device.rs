@@ -25,7 +25,8 @@ use crate::{
     auxil::{self, dxgi::result::HResult},
     dx12::{
         borrow_optional_interface_temporarily, shader_compilation,
-        suballocation::DeviceAllocationContext, DynamicStorageBufferOffsets, Event,
+        suballocation::{self, DeviceAllocationContext},
+        DynamicStorageBufferOffsets, Event,
     },
     AccelerationStructureEntries, TlasInstance,
 };
@@ -52,7 +53,7 @@ impl super::Device {
             auxil::dxgi::exception::register_exception_handler();
         }
 
-        let mem_allocator = Arc::new(super::suballocation::create_allocator(&raw, memory_hints)?);
+        let mem_allocator = Arc::new(suballocation::create_allocator(&raw, memory_hints)?);
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -383,7 +384,7 @@ impl super::Device {
             size,
             mip_level_count,
             sample_count,
-            allocation: None,
+            allocation: suballocation::Allocation::none(suballocation::AllocationType::Texture),
         }
     }
 
@@ -394,7 +395,7 @@ impl super::Device {
         super::Buffer {
             resource,
             size,
-            allocation: None,
+            allocation: suballocation::Allocation::none(suballocation::AllocationType::Buffer),
         }
     }
 }
@@ -429,7 +430,7 @@ impl crate::Device for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) = super::suballocation::create_buffer_resource(
+        let (resource, allocation) = suballocation::create_buffer_resource(
             DeviceAllocationContext::from(self),
             desc,
             raw_desc,
@@ -449,14 +450,10 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
-        // Always Some except on Intel Xe: https://github.com/gfx-rs/wgpu/issues/3552
-        if let Some(alloc) = buffer.allocation.take() {
-            // Resource should be dropped before free suballocation
-            drop(buffer);
-
-            super::suballocation::free_buffer_allocation(self, alloc, &self.mem_allocator);
-        }
+    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+        // Resource should be dropped before free suballocation
+        drop(buffer.resource);
+        suballocation::free_allocation(self, buffer.allocation, &self.mem_allocator);
 
         self.counters.buffers.sub(1);
     }
@@ -517,7 +514,7 @@ impl crate::Device for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) = super::suballocation::create_texture_resource(
+        let (resource, allocation) = suballocation::create_texture_resource(
             DeviceAllocationContext::from(self),
             desc,
             raw_desc,
@@ -541,18 +538,16 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn destroy_texture(&self, mut texture: super::Texture) {
-        if let Some(alloc) = texture.allocation.take() {
-            // Resource should be dropped before free suballocation
-            drop(texture);
+    unsafe fn destroy_texture(&self, texture: super::Texture) {
+        // Resource should be dropped before free suballocation
+        drop(texture.resource);
 
-            super::suballocation::free_texture_allocation(
-                self,
-                alloc,
-                // SAFETY: for allocations to exist, the allocator must exist
-                &self.mem_allocator,
-            );
-        }
+        suballocation::free_allocation(
+            self,
+            texture.allocation,
+            // SAFETY: for allocations to exist, the allocator must exist
+            &self.mem_allocator,
+        );
 
         self.counters.textures.sub(1);
     }
@@ -1591,7 +1586,7 @@ impl crate::Device for super::Device {
                 Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
             };
 
-            let (buffer, allocation) = super::suballocation::create_buffer_resource(
+            let (buffer, allocation) = suballocation::create_buffer_resource(
                 DeviceAllocationContext::from(self),
                 &buffer_desc,
                 raw_buffer_desc,
@@ -1680,9 +1675,7 @@ impl crate::Device for super::Device {
             // Make sure the buffer is dropped before the allocation
             drop(sampler_buffer.buffer);
 
-            if let Some(allocation) = sampler_buffer.allocation {
-                super::suballocation::free_buffer_allocation(self, allocation, &self.mem_allocator);
-            }
+            suballocation::free_allocation(self, sampler_buffer.allocation, &self.mem_allocator);
         }
 
         self.counters.bind_groups.sub(1);
@@ -2301,7 +2294,7 @@ impl crate::Device for super::Device {
             Flags: Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
         };
 
-        let (resource, allocation) = super::suballocation::create_acceleration_structure_resource(
+        let (resource, allocation) = suballocation::create_acceleration_structure_resource(
             DeviceAllocationContext::from(self),
             desc,
             raw_desc,
@@ -2322,18 +2315,16 @@ impl crate::Device for super::Device {
 
     unsafe fn destroy_acceleration_structure(
         &self,
-        mut acceleration_structure: super::AccelerationStructure,
+        acceleration_structure: super::AccelerationStructure,
     ) {
-        if let Some(alloc) = acceleration_structure.allocation.take() {
-            // Resource should be dropped before suballocation is freed
-            drop(acceleration_structure);
+        // Resource should be dropped before suballocation is freed
+        drop(acceleration_structure.resource);
 
-            super::suballocation::free_acceleration_structure_allocation(
-                self,
-                alloc,
-                &self.mem_allocator,
-            );
-        }
+        suballocation::free_allocation(
+            self,
+            acceleration_structure.allocation,
+            &self.mem_allocator,
+        );
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {

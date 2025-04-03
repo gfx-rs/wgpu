@@ -8,8 +8,22 @@ use windows::Win32::Graphics::Direct3D12;
 use crate::auxil::dxgi::result::HResult as _;
 
 #[derive(Debug)]
+pub(crate) enum AllocationType {
+    Buffer,
+    Texture,
+    AccelerationStructure,
+}
+
+#[derive(Debug)]
 pub(crate) struct Allocation {
-    pub(crate) inner: gpu_allocator::d3d12::Allocation,
+    inner: Option<gpu_allocator::d3d12::Allocation>,
+    ty: AllocationType,
+}
+
+impl Allocation {
+    pub fn none(ty: AllocationType) -> Self {
+        Self { inner: None, ty }
+    }
 }
 
 pub(crate) fn create_allocator(
@@ -82,14 +96,14 @@ pub(crate) fn create_buffer_resource(
     ctx: DeviceAllocationContext,
     desc: &crate::BufferDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
-) -> Result<(Direct3D12::ID3D12Resource, Option<Allocation>), crate::DeviceError> {
+) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
     let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
     let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
     // Workaround for Intel Xe drivers
     if !ctx.shared.private_caps.suballocation_supported {
-        return create_committed_buffer_resource(ctx, desc, raw_desc)
-            .map(|resource| (resource, None));
+        let resource = create_committed_buffer_resource(ctx, desc, raw_desc)?;
+        return Ok((resource, Allocation::none(AllocationType::Buffer)));
     }
 
     let location = match (is_cpu_read, is_cpu_write) {
@@ -128,18 +142,24 @@ pub(crate) fn create_buffer_resource(
 
     ctx.counters.buffer_memory.add(allocation.size() as isize);
 
-    Ok((resource, Some(Allocation { inner: allocation })))
+    Ok((
+        resource,
+        Allocation {
+            inner: Some(allocation),
+            ty: AllocationType::Buffer,
+        },
+    ))
 }
 
 pub(crate) fn create_texture_resource(
     ctx: DeviceAllocationContext,
     desc: &crate::TextureDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
-) -> Result<(Direct3D12::ID3D12Resource, Option<Allocation>), crate::DeviceError> {
+) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
     // Workaround for Intel Xe drivers
     if !ctx.shared.private_caps.suballocation_supported {
-        return create_committed_texture_resource(ctx, desc, raw_desc)
-            .map(|resource| (resource, None));
+        let resource = create_committed_texture_resource(ctx, desc, raw_desc)?;
+        return Ok((resource, Allocation::none(AllocationType::Texture)));
     }
 
     let location = MemoryLocation::GpuOnly;
@@ -172,18 +192,27 @@ pub(crate) fn create_texture_resource(
 
     ctx.counters.texture_memory.add(allocation.size() as isize);
 
-    Ok((resource, Some(Allocation { inner: allocation })))
+    Ok((
+        resource,
+        Allocation {
+            inner: Some(allocation),
+            ty: AllocationType::Texture,
+        },
+    ))
 }
 
 pub(crate) fn create_acceleration_structure_resource(
     ctx: DeviceAllocationContext,
     desc: &crate::AccelerationStructureDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
-) -> Result<(Direct3D12::ID3D12Resource, Option<Allocation>), crate::DeviceError> {
+) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
     // Workaround for Intel Xe drivers
     if !ctx.shared.private_caps.suballocation_supported {
-        return create_committed_acceleration_structure_resource(ctx, desc, raw_desc)
-            .map(|resource| (resource, None));
+        let resource = create_committed_acceleration_structure_resource(ctx, desc, raw_desc)?;
+        return Ok((
+            resource,
+            Allocation::none(AllocationType::AccelerationStructure),
+        ));
     }
 
     let location = MemoryLocation::GpuOnly;
@@ -219,54 +248,35 @@ pub(crate) fn create_acceleration_structure_resource(
         .acceleration_structure_memory
         .add(allocation.size() as isize);
 
-    Ok((resource, Some(Allocation { inner: allocation })))
+    Ok((
+        resource,
+        Allocation {
+            inner: Some(allocation),
+            ty: AllocationType::AccelerationStructure,
+        },
+    ))
 }
 
-pub(crate) fn free_buffer_allocation(
+pub(crate) fn free_allocation(
     device: &crate::dx12::Device,
     allocation: Allocation,
     allocator: &Mutex<Allocator>,
 ) {
-    device
-        .counters
-        .buffer_memory
-        .sub(allocation.inner.size() as isize);
-    match allocator.lock().free(allocation.inner) {
-        Ok(_) => (),
-        // TODO: Don't panic here
-        Err(e) => panic!("Failed to destroy dx12 buffer, {e}"),
+    let Some(inner) = allocation.inner else {
+        return;
     };
-}
 
-pub(crate) fn free_texture_allocation(
-    device: &crate::dx12::Device,
-    allocation: Allocation,
-    allocator: &Mutex<Allocator>,
-) {
-    device
-        .counters
-        .texture_memory
-        .sub(allocation.inner.size() as isize);
-    match allocator.lock().free(allocation.inner) {
-        Ok(_) => (),
-        // TODO: Don't panic here
-        Err(e) => panic!("Failed to destroy dx12 texture, {e}"),
+    let counter = match allocation.ty {
+        AllocationType::Buffer => &device.counters.buffer_memory,
+        AllocationType::Texture => &device.counters.texture_memory,
+        AllocationType::AccelerationStructure => &device.counters.acceleration_structure_memory,
     };
-}
+    counter.sub(inner.size() as isize);
 
-pub(crate) fn free_acceleration_structure_allocation(
-    device: &crate::dx12::Device,
-    allocation: Allocation,
-    allocator: &Mutex<Allocator>,
-) {
-    device
-        .counters
-        .acceleration_structure_memory
-        .sub(allocation.inner.size() as isize);
-    match allocator.lock().free(allocation.inner) {
+    match allocator.lock().free(inner) {
         Ok(_) => (),
         // TODO: Don't panic here
-        Err(e) => panic!("Failed to destroy dx12 acceleration structure, {e}"),
+        Err(e) => panic!("Failed to destroy dx12 {:?}, {e}", allocation.ty),
     };
 }
 
