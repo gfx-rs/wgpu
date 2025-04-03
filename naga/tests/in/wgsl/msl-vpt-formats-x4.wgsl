@@ -1,3 +1,5 @@
+// Tests for the vertex pulling transform in the MSL backend.
+//
 // Test loading `vec4` from each vertex format.
 //
 // (Note: only the wgsl files are different for each of the -formats-xN tests.
