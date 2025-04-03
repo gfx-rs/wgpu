@@ -83,6 +83,7 @@ mod instance;
 mod sampler;
 mod shader_compilation;
 mod suballocation;
+mod texture_copies;
 mod types;
 mod view;
 
