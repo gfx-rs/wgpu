@@ -621,6 +621,19 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 },
             };
 
+            {
+                let offset = unsafe { src_location.Anonymous.PlacedFootprint.Offset };
+                let remainder = offset % Direct3D12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64;
+
+                assert_eq!(
+                    remainder,
+                    0,
+                    "D3D12_PLACED_SUBRESOURCE_FOOTPRINT::Offset must be a multiple of 512. Was {}. Remainder is {}",
+                    offset,
+                    remainder
+                );
+            };
+
             let src_box = make_box(&wgt::Origin3d::ZERO, &r.size);
             unsafe {
                 list.CopyTextureRegion(
@@ -659,6 +672,19 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 Anonymous: Direct3D12::D3D12_TEXTURE_COPY_LOCATION_0 {
                     PlacedFootprint: r.to_subresource_footprint(src.format),
                 },
+            };
+
+            {
+                let offset = unsafe { dst_location.Anonymous.PlacedFootprint.Offset };
+                let remainder = offset % Direct3D12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64;
+
+                assert_eq!(
+                    remainder,
+                    0,
+                    "D3D12_PLACED_SUBRESOURCE_FOOTPRINT::Offset must be a multiple of 512. Was {}. Remainder is {}",
+                    offset,
+                    remainder
+                );
             };
 
             let src_box = make_box(&r.texture_base.origin, &r.size);

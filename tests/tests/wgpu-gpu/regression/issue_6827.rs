@@ -24,7 +24,6 @@ static TEST_SCATTER: GpuTestConfiguration = GpuTestConfiguration::new()
                 // Unfortunately this depends on if `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported`
                 // is true, which we have no way to encode. This reproduces in CI though, so not too worried about it.
                 FailureCase::backend(wgpu::Backends::DX12)
-                    .flaky()
                     .validation_error(
                         "D3D12_PLACED_SUBRESOURCE_FOOTPRINT::Offset must be a multiple of 512",
                     )
