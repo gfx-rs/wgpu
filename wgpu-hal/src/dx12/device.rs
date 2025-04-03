@@ -451,10 +451,9 @@ impl crate::Device for super::Device {
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         suballocation::free_resource(
-            self,
+            suballocation::DeviceAllocationContext::from(self),
             buffer.resource,
             buffer.allocation,
-            &self.mem_allocator,
         );
 
         self.counters.buffers.sub(1);
@@ -542,11 +541,9 @@ impl crate::Device for super::Device {
 
     unsafe fn destroy_texture(&self, texture: super::Texture) {
         suballocation::free_resource(
-            self,
+            suballocation::DeviceAllocationContext::from(self),
             texture.resource,
             texture.allocation,
-            // SAFETY: for allocations to exist, the allocator must exist
-            &self.mem_allocator,
         );
 
         self.counters.textures.sub(1);
@@ -1673,10 +1670,9 @@ impl crate::Device for super::Device {
 
         if let Some(sampler_buffer) = group.sampler_index_buffer {
             suballocation::free_resource(
-                self,
+                suballocation::DeviceAllocationContext::from(self),
                 sampler_buffer.buffer,
                 sampler_buffer.allocation,
-                &self.mem_allocator,
             );
         }
 
@@ -2320,10 +2316,9 @@ impl crate::Device for super::Device {
         acceleration_structure: super::AccelerationStructure,
     ) {
         suballocation::free_resource(
-            self,
+            suballocation::DeviceAllocationContext::from(self),
             acceleration_structure.resource,
             acceleration_structure.allocation,
-            &self.mem_allocator,
         );
     }
 

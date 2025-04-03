@@ -258,10 +258,9 @@ pub(crate) fn create_acceleration_structure(
 }
 
 pub(crate) fn free_resource(
-    device: &crate::dx12::Device,
+    ctx: DeviceAllocationContext,
     resource: Direct3D12::ID3D12Resource,
     allocation: Allocation,
-    allocator: &Mutex<Allocator>,
 ) {
     // Make sure the resource is released before we free the allocation.
     drop(resource);
@@ -271,13 +270,13 @@ pub(crate) fn free_resource(
     };
 
     let counter = match allocation.ty {
-        AllocationType::Buffer => &device.counters.buffer_memory,
-        AllocationType::Texture => &device.counters.texture_memory,
-        AllocationType::AccelerationStructure => &device.counters.acceleration_structure_memory,
+        AllocationType::Buffer => &ctx.counters.buffer_memory,
+        AllocationType::Texture => &ctx.counters.texture_memory,
+        AllocationType::AccelerationStructure => &ctx.counters.acceleration_structure_memory,
     };
     counter.sub(inner.size() as isize);
 
-    match allocator.lock().free(inner) {
+    match ctx.mem_allocator.lock().free(inner) {
         Ok(_) => (),
         // TODO: Don't panic here
         Err(e) => panic!("Failed to destroy dx12 {:?}, {e}", allocation.ty),
