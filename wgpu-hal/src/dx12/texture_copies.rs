@@ -6,7 +6,10 @@ use windows::Win32::Graphics::{Direct3D12::*, Dxgi::Common::*};
 
 use crate::{
     auxil::dxgi::result::HResult,
-    dx12::{suballocation::AllocationWrapper, PrivateCapabilities},
+    dx12::{
+        suballocation::{AllocationWrapper, DeviceAllocationContext},
+        PrivateCapabilities,
+    },
     Device,
 };
 
@@ -90,7 +93,7 @@ impl TemporaryBuffer {
         Ok(Self { buffer })
     }
 
-    pub fn get_resource(&mut self, device: &super::Device, size: u64) -> Arc<super::Buffer> {
+    pub fn get_resource(&mut self, ctx: DeviceAllocationContext, size: u64) -> Arc<super::Buffer> {
         if size > self.buffer.size {
             let label = label(size);
             let desc = buffer_desc(&label, size);
@@ -103,7 +106,7 @@ impl TemporaryBuffer {
 
             // Release the old buffer if we are the last reference to it
             if let Some(buffer) = Arc::into_inner(old_buffer) {
-                unsafe { device.destroy_buffer(buffer) };
+                unsafe { ctx.raw.destroy_buffer(buffer) };
             }
         }
 
