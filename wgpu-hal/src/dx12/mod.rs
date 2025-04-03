@@ -574,6 +574,7 @@ struct PrivateCapabilities {
     suballocation_supported: bool,
     shader_model: naga::back::hlsl::ShaderModel,
     max_sampler_descriptor_heap_size: u32,
+    unrestricted_buffer_texture_copy_pitch: bool,
 }
 
 #[derive(Default)]
