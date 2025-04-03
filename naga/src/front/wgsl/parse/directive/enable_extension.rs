@@ -98,18 +98,18 @@ impl EnableExtension {
 /// A variant of [`EnableExtension::Implemented`].
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum ImplementedEnableExtension {
-    /// Enables the `blend_src` attribute in WGSL.
-    ///
-    /// In the WGSL standard, this corresponds to [`enable dual_source_blending;`].
-    ///
-    /// [`enable dual_source_blending;`]: https://www.w3.org/TR/WGSL/#extension-dual_source_blending
-    DualSourceBlending,
     /// Enables `f16`/`half` primitive support in all shader languages.
     ///
     /// In the WGSL standard, this corresponds to [`enable f16;`].
     ///
     /// [`enable f16;`]: https://www.w3.org/TR/WGSL/#extension-f16
     F16,
+    /// Enables the `blend_src` attribute in WGSL.
+    ///
+    /// In the WGSL standard, this corresponds to [`enable dual_source_blending;`].
+    ///
+    /// [`enable dual_source_blending;`]: https://www.w3.org/TR/WGSL/#extension-dual_source_blending
+    DualSourceBlending,
 }
 
 /// A variant of [`EnableExtension::Unimplemented`].
