@@ -8,8 +8,8 @@ use windows::Win32::Graphics::Direct3D12;
 use crate::auxil::dxgi::result::HResult as _;
 
 #[derive(Debug)]
-pub(crate) struct AllocationWrapper {
-    pub(crate) allocation: gpu_allocator::d3d12::Allocation,
+pub(crate) struct Allocation {
+    pub(crate) inner: gpu_allocator::d3d12::Allocation,
 }
 
 pub(crate) fn create_allocator(
@@ -82,7 +82,7 @@ pub(crate) fn create_buffer_resource(
     ctx: DeviceAllocationContext,
     desc: &crate::BufferDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
-) -> Result<(Direct3D12::ID3D12Resource, Option<AllocationWrapper>), crate::DeviceError> {
+) -> Result<(Direct3D12::ID3D12Resource, Option<Allocation>), crate::DeviceError> {
     let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
     let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
@@ -128,14 +128,14 @@ pub(crate) fn create_buffer_resource(
 
     ctx.counters.buffer_memory.add(allocation.size() as isize);
 
-    Ok((resource, Some(AllocationWrapper { allocation })))
+    Ok((resource, Some(Allocation { inner: allocation })))
 }
 
 pub(crate) fn create_texture_resource(
     ctx: DeviceAllocationContext,
     desc: &crate::TextureDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
-) -> Result<(Direct3D12::ID3D12Resource, Option<AllocationWrapper>), crate::DeviceError> {
+) -> Result<(Direct3D12::ID3D12Resource, Option<Allocation>), crate::DeviceError> {
     // Workaround for Intel Xe drivers
     if !ctx.shared.private_caps.suballocation_supported {
         return create_committed_texture_resource(ctx, desc, raw_desc)
@@ -172,14 +172,14 @@ pub(crate) fn create_texture_resource(
 
     ctx.counters.texture_memory.add(allocation.size() as isize);
 
-    Ok((resource, Some(AllocationWrapper { allocation })))
+    Ok((resource, Some(Allocation { inner: allocation })))
 }
 
 pub(crate) fn create_acceleration_structure_resource(
     ctx: DeviceAllocationContext,
     desc: &crate::AccelerationStructureDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
-) -> Result<(Direct3D12::ID3D12Resource, Option<AllocationWrapper>), crate::DeviceError> {
+) -> Result<(Direct3D12::ID3D12Resource, Option<Allocation>), crate::DeviceError> {
     // Workaround for Intel Xe drivers
     if !ctx.shared.private_caps.suballocation_supported {
         return create_committed_acceleration_structure_resource(ctx, desc, raw_desc)
@@ -219,19 +219,19 @@ pub(crate) fn create_acceleration_structure_resource(
         .acceleration_structure_memory
         .add(allocation.size() as isize);
 
-    Ok((resource, Some(AllocationWrapper { allocation })))
+    Ok((resource, Some(Allocation { inner: allocation })))
 }
 
 pub(crate) fn free_buffer_allocation(
     device: &crate::dx12::Device,
-    allocation: AllocationWrapper,
+    allocation: Allocation,
     allocator: &Mutex<Allocator>,
 ) {
     device
         .counters
         .buffer_memory
-        .sub(allocation.allocation.size() as isize);
-    match allocator.lock().free(allocation.allocation) {
+        .sub(allocation.inner.size() as isize);
+    match allocator.lock().free(allocation.inner) {
         Ok(_) => (),
         // TODO: Don't panic here
         Err(e) => panic!("Failed to destroy dx12 buffer, {e}"),
@@ -240,14 +240,14 @@ pub(crate) fn free_buffer_allocation(
 
 pub(crate) fn free_texture_allocation(
     device: &crate::dx12::Device,
-    allocation: AllocationWrapper,
+    allocation: Allocation,
     allocator: &Mutex<Allocator>,
 ) {
     device
         .counters
         .texture_memory
-        .sub(allocation.allocation.size() as isize);
-    match allocator.lock().free(allocation.allocation) {
+        .sub(allocation.inner.size() as isize);
+    match allocator.lock().free(allocation.inner) {
         Ok(_) => (),
         // TODO: Don't panic here
         Err(e) => panic!("Failed to destroy dx12 texture, {e}"),
@@ -256,14 +256,14 @@ pub(crate) fn free_texture_allocation(
 
 pub(crate) fn free_acceleration_structure_allocation(
     device: &crate::dx12::Device,
-    allocation: AllocationWrapper,
+    allocation: Allocation,
     allocator: &Mutex<Allocator>,
 ) {
     device
         .counters
         .acceleration_structure_memory
-        .sub(allocation.allocation.size() as isize);
-    match allocator.lock().free(allocation.allocation) {
+        .sub(allocation.inner.size() as isize);
+    match allocator.lock().free(allocation.inner) {
         Ok(_) => (),
         // TODO: Don't panic here
         Err(e) => panic!("Failed to destroy dx12 acceleration structure, {e}"),
