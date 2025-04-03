@@ -24,8 +24,7 @@ use super::{conv, descriptor, D3D12Lib};
 use crate::{
     auxil::{self, dxgi::result::HResult},
     dx12::{
-        borrow_optional_interface_temporarily, shader_compilation,
-        suballocation::{self, DeviceAllocationContext},
+        borrow_optional_interface_temporarily, shader_compilation, suballocation,
         DynamicStorageBufferOffsets, Event,
     },
     AccelerationStructureEntries, TlasInstance,
@@ -430,8 +429,11 @@ impl crate::Device for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) =
-            suballocation::create_buffer(DeviceAllocationContext::from(self), desc, raw_desc)?;
+        let (resource, allocation) = suballocation::create_buffer(
+            suballocation::DeviceAllocationContext::from(self),
+            desc,
+            raw_desc,
+        )?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -514,8 +516,11 @@ impl crate::Device for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) =
-            suballocation::create_texture(DeviceAllocationContext::from(self), desc, raw_desc)?;
+        let (resource, allocation) = suballocation::create_texture(
+            suballocation::DeviceAllocationContext::from(self),
+            desc,
+            raw_desc,
+        )?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -1582,7 +1587,7 @@ impl crate::Device for super::Device {
             };
 
             let (buffer, allocation) = suballocation::create_buffer(
-                DeviceAllocationContext::from(self),
+                suballocation::DeviceAllocationContext::from(self),
                 &buffer_desc,
                 raw_buffer_desc,
             )?;
@@ -2292,7 +2297,7 @@ impl crate::Device for super::Device {
         };
 
         let (resource, allocation) = suballocation::create_acceleration_structure(
-            DeviceAllocationContext::from(self),
+            suballocation::DeviceAllocationContext::from(self),
             desc,
             raw_desc,
         )?;
