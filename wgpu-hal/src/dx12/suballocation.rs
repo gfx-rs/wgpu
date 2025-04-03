@@ -57,7 +57,7 @@ pub(crate) fn create_buffer_resource(
     let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
     // Workaround for Intel Xe drivers
-    if !device.private_caps.suballocation_supported {
+    if !device.shared.private_caps.suballocation_supported {
         return create_committed_buffer_resource(device, desc, raw_desc)
             .map(|resource| (resource, None));
     }
@@ -110,7 +110,7 @@ pub(crate) fn create_texture_resource(
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
 ) -> Result<(Direct3D12::ID3D12Resource, Option<AllocationWrapper>), crate::DeviceError> {
     // Workaround for Intel Xe drivers
-    if !device.private_caps.suballocation_supported {
+    if !device.shared.private_caps.suballocation_supported {
         return create_committed_texture_resource(device, desc, raw_desc)
             .map(|resource| (resource, None));
     }
@@ -157,7 +157,7 @@ pub(crate) fn create_acceleration_structure_resource(
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
 ) -> Result<(Direct3D12::ID3D12Resource, Option<AllocationWrapper>), crate::DeviceError> {
     // Workaround for Intel Xe drivers
-    if !device.private_caps.suballocation_supported {
+    if !device.shared.private_caps.suballocation_supported {
         return create_committed_acceleration_structure_resource(device, desc, raw_desc)
             .map(|resource| (resource, None));
     }
@@ -301,7 +301,7 @@ pub(crate) fn create_committed_buffer_resource(
         } else {
             Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE
         },
-        MemoryPoolPreference: match device.private_caps.memory_architecture {
+        MemoryPoolPreference: match device.shared.private_caps.memory_architecture {
             crate::dx12::MemoryArchitecture::NonUnified if !is_cpu_read && !is_cpu_write => {
                 Direct3D12::D3D12_MEMORY_POOL_L1
             }
@@ -316,7 +316,7 @@ pub(crate) fn create_committed_buffer_resource(
     unsafe {
         device.raw.CreateCommittedResource(
             &heap_properties,
-            if device.private_caps.heap_create_not_zeroed {
+            if device.shared.private_caps.heap_create_not_zeroed {
                 Direct3D12::D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
             } else {
                 Direct3D12::D3D12_HEAP_FLAG_NONE
@@ -340,7 +340,7 @@ pub(crate) fn create_committed_texture_resource(
     let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
         Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,
         CPUPageProperty: Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
-        MemoryPoolPreference: match device.private_caps.memory_architecture {
+        MemoryPoolPreference: match device.shared.private_caps.memory_architecture {
             crate::dx12::MemoryArchitecture::NonUnified => Direct3D12::D3D12_MEMORY_POOL_L1,
             crate::dx12::MemoryArchitecture::Unified { .. } => Direct3D12::D3D12_MEMORY_POOL_L0,
         },
@@ -353,7 +353,7 @@ pub(crate) fn create_committed_texture_resource(
     unsafe {
         device.raw.CreateCommittedResource(
             &heap_properties,
-            if device.private_caps.heap_create_not_zeroed {
+            if device.shared.private_caps.heap_create_not_zeroed {
                 Direct3D12::D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
             } else {
                 Direct3D12::D3D12_HEAP_FLAG_NONE
@@ -377,7 +377,7 @@ pub(crate) fn create_committed_acceleration_structure_resource(
     let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
         Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,
         CPUPageProperty: Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
-        MemoryPoolPreference: match device.private_caps.memory_architecture {
+        MemoryPoolPreference: match device.shared.private_caps.memory_architecture {
             crate::dx12::MemoryArchitecture::NonUnified => Direct3D12::D3D12_MEMORY_POOL_L1,
             _ => Direct3D12::D3D12_MEMORY_POOL_L0,
         },
@@ -390,7 +390,7 @@ pub(crate) fn create_committed_acceleration_structure_resource(
     unsafe {
         device.raw.CreateCommittedResource(
             &heap_properties,
-            if device.private_caps.heap_create_not_zeroed {
+            if device.shared.private_caps.heap_create_not_zeroed {
                 Direct3D12::D3D12_HEAP_FLAG_CREATE_NOT_ZEROED
             } else {
                 Direct3D12::D3D12_HEAP_FLAG_NONE

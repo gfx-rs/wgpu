@@ -630,6 +630,7 @@ struct DeviceShared {
     cmd_signatures: CommandSignatures,
     heap_views: descriptor::GeneralHeap,
     sampler_heap: sampler::SamplerHeap,
+    private_caps: PrivateCapabilities,
 }
 
 unsafe impl Send for DeviceShared {}
@@ -639,7 +640,6 @@ pub struct Device {
     raw: Direct3D12::ID3D12Device,
     present_queue: Direct3D12::ID3D12CommandQueue,
     idler: Idler,
-    private_caps: PrivateCapabilities,
     features: wgt::Features,
     shared: Arc<DeviceShared>,
     // CPU only pools
@@ -660,6 +660,7 @@ impl Drop for Device {
     fn drop(&mut self) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
         if self
+            .shared
             .private_caps
             .instance_flags
             .contains(wgt::InstanceFlags::VALIDATION)

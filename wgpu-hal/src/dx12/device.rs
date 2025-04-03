@@ -149,6 +149,7 @@ impl super::Device {
                 capacity_views,
             )?,
             sampler_heap: super::sampler::SamplerHeap::new(&raw, &private_caps)?,
+            private_caps,
         };
 
         let mut rtv_pool =
@@ -180,7 +181,6 @@ impl super::Device {
                 fence: idle_fence,
                 event: Event::create(false, false)?,
             },
-            private_caps,
             features,
             shared: Arc::new(shared),
             rtv_pool: Mutex::new(rtv_pool),
@@ -502,7 +502,9 @@ impl crate::Device for super::Device {
                 desc.format,
                 desc.usage,
                 !desc.view_formats.is_empty(),
-                self.private_caps.casting_fully_typed_format_supported,
+                self.shared
+                    .private_caps
+                    .casting_fully_typed_format_supported,
             ),
             SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
                 Count: desc.sample_count,
@@ -1351,7 +1353,7 @@ impl crate::Device for super::Device {
             },
             bind_group_infos,
             naga_options: hlsl::Options {
-                shader_model: self.private_caps.shader_model,
+                shader_model: self.shared.private_caps.shader_model,
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,
