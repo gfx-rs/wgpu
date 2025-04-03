@@ -651,7 +651,7 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
-    mem_allocator: Mutex<suballocation::GpuAllocatorWrapper>,
+    mem_allocator: Arc<Mutex<suballocation::GpuAllocatorWrapper>>,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     counters: Arc<wgt::HalCounters>,
 }
@@ -793,6 +793,8 @@ pub struct CommandEncoder {
     allocator: Direct3D12::ID3D12CommandAllocator,
     device: Direct3D12::ID3D12Device,
     shared: Arc<DeviceShared>,
+    mem_allocator: Arc<Mutex<suballocation::GpuAllocatorWrapper>>,
+
     null_rtv_handle: descriptor::Handle,
     list: Option<Direct3D12::ID3D12GraphicsCommandList>,
     free_lists: Vec<Direct3D12::ID3D12GraphicsCommandList>,

@@ -24,8 +24,8 @@ use super::{conv, descriptor, D3D12Lib};
 use crate::{
     auxil::{self, dxgi::result::HResult},
     dx12::{
-        borrow_optional_interface_temporarily, shader_compilation, DynamicStorageBufferOffsets,
-        Event,
+        borrow_optional_interface_temporarily, shader_compilation,
+        suballocation::DeviceAllocationContext, DynamicStorageBufferOffsets, Event,
     },
     AccelerationStructureEntries, TlasInstance,
 };
@@ -52,7 +52,10 @@ impl super::Device {
             auxil::dxgi::exception::register_exception_handler();
         }
 
-        let mem_allocator = super::suballocation::create_allocator_wrapper(&raw, memory_hints)?;
+        let mem_allocator = Arc::new(super::suballocation::create_allocator_wrapper(
+            &raw,
+            memory_hints,
+        )?);
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -429,8 +432,11 @@ impl crate::Device for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) =
-            super::suballocation::create_buffer_resource(self, desc, raw_desc)?;
+        let (resource, allocation) = super::suballocation::create_buffer_resource(
+            DeviceAllocationContext::from(self),
+            desc,
+            raw_desc,
+        )?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -514,8 +520,11 @@ impl crate::Device for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) =
-            super::suballocation::create_texture_resource(self, desc, raw_desc)?;
+        let (resource, allocation) = super::suballocation::create_texture_resource(
+            DeviceAllocationContext::from(self),
+            desc,
+            raw_desc,
+        )?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -753,6 +762,7 @@ impl crate::Device for super::Device {
             allocator,
             device: self.raw.clone(),
             shared: Arc::clone(&self.shared),
+            mem_allocator: self.mem_allocator.clone(),
             null_rtv_handle: self.null_rtv_handle,
             list: None,
             free_lists: Vec::new(),
@@ -1584,8 +1594,11 @@ impl crate::Device for super::Device {
                 Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
             };
 
-            let (buffer, allocation) =
-                super::suballocation::create_buffer_resource(self, &buffer_desc, raw_buffer_desc)?;
+            let (buffer, allocation) = super::suballocation::create_buffer_resource(
+                DeviceAllocationContext::from(self),
+                &buffer_desc,
+                raw_buffer_desc,
+            )?;
 
             unsafe { buffer.SetName(&windows::core::HSTRING::from(&*label)) }
                 .into_device_result("SetName")?;
@@ -2291,8 +2304,11 @@ impl crate::Device for super::Device {
             Flags: Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
         };
 
-        let (resource, allocation) =
-            super::suballocation::create_acceleration_structure_resource(self, desc, raw_desc)?;
+        let (resource, allocation) = super::suballocation::create_acceleration_structure_resource(
+            DeviceAllocationContext::from(self),
+            desc,
+            raw_desc,
+        )?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
