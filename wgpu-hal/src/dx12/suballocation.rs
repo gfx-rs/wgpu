@@ -92,7 +92,7 @@ impl<'a> From<&'a super::CommandEncoder> for DeviceAllocationContext<'a> {
     }
 }
 
-pub(crate) fn create_buffer_resource(
+pub(crate) fn create_buffer(
     ctx: DeviceAllocationContext,
     desc: &crate::BufferDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
@@ -102,7 +102,7 @@ pub(crate) fn create_buffer_resource(
 
     // Workaround for Intel Xe drivers
     if !ctx.shared.private_caps.suballocation_supported {
-        let resource = create_committed_buffer_resource(ctx, desc, raw_desc)?;
+        let resource = create_committed_buffer(ctx, desc, raw_desc)?;
         return Ok((resource, Allocation::none(AllocationType::Buffer)));
     }
 
@@ -151,14 +151,14 @@ pub(crate) fn create_buffer_resource(
     ))
 }
 
-pub(crate) fn create_texture_resource(
+pub(crate) fn create_texture(
     ctx: DeviceAllocationContext,
     desc: &crate::TextureDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
 ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
     // Workaround for Intel Xe drivers
     if !ctx.shared.private_caps.suballocation_supported {
-        let resource = create_committed_texture_resource(ctx, desc, raw_desc)?;
+        let resource = create_committed_texture(ctx, desc, raw_desc)?;
         return Ok((resource, Allocation::none(AllocationType::Texture)));
     }
 
@@ -201,14 +201,14 @@ pub(crate) fn create_texture_resource(
     ))
 }
 
-pub(crate) fn create_acceleration_structure_resource(
+pub(crate) fn create_acceleration_structure(
     ctx: DeviceAllocationContext,
     desc: &crate::AccelerationStructureDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
 ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
     // Workaround for Intel Xe drivers
     if !ctx.shared.private_caps.suballocation_supported {
-        let resource = create_committed_acceleration_structure_resource(ctx, desc, raw_desc)?;
+        let resource = create_committed_acceleration_structure(ctx, desc, raw_desc)?;
         return Ok((
             resource,
             Allocation::none(AllocationType::AccelerationStructure),
@@ -317,7 +317,7 @@ impl From<gpu_allocator::AllocationError> for crate::DeviceError {
     }
 }
 
-pub(crate) fn create_committed_buffer_resource(
+pub(crate) fn create_committed_buffer(
     ctx: DeviceAllocationContext,
     desc: &crate::BufferDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
@@ -365,7 +365,7 @@ pub(crate) fn create_committed_buffer_resource(
     resource.ok_or(crate::DeviceError::Unexpected)
 }
 
-pub(crate) fn create_committed_texture_resource(
+pub(crate) fn create_committed_texture(
     ctx: DeviceAllocationContext,
     _desc: &crate::TextureDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
@@ -402,7 +402,7 @@ pub(crate) fn create_committed_texture_resource(
     resource.ok_or(crate::DeviceError::Unexpected)
 }
 
-pub(crate) fn create_committed_acceleration_structure_resource(
+pub(crate) fn create_committed_acceleration_structure(
     ctx: DeviceAllocationContext,
     _desc: &crate::AccelerationStructureDescriptor,
     raw_desc: Direct3D12::D3D12_RESOURCE_DESC,

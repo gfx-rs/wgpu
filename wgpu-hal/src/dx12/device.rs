@@ -430,11 +430,8 @@ impl crate::Device for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) = suballocation::create_buffer_resource(
-            DeviceAllocationContext::from(self),
-            desc,
-            raw_desc,
-        )?;
+        let (resource, allocation) =
+            suballocation::create_buffer(DeviceAllocationContext::from(self), desc, raw_desc)?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -514,11 +511,8 @@ impl crate::Device for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) = suballocation::create_texture_resource(
-            DeviceAllocationContext::from(self),
-            desc,
-            raw_desc,
-        )?;
+        let (resource, allocation) =
+            suballocation::create_texture(DeviceAllocationContext::from(self), desc, raw_desc)?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -1586,7 +1580,7 @@ impl crate::Device for super::Device {
                 Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
             };
 
-            let (buffer, allocation) = suballocation::create_buffer_resource(
+            let (buffer, allocation) = suballocation::create_buffer(
                 DeviceAllocationContext::from(self),
                 &buffer_desc,
                 raw_buffer_desc,
@@ -2294,7 +2288,7 @@ impl crate::Device for super::Device {
             Flags: Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
         };
 
-        let (resource, allocation) = suballocation::create_acceleration_structure_resource(
+        let (resource, allocation) = suballocation::create_acceleration_structure(
             DeviceAllocationContext::from(self),
             desc,
             raw_desc,
