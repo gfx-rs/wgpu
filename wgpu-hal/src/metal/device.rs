@@ -831,6 +831,10 @@ impl crate::Device for super::Device {
                 for (entry, layout) in layout_and_entry_iter {
                     // Bindless path
                     if layout.count.is_some() {
+                        if !layout.visibility.contains(stage_bit) {
+                            continue;
+                        }
+
                         let count = entry.count;
 
                         let stages = conv::map_render_stages(layout.visibility);
