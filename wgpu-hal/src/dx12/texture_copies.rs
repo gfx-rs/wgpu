@@ -5,11 +5,7 @@ use alloc::{string::String, sync::Arc};
 use windows::Win32::Graphics::{Direct3D12::*, Dxgi::Common::*};
 
 use crate::{
-    auxil::dxgi::result::HResult,
-    dx12::{
-        suballocation::{AllocationWrapper, DeviceAllocationContext},
-        PrivateCapabilities,
-    },
+    dx12::{suballocation::DeviceAllocationContext, PrivateCapabilities},
     Device,
 };
 
