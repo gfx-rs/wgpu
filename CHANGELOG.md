@@ -245,21 +245,13 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 
 - Avoid overflow in query set bounds check validation. By @ErichDonGubler in [#6933](https://github.com/gfx-rs/wgpu/pull/6933).
 - Add Flush to GL Queue::submit. By @cwfitzgerald in [#6941](https://github.com/gfx-rs/wgpu/pull/6941).
-- Fix `wgpu` not building with `--no-default-features` on when targeting `wasm32-unknown-unknown`. By @wumpf in [#6946](https://github.com/gfx-rs/wgpu/pull/6946).
-- Fix `CopyExternalImageDestInfo` not exported on `wgpu`. By @wumpf in [#6962](https://github.com/gfx-rs/wgpu/pull/6962).
 - Reduce downlevel `max_color_attachments` limit from 8 to 4 for better GLES compatibility. By @adrian17 in [#6994](https://github.com/gfx-rs/wgpu/pull/6994).
-- Fix drop order in `Surface`. By @ed-2100 in [#6997](https://github.com/gfx-rs/wgpu/pull/6997)
-- Fix a possible deadlock within `Queue::write_texture`. By @metamuffin in [#7004](https://github.com/gfx-rs/wgpu/pull/7004)
 - Fix building a BLAS with a transform buffer by adding a flag to indicate usage of the transform buffer. By @Vecvec in
 [#7062](https://github.com/gfx-rs/wgpu/pull/7062).
 
 #### Vulkan
 
 - Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
-
-#### Metal
-
-- Use resize observers for smoother resizing. By @madsmtm in [#7026](https://github.com/gfx-rs/wgpu/pull/7026).
 
 #### Gles
 
@@ -291,6 +283,31 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 ### Examples
 
 - Call `pre_present_notify()` before presenting. By @kjarosh in [#7074](https://github.com/gfx-rs/wgpu/pull/7074).
+
+## v24.0.4 (2025-04-03)
+
+### Metal
+ - Use resize observers for smoother resizing. By @madsmtm in [#7026](https://github.com/gfx-rs/wgpu/pull/7026).
+
+## v24.0.3 (2025-03-19)
+
+### Bug Fixes
+- Fix drop order in `Surface`, solving segfaults on exit on some systems. By @ed-2100 in [#6997](https://github.com/gfx-rs/wgpu/pull/6997)
+
+## v24.0.2 (2025-02-26)
+
+### Bug Fixes
+- Fix GLES renderpass clears causing violation of `max_color_attachments` limit. By @adrian17 in [#6994](https://github.com/gfx-rs/wgpu/pull/6994).
+- Fix a possible deadlock within `Queue::write_texture`. By @metamuffin in [#7004](https://github.com/gfx-rs/wgpu/pull/7004)
+- Decrement `max_storage_buffer_binding_size` by 1 to match `max_buffer_size`. By @minus1ms in [#7217](https://github.com/gfx-rs/wgpu/pull/7217)
+
+## v24.0.1 (2025-01-22)
+
+### Bug Fixes
+
+* Fix `wgpu` not building with `--no-default-features` on when targeting `wasm32-unknown-unknown`. By @wumpf in [#6946](https://github.com/gfx-rs/wgpu/pull/6946).
+* Implement `Clone` on `ShaderModule`. By @a1phyr in [#6937](https://github.com/gfx-rs/wgpu/pull/6937).
+- Fix `CopyExternalImageDestInfo` not exported on `wgpu`. By @wumpf in [#6962](https://github.com/gfx-rs/wgpu/pull/6962).
 
 ## v24.0.0 (2025-01-15)
 
