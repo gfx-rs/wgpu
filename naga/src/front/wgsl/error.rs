@@ -26,9 +26,6 @@ use alloc::{
 };
 use core::ops::Range;
 
-#[cfg(feature = "termcolor")]
-use codespan_reporting::term::termcolor::{ColorChoice, NoColor, StandardStream};
-
 #[derive(Clone, Debug)]
 pub struct ParseError {
     message: String,
@@ -86,7 +83,7 @@ impl ParseError {
         let config = term::Config::default();
 
         #[cfg(feature = "termcolor")]
-        let writer = StandardStream::stderr(ColorChoice::Auto);
+        let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
 
         #[cfg(not(feature = "termcolor"))]
         let writer = std::io::stderr();
@@ -115,7 +112,7 @@ impl ParseError {
 
         #[cfg(feature = "termcolor")]
         let writer = {
-            let mut writer = NoColor::new(Vec::new());
+            let mut writer = term::termcolor::NoColor::new(Vec::new());
             emit(&mut writer);
             writer.into_inner()
         };
