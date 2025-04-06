@@ -40,13 +40,30 @@ impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>
         let label = self.label.as_deref().unwrap_or_default();
         let files = SimpleFile::new(label, &self.source);
         let config = term::Config::default();
-        let mut writer = term::termcolor::NoColor::new(Vec::new());
-        term::emit(&mut writer, &config, &files, &self.inner.diagnostic())
-            .expect("cannot write error");
+
+        let emit = |writer| {
+            term::emit(writer, &config, &files, &self.inner.diagnostic())
+                .expect("cannot write error")
+        };
+
+        #[cfg(feature = "termcolor")]
+        let writer = {
+            let mut writer = term::termcolor::NoColor::new(Vec::new());
+            emit(&mut writer);
+            writer.into_inner()
+        };
+
+        #[cfg(not(feature = "termcolor"))]
+        let writer = {
+            let mut writer = Vec::new();
+            emit(&mut writer);
+            writer
+        };
+
         write!(
             f,
             "\nShader validation {}",
-            String::from_utf8_lossy(&writer.into_inner())
+            String::from_utf8_lossy(&writer)
         )
     }
 }

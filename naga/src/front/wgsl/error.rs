@@ -14,7 +14,6 @@ use super::parse::lexer::Token;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
-use codespan_reporting::term::termcolor::{ColorChoice, NoColor, StandardStream};
 use thiserror::Error;
 
 use alloc::{
@@ -26,6 +25,9 @@ use alloc::{
     vec::Vec,
 };
 use core::ops::Range;
+
+#[cfg(feature = "termcolor")]
+use codespan_reporting::term::termcolor::{ColorChoice, NoColor, StandardStream};
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
@@ -68,11 +70,13 @@ impl ParseError {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "stderr")]
     pub fn emit_to_stderr(&self, source: &str) {
         self.emit_to_stderr_with_path(source, "wgsl")
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "stderr")]
     pub fn emit_to_stderr_with_path<P>(&self, source: &str, path: P)
     where
         P: AsRef<std::path::Path>,
@@ -80,7 +84,13 @@ impl ParseError {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
+
+        #[cfg(feature = "termcolor")]
         let writer = StandardStream::stderr(ColorChoice::Auto);
+
+        #[cfg(not(feature = "termcolor"))]
+        let writer = std::io::stderr();
+
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
             .expect("cannot write error");
     }
@@ -98,9 +108,26 @@ impl ParseError {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
-        let mut writer = NoColor::new(Vec::new());
-        term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
-        String::from_utf8(writer.into_inner()).unwrap()
+
+        let emit = |writer| {
+            term::emit(writer, &config, &files, &self.diagnostic()).expect("cannot write error")
+        };
+
+        #[cfg(feature = "termcolor")]
+        let writer = {
+            let mut writer = NoColor::new(Vec::new());
+            emit(&mut writer);
+            writer.into_inner()
+        };
+
+        #[cfg(not(feature = "termcolor"))]
+        let writer = {
+            let mut writer = Vec::new();
+            emit(&mut writer);
+            writer
+        };
+
+        String::from_utf8(writer).unwrap()
     }
 
     /// Returns a [`SourceLocation`] for the first label in the error message.

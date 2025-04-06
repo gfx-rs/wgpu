@@ -8,13 +8,15 @@ use alloc::{
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
-use codespan_reporting::term::termcolor::{NoColor, WriteColor};
 use pp_rs::token::PreprocessorError;
 use thiserror::Error;
 
 use super::token::TokenValue;
 use crate::SourceLocation;
 use crate::{proc::ConstantEvaluatorError, Span};
+
+#[cfg(feature = "termcolor")]
+use codespan_reporting::term::termcolor::{NoColor, WriteColor};
 
 fn join_with_comma(list: &[ExpectedToken]) -> String {
     let mut string = "".to_string();
@@ -166,10 +168,12 @@ pub struct ParseErrors {
 }
 
 impl ParseErrors {
+    #[cfg(feature = "termcolor")]
     pub fn emit_to_writer(&self, writer: &mut impl WriteColor, source: &str) {
         self.emit_to_writer_with_path(writer, source, "glsl");
     }
 
+    #[cfg(feature = "termcolor")]
     pub fn emit_to_writer_with_path(&self, writer: &mut impl WriteColor, source: &str, path: &str) {
         let path = path.to_string();
         let files = SimpleFile::new(path, source);
@@ -187,9 +191,33 @@ impl ParseErrors {
     }
 
     pub fn emit_to_string(&self, source: &str) -> String {
-        let mut writer = NoColor::new(Vec::new());
-        self.emit_to_writer(&mut writer, source);
-        String::from_utf8(writer.into_inner()).unwrap()
+        #[cfg(feature = "termcolor")]
+        {
+            let mut writer = NoColor::new(Vec::new());
+            self.emit_to_writer(&mut writer, source);
+            String::from_utf8(writer.into_inner()).unwrap()
+        }
+
+        #[cfg(not(feature = "termcolor"))]
+        {
+            let mut writer = Vec::new();
+
+            let path = "glsl".to_string();
+            let files = SimpleFile::new(path, source);
+            let config = term::Config::default();
+
+            for err in &self.errors {
+                let mut diagnostic = Diagnostic::error().with_message(err.kind.to_string());
+
+                if let Some(range) = err.meta.to_range() {
+                    diagnostic = diagnostic.with_labels(vec![Label::primary((), range)]);
+                }
+
+                term::emit(&mut writer, &config, &files, &diagnostic).expect("cannot write error");
+            }
+
+            String::from_utf8(writer).unwrap()
+        }
     }
 }
 
