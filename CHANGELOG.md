@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### New Features
+
+#### Naga
+
+- Add polyfills for `dot4U8Packed` and `dot4I8Packed` for all backends. By @robamler in [#7494](https://github.com/gfx-rs/wgpu/pull/7494).
+
 ### Changes
 
 #### General

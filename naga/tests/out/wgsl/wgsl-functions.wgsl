@@ -16,9 +16,18 @@ fn test_integer_dot_product() -> i32 {
     return c_4_;
 }
 
+fn test_packed_integer_dot_product() -> u32 {
+    let c_5_ = dot4I8Packed(1u, 2u);
+    let c_6_ = dot4U8Packed(3u, 4u);
+    let c_7_ = dot4I8Packed((5u + c_6_), (6u + c_6_));
+    let c_8_ = dot4U8Packed((7u + c_6_), (8u + c_6_));
+    return c_8_;
+}
+
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
     let _e0 = test_fma();
     let _e1 = test_integer_dot_product();
+    let _e2 = test_packed_integer_dot_product();
     return;
 }

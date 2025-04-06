@@ -1126,6 +1126,14 @@ impl BlockContext<'_> {
                                 arg1_id,
                                 size as u32,
                                 block,
+                                |result_id, composite_id, index| {
+                                    Instruction::composite_extract(
+                                        result_type_id,
+                                        result_id,
+                                        composite_id,
+                                        &[index],
+                                    )
+                                },
                             );
                             self.cached[expr_handle] = id;
                             return Ok(());
@@ -1134,6 +1142,63 @@ impl BlockContext<'_> {
                             "Correct TypeInner for dot product should be already validated"
                         ),
                     },
+                    fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed) => {
+                        // TODO: consider using packed integer dot product if PackedVectorFormat4x8Bit is available
+                        let (extract_op, arg0_id, arg1_id) = match fun {
+                            Mf::Dot4U8Packed => (spirv::Op::BitFieldUExtract, arg0_id, arg1_id),
+                            Mf::Dot4I8Packed => {
+                                // Convert both packed arguments to signed integers so that we can apply the
+                                // `BitFieldSExtract` operation on them in `write_dot_product` below.
+                                let new_arg0_id = self.gen_id();
+                                block.body.push(Instruction::unary(
+                                    spirv::Op::Bitcast,
+                                    result_type_id,
+                                    new_arg0_id,
+                                    arg0_id,
+                                ));
+
+                                let new_arg1_id = self.gen_id();
+                                block.body.push(Instruction::unary(
+                                    spirv::Op::Bitcast,
+                                    result_type_id,
+                                    new_arg1_id,
+                                    arg1_id,
+                                ));
+
+                                (spirv::Op::BitFieldSExtract, new_arg0_id, new_arg1_id)
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+
+                        const VEC_LENGTH: u8 = 4;
+                        let bit_shifts: [_; VEC_LENGTH as usize] = core::array::from_fn(|index| {
+                            self.writer
+                                .get_constant_scalar(crate::Literal::U32(index as u32 * 8))
+                        });
+
+                        self.write_dot_product(
+                            id,
+                            result_type_id,
+                            arg0_id,
+                            arg1_id,
+                            VEC_LENGTH as Word,
+                            block,
+                            |result_id, composite_id, index| {
+                                Instruction::ternary(
+                                    extract_op,
+                                    result_type_id,
+                                    result_id,
+                                    composite_id,
+                                    bit_shifts[index as usize],
+                                    eight,
+                                )
+                            },
+                        );
+                        self.cached[expr_handle] = id;
+                        return Ok(());
+                    }
                     Mf::Outer => MathOp::Custom(Instruction::binary(
                         spirv::Op::OuterProduct,
                         result_type_id,
@@ -2540,6 +2605,12 @@ impl BlockContext<'_> {
     }
 
     /// Build the instructions for the arithmetic expression of a dot product
+    ///
+    /// The argument `extractor` is a function that maps `(result_id,
+    /// composite_id, index)` to an instruction that extracts the `index`th
+    /// entry of the value with ID `composite_id` and assigns it to the slot
+    /// with id `result_id` (which must have type `result_type_id`).
+    #[expect(clippy::too_many_arguments)]
     fn write_dot_product(
         &mut self,
         result_id: Word,
@@ -2548,25 +2619,16 @@ impl BlockContext<'_> {
         arg1_id: Word,
         size: u32,
         block: &mut Block,
+        extractor: impl Fn(Word, Word, Word) -> Instruction,
     ) {
         let mut partial_sum = self.writer.get_constant_null(result_type_id);
         let last_component = size - 1;
         for index in 0..=last_component {
             // compute the product of the current components
             let a_id = self.gen_id();
-            block.body.push(Instruction::composite_extract(
-                result_type_id,
-                a_id,
-                arg0_id,
-                &[index],
-            ));
+            block.body.push(extractor(a_id, arg0_id, index));
             let b_id = self.gen_id();
-            block.body.push(Instruction::composite_extract(
-                result_type_id,
-                b_id,
-                arg1_id,
-                &[index],
-            ));
+            block.body.push(extractor(b_id, arg1_id, index));
             let prod_id = self.gen_id();
             block.body.push(Instruction::binary(
                 spirv::Op::IMul,

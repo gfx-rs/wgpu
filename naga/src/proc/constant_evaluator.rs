@@ -1314,6 +1314,8 @@ impl<'a> ConstantEvaluator<'a> {
             | crate::MathFunction::Frexp
             | crate::MathFunction::Ldexp
             | crate::MathFunction::Dot
+            | crate::MathFunction::Dot4I8Packed
+            | crate::MathFunction::Dot4U8Packed
             | crate::MathFunction::Outer
             | crate::MathFunction::Distance
             | crate::MathFunction::Length

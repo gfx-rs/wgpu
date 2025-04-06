@@ -1470,12 +1470,14 @@ impl<W: Write> Writer<W> {
 
     /// Emit code for the arithmetic expression of the dot product.
     ///
+    /// The argument `extractor` is a function that accepts a `Writer`, a handle to a vector,
+    /// and an index. writes out the expression for the component at that index.
     fn put_dot_product(
         &mut self,
         arg: Handle<crate::Expression>,
         arg1: Handle<crate::Expression>,
         size: usize,
-        context: &ExpressionContext,
+        extractor: impl Fn(&mut Self, Handle<crate::Expression>, usize) -> BackendResult,
     ) -> BackendResult {
         // Write parentheses around the dot product expression to prevent operators
         // with different precedences from applying earlier.
@@ -1483,22 +1485,12 @@ impl<W: Write> Writer<W> {
 
         // Cycle through all the components of the vector
         for index in 0..size {
-            let component = back::COMPONENTS[index];
             // Write the addition to the previous product
             // This will print an extra '+' at the beginning but that is fine in msl
             write!(self.out, " + ")?;
-            // Write the first vector expression, this expression is marked to be
-            // cached so unless it can't be cached (for example, it's a Constant)
-            // it shouldn't produce large expressions.
-            self.put_expression(arg, context, true)?;
-            // Access the current component on the first vector
-            write!(self.out, ".{component} * ")?;
-            // Write the second vector expression, this expression is marked to be
-            // cached so unless it can't be cached (for example, it's a Constant)
-            // it shouldn't produce large expressions.
-            self.put_expression(arg1, context, true)?;
-            // Access the current component on the second vector
-            write!(self.out, ".{component}")?;
+            extractor(self, arg, index)?;
+            write!(self.out, " * ")?;
+            extractor(self, arg1, index)?;
         }
 
         write!(self.out, ")")?;
@@ -2194,12 +2186,48 @@ impl<W: Write> Writer<W> {
                             ..
                         } => "dot",
                         crate::TypeInner::Vector { size, .. } => {
-                            return self.put_dot_product(arg, arg1.unwrap(), size as usize, context)
+                            return self.put_dot_product(
+                                arg,
+                                arg1.unwrap(),
+                                size as usize,
+                                |writer, arg, index| {
+                                    // Write the vector expression; this expression is marked to be
+                                    // cached so unless it can't be cached (for example, it's a Constant)
+                                    // it shouldn't produce large expressions.
+                                    writer.put_expression(arg, context, true)?;
+                                    // Access the current component on the vector.
+                                    write!(writer.out, ".{}", back::COMPONENTS[index])?;
+                                    Ok(())
+                                },
+                            );
                         }
                         _ => unreachable!(
                             "Correct TypeInner for dot product should be already validated"
                         ),
                     },
+                    fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed) => {
+                        let conversion = match fun {
+                            Mf::Dot4I8Packed => "int",
+                            Mf::Dot4U8Packed => "",
+                            _ => unreachable!(),
+                        };
+
+                        return self.put_dot_product(
+                            arg,
+                            arg1.unwrap(),
+                            4,
+                            |writer, arg, index| {
+                                write!(writer.out, "({}(", conversion)?;
+                                writer.put_expression(arg, context, true)?;
+                                if index == 3 {
+                                    write!(writer.out, ") >> 24)")?;
+                                } else {
+                                    write!(writer.out, ") << {} >> 24)", (3 - index) * 8)?;
+                                }
+                                Ok(())
+                            },
+                        );
+                    }
                     Mf::Outer => return Err(Error::UnsupportedCall(format!("{fun:?}"))),
                     Mf::Cross => "cross",
                     Mf::Distance => "distance",
@@ -3176,6 +3204,10 @@ impl<W: Write> Writer<W> {
                                 _ => {}
                             }
                         }
+                    }
+                    crate::MathFunction::Dot4U8Packed | crate::MathFunction::Dot4I8Packed => {
+                        self.need_bake_expressions.insert(arg);
+                        self.need_bake_expressions.insert(arg1.unwrap());
                     }
                     crate::MathFunction::FirstLeadingBit
                     | crate::MathFunction::Pack4xI8

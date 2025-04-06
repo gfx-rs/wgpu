@@ -1386,6 +1386,10 @@ impl<'a, W: Write> Writer<'a, W> {
                             self.need_bake_expressions.insert(arg1.unwrap());
                         }
                     }
+                    crate::MathFunction::Dot4U8Packed | crate::MathFunction::Dot4I8Packed => {
+                        self.need_bake_expressions.insert(arg);
+                        self.need_bake_expressions.insert(arg1.unwrap());
+                    }
                     crate::MathFunction::Pack4xI8
                     | crate::MathFunction::Pack4xU8
                     | crate::MathFunction::Unpack4xI8
@@ -3558,6 +3562,40 @@ impl<'a, W: Write> Writer<'a, W> {
                             "Correct TypeInner for dot product should be already validated"
                         ),
                     },
+                    fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed) => {
+                        let conversion = match fun {
+                            Mf::Dot4I8Packed => "int",
+                            Mf::Dot4U8Packed => "",
+                            _ => unreachable!(),
+                        };
+
+                        let arg1 = arg1.unwrap();
+
+                        // Write parentheses around the dot product expression to prevent operators
+                        // with different precedences from applying earlier.
+                        write!(self.out, "(")?;
+                        for i in 0..4 {
+                            // Since `bitfieldExtract` only sign extends if the value is signed, we
+                            // need to convert the inputs to `int` in case of `Dot4I8Packed`. For
+                            // `Dot4U8Packed`, the code below only introduces parenthesis around
+                            // each factor, which aren't strictly needed because both operands are
+                            // baked, but which don't hurt either.
+                            write!(self.out, "bitfieldExtract({}(", conversion)?;
+                            self.write_expr(arg, ctx)?;
+                            write!(self.out, "), {}, 8)", i * 8)?;
+
+                            write!(self.out, " * bitfieldExtract({}(", conversion)?;
+                            self.write_expr(arg1, ctx)?;
+                            write!(self.out, "), {}, 8)", i * 8)?;
+
+                            if i != 3 {
+                                write!(self.out, " + ")?;
+                            }
+                        }
+                        write!(self.out, ")")?;
+
+                        return Ok(());
+                    }
                     Mf::Outer => "outerProduct",
                     Mf::Cross => "cross",
                     Mf::Distance => "distance",

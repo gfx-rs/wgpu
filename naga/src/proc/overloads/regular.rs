@@ -209,6 +209,7 @@ pub(in crate::proc::overloads) enum ConclusionRule {
     Frexp,
     Modf,
     U32,
+    I32,
     Vec2F,
     Vec4F,
     Vec4I,
@@ -223,6 +224,7 @@ impl ConclusionRule {
             Self::Frexp => Conclusion::for_frexp_modf(ir::MathFunction::Frexp, size, scalar),
             Self::Modf => Conclusion::for_frexp_modf(ir::MathFunction::Modf, size, scalar),
             Self::U32 => Conclusion::Value(ir::TypeInner::Scalar(ir::Scalar::U32)),
+            Self::I32 => Conclusion::Value(ir::TypeInner::Scalar(ir::Scalar::I32)),
             Self::Vec2F => Conclusion::Value(ir::TypeInner::Vector {
                 size: ir::VectorSize::Bi,
                 scalar: ir::Scalar::F32,
