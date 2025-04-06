@@ -324,9 +324,9 @@ cfg_aliases.workspace = true
 [dev-dependencies]
 cfg-if.workspace = true
 env_logger.workspace = true
-glam.workspace = true                               # for ray-traced-triangle example
-naga = { workspace = true, features = ["wgsl-in"] }
-winit.workspace = true                              # for "halmark" example
+glam.workspace = true                                            # for ray-traced-triangle example
+naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
+winit.workspace = true                                           # for "halmark" example
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dev-dependencies]
