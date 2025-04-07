@@ -831,6 +831,10 @@ impl crate::Device for super::Device {
                 for (entry, layout) in layout_and_entry_iter {
                     // Bindless path
                     if layout.count.is_some() {
+                        if !layout.visibility.contains(stage_bit) {
+                            continue;
+                        }
+
                         let count = entry.count;
 
                         let stages = conv::map_render_stages(layout.visibility);
@@ -1491,7 +1495,7 @@ impl crate::Device for super::Device {
         }
     }
 
-    unsafe fn start_capture(&self) -> bool {
+    unsafe fn start_graphics_debugger_capture(&self) -> bool {
         if !self.shared.private_caps.supports_capture_manager {
             return false;
         }
@@ -1503,7 +1507,8 @@ impl crate::Device for super::Device {
         default_capture_scope.begin_scope();
         true
     }
-    unsafe fn stop_capture(&self) {
+
+    unsafe fn stop_graphics_debugger_capture(&self) {
         let shared_capture_manager = metal::CaptureManager::shared();
         if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
             default_capture_scope.end_scope();

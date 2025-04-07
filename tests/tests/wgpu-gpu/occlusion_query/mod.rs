@@ -1,8 +1,14 @@
+use wgpu::InstanceFlags;
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().expect_fail(FailureCase::webgl2()))
+    .parameters(
+        TestParameters::default()
+            .expect_fail(FailureCase::webgl2())
+            // Ensure timestamp normalization does not interfere with occlusion query results
+            .instance_flags(InstanceFlags::AUTOMATIC_TIMESTAMP_NORMALIZATION),
+    )
     .run_async(|ctx| async move {
         // Create depth texture
         let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {

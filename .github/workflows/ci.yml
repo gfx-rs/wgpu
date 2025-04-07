@@ -653,6 +653,14 @@ jobs:
           echo "LD_LIBRARY_PATH=$PWD/mesa/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
           echo "LIBGL_DRIVERS_PATH=$PWD/mesa/lib/x86_64-linux-gnu/dri" >> "$GITHUB_ENV"
 
+      - name: Delete Naga snapshots
+        shell: bash
+        run: |
+          set -e
+
+          # Delete snapshots so we can ensure there aren't any excess output files.
+          rm -r naga/tests/out
+
       - name: Run `wgpu-info`
         shell: bash
         run: |

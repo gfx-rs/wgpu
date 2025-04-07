@@ -2,6 +2,8 @@
 // the corresponding warnings aren't helpful.
 #![allow(dead_code, unused_imports)]
 
+use core::fmt::Write;
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -167,7 +169,7 @@ struct Input {
     ///
     /// If the subdirectory is omitted, we assume that the output goes
     /// to "wgsl".
-    subdirectory: Option<PathBuf>,
+    subdirectory: PathBuf,
 
     /// The input filename name, without a directory.
     file_name: PathBuf,
@@ -190,9 +192,9 @@ impl Input {
     /// The `input` path is interpreted relative to the `BASE_DIR_IN`
     /// subdirectory of the directory given by the `CARGO_MANIFEST_DIR`
     /// environment variable.
-    fn new(subdirectory: Option<&str>, name: &str, extension: &str) -> Input {
+    fn new(subdirectory: &str, name: &str, extension: &str) -> Input {
         Input {
-            subdirectory: subdirectory.map(PathBuf::from),
+            subdirectory: PathBuf::from(subdirectory),
             // Don't wipe out any extensions on `name`, as
             // `with_extension` would do.
             file_name: PathBuf::from(format!("{name}.{extension}")),
@@ -202,13 +204,11 @@ impl Input {
 
     /// Return an iterator that produces an `Input` for each entry in `subdirectory`.
     fn files_in_dir(
-        subdirectory: Option<&'static str>,
+        subdirectory: &'static str,
         file_extensions: &'static [&'static str],
     ) -> impl Iterator<Item = Input> + 'static {
-        let mut input_directory = Path::new(env!("CARGO_MANIFEST_DIR")).join(BASE_DIR_IN);
-        if let Some(ref subdirectory) = subdirectory {
-            input_directory.push(subdirectory);
-        }
+        let input_directory = Path::new(CRATE_ROOT).join(BASE_DIR_IN).join(subdirectory);
+
         let entries = match std::fs::read_dir(&input_directory) {
             Ok(entries) => entries,
             Err(err) => panic!(
@@ -245,14 +245,12 @@ impl Input {
     /// Return the path to the input directory.
     fn input_directory(&self) -> PathBuf {
         let mut dir = Path::new(CRATE_ROOT).join(BASE_DIR_IN);
-        if let Some(ref subdirectory) = self.subdirectory {
-            dir.push(subdirectory);
-        }
+        dir.push(&self.subdirectory);
         dir
     }
 
     /// Return the path to the output directory.
-    fn output_directory(&self, subdirectory: &str) -> PathBuf {
+    fn output_directory(subdirectory: &str) -> PathBuf {
         let mut dir = Path::new(CRATE_ROOT).join(BASE_DIR_OUT);
         dir.push(subdirectory);
         dir
@@ -266,14 +264,24 @@ impl Input {
     }
 
     fn output_path(&self, subdirectory: &str, extension: &str) -> PathBuf {
-        let mut output = self.output_directory(subdirectory);
+        let mut output = Self::output_directory(subdirectory);
         if self.keep_input_extension {
-            let mut file_name = self.file_name.as_os_str().to_owned();
-            file_name.push(".");
-            file_name.push(extension);
+            let file_name = format!(
+                "{}-{}.{}",
+                self.subdirectory.display(),
+                self.file_name.display(),
+                extension
+            );
+
             output.push(&file_name);
         } else {
-            output.push(&self.file_name);
+            let file_name = format!(
+                "{}-{}",
+                self.subdirectory.display(),
+                self.file_name.display()
+            );
+
+            output.push(&file_name);
             output.set_extension(extension);
         }
         output
@@ -792,7 +800,7 @@ fn write_output_wgsl(
 fn convert_snapshots_wgsl() {
     let _ = env_logger::try_init();
 
-    for input in Input::files_in_dir(Some("wgsl"), &["wgsl"]) {
+    for input in Input::files_in_dir("wgsl", &["wgsl"]) {
         let source = input.read_source();
         // crlf will make the large split output different on different platform
         let source = source.replace('\r', "");
@@ -813,7 +821,7 @@ fn convert_snapshots_spv() {
 
     let _ = env_logger::try_init();
 
-    for input in Input::files_in_dir(Some("spv"), &["spvasm"]) {
+    for input in Input::files_in_dir("spv", &["spvasm"]) {
         println!("Assembling '{}'", input.file_name.display());
 
         let command = Command::new("spirv-as")
@@ -861,7 +869,7 @@ fn convert_snapshots_spv() {
 fn convert_snapshots_glsl() {
     let _ = env_logger::try_init();
 
-    for input in Input::files_in_dir(Some("glsl"), &["vert", "frag", "comp"]) {
+    for input in Input::files_in_dir("glsl", &["vert", "frag", "comp"]) {
         let input = Input {
             keep_input_extension: true,
             ..input

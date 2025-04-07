@@ -89,6 +89,7 @@ pub mod registry;
 pub mod resource;
 mod snatch;
 pub mod storage;
+mod timestamp_normalization;
 mod track;
 mod weak_vec;
 // This is public for users who pre-compile shaders while still wanting to

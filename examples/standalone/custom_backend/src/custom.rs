@@ -236,11 +236,11 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
-    fn start_capture(&self) {
+    unsafe fn start_graphics_debugger_capture(&self) {
         unimplemented!()
     }
 
-    fn stop_capture(&self) {
+    unsafe fn stop_graphics_debugger_capture(&self) {
         unimplemented!()
     }
 

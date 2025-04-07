@@ -2025,26 +2025,36 @@ impl Global {
         Ok(all_queue_empty)
     }
 
-    pub fn device_start_capture(&self, device_id: DeviceId) {
-        api_log!("Device::start_capture");
+    /// # Safety
+    ///
+    /// - See [wgpu::Device::start_graphics_debugger_capture][api] for details the safety.
+    ///
+    /// [api]: ../../wgpu/struct.Device.html#method.start_graphics_debugger_capture
+    pub unsafe fn device_start_graphics_debugger_capture(&self, device_id: DeviceId) {
+        api_log!("Device::start_graphics_debugger_capture");
 
         let device = self.hub.devices.get(device_id);
 
         if !device.is_valid() {
             return;
         }
-        unsafe { device.raw().start_capture() };
+        unsafe { device.raw().start_graphics_debugger_capture() };
     }
 
-    pub fn device_stop_capture(&self, device_id: DeviceId) {
-        api_log!("Device::stop_capture");
+    /// # Safety
+    ///
+    /// - See [wgpu::Device::stop_graphics_debugger_capture][api] for details the safety.
+    ///
+    /// [api]: ../../wgpu/struct.Device.html#method.stop_graphics_debugger_capture
+    pub unsafe fn device_stop_graphics_debugger_capture(&self, device_id: DeviceId) {
+        api_log!("Device::stop_graphics_debugger_capture");
 
         let device = self.hub.devices.get(device_id);
 
         if !device.is_valid() {
             return;
         }
-        unsafe { device.raw().stop_capture() };
+        unsafe { device.raw().stop_graphics_debugger_capture() };
     }
 
     pub fn pipeline_cache_get_data(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {

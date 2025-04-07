@@ -62,7 +62,7 @@ Day of Release:
 - Create a new milestone for the next release, in 12 weeks time.
 
 ## Patch Release Process
-- Enumerate all PRs that haven't been backported yet. These use the `needs-backport` label. [GH Link](https://github.com/gfx-rs/wgpu/issues?q=label%3A%22PR%3A+needs+back-porting)
+- Enumerate all PRs that haven't been backported yet. These use the `needs-backport` label. [GH Link](https://github.com/gfx-rs/wgpu/pulls?q=sort%3Aupdated-desc+is%3Apr+label%3A%22PR%3A+needs+back-porting%22)
 - On _your own branch_ based on the latest release branch. Cherry-pick the PRs that need to be backported. When modifying the commits, use --append to retain their original authorship.
 - Remove the `needs-backport` label from the PRs.
 - Fix the changelogs items and add a new header for the patch release with the release version and date.

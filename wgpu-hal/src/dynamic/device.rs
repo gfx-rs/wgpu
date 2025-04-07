@@ -146,8 +146,8 @@ pub trait DynDevice: DynResource {
         timeout_ms: u32,
     ) -> Result<bool, DeviceError>;
 
-    unsafe fn start_capture(&self) -> bool;
-    unsafe fn stop_capture(&self);
+    unsafe fn start_graphics_debugger_capture(&self) -> bool;
+    unsafe fn stop_graphics_debugger_capture(&self);
 
     unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>>;
 
@@ -504,12 +504,12 @@ impl<D: Device + DynResource> DynDevice for D {
         unsafe { D::wait(self, fence, value, timeout_ms) }
     }
 
-    unsafe fn start_capture(&self) -> bool {
-        unsafe { D::start_capture(self) }
+    unsafe fn start_graphics_debugger_capture(&self) -> bool {
+        unsafe { D::start_graphics_debugger_capture(self) }
     }
 
-    unsafe fn stop_capture(&self) {
-        unsafe { D::stop_capture(self) }
+    unsafe fn stop_graphics_debugger_capture(&self) {
+        unsafe { D::stop_graphics_debugger_capture(self) }
     }
 
     unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>> {

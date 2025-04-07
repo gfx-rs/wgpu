@@ -426,10 +426,10 @@ impl crate::Device for Context {
         Ok(true)
     }
 
-    unsafe fn start_capture(&self) -> bool {
+    unsafe fn start_graphics_debugger_capture(&self) -> bool {
         false
     }
-    unsafe fn stop_capture(&self) {}
+    unsafe fn stop_graphics_debugger_capture(&self) {}
     unsafe fn create_acceleration_structure(
         &self,
         desc: &crate::AccelerationStructureDescriptor,

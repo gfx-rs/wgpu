@@ -492,8 +492,9 @@ OpLine %3 93 25
 %200 = OpVectorShuffle  %11  %199 %199 0 1 2
 %201 = OpFSub  %11  %198 %200
 %202 = OpExtInst  %11  %1 Normalize %201
-OpLine %3 94 23
+OpLine %3 94 32
 %203 = OpDot  %4  %155 %202
+OpLine %3 94 23
 %204 = OpExtInst  %4  %1 FMax %48 %203
 OpLine %3 96 9
 %205 = OpFMul  %4  %196 %204
@@ -599,8 +600,9 @@ OpLine %3 112 25
 %276 = OpVectorShuffle  %11  %275 %275 0 1 2
 %277 = OpFSub  %11  %274 %276
 %278 = OpExtInst  %11  %1 Normalize %277
-OpLine %3 113 23
+OpLine %3 113 32
 %279 = OpDot  %4  %239 %278
+OpLine %3 113 23
 %280 = OpExtInst  %4  %1 FMax %48 %279
 OpLine %3 114 9
 %281 = OpFMul  %4  %272 %280

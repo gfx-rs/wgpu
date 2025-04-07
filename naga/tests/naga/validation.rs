@@ -266,13 +266,15 @@ fn builtin_cross_product_args() {
     use naga::{MathFunction, Module, Type, TypeInner, VectorSize};
 
     // We want to ensure that the *only* problem with the code is the
-    // arity of the vectors passed to `cross`. So validate two
-    // versions of the module varying only in that aspect.
+    // arity of the call, or the size of the vectors passed to
+    // `cross`. So validate different versions of the module varying
+    // only in those aspects.
     //
-    // Looking at uses of the `wg_load` makes it easy to identify the
-    // differences between the two variants.
+    // Looking at uses of `size` and `arity` makes it easy to identify
+    // the differences between the variants.
     fn variant(
         size: VectorSize,
+        arity: usize,
     ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
@@ -311,9 +313,9 @@ fn builtin_cross_product_args() {
             Expression::Math {
                 fun: MathFunction::Cross,
                 arg: ex_zero,
-                arg1: Some(ex_zero),
-                arg2: None,
-                arg3: None,
+                arg1: (arity >= 2).then_some(ex_zero),
+                arg2: (arity >= 3).then_some(ex_zero),
+                arg3: (arity >= 4).then_some(ex_zero),
             },
             span,
         );
@@ -338,9 +340,14 @@ fn builtin_cross_product_args() {
         .validate(&module)
     }
 
-    assert!(variant(VectorSize::Bi).is_err());
-    variant(VectorSize::Tri).expect("module should validate");
-    assert!(variant(VectorSize::Quad).is_err());
+    assert!(variant(VectorSize::Bi, 2).is_err());
+
+    assert!(variant(VectorSize::Tri, 1).is_err());
+    variant(VectorSize::Tri, 2).expect("module should validate");
+    assert!(variant(VectorSize::Tri, 3).is_err());
+    assert!(variant(VectorSize::Tri, 4).is_err());
+
+    assert!(variant(VectorSize::Quad, 2).is_err());
 }
 
 #[cfg(feature = "wgsl-in")]
@@ -757,4 +764,62 @@ fn bad_texture_dimensions_level() {
     assert!(validate("1").is_ok());
     assert!(validate("1i").is_ok());
     assert!(validate("1").is_ok());
+}
+
+#[test]
+fn arity_check() {
+    use ir::MathFunction as Mf;
+    use naga::Span;
+    use naga::{ir, valid};
+    let _ = env_logger::builder().is_test(true).try_init();
+
+    type Result = core::result::Result<naga::valid::ModuleInfo, naga::valid::ValidationError>;
+
+    fn validate(fun: ir::MathFunction, args: &[usize]) -> Result {
+        let nowhere = Span::default();
+        let mut module = ir::Module::default();
+        let ty_f32 = module.types.insert(
+            ir::Type {
+                name: Some("f32".to_string()),
+                inner: ir::TypeInner::Scalar(ir::Scalar::F32),
+            },
+            nowhere,
+        );
+        let mut f = ir::Function {
+            result: Some(ir::FunctionResult {
+                ty: ty_f32,
+                binding: None,
+            }),
+            ..ir::Function::default()
+        };
+        let ex_zero = f
+            .expressions
+            .append(ir::Expression::ZeroValue(ty_f32), nowhere);
+        let ex_pow = f.expressions.append(
+            dbg!(ir::Expression::Math {
+                fun,
+                arg: ex_zero,
+                arg1: args.contains(&1).then_some(ex_zero),
+                arg2: args.contains(&2).then_some(ex_zero),
+                arg3: args.contains(&3).then_some(ex_zero),
+            }),
+            nowhere,
+        );
+        f.body = ir::Block::from_vec(vec![
+            ir::Statement::Emit(naga::Range::new_from_bounds(ex_pow, ex_pow)),
+            ir::Statement::Return {
+                value: Some(ex_pow),
+            },
+        ]);
+        module.functions.append(f, nowhere);
+        valid::Validator::new(Default::default(), valid::Capabilities::all())
+            .validate(&module)
+            .map_err(|err| err.into_inner()) // discard spans
+    }
+
+    assert!(validate(Mf::Sin, &[]).is_ok());
+    assert!(validate(Mf::Sin, &[1]).is_err());
+    assert!(validate(Mf::Sin, &[3]).is_err());
+    assert!(validate(Mf::Pow, &[1]).is_ok());
+    assert!(validate(Mf::Pow, &[3]).is_err());
 }

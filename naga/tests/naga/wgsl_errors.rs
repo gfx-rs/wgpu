@@ -180,6 +180,56 @@ fn bad_type_cast() {
 }
 
 #[test]
+fn cross_vec2() {
+    check(
+        r#"
+            fn x() -> f32 {
+                return cross(vec2(0., 1.), vec2(0., 1.));
+            }
+        "#,
+        "\
+error: wrong type passed as argument #1 to `cross`
+  ┌─ wgsl:3:24
+  │
+3 │                 return cross(vec2(0., 1.), vec2(0., 1.));
+  │                        ^^^^^ ^^^^^^^^^^^^ argument #1 has type `vec2<{AbstractFloat}>`
+  │
+  = note: `cross` accepts the following types for argument #1:
+  = note: allowed type: vec3<{AbstractFloat}>
+  = note: allowed type: vec3<f32>
+  = note: allowed type: vec3<f16>
+  = note: allowed type: vec3<f64>
+
+",
+    );
+}
+
+#[test]
+fn cross_vec4() {
+    check(
+        r#"
+            fn x() -> f32 {
+                return cross(vec4(0., 1., 2., 3.), vec4(0., 1., 2., 3.));
+            }
+        "#,
+        "\
+error: wrong type passed as argument #1 to `cross`
+  ┌─ wgsl:3:24
+  │
+3 │                 return cross(vec4(0., 1., 2., 3.), vec4(0., 1., 2., 3.));
+  │                        ^^^^^ ^^^^^^^^^^^^^^^^^^^^ argument #1 has type `vec4<{AbstractFloat}>`
+  │
+  = note: `cross` accepts the following types for argument #1:
+  = note: allowed type: vec3<{AbstractFloat}>
+  = note: allowed type: vec3<f32>
+  = note: allowed type: vec3<f16>
+  = note: allowed type: vec3<f64>
+
+",
+    );
+}
+
+#[test]
 fn type_not_constructible() {
     check(
         r#"
@@ -3135,4 +3185,142 @@ fn issue7165() {
     // module source, which (prior to the fix for #7165) could panic when
     // rendering an error if the module contained spans.
     let _location = err.location("");
+}
+
+#[test]
+fn wrong_argument_count() {
+    check(
+        "fn foo() -> f32 {
+            return sin();
+        }",
+        r#"error: wrong number of arguments: expected 1, found 0
+  ┌─ wgsl:2:20
+  │
+2 │             return sin();
+  │                    ^^^ wrong number of arguments
+
+"#,
+    );
+}
+
+#[test]
+fn too_many_arguments() {
+    check(
+        "fn foo() -> f32 {
+            return sin(1.0, 2.0);
+        }",
+        r#"error: too many arguments passed to `sin`
+  ┌─ wgsl:2:20
+  │
+2 │             return sin(1.0, 2.0);
+  │                    ^^^      ^^^ unexpected argument #2
+  │
+  = note: The `sin` function accepts at most 1 argument(s)
+
+"#,
+    );
+}
+
+#[test]
+fn too_many_arguments_2() {
+    check(
+        "fn foo() -> f32 {
+            return distance(vec2<f32>(), 0i);
+        }",
+        r#"error: wrong type passed as argument #2 to `distance`
+  ┌─ wgsl:2:20
+  │
+2 │             return distance(vec2<f32>(), 0i);
+  │                    ^^^^^^^^              ^^ argument #2 has type `i32`
+  │
+  = note: `distance` accepts the following types for argument #2:
+  = note: allowed type: vec2<f32>
+  = note: allowed type: vec2<f16>
+  = note: allowed type: vec2<f64>
+  = note: allowed type: vec3<f32>
+  = note: allowed type: vec3<f16>
+  = note: allowed type: vec3<f64>
+  = note: allowed type: vec4<f32>
+  = note: allowed type: vec4<f16>
+  = note: allowed type: vec4<f64>
+
+"#,
+    );
+}
+
+#[test]
+fn inconsistent_type() {
+    check(
+        "fn foo() -> f32 {
+            return dot(vec4<f32>(), vec3<f32>());
+        }",
+        r#"error: inconsistent type passed as argument #2 to `dot`
+  ┌─ wgsl:2:20
+  │
+2 │             return dot(vec4<f32>(), vec3<f32>());
+  │                    ^^^ ^^^^^^^^^^   ^^^^^^^^^^ argument #2 has type vec3<f32>
+  │                        │             
+  │                        this argument has type vec4<f32>, which constrains subsequent arguments
+  │
+  = note: Because argument #1 has type vec4<f32>, only the following types
+  = note: (or types that automatically convert to them) are accepted for argument #2:
+  = note: allowed type: vec4<f32>
+
+"#,
+    );
+}
+
+#[test]
+fn more_inconsistent_type() {
+    #[track_caller]
+    fn variant(call: &str) {
+        let input = format!(
+            r#"
+            fn f() {{ var x = {call}; }}
+        "#
+        );
+        let result = naga::front::wgsl::parse_str(&input);
+        let Err(ref err) = result else {
+            panic!("expected ParseError, got {result:#?}");
+        };
+        if !err.message().contains("inconsistent type") {
+            panic!("expected 'inconsistent type' error, got {result:#?}");
+        }
+    }
+
+    variant("min(1.0, 1i)");
+    variant("min(1i, 1.0)");
+    variant("min(1i, 1f)");
+    variant("min(1f, 1i)");
+
+    variant("clamp(1, 1.0, 1i)");
+    variant("clamp(1, 1i, 1.0)");
+    variant("clamp(1, 1i, 1f)");
+    variant("clamp(1, 1f, 1i)");
+    variant("clamp(1.0, 1, 1i)");
+    variant("clamp(1.0, 1.0, 1i)");
+    variant("clamp(1.0, 1i, 1)");
+    variant("clamp(1.0, 1i, 1.0)");
+    variant("clamp(1.0, 1i, 1i)");
+    variant("clamp(1.0, 1i, 1f)");
+    variant("clamp(1.0, 1f, 1i)");
+    variant("clamp(1i, 1, 1.0)");
+    variant("clamp(1i, 1, 1f)");
+    variant("clamp(1i, 1.0, 1)");
+    variant("clamp(1i, 1.0, 1.0)");
+    variant("clamp(1i, 1.0, 1i)");
+    variant("clamp(1i, 1.0, 1f)");
+    variant("clamp(1i, 1i, 1.0)");
+    variant("clamp(1i, 1i, 1f)");
+    variant("clamp(1i, 1f, 1)");
+    variant("clamp(1i, 1f, 1.0)");
+    variant("clamp(1i, 1f, 1i)");
+    variant("clamp(1i, 1f, 1f)");
+    variant("clamp(1f, 1, 1i)");
+    variant("clamp(1f, 1.0, 1i)");
+    variant("clamp(1f, 1i, 1)");
+    variant("clamp(1f, 1i, 1.0)");
+    variant("clamp(1f, 1i, 1i)");
+    variant("clamp(1f, 1i, 1f)");
+    variant("clamp(1f, 1f, 1i)");
 }
