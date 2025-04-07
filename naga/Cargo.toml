@@ -55,6 +55,7 @@ arbitrary = [
     "bitflags/arbitrary",
     "indexmap/arbitrary",
     "half/arbitrary",
+    "half/std",
 ]
 spv-in = ["dep:petgraph", "dep:spirv"]
 spv-out = ["dep:spirv"]
