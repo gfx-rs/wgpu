@@ -383,7 +383,10 @@ impl super::Device {
             size,
             mip_level_count,
             sample_count,
-            allocation: suballocation::Allocation::none(suballocation::AllocationType::Texture),
+            allocation: suballocation::Allocation::none(
+                suballocation::AllocationType::Texture,
+                format.theoretical_memory_footprint(size),
+            ),
         }
     }
 
@@ -394,7 +397,10 @@ impl super::Device {
         super::Buffer {
             resource,
             size,
-            allocation: suballocation::Allocation::none(suballocation::AllocationType::Buffer),
+            allocation: suballocation::Allocation::none(
+                suballocation::AllocationType::Buffer,
+                size,
+            ),
         }
     }
 }

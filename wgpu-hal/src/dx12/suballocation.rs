@@ -15,14 +15,46 @@ pub(crate) enum AllocationType {
 }
 
 #[derive(Debug)]
+enum AllocationInner {
+    /// This resource is suballocated from a heap.
+    Placed {
+        inner: gpu_allocator::d3d12::Allocation,
+    },
+    /// This resource is a committed resource and does not belong to a
+    /// suballocated heap. We store an approximate size, so we can manage our counters
+    /// correctly.
+    ///
+    /// This is only used for Intel Xe drivers, which have a bug that
+    /// prevents suballocation from working correctly.
+    Committed { size: u64 },
+}
+
+#[derive(Debug)]
 pub(crate) struct Allocation {
-    inner: Option<gpu_allocator::d3d12::Allocation>,
+    inner: AllocationInner,
     ty: AllocationType,
 }
 
 impl Allocation {
-    pub fn none(ty: AllocationType) -> Self {
-        Self { inner: None, ty }
+    pub fn placed(inner: gpu_allocator::d3d12::Allocation, ty: AllocationType) -> Self {
+        Self {
+            inner: AllocationInner::Placed { inner },
+            ty,
+        }
+    }
+
+    pub fn none(ty: AllocationType, size: u64) -> Self {
+        Self {
+            inner: AllocationInner::Committed { size },
+            ty,
+        }
+    }
+
+    pub fn size(&self) -> u64 {
+        match self.inner {
+            AllocationInner::Placed { ref inner } => inner.size(),
+            AllocationInner::Committed { size } => size,
+        }
     }
 }
 
@@ -105,7 +137,10 @@ impl<'a> DeviceAllocationContext<'a> {
         // Workaround for Intel Xe drivers
         if !self.shared.private_caps.suballocation_supported {
             let resource = self.create_committed_buffer(desc, raw_desc)?;
-            return Ok((resource, Allocation::none(AllocationType::Buffer)));
+            return Ok((
+                resource,
+                Allocation::none(AllocationType::Buffer, desc.size),
+            ));
         }
 
         let location = match (is_cpu_read, is_cpu_write) {
@@ -146,10 +181,7 @@ impl<'a> DeviceAllocationContext<'a> {
 
         Ok((
             resource,
-            Allocation {
-                inner: Some(allocation),
-                ty: AllocationType::Buffer,
-            },
+            Allocation::placed(allocation, AllocationType::Buffer),
         ))
     }
 
@@ -161,7 +193,13 @@ impl<'a> DeviceAllocationContext<'a> {
         // Workaround for Intel Xe drivers
         if !self.shared.private_caps.suballocation_supported {
             let resource = self.create_committed_texture(raw_desc)?;
-            return Ok((resource, Allocation::none(AllocationType::Texture)));
+            return Ok((
+                resource,
+                Allocation::none(
+                    AllocationType::Texture,
+                    desc.format.theoretical_memory_footprint(desc.size),
+                ),
+            ));
         }
 
         let location = MemoryLocation::GpuOnly;
@@ -196,10 +234,7 @@ impl<'a> DeviceAllocationContext<'a> {
 
         Ok((
             resource,
-            Allocation {
-                inner: Some(allocation),
-                ty: AllocationType::Texture,
-            },
+            Allocation::placed(allocation, AllocationType::Texture),
         ))
     }
 
@@ -213,7 +248,7 @@ impl<'a> DeviceAllocationContext<'a> {
             let resource = self.create_committed_acceleration_structure(raw_desc)?;
             return Ok((
                 resource,
-                Allocation::none(AllocationType::AccelerationStructure),
+                Allocation::none(AllocationType::AccelerationStructure, desc.size),
             ));
         }
 
@@ -252,10 +287,7 @@ impl<'a> DeviceAllocationContext<'a> {
 
         Ok((
             resource,
-            Allocation {
-                inner: Some(allocation),
-                ty: AllocationType::AccelerationStructure,
-            },
+            Allocation::placed(allocation, AllocationType::AccelerationStructure),
         ))
     }
 
@@ -267,7 +299,7 @@ impl<'a> DeviceAllocationContext<'a> {
         // Make sure the resource is released before we free the allocation.
         drop(resource);
 
-        let Some(inner) = allocation.inner else {
+        let AllocationInner::Placed { inner } = allocation.inner else {
             return;
         };
 

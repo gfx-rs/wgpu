@@ -3540,6 +3540,47 @@ impl TextureFormat {
     pub fn is_srgb(&self) -> bool {
         *self != self.remove_srgb_suffix()
     }
+
+    /// Returns the theoretical memory footprint of a texture with the given format and dimensions.
+    ///
+    /// Actual memory usage may greatly exceed this value due to alignment and padding.
+    #[must_use]
+    pub fn theoretical_memory_footprint(&self, size: Extent3d) -> u64 {
+        let (block_width, block_height) = self.block_dimensions();
+
+        let block_size = self.block_copy_size(None);
+
+        let approximate_block_size = match block_size {
+            Some(size) => size,
+            None => match self {
+                // One f16 per pixel
+                Self::Depth16Unorm => 2,
+                // One u24 per pixel, padded to 4 bytes
+                Self::Depth24Plus => 4,
+                // One u24 per pixel, plus one u8 per pixel
+                Self::Depth24PlusStencil8 => 4,
+                // One f32 per pixel
+                Self::Depth32Float => 4,
+                // One f32 per pixel, plus one u8 per pixel, with 3 bytes intermediary padding
+                Self::Depth32FloatStencil8 => 8,
+                // One u8 per pixel
+                Self::Stencil8 => 1,
+                // Two chroma bytes per block, one luma byte per block
+                Self::NV12 => 3,
+                f => {
+                    log::warn!("Memory footprint for format {:?} is not implemented", f);
+                    0
+                }
+            },
+        };
+
+        let width_blocks = size.width.div_ceil(block_width) as u64;
+        let height_blocks = size.height.div_ceil(block_height) as u64;
+
+        let total_blocks = width_blocks * height_blocks * size.depth_or_array_layers as u64;
+
+        total_blocks * approximate_block_size as u64
+    }
 }
 
 #[test]

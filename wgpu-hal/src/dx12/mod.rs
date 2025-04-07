@@ -1375,7 +1375,10 @@ impl crate::Surface for Surface {
             size: sc.size,
             mip_level_count: 1,
             sample_count: 1,
-            allocation: suballocation::Allocation::none(suballocation::AllocationType::Texture),
+            allocation: suballocation::Allocation::none(
+                suballocation::AllocationType::Texture,
+                sc.format.theoretical_memory_footprint(sc.size),
+            ),
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,
