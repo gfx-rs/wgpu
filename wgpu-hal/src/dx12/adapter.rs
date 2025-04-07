@@ -474,7 +474,8 @@ impl super::Adapter {
         // Once ray tracing pipelines are supported they also will go here
         features.set(
             wgt::Features::EXPERIMENTAL_RAY_QUERY
-                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                | wgt::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
             features5.RaytracingTier == Direct3D12::D3D12_RAYTRACING_TIER_1_1
                 && shader_model >= naga::back::hlsl::ShaderModel::V6_5
                 && has_features5,

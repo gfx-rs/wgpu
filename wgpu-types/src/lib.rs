@@ -4974,6 +4974,29 @@ impl VertexFormat {
             Self::Float64x4 => 32,
         }
     }
+
+    /// Returns the readable size of the vertex format in and acceleration structure build (this is
+    /// slightly different from [`Self::size`])
+    #[must_use]
+    pub const fn acceleration_structure_vertex_readable_size(&self) -> u64 {
+        match self {
+            Self::Float16x2 | Self::Snorm16x2 => 4,
+            Self::Float32x3 => 12,
+            Self::Float32x2 => 8,
+            Self::Float16x4 | Self::Snorm16x4 => 6,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Returns the alignment required for `wgpu::BlasTriangleGeometry::vertex_stride`
+    #[must_use]
+    pub const fn acceleration_structure_stride_alignment(&self) -> u64 {
+        match self {
+            Self::Float16x4 | Self::Float16x2 | Self::Snorm16x4 | Self::Snorm16x2 => 2,
+            Self::Float32x2 | Self::Float32x3 => 4,
+            _ => unreachable!(),
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -7436,7 +7459,7 @@ impl Default for ShaderRuntimeChecks {
 pub struct BlasTriangleGeometrySizeDescriptor {
     /// Format of a vertex position, must be [`VertexFormat::Float32x3`]
     /// with just [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
-    /// but later features may add more formats.
+    /// but [`Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS`] adds more.
     pub vertex_format: VertexFormat,
     /// Number of vertices.
     pub vertex_count: u32,

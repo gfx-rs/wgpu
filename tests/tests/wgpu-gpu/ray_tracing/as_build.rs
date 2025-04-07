@@ -1,4 +1,4 @@
-use std::iter;
+use std::{iter, mem};
 
 use crate::ray_tracing::AsBuildContext;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
@@ -600,6 +600,207 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
         &ctx.device,
         || {
             encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+        },
+        None,
+    );
+}
+
+#[gpu_test]
+static EXTRA_FORMAT_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(
+                wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                    | wgpu::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+            )
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+    )
+    .run_sync(extra_format_build);
+
+fn extra_format_build(ctx: TestingContext) {
+    let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: &[0; mem::size_of::<[[i16; 3]; 3]>()],
+        usage: BufferUsages::BLAS_INPUT,
+    });
+
+    let blas_size = BlasTriangleGeometrySizeDescriptor {
+        // The fourth component is ignored, and it allows us to have a smaller stride.
+        vertex_format: VertexFormat::Snorm16x4,
+        vertex_count: 3,
+        index_format: None,
+        index_count: None,
+        flags: wgpu::AccelerationStructureGeometryFlags::empty(),
+    };
+
+    let blas = ctx.device.create_blas(
+        &CreateBlasDescriptor {
+            label: Some("BLAS"),
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: AccelerationStructureUpdateMode::Build,
+        },
+        BlasGeometrySizeDescriptors::Triangles {
+            descriptors: vec![blas_size.clone()],
+        },
+    );
+
+    let mut command_encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS_1"),
+        });
+    command_encoder.build_acceleration_structures(
+        &[BlasBuildEntry {
+            blas: &blas,
+            geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
+                size: &blas_size,
+                vertex_buffer: &vertices,
+                first_vertex: 0,
+                vertex_stride: mem::size_of::<[i16; 3]>() as BufferAddress,
+                index_buffer: None,
+                first_index: None,
+                transform_buffer: None,
+                transform_buffer_offset: None,
+            }]),
+        }],
+        &[],
+    );
+    ctx.queue.submit([command_encoder.finish()]);
+}
+
+#[gpu_test]
+static MISALIGNED_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+    )
+    .run_sync(misaligned_build);
+
+fn misaligned_build(ctx: TestingContext) {
+    let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: &[0; mem::size_of::<[[i16; 3]; 3]>()],
+        usage: BufferUsages::BLAS_INPUT,
+    });
+
+    let blas_size = BlasTriangleGeometrySizeDescriptor {
+        // The fourth component is ignored, and it allows us to have a smaller stride.
+        vertex_format: VertexFormat::Float32x3,
+        vertex_count: 3,
+        index_format: None,
+        index_count: None,
+        flags: wgpu::AccelerationStructureGeometryFlags::empty(),
+    };
+
+    let blas = ctx.device.create_blas(
+        &CreateBlasDescriptor {
+            label: Some("BLAS"),
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: AccelerationStructureUpdateMode::Build,
+        },
+        BlasGeometrySizeDescriptors::Triangles {
+            descriptors: vec![blas_size.clone()],
+        },
+    );
+
+    let mut command_encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS_1"),
+        });
+    fail(
+        &ctx.device,
+        || {
+            command_encoder.build_acceleration_structures(
+                &[BlasBuildEntry {
+                    blas: &blas,
+                    geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
+                        size: &blas_size,
+                        vertex_buffer: &vertices,
+                        first_vertex: 0,
+                        // Not aligned to four bytes like it should be
+                        vertex_stride: 13,
+                        index_buffer: None,
+                        first_index: None,
+                        transform_buffer: None,
+                        transform_buffer_offset: None,
+                    }]),
+                }],
+                &[],
+            )
+        },
+        None,
+    );
+}
+
+#[gpu_test]
+static TOO_SMALL_STRIDE_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            // https://github.com/gfx-rs/wgpu/issues/6727
+            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+    )
+    .run_sync(too_small_stride_build);
+
+fn too_small_stride_build(ctx: TestingContext) {
+    let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: &[0; mem::size_of::<[[i16; 3]; 3]>()],
+        usage: BufferUsages::BLAS_INPUT,
+    });
+
+    let blas_size = BlasTriangleGeometrySizeDescriptor {
+        // The fourth component is ignored, and it allows us to have a smaller stride.
+        vertex_format: VertexFormat::Float32x3,
+        vertex_count: 3,
+        index_format: None,
+        index_count: None,
+        flags: wgpu::AccelerationStructureGeometryFlags::empty(),
+    };
+
+    let blas = ctx.device.create_blas(
+        &CreateBlasDescriptor {
+            label: Some("BLAS"),
+            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
+            update_mode: AccelerationStructureUpdateMode::Build,
+        },
+        BlasGeometrySizeDescriptors::Triangles {
+            descriptors: vec![blas_size.clone()],
+        },
+    );
+
+    let mut command_encoder = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS_1"),
+        });
+    fail(
+        &ctx.device,
+        || {
+            command_encoder.build_acceleration_structures(
+                &[BlasBuildEntry {
+                    blas: &blas,
+                    geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
+                        size: &blas_size,
+                        vertex_buffer: &vertices,
+                        first_vertex: 0,
+                        // Aligned to four bytes but too small
+                        vertex_stride: 8,
+                        index_buffer: None,
+                        first_index: None,
+                        transform_buffer: None,
+                        transform_buffer_offset: None,
+                    }]),
+                }],
+                &[],
+            )
         },
         None,
     );

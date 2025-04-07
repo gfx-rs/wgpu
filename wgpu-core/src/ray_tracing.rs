@@ -102,6 +102,12 @@ pub enum BuildAccelerationStructureError {
     #[error("Blas {0:?} vertex formats are different, creation format: {1:?}, provided: {2:?}")]
     DifferentBlasVertexFormats(ResourceErrorIdent, VertexFormat, VertexFormat),
 
+    #[error("Blas {0:?} stride was required to be at least {1} but stride given was {2}")]
+    VertexStrideTooSmall(ResourceErrorIdent, u64, u64),
+
+    #[error("Blas {0:?} stride was required to be a multiple of {1} but stride given was {2}")]
+    VertexStrideUnaligned(ResourceErrorIdent, u64, u64),
+
     #[error("Blas {0:?} index count was provided at creation or building, but not the other")]
     BlasIndexCountProvidedMismatch(ResourceErrorIdent),
 

@@ -100,7 +100,8 @@ pub struct BlasTriangleGeometry<'a> {
     pub vertex_buffer: &'a Buffer,
     /// Offset into the vertex buffer as a factor of the vertex stride.
     pub first_vertex: u32,
-    /// Vertex stride.
+    /// Vertex stride, must be greater than [`wgpu_types::VertexFormat::acceleration_structure_vertex_readable_size`]
+    /// of the format and must be a multiple of [`wgpu_types::VertexFormat::acceleration_structure_stride_alignment`].
     pub vertex_stride: wgt::BufferAddress,
     /// Index buffer (optional).
     pub index_buffer: Option<&'a Buffer>,

@@ -898,6 +898,35 @@ fn iter_blas<'a>(
                         ));
                     }
 
+                    if size_desc
+                        .vertex_format
+                        .acceleration_structure_vertex_readable_size()
+                        > mesh.vertex_stride
+                    {
+                        return Err(BuildAccelerationStructureError::VertexStrideTooSmall(
+                            blas.error_ident(),
+                            size_desc
+                                .vertex_format
+                                .acceleration_structure_vertex_readable_size(),
+                            mesh.vertex_stride,
+                        ));
+                    }
+
+                    if mesh.vertex_stride
+                        % size_desc
+                            .vertex_format
+                            .acceleration_structure_stride_alignment()
+                        != 0
+                    {
+                        return Err(BuildAccelerationStructureError::VertexStrideUnaligned(
+                            blas.error_ident(),
+                            size_desc
+                                .vertex_format
+                                .acceleration_structure_stride_alignment(),
+                            mesh.vertex_stride,
+                        ));
+                    }
+
                     match (size_desc.index_count, mesh.size.index_count) {
                         (Some(_), None) | (None, Some(_)) => {
                             return Err(
