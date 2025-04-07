@@ -132,17 +132,6 @@ impl<'a> DeviceAllocationContext<'a> {
         let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
-        let raw_desc = conv::map_buffer_descriptor(desc);
-
-        // Workaround for Intel Xe drivers
-        if !self.shared.private_caps.suballocation_supported {
-            let resource = self.create_committed_buffer(desc, raw_desc)?;
-            return Ok((
-                resource,
-                Allocation::none(AllocationType::Buffer, desc.size),
-            ));
-        }
-
         let location = match (is_cpu_read, is_cpu_write) {
             (true, true) => MemoryLocation::CpuToGpu,
             (true, false) => MemoryLocation::GpuToCpu,
@@ -150,39 +139,22 @@ impl<'a> DeviceAllocationContext<'a> {
             (false, false) => MemoryLocation::GpuOnly,
         };
 
-        let name = desc.label.unwrap_or("Unlabeled buffer");
+        // Workaround for Intel Xe drivers
+        if !self.shared.private_caps.suballocation_supported {
+            let raw_desc = conv::map_buffer_descriptor(desc);
 
-        let mut allocator = self.mem_allocator.lock();
-
-        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-            allocator.device(),
-            &raw_desc,
-            name,
-            location,
-        );
-        let allocation = allocator.allocate(&allocation_desc)?;
-        let mut resource = None;
-
-        unsafe {
-            self.raw.CreatePlacedResource(
-                allocation.heap(),
-                allocation.offset(),
-                &raw_desc,
-                Direct3D12::D3D12_RESOURCE_STATE_COMMON,
-                None,
-                &mut resource,
-            )
+            let resource = self.create_committed_buffer(desc, raw_desc)?;
+            return Ok((
+                resource,
+                Allocation::none(AllocationType::Buffer, desc.size),
+            ));
         }
-        .into_device_result("Placed buffer creation")?;
 
-        let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
+        let (resource, allocation) = self.create_placed_buffer(desc, location)?;
 
         self.counters.buffer_memory.add(allocation.size() as isize);
 
-        Ok((
-            resource,
-            Allocation::placed(allocation, AllocationType::Buffer),
-        ))
+        Ok((resource, allocation))
     }
 
     pub(crate) fn create_texture(
@@ -204,38 +176,14 @@ impl<'a> DeviceAllocationContext<'a> {
 
         let location = MemoryLocation::GpuOnly;
 
-        let name = desc.label.unwrap_or("Unlabeled texture");
+        let (resource, wrapped_allocation) =
+            self.create_placed_texture(desc, raw_desc, location)?;
 
-        let mut allocator = self.mem_allocator.lock();
-        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-            allocator.device(),
-            &raw_desc,
-            name,
-            location,
-        );
-        let allocation = allocator.allocate(&allocation_desc)?;
-        let mut resource = None;
+        self.counters
+            .texture_memory
+            .add(wrapped_allocation.size() as isize);
 
-        unsafe {
-            self.raw.CreatePlacedResource(
-                allocation.heap(),
-                allocation.offset(),
-                &raw_desc,
-                Direct3D12::D3D12_RESOURCE_STATE_COMMON,
-                None, // clear value
-                &mut resource,
-            )
-        }
-        .into_device_result("Placed texture creation")?;
-
-        let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
-
-        self.counters.texture_memory.add(allocation.size() as isize);
-
-        Ok((
-            resource,
-            Allocation::placed(allocation, AllocationType::Texture),
-        ))
+        Ok((resource, wrapped_allocation))
     }
 
     pub(crate) fn create_acceleration_structure(
@@ -254,41 +202,14 @@ impl<'a> DeviceAllocationContext<'a> {
 
         let location = MemoryLocation::GpuOnly;
 
-        let name = desc.label.unwrap_or("Unlabeled acceleration structure");
-
-        let mut allocator = self.mem_allocator.lock();
-
-        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-            allocator.device(),
-            &raw_desc,
-            name,
-            location,
-        );
-        let allocation = allocator.allocate(&allocation_desc)?;
-        let mut resource = None;
-
-        unsafe {
-            self.raw.CreatePlacedResource(
-                allocation.heap(),
-                allocation.offset(),
-                &raw_desc,
-                Direct3D12::D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
-                None,
-                &mut resource,
-            )
-        }
-        .into_device_result("Placed acceleration structure creation")?;
-
-        let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
+        let (resource, wrapped_allocation) =
+            self.create_placed_acceleration_structure(desc, raw_desc, location)?;
 
         self.counters
             .acceleration_structure_memory
-            .add(allocation.size() as isize);
+            .add(wrapped_allocation.size() as isize);
 
-        Ok((
-            resource,
-            Allocation::placed(allocation, AllocationType::AccelerationStructure),
-        ))
+        Ok((resource, wrapped_allocation))
     }
 
     pub(crate) fn free_resource(
@@ -316,6 +237,127 @@ impl<'a> DeviceAllocationContext<'a> {
             Err(e) => panic!("Failed to destroy dx12 {:?}, {e}", allocation.ty),
         };
     }
+
+    ////////////////////////////////
+    /// Placed Resource Creation ///
+    /// ////////////////////////////
+
+    fn create_placed_buffer(
+        &self,
+        desc: &crate::BufferDescriptor<'_>,
+        location: MemoryLocation,
+    ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
+        let raw_desc = conv::map_buffer_descriptor(desc);
+
+        let name = desc.label.unwrap_or("Unlabeled buffer");
+
+        let mut allocator = self.mem_allocator.lock();
+
+        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
+            allocator.device(),
+            &raw_desc,
+            name,
+            location,
+        );
+
+        let allocation = allocator.allocate(&allocation_desc)?;
+        let mut resource = None;
+        unsafe {
+            self.raw.CreatePlacedResource(
+                allocation.heap(),
+                allocation.offset(),
+                &raw_desc,
+                Direct3D12::D3D12_RESOURCE_STATE_COMMON,
+                None,
+                &mut resource,
+            )
+        }
+        .into_device_result("Placed buffer creation")?;
+
+        let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
+        let wrapped_allocation = Allocation::placed(allocation, AllocationType::Buffer);
+
+        Ok((resource, wrapped_allocation))
+    }
+
+    fn create_placed_texture(
+        &self,
+        desc: &crate::TextureDescriptor<'_>,
+        raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
+        location: MemoryLocation,
+    ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
+        let name = desc.label.unwrap_or("Unlabeled texture");
+
+        let mut allocator = self.mem_allocator.lock();
+
+        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
+            allocator.device(),
+            &raw_desc,
+            name,
+            location,
+        );
+
+        let allocation = allocator.allocate(&allocation_desc)?;
+        let mut resource = None;
+        unsafe {
+            self.raw.CreatePlacedResource(
+                allocation.heap(),
+                allocation.offset(),
+                &raw_desc,
+                Direct3D12::D3D12_RESOURCE_STATE_COMMON,
+                None, // clear value
+                &mut resource,
+            )
+        }
+        .into_device_result("Placed texture creation")?;
+
+        let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
+        let wrapped_allocation = Allocation::placed(allocation, AllocationType::Texture);
+
+        Ok((resource, wrapped_allocation))
+    }
+
+    fn create_placed_acceleration_structure(
+        &self,
+        desc: &crate::AccelerationStructureDescriptor<'_>,
+        raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
+        location: MemoryLocation,
+    ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
+        let name = desc.label.unwrap_or("Unlabeled acceleration structure");
+
+        let mut allocator = self.mem_allocator.lock();
+
+        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
+            allocator.device(),
+            &raw_desc,
+            name,
+            location,
+        );
+
+        let allocation = allocator.allocate(&allocation_desc)?;
+        let mut resource = None;
+        unsafe {
+            self.raw.CreatePlacedResource(
+                allocation.heap(),
+                allocation.offset(),
+                &raw_desc,
+                Direct3D12::D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE,
+                None,
+                &mut resource,
+            )
+        }
+        .into_device_result("Placed acceleration structure creation")?;
+
+        let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
+        let wrapped_allocation =
+            Allocation::placed(allocation, AllocationType::AccelerationStructure);
+
+        Ok((resource, wrapped_allocation))
+    }
+
+    ///////////////////////////////////
+    /// Committed Resource Creation ///
+    ///////////////////////////////////
 
     fn create_committed_buffer(
         &self,
