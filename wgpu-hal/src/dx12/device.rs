@@ -414,10 +414,8 @@ impl crate::Device for super::Device {
                 .next_multiple_of(Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.into())
         }
 
-        let raw_desc = conv::map_buffer_descriptor(&desc);
-
         let (resource, allocation) =
-            suballocation::DeviceAllocationContext::from(self).create_buffer(&desc, raw_desc)?;
+            suballocation::DeviceAllocationContext::from(self).create_buffer(&desc)?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -1542,10 +1540,8 @@ impl crate::Device for super::Device {
                 memory_flags: crate::MemoryFlags::empty(),
             };
 
-            let raw_buffer_desc = conv::map_buffer_descriptor(&buffer_desc);
-
-            let (buffer, allocation) = suballocation::DeviceAllocationContext::from(self)
-                .create_buffer(&buffer_desc, raw_buffer_desc)?;
+            let (buffer, allocation) =
+                suballocation::DeviceAllocationContext::from(self).create_buffer(&buffer_desc)?;
 
             unsafe { buffer.SetName(&windows::core::HSTRING::from(&*label)) }
                 .into_device_result("SetName")?;

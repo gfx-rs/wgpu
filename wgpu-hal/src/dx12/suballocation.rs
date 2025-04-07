@@ -5,7 +5,7 @@ use gpu_allocator::{
 use parking_lot::Mutex;
 use windows::Win32::Graphics::Direct3D12;
 
-use crate::auxil::dxgi::result::HResult as _;
+use crate::{auxil::dxgi::result::HResult as _, dx12::conv};
 
 #[derive(Debug)]
 pub(crate) enum AllocationType {
@@ -96,10 +96,11 @@ impl<'a> DeviceAllocationContext<'a> {
     pub(crate) fn create_buffer(
         &self,
         desc: &crate::BufferDescriptor,
-        raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
         let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
+
+        let raw_desc = conv::map_buffer_descriptor(desc);
 
         // Workaround for Intel Xe drivers
         if !self.shared.private_caps.suballocation_supported {
