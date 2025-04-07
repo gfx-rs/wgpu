@@ -204,7 +204,7 @@ deno_webidl = "0.190.0"
 deno_webgpu = { version = "0.157.0", path = "./deno_webgpu" }
 deno_unsync = "0.4.2"
 deno_error = "0.5.5"
-tokio = "1.44.1"
+tokio = "1.44.2"
 termcolor = "1.4.1"
 
 # android dependencies

@@ -24,8 +24,8 @@ use super::{conv, descriptor, D3D12Lib};
 use crate::{
     auxil::{self, dxgi::result::HResult},
     dx12::{
-        borrow_optional_interface_temporarily, shader_compilation, DynamicStorageBufferOffsets,
-        Event,
+        borrow_optional_interface_temporarily, shader_compilation, suballocation,
+        DynamicStorageBufferOffsets, Event,
     },
     AccelerationStructureEntries, TlasInstance,
 };
@@ -52,7 +52,7 @@ impl super::Device {
             auxil::dxgi::exception::register_exception_handler();
         }
 
-        let mem_allocator = super::suballocation::create_allocator_wrapper(&raw, memory_hints)?;
+        let mem_allocator = Arc::new(suballocation::create_allocator(&raw, memory_hints)?);
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -149,6 +149,7 @@ impl super::Device {
                 capacity_views,
             )?,
             sampler_heap: super::sampler::SamplerHeap::new(&raw, &private_caps)?,
+            private_caps,
         };
 
         let mut rtv_pool =
@@ -180,7 +181,6 @@ impl super::Device {
                 fence: idle_fence,
                 event: Event::create(false, false)?,
             },
-            private_caps,
             features,
             shared: Arc::new(shared),
             rtv_pool: Mutex::new(rtv_pool),
@@ -383,7 +383,7 @@ impl super::Device {
             size,
             mip_level_count,
             sample_count,
-            allocation: None,
+            allocation: suballocation::Allocation::none(suballocation::AllocationType::Texture),
         }
     }
 
@@ -394,7 +394,7 @@ impl super::Device {
         super::Buffer {
             resource,
             size,
-            allocation: None,
+            allocation: suballocation::Allocation::none(suballocation::AllocationType::Buffer),
         }
     }
 }
@@ -429,8 +429,11 @@ impl crate::Device for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) =
-            super::suballocation::create_buffer_resource(self, desc, raw_desc)?;
+        let (resource, allocation) = suballocation::create_buffer(
+            suballocation::DeviceAllocationContext::from(self),
+            desc,
+            raw_desc,
+        )?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -446,14 +449,12 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn destroy_buffer(&self, mut buffer: super::Buffer) {
-        // Always Some except on Intel Xe: https://github.com/gfx-rs/wgpu/issues/3552
-        if let Some(alloc) = buffer.allocation.take() {
-            // Resource should be dropped before free suballocation
-            drop(buffer);
-
-            super::suballocation::free_buffer_allocation(self, alloc, &self.mem_allocator);
-        }
+    unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
+        suballocation::free_resource(
+            suballocation::DeviceAllocationContext::from(self),
+            buffer.resource,
+            buffer.allocation,
+        );
 
         self.counters.buffers.sub(1);
     }
@@ -502,7 +503,9 @@ impl crate::Device for super::Device {
                 desc.format,
                 desc.usage,
                 !desc.view_formats.is_empty(),
-                self.private_caps.casting_fully_typed_format_supported,
+                self.shared
+                    .private_caps
+                    .casting_fully_typed_format_supported,
             ),
             SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
                 Count: desc.sample_count,
@@ -512,8 +515,11 @@ impl crate::Device for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) =
-            super::suballocation::create_texture_resource(self, desc, raw_desc)?;
+        let (resource, allocation) = suballocation::create_texture(
+            suballocation::DeviceAllocationContext::from(self),
+            desc,
+            raw_desc,
+        )?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -533,18 +539,12 @@ impl crate::Device for super::Device {
         })
     }
 
-    unsafe fn destroy_texture(&self, mut texture: super::Texture) {
-        if let Some(alloc) = texture.allocation.take() {
-            // Resource should be dropped before free suballocation
-            drop(texture);
-
-            super::suballocation::free_texture_allocation(
-                self,
-                alloc,
-                // SAFETY: for allocations to exist, the allocator must exist
-                &self.mem_allocator,
-            );
-        }
+    unsafe fn destroy_texture(&self, texture: super::Texture) {
+        suballocation::free_resource(
+            suballocation::DeviceAllocationContext::from(self),
+            texture.resource,
+            texture.allocation,
+        );
 
         self.counters.textures.sub(1);
     }
@@ -751,6 +751,7 @@ impl crate::Device for super::Device {
             allocator,
             device: self.raw.clone(),
             shared: Arc::clone(&self.shared),
+            mem_allocator: self.mem_allocator.clone(),
             null_rtv_handle: self.null_rtv_handle,
             list: None,
             free_lists: Vec::new(),
@@ -1351,7 +1352,7 @@ impl crate::Device for super::Device {
             },
             bind_group_infos,
             naga_options: hlsl::Options {
-                shader_model: self.private_caps.shader_model,
+                shader_model: self.shared.private_caps.shader_model,
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,
@@ -1582,8 +1583,11 @@ impl crate::Device for super::Device {
                 Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
             };
 
-            let (buffer, allocation) =
-                super::suballocation::create_buffer_resource(self, &buffer_desc, raw_buffer_desc)?;
+            let (buffer, allocation) = suballocation::create_buffer(
+                suballocation::DeviceAllocationContext::from(self),
+                &buffer_desc,
+                raw_buffer_desc,
+            )?;
 
             unsafe { buffer.SetName(&windows::core::HSTRING::from(&*label)) }
                 .into_device_result("SetName")?;
@@ -1665,12 +1669,11 @@ impl crate::Device for super::Device {
         }
 
         if let Some(sampler_buffer) = group.sampler_index_buffer {
-            // Make sure the buffer is dropped before the allocation
-            drop(sampler_buffer.buffer);
-
-            if let Some(allocation) = sampler_buffer.allocation {
-                super::suballocation::free_buffer_allocation(self, allocation, &self.mem_allocator);
-            }
+            suballocation::free_resource(
+                suballocation::DeviceAllocationContext::from(self),
+                sampler_buffer.buffer,
+                sampler_buffer.allocation,
+            );
         }
 
         self.counters.bind_groups.sub(1);
@@ -2289,8 +2292,11 @@ impl crate::Device for super::Device {
             Flags: Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
         };
 
-        let (resource, allocation) =
-            super::suballocation::create_acceleration_structure_resource(self, desc, raw_desc)?;
+        let (resource, allocation) = suballocation::create_acceleration_structure(
+            suballocation::DeviceAllocationContext::from(self),
+            desc,
+            raw_desc,
+        )?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -2307,18 +2313,13 @@ impl crate::Device for super::Device {
 
     unsafe fn destroy_acceleration_structure(
         &self,
-        mut acceleration_structure: super::AccelerationStructure,
+        acceleration_structure: super::AccelerationStructure,
     ) {
-        if let Some(alloc) = acceleration_structure.allocation.take() {
-            // Resource should be dropped before suballocation is freed
-            drop(acceleration_structure);
-
-            super::suballocation::free_acceleration_structure_allocation(
-                self,
-                alloc,
-                &self.mem_allocator,
-            );
-        }
+        suballocation::free_resource(
+            suballocation::DeviceAllocationContext::from(self),
+            acceleration_structure.resource,
+            acceleration_structure.allocation,
+        );
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
@@ -2326,7 +2327,7 @@ impl crate::Device for super::Device {
     }
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
-        let mut upstream = self.mem_allocator.lock().allocator.generate_report();
+        let mut upstream = self.mem_allocator.lock().generate_report();
 
         let allocations = upstream
             .allocations

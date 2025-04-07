@@ -615,7 +615,8 @@ pub fn map_buffer_usage_to_barrier(
     ) {
         stages |= vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR;
         access |= vk::AccessFlags::ACCELERATION_STRUCTURE_READ_KHR
-            | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR;
+            | vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR
+            | vk::AccessFlags::SHADER_READ;
     }
     if usage.contains(wgt::BufferUses::ACCELERATION_STRUCTURE_QUERY) {
         stages |= vk::PipelineStageFlags::TRANSFER;

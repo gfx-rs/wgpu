@@ -66,6 +66,7 @@ impl EnableExtension {
     const F16: &'static str = "f16";
     const CLIP_DISTANCES: &'static str = "clip_distances";
     const DUAL_SOURCE_BLENDING: &'static str = "dual_source_blending";
+    const SUBGROUPS: &'static str = "subgroups";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<Self> {
@@ -77,6 +78,7 @@ impl EnableExtension {
             Self::DUAL_SOURCE_BLENDING => {
                 Self::Implemented(ImplementedEnableExtension::DualSourceBlending)
             }
+            Self::SUBGROUPS => Self::Unimplemented(UnimplementedEnableExtension::Subgroups),
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
     }
@@ -90,6 +92,7 @@ impl EnableExtension {
             },
             Self::Unimplemented(kind) => match kind {
                 UnimplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
+                UnimplementedEnableExtension::Subgroups => Self::SUBGROUPS,
             },
         }
     }
@@ -98,18 +101,18 @@ impl EnableExtension {
 /// A variant of [`EnableExtension::Implemented`].
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum ImplementedEnableExtension {
-    /// Enables the `blend_src` attribute in WGSL.
-    ///
-    /// In the WGSL standard, this corresponds to [`enable dual_source_blending;`].
-    ///
-    /// [`enable dual_source_blending;`]: https://www.w3.org/TR/WGSL/#extension-dual_source_blending
-    DualSourceBlending,
     /// Enables `f16`/`half` primitive support in all shader languages.
     ///
     /// In the WGSL standard, this corresponds to [`enable f16;`].
     ///
     /// [`enable f16;`]: https://www.w3.org/TR/WGSL/#extension-f16
     F16,
+    /// Enables the `blend_src` attribute in WGSL.
+    ///
+    /// In the WGSL standard, this corresponds to [`enable dual_source_blending;`].
+    ///
+    /// [`enable dual_source_blending;`]: https://www.w3.org/TR/WGSL/#extension-dual_source_blending
+    DualSourceBlending,
 }
 
 /// A variant of [`EnableExtension::Unimplemented`].
@@ -121,12 +124,19 @@ pub enum UnimplementedEnableExtension {
     ///
     /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-clip_distances
     ClipDistances,
+    /// Enables subgroup built-ins in all languages.
+    ///
+    /// In the WGSL standard, this corresponds to [`enable subgroups;`].
+    ///
+    /// [`enable subgroups;`]: https://www.w3.org/TR/WGSL/#extension-subgroups
+    Subgroups,
 }
 
 impl UnimplementedEnableExtension {
     pub(crate) const fn tracking_issue_num(self) -> u16 {
         match self {
             Self::ClipDistances => 6236,
+            Self::Subgroups => 5555,
         }
     }
 }

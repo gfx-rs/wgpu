@@ -716,7 +716,7 @@ impl Global {
                     cmd_buf_raw.transition_buffers(&[hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: tlas.instance_buffer.as_ref(),
                         usage: hal::StateTransition {
-                            from: BufferUses::MAP_READ,
+                            from: BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                             to: BufferUses::COPY_DST,
                         },
                     }]);

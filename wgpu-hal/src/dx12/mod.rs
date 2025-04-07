@@ -89,6 +89,7 @@ mod view;
 use std::{borrow::ToOwned as _, ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc, vec::Vec};
 
 use arrayvec::ArrayVec;
+use gpu_allocator::d3d12::Allocator;
 use parking_lot::{Mutex, RwLock};
 use windows::{
     core::{Free, Interface},
@@ -630,6 +631,7 @@ struct DeviceShared {
     cmd_signatures: CommandSignatures,
     heap_views: descriptor::GeneralHeap,
     sampler_heap: sampler::SamplerHeap,
+    private_caps: PrivateCapabilities,
 }
 
 unsafe impl Send for DeviceShared {}
@@ -639,7 +641,6 @@ pub struct Device {
     raw: Direct3D12::ID3D12Device,
     present_queue: Direct3D12::ID3D12CommandQueue,
     idler: Idler,
-    private_caps: PrivateCapabilities,
     features: wgt::Features,
     shared: Arc<DeviceShared>,
     // CPU only pools
@@ -651,7 +652,7 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
-    mem_allocator: Mutex<suballocation::GpuAllocatorWrapper>,
+    mem_allocator: Arc<Mutex<Allocator>>,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     counters: Arc<wgt::HalCounters>,
 }
@@ -660,6 +661,7 @@ impl Drop for Device {
     fn drop(&mut self) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
         if self
+            .shared
             .private_caps
             .instance_flags
             .contains(wgt::InstanceFlags::VALIDATION)
@@ -792,6 +794,8 @@ pub struct CommandEncoder {
     allocator: Direct3D12::ID3D12CommandAllocator,
     device: Direct3D12::ID3D12Device,
     shared: Arc<DeviceShared>,
+    mem_allocator: Arc<Mutex<Allocator>>,
+
     null_rtv_handle: descriptor::Handle,
     list: Option<Direct3D12::ID3D12GraphicsCommandList>,
     free_lists: Vec<Direct3D12::ID3D12GraphicsCommandList>,
@@ -831,7 +835,7 @@ unsafe impl Sync for CommandBuffer {}
 pub struct Buffer {
     resource: Direct3D12::ID3D12Resource,
     size: wgt::BufferAddress,
-    allocation: Option<suballocation::AllocationWrapper>,
+    allocation: suballocation::Allocation,
 }
 
 unsafe impl Send for Buffer {}
@@ -861,7 +865,7 @@ pub struct Texture {
     size: wgt::Extent3d,
     mip_level_count: u32,
     sample_count: u32,
-    allocation: Option<suballocation::AllocationWrapper>,
+    allocation: suballocation::Allocation,
 }
 
 impl Texture {
@@ -980,7 +984,7 @@ enum DynamicBuffer {
 #[derive(Debug)]
 struct SamplerIndexBuffer {
     buffer: Direct3D12::ID3D12Resource,
-    allocation: Option<suballocation::AllocationWrapper>,
+    allocation: suballocation::Allocation,
 }
 
 #[derive(Debug)]
@@ -1117,7 +1121,7 @@ impl crate::DynPipelineCache for PipelineCache {}
 #[derive(Debug)]
 pub struct AccelerationStructure {
     resource: Direct3D12::ID3D12Resource,
-    allocation: Option<suballocation::AllocationWrapper>,
+    allocation: suballocation::Allocation,
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
@@ -1371,7 +1375,7 @@ impl crate::Surface for Surface {
             size: sc.size,
             mip_level_count: 1,
             sample_count: 1,
-            allocation: None,
+            allocation: suballocation::Allocation::none(suballocation::AllocationType::Texture),
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,
