@@ -56,6 +56,8 @@ mod texture_binding;
 mod texture_blit;
 mod texture_bounds;
 mod texture_view_creation;
+mod timestamp_normalization;
+mod timestamp_query;
 mod transfer;
 mod transition_resources;
 mod vertex_formats;

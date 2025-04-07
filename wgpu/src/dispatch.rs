@@ -161,8 +161,8 @@ pub trait DeviceInterface: CommonTraits {
     fn push_error_scope(&self, filter: crate::ErrorFilter);
     fn pop_error_scope(&self) -> Pin<Box<dyn PopErrorScopeFuture>>;
 
-    fn start_capture(&self);
-    fn stop_capture(&self);
+    unsafe fn start_graphics_debugger_capture(&self);
+    unsafe fn stop_graphics_debugger_capture(&self);
 
     fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError>;
 

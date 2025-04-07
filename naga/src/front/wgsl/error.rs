@@ -271,6 +271,75 @@ pub(crate) enum Error<'a> {
         expected: Range<u32>,
         found: u32,
     },
+    /// No overload of this function accepts this many arguments.
+    TooManyArguments {
+        /// The name of the function being called.
+        function: String,
+
+        /// The function name in the call expression.
+        call_span: Span,
+
+        /// The first argument that is unacceptable.
+        arg_span: Span,
+
+        /// Maximum number of arguments accepted by any overload of
+        /// this function.
+        max_arguments: u32,
+    },
+    /// A value passed to a builtin function has a type that is not
+    /// accepted by any overload of the function.
+    WrongArgumentType {
+        /// The name of the function being called.
+        function: String,
+
+        /// The function name in the call expression.
+        call_span: Span,
+
+        /// The first argument whose type is unacceptable.
+        arg_span: Span,
+
+        /// The index of the first argument whose type is unacceptable.
+        arg_index: u32,
+
+        /// That argument's actual type.
+        arg_ty: String,
+
+        /// The set of argument types that would have been accepted for
+        /// this argument, given the prior arguments.
+        allowed: Vec<String>,
+    },
+    /// A value passed to a builtin function has a type that is not
+    /// accepted, given the earlier arguments' types.
+    InconsistentArgumentType {
+        /// The name of the function being called.
+        function: String,
+
+        /// The function name in the call expression.
+        call_span: Span,
+
+        /// The first unacceptable argument.
+        arg_span: Span,
+
+        /// The index of the first unacceptable argument.
+        arg_index: u32,
+
+        /// The actual type of the first unacceptable argument.
+        arg_ty: String,
+
+        /// The prior argument whose type made the `arg_span` argument
+        /// unacceptable.
+        inconsistent_span: Span,
+
+        /// The index of the `inconsistent_span` argument.
+        inconsistent_index: u32,
+
+        /// The type of the `inconsistent_span` argument.
+        inconsistent_ty: String,
+
+        /// The types that would have been accepted instead of the
+        /// first unacceptable argument.
+        allowed: Vec<String>,
+    },
     FunctionReturnsVoid(Span),
     FunctionMustUseUnused(Span),
     FunctionMustUseReturnsVoid(Span, Span),
@@ -402,7 +471,8 @@ impl<'a> Error<'a> {
                         "workgroup size separator (`,`) or a closing parenthesis".to_string()
                     }
                     ExpectedToken::GlobalItem => concat!(
-                        "global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) ",
+                        "global item (`struct`, `const`, `var`, `alias`, ",
+                        "`fn`, `diagnostic`, `enable`, `requires`, `;`) ",
                         "or the end of the file"
                     )
                     .to_string(),
@@ -831,6 +901,74 @@ impl<'a> Error<'a> {
                 labels: vec![(span, "wrong number of arguments".into())],
                 notes: vec![],
             },
+            Error::TooManyArguments {
+                ref function,
+                call_span,
+                arg_span,
+                max_arguments,
+            } => ParseError {
+                message: format!("too many arguments passed to `{function}`"),
+                labels: vec![
+                    (call_span, "".into()),
+                    (arg_span, format!("unexpected argument #{}", max_arguments + 1).into())
+                ],
+                notes: vec![
+                    format!("The `{function}` function accepts at most {max_arguments} argument(s)")
+                ],
+            },
+            Error::WrongArgumentType {
+                ref function,
+                call_span,
+                arg_span,
+                arg_index,
+                ref arg_ty,
+                ref allowed,
+            } => {
+                let message = format!(
+                    "wrong type passed as argument #{} to `{function}`",
+                    arg_index + 1,
+                );
+                let labels = vec![
+                    (call_span, "".into()),
+                    (arg_span, format!("argument #{} has type `{arg_ty}`", arg_index + 1).into())
+                ];
+
+                let mut notes = vec![];
+                notes.push(format!("`{function}` accepts the following types for argument #{}:", arg_index + 1));
+                notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}")));
+
+                ParseError { message, labels, notes }
+            },
+            Error::InconsistentArgumentType {
+                ref function,
+                call_span,
+                arg_span,
+                arg_index,
+                ref arg_ty,
+                inconsistent_span,
+                inconsistent_index,
+                ref inconsistent_ty,
+                ref allowed
+            } => {
+                let message = format!(
+                    "inconsistent type passed as argument #{} to `{function}`",
+                    arg_index + 1,
+                );
+                let labels = vec![
+                    (call_span, "".into()),
+                    (arg_span, format!("argument #{} has type {arg_ty}", arg_index + 1).into()),
+                    (inconsistent_span, format!(
+                        "this argument has type {inconsistent_ty}, which constrains subsequent arguments"
+                    ).into()),
+                ];
+                let mut notes = vec![
+                    format!("Because argument #{} has type {inconsistent_ty}, only the following types", inconsistent_index + 1),
+                    format!("(or types that automatically convert to them) are accepted for argument #{}:", arg_index + 1),
+                ];
+                notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}")));
+
+                ParseError { message, labels, notes }
+            }
             Error::FunctionReturnsVoid(span) => ParseError {
                 message: "function does not return any value".to_string(),
                 labels: vec![(span, "".into())],

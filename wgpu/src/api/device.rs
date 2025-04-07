@@ -377,14 +377,65 @@ impl Device {
         self.inner.pop_error_scope()
     }
 
-    /// Starts frame capture.
-    pub fn start_capture(&self) {
-        self.inner.start_capture()
+    /// Starts a capture in the attached graphics debugger.
+    ///
+    /// This behaves differently depending on which graphics debugger is attached:
+    ///
+    /// - Renderdoc: Calls [`StartFrameCapture(device, NULL)`][rd].
+    /// - Xcode: Creates a capture with [`MTLCaptureManager`][xcode].
+    /// - None: No action is taken.
+    ///
+    /// # Safety
+    ///
+    /// - There should not be any other captures currently active.
+    /// - All other safety rules are defined by the graphics debugger, see the
+    ///   documentation for the specific debugger.
+    /// - In general, graphics debuggers can easily cause crashes, so this isn't
+    ///   ever guaranteed to be sound.
+    ///
+    /// # Tips
+    ///
+    /// - Debuggers need to capture both the recording of the commands and the
+    ///   submission of the commands to the GPU. Try to wrap all of your
+    ///   gpu work in a capture.
+    /// - If you encounter issues, try waiting for the GPU to finish all work
+    ///   before stopping the capture.
+    ///
+    /// [rd]: https://renderdoc.org/docs/in_application_api.html#_CPPv417StartFrameCapture23RENDERDOC_DevicePointer22RENDERDOC_WindowHandle
+    /// [xcode]: https://developer.apple.com/documentation/metal/mtlcapturemanager
+    #[doc(alias = "start_renderdoc_capture")]
+    #[doc(alias = "start_xcode_capture")]
+    pub unsafe fn start_graphics_debugger_capture(&self) {
+        unsafe { self.inner.start_graphics_debugger_capture() }
     }
 
-    /// Stops frame capture.
-    pub fn stop_capture(&self) {
-        self.inner.stop_capture()
+    /// Stops the current capture in the attached graphics debugger.
+    ///
+    /// This behaves differently depending on which graphics debugger is attached:
+    ///
+    /// - Renderdoc: Calls [`EndFrameCapture(device, NULL)`][rd].
+    /// - Xcode: Stops the capture with [`MTLCaptureManager`][xcode].
+    /// - None: No action is taken.
+    ///
+    /// # Safety
+    ///
+    /// - There should be a capture currently active.
+    /// - All other safety rules are defined by the graphics debugger, see the
+    ///   documentation for the specific debugger.
+    /// - In general, graphics debuggers can easily cause crashes, so this isn't
+    ///   ever guaranteed to be sound.
+    ///
+    /// # Tips
+    ///
+    /// - If you encounter issues, try to submit all work to the GPU, and waiting
+    ///   for that work to finish before stopping the capture.
+    ///
+    /// [rd]: https://renderdoc.org/docs/in_application_api.html#_CPPv415EndFrameCapture23RENDERDOC_DevicePointer22RENDERDOC_WindowHandle
+    /// [xcode]: https://developer.apple.com/documentation/metal/mtlcapturemanager
+    #[doc(alias = "stop_renderdoc_capture")]
+    #[doc(alias = "stop_xcode_capture")]
+    pub unsafe fn stop_graphics_debugger_capture(&self) {
+        unsafe { self.inner.stop_graphics_debugger_capture() }
     }
 
     /// Query internal counters from the native backend for debugging purposes.

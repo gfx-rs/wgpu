@@ -971,8 +971,23 @@ pub trait Device: WasmNotSendSync {
         timeout_ms: u32,
     ) -> Result<bool, DeviceError>;
 
-    unsafe fn start_capture(&self) -> bool;
-    unsafe fn stop_capture(&self);
+    /// Start a graphics debugger capture.
+    ///
+    /// # Safety
+    ///
+    /// See [`wgpu::Device::start_graphics_debugger_capture`][api] for more details.
+    ///
+    /// [api]: ../wgpu/struct.Device.html#method.start_graphics_debugger_capture
+    unsafe fn start_graphics_debugger_capture(&self) -> bool;
+
+    /// Stop a graphics debugger capture.
+    ///
+    /// # Safety
+    ///
+    /// See [`wgpu::Device::stop_graphics_debugger_capture`][api] for more details.
+    ///
+    /// [api]: ../wgpu/struct.Device.html#method.stop_graphics_debugger_capture
+    unsafe fn stop_graphics_debugger_capture(&self);
 
     #[allow(unused_variables)]
     unsafe fn pipeline_cache_get_data(

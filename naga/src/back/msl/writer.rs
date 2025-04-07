@@ -5,6 +5,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{
+    cmp::Ordering,
     fmt::{Display, Error as FmtError, Formatter, Write},
     iter,
 };
@@ -6384,14 +6385,12 @@ template <typename A>
                     // from the buffer elements.
                     for attribute in vbm.attributes {
                         let location = attribute.shader_location;
-                        let am_option = am_resolved.get(&location);
-                        if am_option.is_none() {
+                        let Some(am) = am_resolved.get(&location) else {
                             // This bound attribute isn't used in this entry point, so
                             // don't bother extracting the data. Too bad we emitted the
                             // unpacking function earlier -- it might not get used.
                             continue;
-                        }
-                        let am = am_option.unwrap();
+                        };
                         let attribute_name = &am.name;
                         let attribute_ty_name = &am.ty_name;
 
@@ -6401,36 +6400,62 @@ template <typename A>
                             .expect("Should have generated this unpacking function earlier.");
                         let func_name = &func.name;
 
+                        // Check dimensionality of the attribute compared to the unpacking
+                        // function. If attribute dimension > unpack dimension, we have to
+                        // pad out the unpack value from a vec4(0, 0, 0, 1) of matching
+                        // scalar type. Otherwise, if attribute dimension is < unpack
+                        // dimension, then we need to explicitly truncate the result.
+
+                        let needs_padding_or_truncation = am.dimension.cmp(&func.dimension);
+
+                        if needs_padding_or_truncation != Ordering::Equal {
+                            // Emit a comment flagging that a conversion is happening,
+                            // since the actual logic can be at the end of a long line.
+                            writeln!(
+                                self.out,
+                                "{}// {attribute_ty_name} <- {:?}",
+                                back::Level(2),
+                                attribute.format
+                            )?;
+                        }
+
                         write!(self.out, "{}{attribute_name} = ", back::Level(2),)?;
 
-                        // Check dimensionality of the attribute compared to the unpacking
-                        // function. If attribute dimension is < unpack dimension, then
-                        // we need to explicitly cast down the result. Otherwise, if attribute
-                        // dimension > unpack dimension, we have to pad out the unpack value
-                        // from a vec4(0, 0, 0, 1) of matching scalar type.
-
-                        let needs_truncate_or_padding = am.dimension != func.dimension;
-                        if needs_truncate_or_padding {
+                        if needs_padding_or_truncation == Ordering::Greater {
+                            // Needs padding: emit constructor call for wider type
                             write!(self.out, "{attribute_ty_name}(")?;
                         }
 
+                        // Emit call to unpacking function
                         write!(self.out, "{func_name}({elem_name}.data[{offset}]",)?;
                         for i in (offset + 1)..(offset + func.byte_count) {
                             write!(self.out, ", {elem_name}.data[{i}]")?;
                         }
                         write!(self.out, ")")?;
 
-                        if needs_truncate_or_padding {
-                            let zero_value = if am.ty_is_int { "0" } else { "0.0" };
-                            let one_value = if am.ty_is_int { "1" } else { "1.0" };
-                            for i in func.dimension..am.dimension {
+                        match needs_padding_or_truncation {
+                            Ordering::Greater => {
+                                // Padding
+                                let zero_value = if am.ty_is_int { "0" } else { "0.0" };
+                                let one_value = if am.ty_is_int { "1" } else { "1.0" };
+                                for i in func.dimension..am.dimension {
+                                    write!(
+                                        self.out,
+                                        ", {}",
+                                        if i == 3 { one_value } else { zero_value }
+                                    )?;
+                                }
+                                write!(self.out, ")")?;
+                            }
+                            Ordering::Less => {
+                                // Truncate to the first `am.dimension` components
                                 write!(
                                     self.out,
-                                    ", {}",
-                                    if i == 3 { one_value } else { zero_value }
+                                    ".{}",
+                                    &"xyzw"[0..usize::try_from(am.dimension).unwrap()]
                                 )?;
                             }
-                            write!(self.out, ")")?;
+                            Ordering::Equal => {}
                         }
 
                         writeln!(self.out, ";")?;

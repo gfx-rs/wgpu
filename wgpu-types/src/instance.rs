@@ -103,6 +103,18 @@ bitflags::bitflags! {
         ///
         /// When `Self::from_env()` is used takes value from `WGPU_VALIDATION_INDIRECT_CALL` environment variable.
         const VALIDATION_INDIRECT_CALL = 1 << 5;
+
+        /// Enable automatic timestamp normalization. This means that in [`CommandEncoder::resolve_query_set`][rqs],
+        /// the timestamps will automatically be normalized to be in nanoseconds instead of the raw timestamp values.
+        ///
+        /// This is disabled by default because it introduces a compute shader into the resolution of query sets.
+        ///
+        /// This can be useful for users that need to read timestamps on the gpu, as the normalization
+        /// can be a hassle to do manually. When this is enabled, the timestamp period returned by the queue
+        /// will always be `1.0`.
+        ///
+        /// [rqs]: ../wgpu/struct.CommandEncoder.html#method.resolve_query_set
+        const AUTOMATIC_TIMESTAMP_NORMALIZATION = 1 << 6;
     }
 }
 

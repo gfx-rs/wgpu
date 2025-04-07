@@ -1,0 +1,53 @@
+targets = "METAL"
+
+[msl_pipeline]
+allow_and_force_point_size = false
+vertex_pulling_transform = true
+
+[[msl_pipeline.vertex_buffer_mappings]]
+attributes = [
+    { offset = 0, shader_location = 0, format = "Uint8" },
+    { offset = 16, shader_location = 1, format = "Uint8x2" },
+    { offset = 32, shader_location = 2, format = "Uint8x4" },
+    { offset = 48, shader_location = 3, format = "Sint8" },
+    { offset = 64, shader_location = 4, format = "Sint8x2" },
+    { offset = 80, shader_location = 5, format = "Sint8x4" },
+    { offset = 96, shader_location = 6, format = "Unorm8" },
+    { offset = 112, shader_location = 7, format = "Unorm8x2" },
+    { offset = 128, shader_location = 8, format = "Unorm8x4" },
+    { offset = 144, shader_location = 9, format = "Snorm8" },
+    { offset = 160, shader_location = 10, format = "Snorm8x2" },
+    { offset = 176, shader_location = 11, format = "Snorm8x4" },
+    { offset = 192, shader_location = 12, format = "Uint16" },
+    { offset = 208, shader_location = 13, format = "Uint16x2" },
+    { offset = 224, shader_location = 14, format = "Uint16x4" },
+    { offset = 240, shader_location = 15, format = "Sint16" },
+    { offset = 256, shader_location = 16, format = "Sint16x2" },
+    { offset = 272, shader_location = 17, format = "Sint16x4" },
+    { offset = 288, shader_location = 18, format = "Unorm16" },
+    { offset = 304, shader_location = 19, format = "Unorm16x2" },
+    { offset = 320, shader_location = 20, format = "Unorm16x4" },
+    { offset = 336, shader_location = 21, format = "Snorm16" },
+    { offset = 352, shader_location = 22, format = "Snorm16x2" },
+    { offset = 368, shader_location = 23, format = "Snorm16x4" },
+    { offset = 384, shader_location = 24, format = "Float16" },
+    { offset = 400, shader_location = 25, format = "Float16x2" },
+    { offset = 416, shader_location = 26, format = "Float16x4" },
+    { offset = 432, shader_location = 27, format = "Float32" },
+    { offset = 448, shader_location = 28, format = "Float32x2" },
+    { offset = 464, shader_location = 29, format = "Float32x3" },
+    { offset = 480, shader_location = 30, format = "Float32x4" },
+    { offset = 496, shader_location = 31, format = "Uint32" },
+    { offset = 512, shader_location = 32, format = "Uint32x2" },
+    { offset = 528, shader_location = 33, format = "Uint32x3" },
+    { offset = 544, shader_location = 34, format = "Uint32x4" },
+    { offset = 560, shader_location = 35, format = "Sint32" },
+    { offset = 576, shader_location = 36, format = "Sint32x2" },
+    { offset = 592, shader_location = 37, format = "Sint32x3" },
+    { offset = 608, shader_location = 38, format = "Sint32x4" },
+    { offset = 624, shader_location = 39, format = "unorm10-10-10-2" },
+    { offset = 640, shader_location = 40, format = "unorm8x4-bgra" },
+]
+id = 1
+indexed_by_vertex = true
+stride = 644

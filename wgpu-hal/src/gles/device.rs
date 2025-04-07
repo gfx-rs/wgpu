@@ -1572,7 +1572,7 @@ impl crate::Device for super::Device {
         fence.wait(gl, wait_value, timeout_ns)
     }
 
-    unsafe fn start_capture(&self) -> bool {
+    unsafe fn start_graphics_debugger_capture(&self) -> bool {
         #[cfg(all(native, feature = "renderdoc"))]
         return unsafe {
             self.render_doc
@@ -1581,7 +1581,7 @@ impl crate::Device for super::Device {
         #[allow(unreachable_code)]
         false
     }
-    unsafe fn stop_capture(&self) {
+    unsafe fn stop_graphics_debugger_capture(&self) {
         #[cfg(all(native, feature = "renderdoc"))]
         unsafe {
             self.render_doc

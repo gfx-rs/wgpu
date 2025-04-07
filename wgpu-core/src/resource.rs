@@ -30,6 +30,7 @@ use crate::{
     lock::{rank, Mutex, RwLock},
     resource_log,
     snatch::{SnatchGuard, Snatchable},
+    timestamp_normalization::TimestampNormalizationBindGroup,
     track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
     Label, LabelHelpers, SubmissionIndex,
@@ -368,14 +369,20 @@ pub struct Buffer {
     pub(crate) tracking_data: TrackingData,
     pub(crate) map_state: Mutex<BufferMapState>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+    pub(crate) timestamp_normalization_bind_group: Snatchable<TimestampNormalizationBindGroup>,
     pub(crate) indirect_validation_bind_groups: Snatchable<crate::indirect_validation::BindGroups>,
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
+        if let Some(raw) = self.timestamp_normalization_bind_group.take() {
+            raw.dispose(self.device.raw());
+        }
+
         if let Some(raw) = self.indirect_validation_bind_groups.take() {
             raw.dispose(self.device.raw());
         }
+
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
@@ -710,6 +717,10 @@ impl Buffer {
                 }
             };
 
+            let timestamp_normalization_bind_group = self
+                .timestamp_normalization_bind_group
+                .snatch(&mut snatch_guard);
+
             let indirect_validation_bind_groups = self
                 .indirect_validation_bind_groups
                 .snatch(&mut snatch_guard);
@@ -726,6 +737,7 @@ impl Buffer {
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
                 bind_groups,
+                timestamp_normalization_bind_group,
                 indirect_validation_bind_groups,
             })
         };
@@ -781,6 +793,7 @@ pub struct DestroyedBuffer {
     device: Arc<Device>,
     label: String,
     bind_groups: WeakVec<BindGroup>,
+    timestamp_normalization_bind_group: Option<TimestampNormalizationBindGroup>,
     indirect_validation_bind_groups: Option<crate::indirect_validation::BindGroups>,
 }
 
@@ -797,6 +810,10 @@ impl Drop for DestroyedBuffer {
             &mut self.bind_groups,
         )));
         drop(deferred);
+
+        if let Some(raw) = self.timestamp_normalization_bind_group.take() {
+            raw.dispose(self.device.raw());
+        }
 
         if let Some(raw) = self.indirect_validation_bind_groups.take() {
             raw.dispose(self.device.raw());

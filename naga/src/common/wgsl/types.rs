@@ -133,6 +133,37 @@ pub trait TypeContext {
         }
     }
 
+    fn write_type_conclusion<W: Write>(
+        &self,
+        conclusion: &crate::proc::Conclusion,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        use crate::proc::Conclusion as Co;
+
+        match *conclusion {
+            Co::Value(ref inner) => self.write_type_inner(inner, out),
+            Co::Predeclared(ref predeclared) => out.write_str(&predeclared.struct_name()),
+        }
+    }
+
+    fn write_type_rule<W: Write>(
+        &self,
+        name: &str,
+        rule: &crate::proc::Rule,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        write!(out, "fn {name}(")?;
+        for (i, arg) in rule.arguments.iter().enumerate() {
+            if i > 0 {
+                out.write_str(", ")?;
+            }
+            self.write_type_resolution(arg, out)?
+        }
+        out.write_str(") -> ")?;
+        self.write_type_conclusion(&rule.conclusion, out)?;
+        Ok(())
+    }
+
     fn type_to_string(&self, handle: Handle<crate::Type>) -> String {
         let mut buf = String::new();
         self.write_type(handle, &mut buf).unwrap();
@@ -148,6 +179,12 @@ pub trait TypeContext {
     fn type_resolution_to_string(&self, resolution: &TypeResolution) -> String {
         let mut buf = String::new();
         self.write_type_resolution(resolution, &mut buf).unwrap();
+        buf
+    }
+
+    fn type_rule_to_string(&self, name: &str, rule: &crate::proc::Rule) -> String {
+        let mut buf = String::new();
+        self.write_type_rule(name, rule, &mut buf).unwrap();
         buf
     }
 }
@@ -354,5 +391,72 @@ enum WriteTypeError {
 impl From<core::fmt::Error> for WriteTypeError {
     fn from(err: core::fmt::Error) -> Self {
         Self::Format(err)
+    }
+}
+
+/// Format types as WGSL based on a [`GlobalCtx`].
+///
+/// This is probably good enough for diagnostic output, but it has some
+/// limitations:
+///
+/// - It does not apply [`Namer`] renamings, to avoid collisions.
+///
+/// - It generates invalid WGSL for anonymous struct types.
+///
+/// - It doesn't write the lengths of override-expression-sized arrays
+///   correctly, unless the expression is just the override identifier.
+///
+/// [`GlobalCtx`]: crate::proc::GlobalCtx
+/// [`Namer`]: crate::proc::Namer
+impl TypeContext for crate::proc::GlobalCtx<'_> {
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
+        &self.types[handle]
+    }
+
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
+        self.types[handle]
+            .name
+            .as_deref()
+            .unwrap_or("{anonymous type}")
+    }
+
+    fn write_override<W: Write>(
+        &self,
+        handle: Handle<crate::Override>,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        match self.overrides[handle].name {
+            Some(ref name) => out.write_str(name),
+            None => write!(out, "{{anonymous override {handle:?}}}"),
+        }
+    }
+}
+
+/// Format types as WGSL based on a `UniqueArena<Type>`.
+///
+/// This is probably only good enough for logging:
+///
+/// - It does not apply any kind of [`Namer`] renamings.
+///
+/// - It generates invalid WGSL for anonymous struct types.
+///
+/// - It doesn't write override-sized arrays properly.
+///
+/// [`Namer`]: crate::proc::Namer
+impl TypeContext for crate::UniqueArena<crate::Type> {
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
+        &self[handle]
+    }
+
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
+        self[handle].name.as_deref().unwrap_or("{anonymous type}")
+    }
+
+    fn write_override<W: Write>(
+        &self,
+        handle: Handle<crate::Override>,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        write!(out, "{{override {handle:?}}}")
     }
 }
