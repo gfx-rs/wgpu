@@ -766,7 +766,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.31.0
+        uses: crate-ci/typos@v1.31.1
 
   check-cts-runner:
     # runtime is normally 2 minutes

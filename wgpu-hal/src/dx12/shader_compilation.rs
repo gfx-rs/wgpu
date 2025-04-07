@@ -23,6 +23,7 @@ pub(super) fn compile_fxc(
     let mut shader_data = None;
     let mut compile_flags = Fxc::D3DCOMPILE_ENABLE_STRICTNESS;
     if device
+        .shared
         .private_caps
         .instance_flags
         .contains(wgt::InstanceFlags::DEBUG)
@@ -290,6 +291,7 @@ pub(super) fn compile_dxc(
     }
 
     if device
+        .shared
         .private_caps
         .instance_flags
         .contains(wgt::InstanceFlags::DEBUG)
