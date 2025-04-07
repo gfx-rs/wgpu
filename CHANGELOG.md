@@ -257,6 +257,8 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 
 #### General
 
+- Fix some validation errors when building acceleration
+ structures. By @Vecvec in [#7486](https://github.com/gfx-rs/wgpu/pull/7486).
 - Avoid overflow in query set bounds check validation. By @ErichDonGubler in [#6933](https://github.com/gfx-rs/wgpu/pull/6933).
 - Add Flush to GL Queue::submit. By @cwfitzgerald in [#6941](https://github.com/gfx-rs/wgpu/pull/6941).
 - Reduce downlevel `max_color_attachments` limit from 8 to 4 for better GLES compatibility. By @adrian17 in [#6994](https://github.com/gfx-rs/wgpu/pull/6994).
