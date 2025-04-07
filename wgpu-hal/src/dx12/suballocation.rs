@@ -159,7 +159,7 @@ impl<'a> DeviceAllocationContext<'a> {
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
         // Workaround for Intel Xe drivers
         if !self.shared.private_caps.suballocation_supported {
-            let resource = self.create_committed_texture(desc, raw_desc)?;
+            let resource = self.create_committed_texture(raw_desc)?;
             return Ok((resource, Allocation::none(AllocationType::Texture)));
         }
 
@@ -209,7 +209,7 @@ impl<'a> DeviceAllocationContext<'a> {
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
         // Workaround for Intel Xe drivers
         if !self.shared.private_caps.suballocation_supported {
-            let resource = self.create_committed_acceleration_structure(desc, raw_desc)?;
+            let resource = self.create_committed_acceleration_structure(raw_desc)?;
             return Ok((
                 resource,
                 Allocation::none(AllocationType::AccelerationStructure),
@@ -284,7 +284,7 @@ impl<'a> DeviceAllocationContext<'a> {
         };
     }
 
-    pub(crate) fn create_committed_buffer(
+    fn create_committed_buffer(
         &self,
         desc: &crate::BufferDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
@@ -332,9 +332,8 @@ impl<'a> DeviceAllocationContext<'a> {
         resource.ok_or(crate::DeviceError::Unexpected)
     }
 
-    pub(crate) fn create_committed_texture(
+    fn create_committed_texture(
         &self,
-        _desc: &crate::TextureDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
     ) -> Result<Direct3D12::ID3D12Resource, crate::DeviceError> {
         let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
@@ -369,9 +368,8 @@ impl<'a> DeviceAllocationContext<'a> {
         resource.ok_or(crate::DeviceError::Unexpected)
     }
 
-    pub(crate) fn create_committed_acceleration_structure(
+    fn create_committed_acceleration_structure(
         &self,
-        _desc: &crate::AccelerationStructureDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
     ) -> Result<Direct3D12::ID3D12Resource, crate::DeviceError> {
         let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
