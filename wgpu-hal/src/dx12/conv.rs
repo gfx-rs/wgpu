@@ -1,4 +1,4 @@
-use windows::Win32::Graphics::{Direct3D, Direct3D12};
+use windows::Win32::Graphics::{Direct3D, Direct3D12, Dxgi};
 
 pub fn map_buffer_usage_to_resource_flags(
     usage: wgt::BufferUses,
@@ -10,6 +10,26 @@ pub fn map_buffer_usage_to_resource_flags(
         flags |= Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }
     flags
+}
+
+pub fn map_buffer_descriptor(
+    desc: &crate::BufferDescriptor<'_>,
+) -> Direct3D12::D3D12_RESOURCE_DESC {
+    Direct3D12::D3D12_RESOURCE_DESC {
+        Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
+        Alignment: 0,
+        Width: desc.size,
+        Height: 1,
+        DepthOrArraySize: 1,
+        MipLevels: 1,
+        Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
+        SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        Flags: map_buffer_usage_to_resource_flags(desc.usage),
+    }
 }
 
 pub fn map_texture_dimension(dim: wgt::TextureDimension) -> Direct3D12::D3D12_RESOURCE_DIMENSION {

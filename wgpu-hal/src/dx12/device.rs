@@ -406,31 +406,18 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
-        let alloc_size = if desc.usage.contains(wgt::BufferUses::UNIFORM) {
-            desc.size
-                .next_multiple_of(Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.into())
-        } else {
-            desc.size
-        };
+        let mut desc = desc.clone();
 
-        let raw_desc = Direct3D12::D3D12_RESOURCE_DESC {
-            Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0,
-            Width: alloc_size,
-            Height: 1,
-            DepthOrArraySize: 1,
-            MipLevels: 1,
-            Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
-            SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
-                Count: 1,
-                Quality: 0,
-            },
-            Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-            Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
-        };
+        if desc.usage.contains(wgt::BufferUses::UNIFORM) {
+            desc.size = desc
+                .size
+                .next_multiple_of(Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.into())
+        }
+
+        let raw_desc = conv::map_buffer_descriptor(&desc);
 
         let (resource, allocation) =
-            suballocation::DeviceAllocationContext::from(self).create_buffer(desc, raw_desc)?;
+            suballocation::DeviceAllocationContext::from(self).create_buffer(&desc, raw_desc)?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -1555,21 +1542,7 @@ impl crate::Device for super::Device {
                 memory_flags: crate::MemoryFlags::empty(),
             };
 
-            let raw_buffer_desc = Direct3D12::D3D12_RESOURCE_DESC {
-                Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
-                Alignment: 0,
-                Width: buffer_size,
-                Height: 1,
-                DepthOrArraySize: 1,
-                MipLevels: 1,
-                Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
-                SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
-                    Count: 1,
-                    Quality: 0,
-                },
-                Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-                Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
-            };
+            let raw_buffer_desc = conv::map_buffer_descriptor(&buffer_desc);
 
             let (buffer, allocation) = suballocation::DeviceAllocationContext::from(self)
                 .create_buffer(&buffer_desc, raw_buffer_desc)?;
