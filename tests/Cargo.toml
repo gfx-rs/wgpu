@@ -44,7 +44,7 @@ cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true
 glam.workspace = true
-half = { workspace = true, features = ["bytemuck"] }
+half = { workspace = true, features = ["bytemuck", "std"] }
 itertools.workspace = true
 image.workspace = true
 libtest-mimic.workspace = true
