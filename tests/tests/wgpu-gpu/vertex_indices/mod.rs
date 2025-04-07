@@ -183,32 +183,12 @@ impl Test {
             .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE)
             || !is_indirect;
 
-        // If this is false, it won't be ignored, but it won't show up in the shader
-        //
-        // If the IdSource is buffers, this doesn't apply
-        let first_vert_instance_supported = ctx.adapter_downlevel_capabilities.flags.contains(
-            wgpu::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW,
-        ) || matches!(self.id_source, IdSource::Buffers)
-            || !is_indirect;
-
         match self.case {
-            TestCase::DrawBaseVertex => {
-                if !first_vert_instance_supported {
-                    return &[0, 1, 2, 3, 4, 5];
-                }
-
-                &[0, 0, 0, 3, 4, 5, 6, 7, 8]
-            }
+            TestCase::DrawBaseVertex => &[0, 0, 0, 3, 4, 5, 6, 7, 8],
             TestCase::Draw | TestCase::DrawInstanced => &[0, 1, 2, 3, 4, 5],
-            TestCase::DrawNonZeroFirstVertex => {
-                if !first_vert_instance_supported {
-                    return &[0, 1, 2, 0, 0, 0];
-                }
-
-                &[0, 1, 2, 3, 4, 5]
-            }
+            TestCase::DrawNonZeroFirstVertex => &[0, 1, 2, 3, 4, 5],
             TestCase::DrawNonZeroFirstInstance => {
-                if !first_vert_instance_supported || !non_zero_first_instance_supported {
+                if !non_zero_first_instance_supported {
                     return &[0, 1, 2, 0, 0, 0];
                 }
 
