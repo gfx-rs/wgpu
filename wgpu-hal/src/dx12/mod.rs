@@ -834,6 +834,9 @@ unsafe impl Sync for CommandBuffer {}
 #[derive(Debug)]
 pub struct Buffer {
     resource: Direct3D12::ID3D12Resource,
+    // While the allocation also has _a_ size, it may not
+    // be the same as the original size of the buffer,
+    // as the allocation size varies for assorted reasons.
     size: wgt::BufferAddress,
     allocation: suballocation::Allocation,
 }

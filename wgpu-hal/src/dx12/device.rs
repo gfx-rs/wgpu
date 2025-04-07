@@ -426,10 +426,6 @@ impl crate::Device for super::Device {
         let (resource, allocation) =
             suballocation::DeviceAllocationContext::from(self).create_buffer(&desc)?;
 
-        if let Some(label) = desc.label {
-            resource.set_name(label)?;
-        }
-
         self.counters.buffers.add(1);
 
         Ok(super::Buffer {
@@ -504,10 +500,6 @@ impl crate::Device for super::Device {
 
         let (resource, allocation) =
             suballocation::DeviceAllocationContext::from(self).create_texture(desc, raw_desc)?;
-
-        if let Some(label) = desc.label {
-            resource.set_name(label)?;
-        }
 
         self.counters.textures.add(1);
 
@@ -1538,7 +1530,7 @@ impl crate::Device for super::Device {
             };
 
             let buffer_desc = crate::BufferDescriptor {
-                label: None,
+                label: Some(&label),
                 size: buffer_size,
                 usage: wgt::BufferUses::STORAGE_READ_ONLY | wgt::BufferUses::MAP_WRITE,
                 // D3D12 backend doesn't care about the memory flags
@@ -1547,8 +1539,6 @@ impl crate::Device for super::Device {
 
             let (buffer, allocation) =
                 suballocation::DeviceAllocationContext::from(self).create_buffer(&buffer_desc)?;
-
-            buffer.set_name(&*label)?;
 
             let mut mapping = ptr::null_mut::<ffi::c_void>();
             unsafe { buffer.Map(0, None, Some(&mut mapping)) }.into_device_result("Map")?;
@@ -2246,10 +2236,6 @@ impl crate::Device for super::Device {
 
         let (resource, allocation) = suballocation::DeviceAllocationContext::from(self)
             .create_acceleration_structure(desc, raw_desc)?;
-
-        if let Some(label) = desc.label {
-            resource.set_name(label)?;
-        }
 
         // for some reason there is no counter for acceleration structures
 

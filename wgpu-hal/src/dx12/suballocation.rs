@@ -5,7 +5,10 @@ use gpu_allocator::{
 use parking_lot::Mutex;
 use windows::Win32::Graphics::Direct3D12;
 
-use crate::{auxil::dxgi::result::HResult as _, dx12::conv};
+use crate::{
+    auxil::dxgi::{name::ObjectExt, result::HResult as _},
+    dx12::conv,
+};
 
 #[derive(Debug)]
 pub(crate) enum AllocationType {
@@ -149,6 +152,10 @@ impl<'a> DeviceAllocationContext<'a> {
             self.create_committed_buffer(desc, location)?
         };
 
+        if let Some(label) = desc.label {
+            resource.set_name(label)?;
+        }
+
         self.counters.buffer_memory.add(allocation.size() as isize);
 
         Ok((resource, allocation))
@@ -165,6 +172,10 @@ impl<'a> DeviceAllocationContext<'a> {
             self.create_committed_texture(desc, raw_desc)?
         };
 
+        if let Some(label) = desc.label {
+            resource.set_name(label)?;
+        }
+
         self.counters.texture_memory.add(allocation.size() as isize);
 
         Ok((resource, allocation))
@@ -180,6 +191,10 @@ impl<'a> DeviceAllocationContext<'a> {
         } else {
             self.create_committed_acceleration_structure(desc, raw_desc)?
         };
+
+        if let Some(label) = desc.label {
+            resource.set_name(label)?;
+        }
 
         self.counters
             .acceleration_structure_memory
