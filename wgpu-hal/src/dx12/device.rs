@@ -22,7 +22,10 @@ use windows::{
 
 use super::{conv, descriptor, D3D12Lib};
 use crate::{
-    auxil::{self, dxgi::result::HResult},
+    auxil::{
+        self,
+        dxgi::{name::ObjectExt, result::HResult},
+    },
     dx12::{
         borrow_optional_interface_temporarily, shader_compilation, suballocation,
         DynamicStorageBufferOffsets, Event,
@@ -424,8 +427,7 @@ impl crate::Device for super::Device {
             suballocation::DeviceAllocationContext::from(self).create_buffer(&desc)?;
 
         if let Some(label) = desc.label {
-            unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            resource.set_name(label)?;
         }
 
         self.counters.buffers.add(1);
@@ -504,8 +506,7 @@ impl crate::Device for super::Device {
             suballocation::DeviceAllocationContext::from(self).create_texture(desc, raw_desc)?;
 
         if let Some(label) = desc.label {
-            unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            resource.set_name(label)?;
         }
 
         self.counters.textures.add(1);
@@ -720,8 +721,7 @@ impl crate::Device for super::Device {
         .into_device_result("Command allocator creation")?;
 
         if let Some(label) = desc.label {
-            unsafe { allocator.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            allocator.set_name(label)?;
         }
 
         self.counters.command_encoders.add(1);
@@ -1315,8 +1315,7 @@ impl crate::Device for super::Device {
         };
 
         if let Some(label) = desc.label {
-            unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            raw.set_name(label)?;
         }
 
         self.counters.pipeline_layouts.add(1);
@@ -1549,8 +1548,7 @@ impl crate::Device for super::Device {
             let (buffer, allocation) =
                 suballocation::DeviceAllocationContext::from(self).create_buffer(&buffer_desc)?;
 
-            unsafe { buffer.SetName(&windows::core::HSTRING::from(&*label)) }
-                .into_device_result("SetName")?;
+            buffer.set_name(&*label)?;
 
             let mut mapping = ptr::null_mut::<ffi::c_void>();
             unsafe { buffer.Map(0, None, Some(&mut mapping)) }.into_device_result("Map")?;
@@ -1835,8 +1833,7 @@ impl crate::Device for super::Device {
         };
 
         if let Some(label) = desc.label {
-            unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            raw.set_name(label)?;
         }
 
         self.counters.render_pipelines.add(1);
@@ -1899,8 +1896,7 @@ impl crate::Device for super::Device {
         })?;
 
         if let Some(label) = desc.label {
-            unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            raw.set_name(label)?;
         }
 
         self.counters.compute_pipelines.add(1);
@@ -1958,8 +1954,7 @@ impl crate::Device for super::Device {
         let raw = raw.ok_or(crate::DeviceError::Unexpected)?;
 
         if let Some(label) = desc.label {
-            unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            raw.set_name(label)?;
         }
 
         self.counters.query_sets.add(1);
@@ -2253,8 +2248,7 @@ impl crate::Device for super::Device {
             .create_acceleration_structure(desc, raw_desc)?;
 
         if let Some(label) = desc.label {
-            unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            resource.set_name(label)?;
         }
 
         // for some reason there is no counter for acceleration structures
