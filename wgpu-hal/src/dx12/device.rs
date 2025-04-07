@@ -429,11 +429,8 @@ impl crate::Device for super::Device {
             Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) = suballocation::create_buffer(
-            suballocation::DeviceAllocationContext::from(self),
-            desc,
-            raw_desc,
-        )?;
+        let (resource, allocation) =
+            suballocation::DeviceAllocationContext::from(self).create_buffer(desc, raw_desc)?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -450,11 +447,8 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
-        suballocation::free_resource(
-            suballocation::DeviceAllocationContext::from(self),
-            buffer.resource,
-            buffer.allocation,
-        );
+        suballocation::DeviceAllocationContext::from(self)
+            .free_resource(buffer.resource, buffer.allocation);
 
         self.counters.buffers.sub(1);
     }
@@ -515,11 +509,8 @@ impl crate::Device for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) = suballocation::create_texture(
-            suballocation::DeviceAllocationContext::from(self),
-            desc,
-            raw_desc,
-        )?;
+        let (resource, allocation) =
+            suballocation::DeviceAllocationContext::from(self).create_texture(desc, raw_desc)?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -540,11 +531,8 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        suballocation::free_resource(
-            suballocation::DeviceAllocationContext::from(self),
-            texture.resource,
-            texture.allocation,
-        );
+        suballocation::DeviceAllocationContext::from(self)
+            .free_resource(texture.resource, texture.allocation);
 
         self.counters.textures.sub(1);
     }
@@ -1583,11 +1571,8 @@ impl crate::Device for super::Device {
                 Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
             };
 
-            let (buffer, allocation) = suballocation::create_buffer(
-                suballocation::DeviceAllocationContext::from(self),
-                &buffer_desc,
-                raw_buffer_desc,
-            )?;
+            let (buffer, allocation) = suballocation::DeviceAllocationContext::from(self)
+                .create_buffer(&buffer_desc, raw_buffer_desc)?;
 
             unsafe { buffer.SetName(&windows::core::HSTRING::from(&*label)) }
                 .into_device_result("SetName")?;
@@ -1669,11 +1654,8 @@ impl crate::Device for super::Device {
         }
 
         if let Some(sampler_buffer) = group.sampler_index_buffer {
-            suballocation::free_resource(
-                suballocation::DeviceAllocationContext::from(self),
-                sampler_buffer.buffer,
-                sampler_buffer.allocation,
-            );
+            suballocation::DeviceAllocationContext::from(self)
+                .free_resource(sampler_buffer.buffer, sampler_buffer.allocation);
         }
 
         self.counters.bind_groups.sub(1);
@@ -2292,11 +2274,8 @@ impl crate::Device for super::Device {
             Flags: Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
         };
 
-        let (resource, allocation) = suballocation::create_acceleration_structure(
-            suballocation::DeviceAllocationContext::from(self),
-            desc,
-            raw_desc,
-        )?;
+        let (resource, allocation) = suballocation::DeviceAllocationContext::from(self)
+            .create_acceleration_structure(desc, raw_desc)?;
 
         if let Some(label) = desc.label {
             unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
@@ -2315,8 +2294,7 @@ impl crate::Device for super::Device {
         &self,
         acceleration_structure: super::AccelerationStructure,
     ) {
-        suballocation::free_resource(
-            suballocation::DeviceAllocationContext::from(self),
+        suballocation::DeviceAllocationContext::from(self).free_resource(
             acceleration_structure.resource,
             acceleration_structure.allocation,
         );
