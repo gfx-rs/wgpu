@@ -20,10 +20,8 @@ impl Writer {
             if let Some(func_id) = self.ray_get_committed_intersection_function {
                 return func_id;
             }
-        } else {
-            if let Some(func_id) = self.ray_get_candidate_intersection_function {
-                return func_id;
-            }
+        } else if let Some(func_id) = self.ray_get_candidate_intersection_function {
+            return func_id;
         };
         let ray_intersection = ir_module.special_types.ray_intersection.unwrap();
         let intersection_type_id = self.get_handle_type_id(ray_intersection);
