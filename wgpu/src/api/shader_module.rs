@@ -223,7 +223,7 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 static_assertions::assert_impl_all!(ShaderModuleDescriptor<'_>: Send, Sync);
 
-/// Descriptor for a pre-compiled shader module passthrough, for use with
+/// Descriptor for a shader module that will bypass wgpu's shader tooling, for use with
 /// [`Device::create_shader_module_passthrough`].
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
