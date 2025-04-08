@@ -614,7 +614,8 @@ impl<'a> ResolveContext<'a> {
                         TypeResolution::Value(bool)
                     } else {
                         return Err(ResolveError::IncompatibleOperands(format!(
-                            "{op:?}({ty:?}, _)"
+                            "{op:?}({:?}, _)",
+                            ty.for_debug(types),
                         )));
                     }
                 }

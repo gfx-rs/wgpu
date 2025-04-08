@@ -3185,7 +3185,7 @@ fn vector_logical_ops() {
         "fn foo(a: vec2<bool>, b: vec2<bool>) {
             let y = a && b;
         }",
-        r#"error: Incompatible operands: LogicalAnd(Vector { size: Bi, scalar: Scalar { kind: Bool, width: 1 } }, _)
+        r#"error: Incompatible operands: LogicalAnd(vec2<bool>, _)
 
 "#,
     );
@@ -3194,7 +3194,7 @@ fn vector_logical_ops() {
         "fn foo(a: vec2<bool>, b: vec2<bool>) {
             let y = a || b;
         }",
-        r#"error: Incompatible operands: LogicalOr(Vector { size: Bi, scalar: Scalar { kind: Bool, width: 1 } }, _)
+        r#"error: Incompatible operands: LogicalOr(vec2<bool>, _)
 
 "#,
     );
