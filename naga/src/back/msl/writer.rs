@@ -18,7 +18,11 @@ use crate::{
     arena::{Handle, HandleSet},
     back::{self, Baked},
     common,
-    proc::{self, index, NameKey, TypeResolution},
+    proc::{
+        self,
+        index::{self, BoundsCheck},
+        NameKey, TypeResolution,
+    },
     valid, FastHashMap, FastHashSet,
 };
 
@@ -723,13 +727,7 @@ impl<'a> ExpressionContext<'a> {
     fn bounds_check_iter(
         &self,
         chain: Handle<crate::Expression>,
-    ) -> impl Iterator<
-        Item = (
-            Handle<crate::Expression>,
-            index::GuardedIndex,
-            index::IndexableLength,
-        ),
-    > + '_ {
+    ) -> impl Iterator<Item = BoundsCheck> + '_ {
         index::bounds_check_iter(chain, self.module, self.function, self.info)
     }
 
@@ -2778,7 +2776,13 @@ impl<W: Write> Writer<W> {
         let mut check_written = false;
 
         // Iterate over the access chain, handling each required bounds check.
-        for (base, index, length) in context.bounds_check_iter(chain) {
+        for item in context.bounds_check_iter(chain) {
+            let BoundsCheck {
+                base,
+                index,
+                length,
+            } = item;
+
             if check_written {
                 write!(self.out, " && ")?;
             } else {

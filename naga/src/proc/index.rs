@@ -342,12 +342,27 @@ pub fn access_needs_check(
     Some(length)
 }
 
+/// Items returned by the [`bounds_check_iter`] iterator.
+#[cfg_attr(not(feature = "msl-out"), allow(dead_code))]
+pub(crate) struct BoundsCheck {
+    /// The base of the [`Access`] or [`AccessIndex`] expression.
+    ///
+    /// [`Access`]: crate::Expression::Access
+    /// [`AccessIndex`]: crate::Expression::AccessIndex
+    pub base: Handle<crate::Expression>,
+
+    /// The index being accessed.
+    pub index: GuardedIndex,
+
+    /// The length of `base`.
+    pub length: IndexableLength,
+}
+
 /// Returns an iterator of accesses within the chain of `Access` and
 /// `AccessIndex` expressions starting from `chain` that may need to be
 /// bounds-checked at runtime.
 ///
-/// They're yielded as `(base, index)` pairs, where `base` is the type that the
-/// access expression will produce and `index` is the index being used.
+/// Items are yielded as [`BoundsCheck`] instances.
 ///
 /// Accesses through a struct are omitted, since you never need a bounds check
 /// for accessing a struct field.
@@ -359,7 +374,7 @@ pub(crate) fn bounds_check_iter<'a>(
     module: &'a crate::Module,
     function: &'a crate::Function,
     info: &'a valid::FunctionInfo,
-) -> impl Iterator<Item = (Handle<crate::Expression>, GuardedIndex, IndexableLength)> + 'a {
+) -> impl Iterator<Item = BoundsCheck> + 'a {
     iter::from_fn(move || {
         let (next_expr, result) = match function.expressions[chain] {
             crate::Expression::Access { base, index } => {
@@ -384,8 +399,13 @@ pub(crate) fn bounds_check_iter<'a>(
     })
     .flatten()
     .filter_map(|(base, index)| {
-        access_needs_check(base, index, module, &function.expressions, info)
-            .map(|length| (base, index, length))
+        access_needs_check(base, index, module, &function.expressions, info).map(|length| {
+            BoundsCheck {
+                base,
+                index,
+                length,
+            }
+        })
     })
 }
 
