@@ -172,7 +172,7 @@ impl Device {
         ShaderModule { inner: module }
     }
 
-    /// Creates a shader module for passthrough to bypass naga and validations.
+    /// Creates a shader module which will bypass wgpu's shader tooling and validation and be used directly by the backend.
     ///
     /// # Safety
     ///
