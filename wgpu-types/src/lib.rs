@@ -7670,26 +7670,27 @@ pub enum CreateShaderModuleDescriptorPassthrough<'a, L> {
 
 impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
     /// Takes a closure and maps the label of the shader module descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateShaderModuleDescriptorPassthrough<'_, K> {
+    pub fn map_label<K>(
+        &self,
+        fun: impl FnOnce(&L) -> K,
+    ) -> CreateShaderModuleDescriptorPassthrough<'_, K> {
         match self {
             CreateShaderModuleDescriptorPassthrough::SpirV(inner) => {
                 CreateShaderModuleDescriptorPassthrough::<'_, K>::SpirV(
                     ShaderModuleDescriptorSpirV {
                         label: fun(&inner.label),
                         source: inner.source.clone(),
-                    }
+                    },
                 )
-            },
+            }
             CreateShaderModuleDescriptorPassthrough::Msl(inner) => {
-                CreateShaderModuleDescriptorPassthrough::<'_, K>::Msl(
-                    ShaderModuleDescriptorMsl {
-                        entry_point: inner.entry_point.clone(),
-                        label: fun(&inner.label),
-                        num_workgroups: inner.num_workgroups,
-                        source: inner.source.clone(),
-                    }
-                )
-            },
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Msl(ShaderModuleDescriptorMsl {
+                    entry_point: inner.entry_point.clone(),
+                    label: fun(&inner.label),
+                    num_workgroups: inner.num_workgroups,
+                    source: inner.source.clone(),
+                })
+            }
         }
     }
 
