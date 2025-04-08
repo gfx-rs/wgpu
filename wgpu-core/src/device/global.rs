@@ -962,7 +962,7 @@ impl Global {
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
-                let data = trace.make_binary(desc.trace_binary_ext(), &desc.trace_data());
+                let data = trace.make_binary(desc.trace_binary_ext(), desc.trace_data());
                 trace.add(trace::Action::CreateShaderModule {
                     id: fid.id(),
                     desc: desc.clone().into(),
