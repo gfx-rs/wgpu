@@ -965,7 +965,20 @@ impl Global {
                 let data = trace.make_binary(desc.trace_binary_ext(), desc.trace_data());
                 trace.add(trace::Action::CreateShaderModule {
                     id: fid.id(),
-                    desc: desc.clone().into(),
+                    desc: match desc {
+                        pipeline::ShaderModuleDescriptorPassthrough::SpirV(inner) => {
+                            pipeline::ShaderModuleDescriptor {
+                                label: inner.label.clone(),
+                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                            }
+                        }
+                        pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => {
+                            pipeline::ShaderModuleDescriptor {
+                                label: inner.label.clone(),
+                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                            }
+                        }
+                    },
                     data,
                 });
             };
