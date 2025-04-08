@@ -181,6 +181,32 @@ layout(location = 0, index = 1) out vec4 output1;
 
 By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 
+#### Unify interface for SpirV shader passthrough
+
+Replace device `create_shader_module_spirv` function with a generic `create_shader_module_passthrough` function
+taking a `ShaderModuleDescriptorPassthrough` enum as parameter.
+
+Update your calls to `create_shader_module_spirv` and use `create_shader_module_passthrough` instead:
+
+```diff
+-    device.create_shader_module_spirv(
+-        wgpu::ShaderModuleDescriptorSpirV {
+-            label: Some(&name),
+-            source: Cow::Borrowed(&source),
+-        }
+-    )
++    device.create_shader_module_passthrough(
++        wgpu::ShaderModuleDescriptorPassthrough::SpirV(
++            wgpu::ShaderModuleDescriptorSpirV {
++                label: Some(&name),
++                source: Cow::Borrowed(&source),
++            },
++        ),
++    )
+```
+
+By @syl20bnr in [#7326](https://github.com/gfx-rs/wgpu/pull/7326).
+
 ### New Features
 
 - Added mesh shader support to `wgpu_hal`. By @SupaMaggie70Incorporated in [#7089](https://github.com/gfx-rs/wgpu/pull/7089)
@@ -203,8 +229,9 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 
 - Support getting vertices of the hit triangle when raytracing. By @Vecvec in [#7183](https://github.com/gfx-rs/wgpu/pull/7183) .
 
-- Replace device `create_shader_module_spirv` with generic `create_shader_module_passthrough` taking a `ShaderModuleDescriptorPassthrough` enum as parameter. By @syl20bnr in [#7326](https://github.com/gfx-rs/wgpu/pull/7326).
 - Add Metal compute shader passthrough. Use `create_shader_module_passthrough` on device. By @syl20bnr in [#7326](https://github.com/gfx-rs/wgpu/pull/7326).
+
+- new `Features::MSL_SHADER_PASSTHROUGH` run-time feature allows providing pass-through MSL Metal shaders. By @syl20bnr in [#7326](https://github.com/gfx-rs/wgpu/pull/7326).
 
 #### Naga
 
