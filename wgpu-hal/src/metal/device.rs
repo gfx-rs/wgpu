@@ -4,7 +4,7 @@ use std::{thread, time};
 
 use parking_lot::Mutex;
 
-use super::conv;
+use super::{conv, ShaderModuleDescriptorPassthrough};
 use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
 
@@ -994,10 +994,7 @@ impl crate::Device for super::Device {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
                 naga: Some(naga),
                 bounds_checks: desc.runtime_checks,
-                library: None,
-                function: None,
-                entry_point: None,
-                num_workgroups: None,
+                passthrough_desc: None,
             }),
             crate::ShaderInput::Msl {
                 shader: source,
@@ -1018,11 +1015,13 @@ impl crate::Device for super::Device {
                 })?;
 
                 Ok(super::ShaderModule {
-                    naga: None, // naga modules is not used for passthrough
-                    library: Some(library),
-                    function: Some(function),
-                    entry_point: Some(entry_point),
-                    num_workgroups: Some(num_workgroups),
+                    naga: None,
+                    passthrough_desc: Some(ShaderModuleDescriptorPassthrough {
+                        library,
+                        function,
+                        entry_point,
+                        num_workgroups,
+                    }),
                     bounds_checks: desc.runtime_checks,
                 })
             }
@@ -1334,18 +1333,14 @@ impl crate::Device for super::Device {
             let descriptor = metal::ComputePipelineDescriptor::new();
 
             let module = desc.stage.module;
-            let cs = if module.function.is_some()
-                && module.library.is_some()
-                && module.num_workgroups.is_some()
-            {
-                let wg_size = module.num_workgroups.unwrap();
+            let cs = if let Some(ref desc) = module.passthrough_desc {
                 CompiledShader {
-                    library: module.library.clone().unwrap(),
-                    function: module.function.clone().unwrap(),
+                    library: desc.library.clone(),
+                    function: desc.function.clone(),
                     wg_size: metal::MTLSize::new(
-                        wg_size.0 as u64,
-                        wg_size.1 as u64,
-                        wg_size.2 as u64,
+                        desc.num_workgroups.0 as u64,
+                        desc.num_workgroups.1 as u64,
+                        desc.num_workgroups.2 as u64,
                     ),
                     wg_memory_sizes: vec![],
                     sized_bindings: vec![],

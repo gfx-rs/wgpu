@@ -782,13 +782,18 @@ unsafe impl Send for BindGroup {}
 unsafe impl Sync for BindGroup {}
 
 #[derive(Debug)]
+pub struct ShaderModuleDescriptorPassthrough {
+    pub library: metal::Library,
+    pub function: metal::Function,
+    pub entry_point: String,
+    pub num_workgroups: (u32, u32, u32),
+}
+
+#[derive(Debug)]
 pub struct ShaderModule {
     naga: Option<crate::NagaShader>,
     bounds_checks: wgt::ShaderRuntimeChecks,
-    pub library: Option<metal::Library>,
-    pub function: Option<metal::Function>,
-    pub entry_point: Option<String>,
-    pub num_workgroups: Option<(u32, u32, u32)>,
+    passthrough_desc: Option<ShaderModuleDescriptorPassthrough>,
 }
 
 impl crate::DynShaderModule for ShaderModule {}
