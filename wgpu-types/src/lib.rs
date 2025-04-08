@@ -7668,30 +7668,31 @@ pub enum CreateShaderModuleDescriptorPassthrough<'a, L> {
     Msl(ShaderModuleDescriptorMsl<'a, L>),
 }
 
-impl<'a> From<&CreateShaderModuleDescriptorPassthrough<'a, Option<&'a str>>>
-    for CreateShaderModuleDescriptorPassthrough<'a, Option<Cow<'a, str>>>
-{
-    fn from(src: &CreateShaderModuleDescriptorPassthrough<'a, Option<&'a str>>) -> Self {
-        match src {
+impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
+    /// Takes a closure and maps the label of the shader module descriptor into another.
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateShaderModuleDescriptorPassthrough<'_, K> {
+        match self {
             CreateShaderModuleDescriptorPassthrough::SpirV(inner) => {
-                CreateShaderModuleDescriptorPassthrough::SpirV(ShaderModuleDescriptorSpirV {
-                    label: inner.label.map(Cow::from),
-                    source: inner.source.clone(),
-                })
-            }
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::SpirV(
+                    ShaderModuleDescriptorSpirV {
+                        label: fun(&inner.label),
+                        source: inner.source.clone(),
+                    }
+                )
+            },
             CreateShaderModuleDescriptorPassthrough::Msl(inner) => {
-                CreateShaderModuleDescriptorPassthrough::Msl(ShaderModuleDescriptorMsl {
-                    entry_point: inner.entry_point.clone(),
-                    label: inner.label.map(Cow::from),
-                    num_workgroups: inner.num_workgroups,
-                    source: inner.source.clone(),
-                })
-            }
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Msl(
+                    ShaderModuleDescriptorMsl {
+                        entry_point: inner.entry_point.clone(),
+                        label: fun(&inner.label),
+                        num_workgroups: inner.num_workgroups,
+                        source: inner.source.clone(),
+                    }
+                )
+            },
         }
     }
-}
 
-impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
     /// Returns the label of shader module passthrough descriptor.
     pub fn label(&'a self) -> &'a L {
         match self {

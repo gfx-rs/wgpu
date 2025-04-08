@@ -1047,7 +1047,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         &self,
         desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> dispatch::DispatchShaderModule {
-        let desc = desc.into();
+        let desc = desc.map_label(|l| l.map(std::borrow::Cow::from));
         let (id, error) = unsafe {
             self.context
                 .0

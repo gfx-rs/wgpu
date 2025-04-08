@@ -1754,16 +1754,18 @@ impl Device {
         self: &Arc<Self>,
         descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
+        self.check_is_valid()?;
         let hal_shader = match descriptor {
             pipeline::ShaderModuleDescriptorPassthrough::SpirV(inner) => {
-                self.check_is_valid()?;
                 self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
                 hal::ShaderInput::SpirV(&inner.source)
             }
-            pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => hal::ShaderInput::Msl {
-                shader: inner.source.to_string(),
-                entry_point: inner.entry_point.to_string(),
-                num_workgroups: inner.num_workgroups,
+            pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => {
+                hal::ShaderInput::Msl {
+                    shader: inner.source.to_string(),
+                    entry_point: inner.entry_point.to_string(),
+                    num_workgroups: inner.num_workgroups,
+                }
             },
         };
 
