@@ -122,11 +122,14 @@ impl super::Device {
         primitive_class: metal::MTLPrimitiveTopologyClass,
         naga_stage: naga::ShaderStage,
     ) -> Result<CompiledShader, crate::PipelineError> {
+        assert!(stage.module.naga.is_some(), "load_shader required a naga shader");
+
         let stage_bit = map_naga_stage(naga_stage);
+        let naga = stage.module.naga.as_ref().unwrap();
 
         let (module, module_info) = naga::back::pipeline_constants::process_overrides(
-            &stage.module.naga.module,
-            &stage.module.naga.info,
+            &naga.module,
+            &naga.info,
             stage.constants,
         )
         .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {:?}", e)))?;
@@ -989,7 +992,7 @@ impl crate::Device for super::Device {
 
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
-                naga,
+                naga: Some(naga),
                 bounds_checks: desc.runtime_checks,
                 library: None,
                 function: None,
@@ -1015,7 +1018,7 @@ impl crate::Device for super::Device {
                 })?;
 
                 Ok(super::ShaderModule {
-                    naga: crate::NagaShader::default(), // naga modules is not used for passthrough
+                    naga: None, // naga modules is not used for passthrough
                     library: Some(library),
                     function: Some(function),
                     entry_point: Some(entry_point),
