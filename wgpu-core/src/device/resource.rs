@@ -1750,19 +1750,28 @@ impl Device {
     }
 
     #[allow(unused_unsafe)]
-    pub(crate) unsafe fn create_shader_module_spirv<'a>(
+    pub(crate) unsafe fn create_shader_module_passthrough<'a>(
         self: &Arc<Self>,
-        desc: &pipeline::ShaderModuleDescriptor<'a>,
-        source: &'a [u32],
+        descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
-        self.check_is_valid()?;
-
-        self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
-        let hal_desc = hal::ShaderModuleDescriptor {
-            label: desc.label.to_hal(self.instance_flags),
-            runtime_checks: desc.runtime_checks,
+        let hal_shader = match descriptor {
+            pipeline::ShaderModuleDescriptorPassthrough::SpirV(inner) => {
+                self.check_is_valid()?;
+                self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::SpirV(&inner.source)
+            }
+            pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => hal::ShaderInput::Msl {
+                shader: inner.source.to_string(),
+                entry_point: inner.entry_point.to_string(),
+                num_workgroups: inner.num_workgroups,
+            },
         };
-        let hal_shader = hal::ShaderInput::SpirV(source);
+
+        let hal_desc = hal::ShaderModuleDescriptor {
+            label: descriptor.label().to_hal(self.instance_flags),
+            runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+        };
+
         let raw = match unsafe { self.raw().create_shader_module(&hal_desc, hal_shader) } {
             Ok(raw) => raw,
             Err(error) => {
@@ -1782,48 +1791,7 @@ impl Device {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),
             interface: None,
-            label: desc.label.to_string(),
-        };
-
-        let module = Arc::new(module);
-
-        Ok(module)
-    }
-
-    #[allow(unused_unsafe)]
-    pub(crate) unsafe fn create_shader_module_msl<'a>(
-        self: &Arc<Self>,
-        desc: &pipeline::ShaderModuleDescriptor<'a>,
-        source: &'a Cow<str>,
-        entry_point: &str,
-        num_workgroups: (u32, u32, u32),
-    ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
-        let hal_shader = hal::ShaderInput::Msl {
-            shader: source.to_string(),
-            entry_point: entry_point.to_string(),
-            num_workgroups,
-        };
-        let hal_desc = hal::ShaderModuleDescriptor {
-            label: desc.label.to_hal(self.instance_flags),
-            runtime_checks: desc.runtime_checks,
-        };
-        let raw =
-            unsafe { self.raw().create_shader_module(&hal_desc, hal_shader) }.map_err(|error| {
-                match error {
-                    hal::ShaderError::Device(err) => {
-                        pipeline::CreateShaderModuleError::Device(self.handle_hal_error(err))
-                    }
-                    hal::ShaderError::Compilation(msg) => {
-                        log::error!("Shader compilation error: {}", msg);
-                        pipeline::CreateShaderModuleError::Generation
-                    }
-                }
-            })?;
-        let module = pipeline::ShaderModule {
-            raw: ManuallyDrop::new(raw),
-            device: self.clone(),
-            interface: None,
-            label: desc.label.to_string(),
+            label: descriptor.label().to_string(),
         };
 
         Ok(Arc::new(module))

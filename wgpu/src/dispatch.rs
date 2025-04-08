@@ -111,14 +111,12 @@ pub trait DeviceInterface: CommonTraits {
         desc: crate::ShaderModuleDescriptor<'_>,
         shader_bound_checks: crate::ShaderRuntimeChecks,
     ) -> DispatchShaderModule;
-    unsafe fn create_shader_module_spirv(
+
+    unsafe fn create_shader_module_passthrough(
         &self,
-        desc: &crate::ShaderModuleDescriptorSpirV<'_>,
+        desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> DispatchShaderModule;
-    unsafe fn create_shader_module_msl(
-        &self,
-        desc: &crate::ShaderModuleDescriptorMsl<'_>,
-    ) -> DispatchShaderModule;
+
     fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor<'_>,

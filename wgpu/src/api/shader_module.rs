@@ -228,39 +228,17 @@ static_assertions::assert_impl_all!(ShaderModuleDescriptor<'_>: Send, Sync);
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
-pub enum ShaderModuleDescriptorPassthrough<'a> {
-    /// Passthrough for SPIR-V binaries.
-    SpirV(&'a ShaderModuleDescriptorSpirV<'a>),
-    /// Passthrough for MSL source code.
-    Msl(&'a ShaderModuleDescriptorMsl<'a>),
-}
-
-/// Descriptor for a shader module given by SPIR-V binary.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug)]
-pub struct ShaderModuleDescriptorSpirV<'a> {
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
-    /// Binary SPIR-V data, in 4-byte words.
-    pub source: Cow<'a, [u32]>,
-}
-static_assertions::assert_impl_all!(ShaderModuleDescriptorSpirV<'_>: Send, Sync);
+pub type ShaderModuleDescriptorPassthrough<'a> =
+    wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
 
 /// Descriptor for a shader module given by Metal MSL source.
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
-#[derive(Debug)]
-pub struct ShaderModuleDescriptorMsl<'a> {
-    /// Entrypoint.
-    pub entry_point: String,
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-    /// Shader MSL source.
-    pub source: Cow<'a, str>,
-}
-static_assertions::assert_impl_all!(ShaderModuleDescriptorMsl<'_>: Send, Sync);
+pub type ShaderModuleDescriptorMsl<'a> = wgt::ShaderModuleDescriptorMsl<'a, Label<'a>>;
+
+/// Descriptor for a shader module given by SPIR-V binary.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+pub type ShaderModuleDescriptorSpirV<'a> = wgt::ShaderModuleDescriptorSpirV<'a, Label<'a>>;

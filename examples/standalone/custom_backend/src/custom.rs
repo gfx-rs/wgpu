@@ -126,16 +126,9 @@ impl DeviceInterface for CustomDevice {
         DispatchShaderModule::custom(CustomShaderModule(self.0.clone()))
     }
 
-    unsafe fn create_shader_module_spirv(
+    unsafe fn create_shader_module_passthrough(
         &self,
-        _desc: &wgpu::ShaderModuleDescriptorSpirV<'_>,
-    ) -> DispatchShaderModule {
-        unimplemented!()
-    }
-
-    unsafe fn create_shader_module_msl(
-        &self,
-        _desc: &wgpu::ShaderModuleDescriptorMsl<'_>,
+        _desc: &wgpu::ShaderModuleDescriptorPassthrough<'_>,
     ) -> DispatchShaderModule {
         unimplemented!()
     }

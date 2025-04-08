@@ -53,6 +53,24 @@ pub struct ShaderModuleDescriptor<'a> {
     pub runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
+pub type ShaderModuleDescriptorPassthrough<'a> =
+    wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
+
+impl<'a> From<ShaderModuleDescriptorPassthrough<'a>> for ShaderModuleDescriptor<'a> {
+    fn from(val: ShaderModuleDescriptorPassthrough<'a>) -> Self {
+        match val {
+            ShaderModuleDescriptorPassthrough::SpirV(inner) => ShaderModuleDescriptor {
+                label: inner.label.clone(),
+                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+            },
+            ShaderModuleDescriptorPassthrough::Msl(inner) => ShaderModuleDescriptor {
+                label: inner.label.clone(),
+                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+            },
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ShaderModule {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynShaderModule>>,

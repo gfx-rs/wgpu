@@ -181,16 +181,9 @@ impl Device {
     #[must_use]
     pub unsafe fn create_shader_module_passthrough(
         &self,
-        desc: &ShaderModuleDescriptorPassthrough<'_>,
+        desc: ShaderModuleDescriptorPassthrough<'_>,
     ) -> ShaderModule {
-        let module = match desc {
-            ShaderModuleDescriptorPassthrough::SpirV(desc) => {
-                unsafe { self.inner.create_shader_module_spirv(desc) }
-            },
-            ShaderModuleDescriptorPassthrough::Msl(desc) => {
-                unsafe { self.inner.create_shader_module_msl(desc) }
-            },
-        };
+        let module = unsafe { self.inner.create_shader_module_passthrough(&desc) };
         ShaderModule { inner: module }
     }
 

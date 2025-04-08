@@ -938,23 +938,21 @@ impl Global {
         (id, Some(error))
     }
 
-    // Unsafe-ness of internal calls has little to do with unsafe-ness of this.
     #[allow(unused_unsafe)]
     /// # Safety
     ///
-    /// This function passes SPIR-V binary to the backend as-is and can potentially result in a
+    /// This function passes source code or binary to the backend as-is and can potentially result in a
     /// driver crash.
-    pub unsafe fn device_create_shader_module_spirv(
+    pub unsafe fn device_create_shader_module_passthrough(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::ShaderModuleDescriptor,
-        source: Cow<[u32]>,
+        desc: &pipeline::ShaderModuleDescriptorPassthrough<'_>,
         id_in: Option<id::ShaderModuleId>,
     ) -> (
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
     ) {
-        profiling::scope!("Device::create_shader_module");
+        profiling::scope!("Device::create_shader_module_passthrough");
 
         let hub = &self.hub;
         let fid = hub.shader_modules.prepare(id_in);
@@ -964,15 +962,17 @@ impl Global {
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
-                let data = trace.make_binary("spv", bytemuck::cast_slice(&source));
+                let data = trace.make_binary(desc.trace_binary_ext(), &desc.trace_data());
                 trace.add(trace::Action::CreateShaderModule {
                     id: fid.id(),
-                    desc: desc.clone(),
+                    desc: desc.clone().into(),
                     data,
                 });
             };
 
-            let shader = match unsafe { device.create_shader_module_spirv(desc, &source) } {
+            let result = unsafe { device.create_shader_module_passthrough(desc) };
+
+            let shader = match result {
                 Ok(shader) => shader,
                 Err(e) => break 'error e,
             };
@@ -981,47 +981,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-        (id, Some(error))
-    }
-
-    // Unsafe-ness of internal calls has little to do with unsafe-ness of this.
-    #[allow(unused_unsafe)]
-    /// # Safety
-    ///
-    /// This function passes MSL source  code to the backend as-is and can potentially result in a
-    /// driver crash.
-    pub unsafe fn device_create_shader_module_msl(
-        &self,
-        device_id: DeviceId,
-        desc: &pipeline::ShaderModuleDescriptor,
-        source: Cow<str>,
-        entry_point: &str,
-        num_workgroups: (u32, u32, u32),
-        id_in: Option<id::ShaderModuleId>,
-    ) -> (
-        id::ShaderModuleId,
-        Option<pipeline::CreateShaderModuleError>,
-    ) {
-        profiling::scope!("Device::create_shader_module");
-
-        let hub = &self.hub;
-        let fid = hub.shader_modules.prepare(id_in);
-
-        let error = 'error: {
-            let device = self.hub.devices.get(device_id);
-            let shader = match unsafe {
-                device.create_shader_module_msl(desc, &source, entry_point, num_workgroups)
-            } {
-                Ok(shader) => shader,
-                Err(e) => break 'error e,
-            };
-            let id = fid.assign(Fallible::Valid(shader));
-            api_log!("Device::create_shader_module_spirv -> {id:?}");
-            return (id, None);
-        };
-
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label().to_string())));
         (id, Some(error))
     }
 
