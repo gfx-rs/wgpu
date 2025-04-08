@@ -14,6 +14,7 @@ extern crate std;
 
 extern crate alloc;
 
+use alloc::borrow::Cow;
 use alloc::{string::String, vec, vec::Vec};
 use core::{
     fmt,
@@ -22,7 +23,6 @@ use core::{
     num::NonZeroU32,
     ops::Range,
 };
-use alloc::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
 

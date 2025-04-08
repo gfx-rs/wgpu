@@ -4,8 +4,9 @@ use std::{thread, time};
 
 use parking_lot::Mutex;
 
-use super::{conv, ShaderModuleDescriptorPassthrough};
+use super::{conv, PassthroughShader};
 use crate::auxil::map_naga_stage;
+use crate::metal::ShaderModuleSource;
 use crate::TlasInstance;
 
 use metal::foreign_types::ForeignType;
@@ -122,14 +123,15 @@ impl super::Device {
         primitive_class: metal::MTLPrimitiveTopologyClass,
         naga_stage: naga::ShaderStage,
     ) -> Result<CompiledShader, crate::PipelineError> {
-        assert!(stage.module.naga.is_some(), "load_shader required a naga shader");
-
+        let naga_shader = if let ShaderModuleSource::Naga(naga) = &stage.module.source {
+            naga
+        } else {
+            panic!("load_shader required a naga shader");
+        };
         let stage_bit = map_naga_stage(naga_stage);
-        let naga = stage.module.naga.as_ref().unwrap();
-
         let (module, module_info) = naga::back::pipeline_constants::process_overrides(
-            &naga.module,
-            &naga.info,
+            &naga_shader.module,
+            &naga_shader.info,
             stage.constants,
         )
         .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {:?}", e)))?;
@@ -992,9 +994,8 @@ impl crate::Device for super::Device {
 
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
-                naga: Some(naga),
+                source: ShaderModuleSource::Naga(naga),
                 bounds_checks: desc.runtime_checks,
-                passthrough_desc: None,
             }),
             crate::ShaderInput::Msl {
                 shader: source,
@@ -1015,8 +1016,7 @@ impl crate::Device for super::Device {
                 })?;
 
                 Ok(super::ShaderModule {
-                    naga: None,
-                    passthrough_desc: Some(ShaderModuleDescriptorPassthrough {
+                    source: ShaderModuleSource::Passthrough(PassthroughShader {
                         library,
                         function,
                         entry_point,
@@ -1333,7 +1333,7 @@ impl crate::Device for super::Device {
             let descriptor = metal::ComputePipelineDescriptor::new();
 
             let module = desc.stage.module;
-            let cs = if let Some(ref desc) = module.passthrough_desc {
+            let cs = if let ShaderModuleSource::Passthrough(desc) = &module.source {
                 CompiledShader {
                     library: desc.library.clone(),
                     function: desc.function.clone(),

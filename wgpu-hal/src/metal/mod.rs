@@ -782,7 +782,13 @@ unsafe impl Send for BindGroup {}
 unsafe impl Sync for BindGroup {}
 
 #[derive(Debug)]
-pub struct ShaderModuleDescriptorPassthrough {
+pub enum ShaderModuleSource {
+    Naga(crate::NagaShader),
+    Passthrough(PassthroughShader),
+}
+
+#[derive(Debug)]
+pub struct PassthroughShader {
     pub library: metal::Library,
     pub function: metal::Function,
     pub entry_point: String,
@@ -791,9 +797,8 @@ pub struct ShaderModuleDescriptorPassthrough {
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    naga: Option<crate::NagaShader>,
+    source: ShaderModuleSource,
     bounds_checks: wgt::ShaderRuntimeChecks,
-    passthrough_desc: Option<ShaderModuleDescriptorPassthrough>,
 }
 
 impl crate::DynShaderModule for ShaderModule {}
