@@ -1306,6 +1306,12 @@ impl<'a> ConstantEvaluator<'a> {
             }
 
             // vector
+            crate::MathFunction::Dot4I8Packed => {
+                self.packed_dot_product(arg, arg1.unwrap(), span, true)
+            }
+            crate::MathFunction::Dot4U8Packed => {
+                self.packed_dot_product(arg, arg1.unwrap(), span, false)
+            }
             crate::MathFunction::Cross => self.cross_product(arg, arg1.unwrap(), span),
 
             // unimplemented
@@ -1314,8 +1320,6 @@ impl<'a> ConstantEvaluator<'a> {
             | crate::MathFunction::Frexp
             | crate::MathFunction::Ldexp
             | crate::MathFunction::Dot
-            | crate::MathFunction::Dot4I8Packed
-            | crate::MathFunction::Dot4U8Packed
             | crate::MathFunction::Outer
             | crate::MathFunction::Distance
             | crate::MathFunction::Length
@@ -1348,6 +1352,40 @@ impl<'a> ConstantEvaluator<'a> {
                 format!("{fun:?} built-in function"),
             )),
         }
+    }
+
+    /// Dot product of two packed vectors (`dot4I8Packed` and `dot4U8Packed`)
+    fn packed_dot_product(
+        &mut self,
+        a: Handle<Expression>,
+        b: Handle<Expression>,
+        span: Span,
+        signed: bool,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let Expression::Literal(Literal::U32(a)) = self.expressions[a] else {
+            return Err(ConstantEvaluatorError::InvalidMathArg);
+        };
+        let Expression::Literal(Literal::U32(b)) = self.expressions[b] else {
+            return Err(ConstantEvaluatorError::InvalidMathArg);
+        };
+
+        let result = if signed {
+            Literal::I32(
+                (a & 0xFF) as i8 as i32 * (b & 0xFF) as i8 as i32
+                    + ((a >> 8) & 0xFF) as i8 as i32 * ((b >> 8) & 0xFF) as i8 as i32
+                    + ((a >> 16) & 0xFF) as i8 as i32 * ((b >> 16) & 0xFF) as i8 as i32
+                    + ((a >> 24) & 0xFF) as i8 as i32 * ((b >> 24) & 0xFF) as i8 as i32,
+            )
+        } else {
+            Literal::U32(
+                (a & 0xFF) * (b & 0xFF)
+                    + ((a >> 8) & 0xFF) * ((b >> 8) & 0xFF)
+                    + ((a >> 16) & 0xFF) * ((b >> 16) & 0xFF)
+                    + ((a >> 24) & 0xFF) * ((b >> 24) & 0xFF),
+            )
+        };
+
+        self.register_evaluated_expr(Expression::Literal(result), span)
     }
 
     /// Vector cross product.

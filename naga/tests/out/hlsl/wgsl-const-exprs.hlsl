@@ -125,6 +125,19 @@ void relational()
     return;
 }
 
+void packed_dot_product()
+{
+    int signed_four = int(4);
+    uint unsigned_four = 4u;
+    int signed_twelve = int(12);
+    uint unsigned_twelve = 12u;
+    int signed_seventy = int(70);
+    uint unsigned_seventy = 70u;
+    int minus_four = int(-4);
+
+    return;
+}
+
 typedef int ret_Constructarray9_int_[9];
 ret_Constructarray9_int_ Constructarray9_int_(int arg0, int arg1, int arg2, int arg3, int arg4, int arg5, int arg6, int arg7, int arg8) {
     int ret[9] = { arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8 };
