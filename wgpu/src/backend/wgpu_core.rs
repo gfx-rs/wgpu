@@ -1,5 +1,5 @@
 use alloc::{
-    borrow::Cow::Borrowed,
+    borrow::Cow::{self, Borrowed},
     boxed::Box,
     format,
     string::{String, ToString as _},
@@ -1047,7 +1047,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         &self,
         desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> dispatch::DispatchShaderModule {
-        let desc = desc.map_label(|l| l.map(std::borrow::Cow::from));
+        let desc = desc.map_label(|l| l.map(Cow::from));
         let (id, error) = unsafe {
             self.context
                 .0

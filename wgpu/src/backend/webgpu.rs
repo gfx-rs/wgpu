@@ -1845,8 +1845,8 @@ impl dispatch::DeviceInterface for WebDevice {
 
     unsafe fn create_shader_module_passthrough(
         &self,
-        desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
-    ) -> DispatchShaderModule {
+        _desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
+    ) -> dispatch::DispatchShaderModule {
         unreachable!("No XXX_SHADER_PASSTHROUGH feature enabled for this backend")
     }
 
