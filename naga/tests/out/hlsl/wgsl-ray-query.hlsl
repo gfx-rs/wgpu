@@ -59,27 +59,6 @@ RayDesc_ ConstructRayDesc_(uint arg0, uint arg1, float arg2, float arg3, float3 
     return ret;
 }
 
-RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
-    RayIntersection ret = (RayIntersection)0;
-    CANDIDATE_TYPE kind = rq.CandidateType();
-    if (kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
-        ret.kind = 1;
-        ret.t = rq.CandidateTriangleRayT();
-        ret.barycentrics = rq.CandidateTriangleBarycentrics();
-        ret.front_face = rq.CandidateTriangleFrontFace();
-    } else {
-        ret.kind = 3;
-    }
-    ret.instance_custom_data = rq.CandidateInstanceID();
-    ret.instance_index = rq.CandidateInstanceIndex();
-    ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();
-    ret.geometry_index = rq.CandidateGeometryIndex();
-    ret.primitive_index = rq.CandidatePrimitiveIndex();
-    ret.object_to_world = rq.CandidateObjectToWorld4x3();
-    ret.world_to_object = rq.CandidateWorldToObject4x3();
-    return ret;
-}
-
 RayIntersection GetCommittedIntersection(RayQuery<RAY_FLAG_NONE> rq) {
     RayIntersection ret = (RayIntersection)0;
     ret.kind = rq.CommittedStatus();
@@ -115,7 +94,6 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
             break;
         }
         {
-            RayIntersection phony = GetCandidateIntersection(rq_1);
         }
     }
     const RayIntersection rayintersection = GetCommittedIntersection(rq_1);
@@ -140,6 +118,27 @@ void main()
     const float3 _e18 = get_torus_normal((dir_1 * _e7.t), _e7);
     output.Store3(16, asuint(_e18));
     return;
+}
+
+RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
+    RayIntersection ret = (RayIntersection)0;
+    CANDIDATE_TYPE kind = rq.CandidateType();
+    if (kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
+        ret.kind = 1;
+        ret.t = rq.CandidateTriangleRayT();
+        ret.barycentrics = rq.CandidateTriangleBarycentrics();
+        ret.front_face = rq.CandidateTriangleFrontFace();
+    } else {
+        ret.kind = 3;
+    }
+    ret.instance_custom_data = rq.CandidateInstanceID();
+    ret.instance_index = rq.CandidateInstanceIndex();
+    ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();
+    ret.geometry_index = rq.CandidateGeometryIndex();
+    ret.primitive_index = rq.CandidatePrimitiveIndex();
+    ret.object_to_world = rq.CandidateObjectToWorld4x3();
+    ret.world_to_object = rq.CandidateWorldToObject4x3();
+    return ret;
 }
 
 [numthreads(1, 1, 1)]

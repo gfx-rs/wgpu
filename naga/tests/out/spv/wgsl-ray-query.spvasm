@@ -1,16 +1,16 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 219
+; Bound: 218
 OpCapability Shader
 OpCapability RayQueryKHR
 OpExtension "SPV_KHR_ray_query"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %176 "main" %15 %17
-OpEntryPoint GLCompute %196 "main_candidate" %15
-OpExecutionMode %176 LocalSize 1 1 1
-OpExecutionMode %196 LocalSize 1 1 1
+OpEntryPoint GLCompute %140 "main" %15 %17
+OpEntryPoint GLCompute %160 "main_candidate" %15
+OpExecutionMode %140 LocalSize 1 1 1
+OpExecutionMode %160 LocalSize 1 1 1
 OpMemberDecorate %10 0 Offset 0
 OpMemberDecorate %10 1 Offset 4
 OpMemberDecorate %10 2 Offset 8
@@ -80,131 +80,77 @@ OpMemberDecorate %18 0 Offset 0
 %74 = OpTypePointer Function %3
 %75 = OpTypeFunction %10 %32
 %77 = OpConstantNull  %10
-%84 = OpConstant  %6  3
-%96 = OpConstant  %6  2
-%100 = OpConstant  %6  5
-%102 = OpConstant  %6  6
-%104 = OpConstant  %6  9
-%106 = OpConstant  %6  10
-%115 = OpConstant  %6  7
-%117 = OpConstant  %6  8
-%159 = OpTypeFunction %4 %4 %10
-%160 = OpConstant  %3  1.0
-%161 = OpConstant  %3  2.4
-%162 = OpConstant  %3  0.0
-%177 = OpTypeFunction %2
-%179 = OpTypePointer StorageBuffer %13
-%181 = OpConstantComposite  %4  %162 %162 %162
-%182 = OpConstantComposite  %4  %162 %160 %162
-%185 = OpTypePointer StorageBuffer %6
-%190 = OpTypePointer StorageBuffer %4
-%198 = OpConstantComposite  %12  %27 %28 %29 %30 %181 %182
-%199 = OpConstant  %3  10.0
+%93 = OpConstant  %6  2
+%95 = OpConstant  %6  3
+%98 = OpConstant  %6  5
+%100 = OpConstant  %6  6
+%102 = OpConstant  %6  9
+%104 = OpConstant  %6  10
+%113 = OpConstant  %6  7
+%115 = OpConstant  %6  8
+%123 = OpTypeFunction %4 %4 %10
+%124 = OpConstant  %3  1.0
+%125 = OpConstant  %3  2.4
+%126 = OpConstant  %3  0.0
+%141 = OpTypeFunction %2
+%143 = OpTypePointer StorageBuffer %13
+%145 = OpConstantComposite  %4  %126 %126 %126
+%146 = OpConstantComposite  %4  %126 %124 %126
+%149 = OpTypePointer StorageBuffer %6
+%154 = OpTypePointer StorageBuffer %4
+%162 = OpConstantComposite  %12  %27 %28 %29 %30 %145 %146
+%163 = OpConstant  %3  10.0
 %76 = OpFunction  %10  None %75
 %78 = OpFunctionParameter  %32
 %79 = OpLabel
 %80 = OpVariable  %69  Function %77
-%81 = OpRayQueryGetIntersectionTypeKHR  %6  %78 %48
-%82 = OpIEqual  %8  %81 %48
-%83 = OpSelect  %6  %82 %50 %84
-%85 = OpAccessChain  %70  %80 %48
-OpStore %85 %83
-%86 = OpINotEqual  %8  %83 %48
-OpSelectionMerge %88 None
-OpBranchConditional %86 %87 %88
-%87 = OpLabel
-%89 = OpRayQueryGetIntersectionInstanceCustomIndexKHR  %6  %78 %48
-%90 = OpRayQueryGetIntersectionInstanceIdKHR  %6  %78 %48
-%91 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR  %6  %78 %48
-%92 = OpRayQueryGetIntersectionGeometryIndexKHR  %6  %78 %48
-%93 = OpRayQueryGetIntersectionPrimitiveIndexKHR  %6  %78 %48
-%94 = OpRayQueryGetIntersectionObjectToWorldKHR  %9  %78 %48
-%95 = OpRayQueryGetIntersectionWorldToObjectKHR  %9  %78 %48
-%97 = OpAccessChain  %70  %80 %96
-OpStore %97 %89
-%98 = OpAccessChain  %70  %80 %84
-OpStore %98 %90
-%99 = OpAccessChain  %70  %80 %27
-OpStore %99 %91
+%81 = OpRayQueryGetIntersectionTypeKHR  %6  %78 %50
+%82 = OpAccessChain  %70  %80 %48
+OpStore %82 %81
+%83 = OpINotEqual  %8  %81 %48
+OpSelectionMerge %85 None
+OpBranchConditional %83 %84 %85
+%84 = OpLabel
+%86 = OpRayQueryGetIntersectionInstanceCustomIndexKHR  %6  %78 %50
+%87 = OpRayQueryGetIntersectionInstanceIdKHR  %6  %78 %50
+%88 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR  %6  %78 %50
+%89 = OpRayQueryGetIntersectionGeometryIndexKHR  %6  %78 %50
+%90 = OpRayQueryGetIntersectionPrimitiveIndexKHR  %6  %78 %50
+%91 = OpRayQueryGetIntersectionObjectToWorldKHR  %9  %78 %50
+%92 = OpRayQueryGetIntersectionWorldToObjectKHR  %9  %78 %50
+%94 = OpAccessChain  %70  %80 %93
+OpStore %94 %86
+%96 = OpAccessChain  %70  %80 %95
+OpStore %96 %87
+%97 = OpAccessChain  %70  %80 %27
+OpStore %97 %88
+%99 = OpAccessChain  %70  %80 %98
+OpStore %99 %89
 %101 = OpAccessChain  %70  %80 %100
-OpStore %101 %92
-%103 = OpAccessChain  %70  %80 %102
-OpStore %103 %93
+OpStore %101 %90
+%103 = OpAccessChain  %71  %80 %102
+OpStore %103 %91
 %105 = OpAccessChain  %71  %80 %104
-OpStore %105 %94
-%107 = OpAccessChain  %71  %80 %106
-OpStore %107 %95
-%108 = OpIEqual  %8  %83 %50
-OpSelectionMerge %110 None
-OpBranchConditional %86 %109 %110
-%109 = OpLabel
-%111 = OpRayQueryGetIntersectionTKHR  %3  %78 %48
-%112 = OpAccessChain  %74  %80 %50
-OpStore %112 %111
-%113 = OpRayQueryGetIntersectionBarycentricsKHR  %7  %78 %48
-%114 = OpRayQueryGetIntersectionFrontFaceKHR  %8  %78 %48
-%116 = OpAccessChain  %72  %80 %115
-OpStore %116 %113
-%118 = OpAccessChain  %73  %80 %117
-OpStore %118 %114
-OpBranch %110
-%110 = OpLabel
-OpBranch %88
-%88 = OpLabel
-%119 = OpLoad  %10  %80
-OpReturnValue %119
-OpFunctionEnd
-%121 = OpFunction  %10  None %75
-%122 = OpFunctionParameter  %32
-%123 = OpLabel
-%124 = OpVariable  %69  Function %77
-%125 = OpRayQueryGetIntersectionTypeKHR  %6  %122 %50
-%126 = OpAccessChain  %70  %124 %48
-OpStore %126 %125
-%127 = OpINotEqual  %8  %125 %48
-OpSelectionMerge %129 None
-OpBranchConditional %127 %128 %129
-%128 = OpLabel
-%130 = OpRayQueryGetIntersectionInstanceCustomIndexKHR  %6  %122 %50
-%131 = OpRayQueryGetIntersectionInstanceIdKHR  %6  %122 %50
-%132 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR  %6  %122 %50
-%133 = OpRayQueryGetIntersectionGeometryIndexKHR  %6  %122 %50
-%134 = OpRayQueryGetIntersectionPrimitiveIndexKHR  %6  %122 %50
-%135 = OpRayQueryGetIntersectionObjectToWorldKHR  %9  %122 %50
-%136 = OpRayQueryGetIntersectionWorldToObjectKHR  %9  %122 %50
-%137 = OpAccessChain  %70  %124 %96
-OpStore %137 %130
-%138 = OpAccessChain  %70  %124 %84
-OpStore %138 %131
-%139 = OpAccessChain  %70  %124 %27
-OpStore %139 %132
-%140 = OpAccessChain  %70  %124 %100
-OpStore %140 %133
-%141 = OpAccessChain  %70  %124 %102
-OpStore %141 %134
-%142 = OpAccessChain  %71  %124 %104
-OpStore %142 %135
-%143 = OpAccessChain  %71  %124 %106
-OpStore %143 %136
-%144 = OpIEqual  %8  %125 %50
-%147 = OpRayQueryGetIntersectionTKHR  %3  %122 %50
-%148 = OpAccessChain  %74  %124 %50
-OpStore %148 %147
-OpSelectionMerge %146 None
-OpBranchConditional %127 %145 %146
-%145 = OpLabel
-%149 = OpRayQueryGetIntersectionBarycentricsKHR  %7  %122 %50
-%150 = OpRayQueryGetIntersectionFrontFaceKHR  %8  %122 %50
-%151 = OpAccessChain  %72  %124 %115
-OpStore %151 %149
-%152 = OpAccessChain  %73  %124 %117
-OpStore %152 %150
-OpBranch %146
-%146 = OpLabel
-OpBranch %129
-%129 = OpLabel
-%153 = OpLoad  %10  %124
-OpReturnValue %153
+OpStore %105 %92
+%106 = OpIEqual  %8  %81 %50
+%109 = OpRayQueryGetIntersectionTKHR  %3  %78 %50
+%110 = OpAccessChain  %74  %80 %50
+OpStore %110 %109
+OpSelectionMerge %108 None
+OpBranchConditional %83 %107 %108
+%107 = OpLabel
+%111 = OpRayQueryGetIntersectionBarycentricsKHR  %7  %78 %50
+%112 = OpRayQueryGetIntersectionFrontFaceKHR  %8  %78 %50
+%114 = OpAccessChain  %72  %80 %113
+OpStore %114 %111
+%116 = OpAccessChain  %73  %80 %115
+OpStore %116 %112
+OpBranch %108
+%108 = OpLabel
+OpBranch %85
+%85 = OpLabel
+%117 = OpLoad  %10  %80
+OpReturnValue %117
 OpFunctionEnd
 %25 = OpFunction  %10  None %26
 %21 = OpFunctionParameter  %4
@@ -251,87 +197,140 @@ OpBranch %42
 %65 = OpLabel
 OpBranch %67
 %67 = OpLabel
-%120 = OpFunctionCall  %10  %76 %31
 OpBranch %68
 %68 = OpLabel
 OpBranch %44
 %44 = OpLabel
 OpBranch %41
 %42 = OpLabel
-%154 = OpFunctionCall  %10  %121 %31
-OpReturnValue %154
+%118 = OpFunctionCall  %10  %76 %31
+OpReturnValue %118
 OpFunctionEnd
-%158 = OpFunction  %4  None %159
-%156 = OpFunctionParameter  %4
-%157 = OpFunctionParameter  %10
-%155 = OpLabel
-OpBranch %163
-%163 = OpLabel
-%164 = OpCompositeExtract  %9  %157 10
-%165 = OpCompositeConstruct  %14  %156 %160
-%166 = OpMatrixTimesVector  %4  %164 %165
-%167 = OpVectorShuffle  %7  %166 %166 0 1
-%168 = OpExtInst  %7  %1 Normalize %167
-%169 = OpVectorTimesScalar  %7  %168 %161
-%170 = OpCompositeExtract  %9  %157 9
-%171 = OpCompositeConstruct  %14  %169 %162 %160
-%172 = OpMatrixTimesVector  %4  %170 %171
-%173 = OpFSub  %4  %156 %172
-%174 = OpExtInst  %4  %1 Normalize %173
-OpReturnValue %174
+%122 = OpFunction  %4  None %123
+%120 = OpFunctionParameter  %4
+%121 = OpFunctionParameter  %10
+%119 = OpLabel
+OpBranch %127
+%127 = OpLabel
+%128 = OpCompositeExtract  %9  %121 10
+%129 = OpCompositeConstruct  %14  %120 %124
+%130 = OpMatrixTimesVector  %4  %128 %129
+%131 = OpVectorShuffle  %7  %130 %130 0 1
+%132 = OpExtInst  %7  %1 Normalize %131
+%133 = OpVectorTimesScalar  %7  %132 %125
+%134 = OpCompositeExtract  %9  %121 9
+%135 = OpCompositeConstruct  %14  %133 %126 %124
+%136 = OpMatrixTimesVector  %4  %134 %135
+%137 = OpFSub  %4  %120 %136
+%138 = OpExtInst  %4  %1 Normalize %137
+OpReturnValue %138
 OpFunctionEnd
-%176 = OpFunction  %2  None %177
-%175 = OpLabel
-%178 = OpLoad  %5  %15
-%180 = OpAccessChain  %179  %17 %48
-OpBranch %183
-%183 = OpLabel
-%184 = OpFunctionCall  %10  %25 %181 %182 %15
-%186 = OpCompositeExtract  %6  %184 0
-%187 = OpIEqual  %8  %186 %48
-%188 = OpSelect  %6  %187 %50 %48
-%189 = OpAccessChain  %185  %180 %48
-OpStore %189 %188
-%191 = OpCompositeExtract  %3  %184 1
-%192 = OpVectorTimesScalar  %4  %182 %191
-%193 = OpFunctionCall  %4  %158 %192 %184
-%194 = OpAccessChain  %190  %180 %50
-OpStore %194 %193
+%140 = OpFunction  %2  None %141
+%139 = OpLabel
+%142 = OpLoad  %5  %15
+%144 = OpAccessChain  %143  %17 %48
+OpBranch %147
+%147 = OpLabel
+%148 = OpFunctionCall  %10  %25 %145 %146 %15
+%150 = OpCompositeExtract  %6  %148 0
+%151 = OpIEqual  %8  %150 %48
+%152 = OpSelect  %6  %151 %50 %48
+%153 = OpAccessChain  %149  %144 %48
+OpStore %153 %152
+%155 = OpCompositeExtract  %3  %148 1
+%156 = OpVectorTimesScalar  %4  %146 %155
+%157 = OpFunctionCall  %4  %122 %156 %148
+%158 = OpAccessChain  %154  %144 %50
+OpStore %158 %157
 OpReturn
 OpFunctionEnd
-%196 = OpFunction  %2  None %177
-%195 = OpLabel
-%200 = OpVariable  %32  Function
-%197 = OpLoad  %5  %15
-OpBranch %201
-%201 = OpLabel
-%202 = OpCompositeExtract  %6  %198 0
-%203 = OpCompositeExtract  %6  %198 1
-%204 = OpCompositeExtract  %3  %198 2
-%205 = OpCompositeExtract  %3  %198 3
-%206 = OpCompositeExtract  %4  %198 4
-%207 = OpCompositeExtract  %4  %198 5
-OpRayQueryInitializeKHR %200 %197 %202 %203 %206 %204 %207 %205
-%208 = OpFunctionCall  %10  %76 %200
-%209 = OpCompositeExtract  %6  %208 0
-%210 = OpIEqual  %8  %209 %84
-OpSelectionMerge %211 None
-OpBranchConditional %210 %212 %213
-%212 = OpLabel
-OpRayQueryGenerateIntersectionKHR %200 %199
-OpReturn
-%213 = OpLabel
-%214 = OpCompositeExtract  %6  %208 0
-%215 = OpIEqual  %8  %214 %50
-OpSelectionMerge %216 None
-OpBranchConditional %215 %217 %218
-%217 = OpLabel
-OpRayQueryConfirmIntersectionKHR %200
-OpReturn
-%218 = OpLabel
-OpReturn
-%216 = OpLabel
-OpBranch %211
+%172 = OpFunction  %10  None %75
+%173 = OpFunctionParameter  %32
+%174 = OpLabel
+%175 = OpVariable  %69  Function %77
+%176 = OpRayQueryGetIntersectionTypeKHR  %6  %173 %48
+%177 = OpIEqual  %8  %176 %48
+%178 = OpSelect  %6  %177 %50 %95
+%179 = OpAccessChain  %70  %175 %48
+OpStore %179 %178
+%180 = OpINotEqual  %8  %178 %48
+OpSelectionMerge %182 None
+OpBranchConditional %180 %181 %182
+%181 = OpLabel
+%183 = OpRayQueryGetIntersectionInstanceCustomIndexKHR  %6  %173 %48
+%184 = OpRayQueryGetIntersectionInstanceIdKHR  %6  %173 %48
+%185 = OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR  %6  %173 %48
+%186 = OpRayQueryGetIntersectionGeometryIndexKHR  %6  %173 %48
+%187 = OpRayQueryGetIntersectionPrimitiveIndexKHR  %6  %173 %48
+%188 = OpRayQueryGetIntersectionObjectToWorldKHR  %9  %173 %48
+%189 = OpRayQueryGetIntersectionWorldToObjectKHR  %9  %173 %48
+%190 = OpAccessChain  %70  %175 %93
+OpStore %190 %183
+%191 = OpAccessChain  %70  %175 %95
+OpStore %191 %184
+%192 = OpAccessChain  %70  %175 %27
+OpStore %192 %185
+%193 = OpAccessChain  %70  %175 %98
+OpStore %193 %186
+%194 = OpAccessChain  %70  %175 %100
+OpStore %194 %187
+%195 = OpAccessChain  %71  %175 %102
+OpStore %195 %188
+%196 = OpAccessChain  %71  %175 %104
+OpStore %196 %189
+%197 = OpIEqual  %8  %178 %50
+OpSelectionMerge %199 None
+OpBranchConditional %180 %198 %199
+%198 = OpLabel
+%200 = OpRayQueryGetIntersectionTKHR  %3  %173 %48
+%201 = OpAccessChain  %74  %175 %50
+OpStore %201 %200
+%202 = OpRayQueryGetIntersectionBarycentricsKHR  %7  %173 %48
+%203 = OpRayQueryGetIntersectionFrontFaceKHR  %8  %173 %48
+%204 = OpAccessChain  %72  %175 %113
+OpStore %204 %202
+%205 = OpAccessChain  %73  %175 %115
+OpStore %205 %203
+OpBranch %199
+%199 = OpLabel
+OpBranch %182
+%182 = OpLabel
+%206 = OpLoad  %10  %175
+OpReturnValue %206
+OpFunctionEnd
+%160 = OpFunction  %2  None %141
+%159 = OpLabel
+%164 = OpVariable  %32  Function
+%161 = OpLoad  %5  %15
+OpBranch %165
+%165 = OpLabel
+%166 = OpCompositeExtract  %6  %162 0
+%167 = OpCompositeExtract  %6  %162 1
+%168 = OpCompositeExtract  %3  %162 2
+%169 = OpCompositeExtract  %3  %162 3
+%170 = OpCompositeExtract  %4  %162 4
+%171 = OpCompositeExtract  %4  %162 5
+OpRayQueryInitializeKHR %164 %161 %166 %167 %170 %168 %171 %169
+%207 = OpFunctionCall  %10  %172 %164
+%208 = OpCompositeExtract  %6  %207 0
+%209 = OpIEqual  %8  %208 %95
+OpSelectionMerge %210 None
+OpBranchConditional %209 %211 %212
 %211 = OpLabel
+OpRayQueryGenerateIntersectionKHR %164 %163
+OpReturn
+%212 = OpLabel
+%213 = OpCompositeExtract  %6  %207 0
+%214 = OpIEqual  %8  %213 %50
+OpSelectionMerge %215 None
+OpBranchConditional %214 %216 %217
+%216 = OpLabel
+OpRayQueryConfirmIntersectionKHR %164
+OpReturn
+%217 = OpLabel
+OpReturn
+%215 = OpLabel
+OpBranch %210
+%210 = OpLabel
 OpReturn
 OpFunctionEnd
