@@ -44,7 +44,9 @@ fn query_loop(pos: vec3<f32>, dir: vec3<f32>, acs: acceleration_structure) -> Ra
     var rq: ray_query;
     rayQueryInitialize(&rq, acs, RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, 0.1, 100.0, pos, dir));
 
-    while (rayQueryProceed(&rq)) {}
+    while (rayQueryProceed(&rq)) {
+        _ = rayQueryGetCandidateIntersection(&rq);
+    }
 
     return rayQueryGetCommittedIntersection(&rq);
 }
