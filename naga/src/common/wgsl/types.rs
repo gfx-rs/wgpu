@@ -170,12 +170,6 @@ pub trait TypeContext {
         buf
     }
 
-    fn type_inner_to_string(&self, inner: &TypeInner) -> String {
-        let mut buf = String::new();
-        self.write_type_inner(inner, &mut buf).unwrap();
-        buf
-    }
-
     fn type_resolution_to_string(&self, resolution: &TypeResolution) -> String {
         let mut buf = String::new();
         self.write_type_resolution(resolution, &mut buf).unwrap();
