@@ -2,6 +2,7 @@ use core::mem;
 
 use alloc::{string::String, sync::Arc};
 
+use parking_lot::Mutex;
 use windows::Win32::Graphics::{Direct3D12::*, Dxgi::Common::*};
 
 use crate::{
@@ -12,25 +13,26 @@ use crate::{
 const DEFAULT_SIZE: u64 = 1 << 18; // 256 KiB
 
 pub struct TextureCopyHandler {
-    temporary_buffer: TemporaryBuffer,
+    temporary_buffer: Mutex<TemporaryBuffer>,
 }
 
 impl TextureCopyHandler {
     pub fn new(device: &super::Device) -> Result<Self, crate::DeviceError> {
         Ok(Self {
-            temporary_buffer: TemporaryBuffer::new(device)?,
+            temporary_buffer: Mutex::new(TemporaryBuffer::new(device)?),
         })
     }
 
     pub unsafe fn encode_copy(
         &self,
         caps: &PrivateCapabilities,
+        ctx: &DeviceAllocationContext,
         list: &ID3D12GraphicsCommandList,
         src: &super::Buffer,
         dst: &super::Texture,
         copy: &crate::BufferTextureCopy,
     ) -> Result<Arc<super::Buffer>, crate::DeviceError> {
-        let copy_type = CopyType::from_copy(caps, copy);
+        // let copy_type = CopyType::from_copy(caps, copy);
 
         todo!()
     }
@@ -41,14 +43,22 @@ enum CopyType {
     Native,
     /// Copy needs to be done layer by layer, because the rows per image is not
     /// the "natural" rows per image.
-    LayerByLayer,
+    LayerByLayer {
+        // layer_size: u64,
+        rows_per_image: u32,
+        natural_rows_per_image: u32,
+    },
     /// Offset is not properly aligned, so the entire upload needs to be
     /// copied in bulk to a temporary buffer first.
     AlignmentOnly,
 }
 
 impl CopyType {
-    fn from_copy(caps: &PrivateCapabilities, c: &crate::BufferTextureCopy) -> Self {
+    fn from_copy(
+        caps: &PrivateCapabilities,
+        format: wgt::TextureFormat,
+        c: &crate::BufferTextureCopy,
+    ) -> Self {
         let natural_rows_per_image = c.size.depth;
         let rows_per_image = c
             .buffer_layout
@@ -56,7 +66,10 @@ impl CopyType {
             .unwrap_or(natural_rows_per_image);
 
         if rows_per_image != natural_rows_per_image {
-            return CopyType::LayerByLayer;
+            return CopyType::LayerByLayer {
+                rows_per_image,
+                natural_rows_per_image,
+            };
         }
 
         // If unrestricted pitch is supported, we can use the native copy
@@ -81,32 +94,58 @@ impl TemporaryBuffer {
     pub fn new(device: &super::Device) -> Result<Self, crate::DeviceError> {
         let size = DEFAULT_SIZE;
 
-        let label = label(size);
-        let desc = buffer_desc(&label, size);
-
-        let buffer = Arc::new(unsafe { device.create_buffer(&desc)? });
+        let ctx = DeviceAllocationContext::from(device);
+        let buffer = create_buffer(&ctx, size)?;
 
         Ok(Self { buffer })
     }
 
-    pub fn get_resource(&mut self, ctx: DeviceAllocationContext, size: u64) -> Arc<super::Buffer> {
+    pub fn get_resource(
+        &mut self,
+        ctx: &DeviceAllocationContext,
+        size: u64,
+    ) -> Result<Arc<super::Buffer>, crate::DeviceError> {
         if size > self.buffer.size {
-            let label = label(size);
-            let desc = buffer_desc(&label, size);
-
             // Recreate the buffer with the new size
-            let new_buffer = Arc::new(unsafe { device.create_buffer(&desc).unwrap() });
+            let new_buffer = create_buffer(ctx, size)?;
 
             // Update the buffer
             let old_buffer = mem::replace(&mut self.buffer, new_buffer);
 
             // Release the old buffer if we are the last reference to it
             if let Some(buffer) = Arc::into_inner(old_buffer) {
-                unsafe { ctx.raw.destroy_buffer(buffer) };
+                ctx.free_resource(buffer.resource, buffer.allocation);
             }
         }
 
-        Arc::clone(&self.buffer)
+        Ok(Arc::clone(&self.buffer))
+    }
+}
+
+fn create_buffer(
+    ctx: &DeviceAllocationContext,
+    size: u64,
+) -> Result<Arc<super::Buffer>, crate::DeviceError> {
+    let label = format!("wgpu-hal texture copy temporary buffer ({} bytes)", size);
+    let desc = crate::BufferDescriptor {
+        label: Some(&label),
+        size: size,
+        usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST,
+        memory_flags: crate::MemoryFlags::empty(),
+    };
+
+    let (resource, allocation) = ctx.create_buffer(&desc)?;
+    Ok(Arc::new(super::Buffer {
+        resource,
+        size,
+        allocation,
+    }))
+}
+
+fn destroy_buffer(ctx: &DeviceAllocationContext, buffer: Arc<super::Buffer>) {
+    if let Some(buffer) = Arc::into_inner(buffer) {
+        // If we are the last reference to the buffer, free it
+        ctx.free_resource(buffer.resource, buffer.allocation);
     }
 }
 
