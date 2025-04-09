@@ -3390,3 +3390,24 @@ fn struct_names_in_argument_errors() {
     assert!(variant("1i").is_err());
     assert!(variant("A()").is_err());
 }
+
+/// Naga should not crash just because the type of a
+/// bad conversion operand is a struct.
+#[test]
+fn struct_names_in_conversion_errors() {
+    #[track_caller]
+    fn variant(argument: &str) -> Result<naga::Module, naga::front::wgsl::ParseError> {
+        let input = format!(
+            r#"
+                struct A {{ x: i32, }};
+                fn f() {{ _ = i32({argument}); }}
+            "#
+        );
+        naga::front::wgsl::parse_str(&input)
+    }
+
+    assert!(variant("1.0").is_ok());
+    assert!(variant("1").is_ok());
+    assert!(variant("1i").is_ok());
+    assert!(variant("A()").is_err());
+}
