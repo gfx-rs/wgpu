@@ -39,10 +39,12 @@ mod env;
 mod features;
 pub mod instance;
 pub mod math;
+mod transfers;
 
 pub use counters::*;
 pub use features::*;
 pub use instance::*;
+pub use transfers::*;
 
 /// Integral type used for [`Buffer`] offsets and sizes.
 ///
