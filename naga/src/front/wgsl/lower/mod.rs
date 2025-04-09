@@ -412,6 +412,14 @@ impl TypeContext for ExpressionContext<'_, '_, '_> {
             None => write!(out, "{{anonymous override {handle:?}}}"),
         }
     }
+
+    fn write_unnamed_struct<W: core::fmt::Write>(
+        &self,
+        _: &crate::TypeInner,
+        _: &mut W,
+    ) -> core::fmt::Result {
+        unreachable!("the WGSL front end should always know the type name");
+    }
 }
 
 impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {

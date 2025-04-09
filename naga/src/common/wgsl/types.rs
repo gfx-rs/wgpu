@@ -39,6 +39,14 @@ pub trait TypeContext {
         out: &mut W,
     ) -> core::fmt::Result;
 
+    /// Write a [`TypeInner::Struct`] for which we are unable to find a name.
+    ///
+    /// The names of struct types are only available if we have `Handle<Type>`,
+    /// not from [`TypeInner`]. For logging and debugging, it's fine to just
+    /// write something helpful to the developer, but for generating WGSL,
+    /// this should be unreachable.
+    fn write_unnamed_struct<W: Write>(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result;
+
     /// Write a [`TypeInner`] that has no representation as WGSL source,
     /// even including Naga extensions.
     ///
@@ -363,7 +371,7 @@ where
             write!(out, "acceleration_structure{}", caps)?
         }
         TypeInner::Struct { .. } => {
-            unreachable!("structs can only be referenced by name in WGSL");
+            ctx.write_unnamed_struct(inner, out)?;
         }
         TypeInner::RayQuery { vertex_return } => {
             let caps = if vertex_return { "<vertex_return>" } else { "" };
@@ -414,6 +422,10 @@ impl TypeContext for crate::proc::GlobalCtx<'_> {
             .unwrap_or("{anonymous type}")
     }
 
+    fn write_unnamed_struct<W: Write>(&self, _: &TypeInner, out: &mut W) -> core::fmt::Result {
+        write!(out, "{{unnamed struct}}")
+    }
+
     fn write_override<W: Write>(
         &self,
         handle: Handle<crate::Override>,
@@ -444,6 +456,10 @@ impl TypeContext for crate::UniqueArena<crate::Type> {
 
     fn type_name(&self, handle: Handle<crate::Type>) -> &str {
         self[handle].name.as_deref().unwrap_or("{anonymous type}")
+    }
+
+    fn write_unnamed_struct<W: Write>(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result {
+        write!(out, "{{unnamed struct {inner:?}}}")
     }
 
     fn write_override<W: Write>(

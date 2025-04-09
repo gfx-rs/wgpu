@@ -1764,6 +1764,10 @@ impl TypeContext for WriterTypeContext<'_> {
         self.names[&NameKey::Type(handle)].as_str()
     }
 
+    fn write_unnamed_struct<W: Write>(&self, _: &TypeInner, _: &mut W) -> core::fmt::Result {
+        unreachable!("the WGSL back end should always provide type handles");
+    }
+
     fn write_override<W: Write>(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
         unreachable!("overrides should be validated out");
     }
