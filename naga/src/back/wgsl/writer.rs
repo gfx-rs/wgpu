@@ -481,7 +481,11 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_type_inner(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
+    fn write_type_resolution(
+        &mut self,
+        module: &Module,
+        resolution: &proc::TypeResolution,
+    ) -> BackendResult {
         // This actually can't be factored out into a nice constructor method,
         // because the borrow checker needs to be able to see that the borrows
         // of `self.names` and `self.out` are disjoint.
@@ -489,7 +493,7 @@ impl<W: Write> Writer<W> {
             module,
             names: &self.names,
         };
-        type_context.write_type_inner(inner, &mut self.out)?;
+        type_context.write_type_resolution(resolution, &mut self.out)?;
 
         Ok(())
     }
@@ -1031,16 +1035,8 @@ impl<W: Write> Writer<W> {
         write!(self.out, "let {name}")?;
         if self.flags.contains(WriterFlags::EXPLICIT_TYPES) {
             write!(self.out, ": ")?;
-            let ty = &func_ctx.info[handle].ty;
             // Write variable type
-            match *ty {
-                proc::TypeResolution::Handle(handle) => {
-                    self.write_type(module, handle)?;
-                }
-                proc::TypeResolution::Value(ref inner) => {
-                    self.write_type_inner(module, inner)?;
-                }
-            }
+            self.write_type_resolution(module, &func_ctx.info[handle].ty)?;
         }
 
         write!(self.out, " = ")?;
