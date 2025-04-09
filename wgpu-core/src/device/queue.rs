@@ -1068,11 +1068,10 @@ impl Queue {
 
             // Fence lock must be acquired after the snatch lock everywhere to avoid deadlocks.
             let mut fence = self.device.fence.write();
-            submit_index = self
-                .device
-                .active_submission_index
-                .fetch_add(1, Ordering::SeqCst)
-                + 1;
+
+            let mut command_index_guard = self.device.command_indices.write();
+            command_index_guard.active_submission_index += 1;
+            submit_index = command_index_guard.active_submission_index;
             let mut active_executions = Vec::new();
 
             let mut used_surface_textures = track::TextureUsageScope::default();
@@ -1291,6 +1290,8 @@ impl Queue {
                 {
                     break 'error Err(e.into());
                 }
+
+                drop(command_index_guard);
 
                 // Advance the successful submission index.
                 self.device
