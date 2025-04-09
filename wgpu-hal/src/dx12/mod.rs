@@ -843,6 +843,20 @@ pub struct Buffer {
     allocation: suballocation::Allocation,
 }
 
+impl PartialEq for Buffer {
+    fn eq(&self, other: &Self) -> bool {
+        self.resource == other.resource
+    }
+}
+
+impl Eq for Buffer {}
+
+impl std::hash::Hash for Buffer {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.resource.as_raw().hash(state);
+    }
+}
+
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
