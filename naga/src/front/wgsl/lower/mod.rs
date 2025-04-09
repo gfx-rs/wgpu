@@ -1308,8 +1308,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 if !explicit_inner.equivalent(init_inner, &ectx.module.types) {
                     return Err(Box::new(Error::InitializationTypeMismatch {
                         name: name.span,
-                        expected: ectx.type_inner_to_string(explicit_inner),
-                        got: ectx.type_inner_to_string(init_inner),
+                        expected: ectx.type_to_string(explicit_ty),
+                        got: ectx.type_to_string(init_ty),
                     }));
                 }
                 ty = explicit_ty;

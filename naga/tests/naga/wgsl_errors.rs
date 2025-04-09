@@ -3411,3 +3411,24 @@ fn struct_names_in_conversion_errors() {
     assert!(variant("1i").is_ok());
     assert!(variant("A()").is_err());
 }
+
+/// Naga should not crash just because the type of a
+/// bad initializer is a struct.
+#[test]
+fn struct_names_in_init_errors() {
+    #[track_caller]
+    fn variant(init: &str) -> Result<naga::Module, naga::front::wgsl::ParseError> {
+        let input = format!(
+            r#"
+                struct A {{ x: i32, }};
+                fn f() {{ var y: i32 = {init}; }}
+            "#
+        );
+        naga::front::wgsl::parse_str(&input)
+    }
+
+    assert!(variant("1").is_ok());
+    assert!(variant("1i").is_ok());
+    assert!(variant("1.0").is_err());
+    assert!(variant("A()").is_err());
+}
