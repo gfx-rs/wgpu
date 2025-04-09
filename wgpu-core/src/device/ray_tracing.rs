@@ -1,22 +1,23 @@
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 use core::mem::{size_of, ManuallyDrop};
 
-use crate::api_log;
 #[cfg(feature = "trace")]
 use crate::device::trace;
-use crate::lock::{rank, Mutex};
-use crate::ray_tracing::BlasPrepareCompactError;
-use crate::resource::{
-    BlasCompactCallback, BlasCompactState, Fallible, InvalidResourceError, TrackingData,
-};
-use crate::snatch::Snatchable;
 use crate::{
+    api_log,
     device::{Device, DeviceError},
     global::Global,
     id::{self, BlasId, TlasId},
     lock::RwLock,
+    lock::{rank, Mutex},
+    ray_tracing::BlasPrepareCompactError,
     ray_tracing::{CreateBlasError, CreateTlasError},
-    resource, LabelHelpers,
+    resource,
+    resource::{
+        BlasCompactCallback, BlasCompactState, Fallible, InvalidResourceError, TrackingData,
+    },
+    snatch::Snatchable,
+    LabelHelpers,
 };
 use hal::AccelerationStructureTriangleIndices;
 use wgt::Features;

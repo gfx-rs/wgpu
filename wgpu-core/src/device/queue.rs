@@ -1,12 +1,6 @@
 use super::{life::LifetimeTracker, Device};
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
-use crate::id::BlasId;
-use crate::lock::RwLock;
-use crate::ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError};
-use crate::resource::{AccelerationStructure, Blas, BlasCompactState, TrackingData};
-use crate::scratch::ScratchBuffer;
-use crate::snatch::Snatchable;
 use crate::{
     api_log,
     command::{
@@ -18,16 +12,19 @@ use crate::{
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
-    id::{self, QueueId},
+    id::{self, BlasId, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
-    lock::{rank, Mutex, MutexGuard, RwLockWriteGuard},
+    lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
+    ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
     resource::{
-        Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
-        DestroyedTexture, Fallible, FlushedStagingBuffer, InvalidResourceError, Labeled,
-        ParentDevice, ResourceErrorIdent, StagingBuffer, Texture, TextureInner, Trackable,
+        AccelerationStructure, Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState,
+        DestroyedBuffer, DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
+        InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
+        TextureInner, Trackable, TrackingData,
     },
     resource_log,
-    snatch::SnatchGuard,
+    scratch::ScratchBuffer,
+    snatch::{SnatchGuard, Snatchable},
     track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };

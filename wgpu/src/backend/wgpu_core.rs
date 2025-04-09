@@ -9,7 +9,6 @@ use alloc::{
 };
 use core::{error::Error, fmt, future::ready, ops::Range, pin::Pin, ptr::NonNull, slice};
 
-use crate::dispatch::BlasCompactCallback;
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
@@ -21,7 +20,7 @@ use wgt::WasmNotSendSync;
 
 use crate::{
     api,
-    dispatch::{self, BufferMappedRangeInterface},
+    dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},
     BindingResource, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor,
