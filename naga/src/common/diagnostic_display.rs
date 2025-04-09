@@ -1,6 +1,6 @@
 //! Displaying Naga IR terms in diagnostic output.
 
-use crate::proc::{GlobalCtx, Rule};
+use crate::proc::{GlobalCtx, Rule, TypeResolution};
 use crate::{Handle, Scalar, Type, TypeInner};
 
 #[cfg(any(feature = "wgsl-in", feature = "wgsl-out"))]
@@ -48,6 +48,17 @@ use core::fmt;
 /// source language to use, any use site that does not supply this
 /// indication will provoke a compile-time error.
 pub struct DiagnosticDisplay<T>(pub T);
+
+impl fmt::Display for DiagnosticDisplay<(&TypeResolution, GlobalCtx<'_>)> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (resolution, ctx) = self.0;
+
+        match *resolution {
+            TypeResolution::Handle(handle) => DiagnosticDisplay((handle, ctx)).fmt(f),
+            TypeResolution::Value(ref inner) => DiagnosticDisplay((inner, ctx)).fmt(f),
+        }
+    }
+}
 
 impl fmt::Display for DiagnosticDisplay<(Handle<Type>, GlobalCtx<'_>)> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

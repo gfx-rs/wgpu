@@ -3369,3 +3369,24 @@ fn more_inconsistent_type() {
     variant("clamp(1f, 1i, 1f)");
     variant("clamp(1f, 1f, 1i)");
 }
+
+/// Naga should not crash just because the type of a
+/// bad argument is a struct.
+#[test]
+fn struct_names_in_argument_errors() {
+    #[track_caller]
+    fn variant(argument: &str) -> Result<naga::Module, naga::front::wgsl::ParseError> {
+        let input = format!(
+            r#"
+                struct A {{ x: i32, }};
+                fn f() {{ _ = sin({argument}); }}
+            "#
+        );
+        naga::front::wgsl::parse_str(&input)
+    }
+
+    assert!(variant("1.0").is_ok());
+    assert!(variant("1").is_ok());
+    assert!(variant("1i").is_err());
+    assert!(variant("A()").is_err());
+}
