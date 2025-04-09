@@ -1248,7 +1248,7 @@ fn map_blas<'a>(
     storage: &'a BlasStore<'_>,
     scratch_buffer: &'a dyn hal::DynBuffer,
     snatch_guard: &'a SnatchGuard,
-    blas_s_compactable: &mut Vec<(
+    blases_compactable: &mut Vec<(
         &'a dyn hal::DynBuffer,
         &'a dyn hal::DynAccelerationStructure,
     )>,
@@ -1281,7 +1281,7 @@ fn map_blas<'a>(
         .flags
         .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION)
     {
-        blas_s_compactable.push((blas.compaction_buffer.as_ref().unwrap().as_ref(), raw));
+        blases_compactable.push((blas.compaction_buffer.as_ref().unwrap().as_ref(), raw));
     }
     Ok(hal::BuildAccelerationStructureDescriptor {
         entries,
