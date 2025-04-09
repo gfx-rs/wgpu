@@ -8,7 +8,10 @@ use windows_core::Interface;
 
 use super::conv;
 use crate::{
-    auxil::{self, dxgi::result::HResult as _},
+    auxil::{
+        self,
+        dxgi::{name::ObjectExt, result::HResult as _},
+    },
     dx12::borrow_interface_temporarily,
     AccelerationStructureEntries,
 };
@@ -328,8 +331,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
 
         if let Some(label) = label {
-            unsafe { list.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            list.set_name(label)?;
         }
 
         self.list = Some(list);

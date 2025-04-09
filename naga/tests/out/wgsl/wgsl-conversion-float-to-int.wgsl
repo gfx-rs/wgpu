@@ -20,11 +20,11 @@ fn test_const_eval() {
     var max_f32_to_i32_: i32 = 2147483520i;
     var min_f32_to_u32_: u32 = 0u;
     var max_f32_to_u32_: u32 = 4294967040u;
-    var min_f32_to_i64_: i64 = -9223372036854775807li - 1li;
+    var min_f32_to_i64_: i64 = i64(-9223372036854775807 - 1);
     var max_f32_to_i64_: i64 = 9223371487098961920li;
     var min_f32_to_u64_: u64 = 0lu;
     var max_f32_to_u64_: u64 = 18446742974197923840lu;
-    var min_f64_to_i64_: i64 = -9223372036854775807li - 1li;
+    var min_f64_to_i64_: i64 = i64(-9223372036854775807 - 1);
     var max_f64_to_i64_: i64 = 9223372036854774784li;
     var min_f64_to_u64_: u64 = 0lu;
     var max_f64_to_u64_: u64 = 18446744073709549568lu;
@@ -32,7 +32,7 @@ fn test_const_eval() {
     var max_abstract_float_to_i32_: i32 = 2147483647i;
     var min_abstract_float_to_u32_: u32 = 0u;
     var max_abstract_float_to_u32_: u32 = 4294967295u;
-    var min_abstract_float_to_i64_: i64 = -9223372036854775807li - 1li;
+    var min_abstract_float_to_i64_: i64 = i64(-9223372036854775807 - 1);
     var max_abstract_float_to_i64_: i64 = 9223372036854774784li;
     var min_abstract_float_to_u64_: u64 = 0lu;
     var max_abstract_float_to_u64_: u64 = 18446744073709549568lu;

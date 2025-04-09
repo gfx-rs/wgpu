@@ -417,6 +417,8 @@ pub enum GPUFeatureName {
     VertexWritableStorage,
     #[webidl(rename = "clear-texture")]
     ClearTexture,
+    #[webidl(rename = "msl-shader-passthrough")]
+    MslShaderPassthrough,
     #[webidl(rename = "spirv-shader-passthrough")]
     SpirvShaderPassthrough,
     #[webidl(rename = "multiview")]
@@ -477,6 +479,7 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
       GPUFeatureName::ConservativeRasterization => Features::CONSERVATIVE_RASTERIZATION,
       GPUFeatureName::VertexWritableStorage => Features::VERTEX_WRITABLE_STORAGE,
       GPUFeatureName::ClearTexture => Features::CLEAR_TEXTURE,
+      GPUFeatureName::MslShaderPassthrough => Features::MSL_SHADER_PASSTHROUGH,
       GPUFeatureName::SpirvShaderPassthrough => Features::SPIRV_SHADER_PASSTHROUGH,
       GPUFeatureName::Multiview => Features::MULTIVIEW,
       GPUFeatureName::VertexAttribute64Bit => Features::VERTEX_ATTRIBUTE_64BIT,

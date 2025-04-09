@@ -26,7 +26,7 @@ use wgt::Backends;
 use js_sys::Promise;
 use wasm_bindgen::{prelude::*, JsCast};
 
-use crate::{dispatch, SurfaceTargetUnsafe};
+use crate::{dispatch, Blas, SurfaceTargetUnsafe, Tlas};
 
 use crate::dispatch::BlasCompactCallback;
 use defined_non_null_js_value::DefinedNonNullJsValue;
@@ -1844,11 +1844,11 @@ impl dispatch::DeviceInterface for WebDevice {
         .into()
     }
 
-    unsafe fn create_shader_module_spirv(
+    unsafe fn create_shader_module_passthrough(
         &self,
-        _desc: &crate::ShaderModuleDescriptorSpirV<'_>,
+        _desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> dispatch::DispatchShaderModule {
-        unreachable!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
+        unreachable!("No XXX_SHADER_PASSTHROUGH feature enabled for this backend")
     }
 
     fn create_bind_group_layout(
@@ -3097,6 +3097,14 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
             destination,
             destination_offset as u32,
         );
+    }
+
+    fn mark_acceleration_structures_built<'a>(
+        &self,
+        _blas: &mut dyn Iterator<Item = &'a Blas>,
+        _tlas: &mut dyn Iterator<Item = &'a Tlas>,
+    ) {
+        unimplemented!("Raytracing not implemented for web");
     }
 
     fn build_acceleration_structures_unsafe_tlas<'a>(

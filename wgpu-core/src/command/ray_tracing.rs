@@ -31,6 +31,8 @@ use crate::{
     FastHashSet,
 };
 
+use crate::id::{BlasId, TlasId};
+
 struct TriangleBufferStore<'a> {
     vertex_buffer: Arc<Buffer>,
     vertex_transition: Option<PendingTransition<BufferUses>>,
@@ -64,6 +66,60 @@ struct TlasBufferStore {
 }
 
 impl Global {
+    pub fn command_encoder_mark_acceleration_structures_built(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        blas_ids: &[BlasId],
+        tlas_ids: &[TlasId],
+    ) -> Result<(), BuildAccelerationStructureError> {
+        profiling::scope!("CommandEncoder::mark_acceleration_structures_built");
+
+        let hub = &self.hub;
+
+        let cmd_buf = hub
+            .command_buffers
+            .get(command_encoder_id.into_command_buffer_id());
+
+        let device = &cmd_buf.device;
+
+        device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+
+        let build_command_index = NonZeroU64::new(
+            device
+                .last_acceleration_structure_build_command_index
+                .fetch_add(1, Ordering::Relaxed),
+        )
+        .unwrap();
+
+        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
+        let cmd_buf_data = &mut *cmd_buf_data_guard;
+
+        cmd_buf_data.blas_actions.reserve(blas_ids.len());
+
+        cmd_buf_data.tlas_actions.reserve(tlas_ids.len());
+
+        for blas in blas_ids {
+            let blas = hub.blas_s.get(*blas).get()?;
+            cmd_buf_data.blas_actions.push(BlasAction {
+                blas,
+                kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
+            });
+        }
+
+        for tlas in tlas_ids {
+            let tlas = hub.tlas_s.get(*tlas).get()?;
+            cmd_buf_data.tlas_actions.push(TlasAction {
+                tlas,
+                kind: crate::ray_tracing::TlasActionKind::Build {
+                    build_index: build_command_index,
+                    dependencies: Vec::new(),
+                },
+            });
+        }
+
+        Ok(())
+    }
     // Currently this function is very similar to its safe counterpart, however certain parts of it are very different,
     // making for the two to be implemented differently, the main difference is this function has separate buffers for each
     // of the TLAS instances while the other has one large buffer

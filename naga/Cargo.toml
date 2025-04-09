@@ -50,7 +50,13 @@ deserialize = [
     "hashbrown/serde",
     "indexmap/serde",
 ]
-arbitrary = ["dep:arbitrary", "bitflags/arbitrary", "indexmap/arbitrary"]
+arbitrary = [
+    "dep:arbitrary",
+    "bitflags/arbitrary",
+    "indexmap/arbitrary",
+    "half/arbitrary",
+    "half/std",
+]
 spv-in = ["dep:petgraph", "dep:spirv"]
 spv-out = ["dep:spirv"]
 wgsl-in = [
@@ -85,12 +91,12 @@ codespan-reporting = { workspace = true, default-features = false, features = [
     "termcolor",
 ] }
 hashbrown.workspace = true
-half = { workspace = true, features = ["arbitrary", "num-traits"] }
+half = { workspace = true, default-features = false, features = ["num-traits"] }
 rustc-hash.workspace = true
 indexmap.workspace = true
 log = "0.4"
 # `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
-num-traits = "0.2.16"
+num-traits = { version = "0.2.16", default-features = false }
 strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true

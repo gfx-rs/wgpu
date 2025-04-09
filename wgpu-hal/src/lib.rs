@@ -2069,6 +2069,7 @@ pub struct CommandEncoderDescriptor<'a, Q: DynQueue + ?Sized> {
 }
 
 /// Naga shader module.
+#[derive(Default)]
 pub struct NagaShader {
     /// Shader module IR.
     pub module: Cow<'static, naga::Module>,
@@ -2090,6 +2091,11 @@ impl fmt::Debug for NagaShader {
 #[allow(clippy::large_enum_variant)]
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
+    Msl {
+        shader: String,
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+    },
     SpirV(&'a [u32]),
 }
 

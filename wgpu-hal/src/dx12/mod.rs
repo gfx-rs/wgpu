@@ -834,6 +834,9 @@ unsafe impl Sync for CommandBuffer {}
 #[derive(Debug)]
 pub struct Buffer {
     resource: Direct3D12::ID3D12Resource,
+    // While the allocation also has _a_ size, it may not
+    // be the same as the original size of the buffer,
+    // as the allocation size varies for assorted reasons.
     size: wgt::BufferAddress,
     allocation: suballocation::Allocation,
 }
@@ -1375,7 +1378,10 @@ impl crate::Surface for Surface {
             size: sc.size,
             mip_level_count: 1,
             sample_count: 1,
-            allocation: suballocation::Allocation::none(suballocation::AllocationType::Texture),
+            allocation: suballocation::Allocation::none(
+                suballocation::AllocationType::Texture,
+                sc.format.theoretical_memory_footprint(sc.size),
+            ),
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,

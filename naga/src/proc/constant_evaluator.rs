@@ -1308,9 +1308,43 @@ impl<'a> ConstantEvaluator<'a> {
             // vector
             crate::MathFunction::Cross => self.cross_product(arg, arg1.unwrap(), span),
 
-            fun => Err(ConstantEvaluatorError::NotImplemented(format!(
-                "{fun:?} built-in function"
-            ))),
+            // unimplemented
+            crate::MathFunction::Atan2
+            | crate::MathFunction::Modf
+            | crate::MathFunction::Frexp
+            | crate::MathFunction::Ldexp
+            | crate::MathFunction::Dot
+            | crate::MathFunction::Outer
+            | crate::MathFunction::Distance
+            | crate::MathFunction::Length
+            | crate::MathFunction::Normalize
+            | crate::MathFunction::FaceForward
+            | crate::MathFunction::Reflect
+            | crate::MathFunction::Refract
+            | crate::MathFunction::Mix
+            | crate::MathFunction::SmoothStep
+            | crate::MathFunction::Inverse
+            | crate::MathFunction::Transpose
+            | crate::MathFunction::Determinant
+            | crate::MathFunction::QuantizeToF16
+            | crate::MathFunction::ExtractBits
+            | crate::MathFunction::InsertBits
+            | crate::MathFunction::Pack4x8snorm
+            | crate::MathFunction::Pack4x8unorm
+            | crate::MathFunction::Pack2x16snorm
+            | crate::MathFunction::Pack2x16unorm
+            | crate::MathFunction::Pack2x16float
+            | crate::MathFunction::Pack4xI8
+            | crate::MathFunction::Pack4xU8
+            | crate::MathFunction::Unpack4x8snorm
+            | crate::MathFunction::Unpack4x8unorm
+            | crate::MathFunction::Unpack2x16snorm
+            | crate::MathFunction::Unpack2x16unorm
+            | crate::MathFunction::Unpack2x16float
+            | crate::MathFunction::Unpack4xI8
+            | crate::MathFunction::Unpack4xU8 => Err(ConstantEvaluatorError::NotImplemented(
+                format!("{fun:?} built-in function"),
+            )),
         }
     }
 
@@ -2227,10 +2261,13 @@ impl<'a> ConstantEvaluator<'a> {
             | BinaryOperator::And
             | BinaryOperator::ExclusiveOr
             | BinaryOperator::InclusiveOr
-            | BinaryOperator::LogicalAnd
-            | BinaryOperator::LogicalOr
             | BinaryOperator::ShiftLeft
             | BinaryOperator::ShiftRight => left_ty,
+
+            BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr => {
+                // Not supported on vectors
+                return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
+            }
         };
 
         let components = components

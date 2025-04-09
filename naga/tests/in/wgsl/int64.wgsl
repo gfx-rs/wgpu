@@ -56,7 +56,7 @@ fn int64_function(x: i64) -> i64 {
    val += bitcast<vec3<i64>>(input_uniform.val_u64_3).z;
    val += bitcast<vec4<i64>>(input_uniform.val_u64_4).w;
    // Most negative i64
-   val += -9223372036854775807li - 1li;
+   val += i64(-9223372036854775807 - 1);
 
    // Reading/writing to a uniform/storage buffer
    output.val_i64 = input_uniform.val_i64 + input_storage.val_i64;

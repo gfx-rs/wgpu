@@ -22,7 +22,10 @@ use windows::{
 
 use super::{conv, descriptor, D3D12Lib};
 use crate::{
-    auxil::{self, dxgi::result::HResult},
+    auxil::{
+        self,
+        dxgi::{name::ObjectExt, result::HResult},
+    },
     dx12::{
         borrow_optional_interface_temporarily, shader_compilation, suballocation,
         DynamicStorageBufferOffsets, Event,
@@ -383,7 +386,10 @@ impl super::Device {
             size,
             mip_level_count,
             sample_count,
-            allocation: suballocation::Allocation::none(suballocation::AllocationType::Texture),
+            allocation: suballocation::Allocation::none(
+                suballocation::AllocationType::Texture,
+                format.theoretical_memory_footprint(size),
+            ),
         }
     }
 
@@ -394,7 +400,10 @@ impl super::Device {
         super::Buffer {
             resource,
             size,
-            allocation: suballocation::Allocation::none(suballocation::AllocationType::Buffer),
+            allocation: suballocation::Allocation::none(
+                suballocation::AllocationType::Buffer,
+                size,
+            ),
         }
     }
 }
@@ -406,39 +415,16 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
-        let alloc_size = if desc.usage.contains(wgt::BufferUses::UNIFORM) {
-            desc.size
+        let mut desc = desc.clone();
+
+        if desc.usage.contains(wgt::BufferUses::UNIFORM) {
+            desc.size = desc
+                .size
                 .next_multiple_of(Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.into())
-        } else {
-            desc.size
-        };
-
-        let raw_desc = Direct3D12::D3D12_RESOURCE_DESC {
-            Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
-            Alignment: 0,
-            Width: alloc_size,
-            Height: 1,
-            DepthOrArraySize: 1,
-            MipLevels: 1,
-            Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
-            SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
-                Count: 1,
-                Quality: 0,
-            },
-            Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-            Flags: conv::map_buffer_usage_to_resource_flags(desc.usage),
-        };
-
-        let (resource, allocation) = suballocation::create_buffer(
-            suballocation::DeviceAllocationContext::from(self),
-            desc,
-            raw_desc,
-        )?;
-
-        if let Some(label) = desc.label {
-            unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
         }
+
+        let (resource, allocation) =
+            suballocation::DeviceAllocationContext::from(self).create_buffer(&desc)?;
 
         self.counters.buffers.add(1);
 
@@ -450,11 +436,8 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
-        suballocation::free_resource(
-            suballocation::DeviceAllocationContext::from(self),
-            buffer.resource,
-            buffer.allocation,
-        );
+        suballocation::DeviceAllocationContext::from(self)
+            .free_resource(buffer.resource, buffer.allocation);
 
         self.counters.buffers.sub(1);
     }
@@ -515,16 +498,8 @@ impl crate::Device for super::Device {
             Flags: conv::map_texture_usage_to_resource_flags(desc.usage),
         };
 
-        let (resource, allocation) = suballocation::create_texture(
-            suballocation::DeviceAllocationContext::from(self),
-            desc,
-            raw_desc,
-        )?;
-
-        if let Some(label) = desc.label {
-            unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
-        }
+        let (resource, allocation) =
+            suballocation::DeviceAllocationContext::from(self).create_texture(desc, raw_desc)?;
 
         self.counters.textures.add(1);
 
@@ -540,11 +515,8 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_texture(&self, texture: super::Texture) {
-        suballocation::free_resource(
-            suballocation::DeviceAllocationContext::from(self),
-            texture.resource,
-            texture.allocation,
-        );
+        suballocation::DeviceAllocationContext::from(self)
+            .free_resource(texture.resource, texture.allocation);
 
         self.counters.textures.sub(1);
     }
@@ -741,8 +713,7 @@ impl crate::Device for super::Device {
         .into_device_result("Command allocator creation")?;
 
         if let Some(label) = desc.label {
-            unsafe { allocator.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            allocator.set_name(label)?;
         }
 
         self.counters.command_encoders.add(1);
@@ -1336,8 +1307,7 @@ impl crate::Device for super::Device {
         };
 
         if let Some(label) = desc.label {
-            unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            raw.set_name(label)?;
         }
 
         self.counters.pipeline_layouts.add(1);
@@ -1560,37 +1530,15 @@ impl crate::Device for super::Device {
             };
 
             let buffer_desc = crate::BufferDescriptor {
-                label: None,
+                label: Some(&label),
                 size: buffer_size,
                 usage: wgt::BufferUses::STORAGE_READ_ONLY | wgt::BufferUses::MAP_WRITE,
                 // D3D12 backend doesn't care about the memory flags
                 memory_flags: crate::MemoryFlags::empty(),
             };
 
-            let raw_buffer_desc = Direct3D12::D3D12_RESOURCE_DESC {
-                Dimension: Direct3D12::D3D12_RESOURCE_DIMENSION_BUFFER,
-                Alignment: 0,
-                Width: buffer_size,
-                Height: 1,
-                DepthOrArraySize: 1,
-                MipLevels: 1,
-                Format: Dxgi::Common::DXGI_FORMAT_UNKNOWN,
-                SampleDesc: Dxgi::Common::DXGI_SAMPLE_DESC {
-                    Count: 1,
-                    Quality: 0,
-                },
-                Layout: Direct3D12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-                Flags: Direct3D12::D3D12_RESOURCE_FLAG_NONE,
-            };
-
-            let (buffer, allocation) = suballocation::create_buffer(
-                suballocation::DeviceAllocationContext::from(self),
-                &buffer_desc,
-                raw_buffer_desc,
-            )?;
-
-            unsafe { buffer.SetName(&windows::core::HSTRING::from(&*label)) }
-                .into_device_result("SetName")?;
+            let (buffer, allocation) =
+                suballocation::DeviceAllocationContext::from(self).create_buffer(&buffer_desc)?;
 
             let mut mapping = ptr::null_mut::<ffi::c_void>();
             unsafe { buffer.Map(0, None, Some(&mut mapping)) }.into_device_result("Map")?;
@@ -1669,11 +1617,8 @@ impl crate::Device for super::Device {
         }
 
         if let Some(sampler_buffer) = group.sampler_index_buffer {
-            suballocation::free_resource(
-                suballocation::DeviceAllocationContext::from(self),
-                sampler_buffer.buffer,
-                sampler_buffer.allocation,
-            );
+            suballocation::DeviceAllocationContext::from(self)
+                .free_resource(sampler_buffer.buffer, sampler_buffer.allocation);
         }
 
         self.counters.bind_groups.sub(1);
@@ -1695,6 +1640,9 @@ impl crate::Device for super::Device {
             }),
             crate::ShaderInput::SpirV(_) => {
                 panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
+            }
+            crate::ShaderInput::Msl { .. } => {
+                panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
             }
         }
     }
@@ -1878,8 +1826,7 @@ impl crate::Device for super::Device {
         };
 
         if let Some(label) = desc.label {
-            unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            raw.set_name(label)?;
         }
 
         self.counters.render_pipelines.add(1);
@@ -1942,8 +1889,7 @@ impl crate::Device for super::Device {
         })?;
 
         if let Some(label) = desc.label {
-            unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            raw.set_name(label)?;
         }
 
         self.counters.compute_pipelines.add(1);
@@ -2001,8 +1947,7 @@ impl crate::Device for super::Device {
         let raw = raw.ok_or(crate::DeviceError::Unexpected)?;
 
         if let Some(label) = desc.label {
-            unsafe { raw.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
+            raw.set_name(label)?;
         }
 
         self.counters.query_sets.add(1);
@@ -2292,16 +2237,8 @@ impl crate::Device for super::Device {
             Flags: Direct3D12::D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
         };
 
-        let (resource, allocation) = suballocation::create_acceleration_structure(
-            suballocation::DeviceAllocationContext::from(self),
-            desc,
-            raw_desc,
-        )?;
-
-        if let Some(label) = desc.label {
-            unsafe { resource.SetName(&windows::core::HSTRING::from(label)) }
-                .into_device_result("SetName")?;
-        }
+        let (resource, allocation) = suballocation::DeviceAllocationContext::from(self)
+            .create_acceleration_structure(desc, raw_desc)?;
 
         // for some reason there is no counter for acceleration structures
 
@@ -2315,8 +2252,7 @@ impl crate::Device for super::Device {
         &self,
         acceleration_structure: super::AccelerationStructure,
     ) {
-        suballocation::free_resource(
-            suballocation::DeviceAllocationContext::from(self),
+        suballocation::DeviceAllocationContext::from(self).free_resource(
             acceleration_structure.resource,
             acceleration_structure.allocation,
         );

@@ -1329,6 +1329,9 @@ impl crate::Device for super::Device {
                 crate::ShaderInput::SpirV(_) => {
                     panic!("`Features::SPIRV_SHADER_PASSTHROUGH` is not enabled")
                 }
+                crate::ShaderInput::Msl { .. } => {
+                    panic!("`Features::MSL_SHADER_PASSTHROUGH` is not enabled")
+                }
                 crate::ShaderInput::Naga(naga) => naga,
             },
             label: desc.label.map(|str| str.to_string()),

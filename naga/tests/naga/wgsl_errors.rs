@@ -3156,6 +3156,51 @@ fn matrix_vector_pointers() {
 }
 
 #[test]
+fn vector_logical_ops() {
+    // Const context
+    check(
+        "const and = vec2(true, false) && vec2(false, false);",
+        r###"error: Cannot apply the binary op to the arguments
+  ┌─ wgsl:1:13
+  │
+1 │ const and = vec2(true, false) && vec2(false, false);
+  │             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ see msg
+
+"###,
+    );
+
+    check(
+        "const or = vec2(true, false) || vec2(false, false);",
+        r###"error: Cannot apply the binary op to the arguments
+  ┌─ wgsl:1:12
+  │
+1 │ const or = vec2(true, false) || vec2(false, false);
+  │            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ see msg
+
+"###,
+    );
+
+    // Runtime context
+    check(
+        "fn foo(a: vec2<bool>, b: vec2<bool>) {
+            let y = a && b;
+        }",
+        r#"error: Incompatible operands: LogicalAnd(vec2<bool>, _)
+
+"#,
+    );
+
+    check(
+        "fn foo(a: vec2<bool>, b: vec2<bool>) {
+            let y = a || b;
+        }",
+        r#"error: Incompatible operands: LogicalOr(vec2<bool>, _)
+
+"#,
+    );
+}
+
+#[test]
 fn issue7165() {
     // Regression test for https://github.com/gfx-rs/wgpu/issues/7165
     let shader = "
@@ -3323,4 +3368,67 @@ fn more_inconsistent_type() {
     variant("clamp(1f, 1i, 1i)");
     variant("clamp(1f, 1i, 1f)");
     variant("clamp(1f, 1f, 1i)");
+}
+
+/// Naga should not crash just because the type of a
+/// bad argument is a struct.
+#[test]
+fn struct_names_in_argument_errors() {
+    #[track_caller]
+    fn variant(argument: &str) -> Result<naga::Module, naga::front::wgsl::ParseError> {
+        let input = format!(
+            r#"
+                struct A {{ x: i32, }};
+                fn f() {{ _ = sin({argument}); }}
+            "#
+        );
+        naga::front::wgsl::parse_str(&input)
+    }
+
+    assert!(variant("1.0").is_ok());
+    assert!(variant("1").is_ok());
+    assert!(variant("1i").is_err());
+    assert!(variant("A()").is_err());
+}
+
+/// Naga should not crash just because the type of a
+/// bad conversion operand is a struct.
+#[test]
+fn struct_names_in_conversion_errors() {
+    #[track_caller]
+    fn variant(argument: &str) -> Result<naga::Module, naga::front::wgsl::ParseError> {
+        let input = format!(
+            r#"
+                struct A {{ x: i32, }};
+                fn f() {{ _ = i32({argument}); }}
+            "#
+        );
+        naga::front::wgsl::parse_str(&input)
+    }
+
+    assert!(variant("1.0").is_ok());
+    assert!(variant("1").is_ok());
+    assert!(variant("1i").is_ok());
+    assert!(variant("A()").is_err());
+}
+
+/// Naga should not crash just because the type of a
+/// bad initializer is a struct.
+#[test]
+fn struct_names_in_init_errors() {
+    #[track_caller]
+    fn variant(init: &str) -> Result<naga::Module, naga::front::wgsl::ParseError> {
+        let input = format!(
+            r#"
+                struct A {{ x: i32, }};
+                fn f() {{ var y: i32 = {init}; }}
+            "#
+        );
+        naga::front::wgsl::parse_str(&input)
+    }
+
+    assert!(variant("1").is_ok());
+    assert!(variant("1i").is_ok());
+    assert!(variant("1.0").is_err());
+    assert!(variant("A()").is_err());
 }

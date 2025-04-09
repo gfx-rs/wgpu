@@ -106,7 +106,7 @@ fern = "0.7"
 flume = "0.11"
 futures-lite = "2"
 glam = "0.29"
-half = "2.5" # We require 2.5 to have `Arbitrary` support.
+half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.15.2", default-features = false, features = [
     "default-hasher",
     "inline-more",
