@@ -53,10 +53,16 @@ impl fmt::Display for DiagnosticDisplay<(&TypeResolution, GlobalCtx<'_>)> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (resolution, ctx) = self.0;
 
-        match *resolution {
-            TypeResolution::Handle(handle) => DiagnosticDisplay((handle, ctx)).fmt(f),
-            TypeResolution::Value(ref inner) => DiagnosticDisplay((inner, ctx)).fmt(f),
+        #[cfg(any(feature = "wgsl-in", feature = "wgsl-out"))]
+        ctx.write_type_resolution(resolution, f)?;
+
+        #[cfg(not(any(feature = "wgsl-in", feature = "wgsl-out")))]
+        {
+            let _ = ctx;
+            write!(f, "{resolution:?}")?;
         }
+
+        Ok(())
     }
 }
 
