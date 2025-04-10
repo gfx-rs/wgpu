@@ -1241,7 +1241,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     }
                     BindingResource::AccelerationStructure(acceleration_structure) => {
                         bm::BindingResource::AccelerationStructure(
-                            acceleration_structure.shared.inner.as_core().id,
+                            acceleration_structure.inner.as_core().id,
                         )
                     }
                 },
@@ -2594,7 +2594,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             .map(|b| b.inner.as_core().id)
             .collect::<SmallVec<[_; 4]>>();
         let tlas = tlas
-            .map(|t| t.shared.inner.as_core().id)
+            .map(|t| t.inner.as_core().id)
             .collect::<SmallVec<[_; 4]>>();
         if let Err(cause) = self
             .context
@@ -2612,7 +2612,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
     fn build_acceleration_structures<'a>(
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
+        tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
     ) {
         let blas = blas.map(|e: &crate::BlasBuildEntry<'_>| {
             let geometries = match e.geometry {
@@ -2653,7 +2653,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                         })
                 });
             wgc::ray_tracing::TlasPackage {
-                tlas_id: e.tlas.shared.inner.as_core().id,
+                tlas_id: e.inner.as_core().id,
                 instances: Box::new(instances),
                 lowest_unmodified: e.lowest_unmodified,
             }

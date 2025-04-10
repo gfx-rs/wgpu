@@ -31,7 +31,7 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 
 /// Safe instance for a [Tlas].
 ///
-/// A TlasInstance may be made invalid, if a TlasInstance is invalid, any attempt to build a [TlasPackage] containing an
+/// A TlasInstance may be made invalid, if a TlasInstance is invalid, any attempt to build a [Tlas] containing an
 /// invalid TlasInstance will generate a validation error
 ///
 /// Each one contains:
@@ -42,7 +42,6 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 /// - A user accessible custom index
 ///
 /// [Tlas]: crate::Tlas
-/// [TlasPackage]: crate::TlasPackage
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
     pub(crate) blas: dispatch::DispatchBlas,

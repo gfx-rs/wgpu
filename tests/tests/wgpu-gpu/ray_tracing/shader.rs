@@ -41,7 +41,7 @@ fn access_all_struct_members(ctx: TestingContext) {
         });
 
     encoder_build
-        .build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas_package]);
+        .build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
 
     ctx.queue.submit([encoder_build.finish()]);
 
@@ -69,7 +69,7 @@ fn access_all_struct_members(ctx: TestingContext) {
         entries: &[
             BindGroupEntry {
                 binding: 0,
-                resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+                resource: BindingResource::AccelerationStructure(&as_ctx.tlas),
             },
             BindGroupEntry {
                 binding: 1,

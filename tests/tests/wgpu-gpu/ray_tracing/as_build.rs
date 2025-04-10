@@ -30,7 +30,7 @@ fn unbuilt_blas(ctx: TestingContext) {
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
 
-    encoder.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder.build_acceleration_structures([], [&as_ctx.tlas]);
 
     fail(
         &ctx.device,
@@ -223,7 +223,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
             label: Some("TLAS 1"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
 
     let mut encoder_blas = ctx
         .device
@@ -266,7 +266,7 @@ fn out_of_order_as_build(ctx: TestingContext) {
             label: Some("TLAS 2"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
 
     fail(
         &ctx.device,
@@ -321,7 +321,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
             label: Some("TLAS 1"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
 
     let mut encoder_blas2 = ctx
         .device
@@ -360,7 +360,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         layout: &compute_pipeline.get_bind_group_layout(0),
         entries: &[BindGroupEntry {
             binding: 0,
-            resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+            resource: BindingResource::AccelerationStructure(&as_ctx.tlas),
         }],
     });
 
@@ -421,7 +421,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
             label: Some("TLAS 2"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
 
     ctx.queue.submit([
         encoder_blas.finish(),
@@ -434,7 +434,7 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         layout: &compute_pipeline.get_bind_group_layout(0),
         entries: &[BindGroupEntry {
             binding: 0,
-            resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+            resource: BindingResource::AccelerationStructure(&as_ctx.tlas),
         }],
     });
 
@@ -533,15 +533,13 @@ fn build_with_transform(ctx: TestingContext) {
         },
     );
 
-    let tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
+    let mut tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
         label: Some("TLAS"),
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: AccelerationStructureUpdateMode::Build,
     });
-
-    let mut tlas_package = TlasPackage::new(tlas);
-    tlas_package[0] = Some(TlasInstance::new(
+    tlas[0] = Some(TlasInstance::new(
         &blas,
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,
@@ -568,7 +566,7 @@ fn build_with_transform(ctx: TestingContext) {
                 transform_buffer_offset: Some(0),
             }]),
         }],
-        [&tlas_package],
+        [&tlas],
     );
     ctx.queue.submit([encoder_build.finish()]);
 }
@@ -610,7 +608,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
             label: Some("TLAS 1"),
         });
 
-    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
 
     ctx.queue
         .submit([encoder_blas.finish(), encoder_tlas.finish()]);
@@ -641,7 +639,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
                     entries: &[BindGroupEntry {
                         binding: 0,
                         resource: BindingResource::AccelerationStructure(
-                            as_ctx.tlas_package.tlas(),
+                            &as_ctx.tlas,
                         ),
                     }],
                 });
@@ -676,7 +674,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
             layout: &compute_pipeline.get_bind_group_layout(0),
             entries: &[BindGroupEntry {
                 binding: 0,
-                resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+                resource: BindingResource::AccelerationStructure(&as_ctx.tlas),
             }],
         });
 
@@ -741,7 +739,7 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
     fail(
         &ctx.device,
         || {
-            encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+            encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
         },
         None,
     );

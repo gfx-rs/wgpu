@@ -1,10 +1,7 @@
 use core::ops::Range;
 
 use crate::{
-    api::{
-        blas::BlasBuildEntry,
-        tlas::TlasPackage,
-    },
+    api::{blas::BlasBuildEntry, tlas::Tlas},
     *,
 };
 
@@ -341,7 +338,7 @@ impl CommandEncoder {
     pub fn build_acceleration_structures<'a>(
         &mut self,
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
-        tlas: impl IntoIterator<Item = &'a TlasPackage>,
+        tlas: impl IntoIterator<Item = &'a Tlas>,
     ) {
         self.inner
             .build_acceleration_structures(&mut blas.into_iter(), &mut tlas.into_iter());

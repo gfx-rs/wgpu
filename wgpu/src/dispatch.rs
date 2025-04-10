@@ -339,7 +339,7 @@ pub trait CommandEncoderInterface: CommonTraits {
     fn build_acceleration_structures<'a>(
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
+        tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
     );
 
     fn transition_resources<'a>(
