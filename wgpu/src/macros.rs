@@ -106,12 +106,12 @@ macro_rules! include_spirv_raw {
     ($($token:tt)*) => {
         {
             //log::info!("including '{}'", $($token)*);
-            $crate::ShaderModuleDescriptorPassthrough::SpirV {
+            $crate::ShaderModuleDescriptorPassthrough::SpirV(
                 $crate::ShaderModuleDescriptorSpirV {
                     label: $crate::__macro_helpers::Some($($token)*),
                     source: $crate::util::make_spirv_raw($crate::__macro_helpers::include_bytes!($($token)*)),
                 }
-            }
+            )
         }
     };
 }

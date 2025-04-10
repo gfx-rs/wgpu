@@ -295,6 +295,7 @@ By @syl20bnr in [#7326](https://github.com/gfx-rs/wgpu/pull/7326).
 - Reduce downlevel `max_color_attachments` limit from 8 to 4 for better GLES compatibility. By @adrian17 in [#6994](https://github.com/gfx-rs/wgpu/pull/6994).
 - Fix building a BLAS with a transform buffer by adding a flag to indicate usage of the transform buffer. By @Vecvec in
 [#7062](https://github.com/gfx-rs/wgpu/pull/7062).
+- Move incrementation of `Device::last_acceleration_structure_build_command_index` into queue submit. By @Vecvec in [#7462](https://github.com/gfx-rs/wgpu/pull/7462).
 
 #### Vulkan
 

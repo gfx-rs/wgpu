@@ -62,6 +62,18 @@ use core::sync::atomic::AtomicU64;
 #[cfg(not(supports_64bit_atomics))]
 use portable_atomic::AtomicU64;
 
+pub(crate) struct CommandIndices {
+    /// The index of the last command submission that was attempted.
+    ///
+    /// Note that `fence` may never be signalled with this value, if the command
+    /// submission failed. If you need to wait for everything running on a
+    /// `Queue` to complete, wait for [`last_successful_submission_index`].
+    ///
+    /// [`last_successful_submission_index`]: Device::last_successful_submission_index
+    pub(crate) active_submission_index: hal::FenceValue,
+    pub(crate) next_acceleration_structure_build_command_index: u64,
+}
+
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
@@ -74,14 +86,7 @@ pub struct Device {
 
     pub(crate) command_allocator: command::CommandAllocator,
 
-    /// The index of the last command submission that was attempted.
-    ///
-    /// Note that `fence` may never be signalled with this value, if the command
-    /// submission failed. If you need to wait for everything running on a
-    /// `Queue` to complete, wait for [`last_successful_submission_index`].
-    ///
-    /// [`last_successful_submission_index`]: Device::last_successful_submission_index
-    pub(crate) active_submission_index: hal::AtomicFenceValue,
+    pub(crate) command_indices: RwLock<CommandIndices>,
 
     /// The index of the last successful submission to this device's
     /// [`hal::Queue`].
@@ -91,7 +96,7 @@ pub struct Device {
     /// so waiting for this value won't hang waiting for work that was never
     /// submitted.
     ///
-    /// [`active_submission_index`]: Device::active_submission_index
+    /// [`active_submission_index`]: CommandIndices::active_submission_index
     pub(crate) last_successful_submission_index: hal::AtomicFenceValue,
 
     // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
@@ -129,7 +134,6 @@ pub struct Device {
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
-    pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // Optional so that we can late-initialize this after the queue is created.
     pub(crate) timestamp_normalizer:
@@ -276,7 +280,14 @@ impl Device {
             zero_buffer: ManuallyDrop::new(zero_buffer),
             label: desc.label.to_string(),
             command_allocator,
-            active_submission_index: AtomicU64::new(0),
+            command_indices: RwLock::new(
+                rank::DEVICE_COMMAND_INDICES,
+                CommandIndices {
+                    active_submission_index: 0,
+                    // By starting at one, we can put the result in a NonZeroU64.
+                    next_acceleration_structure_build_command_index: 1,
+                },
+            ),
             last_successful_submission_index: AtomicU64::new(0),
             fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
@@ -312,8 +323,6 @@ impl Device {
             instance_flags,
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-            // By starting at one, we can put the result in a NonZeroU64.
-            last_acceleration_structure_build_command_index: AtomicU64::new(1),
             timestamp_normalizer: OnceCellOrLock::new(),
             indirect_validation,
         })

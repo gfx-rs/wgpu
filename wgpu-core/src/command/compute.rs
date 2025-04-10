@@ -4,6 +4,7 @@ use wgt::{BufferAddress, DynamicOffset};
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, str};
 
+use crate::ray_tracing::AsAction;
 use crate::{
     binding_model::{
         BindError, BindGroup, LateMinBufferBindingSizeMismatch, PushConstantUploadError,
@@ -24,7 +25,6 @@ use crate::{
     hal_label, id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind},
     pipeline::ComputePipeline,
-    ray_tracing::TlasAction,
     resource::{
         self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
         MissingBufferUsageError, ParentDevice,
@@ -208,7 +208,7 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     tracker: &'cmd_buf mut Tracker,
     buffer_memory_init_actions: &'cmd_buf mut Vec<BufferInitTrackerAction>,
     texture_memory_actions: &'cmd_buf mut CommandBufferTextureMemoryActions,
-    tlas_actions: &'cmd_buf mut Vec<TlasAction>,
+    as_actions: &'cmd_buf mut Vec<AsAction>,
 
     temp_offsets: Vec<u32>,
     dynamic_offset_count: usize,
@@ -433,7 +433,7 @@ impl Global {
             tracker: &mut cmd_buf_data.trackers,
             buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
             texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
-            tlas_actions: &mut cmd_buf_data.tlas_actions,
+            as_actions: &mut cmd_buf_data.as_actions,
 
             temp_offsets: Vec::new(),
             dynamic_offset_count: 0,
@@ -680,12 +680,9 @@ fn set_bind_group(
         .used
         .acceleration_structures
         .into_iter()
-        .map(|tlas| TlasAction {
-            tlas: tlas.clone(),
-            kind: crate::ray_tracing::TlasActionKind::Use,
-        });
+        .map(|tlas| AsAction::UseTlas(tlas.clone()));
 
-    state.tlas_actions.extend(used_resource);
+    state.as_actions.extend(used_resource);
 
     let pipeline_layout = state.binder.pipeline_layout.clone();
     let entries = state
