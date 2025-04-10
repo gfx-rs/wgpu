@@ -197,7 +197,7 @@ void arithmetic()
     float4 mul_vector1_ = mul(ZeroValuefloat4x3(), (2.0).xxx);
     float3x3 mul_ = mul(ZeroValuefloat3x4(), ZeroValuefloat4x3());
     int _e175 = prevent_const_eval;
-    wgpu_7437_ = asint(asuint(_e175) + asuint(int(-2147483648)));
+    wgpu_7437_ = asint(asuint(_e175) + asuint(int(-2147483647 - 1)));
     return;
 }
 
