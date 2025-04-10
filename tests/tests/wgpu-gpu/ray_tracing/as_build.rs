@@ -481,20 +481,8 @@ fn empty_build(ctx: TestingContext) {
 
     encoder_safe.build_acceleration_structures(iter::empty(), iter::empty());
 
-    let mut encoder_unsafe = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("BLAS 1"),
-        });
-
-    // # SAFETY:
-    // we don't actually do anything so all the requirements are satisfied
-    unsafe {
-        encoder_unsafe.build_acceleration_structures_unsafe_tlas(iter::empty(), iter::empty());
-    }
-
     ctx.queue
-        .submit([encoder_safe.finish(), encoder_unsafe.finish()]);
+        .submit([encoder_safe.finish()]);
 }
 
 #[gpu_test]

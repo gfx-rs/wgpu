@@ -120,44 +120,6 @@ impl GlobalPlay for wgc::global::Global {
                         occlusion_query_set_id,
                     );
                 }
-                trace::Command::BuildAccelerationStructuresUnsafeTlas { blas, tlas } => {
-                    let blas_iter = blas.iter().map(|x| {
-                        let geometries = match &x.geometries {
-                            wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(
-                                triangle_geometries,
-                            ) => {
-                                let iter = triangle_geometries.iter().map(|tg| {
-                                    wgc::ray_tracing::BlasTriangleGeometry {
-                                        size: &tg.size,
-                                        vertex_buffer: tg.vertex_buffer,
-                                        index_buffer: tg.index_buffer,
-                                        transform_buffer: tg.transform_buffer,
-                                        first_vertex: tg.first_vertex,
-                                        vertex_stride: tg.vertex_stride,
-                                        first_index: tg.first_index,
-                                        transform_buffer_offset: tg.transform_buffer_offset,
-                                    }
-                                });
-                                wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
-                            }
-                        };
-                        wgc::ray_tracing::BlasBuildEntry {
-                            blas_id: x.blas_id,
-                            geometries,
-                        }
-                    });
-
-                    if !tlas.is_empty() {
-                        log::error!("a trace of command_encoder_build_acceleration_structures_unsafe_tlas containing a tlas build is not replayable! skipping tlas build");
-                    }
-
-                    self.command_encoder_build_acceleration_structures_unsafe_tlas(
-                        encoder,
-                        blas_iter,
-                        std::iter::empty(),
-                    )
-                    .unwrap();
-                }
                 trace::Command::BuildAccelerationStructures { blas, tlas } => {
                     let blas_iter = blas.iter().map(|x| {
                         let geometries = match &x.geometries {

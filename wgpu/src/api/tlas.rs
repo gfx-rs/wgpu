@@ -1,8 +1,7 @@
 use alloc::{sync::Arc, vec, vec::Vec};
 use core::ops::{Index, IndexMut, Range};
-
 use crate::{api::blas::TlasInstance, dispatch};
-use crate::{BindingResource, Buffer, Label};
+use crate::{BindingResource, Label};
 use wgt::WasmNotSendSync;
 
 /// Descriptor to create top level acceleration structures.
@@ -65,20 +64,7 @@ impl Tlas {
     }
 }
 
-/// Entry for a top level acceleration structure build.
-/// Used with raw instance buffers for an unvalidated builds.
-/// See [`TlasPackage`] for the safe version.
-pub struct TlasBuildEntry<'a> {
-    /// Reference to the acceleration structure.
-    pub tlas: &'a Tlas,
-    /// Reference to the raw instance buffer, each instance is similar to [`TlasInstance`] but contains a handle to the BLAS.
-    pub instance_buffer: &'a Buffer,
-    /// Number of instances in the instance buffer.
-    pub instance_count: u32,
-}
-static_assertions::assert_impl_all!(TlasBuildEntry<'_>: WasmNotSendSync);
-
-/// The safe version of [`TlasBuildEntry`], containing [`TlasInstance`]s instead of a raw buffer.
+/// Wrapper for [`Tlas`] for safe builds containing [`TlasInstance`]s
 pub struct TlasPackage {
     pub(crate) tlas: Tlas,
     pub(crate) instances: Vec<Option<TlasInstance>>,

@@ -2609,56 +2609,6 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         }
     }
 
-    fn build_acceleration_structures_unsafe_tlas<'a>(
-        &self,
-        blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasBuildEntry<'a>>,
-    ) {
-        let blas = blas.map(|e: &crate::BlasBuildEntry<'_>| {
-            let geometries = match e.geometry {
-                crate::BlasGeometries::TriangleGeometries(ref triangle_geometries) => {
-                    let iter = triangle_geometries.iter().map(|tg| {
-                        wgc::ray_tracing::BlasTriangleGeometry {
-                            vertex_buffer: tg.vertex_buffer.inner.as_core().id,
-                            index_buffer: tg.index_buffer.map(|buf| buf.inner.as_core().id),
-                            transform_buffer: tg.transform_buffer.map(|buf| buf.inner.as_core().id),
-                            size: tg.size,
-                            transform_buffer_offset: tg.transform_buffer_offset,
-                            first_vertex: tg.first_vertex,
-                            vertex_stride: tg.vertex_stride,
-                            first_index: tg.first_index,
-                        }
-                    });
-                    wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
-                }
-            };
-            wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas.inner.as_core().id,
-                geometries,
-            }
-        });
-
-        let tlas = tlas.into_iter().map(|e: &crate::TlasBuildEntry<'a>| {
-            wgc::ray_tracing::TlasBuildEntry {
-                tlas_id: e.tlas.shared.inner.as_core().id,
-                instance_buffer_id: e.instance_buffer.inner.as_core().id,
-                instance_count: e.instance_count,
-            }
-        });
-
-        if let Err(cause) = self
-            .context
-            .0
-            .command_encoder_build_acceleration_structures_unsafe_tlas(self.id, blas, tlas)
-        {
-            self.context.handle_error_nolabel(
-                &self.error_sink,
-                cause,
-                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
-            );
-        }
-    }
-
     fn build_acceleration_structures<'a>(
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,

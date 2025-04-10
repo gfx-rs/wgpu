@@ -3107,14 +3107,6 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         unimplemented!("Raytracing not implemented for web");
     }
 
-    fn build_acceleration_structures_unsafe_tlas<'a>(
-        &self,
-        _blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        _tlas: &mut dyn Iterator<Item = &'a crate::TlasBuildEntry<'a>>,
-    ) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
     fn build_acceleration_structures<'a>(
         &self,
         _blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
