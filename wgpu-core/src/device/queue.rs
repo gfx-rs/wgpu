@@ -1431,7 +1431,9 @@ impl Queue {
 
         let mut command_indices_lock = device.command_indices.write();
         command_indices_lock.next_acceleration_structure_build_command_index += 1;
-        let built_index = NonZeroU64::new(command_indices_lock.next_acceleration_structure_build_command_index).unwrap();
+        let built_index =
+            NonZeroU64::new(command_indices_lock.next_acceleration_structure_build_command_index)
+                .unwrap();
 
         let new_blas = Arc::new(Blas {
             raw: Snatchable::new(raw),
