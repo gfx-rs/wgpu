@@ -26,9 +26,11 @@ use wgt::Backends;
 use js_sys::Promise;
 use wasm_bindgen::{prelude::*, JsCast};
 
-use crate::{dispatch, Blas, SurfaceTargetUnsafe, Tlas};
+use crate::{
+    dispatch::{self, BlasCompactCallback},
+    Blas, SurfaceTargetUnsafe, Tlas,
+};
 
-use crate::dispatch::BlasCompactCallback;
 use defined_non_null_js_value::DefinedNonNullJsValue;
 
 // We need to mark various types as Send and Sync to satisfy the Rust type system.

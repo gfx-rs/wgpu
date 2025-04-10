@@ -1,5 +1,7 @@
-use crate::resource::{Blas, Trackable};
-use crate::track::metadata::ResourceMetadata;
+use crate::{
+    resource::{Blas, Trackable},
+    track::metadata::ResourceMetadata,
+};
 use alloc::sync::Arc;
 
 /// A tracker that holds tracks BLASes.

@@ -108,6 +108,7 @@ use crate::{
     pipeline,
     resource::{self, Labeled, ResourceErrorIdent},
     snatch::SnatchGuard,
+    track::blas::BlasTracker,
 };
 
 use alloc::{sync::Arc, vec::Vec};
@@ -115,7 +116,6 @@ use core::{fmt, mem, ops};
 
 use thiserror::Error;
 
-use crate::track::blas::BlasTracker;
 pub(crate) use buffer::{
     BufferBindGroupState, BufferTracker, BufferUsageScope, DeviceBufferTracker,
 };

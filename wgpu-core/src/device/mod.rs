@@ -5,6 +5,7 @@ use crate::{
     binding_model,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
+    ray_tracing::BlasCompactReadyPendingClosure,
     resource::{
         Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
         ResourceErrorIdent,
@@ -26,7 +27,6 @@ pub mod ray_tracing;
 pub mod resource;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
-use crate::ray_tracing::BlasCompactReadyPendingClosure;
 pub use {life::WaitIdleError, resource::Device};
 
 pub const SHADER_STAGE_COUNT: usize = hal::MAX_CONCURRENT_SHADER_STAGES;

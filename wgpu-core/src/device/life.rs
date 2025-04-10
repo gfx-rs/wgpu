@@ -8,13 +8,11 @@ use crate::{
         queue::{EncoderInFlight, SubmittedWorkDoneClosure, TempResource},
         DeviceError,
     },
-    resource::{Buffer, Texture, Trackable},
+    ray_tracing::BlasCompactReadyPendingClosure,
+    resource::{Blas, Buffer, Texture, Trackable},
     snatch::SnatchGuard,
     SubmissionIndex,
 };
-
-use crate::ray_tracing::BlasCompactReadyPendingClosure;
-use crate::resource::Blas;
 
 /// A command submitted to the GPU for execution.
 ///
