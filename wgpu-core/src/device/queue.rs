@@ -10,6 +10,7 @@ use smallvec::SmallVec;
 use thiserror::Error;
 
 use super::{life::LifetimeTracker, Device};
+use crate::device::resource::CommandIndices;
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::scratch::ScratchBuffer;
@@ -447,9 +448,7 @@ pub enum QueueSubmitError {
     #[error(transparent)]
     CommandEncoder(#[from] CommandEncoderError),
     #[error(transparent)]
-    ValidateBlasActionsError(#[from] crate::ray_tracing::ValidateBlasActionsError),
-    #[error(transparent)]
-    ValidateTlasActionsError(#[from] crate::ray_tracing::ValidateTlasActionsError),
+    ValidateAsActionsError(#[from] crate::ray_tracing::ValidateAsActionsError),
 }
 
 //TODO: move out common parts of write_xxx.
@@ -1126,6 +1125,7 @@ impl Queue {
                                     &snatch_guard,
                                     &mut submit_surface_textures_owned,
                                     &mut used_surface_textures,
+                                    &mut command_index_guard,
                                 );
                                 if let Err(err) = res {
                                     first_error.get_or_insert(err);
@@ -1518,6 +1518,7 @@ fn validate_command_buffer(
     snatch_guard: &SnatchGuard,
     submit_surface_textures_owned: &mut FastHashMap<*const Texture, Arc<Texture>>,
     used_surface_textures: &mut track::TextureUsageScope,
+    command_index_guard: &mut RwLockWriteGuard<CommandIndices>,
 ) -> Result<(), QueueSubmitError> {
     command_buffer.same_device_as(queue)?;
 
@@ -1557,10 +1558,9 @@ fn validate_command_buffer(
             }
         }
 
-        if let Err(e) = cmd_buf_data.validate_blas_actions() {
-            return Err(e.into());
-        }
-        if let Err(e) = cmd_buf_data.validate_tlas_actions(snatch_guard) {
+        if let Err(e) =
+            cmd_buf_data.validate_acceleration_structure_actions(snatch_guard, command_index_guard)
+        {
             return Err(e.into());
         }
     }

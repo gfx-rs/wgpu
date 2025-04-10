@@ -36,7 +36,7 @@ use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::ray_tracing::{BlasAction, TlasAction};
+use crate::ray_tracing::AsAction;
 use crate::resource::{Fallible, InvalidResourceError, Labeled, ParentDevice as _, QuerySet};
 use crate::storage::Storage;
 use crate::track::{DeviceTracker, Tracker, UsageScope};
@@ -463,8 +463,7 @@ pub struct CommandBufferMutable {
 
     pub(crate) pending_query_resets: QueryResetMap,
 
-    blas_actions: Vec<BlasAction>,
-    tlas_actions: Vec<TlasAction>,
+    as_actions: Vec<AsAction>,
     temp_resources: Vec<TempResource>,
 
     indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
@@ -553,8 +552,7 @@ impl CommandBuffer {
                     buffer_memory_init_actions: Default::default(),
                     texture_memory_actions: Default::default(),
                     pending_query_resets: QueryResetMap::new(),
-                    blas_actions: Default::default(),
-                    tlas_actions: Default::default(),
+                    as_actions: Default::default(),
                     temp_resources: Default::default(),
                     indirect_draw_validation_resources:
                         crate::indirect_validation::DrawResources::new(device.clone()),

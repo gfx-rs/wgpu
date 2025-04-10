@@ -3,11 +3,13 @@ use core::{
     cmp::max,
     num::NonZeroU64,
     ops::{Deref, Range},
-    sync::atomic::Ordering,
 };
 
 use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 
+use crate::device::resource::CommandIndices;
+use crate::lock::RwLockWriteGuard;
+use crate::ray_tracing::{AsAction, AsBuild, TlasBuild, ValidateAsActionsError};
 use crate::{
     command::CommandBufferMutable,
     device::queue::TempResource,
@@ -16,16 +18,14 @@ use crate::{
     id::CommandEncoderId,
     init_tracker::MemoryInitKind,
     ray_tracing::{
-        BlasAction, BlasBuildEntry, BlasGeometries, BlasTriangleGeometry,
-        BuildAccelerationStructureError, TlasAction, TlasBuildEntry, TlasInstance, TlasPackage,
-        TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance,
-        TraceTlasPackage, ValidateBlasActionsError, ValidateTlasActionsError,
+        BlasBuildEntry, BlasGeometries, BlasTriangleGeometry, BuildAccelerationStructureError,
+        TlasBuildEntry, TlasInstance, TlasPackage, TraceBlasBuildEntry, TraceBlasGeometries,
+        TraceBlasTriangleGeometry, TraceTlasInstance, TraceTlasPackage,
     },
-    resource::{AccelerationStructure, Blas, Buffer, Labeled, StagingBuffer, Tlas, Trackable},
+    resource::{AccelerationStructure, Blas, Buffer, Labeled, StagingBuffer, Tlas},
     scratch::ScratchBuffer,
     snatch::SnatchGuard,
     track::PendingTransition,
-    FastHashSet,
 };
 
 use crate::id::{BlasId, TlasId};
@@ -81,39 +81,28 @@ impl Global {
 
         device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
 
-        let build_command_index = NonZeroU64::new(
-            device
-                .last_acceleration_structure_build_command_index
-                .fetch_add(1, Ordering::Relaxed),
-        )
-        .unwrap();
+        let mut build_command = AsBuild::default();
+
+        for blas in blas_ids {
+            let blas = hub.blas_s.get(*blas).get()?;
+            build_command.blas_s_built.push(blas);
+        }
+
+        for tlas in tlas_ids {
+            let tlas = hub.tlas_s.get(*tlas).get()?;
+            build_command.tlas_s_built.push(TlasBuild {
+                tlas,
+                dependencies: Vec::new(),
+            });
+        }
 
         let mut cmd_buf_data = cmd_buf.data.lock();
         let mut cmd_buf_data_guard = cmd_buf_data.record()?;
         let cmd_buf_data = &mut *cmd_buf_data_guard;
 
-        cmd_buf_data.blas_actions.reserve(blas_ids.len());
+        cmd_buf_data.as_actions.push(AsAction::Build(build_command));
 
-        cmd_buf_data.tlas_actions.reserve(tlas_ids.len());
-
-        for blas in blas_ids {
-            let blas = hub.blas_s.get(*blas).get()?;
-            cmd_buf_data.blas_actions.push(BlasAction {
-                blas,
-                kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
-            });
-        }
-
-        for tlas in tlas_ids {
-            let tlas = hub.tlas_s.get(*tlas).get()?;
-            cmd_buf_data.tlas_actions.push(TlasAction {
-                tlas,
-                kind: crate::ray_tracing::TlasActionKind::Build {
-                    build_index: build_command_index,
-                    dependencies: Vec::new(),
-                },
-            });
-        }
+        cmd_buf_data_guard.mark_successful();
 
         Ok(())
     }
@@ -139,12 +128,7 @@ impl Global {
 
         device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
 
-        let build_command_index = NonZeroU64::new(
-            device
-                .last_acceleration_structure_build_command_index
-                .fetch_add(1, Ordering::Relaxed),
-        )
-        .unwrap();
+        let mut build_command = AsBuild::default();
 
         #[cfg(feature = "trace")]
         let trace_blas: Vec<TraceBlasBuildEntry> = blas_iter
@@ -227,7 +211,7 @@ impl Global {
         iter_blas(
             blas_iter,
             cmd_buf_data,
-            build_command_index,
+            &mut build_command,
             &mut buf_storage,
             hub,
         )?;
@@ -281,12 +265,9 @@ impl Global {
             let tlas = hub.tlas_s.get(entry.tlas_id).get()?;
             cmd_buf_data.trackers.tlas_s.insert_single(tlas.clone());
 
-            cmd_buf_data.tlas_actions.push(TlasAction {
+            build_command.tlas_s_built.push(TlasBuild {
                 tlas: tlas.clone(),
-                kind: crate::ray_tracing::TlasActionKind::Build {
-                    build_index: build_command_index,
-                    dependencies: Vec::new(),
-                },
+                dependencies: Vec::new(),
             });
 
             let scratch_buffer_offset = scratch_buffer_tlas_size;
@@ -388,6 +369,8 @@ impl Global {
             .temp_resources
             .push(TempResource::ScratchBuffer(scratch_buffer));
 
+        cmd_buf_data.as_actions.push(AsAction::Build(build_command));
+
         cmd_buf_data_guard.mark_successful();
         Ok(())
     }
@@ -410,12 +393,7 @@ impl Global {
 
         device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
 
-        let build_command_index = NonZeroU64::new(
-            device
-                .last_acceleration_structure_build_command_index
-                .fetch_add(1, Ordering::Relaxed),
-        )
-        .unwrap();
+        let mut build_command = AsBuild::default();
 
         let trace_blas: Vec<TraceBlasBuildEntry> = blas_iter
             .map(|blas_entry| {
@@ -523,7 +501,7 @@ impl Global {
         iter_blas(
             blas_iter,
             cmd_buf_data,
-            build_command_index,
+            &mut build_command,
             &mut buf_storage,
             hub,
         )?;
@@ -604,19 +582,11 @@ impl Global {
                 instance_count += 1;
 
                 dependencies.push(blas.clone());
-
-                cmd_buf_data.blas_actions.push(BlasAction {
-                    blas,
-                    kind: crate::ray_tracing::BlasActionKind::Use,
-                });
             }
 
-            cmd_buf_data.tlas_actions.push(TlasAction {
+            build_command.tlas_s_built.push(TlasBuild {
                 tlas: tlas.clone(),
-                kind: crate::ray_tracing::TlasActionKind::Build {
-                    build_index: build_command_index,
-                    dependencies,
-                },
+                dependencies,
             });
 
             if instance_count > tlas.max_instance_count {
@@ -800,72 +770,69 @@ impl Global {
             .temp_resources
             .push(TempResource::ScratchBuffer(scratch_buffer));
 
+        cmd_buf_data.as_actions.push(AsAction::Build(build_command));
+
         cmd_buf_data_guard.mark_successful();
         Ok(())
     }
 }
 
 impl CommandBufferMutable {
-    // makes sure a blas is build before it is used
-    pub(crate) fn validate_blas_actions(&self) -> Result<(), ValidateBlasActionsError> {
-        profiling::scope!("CommandEncoder::[submission]::validate_blas_actions");
-        let mut built = FastHashSet::default();
-        for action in &self.blas_actions {
-            match &action.kind {
-                crate::ray_tracing::BlasActionKind::Build(id) => {
-                    built.insert(action.blas.tracker_index());
-                    *action.blas.built_index.write() = Some(*id);
-                }
-                crate::ray_tracing::BlasActionKind::Use => {
-                    if !built.contains(&action.blas.tracker_index())
-                        && (*action.blas.built_index.read()).is_none()
-                    {
-                        return Err(ValidateBlasActionsError::UsedUnbuilt(
-                            action.blas.error_ident(),
-                        ));
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    // makes sure a tlas is built before it is used
-    pub(crate) fn validate_tlas_actions(
+    pub(crate) fn validate_acceleration_structure_actions(
         &self,
         snatch_guard: &SnatchGuard,
-    ) -> Result<(), ValidateTlasActionsError> {
-        profiling::scope!("CommandEncoder::[submission]::validate_tlas_actions");
-        for action in &self.tlas_actions {
-            match &action.kind {
-                crate::ray_tracing::TlasActionKind::Build {
-                    build_index,
-                    dependencies,
-                } => {
-                    *action.tlas.built_index.write() = Some(*build_index);
-                    action.tlas.dependencies.write().clone_from(dependencies);
+        command_index_guard: &mut RwLockWriteGuard<CommandIndices>,
+    ) -> Result<(), ValidateAsActionsError> {
+        profiling::scope!("CommandEncoder::[submission]::validate_as_actions");
+        for action in &self.as_actions {
+            match action {
+                AsAction::Build(build) => {
+                    let build_command_index = NonZeroU64::new(
+                        command_index_guard.next_acceleration_structure_build_command_index,
+                    )
+                    .unwrap();
+
+                    command_index_guard.next_acceleration_structure_build_command_index += 1;
+                    for blas in build.blas_s_built.iter() {
+                        *blas.built_index.write() = Some(build_command_index);
+                    }
+
+                    for tlas_build in build.tlas_s_built.iter() {
+                        for blas in &tlas_build.dependencies {
+                            if blas.built_index.read().is_none() {
+                                return Err(ValidateAsActionsError::UsedUnbuiltBlas(
+                                    blas.error_ident(),
+                                    tlas_build.tlas.error_ident(),
+                                ));
+                            }
+                        }
+                        *tlas_build.tlas.built_index.write() = Some(build_command_index);
+                        tlas_build
+                            .tlas
+                            .dependencies
+                            .write()
+                            .clone_from(&tlas_build.dependencies)
+                    }
                 }
-                crate::ray_tracing::TlasActionKind::Use => {
-                    let tlas_build_index = action.tlas.built_index.read();
-                    let dependencies = action.tlas.dependencies.read();
+                AsAction::UseTlas(tlas) => {
+                    let tlas_build_index = tlas.built_index.read();
+                    let dependencies = tlas.dependencies.read();
 
                     if (*tlas_build_index).is_none() {
-                        return Err(ValidateTlasActionsError::UsedUnbuilt(
-                            action.tlas.error_ident(),
-                        ));
+                        return Err(ValidateAsActionsError::UsedUnbuiltTlas(tlas.error_ident()));
                     }
                     for blas in dependencies.deref() {
                         let blas_build_index = *blas.built_index.read();
                         if blas_build_index.is_none() {
-                            return Err(ValidateTlasActionsError::UsedUnbuiltBlas(
-                                action.tlas.error_ident(),
+                            return Err(ValidateAsActionsError::UsedUnbuiltBlas(
+                                tlas.error_ident(),
                                 blas.error_ident(),
                             ));
                         }
                         if blas_build_index.unwrap() > tlas_build_index.unwrap() {
-                            return Err(ValidateTlasActionsError::BlasNewerThenTlas(
+                            return Err(ValidateAsActionsError::BlasNewerThenTlas(
                                 blas.error_ident(),
-                                action.tlas.error_ident(),
+                                tlas.error_ident(),
                             ));
                         }
                         blas.try_raw(snatch_guard)?;
@@ -881,7 +848,7 @@ impl CommandBufferMutable {
 fn iter_blas<'a>(
     blas_iter: impl Iterator<Item = BlasBuildEntry<'a>>,
     cmd_buf_data: &mut CommandBufferMutable,
-    build_command_index: NonZeroU64,
+    build_command: &mut AsBuild,
     buf_storage: &mut Vec<TriangleBufferStore<'a>>,
     hub: &Hub,
 ) -> Result<(), BuildAccelerationStructureError> {
@@ -890,10 +857,7 @@ fn iter_blas<'a>(
         let blas = hub.blas_s.get(entry.blas_id).get()?;
         cmd_buf_data.trackers.blas_s.insert_single(blas.clone());
 
-        cmd_buf_data.blas_actions.push(BlasAction {
-            blas: blas.clone(),
-            kind: crate::ray_tracing::BlasActionKind::Build(build_command_index),
-        });
+        build_command.blas_s_built.push(blas.clone());
 
         match entry.geometries {
             BlasGeometries::TriangleGeometries(triangle_geometries) => {
