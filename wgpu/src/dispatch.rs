@@ -12,7 +12,7 @@
 #![allow(clippy::too_many_arguments)] // It's fine.
 #![allow(missing_docs, clippy::missing_safety_doc)] // Interfaces are not documented
 
-use crate::{WasmNotSend, WasmNotSendSync};
+use crate::{Blas, Tlas, WasmNotSend, WasmNotSendSync};
 
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin};
@@ -111,10 +111,12 @@ pub trait DeviceInterface: CommonTraits {
         desc: crate::ShaderModuleDescriptor<'_>,
         shader_bound_checks: crate::ShaderRuntimeChecks,
     ) -> DispatchShaderModule;
-    unsafe fn create_shader_module_spirv(
+
+    unsafe fn create_shader_module_passthrough(
         &self,
-        desc: &crate::ShaderModuleDescriptorSpirV<'_>,
+        desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> DispatchShaderModule;
+
     fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor<'_>,
@@ -310,6 +312,11 @@ pub trait CommandEncoderInterface: CommonTraits {
         query_count: u32,
         destination: &DispatchBuffer,
         destination_offset: crate::BufferAddress,
+    );
+    fn mark_acceleration_structures_built<'a>(
+        &self,
+        blas: &mut dyn Iterator<Item = &'a Blas>,
+        tlas: &mut dyn Iterator<Item = &'a Tlas>,
     );
 
     fn build_acceleration_structures_unsafe_tlas<'a>(

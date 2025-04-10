@@ -53,6 +53,9 @@ pub struct ShaderModuleDescriptor<'a> {
     pub runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
+pub type ShaderModuleDescriptorPassthrough<'a> =
+    wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
+
 #[derive(Debug)]
 pub struct ShaderModule {
     pub(crate) raw: ManuallyDrop<Box<dyn hal::DynShaderModule>>,

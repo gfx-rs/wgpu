@@ -481,7 +481,11 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_type_inner(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
+    fn write_type_resolution(
+        &mut self,
+        module: &Module,
+        resolution: &proc::TypeResolution,
+    ) -> BackendResult {
         // This actually can't be factored out into a nice constructor method,
         // because the borrow checker needs to be able to see that the borrows
         // of `self.names` and `self.out` are disjoint.
@@ -489,7 +493,7 @@ impl<W: Write> Writer<W> {
             module,
             names: &self.names,
         };
-        type_context.write_type_inner(inner, &mut self.out)?;
+        type_context.write_type_resolution(resolution, &mut self.out)?;
 
         Ok(())
     }
@@ -1031,16 +1035,8 @@ impl<W: Write> Writer<W> {
         write!(self.out, "let {name}")?;
         if self.flags.contains(WriterFlags::EXPLICIT_TYPES) {
             write!(self.out, ": ")?;
-            let ty = &func_ctx.info[handle].ty;
             // Write variable type
-            match *ty {
-                proc::TypeResolution::Handle(handle) => {
-                    self.write_type(module, handle)?;
-                }
-                proc::TypeResolution::Value(ref inner) => {
-                    self.write_type_inner(module, inner)?;
-                }
-            }
+            self.write_type_resolution(module, &func_ctx.info[handle].ty)?;
         }
 
         write!(self.out, " = ")?;
@@ -1139,12 +1135,12 @@ impl<W: Write> Writer<W> {
                 crate::Literal::Bool(value) => write!(self.out, "{value}")?,
                 crate::Literal::F64(value) => write!(self.out, "{value:?}lf")?,
                 crate::Literal::I64(value) => {
-                    // `-9223372036854775808li` is not valid WGSL. Nor can we use the AbstractInt
-                    // trick above, as AbstractInt also cannot represent `9223372036854775808`.
-                    // The most negative `i64` value can only be expressed in WGSL using
-                    // subtracting 1 from the second most negative value.
+                    // `-9223372036854775808li` is not valid WGSL. Nor can we simply use the
+                    // AbstractInt trick above, as AbstractInt also cannot represent
+                    // `9223372036854775808`. Instead construct the second most negative
+                    // AbstractInt, subtract one from it, then cast to i64.
                     if value == i64::MIN {
-                        write!(self.out, "{}li - 1li", value + 1)?;
+                        write!(self.out, "i64({} - 1)", value + 1)?;
                     } else {
                         write!(self.out, "{value}li")?;
                     }
@@ -1766,6 +1762,10 @@ impl TypeContext for WriterTypeContext<'_> {
 
     fn type_name(&self, handle: Handle<crate::Type>) -> &str {
         self.names[&NameKey::Type(handle)].as_str()
+    }
+
+    fn write_unnamed_struct<W: Write>(&self, _: &TypeInner, _: &mut W) -> core::fmt::Result {
+        unreachable!("the WGSL back end should always provide type handles");
     }
 
     fn write_override<W: Write>(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {

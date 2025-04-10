@@ -550,8 +550,14 @@ impl<'source> Lowerer<'source, '_> {
             // ERRORS
 
             // Bad conversion (type cast)
-            (Components::One { span, ty_inner, .. }, constructor) => {
-                let from_type = ctx.type_inner_to_string(ty_inner);
+            (
+                Components::One {
+                    span, component, ..
+                },
+                constructor,
+            ) => {
+                let component_ty = &ctx.typifier()[component];
+                let from_type = ctx.type_resolution_to_string(component_ty);
                 return Err(Box::new(Error::BadTypeCast {
                     span,
                     from_type,

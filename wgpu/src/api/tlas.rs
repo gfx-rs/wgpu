@@ -32,6 +32,33 @@ static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .shared.inner);
 
+impl Tlas {
+    /// Returns the inner hal Acceleration Structure using a callback. The hal acceleration structure
+    /// will be `None` if the backend type argument does not match with this wgpu Tlas
+    ///
+    /// This method will start the wgpu_core level command recording.
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Acceleration Structure must not be manually destroyed
+    /// - If the raw handle is build,
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::AccelerationStructure>) -> R,
+        R,
+    >(
+        &mut self,
+        hal_tlas_callback: F,
+    ) -> R {
+        if let Some(tlas) = self.shared.inner.as_core_opt() {
+            unsafe { tlas.context.tlas_as_hal::<A, F, R>(tlas, hal_tlas_callback) }
+        } else {
+            hal_tlas_callback(None)
+        }
+    }
+}
+
 /// Entry for a top level acceleration structure build.
 /// Used with raw instance buffers for an unvalidated builds.
 /// See [`TlasPackage`] for the safe version.

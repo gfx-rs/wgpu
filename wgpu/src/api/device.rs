@@ -172,20 +172,18 @@ impl Device {
         ShaderModule { inner: module }
     }
 
-    /// Creates a shader module from SPIR-V binary directly.
+    /// Creates a shader module which will bypass wgpu's shader tooling and validation and be used directly by the backend.
     ///
     /// # Safety
     ///
-    /// This function passes binary data to the backend as-is and can potentially result in a
-    /// driver crash or bogus behaviour. No attempt is made to ensure that data is valid SPIR-V.
-    ///
-    /// See also [`include_spirv_raw!`] and [`util::make_spirv_raw`].
+    /// This function passes data to the backend as-is and can potentially result in a
+    /// driver crash or bogus behaviour. No attempt is made to ensure that data is valid.
     #[must_use]
-    pub unsafe fn create_shader_module_spirv(
+    pub unsafe fn create_shader_module_passthrough(
         &self,
-        desc: &ShaderModuleDescriptorSpirV<'_>,
+        desc: ShaderModuleDescriptorPassthrough<'_>,
     ) -> ShaderModule {
-        let module = unsafe { self.inner.create_shader_module_spirv(desc) };
+        let module = unsafe { self.inner.create_shader_module_passthrough(&desc) };
         ShaderModule { inner: module }
     }
 

@@ -1862,6 +1862,9 @@ impl crate::Device for super::Device {
                     .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?,
                 )
             }
+            crate::ShaderInput::Msl { .. } => {
+                panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
+            }
             crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
         };
 

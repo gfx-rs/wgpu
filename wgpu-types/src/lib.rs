@@ -14,6 +14,7 @@ extern crate std;
 
 extern crate alloc;
 
+use alloc::borrow::Cow;
 use alloc::{string::String, vec, vec::Vec};
 use core::{
     fmt,
@@ -7653,4 +7654,99 @@ pub enum DeviceLostReason {
     Unknown = 0,
     /// After `Device::destroy`
     Destroyed = 1,
+}
+
+/// Descriptor for creating a shader module.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub enum CreateShaderModuleDescriptorPassthrough<'a, L> {
+    /// Passthrough for SPIR-V binaries.
+    SpirV(ShaderModuleDescriptorSpirV<'a, L>),
+    /// Passthrough for MSL source code.
+    Msl(ShaderModuleDescriptorMsl<'a, L>),
+}
+
+impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
+    /// Takes a closure and maps the label of the shader module descriptor into another.
+    pub fn map_label<K>(
+        &self,
+        fun: impl FnOnce(&L) -> K,
+    ) -> CreateShaderModuleDescriptorPassthrough<'_, K> {
+        match self {
+            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::SpirV(
+                    ShaderModuleDescriptorSpirV {
+                        label: fun(&inner.label),
+                        source: inner.source.clone(),
+                    },
+                )
+            }
+            CreateShaderModuleDescriptorPassthrough::Msl(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Msl(ShaderModuleDescriptorMsl {
+                    entry_point: inner.entry_point.clone(),
+                    label: fun(&inner.label),
+                    num_workgroups: inner.num_workgroups,
+                    source: inner.source.clone(),
+                })
+            }
+        }
+    }
+
+    /// Returns the label of shader module passthrough descriptor.
+    pub fn label(&'a self) -> &'a L {
+        match self {
+            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => &inner.label,
+            CreateShaderModuleDescriptorPassthrough::Msl(inner) => &inner.label,
+        }
+    }
+
+    #[cfg(feature = "trace")]
+    /// Returns the source data for tracing purpose.
+    pub fn trace_data(&self) -> &[u8] {
+        match self {
+            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => {
+                bytemuck::cast_slice(&inner.source)
+            }
+            CreateShaderModuleDescriptorPassthrough::Msl(inner) => inner.source.as_bytes(),
+        }
+    }
+
+    #[cfg(feature = "trace")]
+    /// Returns the binary file extension for tracing purpose.
+    pub fn trace_binary_ext(&self) -> &'static str {
+        match self {
+            CreateShaderModuleDescriptorPassthrough::SpirV(..) => "spv",
+            CreateShaderModuleDescriptorPassthrough::Msl(..) => "msl",
+        }
+    }
+}
+
+/// Descriptor for a shader module given by Metal MSL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorMsl<'a, L> {
+    /// Entrypoint.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
+    /// Shader MSL source.
+    pub source: Cow<'a, str>,
+}
+
+/// Descriptor for a shader module given by SPIR-V binary.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorSpirV<'a, L> {
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Binary SPIR-V data, in 4-byte words.
+    pub source: Cow<'a, [u32]>,
 }

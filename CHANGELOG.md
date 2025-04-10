@@ -181,6 +181,32 @@ layout(location = 0, index = 1) out vec4 output1;
 
 By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 
+#### Unify interface for SpirV shader passthrough
+
+Replace device `create_shader_module_spirv` function with a generic `create_shader_module_passthrough` function
+taking a `ShaderModuleDescriptorPassthrough` enum as parameter.
+
+Update your calls to `create_shader_module_spirv` and use `create_shader_module_passthrough` instead:
+
+```diff
+-    device.create_shader_module_spirv(
+-        wgpu::ShaderModuleDescriptorSpirV {
+-            label: Some(&name),
+-            source: Cow::Borrowed(&source),
+-        }
+-    )
++    device.create_shader_module_passthrough(
++        wgpu::ShaderModuleDescriptorPassthrough::SpirV(
++            wgpu::ShaderModuleDescriptorSpirV {
++                label: Some(&name),
++                source: Cow::Borrowed(&source),
++            },
++        ),
++    )
+```
+
+By @syl20bnr in [#7326](https://github.com/gfx-rs/wgpu/pull/7326).
+
 ### New Features
 
 - Added mesh shader support to `wgpu_hal`. By @SupaMaggie70Incorporated in [#7089](https://github.com/gfx-rs/wgpu/pull/7089)
@@ -201,8 +227,12 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 - Added `CommandEncoder::transition_resources()` for native API interop, and allowing users to slightly optimize barriers. By @JMS55 in [#6678](https://github.com/gfx-rs/wgpu/pull/6678).
 - Add `wgpu_hal::vulkan::Adapter::texture_format_as_raw` for native API interop. By @JMS55 in [#7228](https://github.com/gfx-rs/wgpu/pull/7228).
 
-- Support getting vertices of the hit triangle when raytracing. By @Vecvec in [#7183](https://github.com/gfx-rs/wgpu/pull/7183) .
+- Support getting vertices of the hit triangle when raytracing. By @Vecvec in [#7183](https://github.com/gfx-rs/wgpu/pull/7183).
+- Add `as_hal` for both acceleration structures. By @Vecvec in [#7303](https://github.com/gfx-rs/wgpu/pull/7303).
 
+- Add Metal compute shader passthrough. Use `create_shader_module_passthrough` on device. By @syl20bnr in [#7326](https://github.com/gfx-rs/wgpu/pull/7326).
+
+- new `Features::MSL_SHADER_PASSTHROUGH` run-time feature allows providing pass-through MSL Metal shaders. By @syl20bnr in [#7326](https://github.com/gfx-rs/wgpu/pull/7326).
 
 #### Naga
 
@@ -254,6 +284,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 - Allows override-sized arrays to resolve to the same size without causing the type arena to panic. By @KentSlaney in [#7082](https://github.com/gfx-rs/wgpu/pull/7082).
 - Allow abstract types to be used for WGSL switch statement selector and case selector expressions. By @jamienicol in [#7250](https://github.com/gfx-rs/wgpu/pull/7250).
 - Apply automatic conversions to `let` declarations, and accept `vecN()` as a constructor for vectors (in any context). By @andyleiserson in [#7367](https://github.com/gfx-rs/wgpu/pull/7367).
+- The `&&` and `||` operators are no longer allowed on vectors. By @andyleiserson in [#7368](https://github.com/gfx-rs/wgpu/pull/7368).
 - Prevent ray intersection function overwriting each other. By @Vecvec in [#7497](https://github.com/gfx-rs/wgpu/pull/7497).
 
 #### General
@@ -265,6 +296,7 @@ By @wumpf in [#7144](https://github.com/gfx-rs/wgpu/pull/7144)
 - Reduce downlevel `max_color_attachments` limit from 8 to 4 for better GLES compatibility. By @adrian17 in [#6994](https://github.com/gfx-rs/wgpu/pull/6994).
 - Fix building a BLAS with a transform buffer by adding a flag to indicate usage of the transform buffer. By @Vecvec in
 [#7062](https://github.com/gfx-rs/wgpu/pull/7062).
+- Move incrementation of `Device::last_acceleration_structure_build_command_index` into queue submit. By @Vecvec in [#7462](https://github.com/gfx-rs/wgpu/pull/7462).
 
 #### Vulkan
 

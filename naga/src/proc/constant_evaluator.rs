@@ -2261,10 +2261,13 @@ impl<'a> ConstantEvaluator<'a> {
             | BinaryOperator::And
             | BinaryOperator::ExclusiveOr
             | BinaryOperator::InclusiveOr
-            | BinaryOperator::LogicalAnd
-            | BinaryOperator::LogicalOr
             | BinaryOperator::ShiftLeft
             | BinaryOperator::ShiftRight => left_ty,
+
+            BinaryOperator::LogicalAnd | BinaryOperator::LogicalOr => {
+                // Not supported on vectors
+                return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
+            }
         };
 
         let components = components

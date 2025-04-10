@@ -1,7 +1,7 @@
 //! Displaying Naga IR terms in diagnostic output.
 
-use crate::proc::{GlobalCtx, Rule};
-use crate::{Handle, Scalar, Type, TypeInner};
+use crate::proc::{GlobalCtx, Rule, TypeResolution};
+use crate::{Handle, Scalar, Type};
 
 #[cfg(any(feature = "wgsl-in", feature = "wgsl-out"))]
 use crate::common::wgsl::TypeContext;
@@ -23,13 +23,16 @@ use core::fmt;
 /// for a type like `DiagnosticDisplay<(Handle<Type>, GlobalCtx)>`, where
 /// the [`GlobalCtx`] type provides the necessary context.
 ///
+/// Do not implement this type for [`TypeInner`], as that does not
+/// have enough information to display struct types correctly.
+///
 /// If you only need debugging output, [`DiagnosticDebug`] uses
 /// easier-to-obtain context types but still does a good enough job
 /// for logging or debugging.
 ///
 /// [`Display`]: core::fmt::Display
-/// [`Scalar`]: crate::Scalar
 /// [`GlobalCtx`]: crate::proc::GlobalCtx
+/// [`TypeInner`]: crate::ir::TypeInner
 /// [`DiagnosticDebug`]: super::DiagnosticDebug
 ///
 /// ## Language-sensitive diagnostics
@@ -49,6 +52,23 @@ use core::fmt;
 /// indication will provoke a compile-time error.
 pub struct DiagnosticDisplay<T>(pub T);
 
+impl fmt::Display for DiagnosticDisplay<(&TypeResolution, GlobalCtx<'_>)> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (resolution, ctx) = self.0;
+
+        #[cfg(any(feature = "wgsl-in", feature = "wgsl-out"))]
+        ctx.write_type_resolution(resolution, f)?;
+
+        #[cfg(not(any(feature = "wgsl-in", feature = "wgsl-out")))]
+        {
+            let _ = ctx;
+            write!(f, "{resolution:?}")?;
+        }
+
+        Ok(())
+    }
+}
+
 impl fmt::Display for DiagnosticDisplay<(Handle<Type>, GlobalCtx<'_>)> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (handle, ref ctx) = self.0;
@@ -60,23 +80,6 @@ impl fmt::Display for DiagnosticDisplay<(Handle<Type>, GlobalCtx<'_>)> {
         {
             let _ = ctx;
             write!(f, "{handle:?}")?;
-        }
-
-        Ok(())
-    }
-}
-
-impl fmt::Display for DiagnosticDisplay<(&TypeInner, GlobalCtx<'_>)> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (inner, ref ctx) = self.0;
-
-        #[cfg(any(feature = "wgsl-in", feature = "wgsl-out"))]
-        ctx.write_type_inner(inner, f)?;
-
-        #[cfg(not(any(feature = "wgsl-in", feature = "wgsl-out")))]
-        {
-            let _ = ctx;
-            write!(f, "{inner:?}")?;
         }
 
         Ok(())

@@ -234,6 +234,80 @@ fn out_of_order_as_build_use(ctx: TestingContext) {
         },
         None,
     );
+
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
+
+    //
+    // Build in the right order, then rebuild the BLAS so the TLAS is invalid, then use the TLAS.
+    //
+
+    let mut encoder_blas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 3"),
+        });
+
+    encoder_blas.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    let mut encoder_blas2 = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("BLAS 4"),
+        });
+
+    encoder_blas2.build_acceleration_structures([&as_ctx.blas_build_entry()], []);
+
+    let mut encoder_tlas = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("TLAS 2"),
+        });
+
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas_package]);
+
+    ctx.queue.submit([
+        encoder_blas.finish(),
+        encoder_tlas.finish(),
+        encoder_blas2.finish(),
+    ]);
+
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &compute_pipeline.get_bind_group_layout(0),
+        entries: &[BindGroupEntry {
+            binding: 0,
+            resource: BindingResource::AccelerationStructure(as_ctx.tlas_package.tlas()),
+        }],
+    });
+
+    //
+    // Use TLAS
+    //
+
+    let mut encoder_compute = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+    {
+        let mut pass = encoder_compute.begin_compute_pass(&ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&compute_pipeline);
+        pass.set_bind_group(0, Some(&bind_group), &[]);
+        pass.dispatch_workgroups(1, 1, 1)
+    }
+
+    fail(
+        &ctx.device,
+        || {
+            ctx.queue.submit(Some(encoder_compute.finish()));
+        },
+        None,
+    );
 }
 
 #[gpu_test]

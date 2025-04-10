@@ -8,7 +8,6 @@
 // - ([non performance] extract function in build (rust function extraction with guards is a pain))
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
-use core::num::NonZeroU64;
 
 use thiserror::Error;
 use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
@@ -137,18 +136,12 @@ pub enum BuildAccelerationStructureError {
 }
 
 #[derive(Clone, Debug, Error)]
-pub enum ValidateBlasActionsError {
-    #[error("Blas {0:?} is used before it is built")]
-    UsedUnbuilt(ResourceErrorIdent),
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum ValidateTlasActionsError {
+pub enum ValidateAsActionsError {
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
 
     #[error("Tlas {0:?} is used before it is built")]
-    UsedUnbuilt(ResourceErrorIdent),
+    UsedUnbuiltTlas(ResourceErrorIdent),
 
     #[error("Blas {0:?} is used before it is built (in Tlas {1:?})")]
     UsedUnbuiltBlas(ResourceErrorIdent, ResourceErrorIdent),
@@ -200,31 +193,22 @@ pub struct TlasPackage<'a> {
     pub lowest_unmodified: u32,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub(crate) enum BlasActionKind {
-    Build(NonZeroU64),
-    Use,
-}
-
 #[derive(Debug, Clone)]
-pub(crate) enum TlasActionKind {
-    Build {
-        build_index: NonZeroU64,
-        dependencies: Vec<Arc<Blas>>,
-    },
-    Use,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct BlasAction {
-    pub blas: Arc<Blas>,
-    pub kind: BlasActionKind,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct TlasAction {
+pub(crate) struct TlasBuild {
     pub tlas: Arc<Tlas>,
-    pub kind: TlasActionKind,
+    pub dependencies: Vec<Arc<Blas>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AsBuild {
+    pub blas_s_built: Vec<Arc<Blas>>,
+    pub tlas_s_built: Vec<TlasBuild>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum AsAction {
+    Build(AsBuild),
+    UseTlas(Arc<Tlas>),
 }
 
 #[derive(Debug, Clone)]

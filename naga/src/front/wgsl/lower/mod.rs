@@ -7,6 +7,7 @@ use alloc::{
 use core::num::NonZeroU32;
 
 use crate::common::wgsl::{TryToWgsl, TypeContext};
+use crate::common::ForDebugWithTypes;
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
@@ -410,6 +411,14 @@ impl TypeContext for ExpressionContext<'_, '_, '_> {
             Some(ref name) => out.write_str(name),
             None => write!(out, "{{anonymous override {handle:?}}}"),
         }
+    }
+
+    fn write_unnamed_struct<W: core::fmt::Write>(
+        &self,
+        _: &crate::TypeInner,
+        _: &mut W,
+    ) -> core::fmt::Result {
+        unreachable!("the WGSL front end should always know the type name");
     }
 }
 
@@ -1307,8 +1316,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 if !explicit_inner.equivalent(init_inner, &ectx.module.types) {
                     return Err(Box::new(Error::InitializationTypeMismatch {
                         name: name.span,
-                        expected: ectx.type_inner_to_string(explicit_inner),
-                        got: ectx.type_inner_to_string(init_inner),
+                        expected: ectx.type_to_string(explicit_ty),
+                        got: ectx.type_to_string(init_ty),
                     }));
                 }
                 ty = explicit_ty;
@@ -3026,13 +3035,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         );
 
         for (arg_index, &arg) in arguments.iter().enumerate() {
-            let ty = ctx.typifier()[arg].inner_with(&ctx.module.types);
+            let arg_type_resolution = &ctx.typifier()[arg];
+            let arg_inner = arg_type_resolution.inner_with(&ctx.module.types);
             log::debug!(
-                "Supplying argument {arg_index} of type {}",
-                crate::common::DiagnosticDisplay((ty, ctx.module.to_ctx()))
+                "Supplying argument {arg_index} of type {:?}",
+                arg_type_resolution.for_debug(&ctx.module.types)
             );
             let next_remaining_overloads =
-                remaining_overloads.arg(arg_index, ty, &ctx.module.types);
+                remaining_overloads.arg(arg_index, arg_inner, &ctx.module.types);
 
             // If any argument is not a constant expression, then no overloads
             // that accept abstract values should be considered.
@@ -3052,11 +3062,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let function = fun.to_wgsl_for_diagnostics();
                 let call_span = span;
                 let arg_span = ctx.get_expression_span(arg);
-                let arg_ty = ctx.as_diagnostic_display(ty).to_string();
+                let arg_ty = ctx.as_diagnostic_display(arg_type_resolution).to_string();
 
                 // Is this type *ever* permitted for the arg_index'th argument?
                 // For example, `bool` is never permitted for `max`.
-                let only_this_argument = overloads.arg(arg_index, ty, &ctx.module.types);
+                let only_this_argument = overloads.arg(arg_index, arg_inner, &ctx.module.types);
                 if only_this_argument.is_empty() {
                     // No overload of `fun` accepts this type as the
                     // arg_index'th argument. Determine the set of types that
@@ -3105,16 +3115,18 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 // made this one unacceptable.
                 let mut remaining_overloads = overloads;
                 for (prior_index, &prior_expr) in arguments.iter().enumerate() {
-                    let prior_ty = ctx.typifier()[prior_expr].inner_with(&ctx.module.types);
+                    let prior_type_resolution = &ctx.typifier()[prior_expr];
+                    let prior_ty = prior_type_resolution.inner_with(&ctx.module.types);
                     remaining_overloads =
                         remaining_overloads.arg(prior_index, prior_ty, &ctx.module.types);
                     if remaining_overloads
-                        .arg(arg_index, ty, &ctx.module.types)
+                        .arg(arg_index, arg_inner, &ctx.module.types)
                         .is_empty()
                     {
                         // This is the argument that killed our dreams.
                         let inconsistent_span = ctx.get_expression_span(arguments[prior_index]);
-                        let inconsistent_ty = ctx.as_diagnostic_display(prior_ty).to_string();
+                        let inconsistent_ty =
+                            ctx.as_diagnostic_display(prior_type_resolution).to_string();
 
                         if allowed.is_empty() {
                             // Some overloads did accept `ty` at `arg_index`, but

@@ -311,17 +311,19 @@ impl<'source> super::ExpressionContext<'source, '_, '_> {
         I::IntoIter: Clone, // for debugging
     {
         let types = &self.module.types;
-        let mut inners = components
-            .into_iter()
-            .map(|&c| self.typifier()[c].inner_with(types));
+        let components_iter = components.into_iter();
         log::debug!(
             "wgsl automatic_conversion_consensus: {}",
-            inners
+            components_iter
                 .clone()
-                .map(|inner| self.type_inner_to_string(inner))
+                .map(|&expr| {
+                    let res = &self.typifier()[expr];
+                    self.type_resolution_to_string(res)
+                })
                 .collect::<Vec<String>>()
                 .join(", ")
         );
+        let mut inners = components_iter.map(|&c| self.typifier()[c].inner_with(types));
         let mut best = inners.next().unwrap().scalar().ok_or(0_usize)?;
         for (inner, i) in inners.zip(1..) {
             let scalar = inner.scalar().ok_or(i)?;

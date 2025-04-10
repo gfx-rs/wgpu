@@ -285,6 +285,22 @@ impl CommandEncoder {
 
 /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] must be enabled on the device in order to call these functions.
 impl CommandEncoder {
+    /// Mark acceleration structures as being built. ***Should only*** be used with wgpu-hal
+    /// functions, all wgpu functions already mark acceleration structures as built.
+    ///
+    /// # Safety
+    ///
+    /// - All acceleration structures must have been build in this command encoder.
+    /// - All BLASes inputted must have been built before all TLASes that were inputted here and
+    ///   which use them.
+    pub unsafe fn mark_acceleration_structures_built<'a>(
+        &self,
+        blas: impl IntoIterator<Item = &'a Blas>,
+        tlas: impl IntoIterator<Item = &'a Tlas>,
+    ) {
+        self.inner
+            .mark_acceleration_structures_built(&mut blas.into_iter(), &mut tlas.into_iter())
+    }
     /// Build bottom and top level acceleration structures.
     ///
     /// Builds the BLASes then the TLASes, but does ***not*** build the BLASes into the TLASes,

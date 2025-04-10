@@ -150,6 +150,30 @@ impl Blas {
     pub fn handle(&self) -> Option<u64> {
         self.handle
     }
+
+    /// Returns the inner hal Acceleration Structure using a callback. The hal acceleration structure
+    /// will be `None` if the backend type argument does not match with this wgpu Blas
+    ///
+    /// This method will start the wgpu_core level command recording.
+    ///
+    /// # Safety
+    ///
+    /// - The raw handle obtained from the hal Acceleration Structure must not be manually destroyed
+    #[cfg(wgpu_core)]
+    pub unsafe fn as_hal<
+        A: wgc::hal_api::HalApi,
+        F: FnOnce(Option<&A::AccelerationStructure>) -> R,
+        R,
+    >(
+        &mut self,
+        hal_blas_callback: F,
+    ) -> R {
+        if let Some(blas) = self.inner.as_core_opt() {
+            unsafe { blas.context.blas_as_hal::<A, F, R>(blas, hal_blas_callback) }
+        } else {
+            hal_blas_callback(None)
+        }
+    }
 }
 
 /// Context version of [BlasTriangleGeometry].
