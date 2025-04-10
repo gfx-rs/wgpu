@@ -21,9 +21,7 @@ can be found with their definitions.
 A [`Blas`] can be created with [`Device::create_blas`].
 A [`Tlas`] can be created with [`Device::create_tlas`].
 
-Unless one is planning on using the unsafe building API (not recommended for beginners) a [`Tlas`] should be put inside
-a [`TlasPackage`]. After that a reference to the [`Tlas`] can be retrieved by calling [`TlasPackage::tlas`].
-This reference can be placed in a bind group to be used in a shader. A reference to a [`Blas`] can
+The [`Tlas`] reference can be placed in a bind group to be used in a shader. A reference to a [`Blas`] can
 be used to create [`TlasInstance`] alongside a transformation matrix, a custom index
 (this can be any data that should be given to the shader on a hit) which only the first 24
 bits may be set, and a mask to filter hits in the shader.
@@ -86,8 +84,6 @@ fn render(/*whatever args you need to render*/) {
 [`Tlas`]: https://wgpu.rs/doc/wgpu/struct.Tlas.html
 [`Blas`]: https://wgpu.rs/doc/wgpu/struct.Blas.html
 [`TlasInstance`]: https://wgpu.rs/doc/wgpu/struct.TlasInstance.html
-[`TlasPackage`]: https://wgpu.rs/doc/wgpu/struct.TlasPackage.html
-[`TlasPackage::tlas`]: https://wgpu.rs/doc/wgpu/struct.TlasPackage.html#method.tlas
 [`Blas::prepare_compaction_async`]: https://wgpu.rs/doc/wgpu/struct.Blas.html#method.prepare_compaction_async
 [`Blas::ready_for_compaction`]: https://wgpu.rs/doc/wgpu/struct.Blas.html#method.ready_for_compaction
 [`Queue::compact_blas`]: https://wgpu.rs/doc/wgpu/struct.Queue.html#method.compact_blas
