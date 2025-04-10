@@ -1,13 +1,13 @@
 [package]
 name = "wgpu-types"
-version = "25.0.0"
-authors = ["gfx-rs developers"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "Common types and utilities for wgpu, the cross-platform, safe, pure-rust graphics API"
-homepage = "https://wgpu.rs/"
-repository = "https://github.com/gfx-rs/wgpu"
-keywords = ["graphics"]
-license = "MIT OR Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
 
 # Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
 # copy the crates it actually uses out of the workspace, so it's meaningful for

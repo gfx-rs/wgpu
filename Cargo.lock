@@ -946,7 +946,7 @@ dependencies = [
 
 [[package]]
 name = "cts_runner"
-version = "0.1.0"
+version = "25.0.0"
 dependencies = [
  "deno_console",
  "deno_core",
@@ -1844,7 +1844,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hlsl-snapshots"
-version = "0.1.0"
+version = "25.0.0"
 dependencies = [
  "anyhow",
  "nanoserde",
@@ -2448,7 +2448,7 @@ dependencies = [
 
 [[package]]
 name = "naga-fuzz"
-version = "0.0.0"
+version = "25.0.0"
 dependencies = [
  "arbitrary",
  "cfg_aliases 0.2.1",

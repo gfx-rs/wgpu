@@ -1,14 +1,13 @@
 [package]
 name = "naga"
-version = "25.0.0"
-authors = ["gfx-rs developers"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "Shader translator and validator. Part of the wgpu project"
-repository = "https://github.com/gfx-rs/wgpu/tree/trunk/naga"
+repository.workspace = true
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
-license = "MIT OR Apache-2.0"
+license.workspace = true
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
-resolver = "2"
 
 # Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
 # copy the crates it actually uses out of the workspace, so it's meaningful for
