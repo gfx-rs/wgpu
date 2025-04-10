@@ -1,7 +1,7 @@
-use alloc::vec::Vec;
-use core::ops::{Index, IndexMut, Range};
 use crate::{api::blas::TlasInstance, dispatch};
 use crate::{BindingResource, Label};
+use alloc::vec::Vec;
+use core::ops::{Index, IndexMut, Range};
 use wgt::WasmNotSendSync;
 
 /// Descriptor to create top level acceleration structures.

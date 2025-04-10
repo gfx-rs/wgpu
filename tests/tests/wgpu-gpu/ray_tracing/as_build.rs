@@ -481,8 +481,7 @@ fn empty_build(ctx: TestingContext) {
 
     encoder_safe.build_acceleration_structures(iter::empty(), iter::empty());
 
-    ctx.queue
-        .submit([encoder_safe.finish()]);
+    ctx.queue.submit([encoder_safe.finish()]);
 }
 
 #[gpu_test]
@@ -638,9 +637,7 @@ fn only_blas_vertex_return(ctx: TestingContext) {
                     layout: &bind_group_layout,
                     entries: &[BindGroupEntry {
                         binding: 0,
-                        resource: BindingResource::AccelerationStructure(
-                            &as_ctx.tlas,
-                        ),
+                        resource: BindingResource::AccelerationStructure(&as_ctx.tlas),
                     }],
                 });
             },

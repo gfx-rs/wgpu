@@ -5,7 +5,7 @@ use wgpu::{include_wgsl, BufferUsages, IndexFormat, SamplerDescriptor};
 use wgpu::{
     AccelerationStructureFlags, AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries,
     BlasGeometrySizeDescriptors, BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor,
-    CreateBlasDescriptor, CreateTlasDescriptor, TlasInstance, Tlas,
+    CreateBlasDescriptor, CreateTlasDescriptor, Tlas, TlasInstance,
 };
 
 use crate::utils;

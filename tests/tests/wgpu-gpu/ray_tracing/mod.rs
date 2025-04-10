@@ -3,7 +3,7 @@ use wgpu::util::BufferInitDescriptor;
 use wgpu::{
     util::DeviceExt, Blas, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors,
     BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, Buffer, CreateBlasDescriptor,
-    CreateTlasDescriptor, TlasInstance, Tlas,
+    CreateTlasDescriptor, Tlas, TlasInstance,
 };
 use wgpu::{
     AccelerationStructureFlags, AccelerationStructureGeometryFlags,
