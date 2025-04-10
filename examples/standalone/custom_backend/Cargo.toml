@@ -5,7 +5,7 @@ rust-version = "1.84"
 publish = false
 
 [dependencies]
-wgpu = { version = "24.0.0", features = [
+wgpu = { version = "25.0.0", features = [
     "custom",
     "wgsl",
 ], default-features = false }

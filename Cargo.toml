@@ -55,12 +55,12 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "24.0.0"
+version = "25.0.0"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies]
-naga = { version = "24.0.0", path = "./naga" }
-wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features = [
+naga = { version = "25.0.0", path = "./naga" }
+wgpu = { version = "25.0.0", path = "./wgpu", default-features = false, features = [
     "serde",
     "wgsl",
     "vulkan",
@@ -70,16 +70,16 @@ wgpu = { version = "24.0.0", path = "./wgpu", default-features = false, features
     "static-dxc",
     "noop",       # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
-wgpu-core = { version = "24.0.0", path = "./wgpu-core" }
-wgpu-hal = { version = "24.0.0", path = "./wgpu-hal" }
-wgpu-macros = { version = "24.0.0", path = "./wgpu-macros" }
-wgpu-test = { version = "24.0.0", path = "./tests" }
-wgpu-types = { version = "24.0.0", path = "./wgpu-types" }
+wgpu-core = { version = "25.0.0", path = "./wgpu-core" }
+wgpu-hal = { version = "25.0.0", path = "./wgpu-hal" }
+wgpu-macros = { version = "25.0.0", path = "./wgpu-macros" }
+wgpu-test = { version = "25.0.0", path = "./tests" }
+wgpu-types = { version = "25.0.0", path = "./wgpu-types" }
 
-wgpu-core-deps-windows-linux-android = { version = "24.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
-wgpu-core-deps-apple = { version = "24.0.0", path = "./wgpu-core/platform-deps/apple" }
-wgpu-core-deps-wasm = { version = "24.0.0", path = "./wgpu-core/platform-deps/wasm" }
-wgpu-core-deps-emscripten = { version = "24.0.0", path = "./wgpu-core/platform-deps/emscripten" }
+wgpu-core-deps-windows-linux-android = { version = "25.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
+wgpu-core-deps-apple = { version = "25.0.0", path = "./wgpu-core/platform-deps/apple" }
+wgpu-core-deps-wasm = { version = "25.0.0", path = "./wgpu-core/platform-deps/wasm" }
+wgpu-core-deps-emscripten = { version = "25.0.0", path = "./wgpu-core/platform-deps/emscripten" }
 
 anyhow = { version = "1.0.97", default-features = false }
 approx = "0.5"

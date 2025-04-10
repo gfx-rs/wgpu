@@ -2202,7 +2202,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -2254,7 +2254,7 @@ checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
 
 [[package]]
 name = "lock-analyzer"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "anyhow",
  "ron",
@@ -2401,7 +2401,7 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "arbitrary",
  "arrayvec",
@@ -2435,7 +2435,7 @@ dependencies = [
 
 [[package]]
 name = "naga-cli"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "anyhow",
  "argh",
@@ -3047,7 +3047,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "player"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "env_logger",
  "log",
@@ -4122,7 +4122,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69fff37da548239c3bf9e64a12193d261e8b22b660991c6fd2df057c168f435f"
 dependencies = [
  "cc",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -4613,7 +4613,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.0",
@@ -4640,7 +4640,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-benchmark"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -4656,7 +4656,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "arrayvec",
  "bit-set 0.8.0",
@@ -4689,28 +4689,28 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core-deps-apple"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-emscripten"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-wasm"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-windows-linux-android"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "wgpu-hal",
 ]
@@ -4745,7 +4745,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-examples"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -4776,7 +4776,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -4830,7 +4830,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "anyhow",
  "bitflags 2.9.0",
@@ -4844,7 +4844,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-macros"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "heck 0.5.0",
  "quote",
@@ -4853,7 +4853,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-test"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "anyhow",
  "approx",
@@ -4893,7 +4893,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "24.0.0"
+version = "25.0.0"
 dependencies = [
  "bitflags 2.9.0",
  "bytemuck",
@@ -4939,7 +4939,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
