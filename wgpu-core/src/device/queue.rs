@@ -29,10 +29,10 @@ use crate::{
     FastHashMap, SubmissionIndex,
 };
 use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
-use core::num::NonZeroU64;
 use core::{
     iter,
     mem::{self, ManuallyDrop},
+    num::NonZeroU64,
     ptr::NonNull,
     sync::atomic::Ordering,
 };
