@@ -8,14 +8,12 @@ We do a patch releases as needed in the weeks between major releases. Once a new
 
 ## People
 
-Anyone can perform most of these steps, except actually publishing the crates.
-
-Currently only @kvark and @cwfitzgerald can publish all crates. @grovesNL can also publish `wgpu` crates. @jimblandy can publish `naga` crates.
+Anyone in the @gfx-rs/wgpu team can perform these steps.
 
 ## Major Release Process
 
 Approx 1 Week Before:
-- Determine if `glow` (@groves), `metal-rs` (@kvark and @cwfitzgerald) or any other dependant crates will need a release. If so, coordinate with their maintainers.
+- Determine if `glow` (@groves), `metal-rs` (@gfx-rs/wgpu) or any other dependant crates will need a release. If so, coordinate with their maintainers.
 - Go through the changelog:
   - Re-categorize miscategorized items.
   - Edit major changes so a user can easily understand what they need to do.
@@ -23,13 +21,12 @@ Approx 1 Week Before:
   - Copy-edit the changelog for clarity.
 
 Day of Release:
-- Update all crates to be the new version. We bump all versions even if there were no changes.
-  - `naga`
-  - `naga-cli`
-  - `wgpu-types`
-  - `wgpu-hal`
-  - `wgpu-core`
-  - `Cargo.toml` (this covers the rest of the crates).
+- Update the version number in the root `Cargo.toml` to the new version, this will update all crates to the new version.
+- Bump the wgpu dependency numbers in the following places:
+  - `Cargo.toml`
+  - `examples/standalone/*`
+- Grep for the previous version to ensure various documentation links are updated.
+  - For example, if the previous version was v24.0.0, grep for `v24` and `24.0`
 - Ensure `glow` and `metal` are updated to the latest version if needed.
 - Add a new header for the changelog with the release version and date.
 - Create a PR with all of the version changes and changelog updates.
@@ -41,12 +38,21 @@ Day of Release:
     cargo publish -p naga-cli
     cargo publish -p wgpu-types
     cargo publish -p wgpu-hal --all-features
+    cargo publish -p wgpu-core-deps-apple
+    cargo publish -p wgpu-core-deps-emscripten
+    cargo publish -p wgpu-core-deps-wasm
+    cargo publish -p wgpu-core-deps-windows-linux-android
     cargo publish -p wgpu-core --all-features
     cargo publish -p wgpu
     cargo publish -p wgpu-info
   ```
-- Create a new release on the `wgpu` repo with the changelog and a tag called `vX.Y.Z`.
-- Create a branch with the with the new version `vX.Y` and push it to the repo.
+- If there were any newly published crates, ensure `github:gfx-rs/wgpu` is added as an owner of that crate.
+- Create a new tag called `vX.Y.Z` and push it to the repo.
+- Create a new release on the `wgpu` repo with the changelog from this version, targeting that tag
+- Create a branch with the with the new version `vX` and push it to the repo.
+- Complete the release's milestone on GitHub.
+- Create a new milestone for the next release, in 12 weeks time.
+- Update the release checklist with any needed changes.
 - Publish the link to the github release in the following places.
   - [r/rust](https://www.reddit.com/r/rust/).
     - Add an AMA comment.
@@ -58,8 +64,6 @@ Day of Release:
   - [Bevy Discord](https://discord.com/invite/bevy) in the #rendering-dev channel
   - [Graphics Programming Discord](https://discord.gg/6mgNGk7) in the #webgpu channel
   - [Rust Community Discord](https://discord.gg/rust-lang-community) in the #games-and-graphics channel
-- Complete the release's milestone on GitHub.
-- Create a new milestone for the next release, in 12 weeks time.
 
 ## Patch Release Process
 - Enumerate all PRs that haven't been backported yet. These use the `needs-backport` label. [GH Link](https://github.com/gfx-rs/wgpu/pulls?q=sort%3Aupdated-desc+is%3Apr+label%3A%22PR%3A+needs+back-porting%22)
@@ -75,3 +79,4 @@ Day of Release:
 - Create a new release on the `wgpu` repo with the changelog and a tag called `vX.Y.Z` on the release branch.
 - Backport the changelog and version bumps to the `trunk` branch.
   - Ensure that any items in the newly-released changelog don't appear in the "unreleased" section of the trunk changelog.
+- Update the release checklist with any needed changes.
