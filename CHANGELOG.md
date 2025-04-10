@@ -40,6 +40,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+
+#### General
+
+- Removed `MaintainBase` in favor of using `PollType`. By @waywardmonkeys in [#7508](https://github.com/gfx-rs/wgpu/pull/7508).
+
 ## v25.0.0 (2025-04-10)
 
 ### Major Features
