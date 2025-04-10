@@ -17,7 +17,7 @@ float4 builtins()
 }
 
 int4 naga_mod(int4 lhs, int4 rhs) {
-    int4 divisor = ((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs;
+    int4 divisor = ((lhs == int(-2147483647 - 1) & rhs == -1) | (rhs == 0)) ? 1 : rhs;
     return lhs - (lhs / divisor) * divisor;
 }
 
@@ -66,7 +66,7 @@ int2 naga_neg(int2 val) {
 }
 
 int naga_div(int lhs, int rhs) {
-    return lhs / (((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs);
+    return lhs / (((lhs == int(-2147483647 - 1) & rhs == -1) | (rhs == 0)) ? 1 : rhs);
 }
 
 uint naga_div(uint lhs, uint rhs) {
@@ -74,7 +74,7 @@ uint naga_div(uint lhs, uint rhs) {
 }
 
 int2 naga_div(int2 lhs, int2 rhs) {
-    return lhs / (((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs);
+    return lhs / (((lhs == int(-2147483647 - 1) & rhs == -1) | (rhs == 0)) ? 1 : rhs);
 }
 
 uint3 naga_div(uint3 lhs, uint3 rhs) {
@@ -82,7 +82,7 @@ uint3 naga_div(uint3 lhs, uint3 rhs) {
 }
 
 int naga_mod(int lhs, int rhs) {
-    int divisor = ((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs;
+    int divisor = ((lhs == int(-2147483647 - 1) & rhs == -1) | (rhs == 0)) ? 1 : rhs;
     return lhs - (lhs / divisor) * divisor;
 }
 
@@ -91,7 +91,7 @@ uint naga_mod(uint lhs, uint rhs) {
 }
 
 int2 naga_mod(int2 lhs, int2 rhs) {
-    int2 divisor = ((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs;
+    int2 divisor = ((lhs == int(-2147483647 - 1) & rhs == -1) | (rhs == 0)) ? 1 : rhs;
     return lhs - (lhs / divisor) * divisor;
 }
 

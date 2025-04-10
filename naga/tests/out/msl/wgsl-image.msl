@@ -5,7 +5,7 @@
 using metal::uint;
 
 metal::int2 naga_mod(metal::int2 lhs, metal::int2 rhs) {
-    metal::int2 divisor = metal::select(rhs, 1, (lhs == -2147483648 & rhs == -1) | (rhs == 0));
+    metal::int2 divisor = metal::select(rhs, 1, (lhs == (-2147483647 - 1) & rhs == -1) | (rhs == 0));
     return lhs - (lhs / divisor) * divisor;
 }
 

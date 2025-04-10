@@ -1283,8 +1283,16 @@ impl<W: Write> super::Writer<'_, W> {
                         let level = crate::back::Level(1);
                         match scalar.kind {
                             ScalarKind::Sint => {
-                                let min = -1i64 << (scalar.width as u32 * 8 - 1);
-                                writeln!(self.out, "{level}return lhs / (((lhs == {min} & rhs == -1) | (rhs == 0)) ? 1 : rhs);")?
+                                let min_val = match scalar.width {
+                                    4 => crate::Literal::I32(i32::MIN),
+                                    8 => crate::Literal::I64(i64::MIN),
+                                    _ => {
+                                        return Err(super::Error::UnsupportedScalar(scalar));
+                                    }
+                                };
+                                write!(self.out, "{level}return lhs / (((lhs == ")?;
+                                self.write_literal(min_val)?;
+                                writeln!(self.out, " & rhs == -1) | (rhs == 0)) ? 1 : rhs);")?
                             }
                             ScalarKind::Uint => {
                                 writeln!(self.out, "{level}return lhs / (rhs == 0u ? 1u : rhs);")?
@@ -1339,10 +1347,18 @@ impl<W: Write> super::Writer<'_, W> {
                         let level = crate::back::Level(1);
                         match scalar.kind {
                             ScalarKind::Sint => {
-                                let min = -1i64 << (scalar.width as u32 * 8 - 1);
+                                let min_val = match scalar.width {
+                                    4 => crate::Literal::I32(i32::MIN),
+                                    8 => crate::Literal::I64(i64::MIN),
+                                    _ => {
+                                        return Err(super::Error::UnsupportedScalar(scalar));
+                                    }
+                                };
                                 write!(self.out, "{level}")?;
                                 self.write_value_type(module, right_ty)?;
-                                writeln!(self.out, " divisor = ((lhs == {min} & rhs == -1) | (rhs == 0)) ? 1 : rhs;")?;
+                                write!(self.out, " divisor = ((lhs == ")?;
+                                self.write_literal(min_val)?;
+                                writeln!(self.out, " & rhs == -1) | (rhs == 0)) ? 1 : rhs;")?;
                                 writeln!(
                                     self.out,
                                     "{level}return lhs - (lhs / divisor) * divisor;"
