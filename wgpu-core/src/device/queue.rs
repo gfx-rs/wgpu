@@ -1396,13 +1396,6 @@ impl Queue {
         let mut size_info = blas.size_info;
         size_info.acceleration_structure_size = size;
 
-        let build_command_index = NonZeroU64::new(
-            device
-                .last_acceleration_structure_build_command_index
-                .fetch_add(1, Ordering::Relaxed),
-        )
-        .unwrap();
-
         let mut pending_writes = self.pending_writes.lock();
         let cmd_buf_raw = pending_writes.activate();
 
@@ -1436,15 +1429,19 @@ impl Queue {
 
         drop(snatch_guard);
 
+        let mut command_indices_lock = device.command_indices.write();
+        command_indices_lock.next_acceleration_structure_build_command_index += 1;
+        let built_index = NonZeroU64::new(command_indices_lock.next_acceleration_structure_build_command_index).unwrap();
+
         let new_blas = Arc::new(Blas {
             raw: Snatchable::new(raw),
-            device,
+            device: device.clone(),
             size_info,
             sizes: blas.sizes.clone(),
             flags: blas.flags & !AccelerationStructureFlags::ALLOW_COMPACTION,
             update_mode: blas.update_mode,
             // Bypass the submit checks which update this because we don't submit this normally.
-            built_index: RwLock::new(rank::BLAS_BUILT_INDEX, Some(build_command_index)),
+            built_index: RwLock::new(rank::BLAS_BUILT_INDEX, Some(built_index)),
             handle,
             label: blas.label.clone() + " compacted",
             tracking_data: TrackingData::new(blas.device.tracker_indices.blas_s.clone()),

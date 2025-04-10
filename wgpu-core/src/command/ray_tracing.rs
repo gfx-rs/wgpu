@@ -24,7 +24,6 @@ use crate::{
     },
     resource::{
         AccelerationStructure, Blas, BlasCompactState, Buffer, Labeled, StagingBuffer, Tlas,
-        Trackable,
     },
     scratch::ScratchBuffer,
     snatch::SnatchGuard,
@@ -811,7 +810,7 @@ impl CommandBufferMutable {
 
                     command_index_guard.next_acceleration_structure_build_command_index += 1;
                     for blas in build.blas_s_built.iter() {
-                        let mut state_lock = action.blas.compacted_state.lock();
+                        let mut state_lock = blas.compacted_state.lock();
                         *state_lock = match *state_lock {
                             BlasCompactState::Compacted => {
                                 unreachable!("Should be validated out in build.")
