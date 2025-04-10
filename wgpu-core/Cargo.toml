@@ -35,7 +35,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
 [lib]
 
 [features]
-#! See docuemntation for the `wgpu` crate for more in-depth information on these features.
+#! See documentation for the `wgpu` crate for more in-depth information on these features.
 
 # TODO(https://github.com/gfx-rs/wgpu/issues/6826): "std" is a default feature for
 # compatibility with prior behavior only, and should be removed once we know how
