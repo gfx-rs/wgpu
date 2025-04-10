@@ -2620,11 +2620,23 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             crate::Literal::F32(value) => write!(self.out, "{value:?}")?,
             crate::Literal::F16(value) => write!(self.out, "{value:?}h")?,
             crate::Literal::U32(value) => write!(self.out, "{value}u")?,
+            // `-2147483648` is parsed by some compilers as unary negation of
+            // positive 2147483648, which is too large for an int, causing
+            // issues for some compilers. Neither DXC nor FXC appear to have
+            // this problem, but this is not specified and could change. We
+            // therefore use `-2147483647 - 1` as a precaution.
+            crate::Literal::I32(value) if value == i32::MIN => {
+                write!(self.out, "int({} - 1)", value + 1)?
+            }
             // HLSL has no suffix for explicit i32 literals, but not using any suffix
             // makes the type ambiguous which prevents overload resolution from
             // working. So we explicitly use the int() constructor syntax.
             crate::Literal::I32(value) => write!(self.out, "int({value})")?,
             crate::Literal::U64(value) => write!(self.out, "{value}uL")?,
+            // I64 version of the minimum I32 value issue described above.
+            crate::Literal::I64(value) if value == i64::MIN => {
+                write!(self.out, "({}L - 1L)", value + 1)?;
+            }
             crate::Literal::I64(value) => write!(self.out, "{value}L")?,
             crate::Literal::Bool(value) => write!(self.out, "{value}")?,
             crate::Literal::AbstractInt(_) | crate::Literal::AbstractFloat(_) => {

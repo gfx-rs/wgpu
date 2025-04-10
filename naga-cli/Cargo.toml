@@ -1,6 +1,6 @@
 [package]
 name = "naga-cli"
-version = "24.0.0"
+version = "25.0.0"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "CLI for the naga shader translator and validator. Part of the wgpu project"

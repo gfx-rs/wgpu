@@ -16,8 +16,7 @@ arbitrary = { version = "1.4.1", features = ["derive"] }
 libfuzzer-sys = ">0.4.0,<=0.4.7"
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dependencies.naga]
-path = ".."
-version = "24.0.0"
+workspace = true
 features = ["arbitrary", "spv-in", "wgsl-in", "glsl-in"]
 
 [build-dependencies]

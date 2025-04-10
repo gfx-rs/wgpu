@@ -5346,8 +5346,21 @@ template <typename A>
                             let level = back::Level(1);
                             match scalar.kind {
                                 crate::ScalarKind::Sint => {
-                                    let min = -1i64 << (scalar.width as u32 * 8 - 1);
-                                    writeln!(self.out, "{level}return lhs / metal::select(rhs, 1, (lhs == {min} & rhs == -1) | (rhs == 0));")?
+                                    let min_val = match scalar.width {
+                                        4 => crate::Literal::I32(i32::MIN),
+                                        8 => crate::Literal::I64(i64::MIN),
+                                        _ => {
+                                            return Err(Error::GenericValidation(format!(
+                                                "Unexpected width for scalar {scalar:?}"
+                                            )));
+                                        }
+                                    };
+                                    write!(
+                                        self.out,
+                                        "{level}return lhs / metal::select(rhs, 1, (lhs == "
+                                    )?;
+                                    self.put_literal(min_val)?;
+                                    writeln!(self.out, " & rhs == -1) | (rhs == 0));")?
                                 }
                                 crate::ScalarKind::Uint => writeln!(
                                     self.out,
@@ -5415,8 +5428,18 @@ template <typename A>
                             let level = back::Level(1);
                             match scalar.kind {
                                 crate::ScalarKind::Sint => {
-                                    let min = -1i64 << (scalar.width as u32 * 8 - 1);
-                                    writeln!(self.out, "{level}{rhs_type_name} divisor = metal::select(rhs, 1, (lhs == {min} & rhs == -1) | (rhs == 0));")?;
+                                    let min_val = match scalar.width {
+                                        4 => crate::Literal::I32(i32::MIN),
+                                        8 => crate::Literal::I64(i64::MIN),
+                                        _ => {
+                                            return Err(Error::GenericValidation(format!(
+                                                "Unexpected width for scalar {scalar:?}"
+                                            )));
+                                        }
+                                    };
+                                    write!(self.out, "{level}{rhs_type_name} divisor = metal::select(rhs, 1, (lhs == ")?;
+                                    self.put_literal(min_val)?;
+                                    writeln!(self.out, " & rhs == -1) | (rhs == 0));")?;
                                     writeln!(
                                         self.out,
                                         "{level}return lhs - (lhs / divisor) * divisor;"

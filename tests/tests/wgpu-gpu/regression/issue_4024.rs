@@ -58,7 +58,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         let ordering_clone_map_async = Arc::clone(&ordering);
         let ordering_clone_queue_submitted = Arc::clone(&ordering);
 
-        // Register the callabacks.
+        // Register the callbacks.
         buffer.slice(..).map_async(MapMode::Read, move |_| {
             let mut guard = ordering_clone_map_async.lock();
             guard.value_read_map_async = Some(guard.counter);
@@ -74,7 +74,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         });
 
         // No GPU work is happening at this point, but we want to process callbacks.
-        ctx.async_poll(MaintainBase::Poll).await.unwrap();
+        ctx.async_poll(PollType::Poll).await.unwrap();
 
         // Extract the ordering out of the arc.
         let ordering = Arc::into_inner(ordering).unwrap().into_inner();

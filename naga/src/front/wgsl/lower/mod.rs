@@ -1311,9 +1311,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     })?;
 
                 let init_ty = ectx.register_type(init)?;
-                let explicit_inner = &ectx.module.types[explicit_ty].inner;
-                let init_inner = &ectx.module.types[init_ty].inner;
-                if !explicit_inner.equivalent(init_inner, &ectx.module.types) {
+                if !ectx.module.compare_types(
+                    &crate::proc::TypeResolution::Handle(explicit_ty),
+                    &crate::proc::TypeResolution::Handle(init_ty),
+                ) {
                     return Err(Box::new(Error::InitializationTypeMismatch {
                         name: name.span,
                         expected: ectx.type_to_string(explicit_ty),

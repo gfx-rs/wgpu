@@ -16,7 +16,8 @@ use crate::{FastIndexSet, Span};
 /// The element type must implement `Eq` and `Hash`. Insertions of equivalent
 /// elements, according to `Eq`, all return the same `Handle`.
 ///
-/// Once inserted, elements may not be mutated.
+/// Once inserted, elements generally may not be mutated, although a `replace`
+/// method exists to support rare cases.
 ///
 /// `UniqueArena` is similar to [`Arena`]: If `Arena` is vector-like,
 /// `UniqueArena` is `HashSet`-like.
