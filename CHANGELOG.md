@@ -52,6 +52,18 @@ Bottom level categories:
 
 - Removed `MaintainBase` in favor of using `PollType`. By @waywardmonkeys in [#7508](https://github.com/gfx-rs/wgpu/pull/7508).
 
+## v25.0.1 (2025-04-11)
+
+### Bug Fixes
+
+- Fix typos in various documentation. By @waywardmonkeys in [#7509](https://github.com/gfx-rs/wgpu/pull/7509).
+- Fix compile error when building with `profiling/profile-with-*` feature enabled. By @waywardmonkeys in [#7510](https://github.com/gfx-rs/wgpu/pull/7510).
+- Use `once_cell::race::OnceBox` instead of `std::sync::LazyLock` to allow `naga::proc::Namer::default()` to be available without backend features being enabled. By @cwfitzgerald in [#7517](https://github.com/gfx-rs/wgpu/pull/7517).
+
+#### DX12
+
+- Fix validation error when creating a non-mappable buffer using the committed allocation scheme. By @cwfitzgerald and @ErichDonGubler in [#7519](https://github.com/gfx-rs/wgpu/pull/7519). 
+
 ## v25.0.0 (2025-04-10)
 
 ### Major Features
