@@ -1,11 +1,14 @@
 use alloc::{
     borrow::Cow,
+    boxed::Box,
     format,
     string::{String, ToString},
     vec::Vec,
 };
 use core::hash::{Hash, Hasher};
+
 use hashbrown::HashSet;
+use once_cell::race::OnceBox;
 
 use crate::{arena::Handle, FastHashMap, FastHashSet};
 
@@ -46,15 +49,13 @@ pub struct Namer {
     reserved_prefixes: Vec<&'static str>,
 }
 
-#[cfg(any(wgsl_out, glsl_out, msl_out, hlsl_out, test))]
 impl Default for Namer {
     fn default() -> Self {
-        use std::sync::LazyLock;
-        static DEFAULT_KEYWORDS: LazyLock<HashSet<&'static str>> = LazyLock::new(HashSet::default);
+        static DEFAULT_KEYWORDS: OnceBox<HashSet<&'static str>> = OnceBox::new();
 
         Self {
             unique: Default::default(),
-            keywords: &DEFAULT_KEYWORDS,
+            keywords: DEFAULT_KEYWORDS.get_or_init(|| Box::new(HashSet::default())),
             keywords_case_insensitive: Default::default(),
             reserved_prefixes: Default::default(),
         }
