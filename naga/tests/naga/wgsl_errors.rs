@@ -3572,3 +3572,24 @@ fn struct_names_in_init_errors() {
     assert!(variant("1.0").is_err());
     assert!(variant("A()").is_err());
 }
+
+/// Constant evaluation with interesting values.
+#[test]
+fn const_eval_value_errors() {
+    #[track_caller]
+    fn variant(expr: &str) -> Result<naga::Module, naga::front::wgsl::ParseError> {
+        let input = format!(
+            r#"
+                fn f() {{ _ = {expr}; }}
+            "#
+        );
+        naga::front::wgsl::parse_str(&input)
+    }
+
+    assert!(variant("1/1").is_ok());
+    assert!(variant("1/0").is_err());
+
+    assert!(variant("f32(abs(1))").is_ok());
+    assert!(variant("f32(abs(-9223372036854775807))").is_ok());
+    assert!(variant("f32(abs(-9223372036854775807 - 1))").is_ok());
+}

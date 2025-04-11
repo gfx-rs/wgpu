@@ -1080,7 +1080,7 @@ impl<'a> ConstantEvaluator<'a> {
                     Scalar::AbstractFloat([e]) => Ok(Scalar::AbstractFloat([e.abs()])),
                     Scalar::F32([e]) => Ok(Scalar::F32([e.abs()])),
                     Scalar::F16([e]) => Ok(Scalar::F16([e.abs()])),
-                    Scalar::AbstractInt([e]) => Ok(Scalar::AbstractInt([e.abs()])),
+                    Scalar::AbstractInt([e]) => Ok(Scalar::AbstractInt([e.wrapping_abs()])),
                     Scalar::I32([e]) => Ok(Scalar::I32([e.wrapping_abs()])),
                     Scalar::U32([e]) => Ok(Scalar::U32([e])), // TODO: just re-use the expression, ezpz
                     Scalar::I64([e]) => Ok(Scalar::I64([e.wrapping_abs()])),
