@@ -1,3 +1,15 @@
+use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
+use core::{
+    iter,
+    mem::{self, ManuallyDrop},
+    num::NonZeroU64,
+    ptr::NonNull,
+    sync::atomic::Ordering,
+};
+use smallvec::SmallVec;
+use thiserror::Error;
+use wgt::AccelerationStructureFlags;
+
 use super::{life::LifetimeTracker, Device};
 use crate::device::resource::CommandIndices;
 #[cfg(feature = "trace")]
@@ -29,17 +41,6 @@ use crate::{
     track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };
-use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
-use core::{
-    iter,
-    mem::{self, ManuallyDrop},
-    num::NonZeroU64,
-    ptr::NonNull,
-    sync::atomic::Ordering,
-};
-use smallvec::SmallVec;
-use thiserror::Error;
-use wgt::AccelerationStructureFlags;
 
 pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
