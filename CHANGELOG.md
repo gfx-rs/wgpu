@@ -130,8 +130,7 @@ pub enum PollError {
 >
 > You will lose the ability to know exactly when a submission has completed, but `device.poll(Wait)` will behave the same as it does on native.
 
-By @cwfitzgerald in [#6942](https://github.com/gfx-rs/wgpu/pull/6942).
-By @cwfitzgerald in [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
+By @cwfitzgerald in [#6942](https://github.com/gfx-rs/wgpu/pull/6942) and [#7030](https://github.com/gfx-rs/wgpu/pull/7030).
 
 #### `wgpu::Device::start_capture` renamed, documented, and made unsafe
 
@@ -225,6 +224,20 @@ It is now possible to create a dummy `wgpu` device even when no GPU is available
 To use it, enable the `noop` feature of `wgpu`, and either call `Device::noop()`, or add `NoopBackendOptions { enable: true }` to the backend options of your `Instance` (this is an additional safeguard beyond the `Backends` bits).
 
 By @kpreid in [#7063](https://github.com/gfx-rs/wgpu/pull/7063) and [#7342](https://github.com/gfx-rs/wgpu/pull/7342).
+
+#### `SHADER_F16` feature is now available with naga shaders
+
+Previously this feature only allowed you to use `f16` on SPIR-V passthrough shaders. Now you can use it on all shaders, including WGSL, SPIR-V, and GLSL!
+
+```wgsl
+enable f16;
+
+fn hello_world(a: f16) -> f16 {
+    return a + 1.0h;
+}
+```
+
+By @FL33TW00D, @ErichDonGubler, and @cwfitzgerald in [#5701](https://github.com/gfx-rs/wgpu/pull/5701) 
 
 ### New Features
 
