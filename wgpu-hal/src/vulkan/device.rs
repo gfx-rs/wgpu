@@ -1151,7 +1151,10 @@ impl crate::Device for super::Device {
 
         let needs_host_access = alloc_usage.contains(gpu_alloc::UsageFlags::HOST_ACCESS);
 
-        self.error_if_would_oom_on_resource_allocation(needs_host_access, req.size)?;
+        self.error_if_would_oom_on_resource_allocation(needs_host_access, req.size)
+            .inspect_err(|_| {
+                unsafe { self.shared.raw.destroy_buffer(raw, None) };
+            })?;
 
         let alignment_mask = req.alignment - 1;
 
@@ -1164,15 +1167,21 @@ impl crate::Device for super::Device {
                     usage: alloc_usage,
                     memory_types: req.memory_type_bits & self.valid_ash_memory_types,
                 },
-            )?
-        };
+            )
+        }
+        .inspect_err(|_| {
+            unsafe { self.shared.raw.destroy_buffer(raw, None) };
+        })?;
 
         unsafe {
             self.shared
                 .raw
                 .bind_buffer_memory(raw, *block.memory(), block.offset())
-                .map_err(super::map_host_device_oom_and_ioca_err)?
-        };
+        }
+        .map_err(super::map_host_device_oom_and_ioca_err)
+        .inspect_err(|_| {
+            unsafe { self.shared.raw.destroy_buffer(raw, None) };
+        })?;
 
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(raw, label) };
@@ -1263,7 +1272,10 @@ impl crate::Device for super::Device {
     ) -> Result<super::Texture, crate::DeviceError> {
         let image = self.create_image_without_memory(desc, None)?;
 
-        self.error_if_would_oom_on_resource_allocation(false, image.requirements.size)?;
+        self.error_if_would_oom_on_resource_allocation(false, image.requirements.size)
+            .inspect_err(|_| {
+                unsafe { self.shared.raw.destroy_image(image.raw, None) };
+            })?;
 
         let block = unsafe {
             self.mem_allocator.lock().alloc(
@@ -1274,8 +1286,11 @@ impl crate::Device for super::Device {
                     usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
                     memory_types: image.requirements.memory_type_bits & self.valid_ash_memory_types,
                 },
-            )?
-        };
+            )
+        }
+        .inspect_err(|_| {
+            unsafe { self.shared.raw.destroy_image(image.raw, None) };
+        })?;
 
         self.counters.texture_memory.add(block.size() as isize);
 
@@ -1283,8 +1298,11 @@ impl crate::Device for super::Device {
             self.shared
                 .raw
                 .bind_image_memory(image.raw, *block.memory(), block.offset())
-                .map_err(super::map_host_device_oom_err)?
-        };
+        }
+        .map_err(super::map_host_device_oom_err)
+        .inspect_err(|_| {
+            unsafe { self.shared.raw.destroy_image(image.raw, None) };
+        })?;
 
         if let Some(label) = desc.label {
             unsafe { self.shared.set_object_name(image.raw, label) };
@@ -2860,22 +2878,34 @@ impl crate::Device for super::Device {
                 .map_err(super::map_host_device_oom_and_ioca_err)?;
             let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
 
-            self.error_if_would_oom_on_resource_allocation(false, req.size)?;
+            self.error_if_would_oom_on_resource_allocation(false, req.size)
+                .inspect_err(|_| {
+                    self.shared.raw.destroy_buffer(raw_buffer, None);
+                })?;
 
-            let block = self.mem_allocator.lock().alloc(
-                &*self.shared,
-                gpu_alloc::Request {
-                    size: req.size,
-                    align_mask: req.alignment - 1,
-                    usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-                    memory_types: req.memory_type_bits & self.valid_ash_memory_types,
-                },
-            )?;
+            let block = self
+                .mem_allocator
+                .lock()
+                .alloc(
+                    &*self.shared,
+                    gpu_alloc::Request {
+                        size: req.size,
+                        align_mask: req.alignment - 1,
+                        usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
+                        memory_types: req.memory_type_bits & self.valid_ash_memory_types,
+                    },
+                )
+                .inspect_err(|_| {
+                    self.shared.raw.destroy_buffer(raw_buffer, None);
+                })?;
 
             self.shared
                 .raw
                 .bind_buffer_memory(raw_buffer, *block.memory(), block.offset())
-                .map_err(super::map_host_device_oom_and_ioca_err)?;
+                .map_err(super::map_host_device_oom_and_ioca_err)
+                .inspect_err(|_| {
+                    self.shared.raw.destroy_buffer(raw_buffer, None);
+                })?;
 
             if let Some(label) = desc.label {
                 self.shared.set_object_name(raw_buffer, label);
@@ -2890,7 +2920,10 @@ impl crate::Device for super::Device {
             let raw_acceleration_structure = ray_tracing_functions
                 .acceleration_structure
                 .create_acceleration_structure(&vk_info, None)
-                .map_err(super::map_host_oom_and_ioca_err)?;
+                .map_err(super::map_host_oom_and_ioca_err)
+                .inspect_err(|_| {
+                    self.shared.raw.destroy_buffer(raw_buffer, None);
+                })?;
 
             if let Some(label) = desc.label {
                 self.shared
@@ -2906,7 +2939,13 @@ impl crate::Device for super::Device {
                     .shared
                     .raw
                     .create_query_pool(&vk_info, None)
-                    .map_err(super::map_host_device_oom_err)?;
+                    .map_err(super::map_host_device_oom_err)
+                    .inspect_err(|_| {
+                        ray_tracing_functions
+                            .acceleration_structure
+                            .destroy_acceleration_structure(raw_acceleration_structure, None);
+                        self.shared.raw.destroy_buffer(raw_buffer, None);
+                    })?;
                 Some(raw)
             } else {
                 None
