@@ -526,6 +526,10 @@ impl<'a> DeviceAllocationContext<'a> {
                 .GetResourceAllocationInfo(0, std::slice::from_ref(desc))
         };
 
+        let Some(threshold) = self.shared.memory_budget_thresholds.for_resource_creation else {
+            return Ok(allocation_info);
+        };
+
         let memory_segment_group = match location {
             MemoryLocation::Unknown => unreachable!(),
             MemoryLocation::GpuOnly => Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL,
@@ -552,9 +556,8 @@ impl<'a> DeviceAllocationContext<'a> {
             MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => self.shared.host_memblock_size,
         };
 
-        // Make sure we don't exceed 90% of the budget
         if info.CurrentUsage + allocation_info.SizeInBytes.max(memblock_size)
-            >= info.Budget / 10 * 9
+            >= info.Budget / 100 * threshold as u64
         {
             return Err(crate::DeviceError::OutOfMemory);
         }

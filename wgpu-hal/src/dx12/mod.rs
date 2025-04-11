@@ -460,6 +460,7 @@ pub struct Instance {
     supports_allow_tearing: bool,
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
 }
 
@@ -591,6 +592,7 @@ pub struct Adapter {
     // Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
 }
 
@@ -635,6 +637,7 @@ struct DeviceShared {
     private_caps: PrivateCapabilities,
     device_memblock_size: u64,
     host_memblock_size: u64,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
 }
 
 unsafe impl Send for DeviceShared {}

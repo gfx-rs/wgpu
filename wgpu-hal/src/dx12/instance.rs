@@ -109,6 +109,7 @@ impl crate::Instance for super::Instance {
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
             flags: desc.flags,
+            memory_budget_thresholds: desc.memory_budget_thresholds,
             dxc_container,
         })
     }
@@ -142,7 +143,13 @@ impl crate::Instance for super::Instance {
         adapters
             .into_iter()
             .filter_map(|raw| {
-                super::Adapter::expose(raw, &self.library, self.flags, self.dxc_container.clone())
+                super::Adapter::expose(
+                    raw,
+                    &self.library,
+                    self.flags,
+                    self.memory_budget_thresholds,
+                    self.dxc_container.clone(),
+                )
             })
             .collect()
     }

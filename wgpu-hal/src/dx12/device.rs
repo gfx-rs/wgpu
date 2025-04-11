@@ -47,6 +47,7 @@ impl super::Device {
         memory_hints: &wgt::MemoryHints,
         private_caps: super::PrivateCapabilities,
         library: &Arc<D3D12Lib>,
+        memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     ) -> Result<Self, crate::DeviceError> {
         if private_caps
@@ -159,6 +160,7 @@ impl super::Device {
             private_caps,
             device_memblock_size,
             host_memblock_size,
+            memory_budget_thresholds,
         };
 
         let mut rtv_pool =
@@ -1937,17 +1939,18 @@ impl crate::Device for super::Device {
             ),
         };
 
-        let info = self
-            .shared
-            .adapter
-            .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL)?;
+        if let Some(threshold) = self.shared.memory_budget_thresholds.for_resource_creation {
+            let info = self
+                .shared
+                .adapter
+                .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL)?;
 
-        // Assume each query is 256 bytes.
-        // On an AMD W6800 with driver version 32.0.12030.9, occlusion and pipeline statistics are 256, timestamp is 8.
+            // Assume each query is 256 bytes.
+            // On an AMD W6800 with driver version 32.0.12030.9, occlusion and pipeline statistics are 256, timestamp is 8.
 
-        // Make sure we don't exceed 90% of the budget
-        if info.CurrentUsage + desc.count as u64 * 256 >= info.Budget / 10 * 9 {
-            return Err(crate::DeviceError::OutOfMemory);
+            if info.CurrentUsage + desc.count as u64 * 256 >= info.Budget / 100 * threshold as u64 {
+                return Err(crate::DeviceError::OutOfMemory);
+            }
         }
 
         let mut raw = None::<Direct3D12::ID3D12QueryHeap>;
@@ -2326,13 +2329,16 @@ impl crate::Device for super::Device {
     }
 
     fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
+        let Some(threshold) = self.shared.memory_budget_thresholds.for_device_loss else {
+            return Ok(());
+        };
+
         let info = self
             .shared
             .adapter
             .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL)?;
 
-        // Make sure we don't exceed 95% of the budget
-        if info.CurrentUsage >= info.Budget / 100 * 95 {
+        if info.CurrentUsage >= info.Budget / 100 * threshold as u64 {
             return Err(crate::DeviceError::OutOfMemory);
         }
 
@@ -2345,8 +2351,7 @@ impl crate::Device for super::Device {
                 .adapter
                 .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL)?;
 
-            // Make sure we don't exceed 95% of the budget
-            if info.CurrentUsage >= info.Budget / 100 * 95 {
+            if info.CurrentUsage >= info.Budget / 100 * threshold as u64 {
                 return Err(crate::DeviceError::OutOfMemory);
             }
         }

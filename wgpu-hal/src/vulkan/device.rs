@@ -1027,6 +1027,15 @@ impl super::Device {
         needs_host_access: bool,
         size: u64,
     ) -> Result<(), crate::DeviceError> {
+        let Some(threshold) = self
+            .shared
+            .instance
+            .memory_budget_thresholds
+            .for_resource_creation
+        else {
+            return Ok(());
+        };
+
         if !self
             .shared
             .enabled_extensions
@@ -1096,8 +1105,7 @@ impl super::Device {
             let heap_usage = memory_budget_properties.heap_usage[i];
             let heap_budget = memory_budget_properties.heap_budget[i];
 
-            // Make sure we don't exceed 90% of the budget
-            if heap_usage + size >= heap_budget / 100 * 90 {
+            if heap_usage + size >= heap_budget / 100 * threshold as u64 {
                 return Err(crate::DeviceError::OutOfMemory);
             }
         }
@@ -3008,6 +3016,15 @@ impl crate::Device for super::Device {
     }
 
     fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
+        let Some(threshold) = self
+            .shared
+            .instance
+            .memory_budget_thresholds
+            .for_device_loss
+        else {
+            return Ok(());
+        };
+
         if !self
             .shared
             .enabled_extensions
@@ -3041,8 +3058,7 @@ impl crate::Device for super::Device {
             let heap_usage = memory_budget_properties.heap_usage[i as usize];
             let heap_budget = memory_budget_properties.heap_budget[i as usize];
 
-            // Make sure we don't exceed 95% of the budget
-            if heap_usage >= heap_budget / 100 * 95 {
+            if heap_usage >= heap_budget / 100 * threshold as u64 {
                 return Err(crate::DeviceError::OutOfMemory);
             }
         }

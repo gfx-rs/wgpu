@@ -162,6 +162,7 @@ pub struct InstanceShared {
     extensions: Vec<&'static CStr>,
     drop_guard: Option<crate::DropGuard>,
     flags: wgt::InstanceFlags,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::get_physical_device_properties2::Instance>,
     entry: ash::Entry,
