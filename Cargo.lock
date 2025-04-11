@@ -2419,6 +2419,7 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "num-traits",
+ "once_cell",
  "petgraph 0.8.0",
  "pp-rs",
  "ron",
