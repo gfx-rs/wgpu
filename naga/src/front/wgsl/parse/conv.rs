@@ -236,6 +236,8 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "pow" => Mf::Pow,
         // geometry
         "dot" => Mf::Dot,
+        "dot4I8Packed" => Mf::Dot4I8Packed,
+        "dot4U8Packed" => Mf::Dot4U8Packed,
         "cross" => Mf::Cross,
         "distance" => Mf::Distance,
         "length" => Mf::Length,

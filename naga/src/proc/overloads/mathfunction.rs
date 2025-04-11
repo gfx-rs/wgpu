@@ -82,6 +82,8 @@ impl ir::MathFunction {
             }
             Mf::Unpack4xI8 => regular!(1, SCALAR of U32 -> Vec4I).into(),
             Mf::Unpack4xU8 => regular!(1, SCALAR of U32 -> Vec4U).into(),
+            Mf::Dot4I8Packed => regular!(2, SCALAR of U32 -> I32).into(),
+            Mf::Dot4U8Packed => regular!(2, SCALAR of U32 -> U32).into(),
 
             // One-off operations
             Mf::Dot => regular!(2, VECN of NUMERIC -> Scalar).into(),

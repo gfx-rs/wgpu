@@ -114,6 +114,18 @@ fn relational() {
     return;
 }
 
+fn packed_dot_product() {
+    var signed_four: i32 = 4i;
+    var unsigned_four: u32 = 4u;
+    var signed_twelve: i32 = 12i;
+    var unsigned_twelve: u32 = 12u;
+    var signed_seventy: i32 = 70i;
+    var unsigned_seventy: u32 = 70u;
+    var minus_four: i32 = -4i;
+
+    return;
+}
+
 fn abstract_access(i: u32) {
     var a_1: f32 = 1f;
     var b_1: u32 = 1u;

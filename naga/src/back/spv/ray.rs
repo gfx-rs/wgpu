@@ -16,9 +16,13 @@ impl Writer {
         is_committed: bool,
         ir_module: &crate::Module,
     ) -> spirv::Word {
-        if let Some(func_id) = self.ray_get_intersection_function {
+        if is_committed {
+            if let Some(func_id) = self.ray_get_committed_intersection_function {
+                return func_id;
+            }
+        } else if let Some(func_id) = self.ray_get_candidate_intersection_function {
             return func_id;
-        }
+        };
         let ray_intersection = ir_module.special_types.ray_intersection.unwrap();
         let intersection_type_id = self.get_handle_type_id(ray_intersection);
         let intersection_pointer_type_id =
@@ -437,7 +441,11 @@ impl Writer {
         );
 
         function.to_words(&mut self.logical_layout.function_definitions);
-        self.ray_get_intersection_function = Some(func_id);
+        if is_committed {
+            self.ray_get_committed_intersection_function = Some(func_id);
+        } else {
+            self.ray_get_candidate_intersection_function = Some(func_id);
+        }
         func_id
     }
 }

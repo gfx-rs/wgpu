@@ -223,6 +223,8 @@ impl super::MathFunction {
             Self::Pow => 2,
             // geometry
             Self::Dot => 2,
+            Self::Dot4I8Packed => 2,
+            Self::Dot4U8Packed => 2,
             Self::Outer => 2,
             Self::Cross => 2,
             Self::Distance => 2,

@@ -105,6 +105,8 @@ impl TryToWgsl for crate::MathFunction {
             Mf::Log2 => "log2",
             Mf::Pow => "pow",
             Mf::Dot => "dot",
+            Mf::Dot4I8Packed => "dot4I8Packed",
+            Mf::Dot4U8Packed => "dot4U8Packed",
             Mf::Cross => "cross",
             Mf::Distance => "distance",
             Mf::Length => "length",

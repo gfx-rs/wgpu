@@ -111,6 +111,20 @@ fn relational() {
     var vec_all_true     = all(vec4(true));
 }
 
+fn packed_dot_product() {
+    // Test dot product of packed vectors on literals, constants, and
+    // combinations thereof.
+    var signed_four = dot4I8Packed(TWO, TWO);
+    var unsigned_four = dot4U8Packed(TWO, TWO);
+    var signed_twelve = dot4I8Packed(TWO + 1u, TWO + 2u);
+    var unsigned_twelve = dot4U8Packed(TWO + 1u, TWO + 2u);
+    var signed_seventy = dot4I8Packed(0x01020304u, 0x05060708u);
+    var unsigned_seventy = dot4U8Packed(0x01020304u, 0x05060708u);
+
+    // This is equivalent to `dot(vec4(-1, 2, -3, 4), vec4(5, 6, -7, -8))`.
+    var minus_four = dot4I8Packed(0xff02fd04u, 0x0506f9f8u);
+}
+
 fn test_local_const() {
     const local_const = 2;
 	var arr: array<f32, local_const>;

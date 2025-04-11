@@ -40,12 +40,30 @@ Bottom level categories:
 
 ## Unreleased
 
+### New Features
+
+#### Naga
+
+- Add polyfills for `dot4U8Packed` and `dot4I8Packed` for all backends. By @robamler in [#7494](https://github.com/gfx-rs/wgpu/pull/7494).
+
 ### Changes
 
 #### General
 
 - Support BLAS compaction in wgpu. By @Vecvec in [#7285](https://github.com/gfx-rs/wgpu/pull/7285).
 - Removed `MaintainBase` in favor of using `PollType`. By @waywardmonkeys in [#7508](https://github.com/gfx-rs/wgpu/pull/7508).
+
+## v25.0.1 (2025-04-11)
+
+### Bug Fixes
+
+- Fix typos in various documentation. By @waywardmonkeys in [#7509](https://github.com/gfx-rs/wgpu/pull/7509).
+- Fix compile error when building with `profiling/profile-with-*` feature enabled. By @waywardmonkeys in [#7510](https://github.com/gfx-rs/wgpu/pull/7510).
+- Use `once_cell::race::OnceBox` instead of `std::sync::LazyLock` to allow `naga::proc::Namer::default()` to be available without backend features being enabled. By @cwfitzgerald in [#7517](https://github.com/gfx-rs/wgpu/pull/7517).
+
+#### DX12
+
+- Fix validation error when creating a non-mappable buffer using the committed allocation scheme. By @cwfitzgerald and @ErichDonGubler in [#7519](https://github.com/gfx-rs/wgpu/pull/7519). 
 
 ## v25.0.0 (2025-04-10)
 
@@ -240,6 +258,21 @@ fn hello_world(a: f16) -> f16 {
 
 By @FL33TW00D, @ErichDonGubler, and @cwfitzgerald in [#5701](https://github.com/gfx-rs/wgpu/pull/5701) 
 
+#### Bindless support improved and validation rules changed.
+
+Metal support for bindless has significantly improved and the limits for binding arrays have been increased.
+
+Previously, all resources inside binding arrays contributed towards the standard limit of their type (`texture_2d` arrays for example would contribute to `max_sampled_textures_per_shader_stage`). Now these resources will only contribute towards binding-array specific limits:
+- `max_binding_array_elements_per_shader_stage` for all non-sampler resources
+- `max_binding_array_sampler_elements_per_shader_stage` for sampler resources.
+
+This change has allowed the metal binding array limits to go from between 32 and 128 resources, all the way 500,000 sampled textures. Additionally binding arrays are now bound more efficiently on Metal.
+
+This change also enabled legacy Intel GPUs to support 1M bindless resources, instead of the previous 1800.
+
+To facilitate this change, there was an additional validation rule put in place: if there is a binding array in a bind group, you may not use dynamic offset buffers or uniform buffers in that bind group. This requirement comes from vulkan rules on `UpdateAfterBind` descriptors.
+By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](https://github.com/gfx-rs/wgpu/pull/6815), and [#6952](https://github.com/gfx-rs/wgpu/pull/6952).
+
 ### New Features
 
 #### General
@@ -309,6 +342,7 @@ By @FL33TW00D, @ErichDonGubler, and @cwfitzgerald in [#5701](https://github.com/
 - Allow abstract types to be used for WGSL switch statement selector and case selector expressions. By @jamienicol in [#7250](https://github.com/gfx-rs/wgpu/pull/7250).
 - Apply automatic conversions to `let` declarations, and accept `vecN()` as a constructor for vectors (in any context). By @andyleiserson in [#7367](https://github.com/gfx-rs/wgpu/pull/7367).
 - The `&&` and `||` operators are no longer allowed on vectors. By @andyleiserson in [#7368](https://github.com/gfx-rs/wgpu/pull/7368).
+- Prevent ray intersection function overwriting each other. By @Vecvec in [#7497](https://github.com/gfx-rs/wgpu/pull/7497).
 
 #### General
 

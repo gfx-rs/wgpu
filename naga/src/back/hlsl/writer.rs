@@ -206,7 +206,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.need_bake_expressions.insert(exp_handle);
             }
 
-            if let Expression::Math { fun, arg, .. } = *expr {
+            if let Expression::Math { fun, arg, arg1, .. } = *expr {
                 match fun {
                     crate::MathFunction::Asinh
                     | crate::MathFunction::Acosh
@@ -232,6 +232,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         if let Some(ScalarKind::Sint) = inner.scalar_kind() {
                             self.need_bake_expressions.insert(arg);
                         }
+                    }
+                    crate::MathFunction::Dot4U8Packed | crate::MathFunction::Dot4I8Packed => {
+                        self.need_bake_expressions.insert(arg);
+                        self.need_bake_expressions.insert(arg1.unwrap());
                     }
                     _ => {}
                 }
@@ -3433,6 +3437,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Unpack4x8unorm,
                     Unpack4xI8,
                     Unpack4xU8,
+                    Dot4I8Packed,
+                    Dot4U8Packed,
                     QuantizeToF16,
                     Regular(&'static str),
                     MissingIntOverload(&'static str),
@@ -3484,6 +3490,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Pow => Function::Regular("pow"),
                     // geometry
                     Mf::Dot => Function::Regular("dot"),
+                    Mf::Dot4I8Packed => Function::Dot4I8Packed,
+                    Mf::Dot4U8Packed => Function::Dot4U8Packed,
                     //Mf::Outer => ,
                     Mf::Cross => Function::Regular("cross"),
                     Mf::Distance => Function::Regular("distance"),
@@ -3704,6 +3712,37 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, " >> 16, ")?;
                         self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 24) << 24 >> 24)")?;
+                    }
+                    fun @ (Function::Dot4I8Packed | Function::Dot4U8Packed) => {
+                        let arg1 = arg1.unwrap();
+
+                        write!(self.out, "dot(")?;
+
+                        if matches!(fun, Function::Dot4U8Packed) {
+                            write!(self.out, "u")?;
+                        }
+                        write!(self.out, "int4(")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 8, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 16, ")?;
+                        self.write_expr(module, arg, func_ctx)?;
+                        write!(self.out, " >> 24) << 24 >> 24, ")?;
+
+                        if matches!(fun, Function::Dot4U8Packed) {
+                            write!(self.out, "u")?;
+                        }
+                        write!(self.out, "int4(")?;
+                        self.write_expr(module, arg1, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, arg1, func_ctx)?;
+                        write!(self.out, " >> 8, ")?;
+                        self.write_expr(module, arg1, func_ctx)?;
+                        write!(self.out, " >> 16, ")?;
+                        self.write_expr(module, arg1, func_ctx)?;
                         write!(self.out, " >> 24) << 24 >> 24)")?;
                     }
                     Function::QuantizeToF16 => {

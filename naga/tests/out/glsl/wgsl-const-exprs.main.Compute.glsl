@@ -112,6 +112,17 @@ void relational() {
     return;
 }
 
+void packed_dot_product() {
+    int signed_four = 4;
+    uint unsigned_four = 4u;
+    int signed_twelve = 12;
+    uint unsigned_twelve = 12u;
+    int signed_seventy = 70;
+    uint unsigned_seventy = 70u;
+    int minus_four = -4;
+    return;
+}
+
 void abstract_access(uint i) {
     float a_1 = 1.0;
     uint b_1 = 1u;
