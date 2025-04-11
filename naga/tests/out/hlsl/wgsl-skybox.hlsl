@@ -33,7 +33,7 @@ struct FragmentInput_fs_main {
 };
 
 int naga_div(int lhs, int rhs) {
-    return lhs / (((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs);
+    return lhs / (((lhs == int(-2147483647 - 1) & rhs == -1) | (rhs == 0)) ? 1 : rhs);
 }
 
 VertexOutput ConstructVertexOutput(float4 arg0, float3 arg1) {

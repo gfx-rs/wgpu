@@ -25,7 +25,7 @@ Texture2DArray<float> image_2d_array_depth : register(t3, space1);
 TextureCube<float> image_cube_depth : register(t4, space1);
 
 int2 naga_mod(int2 lhs, int2 rhs) {
-    int2 divisor = ((lhs == -2147483648 & rhs == -1) | (rhs == 0)) ? 1 : rhs;
+    int2 divisor = ((lhs == int(-2147483647 - 1) & rhs == -1) | (rhs == 0)) ? 1 : rhs;
     return lhs - (lhs / divisor) * divisor;
 }
 

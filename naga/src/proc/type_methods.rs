@@ -4,6 +4,8 @@
 //! [`Scalar`]: crate::Scalar
 //! [`ScalarKind`]: crate::ScalarKind
 
+use crate::ir;
+
 use super::TypeResolution;
 
 impl crate::ScalarKind {
@@ -255,21 +257,38 @@ impl crate::TypeInner {
         }
     }
 
-    /// Compare `self` and `rhs` as types.
+    /// Compare value type `self` and `rhs` as types.
     ///
     /// This is mostly the same as `<TypeInner as Eq>::eq`, but it treats
-    /// `ValuePointer` and `Pointer` types as equivalent.
+    /// [`ValuePointer`] and [`Pointer`] types as equivalent. This method
+    /// cannot be used for structs, because it cannot distinguish two
+    /// structs with different names but the same members. For structs,
+    /// use [`compare_types`].
     ///
-    /// When you know that one side of the comparison is never a pointer, it's
-    /// fine to not bother with canonicalization, and just compare `TypeInner`
-    /// values with `==`.
-    pub fn equivalent(
+    /// When you know that one side of the comparison is never a pointer or
+    /// struct, it's fine to not bother with canonicalization, and just
+    /// compare `TypeInner` values with `==`.
+    ///
+    /// # Panics
+    ///
+    /// If both `self` and `rhs` are structs.
+    ///
+    /// [`compare_types`]: crate::proc::compare_types
+    /// [`ValuePointer`]: ir::TypeInner::ValuePointer
+    /// [`Pointer`]: ir::TypeInner::Pointer
+    pub fn non_struct_equivalent(
         &self,
-        rhs: &crate::TypeInner,
+        rhs: &ir::TypeInner,
         types: &crate::UniqueArena<crate::Type>,
     ) -> bool {
         let left = self.canonical_form(types);
         let right = rhs.canonical_form(types);
+
+        let left_struct = matches!(*self, ir::TypeInner::Struct { .. });
+        let right_struct = matches!(*rhs, ir::TypeInner::Struct { .. });
+
+        assert!(!left_struct || !right_struct);
+
         left.as_ref().unwrap_or(self) == right.as_ref().unwrap_or(rhs)
     }
 

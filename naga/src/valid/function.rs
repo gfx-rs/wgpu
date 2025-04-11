@@ -120,8 +120,11 @@ pub enum FunctionError {
     ContinueOutsideOfLoop,
     #[error("The `return` is called within a `continuing` block")]
     InvalidReturnSpot,
-    #[error("The `return` value {0:?} does not match the function return value")]
-    InvalidReturnType(Option<Handle<crate::Expression>>),
+    #[error("The `return` expression {expression:?} does not match the declared return type {expected_ty:?}")]
+    InvalidReturnType {
+        expression: Option<Handle<crate::Expression>>,
+        expected_ty: Option<Handle<crate::Type>>,
+    },
     #[error("The `if` condition {0:?} is not a boolean scalar")]
     InvalidIfType(Handle<crate::Expression>),
     #[error("The `switch` value {0:?} is not an integer scalar")]
@@ -280,11 +283,11 @@ impl<'a> BlockContext<'a> {
         &self,
         handle: Handle<crate::Expression>,
         valid_expressions: &HandleSet<crate::Expression>,
-    ) -> Result<&crate::TypeInner, WithSpan<ExpressionError>> {
+    ) -> Result<&TypeResolution, WithSpan<ExpressionError>> {
         if !valid_expressions.contains(handle) {
             Err(ExpressionError::NotInScope.with_span_handle(handle, self.expressions))
         } else {
-            Ok(self.info[handle].ty.inner_with(self.types))
+            Ok(&self.info[handle].ty)
         }
     }
 
@@ -292,17 +295,26 @@ impl<'a> BlockContext<'a> {
         &self,
         handle: Handle<crate::Expression>,
         valid_expressions: &HandleSet<crate::Expression>,
-    ) -> Result<&crate::TypeInner, WithSpan<FunctionError>> {
+    ) -> Result<&TypeResolution, WithSpan<FunctionError>> {
         self.resolve_type_impl(handle, valid_expressions)
             .map_err_inner(|source| FunctionError::Expression { handle, source }.with_span())
+    }
+
+    fn resolve_type_inner(
+        &self,
+        handle: Handle<crate::Expression>,
+        valid_expressions: &HandleSet<crate::Expression>,
+    ) -> Result<&crate::TypeInner, WithSpan<FunctionError>> {
+        self.resolve_type(handle, valid_expressions)
+            .map(|tr| tr.inner_with(self.types))
     }
 
     fn resolve_pointer_type(&self, handle: Handle<crate::Expression>) -> &crate::TypeInner {
         self.info[handle].ty.inner_with(self.types)
     }
 
-    fn inner_type<'t>(&'t self, ty: &'t TypeResolution) -> &'t crate::TypeInner {
-        ty.inner_with(self.types)
+    fn compare_types(&self, lhs: &TypeResolution, rhs: &TypeResolution) -> bool {
+        crate::proc::compare_types(lhs, rhs, self.types)
     }
 }
 
@@ -329,8 +341,7 @@ impl super::Validator {
                     CallError::Argument { index, source }
                         .with_span_handle(expr, context.expressions)
                 })?;
-            let arg_inner = &context.types[arg.ty].inner;
-            if !ty.equivalent(arg_inner, context.types) {
+            if !context.compare_types(&TypeResolution::Handle(arg.ty), ty) {
                 return Err(CallError::ArgumentType {
                     index,
                     required: arg.ty,
@@ -393,7 +404,7 @@ impl super::Validator {
         context: &BlockContext,
     ) -> Result<(), WithSpan<FunctionError>> {
         // The `pointer` operand must be a pointer to an atomic value.
-        let pointer_inner = context.resolve_type(pointer, &self.valid_expression_set)?;
+        let pointer_inner = context.resolve_type_inner(pointer, &self.valid_expression_set)?;
         let crate::TypeInner::Pointer {
             base: pointer_base,
             space: pointer_space,
@@ -415,7 +426,7 @@ impl super::Validator {
         };
 
         // The `value` operand must be a scalar of the same type as the atomic.
-        let value_inner = context.resolve_type(value, &self.valid_expression_set)?;
+        let value_inner = context.resolve_type_inner(value, &self.valid_expression_set)?;
         let crate::TypeInner::Scalar(value_scalar) = *value_inner else {
             log::error!("Atomic operand type {:?}", *value_inner);
             return Err(AtomicError::InvalidOperand(value)
@@ -543,8 +554,8 @@ impl super::Validator {
                     // The comparison value must be a scalar of the same type as the
                     // atomic we're operating on.
                     let compare_inner =
-                        context.resolve_type(compare, &self.valid_expression_set)?;
-                    if !compare_inner.equivalent(value_inner, context.types) {
+                        context.resolve_type_inner(compare, &self.valid_expression_set)?;
+                    if !compare_inner.non_struct_equivalent(value_inner, context.types) {
                         log::error!(
                             "Atomic exchange comparison has a different type from the value"
                         );
@@ -583,7 +594,7 @@ impl super::Validator {
                     // The result expression must be a scalar of the same type as the
                     // atomic we're operating on.
                     let result_inner = &context.types[result_ty].inner;
-                    if !result_inner.equivalent(value_inner, context.types) {
+                    if !result_inner.non_struct_equivalent(value_inner, context.types) {
                         return Err(AtomicError::ResultTypeMismatch(result)
                             .with_span_handle(result, context.expressions)
                             .into_other());
@@ -620,7 +631,7 @@ impl super::Validator {
         result: Handle<crate::Expression>,
         context: &BlockContext,
     ) -> Result<(), WithSpan<FunctionError>> {
-        let argument_inner = context.resolve_type(argument, &self.valid_expression_set)?;
+        let argument_inner = context.resolve_type_inner(argument, &self.valid_expression_set)?;
 
         let (is_scalar, scalar) = match *argument_inner {
             crate::TypeInner::Scalar(scalar) => (true, scalar),
@@ -695,7 +706,7 @@ impl super::Validator {
             | crate::GatherMode::ShuffleDown(index)
             | crate::GatherMode::ShuffleUp(index)
             | crate::GatherMode::ShuffleXor(index) => {
-                let index_ty = context.resolve_type(index, &self.valid_expression_set)?;
+                let index_ty = context.resolve_type_inner(index, &self.valid_expression_set)?;
                 match *index_ty {
                     crate::TypeInner::Scalar(crate::Scalar::U32) => {}
                     _ => {
@@ -710,7 +721,7 @@ impl super::Validator {
                 }
             }
         }
-        let argument_inner = context.resolve_type(argument, &self.valid_expression_set)?;
+        let argument_inner = context.resolve_type_inner(argument, &self.valid_expression_set)?;
         if !matches!(*argument_inner,
             crate::TypeInner::Scalar ( scalar, .. ) | crate::TypeInner::Vector { scalar, .. }
             if matches!(scalar.kind, crate::ScalarKind::Uint | crate::ScalarKind::Sint | crate::ScalarKind::Float)
@@ -802,7 +813,7 @@ impl super::Validator {
                     ref accept,
                     ref reject,
                 } => {
-                    match *context.resolve_type(condition, &self.valid_expression_set)? {
+                    match *context.resolve_type_inner(condition, &self.valid_expression_set)? {
                         Ti::Scalar(crate::Scalar {
                             kind: crate::ScalarKind::Bool,
                             width: _,
@@ -820,7 +831,7 @@ impl super::Validator {
                     ref cases,
                 } => {
                     let uint = match context
-                        .resolve_type(selector, &self.valid_expression_set)?
+                        .resolve_type_inner(selector, &self.valid_expression_set)?
                         .scalar_kind()
                     {
                         Some(crate::ScalarKind::Uint) => true,
@@ -917,7 +928,7 @@ impl super::Validator {
                         .stages;
 
                     if let Some(condition) = break_if {
-                        match *context.resolve_type(condition, &self.valid_expression_set)? {
+                        match *context.resolve_type_inner(condition, &self.valid_expression_set)? {
                             Ti::Scalar(crate::Scalar {
                                 kind: crate::ScalarKind::Bool,
                                 width: _,
@@ -955,13 +966,12 @@ impl super::Validator {
                     let value_ty = value
                         .map(|expr| context.resolve_type(expr, &self.valid_expression_set))
                         .transpose()?;
-                    let expected_ty = context.return_type.map(|ty| &context.types[ty].inner);
                     // We can't return pointers, but it seems best not to embed that
                     // assumption here, so use `TypeInner::equivalent` for comparison.
-                    let okay = match (value_ty, expected_ty) {
+                    let okay = match (value_ty, context.return_type) {
                         (None, None) => true,
-                        (Some(value_inner), Some(expected_inner)) => {
-                            value_inner.equivalent(expected_inner, context.types)
+                        (Some(value_inner), Some(expected_ty)) => {
+                            context.compare_types(value_inner, &TypeResolution::Handle(expected_ty))
                         }
                         (_, _) => false,
                     };
@@ -970,14 +980,20 @@ impl super::Validator {
                         log::error!(
                             "Returning {:?} where {:?} is expected",
                             value_ty,
-                            expected_ty
+                            context.return_type,
                         );
                         if let Some(handle) = value {
-                            return Err(FunctionError::InvalidReturnType(value)
-                                .with_span_handle(handle, context.expressions));
+                            return Err(FunctionError::InvalidReturnType {
+                                expression: value,
+                                expected_ty: context.return_type,
+                            }
+                            .with_span_handle(handle, context.expressions));
                         } else {
-                            return Err(FunctionError::InvalidReturnType(value)
-                                .with_span_static(span, "invalid return"));
+                            return Err(FunctionError::InvalidReturnType {
+                                expression: value,
+                                expected_ty: context.return_type,
+                            }
+                            .with_span_static(span, "invalid return"));
                         }
                     }
                     finished = true;
@@ -1027,7 +1043,8 @@ impl super::Validator {
                         }
                     }
 
-                    let value_ty = context.resolve_type(value, &self.valid_expression_set)?;
+                    let value_tr = context.resolve_type(value, &self.valid_expression_set)?;
+                    let value_ty = value_tr.inner_with(context.types);
                     match *value_ty {
                         Ti::Image { .. } | Ti::Sampler { .. } => {
                             return Err(FunctionError::InvalidStoreTexture {
@@ -1044,16 +1061,19 @@ impl super::Validator {
                     }
 
                     let pointer_ty = context.resolve_pointer_type(pointer);
-                    let good = match pointer_ty
-                        .pointer_base_type()
+                    let pointer_base_tr = pointer_ty.pointer_base_type();
+                    let pointer_base_ty = pointer_base_tr
                         .as_ref()
-                        .map(|ty| context.inner_type(ty))
-                    {
+                        .map(|ty| ty.inner_with(context.types));
+                    let good = if let Some(&Ti::Atomic(ref scalar)) = pointer_base_ty {
                         // The Naga IR allows storing a scalar to an atomic.
-                        Some(&Ti::Atomic(ref scalar)) => *value_ty == Ti::Scalar(*scalar),
-                        Some(other) => *value_ty == *other,
-                        None => false,
+                        *value_ty == Ti::Scalar(*scalar)
+                    } else if let Some(tr) = pointer_base_tr {
+                        context.compare_types(value_tr, &tr)
+                    } else {
+                        false
                     };
+
                     if !good {
                         return Err(FunctionError::InvalidStoreTypes { pointer, value }
                             .with_span()
@@ -1145,7 +1165,7 @@ impl super::Validator {
 
                     // The `coordinate` operand must be a vector of the appropriate size.
                     if context
-                        .resolve_type(coordinate, &self.valid_expression_set)?
+                        .resolve_type_inner(coordinate, &self.valid_expression_set)?
                         .image_storage_coordinates()
                         .is_none_or(|coord_dim| coord_dim != dim)
                     {
@@ -1167,7 +1187,7 @@ impl super::Validator {
                     // If present, `array_index` must be a scalar integer type.
                     if let Some(expr) = array_index {
                         if !matches!(
-                            *context.resolve_type(expr, &self.valid_expression_set)?,
+                            *context.resolve_type_inner(expr, &self.valid_expression_set)?,
                             Ti::Scalar(crate::Scalar {
                                 kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
                                 width: _,
@@ -1188,7 +1208,7 @@ impl super::Validator {
                     // The value we're writing had better match the scalar type
                     // for `image`'s format.
                     let actual_value_ty =
-                        context.resolve_type(value, &self.valid_expression_set)?;
+                        context.resolve_type_inner(value, &self.valid_expression_set)?;
                     if actual_value_ty != &value_ty {
                         return Err(FunctionError::InvalidStoreValue {
                             actual: value,
@@ -1273,7 +1293,7 @@ impl super::Validator {
                             dim,
                         } => {
                             match context
-                                .resolve_type(coordinate, &self.valid_expression_set)?
+                                .resolve_type_inner(coordinate, &self.valid_expression_set)?
                                 .image_storage_coordinates()
                             {
                                 Some(coord_dim) if coord_dim == dim => {}
@@ -1293,7 +1313,9 @@ impl super::Validator {
                                 .with_span_handle(coordinate, context.expressions));
                             }
                             if let Some(expr) = array_index {
-                                match *context.resolve_type(expr, &self.valid_expression_set)? {
+                                match *context
+                                    .resolve_type_inner(expr, &self.valid_expression_set)?
+                                {
                                     Ti::Scalar(crate::Scalar {
                                         kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
                                         width: _,
@@ -1404,7 +1426,7 @@ impl super::Validator {
                         }
                     };
 
-                    if *context.resolve_type(value, &self.valid_expression_set)? != value_ty {
+                    if *context.resolve_type_inner(value, &self.valid_expression_set)? != value_ty {
                         return Err(FunctionError::InvalidImageAtomicValue(value)
                             .with_span_handle(value, context.expressions));
                     }
@@ -1412,7 +1434,7 @@ impl super::Validator {
                 S::WorkGroupUniformLoad { pointer, result } => {
                     stages &= super::ShaderStages::COMPUTE;
                     let pointer_inner =
-                        context.resolve_type(pointer, &self.valid_expression_set)?;
+                        context.resolve_type_inner(pointer, &self.valid_expression_set)?;
                     match *pointer_inner {
                         Ti::Pointer {
                             space: AddressSpace::WorkGroup,
@@ -1441,7 +1463,7 @@ impl super::Validator {
                         base: ty,
                         space: AddressSpace::WorkGroup,
                     };
-                    if !expected_pointer_inner.equivalent(pointer_inner, context.types) {
+                    if !expected_pointer_inner.non_struct_equivalent(pointer_inner, context.types) {
                         return Err(FunctionError::WorkgroupUniformLoadInvalidPointer(pointer)
                             .with_span_static(span, "WorkGroupUniformLoad"));
                     }
@@ -1468,9 +1490,10 @@ impl super::Validator {
                             acceleration_structure,
                             descriptor,
                         } => {
-                            match *context
-                                .resolve_type(acceleration_structure, &self.valid_expression_set)?
-                            {
+                            match *context.resolve_type_inner(
+                                acceleration_structure,
+                                &self.valid_expression_set,
+                            )? {
                                 Ti::AccelerationStructure { vertex_return } => {
                                     if (!vertex_return) && rq_vertex_return {
                                         return Err(FunctionError::MissingAccelerationStructureVertexReturn(acceleration_structure, query).with_span_static(span, "invalid acceleration structure"));
@@ -1483,8 +1506,8 @@ impl super::Validator {
                                     .with_span_static(span, "invalid acceleration structure"))
                                 }
                             }
-                            let desc_ty_given =
-                                context.resolve_type(descriptor, &self.valid_expression_set)?;
+                            let desc_ty_given = context
+                                .resolve_type_inner(descriptor, &self.valid_expression_set)?;
                             let desc_ty_expected = context
                                 .special_types
                                 .ray_desc
@@ -1498,7 +1521,7 @@ impl super::Validator {
                             self.emit_expression(result, context)?;
                         }
                         crate::RayQueryFunction::GenerateIntersection { hit_t } => {
-                            match *context.resolve_type(hit_t, &self.valid_expression_set)? {
+                            match *context.resolve_type_inner(hit_t, &self.valid_expression_set)? {
                                 Ti::Scalar(crate::Scalar {
                                     kind: crate::ScalarKind::Float,
                                     width: _,
@@ -1534,7 +1557,7 @@ impl super::Validator {
                     }
                     if let Some(predicate) = predicate {
                         let predicate_inner =
-                            context.resolve_type(predicate, &self.valid_expression_set)?;
+                            context.resolve_type_inner(predicate, &self.valid_expression_set)?;
                         if !matches!(
                             *predicate_inner,
                             crate::TypeInner::Scalar(crate::Scalar::BOOL,)
@@ -1628,9 +1651,7 @@ impl super::Validator {
         }
 
         if let Some(init) = var.init {
-            let decl_ty = &gctx.types[var.ty].inner;
-            let init_ty = fun_info[init].ty.inner_with(gctx.types);
-            if !decl_ty.equivalent(init_ty, gctx.types) {
+            if !gctx.compare_types(&TypeResolution::Handle(var.ty), &fun_info[init].ty) {
                 return Err(LocalVariableError::InitializerType);
             }
 

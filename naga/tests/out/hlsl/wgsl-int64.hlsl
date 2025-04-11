@@ -100,7 +100,7 @@ int64_t int64_function(int64_t x)
     int64_t _e74 = val;
     val = (_e74 + _e71.w);
     int64_t _e77 = val;
-    val = (_e77 + -9223372036854775808L);
+    val = (_e77 + (-9223372036854775807L - 1L));
     int64_t _e83 = input_uniform.val_i64_;
     int64_t _e86 = input_storage.Load<int64_t>(128);
     output.Store(128, (_e83 + _e86));

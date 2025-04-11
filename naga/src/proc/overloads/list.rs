@@ -100,7 +100,7 @@ impl crate::proc::overloads::OverloadSet for List {
                 match rule.arguments.get(i) {
                     Some(rule_ty) => {
                         let rule_ty = rule_ty.inner_with(types);
-                        if arg_ty.equivalent(rule_ty, types) {
+                        if arg_ty.non_struct_equivalent(rule_ty, types) {
                             log::debug!("    types are equivalent");
                         } else {
                             match arg_ty.automatically_converts_to(rule_ty, types) {
@@ -124,7 +124,7 @@ impl crate::proc::overloads::OverloadSet for List {
             }
             rule.arguments.get(i).is_some_and(|rule_ty| {
                 let rule_ty = rule_ty.inner_with(types);
-                arg_ty.equivalent(rule_ty, types)
+                arg_ty.non_struct_equivalent(rule_ty, types)
                     || arg_ty.automatically_converts_to(rule_ty, types).is_some()
             })
         })

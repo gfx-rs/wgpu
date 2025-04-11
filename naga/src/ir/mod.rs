@@ -636,6 +636,15 @@ pub struct Type {
 }
 
 /// Enum with additional information, depending on the kind of type.
+///
+/// Comparison using `==` is not reliable in the case of [`Pointer`],
+/// [`ValuePointer`], or [`Struct`] variants. For these variants,
+/// use [`TypeInner::non_struct_equivalent`] or [`compare_types`].
+///
+/// [`compare_types`]: crate::proc::compare_types
+/// [`ValuePointer`]: TypeInner::ValuePointer
+/// [`Pointer`]: TypeInner::Pointer
+/// [`Struct`]: TypeInner::Struct
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -656,8 +665,9 @@ pub enum TypeInner {
     /// Pointer to another type.
     ///
     /// Pointers to scalars and vectors should be treated as equivalent to
-    /// [`ValuePointer`] types. Use the [`TypeInner::equivalent`] method to
-    /// compare types in a way that treats pointers correctly.
+    /// [`ValuePointer`] types. Use either [`TypeInner::non_struct_equivalent`]
+    /// or [`compare_types`] to compare types in a way that treats pointers
+    /// correctly.
     ///
     /// ## Pointers to non-`SIZED` types
     ///
@@ -679,6 +689,7 @@ pub enum TypeInner {
     /// [`ValuePointer`]: TypeInner::ValuePointer
     /// [`GlobalVariable`]: Expression::GlobalVariable
     /// [`AccessIndex`]: Expression::AccessIndex
+    /// [`compare_types`]: crate::proc::compare_types
     Pointer {
         base: Handle<Type>,
         space: AddressSpace,
@@ -690,12 +701,13 @@ pub enum TypeInner {
     /// `Scalar` or `Vector` type. This is for use in [`TypeResolution::Value`]
     /// variants; see the documentation for [`TypeResolution`] for details.
     ///
-    /// Use the [`TypeInner::equivalent`] method to compare types that could be
-    /// pointers, to ensure that `Pointer` and `ValuePointer` types are
-    /// recognized as equivalent.
+    /// Use [`TypeInner::non_struct_equivalent`] or [`compare_types`] to compare
+    /// types that could be pointers, to ensure that `Pointer` and
+    /// `ValuePointer` types are recognized as equivalent.
     ///
     /// [`TypeResolution`]: crate::proc::TypeResolution
     /// [`TypeResolution::Value`]: crate::proc::TypeResolution::Value
+    /// [`compare_types`]: crate::proc::compare_types
     ValuePointer {
         size: Option<VectorSize>,
         scalar: Scalar,
@@ -744,9 +756,15 @@ pub enum TypeInner {
     /// struct, which may be a dynamically sized [`Array`]. The
     /// `Struct` type itself is `SIZED` when all its members are `SIZED`.
     ///
+    /// Two structure types with different names are not equivalent. Because
+    /// this variant does not contain the name, it is not possible to use it
+    /// to compare struct types. Use [`compare_types`] to compare two types
+    /// that may be structs.
+    ///
     /// [`DATA`]: crate::valid::TypeFlags::DATA
     /// [`SIZED`]: crate::∅TypeFlags::SIZED
     /// [`Array`]: TypeInner::Array
+    /// [`compare_types`]: crate::proc::compare_types
     Struct {
         members: Vec<StructMember>,
         //TODO: should this be unaligned?

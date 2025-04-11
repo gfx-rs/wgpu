@@ -1,6 +1,6 @@
 [package]
 name = "cts_runner"
-version = "0.1.0"
+version.workspace = true
 authors = ["Luca Casonato <hello@lcas.dev>"]
 edition.workspace = true
 description = "CTS runner for wgpu"

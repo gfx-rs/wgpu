@@ -636,9 +636,10 @@ impl super::Validator {
                 return Err(GlobalVariableError::InitializerExprType);
             }
 
-            let decl_ty = &gctx.types[var.ty].inner;
-            let init_ty = mod_info[init].inner_with(gctx.types);
-            if !decl_ty.equivalent(init_ty, gctx.types) {
+            if !gctx.compare_types(
+                &crate::proc::TypeResolution::Handle(var.ty),
+                &mod_info[init],
+            ) {
                 return Err(GlobalVariableError::InitializerType);
             }
         }
