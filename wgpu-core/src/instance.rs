@@ -408,7 +408,7 @@ impl Instance {
         {
             // NOTE: We might be using `profiling` without any features. The empty backend of this
             // macro emits no code, so unused code linting changes depending on the backend.
-            profiling::scope!("enumerating", &*format!("{:?}", _backend));
+            profiling::scope!("enumerating", &*alloc::format!("{:?}", _backend));
 
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
             for raw in hal_adapters {
