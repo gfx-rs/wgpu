@@ -369,7 +369,7 @@ impl<'a> DeviceAllocationContext<'a> {
         let heap_properties = Direct3D12::D3D12_HEAP_PROPERTIES {
             Type: Direct3D12::D3D12_HEAP_TYPE_CUSTOM,
             CPUPageProperty: match location {
-                MemoryLocation::GpuOnly => Direct3D12::D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+                MemoryLocation::GpuOnly => Direct3D12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
                 MemoryLocation::CpuToGpu => Direct3D12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
                 MemoryLocation::GpuToCpu => Direct3D12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
                 _ => unreachable!(),
