@@ -2401,7 +2401,7 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "25.0.0"
+version = "25.0.1"
 dependencies = [
  "arbitrary",
  "arrayvec",
@@ -4657,7 +4657,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "25.0.0"
+version = "25.0.1"
 dependencies = [
  "arrayvec",
  "bit-set 0.8.0",
@@ -4777,7 +4777,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "25.0.0"
+version = "25.0.1"
 dependencies = [
  "android_system_properties",
  "arrayvec",
