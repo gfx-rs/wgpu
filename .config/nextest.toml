@@ -1,6 +1,7 @@
 # None of our tests should take longer than 45s, and if they've gone 2x that,
 # terminate them to prevent infinite run-on.
 [profile.default]
+default-filter = "!test(~oom_test)"
 slow-timeout = { period = "45s", terminate-after = 2 }
 fail-fast = false
 retries = 0
@@ -33,3 +34,7 @@ retries = 1
 [[profile.default.overrides]]
 filter = 'test(compile_fail)'
 slow-timeout = { period = "3m", terminate-after = 2 }
+
+[[profile.default.overrides]]
+filter = 'test(~oom_test)'
+threads-required = "num-test-threads"
