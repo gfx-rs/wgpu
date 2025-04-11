@@ -64,13 +64,13 @@ impl Allocation {
 pub(crate) fn create_allocator(
     raw: &Direct3D12::ID3D12Device,
     memory_hints: &wgt::MemoryHints,
-) -> Result<Mutex<Allocator>, crate::DeviceError> {
+) -> Result<(Mutex<Allocator>, u64, u64), crate::DeviceError> {
     // TODO: the allocator's configuration should take hardware capability into
     // account.
-    let mb = 1024 * 1024;
-    let allocation_sizes = match memory_hints {
-        wgt::MemoryHints::Performance => gpu_allocator::AllocationSizes::default(),
-        wgt::MemoryHints::MemoryUsage => gpu_allocator::AllocationSizes::new(8 * mb, 4 * mb),
+    const MB: u64 = 1024 * 1024;
+    let (device_memblock_size, host_memblock_size) = match memory_hints {
+        wgt::MemoryHints::Performance => (256 * MB, 64 * MB),
+        wgt::MemoryHints::MemoryUsage => (8 * MB, 4 * MB),
         wgt::MemoryHints::Manual {
             suballocated_device_memory_block_size,
         } => {
@@ -78,21 +78,34 @@ pub(crate) fn create_allocator(
             // instead of always using half of the device size?
             let device_size = suballocated_device_memory_block_size.start;
             let host_size = device_size / 2;
-            gpu_allocator::AllocationSizes::new(device_size, host_size)
+            (device_size, host_size)
         }
     };
 
-    match Allocator::new(&gpu_allocator::d3d12::AllocatorCreateDesc {
+    // gpu_allocator clamps the sizes between 4MiB and 256MiB, but we clamp them ourselves since we use
+    // the sizes when detecting high memory pressure and there is no way to query the values otherwise.
+
+    let device_memblock_size = device_memblock_size.clamp(4 * MB, 256 * MB);
+    let host_memblock_size = host_memblock_size.clamp(4 * MB, 256 * MB);
+
+    let allocation_sizes =
+        gpu_allocator::AllocationSizes::new(device_memblock_size, host_memblock_size);
+
+    let allocator_desc = gpu_allocator::d3d12::AllocatorCreateDesc {
         device: gpu_allocator::d3d12::ID3D12DeviceVersion::Device(raw.clone()),
         debug_settings: Default::default(),
         allocation_sizes,
-    }) {
-        Ok(allocator) => Ok(Mutex::new(allocator)),
-        Err(e) => {
-            log::error!("Failed to create d3d12 allocator, error: {}", e);
-            Err(e)?
-        }
-    }
+    };
+
+    let allocator = Allocator::new(&allocator_desc).inspect_err(|e| {
+        log::error!("Failed to create d3d12 allocator, error: {}", e);
+    })?;
+
+    Ok((
+        Mutex::new(allocator),
+        device_memblock_size,
+        host_memblock_size,
+    ))
 }
 
 /// To allow us to construct buffers from both a `Device` and `CommandEncoder`
@@ -533,10 +546,14 @@ impl<'a> DeviceAllocationContext<'a> {
             .adapter
             .query_video_memory_info(memory_segment_group)?;
 
-        let max_heap_size = 256 * 1024 * 1024; // 256MiB, see gpu_allocator::AllocationSizes
+        let memblock_size = match location {
+            MemoryLocation::Unknown => unreachable!(),
+            MemoryLocation::GpuOnly => self.shared.device_memblock_size,
+            MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => self.shared.host_memblock_size,
+        };
 
         // Make sure we don't exceed 90% of the budget
-        if info.CurrentUsage + allocation_info.SizeInBytes.max(max_heap_size)
+        if info.CurrentUsage + allocation_info.SizeInBytes.max(memblock_size)
             >= info.Budget / 10 * 9
         {
             return Err(crate::DeviceError::OutOfMemory);

@@ -56,7 +56,9 @@ impl super::Device {
             auxil::dxgi::exception::register_exception_handler();
         }
 
-        let mem_allocator = Arc::new(suballocation::create_allocator(&raw, memory_hints)?);
+        let (mem_allocator, device_memblock_size, host_memblock_size) =
+            suballocation::create_allocator(&raw, memory_hints)?;
+        let mem_allocator = Arc::new(mem_allocator);
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -155,6 +157,8 @@ impl super::Device {
             )?,
             sampler_heap: super::sampler::SamplerHeap::new(&raw, &private_caps)?,
             private_caps,
+            device_memblock_size,
+            host_memblock_size,
         };
 
         let mut rtv_pool =

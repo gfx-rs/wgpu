@@ -633,6 +633,8 @@ struct DeviceShared {
     heap_views: descriptor::GeneralHeap,
     sampler_heap: sampler::SamplerHeap,
     private_caps: PrivateCapabilities,
+    device_memblock_size: u64,
+    host_memblock_size: u64,
 }
 
 unsafe impl Send for DeviceShared {}
