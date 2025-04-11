@@ -233,6 +233,21 @@ fn hello_world(a: f16) -> f16 {
 
 By @FL33TW00D, @ErichDonGubler, and @cwfitzgerald in [#5701](https://github.com/gfx-rs/wgpu/pull/5701) 
 
+#### Bindless support improved and validation rules changed.
+
+Metal support for bindless has significantly improved and the limits for binding arrays have been increased.
+
+Previously, all resources inside binding arrays contributed towards the standard limit of their type (`texture_2d` arrays for example would contribute to `max_sampled_textures_per_shader_stage`). Now these resources will only contribute towards binding-array specific limits:
+- `max_binding_array_elements_per_shader_stage` for all non-sampler resources
+- `max_binding_array_sampler_elements_per_shader_stage` for sampler resources.
+
+This change has allowed the metal binding array limits to go from between 32 and 128 resources, all the way 500,000 sampled textures. Additionally binding arrays are now bound more efficiently on Metal.
+
+This change also enabled legacy Intel GPUs to support 1M bindless resources, instead of the previous 1800.
+
+To facilitate this change, there was an additional validation rule put in place: if there is a binding array in a bind group, you may not use dynamic offset buffers or uniform buffers in that bind group. This requirement comes from vulkan rules on `UpdateAfterBind` descriptors.
+By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](https://github.com/gfx-rs/wgpu/pull/6815), and [#6952](https://github.com/gfx-rs/wgpu/pull/6952).
+
 ### New Features
 
 #### General
