@@ -1470,13 +1470,8 @@ fn get_unexpected_err(_err: vk::Result) -> crate::DeviceError {
     crate::DeviceError::Unexpected
 }
 
-/// Returns [`crate::DeviceError::OutOfMemory`] or panics if the `oom_panic`
-/// feature flag is enabled.
+/// Returns [`crate::DeviceError::OutOfMemory`].
 fn get_oom_err(_err: vk::Result) -> crate::DeviceError {
-    #[cfg(feature = "oom_panic")]
-    panic!("Out of memory ({_err:?})");
-
-    #[allow(unreachable_code)]
     crate::DeviceError::OutOfMemory
 }
 

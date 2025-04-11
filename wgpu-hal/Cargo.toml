@@ -166,10 +166,6 @@ portable-atomic = ["dep:portable-atomic"]
 ### Internal Debugging Features ###
 ###################################
 
-# Panic when running into an out-of-memory error (for debugging purposes).
-#
-# Only affects the d3d12 and vulkan backends.
-oom_panic = []
 # Panic when running into a device lost error (for debugging purposes).
 # Only affects the d3d12 and vulkan backends.
 device_lost_panic = []
