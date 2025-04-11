@@ -257,8 +257,7 @@ This change has allowed the metal binding array limits to go from between 32 and
 
 This change also enabled legacy Intel GPUs to support 1M bindless resources, instead of the previous 1800.
 
-To facilitate this change, there was an additional valiidation rule put in place: if there is a binding array in a bind group, you may not use dynamic offset buffers or uniform buffers in that bind group. This requirement comes from vulkan rules on `UpdateAfterBind` descriptors.
-
+To facilitate this change, there was an additional validation rule put in place: if there is a binding array in a bind group, you may not use dynamic offset buffers or uniform buffers in that bind group. This requirement comes from vulkan rules on `UpdateAfterBind` descriptors.
 By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](https://github.com/gfx-rs/wgpu/pull/6815), and [#6952](https://github.com/gfx-rs/wgpu/pull/6952).
 
 ### New Features
