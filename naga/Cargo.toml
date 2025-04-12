@@ -81,7 +81,7 @@ termcolor = ["codespan-reporting/termcolor"]
 stderr = ["codespan-reporting/std"]
 
 [dependencies]
-arbitrary = { version = "1.4", features = ["derive"], optional = true }
+arbitrary = { version = "1.4.1", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
@@ -91,7 +91,7 @@ hashbrown.workspace = true
 half = { workspace = true, default-features = false, features = ["num-traits"] }
 rustc-hash.workspace = true
 indexmap.workspace = true
-log = "0.4"
+log.workspace = true
 # `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
 num-traits = { version = "0.2.16", default-features = false }
 once_cell = { workspace = true, features = ["alloc", "race"] }
@@ -105,7 +105,7 @@ serde = { version = "1.0.219", default-features = false, features = [
 petgraph = { version = "0.8", optional = true, default-features = false }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
-unicode-ident = { version = "1.0", optional = true }
+unicode-ident = { version = "1.0.5", optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true

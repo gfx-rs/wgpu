@@ -5,7 +5,7 @@ rust-version = "1.84"
 publish = false
 
 [dependencies]
-bytemuck = "1"
+bytemuck = "1.22.0"
 env_logger = "0.11.8"
 pollster = "0.4"
 wgpu = "25.0.0"

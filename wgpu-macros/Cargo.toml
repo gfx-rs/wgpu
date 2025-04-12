@@ -17,5 +17,5 @@ proc-macro = true
 
 [dependencies]
 heck = "0.5"
-quote = "1"
-syn = { version = "2", features = ["full"] }
+quote = "1.0.38"
+syn = { version = "2.0.98", features = ["full"] }
