@@ -224,7 +224,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     | crate::MathFunction::Pack4x8snorm
                     | crate::MathFunction::Pack4x8unorm
                     | crate::MathFunction::Pack4xI8
-                    | crate::MathFunction::Pack4xU8 => {
+                    | crate::MathFunction::Pack4xU8
+                    | crate::MathFunction::Pack4xI8Clamp
+                    | crate::MathFunction::Pack4xU8Clamp => {
                         self.need_bake_expressions.insert(arg);
                     }
                     crate::MathFunction::CountLeadingZeros => {
@@ -3439,6 +3441,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Pack4x8unorm,
                     Pack4xI8,
                     Pack4xU8,
+                    Pack4xI8Clamp,
+                    Pack4xU8Clamp,
                     Unpack2x16float,
                     Unpack2x16snorm,
                     Unpack2x16unorm,
@@ -3538,6 +3542,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     Mf::Pack4x8unorm => Function::Pack4x8unorm,
                     Mf::Pack4xI8 => Function::Pack4xI8,
                     Mf::Pack4xU8 => Function::Pack4xU8,
+                    Mf::Pack4xI8Clamp => Function::Pack4xI8Clamp,
+                    Mf::Pack4xU8Clamp => Function::Pack4xU8Clamp,
                     // Data Unpacking
                     Mf::Unpack2x16float => Function::Unpack2x16float,
                     Mf::Unpack2x16snorm => Function::Unpack2x16snorm,
@@ -3638,12 +3644,30 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         self.write_expr(module, arg, func_ctx)?;
                         write!(self.out, "[3], 0.0, 1.0) * {scale}.0)) << 24)")?;
                     }
-                    fun @ (Function::Pack4xI8 | Function::Pack4xU8) => {
-                        let was_signed = matches!(fun, Function::Pack4xI8);
+                    fun @ (Function::Pack4xI8
+                    | Function::Pack4xU8
+                    | Function::Pack4xI8Clamp
+                    | Function::Pack4xU8Clamp) => {
+                        let was_signed =
+                            matches!(fun, Function::Pack4xI8 | Function::Pack4xI8Clamp);
+                        let clamp_bounds = match fun {
+                            Function::Pack4xI8Clamp => Some(("-128", "127")),
+                            Function::Pack4xU8Clamp => Some(("0", "255")),
+                            _ => None,
+                        };
                         if was_signed {
                             write!(self.out, "uint(")?;
                         }
-                        let write_arg = |this: &mut Self| this.write_expr(module, arg, func_ctx);
+                        let write_arg = |this: &mut Self| -> BackendResult {
+                            if let Some((min, max)) = clamp_bounds {
+                                write!(this.out, "clamp(")?;
+                                this.write_expr(module, arg, func_ctx)?;
+                                write!(this.out, ", {min}, {max})")?;
+                            } else {
+                                this.write_expr(module, arg, func_ctx)?;
+                            }
+                            Ok(())
+                        };
                         write!(self.out, "(")?;
                         write_arg(self)?;
                         write!(self.out, "[0] & 0xFF) | ((")?;

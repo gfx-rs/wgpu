@@ -262,6 +262,8 @@ impl super::MathFunction {
             Self::Pack2x16float => 1,
             Self::Pack4xI8 => 1,
             Self::Pack4xU8 => 1,
+            Self::Pack4xI8Clamp => 1,
+            Self::Pack4xU8Clamp => 1,
             // data unpacking
             Self::Unpack4x8snorm => 1,
             Self::Unpack4x8unorm => 1,

@@ -2271,6 +2271,8 @@ impl<W: Write> Writer<W> {
                     Mf::Pack2x16float => "",
                     Mf::Pack4xI8 => "",
                     Mf::Pack4xU8 => "",
+                    Mf::Pack4xI8Clamp => "",
+                    Mf::Pack4xU8Clamp => "",
                     // data unpacking
                     Mf::Unpack4x8snorm => "unpack_snorm4x8_to_float",
                     Mf::Unpack4x8unorm => "unpack_unorm4x8_to_float",
@@ -2435,12 +2437,26 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "{fun_name}")?;
                         self.put_call_parameters(iter::once(arg), context)?;
                     }
-                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
-                        let was_signed = matches!(fun, Mf::Pack4xI8);
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8 | Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp) => {
+                        let was_signed = matches!(fun, Mf::Pack4xI8 | Mf::Pack4xI8Clamp);
+                        let clamp_bounds = match fun {
+                            Mf::Pack4xI8Clamp => Some(("-128", "127")),
+                            Mf::Pack4xU8Clamp => Some(("0", "255")),
+                            _ => None,
+                        };
                         if was_signed {
                             write!(self.out, "uint(")?;
                         }
-                        let write_arg = |this: &mut Self| this.put_expression(arg, context, true);
+                        let write_arg = |this: &mut Self| -> BackendResult {
+                            if let Some((min, max)) = clamp_bounds {
+                                write!(this.out, "{NAMESPACE}::clamp(")?;
+                                this.put_expression(arg, context, true)?;
+                                write!(this.out, ", {min}, {max})")?;
+                            } else {
+                                this.put_expression(arg, context, true)?;
+                            }
+                            Ok(())
+                        };
                         write!(self.out, "(")?;
                         write_arg(self)?;
                         write!(self.out, "[0] & 0xFF) | ((")?;
@@ -3213,6 +3229,8 @@ impl<W: Write> Writer<W> {
                     crate::MathFunction::FirstLeadingBit
                     | crate::MathFunction::Pack4xI8
                     | crate::MathFunction::Pack4xU8
+                    | crate::MathFunction::Pack4xI8Clamp
+                    | crate::MathFunction::Pack4xU8Clamp
                     | crate::MathFunction::Unpack4xI8
                     | crate::MathFunction::Unpack4xU8 => {
                         self.need_bake_expressions.insert(arg);

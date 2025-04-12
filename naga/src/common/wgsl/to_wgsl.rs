@@ -139,6 +139,8 @@ impl TryToWgsl for crate::MathFunction {
             Mf::Pack2x16float => "pack2x16float",
             Mf::Pack4xI8 => "pack4xI8",
             Mf::Pack4xU8 => "pack4xU8",
+            Mf::Pack4xI8Clamp => "pack4xI8Clamp",
+            Mf::Pack4xU8Clamp => "pack4xU8Clamp",
             Mf::Unpack4x8snorm => "unpack4x8snorm",
             Mf::Unpack4x8unorm => "unpack4x8unorm",
             Mf::Unpack2x16snorm => "unpack2x16snorm",
