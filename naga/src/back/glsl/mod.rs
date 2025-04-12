@@ -3889,14 +3889,15 @@ impl<'a, W: Write> Writer<'a, W> {
                         if was_signed {
                             write!(self.out, "uint(")?;
                         }
+                        let write_arg = |this: &mut Self| this.write_expr(arg, ctx);
                         write!(self.out, "(")?;
-                        self.write_expr(arg, ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[0] & 0xFF{const_suffix}) | ((")?;
-                        self.write_expr(arg, ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[1] & 0xFF{const_suffix}) << 8) | ((")?;
-                        self.write_expr(arg, ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[2] & 0xFF{const_suffix}) << 16) | ((")?;
-                        self.write_expr(arg, ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[3] & 0xFF{const_suffix}) << 24)")?;
                         if was_signed {
                             write!(self.out, ")")?;

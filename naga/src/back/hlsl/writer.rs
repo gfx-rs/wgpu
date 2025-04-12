@@ -3643,14 +3643,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         if was_signed {
                             write!(self.out, "uint(")?;
                         }
+                        let write_arg = |this: &mut Self| this.write_expr(module, arg, func_ctx);
                         write!(self.out, "(")?;
-                        self.write_expr(module, arg, func_ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[0] & 0xFF) | ((")?;
-                        self.write_expr(module, arg, func_ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[1] & 0xFF) << 8) | ((")?;
-                        self.write_expr(module, arg, func_ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[2] & 0xFF) << 16) | ((")?;
-                        self.write_expr(module, arg, func_ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[3] & 0xFF) << 24)")?;
                         if was_signed {
                             write!(self.out, ")")?;

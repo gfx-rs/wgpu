@@ -2440,14 +2440,15 @@ impl<W: Write> Writer<W> {
                         if was_signed {
                             write!(self.out, "uint(")?;
                         }
+                        let write_arg = |this: &mut Self| this.put_expression(arg, context, true);
                         write!(self.out, "(")?;
-                        self.put_expression(arg, context, true)?;
+                        write_arg(self)?;
                         write!(self.out, "[0] & 0xFF) | ((")?;
-                        self.put_expression(arg, context, true)?;
+                        write_arg(self)?;
                         write!(self.out, "[1] & 0xFF) << 8) | ((")?;
-                        self.put_expression(arg, context, true)?;
+                        write_arg(self)?;
                         write!(self.out, "[2] & 0xFF) << 16) | ((")?;
-                        self.put_expression(arg, context, true)?;
+                        write_arg(self)?;
                         write!(self.out, "[3] & 0xFF) << 24)")?;
                         if was_signed {
                             write!(self.out, ")")?;
