@@ -405,32 +405,29 @@ jobs:
           # check `wgpu-core` with all features. This will also get `wgpu-hal` and `wgpu-types`.
           cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
 
-  naga-minimal-versions:
+  # Check that the libraries build — but not that there are no warnings or that tests pass -
+  # with `-Zdirect-minimal-versions` which lowers all dependencies from the workspace packages
+  # to non-workspace packages to their minimum allowed version.
+  check-minimal-versions:
     # runtime is normally 2 minutes
     timeout-minutes: 10
 
-    name: MSRV naga Minimal Versions
+    name: MSRV Minimal Versions
     runs-on: ubuntu-22.04
+    env:
+      # Override flags to NOT include `-D warnings`, because warnings may be due to harmless problems in deps.
+      # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
+      RUSTFLAGS: -A unexpected_cfgs
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install core MSRV toolchain
-        run: |
-          rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy
-          rustup override set ${{ env.CORE_MSRV }}
-          cargo -V
-
-      - name: Install Nightly toolchain
+      - name: Install toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
-          cargo +${{ env.REPO_MSRV }} -V
-
-      - name: Install `cargo-hack`
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-hack
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: Disable debug symbols
         shell: bash
@@ -445,16 +442,16 @@ jobs:
         run: |
           set -e
 
-          cargo +${{ env.REPO_MSRV }} hack generate-lockfile --remove-dev-deps -Z minimal-versions -p naga -p naga-cli
+          cargo +${{ env.REPO_MSRV }} update -Zdirect-minimal-versions
         env:
           RUSTC_BOOTSTRAP: 1
 
-      - name: Run Clippy
+      - name: Run cargo check
         shell: bash
         run: |
           set -e
 
-          cargo clippy --all-features -p naga -p naga-cli
+          cargo check --all-targets --all-features
 
   wasm-test:
     # runtime is normally 2 minutes
