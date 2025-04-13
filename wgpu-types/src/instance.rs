@@ -289,6 +289,8 @@ impl GlBackendOptions {
 pub struct Dx12BackendOptions {
     /// Which DX12 shader compiler to use.
     pub shader_compiler: Dx12Compiler,
+    /// Whether to use DirectComposition for managing presentation.
+    pub use_dcomp: bool,
 }
 
 impl Dx12BackendOptions {
@@ -300,6 +302,7 @@ impl Dx12BackendOptions {
         let compiler = Dx12Compiler::from_env().unwrap_or_default();
         Self {
             shader_compiler: compiler,
+            use_dcomp: false,
         }
     }
 
@@ -309,7 +312,10 @@ impl Dx12BackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let shader_compiler = self.shader_compiler.with_env();
-        Self { shader_compiler }
+        Self {
+            shader_compiler,
+            use_dcomp: false,
+        }
     }
 }
 
