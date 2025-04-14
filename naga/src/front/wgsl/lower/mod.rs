@@ -1,6 +1,7 @@
 use alloc::{
     borrow::ToOwned,
     boxed::Box,
+    format,
     string::{String, ToString},
     vec::Vec,
 };
@@ -2541,11 +2542,67 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         "select" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
 
-                            let reject = self.expression(args.next()?, ctx)?;
-                            let accept = self.expression(args.next()?, ctx)?;
+                            let reject_orig = args.next()?;
+                            let accept_orig = args.next()?;
+                            let mut values = [
+                                self.expression_for_abstract(reject_orig, ctx)?,
+                                self.expression_for_abstract(accept_orig, ctx)?,
+                            ];
                             let condition = self.expression(args.next()?, ctx)?;
 
                             args.finish()?;
+
+                            let diagnostic_details =
+                                |ctx: &ExpressionContext<'_, '_, '_>,
+                                 ty_res: &proc::TypeResolution,
+                                 orig_expr| {
+                                    (
+                                        ctx.ast_expressions.get_span(orig_expr),
+                                        format!("`{}`", ctx.as_diagnostic_display(ty_res)),
+                                    )
+                                };
+                            for (&value, orig_value) in
+                                values.iter().zip([reject_orig, accept_orig])
+                            {
+                                let value_ty_res = resolve!(ctx, value);
+                                if value_ty_res
+                                    .inner_with(&ctx.module.types)
+                                    .vector_size_and_scalar()
+                                    .is_none()
+                                {
+                                    let (arg_span, arg_type) =
+                                        diagnostic_details(ctx, value_ty_res, orig_value);
+                                    return Err(Box::new(Error::SelectUnexpectedArgumentType {
+                                        arg_span,
+                                        arg_type,
+                                    }));
+                                }
+                            }
+                            let mut consensus_scalar = ctx
+                                .automatic_conversion_consensus(&values)
+                                .map_err(|_idx| {
+                                    let [reject, accept] = values;
+                                    let [(reject_span, reject_type), (accept_span, accept_type)] =
+                                        [(reject_orig, reject), (accept_orig, accept)].map(
+                                            |(orig_expr, expr)| {
+                                                let ty_res = &ctx.typifier()[expr];
+                                                diagnostic_details(ctx, ty_res, orig_expr)
+                                            },
+                                        );
+                                    Error::SelectRejectAndAcceptHaveNoCommonType {
+                                        reject_span,
+                                        reject_type,
+                                        accept_span,
+                                        accept_type,
+                                    }
+                                })?;
+                            if !ctx.is_const(condition) {
+                                consensus_scalar = consensus_scalar.concretize();
+                            }
+
+                            ctx.convert_slice_to_common_leaf_scalar(&mut values, consensus_scalar)?;
+
+                            let [reject, accept] = values;
 
                             ir::Expression::Select {
                                 reject,
