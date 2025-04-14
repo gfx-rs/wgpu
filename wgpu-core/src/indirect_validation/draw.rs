@@ -62,6 +62,7 @@ impl Draw {
     pub(super) fn new(
         device: &dyn hal::DynDevice,
         required_features: &wgt::Features,
+        backend: wgt::Backend,
     ) -> Result<Self, CreateIndirectValidationPipelineError> {
         let module = create_validation_module(device)?;
 
@@ -92,11 +93,13 @@ impl Draw {
 
         let supports_indirect_first_instance =
             required_features.contains(wgt::Features::INDIRECT_FIRST_INSTANCE);
+        let write_d3d12_special_constants = backend == wgt::Backend::Dx12;
         let pipeline = create_validation_pipeline(
             device,
             module.as_ref(),
             pipeline_layout.as_ref(),
             supports_indirect_first_instance,
+            write_d3d12_special_constants,
         )?;
 
         Ok(Self {
@@ -523,6 +526,7 @@ fn create_validation_pipeline(
     module: &dyn hal::DynShaderModule,
     pipeline_layout: &dyn hal::DynPipelineLayout,
     supports_indirect_first_instance: bool,
+    write_d3d12_special_constants: bool,
 ) -> Result<Box<dyn hal::DynComputePipeline>, CreateIndirectValidationPipelineError> {
     let pipeline_desc = hal::ComputePipelineDescriptor {
         label: None,
@@ -530,10 +534,16 @@ fn create_validation_pipeline(
         stage: hal::ProgrammableStage {
             module,
             entry_point: "main",
-            constants: &hashbrown::HashMap::from([(
-                "supports_indirect_first_instance".to_string(),
-                f64::from(supports_indirect_first_instance),
-            )]),
+            constants: &hashbrown::HashMap::from([
+                (
+                    "supports_indirect_first_instance".to_string(),
+                    f64::from(supports_indirect_first_instance),
+                ),
+                (
+                    "write_d3d12_special_constants".to_string(),
+                    f64::from(write_d3d12_special_constants),
+                ),
+            ]),
             zero_initialize_workgroup_memory: false,
         },
         cache: None,
@@ -913,7 +923,13 @@ impl DrawBatcher {
         vertex_or_index_limit: u64,
         instance_limit: u64,
     ) -> Result<(usize, u64), DeviceError> {
-        let stride = crate::command::get_stride_of_indirect_args(indexed);
+        // space for D3D12 special constants
+        let extra = if device.backend() == wgt::Backend::Dx12 {
+            3 * size_of::<u32>() as u64
+        } else {
+            0
+        };
+        let stride = extra + crate::command::get_stride_of_indirect_args(indexed);
 
         let (dst_resource_index, dst_offset) = indirect_draw_validation_resources
             .get_dst_subrange(stride, &mut self.current_dst_entry)?;

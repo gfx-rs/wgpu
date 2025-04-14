@@ -33,6 +33,7 @@ impl IndirectValidation {
         device: &dyn hal::DynDevice,
         required_limits: &wgt::Limits,
         required_features: &wgt::Features,
+        backend: wgt::Backend,
     ) -> Result<Self, DeviceError> {
         let dispatch = match Dispatch::new(device, required_limits) {
             Ok(dispatch) => dispatch,
@@ -41,7 +42,7 @@ impl IndirectValidation {
                 return Err(DeviceError::Lost);
             }
         };
-        let draw = match Draw::new(device, required_features) {
+        let draw = match Draw::new(device, required_features, backend) {
             Ok(draw) => draw,
             Err(e) => {
                 log::error!("indirect-draw-validation error: {e:?}");
