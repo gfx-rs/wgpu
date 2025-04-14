@@ -823,3 +823,103 @@ fn arity_check() {
     assert!(validate(Mf::Pow, &[1]).is_ok());
     assert!(validate(Mf::Pow, &[3]).is_err());
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn global_use_scalar() {
+    let source = "
+@group(0) @binding(0)
+var<storage, read_write> global: u32;
+
+@compute @workgroup_size(64)
+fn main() {
+    let used = &global;
+}
+    ";
+
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+
+    let global = module.global_variables.iter().next().unwrap().0;
+    assert_eq!(
+        info.get_entry_point(0)[global],
+        naga::valid::GlobalUse::QUERY
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn global_use_array() {
+    let source = "
+@group(0) @binding(0)
+var<storage, read_write> global: array<f32>;
+
+@compute @workgroup_size(64)
+fn main() {
+    let used = &global;
+}
+    ";
+
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+
+    let global = module.global_variables.iter().next().unwrap().0;
+    assert_eq!(
+        info.get_entry_point(0)[global],
+        naga::valid::GlobalUse::QUERY
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn global_use_array_index() {
+    let source = "
+@group(0) @binding(0)
+var<storage, read_write> global: array<f32>;
+
+@compute @workgroup_size(64)
+fn main() {
+    let used = &global[0];
+}
+    ";
+
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+
+    let global = module.global_variables.iter().next().unwrap().0;
+    assert_eq!(
+        info.get_entry_point(0)[global],
+        naga::valid::GlobalUse::QUERY
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn global_use_phony() {
+    let source = "
+@group(0) @binding(0)
+var<storage, read_write> global: u32;
+
+@compute @workgroup_size(64)
+fn main() {
+    _ = &global;
+}
+    ";
+
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+
+    let global = module.global_variables.iter().next().unwrap().0;
+    assert_eq!(
+        info.get_entry_point(0)[global],
+        naga::valid::GlobalUse::QUERY
+    );
+}

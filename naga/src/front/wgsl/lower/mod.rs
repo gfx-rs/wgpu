@@ -1988,6 +1988,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Ok(());
             }
             ast::StatementKind::Phony(expr) => {
+                // Remembered the RHS of the phony assignment as a named expression. This
+                // is important (1) to preserve the RHS for validation, (2) to track any
+                // referenced globals.
                 let mut emitter = Emitter::default();
                 emitter.start(&ctx.function.expressions);
 
