@@ -865,6 +865,7 @@ fn dispatch_indirect(
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
 
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
+    buffer.check_destroyed(&state.snatch_guard)?;
 
     if offset % 4 != 0 {
         return Err(ComputePassErrorInner::UnalignedIndirectBufferOffset(offset));
