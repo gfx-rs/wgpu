@@ -81,7 +81,7 @@ wgpu-core-deps-apple = { version = "25.0.0", path = "./wgpu-core/platform-deps/a
 wgpu-core-deps-wasm = { version = "25.0.0", path = "./wgpu-core/platform-deps/wasm" }
 wgpu-core-deps-emscripten = { version = "25.0.0", path = "./wgpu-core/platform-deps/emscripten" }
 
-anyhow = { version = "1.0.97", default-features = false }
+anyhow = { version = "1.0.98", default-features = false }
 approx = "0.5"
 argh = "0.1.13"
 arrayvec = { version = "0.7.6", default-features = false }
@@ -106,7 +106,7 @@ fern = "0.7"
 flume = "0.11"
 futures-lite = "2"
 glam = "0.29"
-half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
+half = { version = "2.5", default-features = false } # We require 2.6 to have `Arbitrary` support.
 hashbrown = { version = "0.15.2", default-features = false, features = [
     "default-hasher",
     "inline-more",
