@@ -587,6 +587,16 @@ macro_rules! dispatch_types {
                 }
             }
 
+            #[cfg(custom)]
+            #[inline]
+            #[allow(clippy::allow_attributes, unused)]
+            pub(crate) fn as_custom_opt(&self) -> Option<&$custom_type> {
+                match self {
+                    Self::Custom(value) => Some(value),
+                    _ => None,
+                }
+            }
+
             #[cfg(webgpu)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
@@ -701,6 +711,16 @@ macro_rules! dispatch_types {
             ) -> Option<&mut $core_type> {
                 match self {
                     Self::Core(value) => Some(value),
+                    _ => None,
+                }
+            }
+
+            #[cfg(custom)]
+            #[inline]
+            #[allow(clippy::allow_attributes, unused)]
+            pub(crate) fn as_custom_opt(&self) -> Option<&$custom_type> {
+                match self {
+                    Self::Custom(value) => Some(value),
                     _ => None,
                 }
             }

@@ -18,6 +18,14 @@ static_assertions::assert_impl_all!(RenderPipeline: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(RenderPipeline => .inner);
 
 impl RenderPipeline {
+    #[cfg(custom)]
+    /// Returns custom implementation of RenderPipeline (if custom backend and is internally T)
+    pub fn as_custom<T: custom::RenderPipelineInterface>(&self) -> Option<&T> {
+        self.inner.as_custom_opt().and_then(|c| c.downcast())
+    }
+}
+
+impl RenderPipeline {
     /// Get an object representing the bind group layout at a given index.
     ///
     /// If this pipeline was created with a [default layout][RenderPipelineDescriptor::layout], then

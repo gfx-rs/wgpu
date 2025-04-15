@@ -26,6 +26,14 @@ static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(CommandEncoder => .inner);
 
+impl CommandEncoder {
+    #[cfg(custom)]
+    /// Returns custom implementation of CommandEncoder (if custom backend and is internally T)
+    pub fn as_custom<T: custom::CommandEncoderInterface>(&self) -> Option<&T> {
+        self.inner.as_custom_opt().and_then(|c| c.downcast())
+    }
+}
+
 /// Describes a [`CommandEncoder`].
 ///
 /// For use with [`Device::create_command_encoder`].

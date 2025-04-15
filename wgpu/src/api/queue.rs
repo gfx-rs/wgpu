@@ -19,6 +19,22 @@ static_assertions::assert_impl_all!(Queue: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(Queue => .inner);
 
+impl Queue {
+    #[cfg(custom)]
+    /// Returns custom implementation of Queue (if custom backend and is internally T)
+    pub fn as_custom<T: custom::QueueInterface>(&self) -> Option<&T> {
+        self.inner.as_custom_opt().and_then(|c| c.downcast())
+    }
+
+    #[cfg(custom)]
+    /// Creates Queue from custom implementation
+    pub fn from_custom<T: custom::QueueInterface>(queue: T) -> Self {
+        Self {
+            inner: dispatch::DispatchQueue::custom(queue),
+        }
+    }
+}
+
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
 /// as part of an argument to [`Device::poll`] to block for a particular
 /// submission to finish.
@@ -52,6 +68,14 @@ pub struct QueueWriteBufferView<'a> {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(QueueWriteBufferView<'_>: Send, Sync);
 
+impl QueueWriteBufferView<'_> {
+    #[cfg(custom)]
+    /// Returns custom implementation of QueueWriteBufferView (if custom backend and is internally T)
+    pub fn as_custom<T: custom::QueueWriteBufferInterface>(&self) -> Option<&T> {
+        self.inner.as_custom_opt().and_then(|c| c.downcast())
+    }
+}
+
 impl Deref for QueueWriteBufferView<'_> {
     type Target = [u8];
 
@@ -82,14 +106,6 @@ impl Drop for QueueWriteBufferView<'_> {
 }
 
 impl Queue {
-    #[cfg(custom)]
-    /// Creates Queue from custom implementation
-    pub fn from_custom<T: custom::QueueInterface>(queue: T) -> Self {
-        Self {
-            inner: dispatch::DispatchQueue::custom(queue),
-        }
-    }
-
     /// Copies the bytes of `data` into `buffer` starting at `offset`.
     ///
     /// The data must be written fully in-bounds, that is, `offset + data.len() <= buffer.len()`.

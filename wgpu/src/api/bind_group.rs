@@ -17,6 +17,14 @@ static_assertions::assert_impl_all!(BindGroup: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(BindGroup => .inner);
 
+impl BindGroup {
+    #[cfg(custom)]
+    /// Returns custom implementation of BindGroup (if custom backend and is internally T)
+    pub fn as_custom<T: custom::BindGroupInterface>(&self) -> Option<&T> {
+        self.inner.as_custom_opt().and_then(|c| c.downcast())
+    }
+}
+
 /// Resource to be bound by a [`BindGroup`] for use with a pipeline.
 ///
 /// The pipeline’s [`BindGroupLayout`] must contain a matching [`BindingType`].

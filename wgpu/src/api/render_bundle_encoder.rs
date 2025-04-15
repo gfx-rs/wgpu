@@ -25,6 +25,14 @@ static_assertions::assert_not_impl_any!(RenderBundleEncoder<'_>: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(RenderBundleEncoder<'_> => .inner);
 
+impl RenderBundleEncoder<'_> {
+    #[cfg(custom)]
+    /// Returns custom implementation of RenderBundleEncoder (if custom backend and is internally T)
+    pub fn as_custom<T: custom::RenderBundleEncoderInterface>(&self) -> Option<&T> {
+        self.inner.as_custom_opt().and_then(|c| c.downcast())
+    }
+}
+
 /// Describes a [`RenderBundleEncoder`].
 ///
 /// For use with [`Device::create_render_bundle_encoder`].

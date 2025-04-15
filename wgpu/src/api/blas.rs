@@ -174,6 +174,12 @@ impl Blas {
             hal_blas_callback(None)
         }
     }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of Blas (if custom backend and is internally T)
+    pub fn as_custom<T: crate::custom::BlasInterface>(&self) -> Option<&T> {
+        self.inner.as_custom_opt().and_then(|c| c.downcast())
+    }
 }
 
 /// Context version of [BlasTriangleGeometry].
