@@ -54,8 +54,20 @@ pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>)
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
 
+// remove when rust 1.86
+#[cfg_attr(not(custom), expect(dead_code))]
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: 'static> AsAny for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 // Common traits on all the interface traits
-trait_alias!(CommonTraits: Any + Debug + WasmNotSendSync);
+trait_alias!(CommonTraits: AsAny + Any + Debug + WasmNotSendSync);
 
 pub trait InstanceInterface: CommonTraits {
     fn new(desc: &crate::InstanceDescriptor) -> Self
