@@ -2436,7 +2436,7 @@ impl<W: Write> Writer<W> {
                         self.put_call_parameters(iter::once(arg), context)?;
                     }
                     fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
-                        let was_signed = fun == Mf::Pack4xI8;
+                        let was_signed = matches!(fun, Mf::Pack4xI8);
                         if was_signed {
                             write!(self.out, "uint(")?;
                         }
