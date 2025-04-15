@@ -3276,7 +3276,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             Ok((image, image_span))
         }
 
-        let (image, image_span, gather) = match fun {
+        let image;
+        let image_span;
+        let gather;
+        match fun {
             Texture::Gather => {
                 let image_or_component = args.next()?;
                 let image_or_component_span = ctx.ast_expressions.get_span(image_or_component);
@@ -3287,33 +3290,29 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ir::TypeInner::Image {
                         class: ir::ImageClass::Depth { .. },
                         ..
-                    } => (
-                        lowered_image_or_component,
-                        image_or_component_span,
-                        Some(ir::SwizzleComponent::X),
-                    ),
+                    } => {
+                        image = lowered_image_or_component;
+                        image_span = image_or_component_span;
+                        gather = Some(ir::SwizzleComponent::X);
+                    }
                     _ => {
-                        let (image, image_span) = get_image_and_span(self, &mut args, ctx)?;
-                        (
-                            image,
-                            image_span,
-                            Some(ctx.gather_component(
-                                lowered_image_or_component,
-                                image_or_component_span,
-                                span,
-                            )?),
-                        )
+                        (image, image_span) = get_image_and_span(self, &mut args, ctx)?;
+                        gather = Some(ctx.gather_component(
+                            lowered_image_or_component,
+                            image_or_component_span,
+                            span,
+                        )?);
                     }
                 }
             }
             Texture::GatherCompare => {
-                let (image, image_span) = get_image_and_span(self, &mut args, ctx)?;
-                (image, image_span, Some(ir::SwizzleComponent::X))
+                (image, image_span) = get_image_and_span(self, &mut args, ctx)?;
+                gather = Some(ir::SwizzleComponent::X);
             }
 
             _ => {
-                let (image, image_span) = get_image_and_span(self, &mut args, ctx)?;
-                (image, image_span, None)
+                (image, image_span) = get_image_and_span(self, &mut args, ctx)?;
+                gather = None;
             }
         };
 
@@ -3326,34 +3325,48 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .then(|| self.expression(args.next()?, ctx))
             .transpose()?;
 
-        let (level, depth_ref) = match fun {
-            Texture::Gather => (ir::SampleLevel::Zero, None),
+        let level;
+        let depth_ref;
+        match fun {
+            Texture::Gather => {
+                level = ir::SampleLevel::Zero;
+                depth_ref = None;
+            }
             Texture::GatherCompare => {
                 let reference = self.expression(args.next()?, ctx)?;
-                (ir::SampleLevel::Zero, Some(reference))
+                level = ir::SampleLevel::Zero;
+                depth_ref = Some(reference);
             }
 
-            Texture::Sample => (ir::SampleLevel::Auto, None),
+            Texture::Sample => {
+                level = ir::SampleLevel::Auto;
+                depth_ref = None;
+            }
             Texture::SampleBias => {
                 let bias = self.expression(args.next()?, ctx)?;
-                (ir::SampleLevel::Bias(bias), None)
+                level = ir::SampleLevel::Bias(bias);
+                depth_ref = None;
             }
             Texture::SampleCompare => {
                 let reference = self.expression(args.next()?, ctx)?;
-                (ir::SampleLevel::Auto, Some(reference))
+                level = ir::SampleLevel::Auto;
+                depth_ref = Some(reference);
             }
             Texture::SampleCompareLevel => {
                 let reference = self.expression(args.next()?, ctx)?;
-                (ir::SampleLevel::Zero, Some(reference))
+                level = ir::SampleLevel::Zero;
+                depth_ref = Some(reference);
             }
             Texture::SampleGrad => {
                 let x = self.expression(args.next()?, ctx)?;
                 let y = self.expression(args.next()?, ctx)?;
-                (ir::SampleLevel::Gradient { x, y }, None)
+                level = ir::SampleLevel::Gradient { x, y };
+                depth_ref = None;
             }
             Texture::SampleLevel => {
-                let level = self.expression(args.next()?, ctx)?;
-                (ir::SampleLevel::Exact(level), None)
+                let exact = self.expression(args.next()?, ctx)?;
+                level = ir::SampleLevel::Exact(exact);
+                depth_ref = None;
             }
         };
 
