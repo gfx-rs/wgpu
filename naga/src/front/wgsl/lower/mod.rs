@@ -2025,6 +2025,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         ctx.apply_load_rule(expr)
     }
 
+    fn expression_with_leaf_scalar(
+        &mut self,
+        expr: Handle<ast::Expression<'source>>,
+        scalar: ir::Scalar,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Handle<ir::Expression>> {
+        let unconverted = self.expression_for_abstract(expr, ctx)?;
+        ctx.try_automatic_conversion_for_leaf_scalar(unconverted, scalar, Span::default())
+    }
+
     fn expression_for_reference(
         &mut self,
         expr: Handle<ast::Expression<'source>>,
@@ -3272,7 +3282,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         ) -> Result<'source, (Handle<ir::Expression>, Span)> {
             let image = args.next()?;
             let image_span = ctx.ast_expressions.get_span(image);
-            let image = lowerer.expression(image, ctx)?;
+            let image = lowerer.expression_for_abstract(image, ctx)?;
             Ok((image, image_span))
         }
 
@@ -3316,11 +3326,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
         };
 
-        let sampler = self.expression(args.next()?, ctx)?;
+        let sampler = self.expression_for_abstract(args.next()?, ctx)?;
 
-        let coordinate = self.expression(args.next()?, ctx)?;
+        let coordinate = self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?;
 
-        let (_, arrayed) = ctx.image_data(image, image_span)?;
+        let (class, arrayed) = ctx.image_data(image, image_span)?;
         let array_index = arrayed
             .then(|| self.expression(args.next()?, ctx))
             .transpose()?;
@@ -3333,7 +3343,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 depth_ref = None;
             }
             Texture::GatherCompare => {
-                let reference = self.expression(args.next()?, ctx)?;
+                let reference =
+                    self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?;
                 level = ir::SampleLevel::Zero;
                 depth_ref = Some(reference);
             }
@@ -3343,28 +3354,44 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 depth_ref = None;
             }
             Texture::SampleBias => {
-                let bias = self.expression(args.next()?, ctx)?;
+                let bias = self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?;
                 level = ir::SampleLevel::Bias(bias);
                 depth_ref = None;
             }
             Texture::SampleCompare => {
-                let reference = self.expression(args.next()?, ctx)?;
+                let reference =
+                    self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?;
                 level = ir::SampleLevel::Auto;
                 depth_ref = Some(reference);
             }
             Texture::SampleCompareLevel => {
-                let reference = self.expression(args.next()?, ctx)?;
+                let reference =
+                    self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?;
                 level = ir::SampleLevel::Zero;
                 depth_ref = Some(reference);
             }
             Texture::SampleGrad => {
-                let x = self.expression(args.next()?, ctx)?;
-                let y = self.expression(args.next()?, ctx)?;
+                let x = self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?;
+                let y = self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?;
                 level = ir::SampleLevel::Gradient { x, y };
                 depth_ref = None;
             }
             Texture::SampleLevel => {
-                let exact = self.expression(args.next()?, ctx)?;
+                let exact = match class {
+                    // When applied to depth textures, `textureSampleLevel`'s
+                    // `level` argument is an `i32` or `u32`.
+                    ir::ImageClass::Depth { .. } => self.expression(args.next()?, ctx)?,
+
+                    // When applied to other sampled types, its `level` argument
+                    // is an `f32`.
+                    ir::ImageClass::Sampled { .. } => {
+                        self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?
+                    }
+
+                    // Sampling `Storage` textures isn't allowed at all. Let the
+                    // validator report the error.
+                    ir::ImageClass::Storage { .. } => self.expression(args.next()?, ctx)?,
+                };
                 level = ir::SampleLevel::Exact(exact);
                 depth_ref = None;
             }
@@ -3372,7 +3399,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         let offset = args
             .next()
-            .map(|arg| self.expression(arg, &mut ctx.as_const()))
+            .map(|arg| self.expression_with_leaf_scalar(arg, ir::Scalar::I32, &mut ctx.as_const()))
             .ok()
             .transpose()?;
 
