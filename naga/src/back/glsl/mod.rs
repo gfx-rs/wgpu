@@ -3880,11 +3880,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
 
                     fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
-                        let was_signed = match fun {
-                            Mf::Pack4xI8 => true,
-                            Mf::Pack4xU8 => false,
-                            _ => unreachable!(),
-                        };
+                        let was_signed = matches!(fun, Mf::Pack4xI8);
                         let const_suffix = if was_signed { "" } else { "u" };
                         if was_signed {
                             write!(self.out, "uint(")?;
