@@ -500,10 +500,7 @@ impl super::Adapter {
 
         let base = wgt::Limits::default();
 
-        let mut downlevel = wgt::DownlevelCapabilities::default();
-        // https://github.com/gfx-rs/wgpu/issues/2471
-        downlevel.flags -=
-            wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
+        let downlevel = wgt::DownlevelCapabilities::default();
 
         // See https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-feature-levels#feature-level-support
         let max_color_attachments = 8;

@@ -104,7 +104,7 @@ impl super::CommandEncoder {
         self.pass.clear();
     }
 
-    unsafe fn prepare_draw(&mut self, first_vertex: i32, first_instance: u32) {
+    unsafe fn prepare_vertex_buffers(&mut self) {
         while self.pass.dirty_vertex_buffers != 0 {
             let list = self.list.as_ref().unwrap();
             let index = self.pass.dirty_vertex_buffers.trailing_zeros();
@@ -115,6 +115,12 @@ impl super::CommandEncoder {
                     Some(&self.pass.vertex_buffers[index as usize..][..1]),
                 );
             }
+        }
+    }
+
+    unsafe fn prepare_draw(&mut self, first_vertex: i32, first_instance: u32) {
+        unsafe {
+            self.prepare_vertex_buffers();
         }
         if let Some(root_index) = self
             .pass
@@ -1195,10 +1201,31 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        unsafe { self.prepare_draw(0, 0) };
+        if self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
+            .is_some()
+        {
+            unsafe { self.prepare_vertex_buffers() };
+            self.update_root_elements();
+        } else {
+            unsafe { self.prepare_draw(0, 0) };
+        }
+
+        let cmd_signature = &self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
+            .unwrap_or_else(|| &self.shared.cmd_signatures)
+            .draw;
         unsafe {
             self.list.as_ref().unwrap().ExecuteIndirect(
-                &self.shared.cmd_signatures.draw,
+                cmd_signature,
                 draw_count,
                 &buffer.resource,
                 offset,
@@ -1213,10 +1240,31 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        unsafe { self.prepare_draw(0, 0) };
+        if self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
+            .is_some()
+        {
+            unsafe { self.prepare_vertex_buffers() };
+            self.update_root_elements();
+        } else {
+            unsafe { self.prepare_draw(0, 0) };
+        }
+
+        let cmd_signature = &self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
+            .unwrap_or_else(|| &self.shared.cmd_signatures)
+            .draw_indexed;
         unsafe {
             self.list.as_ref().unwrap().ExecuteIndirect(
-                &self.shared.cmd_signatures.draw_indexed,
+                cmd_signature,
                 draw_count,
                 &buffer.resource,
                 offset,

@@ -966,6 +966,15 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         // Push constants need to be assigned a binding explicitly by the consumer
         // since naga has no way to know the binding from the shader alone
         if global.space == crate::AddressSpace::PushConstant {
+            match module.types[global.ty].inner {
+                TypeInner::Struct { .. } => {}
+                _ => {
+                    return Err(Error::Unimplemented(format!(
+                        "push-constant '{name}' has non-struct type; tracked by: https://github.com/gfx-rs/wgpu/issues/5683"
+                    )));
+                }
+            }
+
             let target = self
                 .options
                 .push_constants_target

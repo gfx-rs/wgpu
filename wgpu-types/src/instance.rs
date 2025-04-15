@@ -101,6 +101,26 @@ bitflags::bitflags! {
 
         /// Validate indirect buffer content prior to issuing indirect draws/dispatches.
         ///
+        /// This validation will transform indirect calls into no-ops if they are not valid:
+        ///
+        /// - When calling `dispatch_workgroups_indirect`, all 3 indirect arguments encoded in the buffer
+        /// must be less than the `max_compute_workgroups_per_dimension` device limit.
+        /// - When calling `draw_indirect`/`draw_indexed_indirect`/`multi_draw_indirect`/`multi_draw_indexed_indirect`:
+        ///   - If `Features::INDIRECT_FIRST_INSTANCE` is not enabled on the device, the `first_instance` indirect argument must be 0.
+        ///   - The `first_instance` & `instance_count` indirect arguments must form a range that fits within all bound vertex buffers with `step_mode` set to `Instance`.
+        /// - When calling `draw_indirect`/`multi_draw_indirect`:
+        ///   - The `first_vertex` & `vertex_count` indirect arguments must form a range that fits within all bound vertex buffers with `step_mode` set to `Vertex`.
+        /// - When calling `draw_indexed_indirect`/`multi_draw_indexed_indirect`:
+        ///   - The `first_index` & `index_count` indirect arguments must form a range that fits within the bound index buffer.
+        ///
+        /// __Behavior is undefined if this validation is disabled and the rules above are not satisfied.__
+        ///
+        /// Disabling this will also cause the following built-ins to not report the right values on the D3D12 backend:
+        ///
+        /// - the 3 components of `@builtin(num_workgroups)` will be 0
+        /// - the value of `@builtin(vertex_index)` will not take into account the value of the `first_vertex`/`base_vertex` argument present in the indirect buffer
+        /// - the value of `@builtin(instance_index)` will not take into account the value of the `first_instance` argument present in the indirect buffer
+        ///
         /// When `Self::from_env()` is used takes value from `WGPU_VALIDATION_INDIRECT_CALL` environment variable.
         const VALIDATION_INDIRECT_CALL = 1 << 5;
 

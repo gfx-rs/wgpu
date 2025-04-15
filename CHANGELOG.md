@@ -44,6 +44,12 @@ Bottom level categories:
 
 #### Naga
 
+### Bux Fixes
+
+#### Naga
+
+Naga now infers the correct binding layout when a resource appears only in an assignment to `_`. By @andyleiserson in [#7540](https://github.com/gfx-rs/wgpu/pull/7540).
+
 - Add polyfills for `dot4U8Packed` and `dot4I8Packed` for all backends. By @robamler in [#7494](https://github.com/gfx-rs/wgpu/pull/7494).
 
 ### Changes

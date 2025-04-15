@@ -2523,6 +2523,7 @@ fn multi_draw_indirect(
 
     indirect_buffer.same_device_as(cmd_buf.as_ref())?;
     indirect_buffer.check_usage(BufferUsages::INDIRECT)?;
+    indirect_buffer.check_destroyed(state.snatch_guard)?;
 
     if offset % 4 != 0 {
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
