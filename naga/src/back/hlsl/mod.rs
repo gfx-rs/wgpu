@@ -472,6 +472,7 @@ pub enum Error {
 enum WrappedType {
     ZeroValue(help::WrappedZeroValue),
     ArrayLength(help::WrappedArrayLength),
+    ImageSample(help::WrappedImageSample),
     ImageQuery(help::WrappedImageQuery),
     ImageLoadScalar(crate::Scalar),
     Constructor(help::WrappedConstructor),

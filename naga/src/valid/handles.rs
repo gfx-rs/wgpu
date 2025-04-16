@@ -529,6 +529,7 @@ impl super::Validator {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 handle
                     .check_dep(image)?

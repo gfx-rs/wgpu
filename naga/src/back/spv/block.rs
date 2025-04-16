@@ -1661,6 +1661,7 @@ impl BlockContext<'_> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => self.write_image_sample(
                 result_type_id,
                 image,
@@ -1671,6 +1672,7 @@ impl BlockContext<'_> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
                 block,
             )?,
             crate::Expression::Select {

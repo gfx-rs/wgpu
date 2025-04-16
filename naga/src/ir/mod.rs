@@ -1509,6 +1509,10 @@ pub enum Expression {
         offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
+        /// Whether the sampling operation should clamp each component of
+        /// `coordinate` to the range `[half_texel, 1 - half_texel]`, regardless
+        /// of `sampler`.
+        clamp_to_edge: bool,
     },
 
     /// Load a texel from an image.

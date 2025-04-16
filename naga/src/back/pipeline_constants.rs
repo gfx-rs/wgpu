@@ -468,6 +468,7 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
             ref mut level,
             ref mut depth_ref,
             gather: _,
+            clamp_to_edge: _,
         } => {
             adjust(image);
             adjust(sampler);

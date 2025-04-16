@@ -664,6 +664,7 @@ impl FunctionInfo {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 let image_storage = GlobalOrArgument::from_expression(expression_arena, image)?;
                 let sampler_storage = GlobalOrArgument::from_expression(expression_arena, sampler)?;

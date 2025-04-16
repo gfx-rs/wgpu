@@ -33,7 +33,8 @@ use super::{
     super::FunctionCtx,
     writer::{
         ABS_FUNCTION, DIV_FUNCTION, EXTRACT_BITS_FUNCTION, F2I32_FUNCTION, F2I64_FUNCTION,
-        F2U32_FUNCTION, F2U64_FUNCTION, INSERT_BITS_FUNCTION, MOD_FUNCTION, NEG_FUNCTION,
+        F2U32_FUNCTION, F2U64_FUNCTION, IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION,
+        INSERT_BITS_FUNCTION, MOD_FUNCTION, NEG_FUNCTION,
     },
     BackendResult, WrappedType,
 };
@@ -42,6 +43,11 @@ use crate::{arena::Handle, proc::NameKey, ScalarKind};
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedArrayLength {
     pub(super) writable: bool,
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedImageSample {
+    pub(super) clamp_to_edge: bool,
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -243,6 +249,32 @@ impl<W: Write> super::Writer<'_, W> {
         writeln!(self.out, "}}")?;
         // Write extra new line
         writeln!(self.out)?;
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_image_sample_function(
+        &mut self,
+        sample: WrappedImageSample,
+    ) -> BackendResult {
+        match sample {
+            WrappedImageSample {
+                clamp_to_edge: true,
+            } => {
+                writeln!(self.out, "float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}(Texture2D<float4> tex, SamplerState samp, float2 coords) {{")?;
+                let l1 = crate::back::Level(1);
+                writeln!(self.out, "{l1}float2 size;")?;
+                writeln!(self.out, "{l1}tex.GetDimensions(size.x, size.y);")?;
+                writeln!(self.out, "{l1}float2 half_texel = float2(0.5, 0.5) / size;")?;
+                writeln!(
+                    self.out,
+                    "{l1}return tex.SampleLevel(samp, clamp(coords, half_texel, 1.0 - half_texel), 0.0);"
+                )?;
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+            _ => {}
+        }
 
         Ok(())
     }
@@ -1520,6 +1552,12 @@ impl<W: Write> super::Writer<'_, W> {
 
                     if self.wrapped.insert(WrappedType::ArrayLength(wal)) {
                         self.write_wrapped_array_length_function(wal)?;
+                    }
+                }
+                crate::Expression::ImageSample { clamp_to_edge, .. } => {
+                    let wrapped = WrappedImageSample { clamp_to_edge };
+                    if self.wrapped.insert(WrappedType::ImageSample(wrapped)) {
+                        self.write_wrapped_image_sample_function(wrapped)?;
                     }
                 }
                 crate::Expression::ImageQuery { image, query } => {

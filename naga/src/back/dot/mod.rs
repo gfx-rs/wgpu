@@ -600,6 +600,7 @@ fn write_function_expressions(
                 offset: _,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 edges.insert("image", image);
                 edges.insert("sampler", sampler);

@@ -338,6 +338,13 @@ impl Writer {
         })
     }
 
+    pub(super) fn get_vec2f_type_id(&mut self) -> Word {
+        self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::F32,
+        })
+    }
+
     pub(super) fn get_vec3u_type_id(&mut self) -> Word {
         self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Tri,

@@ -3056,6 +3056,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 let (dim, class, arrayed) = match *ctx.resolve_type(image, &self.module.types) {
                     TypeInner::Image {
@@ -3113,6 +3114,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(image, ctx)?;
                 // The space here isn't required but it helps with readability
                 write!(self.out, ", ")?;
+
+                // TODO: handle clamp_to_edge
+                // https://github.com/gfx-rs/wgpu/issues/7791
 
                 // We need to get the coordinates vector size to later build a vector that's `size + 1`
                 // if `depth_ref` is some, if it isn't a vector we panic as that's not a valid expression
