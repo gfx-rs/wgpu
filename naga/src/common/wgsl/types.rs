@@ -250,6 +250,9 @@ where
                         "texture_storage_{dim_str}{arrayed_str}<{format_str}{access_str}>"
                     )?;
                 }
+                Ic::External => {
+                    write!(out, "texture_external")?;
+                }
             }
         }
         TypeInner::Scalar(scalar) => {

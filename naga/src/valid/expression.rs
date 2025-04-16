@@ -460,6 +460,7 @@ impl super::Validator {
                         kind: crate::ScalarKind::Uint | crate::ScalarKind::Sint,
                         multi: false,
                     } if gather.is_some() => false,
+                    crate::ImageClass::External => false,
                     crate::ImageClass::Depth { multi: false } => true,
                     _ => return Err(ExpressionError::InvalidImageClass(class)),
                 };
@@ -551,7 +552,7 @@ impl super::Validator {
                         crate::ImageClass::Sampled {
                             kind: crate::ScalarKind::Float,
                             multi: false
-                        }
+                        } | crate::ImageClass::External
                     ) {
                         return Err(ExpressionError::InvalidSampleClampCoordinateToEdge(
                             alloc::format!("image class `{class:?}`"),

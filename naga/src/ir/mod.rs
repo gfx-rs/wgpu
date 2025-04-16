@@ -640,6 +640,8 @@ pub enum ImageClass {
         /// Multi-sampled depth image.
         multi: bool,
     },
+    /// External texture.
+    External,
     /// Storage image.
     Storage {
         format: StorageFormat,

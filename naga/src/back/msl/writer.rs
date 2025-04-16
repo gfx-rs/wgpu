@@ -321,6 +321,7 @@ impl Display for TypeContext<'_> {
                         };
                         ("texture", "", format.into(), access)
                     }
+                    crate::ImageClass::External => unimplemented!(),
                 };
                 let base_name = scalar.to_msl_name();
                 let array_str = if arrayed { "_array" } else { "" };
@@ -6637,6 +6638,7 @@ template <typename A>
                                             "read-write textures".to_string(),
                                         ));
                                     }
+                                    crate::ImageClass::External => unimplemented!(),
                                 },
                                 _ => {
                                     return Err(Error::UnsupportedArrayOfType(base));

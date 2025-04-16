@@ -732,6 +732,9 @@ impl super::Validator {
                 if arrayed && matches!(dim, crate::ImageDimension::Cube) {
                     self.require_type_capability(Capabilities::CUBE_ARRAY_TEXTURES)?;
                 }
+                if matches!(class, crate::ImageClass::External) {
+                    self.require_type_capability(Capabilities::TEXTURE_EXTERNAL)?;
+                }
                 TypeInfo::new(
                     TypeFlags::ARGUMENT | TypeFlags::CREATION_RESOLVED,
                     Alignment::ONE,

@@ -538,8 +538,8 @@ fn run() -> anyhow::Result<()> {
                 use naga::valid::Capabilities as C;
                 let missing = match Path::new(path).extension().and_then(|ex| ex.to_str()) {
                     Some("wgsl") => C::CLIP_DISTANCE | C::CULL_DISTANCE,
-                    Some("metal") => C::CULL_DISTANCE,
-                    _ => C::empty(),
+                    Some("metal") => C::CULL_DISTANCE | C::TEXTURE_EXTERNAL,
+                    _ => C::TEXTURE_EXTERNAL,
                 };
                 caps & !missing
             });

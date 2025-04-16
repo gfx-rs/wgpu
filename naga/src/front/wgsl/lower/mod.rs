@@ -3587,9 +3587,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?
                     }
 
-                    // Sampling `Storage` textures isn't allowed at all. Let the
-                    // validator report the error.
-                    ir::ImageClass::Storage { .. } => self.expression(args.next()?, ctx)?,
+                    // Sampling `External` textures with a specified level isn't
+                    // allowed, and sampling `Storage` textures isn't allowed at
+                    // all. Let the validator report the error.
+                    ir::ImageClass::Storage { .. } | ir::ImageClass::External => {
+                        self.expression(args.next()?, ctx)?
+                    }
                 };
                 level = ir::SampleLevel::Exact(exact);
                 depth_ref = None;

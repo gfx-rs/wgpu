@@ -118,6 +118,7 @@ impl Load {
             crate::ImageClass::Depth { .. } | crate::ImageClass::Sampled { .. } => {
                 spirv::Op::ImageFetch
             }
+            crate::ImageClass::External => unimplemented!(),
         };
 
         // `OpImageRead` and `OpImageFetch` instructions produce vec4<f32>

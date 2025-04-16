@@ -521,6 +521,10 @@ pub fn create_validator(
         Caps::RAY_HIT_VERTEX_POSITION,
         features.intersects(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN),
     );
+    caps.set(
+        Caps::TEXTURE_EXTERNAL,
+        features.intersects(wgt::Features::EXTERNAL_TEXTURE),
+    );
 
     naga::valid::Validator::new(flags, caps)
 }

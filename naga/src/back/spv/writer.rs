@@ -1246,6 +1246,7 @@ impl Writer {
                         self.request_image_format_capabilities(format.into())?;
                         false
                     }
+                    crate::ImageClass::External => unimplemented!(),
                 };
 
                 match dim {
