@@ -565,13 +565,13 @@ impl Surface {
         Some(self.swap_chain.read().as_ref()?.raw.clone())
     }
 
-    pub unsafe fn wait_for_frame_latency_object(
-        &self,
-        timeout: Option<std::time::Duration>,
-    ) -> Result<bool, crate::SurfaceError> {
-        let mut swapchain = self.swap_chain.write();
-        let sc = swapchain.as_mut().unwrap();
-        unsafe { sc.wait(timeout) }
+    /// Returns the waitable handle of the swapchain, if it exists.
+    pub unsafe fn waitable_handle(&self) -> Option<Foundation::HANDLE> {
+        let swapchain = self.swap_chain.read();
+        if let Some(swap_chain) = swapchain.as_ref() {
+            return swap_chain.waitable.clone();
+        }
+        None
     }
 }
 
