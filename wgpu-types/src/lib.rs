@@ -1079,34 +1079,6 @@ bitflags::bitflags! {
         /// Not Supported by:
         /// - GL ES / WebGL
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
-
-        /// If this is true, use of `@builtin(vertex_index)` and `@builtin(instance_index)` will properly take into consideration
-        /// the `first_vertex` and `first_instance` parameters of indirect draw calls.
-        ///
-        /// If this is false, `@builtin(vertex_index)` and `@builtin(instance_index)` will start by counting from 0, ignoring the
-        /// `first_vertex` and `first_instance` parameters.
-        ///
-        /// For example, if you had a draw call like this:
-        /// - `first_vertex: 4,`
-        /// - `vertex_count: 12,`
-        ///
-        /// When this flag is present, `@builtin(vertex_index)` will start at 4 and go up to 15 (12 invocations).
-        ///
-        /// When this flag is not present, `@builtin(vertex_index)` will start at 0 and go up to 11 (12 invocations).
-        ///
-        /// This only affects the builtins in the shaders,
-        /// vertex buffers and instance rate vertex buffers will behave like expected with this flag disabled.
-        ///
-        /// See also [`Features::`]
-        ///
-        /// Supported By:
-        /// - Vulkan
-        /// - Metal
-        /// - OpenGL
-        ///
-        /// Will be implemented in the future by:
-        /// - DX12 ([#2471](https://github.com/gfx-rs/wgpu/issues/2471))
-        const VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW = 1 << 23;
     }
 }
 

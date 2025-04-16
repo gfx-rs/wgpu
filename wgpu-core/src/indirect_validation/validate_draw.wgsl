@@ -1,4 +1,5 @@
 override supports_indirect_first_instance: bool;
+override write_d3d12_special_constants: bool;
 
 struct MetadataEntry {
     // bits 0..30 are an offset into `src`
@@ -66,21 +67,32 @@ fn main(@builtin(global_invocation_id) global_invocation_id: vec3u) {
         failed |= first_instance != 0u;
     }
 
+    let dst_offset = select(0u, 3u, write_d3d12_special_constants);
     if failed {
-        dst[dst_base_offset + 0] = 0u;
-        dst[dst_base_offset + 1] = 0u;
-        dst[dst_base_offset + 2] = 0u;
-        dst[dst_base_offset + 3] = 0u;
+        if write_d3d12_special_constants {
+            dst[dst_base_offset + 0] = 0u;
+            dst[dst_base_offset + 1] = 0u;
+            dst[dst_base_offset + 2] = 0u;
+        }
+        dst[dst_base_offset + dst_offset + 0] = 0u;
+        dst[dst_base_offset + dst_offset + 1] = 0u;
+        dst[dst_base_offset + dst_offset + 2] = 0u;
+        dst[dst_base_offset + dst_offset + 3] = 0u;
         if (is_indexed) {
-            dst[dst_base_offset + 4] = 0u;
+            dst[dst_base_offset + dst_offset + 4] = 0u;
         }
     } else {
-        dst[dst_base_offset + 0] = src[src_base_offset + 0];
-        dst[dst_base_offset + 1] = src[src_base_offset + 1];
-        dst[dst_base_offset + 2] = src[src_base_offset + 2];
-        dst[dst_base_offset + 3] = src[src_base_offset + 3];
+        if write_d3d12_special_constants {
+            dst[dst_base_offset + 0] = src[src_base_offset + 2 + u32(is_indexed)];
+            dst[dst_base_offset + 1] = src[src_base_offset + 3 + u32(is_indexed)];
+            dst[dst_base_offset + 2] = 0u;
+        }
+        dst[dst_base_offset + dst_offset + 0] = src[src_base_offset + 0];
+        dst[dst_base_offset + dst_offset + 1] = src[src_base_offset + 1];
+        dst[dst_base_offset + dst_offset + 2] = src[src_base_offset + 2];
+        dst[dst_base_offset + dst_offset + 3] = src[src_base_offset + 3];
         if (is_indexed) {
-            dst[dst_base_offset + 4] = src[src_base_offset + 4];
+            dst[dst_base_offset + dst_offset + 4] = src[src_base_offset + 4];
         }
     }
 }

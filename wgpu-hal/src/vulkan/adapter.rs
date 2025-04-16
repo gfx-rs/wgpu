@@ -559,8 +559,7 @@ impl PhysicalDeviceFeatures {
             | Df::INDIRECT_EXECUTION
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
-            | Df::NONBLOCKING_QUERY_RESOLVE
-            | Df::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
+            | Df::NONBLOCKING_QUERY_RESOLVE;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,

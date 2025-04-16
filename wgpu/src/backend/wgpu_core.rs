@@ -888,6 +888,12 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             crate::WgslLanguageFeatures::empty(),
             |acc, wle| {
                 acc | match wle {
+                    ImplementedLanguageExtension::ReadOnlyAndReadWriteStorageTextures => {
+                        crate::WgslLanguageFeatures::ReadOnlyAndReadWriteStorageTextures
+                    }
+                    ImplementedLanguageExtension::Packed4x8IntegerDotProduct => {
+                        crate::WgslLanguageFeatures::Packed4x8IntegerDotProduct
+                    }
                     ImplementedLanguageExtension::PointerCompositeAccess => {
                         crate::WgslLanguageFeatures::PointerCompositeAccess
                     }
