@@ -1421,8 +1421,7 @@ impl Device {
             }
 
             if !(resolved_dimension == TextureViewDimension::D2
-                || (self.features.contains(wgt::Features::MULTIVIEW)
-                    && resolved_dimension == TextureViewDimension::D2Array))
+                || resolved_dimension == TextureViewDimension::D2Array)
             {
                 break 'error Err(TextureViewNotRenderableReason::Dimension(
                     resolved_dimension,
