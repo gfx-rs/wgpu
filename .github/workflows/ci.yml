@@ -26,8 +26,8 @@ env:
   # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
   #
   # Must also be changed in shaders.yaml
-  DXC_RELEASE: "v1.8.2407"
-  DXC_FILENAME: "dxc_2024_07_31_clang_cl.zip"
+  DXC_RELEASE: "v1.8.2502"
+  DXC_FILENAME: "dxc_2025_02_20.zip"
 
   # Sourced from https://archive.mesa3d.org/. Bumping this requires
   # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.

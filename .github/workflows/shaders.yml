@@ -21,8 +21,8 @@ env:
   # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
   #
   # Must also be changed in ci.yaml
-  DXC_RELEASE: "v1.8.2407"
-  DXC_FILENAME: "dxc_2024_07_31_clang_cl.zip"
+  DXC_RELEASE: "v1.8.2502"
+  DXC_FILENAME: "dxc_2025_02_20.zip"
 
 jobs:
   naga-validate-windows:
