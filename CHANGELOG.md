@@ -52,11 +52,19 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Add polyfills for `dot4U8Packed` and `dot4I8Packed` for all backends. By @robamler in [#7494](https://github.com/gfx-rs/wgpu/pull/7494).
 
+#### DX12
+
+- Get `vertex_index` & `instance_index` builtins working for indirect draws. By @teoxoy in [#7535](https://github.com/gfx-rs/wgpu/pull/7535)
+
 ### Changes
 
 #### General
 
 - Removed `MaintainBase` in favor of using `PollType`. By @waywardmonkeys in [#7508](https://github.com/gfx-rs/wgpu/pull/7508).
+
+#### Naga
+
+- Mark `readonly_and_readwrite_storage_textures` & `packed_4x8_integer_dot_product` language extensions as implemented. By @teoxoy in [#7543](https://github.com/gfx-rs/wgpu/pull/7543)
 
 ## v25.0.1 (2025-04-11)
 
@@ -359,6 +367,7 @@ By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](h
 - Fix building a BLAS with a transform buffer by adding a flag to indicate usage of the transform buffer. By @Vecvec in
 [#7062](https://github.com/gfx-rs/wgpu/pull/7062).
 - Move incrementation of `Device::last_acceleration_structure_build_command_index` into queue submit. By @Vecvec in [#7462](https://github.com/gfx-rs/wgpu/pull/7462).
+- Implement indirect draw validation. By @teoxoy in [#7140](https://github.com/gfx-rs/wgpu/pull/7140)
 
 #### Vulkan
 
@@ -373,6 +382,8 @@ By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](h
 - Fix HLSL storage format generation. By @Vecvec in [#6993](https://github.com/gfx-rs/wgpu/pull/6993) and [#7104](https://github.com/gfx-rs/wgpu/pull/7104)
 - Fix 3D storage texture bindings. By @SparkyPotato in [#7071](https://github.com/gfx-rs/wgpu/pull/7071)
 - Fix DX12 composite alpha modes. By @amrbashir in [#7117](https://github.com/gfx-rs/wgpu/pull/7117)
+- Bound check dynamic buffers. By @teoxoy in [#6931](https://github.com/gfx-rs/wgpu/pull/6931)
+- Fix size of buffer. By @teoxoy in [#7310](https://github.com/gfx-rs/wgpu/pull/7310)
 
 #### WebGPU
 
