@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, string::String};
 use core::{error::Error, fmt};
 
 #[derive(Clone, Debug)]
@@ -41,30 +41,66 @@ impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>
         let files = SimpleFile::new(label, &self.source);
         let config = term::Config::default();
 
-        let emit = |writer| {
-            term::emit(writer, &config, &files, &self.inner.diagnostic())
-                .expect("cannot write error")
-        };
-
-        #[cfg(feature = "termcolor")]
         let writer = {
-            let mut writer = term::termcolor::NoColor::new(Vec::new());
-            emit(&mut writer);
-            writer.into_inner()
+            let mut writer = DiagnosticBuffer::new();
+            term::emit(
+                writer.inner_mut(),
+                &config,
+                &files,
+                &self.inner.diagnostic(),
+            )
+            .expect("cannot write error");
+            writer.into_string()
         };
 
-        #[cfg(not(feature = "termcolor"))]
-        let writer = {
-            let mut writer = Vec::new();
-            emit(&mut writer);
-            writer
-        };
+        write!(f, "\nShader validation {}", writer)
+    }
+}
 
-        write!(
-            f,
-            "\nShader validation {}",
-            String::from_utf8_lossy(&writer)
+#[cfg(feature = "termcolor")]
+type DiagnosticBufferInner = codespan_reporting::term::termcolor::NoColor<alloc::vec::Vec<u8>>;
+#[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
+type DiagnosticBufferInner = alloc::vec::Vec<u8>;
+#[cfg(not(any(feature = "termcolor", feature = "stderr")))]
+type DiagnosticBufferInner = String;
+
+pub(crate) struct DiagnosticBuffer {
+    inner: DiagnosticBufferInner,
+}
+
+impl DiagnosticBuffer {
+    #[cfg_attr(
+        not(feature = "termcolor"),
+        expect(
+            clippy::missing_const_for_fn,
+            reason = "`NoColor::new` isn't `const`, but other `inner`s are."
         )
+    )]
+    pub fn new() -> Self {
+        Self {
+            #[cfg(feature = "termcolor")]
+            inner: codespan_reporting::term::termcolor::NoColor::new(alloc::vec::Vec::new()),
+            #[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
+            inner: alloc::vec::Vec::new(),
+            #[cfg(not(any(feature = "termcolor", feature = "stderr")))]
+            inner: String::new(),
+        }
+    }
+
+    pub fn inner_mut(&mut self) -> &mut DiagnosticBufferInner {
+        &mut self.inner
+    }
+
+    pub fn into_string(self) -> String {
+        let Self { inner } = self;
+        #[cfg(feature = "termcolor")]
+        let converted = String::from_utf8(inner.into_inner()).unwrap();
+        #[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
+        let converted = String::from_utf8(inner).unwrap();
+        #[cfg(not(any(feature = "termcolor", feature = "stderr")))]
+        let converted = inner;
+
+        converted
     }
 }
 impl<E> Error for ShaderError<E>

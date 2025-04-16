@@ -106,25 +106,10 @@ impl ParseError {
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
 
-        let emit = |writer| {
-            term::emit(writer, &config, &files, &self.diagnostic()).expect("cannot write error")
-        };
-
-        #[cfg(feature = "termcolor")]
-        let writer = {
-            let mut writer = term::termcolor::NoColor::new(Vec::new());
-            emit(&mut writer);
-            writer.into_inner()
-        };
-
-        #[cfg(not(feature = "termcolor"))]
-        let writer = {
-            let mut writer = Vec::new();
-            emit(&mut writer);
-            writer
-        };
-
-        String::from_utf8(writer).unwrap()
+        let mut writer = crate::error::DiagnosticBuffer::new();
+        term::emit(writer.inner_mut(), &config, &files, &self.diagnostic())
+            .expect("cannot write error");
+        writer.into_string()
     }
 
     /// Returns a [`SourceLocation`] for the first label in the error message.

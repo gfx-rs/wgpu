@@ -84,16 +84,14 @@ compact = []
 termcolor = ["codespan-reporting/termcolor"]
 
 ## Enables writing output to stderr.
-stderr = []
+stderr = ["codespan-reporting/std"]
 
 [dependencies]
 arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
-codespan-reporting = { workspace = true, default-features = false, features = [
-    "std",
-] }
+codespan-reporting = { workspace = true, default-features = false }
 hashbrown.workspace = true
 half = { workspace = true, default-features = false, features = ["num-traits"] }
 rustc-hash.workspace = true

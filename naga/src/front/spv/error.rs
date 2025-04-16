@@ -1,7 +1,6 @@
 use alloc::{
     format,
     string::{String, ToString},
-    vec::Vec,
 };
 
 use codespan_reporting::diagnostic::Diagnostic;
@@ -12,7 +11,7 @@ use super::ModuleState;
 use crate::{arena::Handle, front::atomic_upgrade};
 
 #[cfg(feature = "termcolor")]
-use codespan_reporting::term::termcolor::{NoColor, WriteColor};
+use codespan_reporting::term::termcolor::WriteColor;
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
@@ -155,13 +154,26 @@ pub enum Error {
 }
 
 impl Error {
-    #[cfg(feature = "termcolor")]
-    pub fn emit_to_writer(&self, writer: &mut impl WriteColor, source: &str) {
+    pub fn emit_to_writer(
+        &self,
+        #[cfg(feature = "termcolor")] writer: &mut impl WriteColor,
+        #[cfg(all(not(feature = "termcolor"), feature = "stderr"))] writer: &mut dyn std::io::Write,
+        #[cfg(not(any(feature = "termcolor", feature = "stderr")))]
+        writer: &mut dyn core::fmt::Write,
+        source: &str,
+    ) {
         self.emit_to_writer_with_path(writer, source, "glsl");
     }
 
-    #[cfg(feature = "termcolor")]
-    pub fn emit_to_writer_with_path(&self, writer: &mut impl WriteColor, source: &str, path: &str) {
+    pub fn emit_to_writer_with_path(
+        &self,
+        #[cfg(feature = "termcolor")] writer: &mut impl WriteColor,
+        #[cfg(all(not(feature = "termcolor"), feature = "stderr"))] writer: &mut dyn std::io::Write,
+        #[cfg(not(any(feature = "termcolor", feature = "stderr")))]
+        writer: &mut dyn core::fmt::Write,
+        source: &str,
+        path: &str,
+    ) {
         let path = path.to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
@@ -171,26 +183,9 @@ impl Error {
     }
 
     pub fn emit_to_string(&self, source: &str) -> String {
-        #[cfg(feature = "termcolor")]
-        {
-            let mut writer = NoColor::new(Vec::new());
-            self.emit_to_writer(&mut writer, source);
-            String::from_utf8(writer.into_inner()).unwrap()
-        }
-
-        #[cfg(not(feature = "termcolor"))]
-        {
-            let mut writer = Vec::new();
-
-            let path = "glsl".to_string();
-            let files = SimpleFile::new(path, source);
-            let config = term::Config::default();
-            let diagnostic = Diagnostic::error().with_message(format!("{self:?}"));
-
-            term::emit(&mut writer, &config, &files, &diagnostic).expect("cannot write error");
-
-            String::from_utf8(writer).unwrap()
-        }
+        let mut writer = crate::error::DiagnosticBuffer::new();
+        self.emit_to_writer(writer.inner_mut(), source);
+        writer.into_string()
     }
 }
 
