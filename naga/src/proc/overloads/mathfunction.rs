@@ -92,7 +92,9 @@ impl ir::MathFunction {
             Mf::Ldexp => ldexp().into(),
             Mf::Outer => outer().into(),
             Mf::Cross => regular!(2, VEC3 of FLOAT).into(),
-            Mf::Distance => regular!(2, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into(),
+            Mf::Distance => {
+                regular!(2, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into()
+            }
             Mf::Length => regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into(),
             Mf::Normalize => regular!(1, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
             Mf::FaceForward => regular!(3, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),

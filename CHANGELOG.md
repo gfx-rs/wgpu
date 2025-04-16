@@ -66,6 +66,12 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Mark `readonly_and_readwrite_storage_textures` & `packed_4x8_integer_dot_product` language extensions as implemented. By @teoxoy in [#7543](https://github.com/gfx-rs/wgpu/pull/7543)
 
+### Bug Fixes
+
+#### Naga
+
+- Allow scalars as the first argument of the `distance` built-in function. By @bernhl in [#7530](https://github.com/gfx-rs/wgpu/pull/7530).
+
 ## v25.0.1 (2025-04-11)
 
 ### Bug Fixes
