@@ -111,8 +111,12 @@ impl crate::framework::Example for Example {
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
-        wgpu::DownlevelCapabilities::default()
+        wgpu::DownlevelCapabilities {
+            flags: wgpu::DownlevelFlags::COMPUTE_SHADERS,
+            ..Default::default()
+        }
     }
+
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits::default()
     }
@@ -377,15 +381,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),
-    base_test_parameters: wgpu_test::TestParameters {
-        required_features: <Example as crate::framework::Example>::required_features(),
-        required_limits: <Example as crate::framework::Example>::required_limits(),
-        skips: vec![],
-        failures: Vec::new(),
-        required_downlevel_caps:
-            <Example as crate::framework::Example>::required_downlevel_capabilities(),
-        ..Default::default()
-    },
+    base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
 };
