@@ -18,6 +18,7 @@ use bit_set::BitSet;
 use crate::{
     arena::{Handle, HandleSet},
     proc::{ExpressionKindTracker, LayoutError, Layouter, TypeResolution},
+    span::WithSpanBoxed,
     FastHashSet,
 };
 
@@ -283,6 +284,7 @@ pub struct Validator {
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: HandleSet<crate::Expression>,
+    diagnostics: Vec<WithSpanBoxed>,
     override_ids: FastHashSet<u16>,
 
     /// Treat overrides whose initializers are not fully-evaluated
@@ -485,6 +487,7 @@ impl Validator {
             switch_values: FastHashSet::default(),
             valid_expression_list: Vec::new(),
             valid_expression_set: HandleSet::new(),
+            diagnostics: Vec::new(),
             override_ids: FastHashSet::default(),
             overrides_resolved: false,
             needs_visit: HandleSet::new(),
@@ -511,6 +514,7 @@ impl Validator {
         self.switch_values.clear();
         self.valid_expression_list.clear();
         self.valid_expression_set.clear();
+        self.diagnostics.clear();
         self.override_ids.clear();
     }
 
@@ -757,6 +761,13 @@ impl Validator {
         }
 
         Ok(mod_info)
+    }
+
+    /// Return any warnings produced during validation.
+    ///
+    /// The details of returned diagnostic messages are not a stable API.
+    pub fn diagnostics(&self) -> &[WithSpanBoxed] {
+        &self.diagnostics
     }
 }
 

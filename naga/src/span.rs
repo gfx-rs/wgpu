@@ -1,5 +1,6 @@
 use alloc::{
     borrow::ToOwned,
+    boxed::Box,
     format,
     string::{String, ToString},
     vec::Vec,
@@ -140,6 +141,20 @@ pub struct WithSpan<E> {
     spans: Vec<SpanContext>,
 }
 
+/// Variant of [`WithSpan`] that holds a boxed [`Error`].
+///
+/// This is currently used to hold warnings from validation, and since we don't
+/// have severity information in [`WithSpan`] or in the error itself, the
+/// implementations of [`Diagnostic`] assume that any [`WithSpan`] is a
+/// [`codespan_reporting::diagnostic::Severity::Error`] and any
+/// [`WithSpanBoxed`] is a
+/// [`codespan_reporting::diagnostic::Severity::Warning`].
+#[derive(Debug)]
+pub struct WithSpanBoxed {
+    inner: Box<dyn Error>,
+    spans: Vec<SpanContext>,
+}
+
 impl<E> fmt::Display for WithSpan<E>
 where
     E: fmt::Display,
@@ -237,6 +252,17 @@ impl<E> WithSpan<E> {
         res
     }
 
+    /// Convert this [`WithSpan`] into a [`WithSpanBoxed`].
+    pub fn boxed(self) -> WithSpanBoxed
+    where
+        E: Error + 'static,
+    {
+        WithSpanBoxed {
+            inner: Box::new(self.inner),
+            spans: self.spans,
+        }
+    }
+
     /// Return a [`SourceLocation`] for our first span, if we have one.
     pub fn location(&self, source: &str) -> Option<SourceLocation> {
         if self.spans.is_empty() || source.is_empty() {
@@ -245,48 +271,63 @@ impl<E> WithSpan<E> {
 
         Some(self.spans[0].0.location(source))
     }
+}
 
-    pub(crate) fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()>
-    where
-        E: Error,
-    {
-        use codespan_reporting::diagnostic::{Diagnostic, Label};
-        let diagnostic = Diagnostic::error()
-            .with_message(self.inner.to_string())
-            .with_labels(
-                self.spans()
-                    .map(|&(span, ref desc)| {
-                        Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
-                    })
-                    .collect(),
-            )
-            .with_notes({
-                let mut notes = Vec::new();
-                let mut source: &dyn Error = &self.inner;
-                while let Some(next) = Error::source(source) {
-                    notes.push(next.to_string());
-                    source = next;
-                }
-                notes
-            });
-        diagnostic
+fn diagnostic(
+    severity: codespan_reporting::diagnostic::Severity,
+    error: &dyn Error,
+    spans: &[SpanContext],
+) -> codespan_reporting::diagnostic::Diagnostic<()> {
+    use codespan_reporting::diagnostic::{Diagnostic, Label};
+    let diagnostic = Diagnostic::new(severity)
+        .with_message(error.to_string())
+        .with_labels(
+            spans
+                .iter()
+                .map(|&(span, ref desc)| {
+                    Label::primary((), span.to_range().unwrap()).with_message(desc.to_owned())
+                })
+                .collect(),
+        )
+        .with_notes({
+            let mut notes = Vec::new();
+            let mut source = error;
+            while let Some(next) = Error::source(source) {
+                notes.push(next.to_string());
+                source = next;
+            }
+            notes
+        });
+    diagnostic
+}
+
+impl<E: Error> Diagnostic for WithSpan<E> {
+    fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()> {
+        use codespan_reporting::diagnostic::Severity;
+        diagnostic(Severity::Error, &self.inner, &self.spans)
     }
+}
+
+impl Diagnostic for WithSpanBoxed {
+    fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()> {
+        /// We assume that `self` is a warning. See documentation for [`WithSpanBoxed`].
+        use codespan_reporting::diagnostic::Severity;
+        diagnostic(Severity::Warning, self.inner.as_ref(), &self.spans)
+    }
+}
+
+pub trait Diagnostic {
+    fn diagnostic(&self) -> codespan_reporting::diagnostic::Diagnostic<()>;
 
     /// Emits a summary of the error to standard error stream.
     #[cfg(feature = "stderr")]
-    pub fn emit_to_stderr(&self, source: &str)
-    where
-        E: Error,
-    {
+    fn emit_to_stderr(&self, source: &str) {
         self.emit_to_stderr_with_path(source, "wgsl")
     }
 
     /// Emits a summary of the error to standard error stream.
     #[cfg(feature = "stderr")]
-    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str)
-    where
-        E: Error,
-    {
+    fn emit_to_stderr_with_path(&self, source: &str, path: &str) {
         use codespan_reporting::{files, term};
 
         let files = files::SimpleFile::new(path, source);
@@ -305,18 +346,12 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to a string.
-    pub fn emit_to_string(&self, source: &str) -> String
-    where
-        E: Error,
-    {
+    fn emit_to_string(&self, source: &str) -> String {
         self.emit_to_string_with_path(source, "wgsl")
     }
 
     /// Emits a summary of the error to a string.
-    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String
-    where
-        E: Error,
-    {
+    fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
         use codespan_reporting::{files, term};
 
         let files = files::SimpleFile::new(path, source);

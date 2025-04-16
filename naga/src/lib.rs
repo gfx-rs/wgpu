@@ -124,7 +124,7 @@ pub mod valid;
 use alloc::string::String;
 
 pub use crate::arena::{Arena, Handle, Range, UniqueArena};
-pub use crate::span::{SourceLocation, Span, SpanContext, WithSpan};
+pub use crate::span::{Diagnostic, SourceLocation, Span, SpanContext, WithSpan};
 
 // TODO: Eliminate this re-export and migrate uses of `crate::Foo` to `use crate::ir; ir::Foo`.
 pub use ir::*;

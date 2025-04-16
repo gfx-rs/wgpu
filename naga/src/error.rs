@@ -1,6 +1,8 @@
 use alloc::{boxed::Box, string::String};
 use core::{error::Error, fmt};
 
+use crate::span::Diagnostic;
+
 #[derive(Clone, Debug)]
 pub struct ShaderError<E> {
     /// The source code of the shader.

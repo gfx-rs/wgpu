@@ -1,4 +1,4 @@
-use naga::{valid, Expression, Function, Scalar};
+use naga::{valid, Diagnostic, Expression, Function, Scalar};
 
 /// Validation should fail if `AtomicResult` expressions are not
 /// populated by `Atomic` statements.
@@ -922,4 +922,36 @@ fn main() {
         info.get_entry_point(0)[global],
         naga::valid::GlobalUse::QUERY
     );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn global_use_unreachable() {
+    let source = "
+@group(0) @binding(0)
+var<storage, read_write> global: u32;
+
+@compute @workgroup_size(64)
+fn main() {
+    var used: u32;
+    return;
+    used = global;
+}
+    ";
+
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let mut validator = valid::Validator::new(Default::default(), valid::Capabilities::all());
+    let info = validator.validate(&module).unwrap();
+
+    let global = module.global_variables.iter().next().unwrap().0;
+    assert_eq!(
+        info.get_entry_point(0)[global],
+        naga::valid::GlobalUse::READ,
+    );
+
+    // But it should emit a diagnostic
+    assert_eq!(validator.diagnostics().len(), 1);
+    assert!(validator.diagnostics()[0]
+        .emit_to_string(source)
+        .contains("warning: Unreachable statement after `return`"));
 }

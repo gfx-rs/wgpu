@@ -4,6 +4,8 @@ use anyhow::{anyhow, Context as _};
 use std::fs;
 use std::{error::Error, fmt, io::Read, path::Path, str::FromStr};
 
+use naga::Diagnostic;
+
 /// Translate shaders to different formats.
 #[derive(argh::FromArgs, Debug, Clone)]
 struct Args {

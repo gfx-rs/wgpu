@@ -7,6 +7,7 @@ use super::{
 };
 use crate::arena::{Arena, UniqueArena};
 use crate::arena::{Handle, HandleSet};
+use crate::diagnostic_filter::Severity;
 use crate::proc::TypeResolution;
 use crate::span::WithSpan;
 use crate::span::{AddSpan as _, MapErrWithSpan as _};
@@ -112,8 +113,8 @@ pub enum FunctionError {
         name: String,
         space: crate::AddressSpace,
     },
-    #[error("There are instructions after `return`/`break`/`continue`")]
-    InstructionsAfterReturn,
+    #[error("Unreachable statement after `{after}`")]
+    UnreachableStatement { after: &'static str },
     #[error("The `break` is used outside of a `loop` or `switch` context")]
     BreakOutsideOfLoopOrSwitch,
     #[error("The `continue` is used outside of a `loop` context")]
@@ -232,9 +233,18 @@ bitflags::bitflags! {
     }
 }
 
+/// Return type of `validate_block`
 struct BlockInfo {
+    /// Shader stages for which the block is valid.
     stages: super::ShaderStages,
-    finished: bool,
+
+    /// Span for a control flow statement that terminated the block.
+    ///
+    /// If the block contained a statement like `return`, `break`, `continue`,
+    /// or `discard` that will cause further statements not to be executed, this
+    /// is set based on that statement. This is used for "unreachable statement"
+    /// diagnostics.
+    unreachable: Option<(&'static str, crate::Span)>,
 }
 
 struct BlockContext<'a> {
@@ -751,12 +761,29 @@ impl super::Validator {
         context: &BlockContext,
     ) -> Result<BlockInfo, WithSpan<FunctionError>> {
         use crate::{AddressSpace, Statement as S, TypeInner as Ti};
-        let mut finished = false;
+        // Information used for "unreachable statement" diagnostics. Upon
+        // diverging control flow like `return`, this is set to `Some(Some(_))`.
+        // After emitting a diagnostic, this is set to `Some(None)`, so that
+        // there is only one warning for each block containing unreachable
+        // statements.
+        let mut unreachable = None;
         let mut stages = super::ShaderStages::all();
         for (statement, &span) in statements.span_iter() {
-            if finished {
-                return Err(FunctionError::InstructionsAfterReturn
-                    .with_span_static(span, "instructions after return"));
+            if let Some(Some((prev_stmt, prev_span))) = unreachable {
+                Severity::Warning.report_diag(
+                    FunctionError::UnreachableStatement { after: prev_stmt }
+                        .with_span()
+                        .with_context((span, String::from("this statement is unreachable")))
+                        .with_context((
+                            prev_span,
+                            String::from("because it appears after this statement"),
+                        )),
+                    |e, level| {
+                        log::log!(level, "{e}");
+                        self.diagnostics.push(e.boxed());
+                    },
+                )?;
+                unreachable = Some(None);
             }
             match *statement {
                 S::Emit(ref range) => {
@@ -806,7 +833,7 @@ impl super::Validator {
                 S::Block(ref block) => {
                     let info = self.validate_block(block, context)?;
                     stages &= info.stages;
-                    finished = info.finished;
+                    unreachable.get_or_insert(info.unreachable);
                 }
                 S::If {
                     condition,
@@ -949,14 +976,14 @@ impl super::Validator {
                         return Err(FunctionError::BreakOutsideOfLoopOrSwitch
                             .with_span_static(span, "invalid break"));
                     }
-                    finished = true;
+                    unreachable.get_or_insert(Some(("break", span)));
                 }
                 S::Continue => {
                     if !context.abilities.contains(ControlFlowAbility::CONTINUE) {
                         return Err(FunctionError::ContinueOutsideOfLoop
                             .with_span_static(span, "invalid continue"));
                     }
-                    finished = true;
+                    unreachable.get_or_insert(Some(("continue", span)));
                 }
                 S::Return { value } => {
                     if !context.abilities.contains(ControlFlowAbility::RETURN) {
@@ -996,11 +1023,11 @@ impl super::Validator {
                             .with_span_static(span, "invalid return"));
                         }
                     }
-                    finished = true;
+                    unreachable.get_or_insert(Some(("return", span)));
                 }
                 S::Kill => {
                     stages &= super::ShaderStages::FRAGMENT;
-                    finished = true;
+                    unreachable.get_or_insert(Some(("discard", span)));
                 }
                 S::Barrier(barrier) => {
                     stages &= super::ShaderStages::COMPUTE;
@@ -1618,7 +1645,10 @@ impl super::Validator {
                 }
             }
         }
-        Ok(BlockInfo { stages, finished })
+        Ok(BlockInfo {
+            stages,
+            unreachable: unreachable.unwrap_or(None),
+        })
     }
 
     fn validate_block(

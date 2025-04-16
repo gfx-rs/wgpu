@@ -3,16 +3,12 @@ Tests for the WGSL front end.
 */
 #![cfg(feature = "wgsl-in")]
 
-use naga::valid::Capabilities;
+use naga::{valid::Capabilities, Diagnostic};
 
 #[track_caller]
-fn check(input: &str, snapshot: &str) {
-    let output = match naga::front::wgsl::parse_str(input) {
-        Ok(_) => panic!("expected parser error, but parsing succeeded!"),
-        Err(err) => err.emit_to_string(input),
-    };
-    if output != snapshot {
-        for diff in diff::lines(snapshot, &output) {
+fn check_msg(actual: &str, expected: &str) {
+    if actual != expected {
+        for diff in diff::lines(actual, expected) {
             match diff {
                 diff::Result::Left(l) => println!("-{l}"),
                 diff::Result::Both(l, _) => println!(" {l}"),
@@ -21,6 +17,15 @@ fn check(input: &str, snapshot: &str) {
         }
         panic!("Error snapshot failed");
     }
+}
+
+#[track_caller]
+fn check(input: &str, snapshot: &str) {
+    let output = match naga::front::wgsl::parse_str(input) {
+        Ok(_) => panic!("expected parser error, but parsing succeeded!"),
+        Err(err) => err.emit_to_string(input),
+    };
+    check_msg(&output, snapshot);
 }
 
 #[track_caller]
@@ -1980,7 +1985,8 @@ fn invalid_local_vars() {
 }
 
 #[test]
-fn dead_code() {
+fn unreachable_statement() {
+    // We don't analyze whether both sides of an if statement exit.
     check_validation! {
         "
         fn dead_code_after_if(condition: bool) -> i32 {
@@ -1994,20 +2000,172 @@ fn dead_code() {
         ":
         Ok(_)
     }
+
+    // Statements removed in lowering don't trigger the warning.
     check_validation! {
         "
+        fn dead_phony_assignment() -> i32 {
+            return 1;
+            _ = 2;
+        }
+        ":
+        Ok(_)
+    }
+
+    // But other statements do trigger the warning.
+    // Variant 1
+    let source = "
         fn dead_code_after_block() -> i32 {
             {
                 return 1;
             }
             return 2;
+            return 3;
         }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InstructionsAfterReturn,
-            ..
-        })
-    }
+        ";
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let mut validator = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::default(),
+    );
+    // Validation should succeed
+    validator.validate(&module).unwrap();
+
+    // It should produce one diagnostic, even though there are two unreachable
+    // statements.
+    assert_eq!(validator.diagnostics().len(), 1);
+    check_msg(
+        &validator.diagnostics()[0].emit_to_string(source),
+        "warning: Unreachable statement after `return`
+  ┌─ wgsl:4:17
+  │
+4 │                 return 1;
+  │                 ^^^^^^^^^ because it appears after this statement
+5 │             }
+6 │             return 2;
+  │             ^^^^^^^^^ this statement is unreachable
+
+",
+    );
+
+    // Variant 2
+    let source = "
+        fn dead_code_after_block() -> i32 {
+            {
+                return 1;
+                return 2;
+            }
+            return 3;
+        }
+        ";
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let mut validator = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::default(),
+    );
+    // Validation should succeed
+    validator.validate(&module).unwrap();
+
+    // It should produce one diagnostic, even though there are two unreachable
+    // statements.
+    assert_eq!(validator.diagnostics().len(), 1);
+    check_msg(
+        &validator.diagnostics()[0].emit_to_string(source),
+        "warning: Unreachable statement after `return`
+  ┌─ wgsl:4:17
+  │
+4 │                 return 1;
+  │                 ^^^^^^^^^ because it appears after this statement
+5 │                 return 2;
+  │                 ^^^^^^^^^ this statement is unreachable
+
+",
+    );
+
+    // Variant 3
+    let source = "
+        fn dead_code_after_block() -> i32 {
+            var x: i32;
+            {
+                return 1;
+                x = 2;
+            }
+            return 3;
+        }
+        ";
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let mut validator = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::default(),
+    );
+    // Validation should succeed
+    validator.validate(&module).unwrap();
+
+    // It should produce one diagnostic, even though there are two unreachable
+    // statements.
+    assert_eq!(validator.diagnostics().len(), 1);
+    check_msg(
+        &validator.diagnostics()[0].emit_to_string(source),
+        "warning: Unreachable statement after `return`
+  ┌─ wgsl:5:17
+  │
+5 │                 return 1;
+  │                 ^^^^^^^^^ because it appears after this statement
+6 │                 x = 2;
+  │                 ^^^^^ this statement is unreachable
+
+",
+    );
+
+    // Variant 4
+    let source = "
+        fn dead_code_after_block() -> i32 {
+            var x: i32;
+            return 1;
+            {
+                return 2;
+                x = 3;
+            }
+            return 4;
+        }
+        ";
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let mut validator = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::default(),
+    );
+    // Validation should succeed
+    validator.validate(&module).unwrap();
+
+    // This one produces two diagnostics, because it doesn't seem worth the
+    // extra effort to suppress one of them.
+    assert_eq!(validator.diagnostics().len(), 2);
+    check_msg(
+        &validator.diagnostics()[0].emit_to_string(source),
+        "warning: Unreachable statement after `return`
+  ┌─ wgsl:4:13
+  │\x20\x20
+4 │               return 1;
+  │               ^^^^^^^^^ because it appears after this statement
+5 │ ╭             {
+6 │ │                 return 2;
+7 │ │                 x = 3;
+  │ ╰──────────────────────^ this statement is unreachable
+
+",
+    );
+    check_msg(
+        &validator.diagnostics()[1].emit_to_string(source),
+        "warning: Unreachable statement after `return`
+  ┌─ wgsl:6:17
+  │
+6 │                 return 2;
+  │                 ^^^^^^^^^ because it appears after this statement
+7 │                 x = 3;
+  │                 ^^^^^ this statement is unreachable
+
+",
+    );
 }
 
 #[test]
@@ -3442,19 +3600,19 @@ fn inconsistent_type() {
         "fn foo() -> f32 {
             return dot(vec4<f32>(), vec3<f32>());
         }",
-        r#"error: inconsistent type passed as argument #2 to `dot`
+        "error: inconsistent type passed as argument #2 to `dot`
   ┌─ wgsl:2:20
   │
 2 │             return dot(vec4<f32>(), vec3<f32>());
   │                    ^^^ ^^^^^^^^^^   ^^^^^^^^^^ argument #2 has type vec3<f32>
-  │                        │             
+  │                        │\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20
   │                        this argument has type vec4<f32>, which constrains subsequent arguments
   │
   = note: Because argument #1 has type vec4<f32>, only the following types
   = note: (or types that automatically convert to them) are accepted for argument #2:
   = note: allowed type: vec4<f32>
 
-"#,
+",
     );
 }
 
