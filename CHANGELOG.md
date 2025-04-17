@@ -59,6 +59,8 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 ### Changes
 
+- Loosen Viewport validation requirements to match the [new specs](https://github.com/gpuweb/gpuweb/pull/5025). By @ebbdrop in [#7564](https://github.com/gfx-rs/wgpu/pull/7564)
+
 #### General
 
 - Removed `MaintainBase` in favor of using `PollType`. By @waywardmonkeys in [#7508](https://github.com/gfx-rs/wgpu/pull/7508).
