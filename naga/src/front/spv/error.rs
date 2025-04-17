@@ -11,7 +11,13 @@ use super::ModuleState;
 use crate::{arena::Handle, front::atomic_upgrade};
 
 #[cfg(feature = "termcolor")]
-use codespan_reporting::term::termcolor::WriteColor;
+use codespan_reporting::term::termcolor::WriteColor as ErrorWrite;
+
+#[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
+use std::io::Write as ErrorWrite;
+
+#[cfg(not(any(feature = "termcolor", feature = "stderr")))]
+use core::fmt::Write as ErrorWrite;
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
@@ -154,25 +160,11 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn emit_to_writer(
-        &self,
-        #[cfg(feature = "termcolor")] writer: &mut impl WriteColor,
-        #[cfg(all(not(feature = "termcolor"), feature = "stderr"))] writer: &mut impl std::io::Write,
-        #[cfg(not(any(feature = "termcolor", feature = "stderr")))]
-        writer: &mut dyn core::fmt::Write,
-        source: &str,
-    ) {
+    pub fn emit_to_writer(&self, writer: &mut impl ErrorWrite, source: &str) {
         self.emit_to_writer_with_path(writer, source, "glsl");
     }
 
-    pub fn emit_to_writer_with_path(
-        &self,
-        #[cfg(feature = "termcolor")] writer: &mut impl WriteColor,
-        #[cfg(all(not(feature = "termcolor"), feature = "stderr"))] writer: &mut impl std::io::Write,
-        #[cfg(not(any(feature = "termcolor", feature = "stderr")))] writer: &mut impl core::fmt::Write,
-        source: &str,
-        path: &str,
-    ) {
+    pub fn emit_to_writer_with_path(&self, writer: &mut impl ErrorWrite, source: &str, path: &str) {
         let path = path.to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
