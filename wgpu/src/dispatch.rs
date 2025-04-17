@@ -166,7 +166,7 @@ pub trait DeviceInterface: CommonTraits {
     unsafe fn start_graphics_debugger_capture(&self);
     unsafe fn stop_graphics_debugger_capture(&self);
 
-    fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError>;
+    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError>;
 
     fn get_internal_counters(&self) -> crate::InternalCounters;
     fn generate_allocator_report(&self) -> Option<crate::AllocatorReport>;

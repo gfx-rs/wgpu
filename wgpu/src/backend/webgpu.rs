@@ -2402,7 +2402,7 @@ impl dispatch::DeviceInterface for WebDevice {
         // No capturing api in webgpu
     }
 
-    fn poll(&self, _poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError> {
+    fn poll(&self, _poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
         // Device is polled automatically
         Ok(crate::PollStatus::QueueEmpty)
     }
