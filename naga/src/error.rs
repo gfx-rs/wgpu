@@ -114,15 +114,13 @@ impl DiagnosticBuffer {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "termcolor")] {
-                let converted = String::from_utf8(inner.into_inner()).unwrap();
+                String::from_utf8(inner.into_inner()).unwrap()
             } else if #[cfg(feature = "stderr")] {
-                let converted = String::from_utf8(inner).unwrap();
+                String::from_utf8(inner).unwrap()
             } else {
-                let converted = inner;
+                inner
             }
-        };
-
-        converted
+        }
     }
 }
 impl<E> Error for ShaderError<E>
