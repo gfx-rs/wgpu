@@ -1,4 +1,4 @@
-// language: metal1.0
+// language: metal1.2
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -26,5 +26,12 @@ void depth(
     float phony_6 = d.sample(s, metal::float2(1.0, 2.0), metal::level(1));
     float phony_7 = d.sample_compare(c, metal::float2(1.0, 2.0), 0.0);
     metal::float4 phony_8 = d.gather_compare(c, metal::float2(1.0, 2.0), 0.0);
+    return;
+}
+
+void storage(
+    metal::texture2d<float, metal::access::read_write> st
+) {
+    st.write(metal::float4(2.0, 3.0, 4.0, 5.0), metal::uint2(metal::int2(0, 1)));
     return;
 }

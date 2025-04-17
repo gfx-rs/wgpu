@@ -18,3 +18,9 @@ fn depth() {
   _ = textureSampleCompare(d, c, vec2(1,2), 0);
   _ = textureGatherCompare(d, c, vec2(1,2), 0);
 }
+
+@group(0) @binding(4) var st: texture_storage_2d<rgba8unorm, read_write>;
+
+fn storage() {
+  textureStore(st, vec2(0,1), vec4(2,3,4,5));
+}

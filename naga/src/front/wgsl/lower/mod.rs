@@ -2681,15 +2681,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let coordinate = self.expression(args.next()?, ctx)?;
 
-                            let (_, arrayed) = ctx.image_data(image, image_span)?;
+                            let (class, arrayed) = ctx.image_data(image, image_span)?;
                             let array_index = arrayed
                                 .then(|| {
                                     args.min_args += 1;
                                     self.expression(args.next()?, ctx)
                                 })
                                 .transpose()?;
+                            let scalar = if let ir::ImageClass::Storage { format, .. } = class {
+                                format.into()
+                            } else {
+                                return Err(Box::new(Error::NotStorageTexture(image_span)));
+                            };
 
-                            let value = self.expression(args.next()?, ctx)?;
+                            let value =
+                                self.expression_with_leaf_scalar(args.next()?, scalar, ctx)?;
 
                             args.finish()?;
 
