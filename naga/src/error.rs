@@ -57,19 +57,18 @@ impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>
     }
 }
 
-#[cfg(feature = "termcolor")]
-type DiagnosticBufferInner = codespan_reporting::term::termcolor::NoColor<alloc::vec::Vec<u8>>;
-#[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
-type DiagnosticBufferInner = alloc::vec::Vec<u8>;
-#[cfg(not(any(feature = "termcolor", feature = "stderr")))]
-type DiagnosticBufferInner = String;
-
-#[cfg(feature = "termcolor")]
-pub(crate) use codespan_reporting::term::termcolor::WriteColor as _ErrorWrite;
-#[cfg(not(any(feature = "termcolor", feature = "stderr")))]
-pub(crate) use core::fmt::Write as _ErrorWrite;
-#[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
-pub(crate) use std::io::Write as _ErrorWrite;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "termcolor")] {
+        type DiagnosticBufferInner = codespan_reporting::term::termcolor::NoColor<alloc::vec::Vec<u8>>;
+        pub(crate) use codespan_reporting::term::termcolor::WriteColor as _ErrorWrite;
+    } else if #[cfg(feature = "stderr")] {
+        type DiagnosticBufferInner = alloc::vec::Vec<u8>;
+        pub(crate) use std::io::Write as _ErrorWrite;
+    } else {
+        type DiagnosticBufferInner = String;
+        pub(crate) use core::fmt::Write as _ErrorWrite;
+    }
+}
 
 #[cfg_attr(
     not(any(feature = "spv-in", feature = "glsl-in")),
@@ -93,14 +92,17 @@ impl DiagnosticBuffer {
         )
     )]
     pub fn new() -> Self {
-        Self {
-            #[cfg(feature = "termcolor")]
-            inner: codespan_reporting::term::termcolor::NoColor::new(alloc::vec::Vec::new()),
-            #[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
-            inner: alloc::vec::Vec::new(),
-            #[cfg(not(any(feature = "termcolor", feature = "stderr")))]
-            inner: String::new(),
-        }
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "termcolor")] {
+                let inner = codespan_reporting::term::termcolor::NoColor::new(alloc::vec::Vec::new());
+            } else if #[cfg(feature = "stderr")] {
+                let inner = alloc::vec::Vec::new();
+            } else {
+                let inner = String::new();
+            }
+        };
+
+        Self { inner }
     }
 
     pub fn inner_mut(&mut self) -> &mut DiagnosticBufferInner {
@@ -109,12 +111,16 @@ impl DiagnosticBuffer {
 
     pub fn into_string(self) -> String {
         let Self { inner } = self;
-        #[cfg(feature = "termcolor")]
-        let converted = String::from_utf8(inner.into_inner()).unwrap();
-        #[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
-        let converted = String::from_utf8(inner).unwrap();
-        #[cfg(not(any(feature = "termcolor", feature = "stderr")))]
-        let converted = inner;
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "termcolor")] {
+                let converted = String::from_utf8(inner.into_inner()).unwrap();
+            } else if #[cfg(feature = "stderr")] {
+                let converted = String::from_utf8(inner).unwrap();
+            } else {
+                let converted = inner;
+            }
+        };
 
         converted
     }
