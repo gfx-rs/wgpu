@@ -77,8 +77,8 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 ### Bug Fixes
 
-- Fix typos in various documentation. By @waywardmonkeys in [#7509](https://github.com/gfx-rs/wgpu/pull/7509).
-- Fix compile error when building with `profiling/profile-with-*` feature enabled. By @waywardmonkeys in [#7510](https://github.com/gfx-rs/wgpu/pull/7510).
+- Fix typos in various documentation. By @waywardmonkeys in [#7510](https://github.com/gfx-rs/wgpu/pull/7510).
+- Fix compile error when building with `profiling/profile-with-*` feature enabled. By @waywardmonkeys in [#7509](https://github.com/gfx-rs/wgpu/pull/7509).
 - Use `once_cell::race::OnceBox` instead of `std::sync::LazyLock` to allow `naga::proc::Namer::default()` to be available without backend features being enabled. By @cwfitzgerald in [#7517](https://github.com/gfx-rs/wgpu/pull/7517).
 
 #### DX12
