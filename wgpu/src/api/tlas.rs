@@ -61,7 +61,7 @@ impl Tlas {
     #[cfg(custom)]
     /// Returns custom implementation of Tlas (if custom backend and is internally T)
     pub fn as_custom<T: crate::custom::TlasInterface>(&self) -> Option<&T> {
-        self.shared.inner.as_custom_opt().and_then(|c| c.downcast())
+        self.shared.inner.as_custom()
     }
 }
 

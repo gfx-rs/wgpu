@@ -18,6 +18,6 @@ impl CommandBuffer {
     #[cfg(custom)]
     /// Returns custom implementation of CommandBuffer (if custom backend and is internally T)
     pub fn as_custom<T: custom::CommandBufferInterface>(&self) -> Option<&T> {
-        self.buffer.as_custom_opt().and_then(|c| c.downcast())
+        self.buffer.as_custom()
     }
 }

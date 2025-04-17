@@ -23,7 +23,7 @@ impl Queue {
     #[cfg(custom)]
     /// Returns custom implementation of Queue (if custom backend and is internally T)
     pub fn as_custom<T: custom::QueueInterface>(&self) -> Option<&T> {
-        self.inner.as_custom_opt().and_then(|c| c.downcast())
+        self.inner.as_custom()
     }
 
     #[cfg(custom)]
@@ -72,7 +72,7 @@ impl QueueWriteBufferView<'_> {
     #[cfg(custom)]
     /// Returns custom implementation of QueueWriteBufferView (if custom backend and is internally T)
     pub fn as_custom<T: custom::QueueWriteBufferInterface>(&self) -> Option<&T> {
-        self.inner.as_custom_opt().and_then(|c| c.downcast())
+        self.inner.as_custom()
     }
 }
 

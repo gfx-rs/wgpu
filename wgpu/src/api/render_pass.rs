@@ -40,7 +40,7 @@ impl RenderPass<'_> {
     #[cfg(custom)]
     /// Returns custom implementation of RenderPass (if custom backend and is internally T)
     pub fn as_custom<T: custom::RenderPassInterface>(&self) -> Option<&T> {
-        self.inner.as_custom_opt().and_then(|c| c.downcast())
+        self.inner.as_custom()
     }
 }
 

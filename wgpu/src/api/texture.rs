@@ -19,7 +19,7 @@ impl Texture {
     #[cfg(custom)]
     /// Returns custom implementation of Texture (if custom backend and is internally T)
     pub fn as_custom<T: custom::TextureInterface>(&self) -> Option<&T> {
-        self.inner.as_custom_opt().and_then(|c| c.downcast())
+        self.inner.as_custom()
     }
 }
 

@@ -390,7 +390,7 @@ impl Buffer {
     #[cfg(custom)]
     /// Returns custom implementation of Buffer (if custom backend and is internally T)
     pub fn as_custom<T: custom::BufferInterface>(&self) -> Option<&T> {
-        self.inner.as_custom_opt().and_then(|c| c.downcast())
+        self.inner.as_custom()
     }
 }
 

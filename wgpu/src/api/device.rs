@@ -37,7 +37,7 @@ impl Device {
     #[cfg(custom)]
     /// Returns custom implementation of Device (if custom backend and is internally T)
     pub fn as_custom<T: custom::DeviceInterface>(&self) -> Option<&T> {
-        self.inner.as_custom_opt().and_then(|c| c.downcast())
+        self.inner.as_custom()
     }
 
     #[cfg(custom)]
