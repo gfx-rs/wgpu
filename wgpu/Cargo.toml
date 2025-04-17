@@ -50,6 +50,9 @@ gles = ["wgpu-core?/gles"]
 webgpu = [
     "naga?/wgsl-out",
     "dep:wasm-bindgen-futures",
+    "dep:wasm-bindgen",
+    "dep:js-sys",
+    "dep:web-sys",
     "web-sys/Document",
     "web-sys/Event",
     "web-sys/Navigator",
@@ -57,6 +60,7 @@ webgpu = [
     "web-sys/Window",
     "web-sys/WorkerGlobalScope",
     "web-sys/WorkerNavigator",
+    "wgpu-types/web",
 ]
 
 #! ### Conditional Backends
@@ -68,7 +72,14 @@ angle = ["wgpu-core?/angle"]
 vulkan-portability = ["wgpu-core?/vulkan-portability"]
 
 ## Enables the GLES backend on WebAssembly only.
-webgl = ["wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
+webgl = [
+    "wgpu-core/webgl",
+    "dep:wgpu-hal",
+    "dep:smallvec",
+    "dep:wasm-bindgen",
+    "dep:js-sys",
+    "dep:web-sys",
+]
 
 ## Enables the noop backend for testing.
 ##
@@ -192,9 +203,9 @@ smallvec.workspace = true
 ###############
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 # Needed for all backends
-js-sys = { workspace = true, features = ["default"] }
-wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = [
+js-sys = { workspace = true, optional = true, features = ["default"] }
+wasm-bindgen = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true, features = [
     "HtmlCanvasElement",
     "OffscreenCanvas",
 ] }
