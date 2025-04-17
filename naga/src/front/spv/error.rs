@@ -8,16 +8,7 @@ use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 
 use super::ModuleState;
-use crate::{arena::Handle, front::atomic_upgrade};
-
-#[cfg(feature = "termcolor")]
-use codespan_reporting::term::termcolor::WriteColor as ErrorWrite;
-
-#[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
-use std::io::Write as ErrorWrite;
-
-#[cfg(not(any(feature = "termcolor", feature = "stderr")))]
-use core::fmt::Write as ErrorWrite;
+use crate::{arena::Handle, error::ErrorWrite, front::atomic_upgrade};
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {

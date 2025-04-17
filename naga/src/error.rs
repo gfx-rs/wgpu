@@ -64,6 +64,22 @@ type DiagnosticBufferInner = alloc::vec::Vec<u8>;
 #[cfg(not(any(feature = "termcolor", feature = "stderr")))]
 type DiagnosticBufferInner = String;
 
+#[cfg(feature = "termcolor")]
+pub(crate) use codespan_reporting::term::termcolor::WriteColor as _ErrorWrite;
+#[cfg(not(any(feature = "termcolor", feature = "stderr")))]
+pub(crate) use core::fmt::Write as _ErrorWrite;
+#[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
+pub(crate) use std::io::Write as _ErrorWrite;
+
+#[cfg_attr(
+    not(any(feature = "spv-in", feature = "glsl-in")),
+    expect(
+        unused_imports,
+        reason = "only need `ErrorWrite` with an appropriate front-end."
+    )
+)]
+pub(crate) use _ErrorWrite as ErrorWrite;
+
 pub(crate) struct DiagnosticBuffer {
     inner: DiagnosticBufferInner,
 }

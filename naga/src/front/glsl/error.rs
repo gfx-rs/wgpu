@@ -13,16 +13,7 @@ use thiserror::Error;
 
 use super::token::TokenValue;
 use crate::SourceLocation;
-use crate::{proc::ConstantEvaluatorError, Span};
-
-#[cfg(feature = "termcolor")]
-use codespan_reporting::term::termcolor::WriteColor as ErrorWrite;
-
-#[cfg(all(not(feature = "termcolor"), feature = "stderr"))]
-use std::io::Write as ErrorWrite;
-
-#[cfg(not(any(feature = "termcolor", feature = "stderr")))]
-use core::fmt::Write as ErrorWrite;
+use crate::{error::ErrorWrite, proc::ConstantEvaluatorError, Span};
 
 fn join_with_comma(list: &[ExpectedToken]) -> String {
     let mut string = "".to_string();
