@@ -7,10 +7,6 @@ use windows::{
     Win32::Graphics::Direct3D::{Dxc, Fxc},
 };
 
-// Currently this will use Dxc if it is chosen as the dx12 compiler at `Instance` creation time, and will
-// fallback to FXC if the Dxc libraries (dxil.dll and dxcompiler.dll) are not found, or if Fxc is chosen at'
-// `Instance` creation time.
-
 pub(super) fn compile_fxc(
     device: &super::Device,
     source: &str,
@@ -134,18 +130,12 @@ unsafe fn dxc_create_instance<T: DxcObj>(
     result__.ok_or(crate::DeviceError::Unexpected)
 }
 
-// Destructor order should be fine since _dxil and _dxc don't rely on each other.
 pub(super) struct DxcContainer {
     pub(super) max_shader_model: wgt::DxcShaderModel,
     compiler: Dxc::IDxcCompiler3,
-    utils: Dxc::IDxcUtils,
-    validator: Option<Dxc::IDxcValidator>,
     // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile.
     // Only needed when using dynamic linking.
     _dxc: Option<DxcLib>,
-    // Also Has to be held onto for the lifetime of the device otherwise shaders will fail to validate.
-    // Only needed when using dynamic linking.
-    _dxil: Option<DxcLib>,
 }
 
 #[derive(Debug, Error)]
@@ -158,26 +148,17 @@ pub(super) enum GetDynamicDXCContainerError {
 
 pub(super) fn get_dynamic_dxc_container(
     dxc_path: PathBuf,
-    dxil_path: PathBuf,
     max_shader_model: wgt::DxcShaderModel,
 ) -> Result<DxcContainer, GetDynamicDXCContainerError> {
     let dxc = DxcLib::new_dynamic(dxc_path)
         .map_err(|e| GetDynamicDXCContainerError::FailedToLoad("dxcompiler.dll", e))?;
 
-    let dxil = DxcLib::new_dynamic(dxil_path)
-        .map_err(|e| GetDynamicDXCContainerError::FailedToLoad("dxil.dll", e))?;
-
     let compiler = dxc.create_instance::<Dxc::IDxcCompiler3>()?;
-    let utils = dxc.create_instance::<Dxc::IDxcUtils>()?;
-    let validator = dxil.create_instance::<Dxc::IDxcValidator>()?;
 
     Ok(DxcContainer {
         max_shader_model,
         compiler,
-        utils,
-        validator: Some(validator),
         _dxc: Some(dxc),
-        _dxil: Some(dxil),
     })
 }
 
@@ -193,21 +174,11 @@ pub(super) fn get_static_dxc_container() -> Result<DxcContainer, crate::DeviceEr
                     ppv,
                 ))
             })?;
-            let utils = dxc_create_instance::<Dxc::IDxcUtils>(|clsid, iid, ppv| {
-                windows_core::HRESULT(mach_dxcompiler_rs::DxcCreateInstance(
-                    clsid.cast(),
-                    iid.cast(),
-                    ppv,
-                ))
-            })?;
 
             Ok(DxcContainer {
                 max_shader_model: wgt::DxcShaderModel::V6_7,
                 compiler,
-                utils,
-                validator: None,
                 _dxc: None,
-                _dxil: None,
             })
         }
     }
@@ -286,10 +257,6 @@ pub(super) fn compile_dxc(
         Dxc::DXC_ARG_ENABLE_STRICTNESS,
     ]);
 
-    if dxc_container.validator.is_some() {
-        compile_args.push(Dxc::DXC_ARG_SKIP_VALIDATION); // Disable implicit validation to work around bugs when dxil.dll isn't in the local directory.)
-    }
-
     if device
         .shared
         .private_caps
@@ -334,26 +301,6 @@ pub(super) fn compile_dxc(
     }
 
     let blob = get_output::<Dxc::IDxcBlob>(&compile_res, Dxc::DXC_OUT_OBJECT)?;
-
-    if let Some(validator) = &dxc_container.validator {
-        let err_blob = {
-            let res = unsafe { validator.Validate(&blob, Dxc::DxcValidatorFlags_InPlaceEdit) }
-                .into_device_result("Validate")?;
-
-            unsafe { res.GetErrorBuffer() }.into_device_result("GetErrorBuffer")?
-        };
-
-        let size = unsafe { err_blob.GetBufferSize() };
-        if size != 0 {
-            let err_blob = unsafe { dxc_container.utils.GetBlobAsUtf8(&err_blob) }
-                .into_device_result("GetBlobAsUtf8")?;
-            let err = as_err_str(&err_blob)?;
-            return Err(crate::PipelineError::Linkage(
-                stage_bit,
-                format!("DXC validation error: {err}"),
-            ));
-        }
-    }
 
     Ok(crate::dx12::CompiledShader::Dxc(blob))
 }

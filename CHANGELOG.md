@@ -67,6 +67,10 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Mark `readonly_and_readwrite_storage_textures` & `packed_4x8_integer_dot_product` language extensions as implemented. By @teoxoy in [#7543](https://github.com/gfx-rs/wgpu/pull/7543)
 
+#### D3D12
+
+- Remove the need for dxil.dll. By @teoxoy in [#7566](https://github.com/gfx-rs/wgpu/pull/7566)
+
 ### Bug Fixes
 
 #### Naga

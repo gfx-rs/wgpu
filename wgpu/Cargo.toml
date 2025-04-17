@@ -121,7 +121,7 @@ serde = ["wgpu-core?/serde", "wgpu-types/serde"]
 ## Enables statically linking DXC.
 ##
 ## Normally, to use the modern DXC shader compiler with WGPU, the final application
-## must be shipped alongside `dxcompiler.dll` and `dxil.dll` (which can be downloaded from [Microsoft's GitHub][dxc]).
+## must be shipped alongside `dxcompiler.dll` (min v1.8.2502) (which can be downloaded from [Microsoft's GitHub][dxc]).
 ## This feature statically links a version of DXC so that no external binaries are required
 ## to compile DX12 shaders.
 ##

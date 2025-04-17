@@ -69,13 +69,11 @@ impl crate::Instance for super::Instance {
         // Initialize DXC shader compiler
         let dxc_container = match desc.backend_options.dx12.shader_compiler.clone() {
             wgt::Dx12Compiler::DynamicDxc {
-                dxil_path,
                 dxc_path,
                 max_shader_model,
             } => {
                 let container = super::shader_compilation::get_dynamic_dxc_container(
                     dxc_path.into(),
-                    dxil_path.into(),
                     max_shader_model,
                 )
                 .map_err(|e| {
