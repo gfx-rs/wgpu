@@ -730,6 +730,7 @@ impl<'a> ColorAttachment<'a, dyn DynTextureView> {
     pub fn expect_downcast<B: DynTextureView>(&self) -> ColorAttachment<'a, B> {
         ColorAttachment {
             target: self.target.expect_downcast(),
+            depth_slice: self.depth_slice,
             resolve_target: self.resolve_target.as_ref().map(|rt| rt.expect_downcast()),
             ops: self.ops,
             clear_value: self.clear_value,

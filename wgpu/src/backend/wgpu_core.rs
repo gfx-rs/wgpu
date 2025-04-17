@@ -2348,6 +2348,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 ca.as_ref()
                     .map(|at| wgc::command::RenderPassColorAttachment {
                         view: at.view.inner.as_core().id,
+                        depth_slice: at.depth_slice,
                         resolve_target: at.resolve_target.map(|view| view.inner.as_core().id),
                         load_op: at.ops.load,
                         store_op: at.ops.store,

@@ -323,6 +323,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
                 view: &view,
                 usage: wgpu_types::TextureUses::COLOR_TARGET,
             },
+            depth_slice: None,
             resolve_target: None,
             ops: hal::AttachmentOps::STORE,
             clear_value: wgpu_types::Color::BLUE,

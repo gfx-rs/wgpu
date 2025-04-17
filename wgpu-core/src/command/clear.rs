@@ -461,6 +461,7 @@ fn clear_texture_via_render_passes(
                         ),
                         usage: wgt::TextureUses::COLOR_TARGET,
                     },
+                    depth_slice: None,
                     resolve_target: None,
                     ops: hal::AttachmentOps::STORE,
                     clear_value: wgt::Color::TRANSPARENT,

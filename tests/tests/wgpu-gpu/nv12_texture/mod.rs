@@ -109,6 +109,7 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
                 ops: wgpu::Operations::default(),
                 resolve_target: None,
                 view: &target_view,
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,

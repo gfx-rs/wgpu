@@ -162,6 +162,8 @@ impl<V: Copy + Default> ResolvedPassChannel<V> {
 pub struct RenderPassColorAttachment<TV = id::TextureViewId> {
     /// The view to use as an attachment.
     pub view: TV,
+    /// The depth slice index of a 3D view. It must not be provided if the view is not 3D.
+    pub depth_slice: Option<u32>,
     /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<TV>,
     /// Operation to perform to the output attachment at the start of a
@@ -1201,6 +1203,7 @@ impl<'d> RenderPassInfo<'d> {
                     view: color_view.try_raw(snatch_guard)?,
                     usage: wgt::TextureUses::COLOR_TARGET,
                 },
+                depth_slice: at.depth_slice,
                 resolve_target: hal_resolve_target,
                 ops: at.hal_ops(),
                 clear_value: at.clear_value(),
@@ -1417,6 +1420,7 @@ impl Global {
             for color_attachment in desc.color_attachments.iter() {
                 if let Some(RenderPassColorAttachment {
                     view: view_id,
+                    depth_slice,
                     resolve_target,
                     load_op,
                     store_op,
@@ -1438,6 +1442,7 @@ impl Global {
                         .color_attachments
                         .push(Some(ArcRenderPassColorAttachment {
                             view,
+                            depth_slice: *depth_slice,
                             resolve_target,
                             load_op: *load_op,
                             store_op: *store_op,

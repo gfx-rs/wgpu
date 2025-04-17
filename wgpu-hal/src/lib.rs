@@ -2336,6 +2336,7 @@ pub struct Attachment<'a, T: DynTextureView + ?Sized> {
 #[derive(Clone, Debug)]
 pub struct ColorAttachment<'a, T: DynTextureView + ?Sized> {
     pub target: Attachment<'a, T>,
+    pub depth_slice: Option<u32>,
     pub resolve_target: Option<Attachment<'a, T>>,
     pub ops: AttachmentOps,
     pub clear_value: wgt::Color,

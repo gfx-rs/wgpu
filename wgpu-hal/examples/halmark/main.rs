@@ -708,6 +708,7 @@ impl<A: hal::Api> Example<A> {
                     view: &surface_tex_view,
                     usage: wgpu_types::TextureUses::COLOR_TARGET,
                 },
+                depth_slice: None,
                 resolve_target: None,
                 ops: hal::AttachmentOps::STORE,
                 clear_value: wgpu_types::Color {

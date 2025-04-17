@@ -177,6 +177,7 @@ async fn run_test(
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: ms_texture_view.as_ref().unwrap_or(&out_texture_view),
+                    depth_slice: None,
                     resolve_target: multisample.then_some(&out_texture_view),
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),

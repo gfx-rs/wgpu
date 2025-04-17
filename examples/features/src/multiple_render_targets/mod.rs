@@ -329,6 +329,7 @@ impl TargetRenderer {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: surface_view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
@@ -508,11 +509,13 @@ impl crate::framework::Example for Example {
             &[
                 Some(wgpu::RenderPassColorAttachment {
                     view: &self.texture_targets.red_view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: Default::default(),
                 }),
                 Some(wgpu::RenderPassColorAttachment {
                     view: &self.texture_targets.green_view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: Default::default(),
                 }),
