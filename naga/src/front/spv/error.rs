@@ -157,7 +157,7 @@ impl Error {
     pub fn emit_to_writer(
         &self,
         #[cfg(feature = "termcolor")] writer: &mut impl WriteColor,
-        #[cfg(all(not(feature = "termcolor"), feature = "stderr"))] writer: &mut dyn std::io::Write,
+        #[cfg(all(not(feature = "termcolor"), feature = "stderr"))] writer: &mut impl std::io::Write,
         #[cfg(not(any(feature = "termcolor", feature = "stderr")))]
         writer: &mut dyn core::fmt::Write,
         source: &str,
@@ -168,9 +168,8 @@ impl Error {
     pub fn emit_to_writer_with_path(
         &self,
         #[cfg(feature = "termcolor")] writer: &mut impl WriteColor,
-        #[cfg(all(not(feature = "termcolor"), feature = "stderr"))] writer: &mut dyn std::io::Write,
-        #[cfg(not(any(feature = "termcolor", feature = "stderr")))]
-        writer: &mut dyn core::fmt::Write,
+        #[cfg(all(not(feature = "termcolor"), feature = "stderr"))] writer: &mut impl std::io::Write,
+        #[cfg(not(any(feature = "termcolor", feature = "stderr")))] writer: &mut impl core::fmt::Write,
         source: &str,
         path: &str,
     ) {
