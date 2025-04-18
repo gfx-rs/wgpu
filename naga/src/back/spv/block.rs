@@ -1143,13 +1143,14 @@ impl BlockContext<'_> {
                         ),
                     },
                     fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed) => {
-                        if self
-                            .writer
-                            .require_all(&[
-                                spirv::Capability::DotProduct,
-                                spirv::Capability::DotProductInput4x8BitPacked,
-                            ])
-                            .is_ok()
+                        if self.writer.lang_version() >= (1, 6)
+                            && self
+                                .writer
+                                .require_all(&[
+                                    spirv::Capability::DotProduct,
+                                    spirv::Capability::DotProductInput4x8BitPacked,
+                                ])
+                                .is_ok()
                         {
                             // Write optimized code using `PackedVectorFormat4x8Bit`.
                             self.writer.use_extension("SPV_KHR_integer_dot_product");

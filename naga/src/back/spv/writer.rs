@@ -60,7 +60,6 @@ impl Writer {
         if major != 1 {
             return Err(Error::UnsupportedVersion(major, minor));
         }
-        let raw_version = ((major as u32) << 16) | ((minor as u32) << 8);
 
         let mut capabilities_used = crate::FastIndexSet::default();
         capabilities_used.insert(spirv::Capability::Shader);
@@ -70,7 +69,7 @@ impl Writer {
         let void_type = id_gen.next();
 
         Ok(Writer {
-            physical_layout: PhysicalLayout::new(raw_version),
+            physical_layout: PhysicalLayout::new(major, minor),
             logical_layout: LogicalLayout::default(),
             id_gen,
             capabilities_available: options.capabilities.clone(),
@@ -97,6 +96,11 @@ impl Writer {
             ray_get_committed_intersection_function: None,
             ray_get_candidate_intersection_function: None,
         })
+    }
+
+    /// Returns `(major, minor)` of the SPIR-V language version.
+    pub const fn lang_version(&self) -> (u8, u8) {
+        self.physical_layout.lang_version()
     }
 
     /// Reset `Writer` to its initial state, retaining any allocations.

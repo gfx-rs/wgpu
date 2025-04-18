@@ -5,6 +5,7 @@ targets = "SPIRV | HLSL"
 
 [spv]
 capabilities = ["DotProduct", "DotProductInput4x8BitPacked"]
+version = [1, 6]
 
 [hlsl]
 shader_model = "V6_4"
