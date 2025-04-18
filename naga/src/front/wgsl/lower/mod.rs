@@ -2504,15 +2504,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                         "atomicLoad" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
-                            let pointer = self.atomic_pointer(args.next()?, ctx)?;
+                            let (pointer, _scalar) = self.atomic_pointer(args.next()?, ctx)?;
                             args.finish()?;
 
                             ir::Expression::Load { pointer }
                         }
                         "atomicStore" => {
                             let mut args = ctx.prepare_args(arguments, 2, span);
-                            let pointer = self.atomic_pointer(args.next()?, ctx)?;
-                            let value = self.expression(args.next()?, ctx)?;
+                            let (pointer, scalar) = self.atomic_pointer(args.next()?, ctx)?;
+                            let value =
+                                self.expression_with_leaf_scalar(args.next()?, scalar, ctx)?;
                             args.finish()?;
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
@@ -2526,13 +2527,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         "atomicCompareExchangeWeak" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
 
-                            let pointer = self.atomic_pointer(args.next()?, ctx)?;
+                            let (pointer, scalar) = self.atomic_pointer(args.next()?, ctx)?;
 
-                            let compare = self.expression(args.next()?, ctx)?;
+                            let compare =
+                                self.expression_with_leaf_scalar(args.next()?, scalar, ctx)?;
 
                             let value = args.next()?;
                             let value_span = ctx.ast_expressions.get_span(value);
-                            let value = self.expression(value, ctx)?;
+                            let value = self.expression_with_leaf_scalar(value, scalar, ctx)?;
 
                             args.finish()?;
 
@@ -3200,13 +3202,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         &mut self,
         expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<'source, Handle<ir::Expression>> {
+    ) -> Result<'source, (Handle<ir::Expression>, ir::Scalar)> {
         let span = ctx.ast_expressions.get_span(expr);
         let pointer = self.expression(expr, ctx)?;
 
         match *resolve_inner!(ctx, pointer) {
             ir::TypeInner::Pointer { base, .. } => match ctx.module.types[base].inner {
-                ir::TypeInner::Atomic { .. } => Ok(pointer),
+                ir::TypeInner::Atomic(scalar) => Ok((pointer, scalar)),
                 ref other => {
                     log::error!("Pointer type to {:?} passed to atomic op", other);
                     Err(Box::new(Error::InvalidAtomicPointer(span)))
@@ -3229,8 +3231,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     ) -> Result<'source, Option<Handle<ir::Expression>>> {
         let mut args = ctx.prepare_args(args, 2, span);
 
-        let pointer = self.atomic_pointer(args.next()?, ctx)?;
-        let value = self.expression(args.next()?, ctx)?;
+        let (pointer, scalar) = self.atomic_pointer(args.next()?, ctx)?;
+        let value = self.expression_with_leaf_scalar(args.next()?, scalar, ctx)?;
         let value_inner = resolve_inner!(ctx, value);
         args.finish()?;
 
