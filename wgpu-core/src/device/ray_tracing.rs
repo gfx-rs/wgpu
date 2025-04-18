@@ -123,7 +123,7 @@ impl Device {
             Some(ManuallyDrop::new(unsafe {
                 self.raw()
                     .create_buffer(&hal::BufferDescriptor {
-                        label: None,
+                        label: Some("(wgpu internal) compaction read-back buffer"),
                         size: size_of::<wgpu_types::BufferAddress>() as wgpu_types::BufferAddress,
                         usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY
                             | wgpu_types::BufferUses::MAP_READ,
