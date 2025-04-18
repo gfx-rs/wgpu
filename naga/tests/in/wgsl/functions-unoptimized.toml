@@ -1,0 +1,6 @@
+# Explicitly turn off optimizations for `dot4I8Packed` and `dot4U8Packed` on HLSL.
+
+targets = "HLSL"
+
+[hlsl]
+shader_model = "V6_3"
