@@ -1,6 +1,10 @@
-# Explicitly turn on optimizations for `dot4I8Packed` and `dot4U8Packed` on HLSL.
+# Explicitly turn on optimizations for `dot4I8Packed` and `dot4U8Packed`
+# on SPIRV and HLSL.
 
-targets = "HLSL"
+targets = "SPIRV | HLSL"
+
+[spv]
+capabilities = ["DotProduct", "DotProductInput4x8BitPacked"]
 
 [hlsl]
 shader_model = "V6_4"

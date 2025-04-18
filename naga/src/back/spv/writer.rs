@@ -202,6 +202,43 @@ impl Writer {
         }
     }
 
+    /// Indicate that the code requires all of the listed capabilities.
+    ///
+    /// If all entries of `capabilities` appear in the available capabilities
+    /// specified in the [`Options`] from which this `Writer` was created
+    /// (including the case where [`Options::capabilities`] is `None`), add
+    /// them all to this `Writer`'s [`capabilities_used`] table, and return
+    /// `Ok(())`. If at least one of the listed capabilities is not available,
+    /// do not add anything to the `capabilities_used` table, and return the
+    /// first unavailable requested capability, wrapped in `Err()`.
+    ///
+    /// This method is does not return an [`enum@Error`] in case of failure
+    /// because it may be used in cases where the caller can recover (e.g.,
+    /// with a polyfill) if the requested capabilities are not available. In
+    /// this case, it would be unnecessary work to find *all* the unavailable
+    /// requested capabilities, and to allocate a `Vec` for them, just so we
+    /// could return an [`Error::MissingCapabilities`]).
+    ///
+    /// [`capabilities_used`]: Writer::capabilities_used
+    pub(super) fn require_all(
+        &mut self,
+        capabilities: &[spirv::Capability],
+    ) -> Result<(), spirv::Capability> {
+        if let Some(ref available) = self.capabilities_available {
+            for requested in capabilities {
+                if !available.contains(requested) {
+                    return Err(*requested);
+                }
+            }
+        }
+
+        for requested in capabilities {
+            self.capabilities_used.insert(*requested);
+        }
+
+        Ok(())
+    }
+
     /// Indicate that the code uses the given extension.
     pub(super) fn use_extension(&mut self, extension: &'static str) {
         self.extensions_used.insert(extension);
