@@ -19,14 +19,6 @@ static_assertions::assert_impl_all!(TextureView: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(TextureView => .inner);
 
 impl TextureView {
-    #[cfg(custom)]
-    /// Returns custom implementation of TextureView (if custom backend and is internally T)
-    pub fn as_custom<T: custom::TextureViewInterface>(&self) -> Option<&T> {
-        self.inner.as_custom()
-    }
-}
-
-impl TextureView {
     /// Returns the inner hal `TextureView` using a callback. The hal texture will be `None` if the
     /// backend type argument does not match with this wgpu Texture
     ///
@@ -47,6 +39,12 @@ impl TextureView {
         } else {
             hal_texture_view_callback(None)
         }
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of TextureView (if custom backend and is internally T)
+    pub fn as_custom<T: custom::TextureViewInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 }
 

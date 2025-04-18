@@ -16,14 +16,6 @@ static_assertions::assert_impl_all!(Texture: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(Texture => .inner);
 
 impl Texture {
-    #[cfg(custom)]
-    /// Returns custom implementation of Texture (if custom backend and is internally T)
-    pub fn as_custom<T: custom::TextureInterface>(&self) -> Option<&T> {
-        self.inner.as_custom()
-    }
-}
-
-impl Texture {
     /// Returns the inner hal Texture using a callback. The hal texture will be `None` if the
     /// backend type argument does not match with this wgpu Texture
     ///
@@ -43,6 +35,12 @@ impl Texture {
         } else {
             hal_texture_callback(None)
         }
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of Texture (if custom backend and is internally T)
+    pub fn as_custom<T: custom::TextureInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 
     /// Creates a view of this texture, specifying an interpretation of its texels and

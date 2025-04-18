@@ -18,6 +18,8 @@ pub struct BindGroupLayout {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindGroupLayout: Send, Sync);
 
+crate::cmp::impl_eq_ord_hash_proxy!(BindGroupLayout => .inner);
+
 impl BindGroupLayout {
     #[cfg(custom)]
     /// Returns custom implementation of BindGroupLayout (if custom backend and is internally T)
@@ -25,8 +27,6 @@ impl BindGroupLayout {
         self.inner.as_custom()
     }
 }
-
-crate::cmp::impl_eq_ord_hash_proxy!(BindGroupLayout => .inner);
 
 /// Describes a [`BindGroupLayout`].
 ///

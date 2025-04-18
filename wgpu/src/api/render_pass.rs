@@ -37,14 +37,6 @@ static_assertions::assert_impl_all!(RenderPass<'_>: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(RenderPass<'_> => .inner);
 
 impl RenderPass<'_> {
-    #[cfg(custom)]
-    /// Returns custom implementation of RenderPass (if custom backend and is internally T)
-    pub fn as_custom<T: custom::RenderPassInterface>(&self) -> Option<&T> {
-        self.inner.as_custom()
-    }
-}
-
-impl RenderPass<'_> {
     /// Drops the lifetime relationship to the parent command encoder, making usage of
     /// the encoder while this pass is recorded a run-time error instead.
     ///
@@ -331,6 +323,12 @@ impl RenderPass<'_> {
     ) {
         self.inner
             .multi_draw_indexed_indirect(&indirect_buffer.inner, indirect_offset, count);
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of RenderPass (if custom backend and is internally T)
+    pub fn as_custom<T: custom::RenderPassInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 }
 

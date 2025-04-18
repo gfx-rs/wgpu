@@ -25,17 +25,15 @@ static_assertions::assert_impl_all!(ShaderModule: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(ShaderModule => .inner);
 
 impl ShaderModule {
+    /// Get the compilation info for the shader module.
+    pub fn get_compilation_info(&self) -> impl Future<Output = CompilationInfo> + WasmNotSend {
+        self.inner.get_compilation_info()
+    }
+
     #[cfg(custom)]
     /// Returns custom implementation of ShaderModule (if custom backend and is internally T)
     pub fn as_custom<T: custom::ShaderModuleInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
-    }
-}
-
-impl ShaderModule {
-    /// Get the compilation info for the shader module.
-    pub fn get_compilation_info(&self) -> impl Future<Output = CompilationInfo> + WasmNotSend {
-        self.inner.get_compilation_info()
     }
 }
 
