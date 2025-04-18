@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    ffi, mem,
+    ffi,
     num::NonZeroU32,
     ptr,
     string::{String, ToString as _},
@@ -57,9 +57,8 @@ impl super::Device {
             auxil::dxgi::exception::register_exception_handler();
         }
 
-        let (mem_allocator, device_memblock_size, host_memblock_size) =
-            suballocation::create_allocator(&raw, memory_hints)?;
-        let mem_allocator = Arc::new(mem_allocator);
+        let mem_allocator =
+            suballocation::Allocator::new(&raw, memory_hints, memory_budget_thresholds)?;
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -158,9 +157,6 @@ impl super::Device {
             )?,
             sampler_heap: super::sampler::SamplerHeap::new(&raw, &private_caps)?,
             private_caps,
-            device_memblock_size,
-            host_memblock_size,
-            memory_budget_thresholds,
         };
 
         let mut rtv_pool =
@@ -1939,7 +1935,11 @@ impl crate::Device for super::Device {
             ),
         };
 
-        if let Some(threshold) = self.shared.memory_budget_thresholds.for_resource_creation {
+        if let Some(threshold) = self
+            .mem_allocator
+            .memory_budget_thresholds
+            .for_resource_creation
+        {
             let info = self
                 .shared
                 .adapter
@@ -2285,33 +2285,7 @@ impl crate::Device for super::Device {
     }
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
-        let mut upstream = self.mem_allocator.lock().generate_report();
-
-        let allocations = upstream
-            .allocations
-            .iter_mut()
-            .map(|alloc| wgt::AllocationReport {
-                name: mem::take(&mut alloc.name),
-                offset: alloc.offset,
-                size: alloc.size,
-            })
-            .collect();
-
-        let blocks = upstream
-            .blocks
-            .iter()
-            .map(|block| wgt::MemoryBlockReport {
-                size: block.size,
-                allocations: block.allocations.clone(),
-            })
-            .collect();
-
-        Some(wgt::AllocatorReport {
-            allocations,
-            blocks,
-            total_allocated_bytes: upstream.total_allocated_bytes,
-            total_reserved_bytes: upstream.total_reserved_bytes,
-        })
+        Some(self.mem_allocator.generate_report())
     }
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
@@ -2329,7 +2303,7 @@ impl crate::Device for super::Device {
     }
 
     fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
-        let Some(threshold) = self.shared.memory_budget_thresholds.for_device_loss else {
+        let Some(threshold) = self.mem_allocator.memory_budget_thresholds.for_device_loss else {
             return Ok(());
         };
 
