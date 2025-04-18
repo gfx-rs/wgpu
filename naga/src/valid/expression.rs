@@ -631,64 +631,56 @@ impl super::Validator {
                 level,
             } => {
                 let ty = Self::global_var_ty(module, function, image)?;
-                match module.types[ty].inner {
-                    Ti::Image {
-                        class,
-                        arrayed,
-                        dim,
-                    } => {
-                        match resolver[coordinate].image_storage_coordinates() {
-                            Some(coord_dim) if coord_dim == dim => {}
-                            _ => {
-                                return Err(ExpressionError::InvalidImageCoordinateType(
-                                    dim, coordinate,
-                                ))
-                            }
-                        };
-                        if arrayed != array_index.is_some() {
-                            return Err(ExpressionError::InvalidImageArrayIndex);
-                        }
-                        if let Some(expr) = array_index {
-                            match resolver[expr] {
-                                Ti::Scalar(Sc {
-                                    kind: Sk::Sint | Sk::Uint,
-                                    width: _,
-                                }) => {}
-                                _ => return Err(ExpressionError::InvalidImageArrayIndexType(expr)),
-                            }
-                        }
+                let Ti::Image {
+                    class,
+                    arrayed,
+                    dim,
+                } = module.types[ty].inner
+                else {
+                    return Err(ExpressionError::ExpectedImageType(ty));
+                };
 
-                        match (sample, class.is_multisampled()) {
-                            (None, false) => {}
-                            (Some(sample), true) => {
-                                if resolver[sample].scalar_kind() != Some(Sk::Sint) {
-                                    return Err(ExpressionError::InvalidImageOtherIndexType(
-                                        sample,
-                                    ));
-                                }
-                            }
-                            _ => {
-                                return Err(ExpressionError::InvalidImageOtherIndex);
-                            }
-                        }
+                match resolver[coordinate].image_storage_coordinates() {
+                    Some(coord_dim) if coord_dim == dim => {}
+                    _ => return Err(ExpressionError::InvalidImageCoordinateType(dim, coordinate)),
+                };
+                if arrayed != array_index.is_some() {
+                    return Err(ExpressionError::InvalidImageArrayIndex);
+                }
+                if let Some(expr) = array_index {
+                    match resolver[expr] {
+                        Ti::Scalar(Sc {
+                            kind: Sk::Sint | Sk::Uint,
+                            width: _,
+                        }) => {}
+                        _ => return Err(ExpressionError::InvalidImageArrayIndexType(expr)),
+                    }
+                }
 
-                        match (level, class.is_mipmapped()) {
-                            (None, false) => {}
-                            (Some(level), true) => match resolver[level] {
-                                Ti::Scalar(Sc {
-                                    kind: Sk::Sint | Sk::Uint,
-                                    width: _,
-                                }) => {}
-                                _ => {
-                                    return Err(ExpressionError::InvalidImageArrayIndexType(level))
-                                }
-                            },
-                            _ => {
-                                return Err(ExpressionError::InvalidImageOtherIndex);
-                            }
+                match (sample, class.is_multisampled()) {
+                    (None, false) => {}
+                    (Some(sample), true) => {
+                        if resolver[sample].scalar_kind() != Some(Sk::Sint) {
+                            return Err(ExpressionError::InvalidImageOtherIndexType(sample));
                         }
                     }
-                    _ => return Err(ExpressionError::ExpectedImageType(ty)),
+                    _ => {
+                        return Err(ExpressionError::InvalidImageOtherIndex);
+                    }
+                }
+
+                match (level, class.is_mipmapped()) {
+                    (None, false) => {}
+                    (Some(level), true) => match resolver[level] {
+                        Ti::Scalar(Sc {
+                            kind: Sk::Sint | Sk::Uint,
+                            width: _,
+                        }) => {}
+                        _ => return Err(ExpressionError::InvalidImageArrayIndexType(level)),
+                    },
+                    _ => {
+                        return Err(ExpressionError::InvalidImageOtherIndex);
+                    }
                 }
                 ShaderStages::all()
             }

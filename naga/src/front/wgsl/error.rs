@@ -176,6 +176,7 @@ pub(crate) enum Error<'a> {
         from_type: String,
         to_type: String,
     },
+    NotStorageTexture(Span),
     BadTextureSampleType {
         span: Span,
         scalar: Scalar,
@@ -535,6 +536,11 @@ impl<'a> Error<'a> {
                 message: format!("unknown scalar type: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown scalar type".into())],
                 notes: vec!["Valid scalar types are f32, f64, i32, u32, bool".into()],
+            },
+            Error::NotStorageTexture(bad_span) => ParseError {
+                message: "textureStore can only be applied to storage textures".to_string(),
+                labels: vec![(bad_span, "not a storage texture".into())],
+                notes: vec![],
             },
             Error::BadTextureSampleType { span, scalar } => ParseError {
                 message: format!(
