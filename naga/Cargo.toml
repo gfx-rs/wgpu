@@ -91,6 +91,7 @@ arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
+cfg-if.workspace = true
 codespan-reporting = { workspace = true, default-features = false }
 hashbrown.workspace = true
 half = { workspace = true, default-features = false, features = ["num-traits"] }
@@ -111,7 +112,6 @@ petgraph = { version = "0.8", optional = true }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-ident = { version = "1.0", optional = true }
-cfg-if.workspace = true
 
 [build-dependencies]
 cfg_aliases.workspace = true

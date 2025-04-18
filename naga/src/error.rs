@@ -70,6 +70,7 @@ cfg_if::cfg_if! {
     }
 }
 
+// Using this indirect export to avoid duplicating the expect(...) for all three cases above.
 #[cfg_attr(
     not(any(feature = "spv-in", feature = "glsl-in")),
     expect(
