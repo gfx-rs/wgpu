@@ -244,7 +244,10 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
-    fn poll(&self, _maintain: wgpu::PollType) -> Result<wgpu::PollStatus, wgpu::PollError> {
+    fn poll(
+        &self,
+        _maintain: wgpu::wgt::PollType<u64>,
+    ) -> Result<wgpu::PollStatus, wgpu::PollError> {
         unimplemented!()
     }
 

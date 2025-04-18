@@ -17,6 +17,7 @@ impl fmt::Display for ShaderError<crate::front::wgsl::ParseError> {
         write!(f, "\nShader '{label}' parsing {string}")
     }
 }
+
 #[cfg(feature = "glsl-in")]
 impl fmt::Display for ShaderError<crate::front::glsl::ParseErrors> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -25,6 +26,7 @@ impl fmt::Display for ShaderError<crate::front::glsl::ParseErrors> {
         write!(f, "\nShader '{label}' parsing {string}")
     }
 }
+
 #[cfg(feature = "spv-in")]
 impl fmt::Display for ShaderError<crate::front::spv::Error> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -33,6 +35,7 @@ impl fmt::Display for ShaderError<crate::front::spv::Error> {
         write!(f, "\nShader '{label}' parsing {string}")
     }
 }
+
 impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use codespan_reporting::{files::SimpleFile, term};
@@ -50,6 +53,7 @@ impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>
         )
     }
 }
+
 impl<E> Error for ShaderError<E>
 where
     ShaderError<E>: fmt::Display,

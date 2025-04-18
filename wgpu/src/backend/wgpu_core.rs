@@ -1689,9 +1689,8 @@ impl dispatch::DeviceInterface for CoreDevice {
         };
     }
 
-    fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError> {
-        let maintain_inner = poll_type.map_index(|i| i.index);
-        match self.context.0.device_poll(self.id, maintain_inner) {
+    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
+        match self.context.0.device_poll(self.id, poll_type) {
             Ok(status) => Ok(status),
             Err(err) => {
                 if let Some(poll_error) = err.to_poll_error() {
