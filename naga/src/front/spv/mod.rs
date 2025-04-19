@@ -74,6 +74,14 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Float64,
     spirv::Capability::Geometry,
     spirv::Capability::MultiView,
+    spirv::Capability::StorageBuffer16BitAccess,
+    spirv::Capability::UniformAndStorageBuffer16BitAccess,
+    spirv::Capability::GroupNonUniform,
+    spirv::Capability::GroupNonUniformVote,
+    spirv::Capability::GroupNonUniformArithmetic,
+    spirv::Capability::GroupNonUniformBallot,
+    spirv::Capability::GroupNonUniformShuffle,
+    spirv::Capability::GroupNonUniformShuffleRelative,
     // tricky ones
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
@@ -380,7 +388,7 @@ impl Default for Options {
     fn default() -> Self {
         Options {
             adjust_coordinate_space: true,
-            strict_capabilities: false,
+            strict_capabilities: true,
             block_ctx_dump_prefix: None,
         }
     }

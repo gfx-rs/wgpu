@@ -2407,6 +2407,7 @@ dependencies = [
  "arrayvec",
  "bit-set 0.8.0",
  "bitflags 2.9.0",
+ "cfg-if",
  "cfg_aliases 0.2.1",
  "codespan-reporting",
  "diff",

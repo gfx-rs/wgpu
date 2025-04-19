@@ -352,6 +352,7 @@ By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](h
 - Refactored `use` statements to simplify future `no_std` support. By @bushrat011899 in [#7256](https://github.com/gfx-rs/wgpu/pull/7256)
 - Naga's WGSL frontend no longer allows using the `&` operator to take the address of a component of a vector,
   which is not permitted by the WGSL specification. By @andyleiserson in [#7284](https://github.com/gfx-rs/wgpu/pull/7284)
+- Naga's use of `termcolor` and `stderr` are now optional behind features of the same names. By @bushrat011899 in [#7482](https://github.com/gfx-rs/wgpu/pull/7482)
 
 #### Vulkan
 

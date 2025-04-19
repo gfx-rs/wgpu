@@ -153,7 +153,7 @@ fragile-send-sync-non-atomic-wasm = [
 #########################
 
 [dependencies]
-naga = { workspace = true, optional = true }
+naga = { workspace = true, optional = true, features = ["termcolor"] }
 wgpu-core = { workspace = true, optional = true }
 wgpu-types.workspace = true
 

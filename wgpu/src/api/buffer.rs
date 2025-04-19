@@ -386,6 +386,12 @@ impl Buffer {
     ) -> BufferViewMut<'_> {
         self.slice(bounds).get_mapped_range_mut()
     }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of Buffer (if custom backend and is internally T)
+    pub fn as_custom<T: custom::BufferInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
 }
 
 /// A slice of a [`Buffer`], to be mapped, used for vertex or index data, or the like.

@@ -35,6 +35,12 @@ static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 
 impl Device {
     #[cfg(custom)]
+    /// Returns custom implementation of Device (if custom backend and is internally T)
+    pub fn as_custom<T: custom::DeviceInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+
+    #[cfg(custom)]
     /// Creates Device from custom implementation
     pub fn from_custom<T: custom::DeviceInterface>(device: T) -> Self {
         Self {

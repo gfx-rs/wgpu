@@ -18,6 +18,11 @@ macro_rules! dyn_type {
             pub(crate) fn new<T: $interface>(t: T) -> Self {
                 Self(Arc::new(t))
             }
+
+            #[allow(clippy::allow_attributes, dead_code)]
+            pub(crate) fn downcast<T: $interface>(&self) -> Option<&T> {
+                self.0.as_ref().as_any().downcast_ref()
+            }
         }
 
         impl core::ops::Deref for $name {
@@ -45,6 +50,10 @@ macro_rules! dyn_type {
         impl $name {
             pub(crate) fn new<T: $interface>(t: T) -> Self {
                 Self(Arc::new(t))
+            }
+
+            pub(crate) fn downcast<T: $interface>(&self) -> Option<&T> {
+                self.0.as_ref().as_any().downcast_ref()
             }
         }
 

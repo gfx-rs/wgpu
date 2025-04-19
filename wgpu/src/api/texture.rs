@@ -37,6 +37,12 @@ impl Texture {
         }
     }
 
+    #[cfg(custom)]
+    /// Returns custom implementation of Texture (if custom backend and is internally T)
+    pub fn as_custom<T: custom::TextureInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+
     /// Creates a view of this texture, specifying an interpretation of its texels and
     /// possibly a subset of its layers and mip levels.
     ///

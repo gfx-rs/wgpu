@@ -40,6 +40,12 @@ impl TextureView {
             hal_texture_view_callback(None)
         }
     }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of TextureView (if custom backend and is internally T)
+    pub fn as_custom<T: custom::TextureViewInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
 }
 
 /// Describes a [`TextureView`].

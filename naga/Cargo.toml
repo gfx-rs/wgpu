@@ -80,15 +80,19 @@ hlsl-out-if-target-windows = []
 
 compact = []
 
+## Enables colored output through codespan-reporting and termcolor.
+termcolor = ["codespan-reporting/termcolor"]
+
+## Enables writing output to stderr.
+stderr = ["codespan-reporting/std"]
+
 [dependencies]
 arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
-codespan-reporting = { workspace = true, default-features = false, features = [
-    "std",
-    "termcolor",
-] }
+cfg-if.workspace = true
+codespan-reporting = { workspace = true, default-features = false }
 hashbrown.workspace = true
 half = { workspace = true, default-features = false, features = ["num-traits"] }
 rustc-hash.workspace = true

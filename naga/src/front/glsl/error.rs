@@ -8,13 +8,12 @@ use alloc::{
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
-use codespan_reporting::term::termcolor::{NoColor, WriteColor};
 use pp_rs::token::PreprocessorError;
 use thiserror::Error;
 
 use super::token::TokenValue;
 use crate::SourceLocation;
-use crate::{proc::ConstantEvaluatorError, Span};
+use crate::{error::ErrorWrite, proc::ConstantEvaluatorError, Span};
 
 fn join_with_comma(list: &[ExpectedToken]) -> String {
     let mut string = "".to_string();
@@ -166,11 +165,11 @@ pub struct ParseErrors {
 }
 
 impl ParseErrors {
-    pub fn emit_to_writer(&self, writer: &mut impl WriteColor, source: &str) {
+    pub fn emit_to_writer(&self, writer: &mut impl ErrorWrite, source: &str) {
         self.emit_to_writer_with_path(writer, source, "glsl");
     }
 
-    pub fn emit_to_writer_with_path(&self, writer: &mut impl WriteColor, source: &str, path: &str) {
+    pub fn emit_to_writer_with_path(&self, writer: &mut impl ErrorWrite, source: &str, path: &str) {
         let path = path.to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
@@ -187,9 +186,9 @@ impl ParseErrors {
     }
 
     pub fn emit_to_string(&self, source: &str) -> String {
-        let mut writer = NoColor::new(Vec::new());
-        self.emit_to_writer(&mut writer, source);
-        String::from_utf8(writer.into_inner()).unwrap()
+        let mut writer = crate::error::DiagnosticBuffer::new();
+        self.emit_to_writer(writer.inner_mut(), source);
+        writer.into_string()
     }
 }
 
