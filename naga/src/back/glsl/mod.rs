@@ -211,6 +211,10 @@ impl Version {
         *self >= Version::Desktop(130) || *self >= Version::new_gles(310)
     }
 
+    fn supports_std140_layout(&self) -> bool {
+        *self >= Version::Desktop(140) || *self >= Version::new_gles(300)
+    }
+
     fn supports_std430_layout(&self) -> bool {
         *self >= Version::Desktop(430) || *self >= Version::new_gles(310)
     }
@@ -1186,6 +1190,63 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper method used by [Self::write_global] to write just the layout part of
+    /// a non image/sampler global variable, if applicable.
+    ///
+    /// # Notes
+    ///
+    /// Adds trailing whitespace if any layout qualifier is written
+    fn write_global_layout(&mut self, global: &crate::GlobalVariable) -> BackendResult {
+        // Determine which of the `std` layouts we can use (if any)
+        let layout = match global.space {
+            crate::AddressSpace::Uniform => {
+                if self.options.version.supports_std140_layout() {
+                    Some("std140")
+                } else {
+                    None
+                }
+            }
+            crate::AddressSpace::Storage { .. } => {
+                if self.options.version.supports_std430_layout() {
+                    Some("std430")
+                } else if self.options.version.supports_std140_layout() {
+                    Some("std140")
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        // If our version supports explicit layouts, we can also output the explicit binding
+        // if we have it
+        if self.options.version.supports_explicit_locations() {
+            if let Some(ref br) = global.binding {
+                match self.options.binding_map.get(br) {
+                    Some(binding) => {
+                        let layout_padded =
+                            layout.map(|l| format!("{}, ", l)).unwrap_or("".to_string());
+
+                        write!(self.out, "layout({layout_padded}binding = {binding}) ")?;
+
+                        return Ok(());
+                    }
+                    None => {
+                        log::debug!("unassigned binding for {:?}", global.name);
+                    }
+                }
+            }
+        }
+
+        // Either no explicit bindings are supported or we didn't have any.
+        // Write just the memory layout.
+        if let Some(layout) = layout {
+            write!(self.out, "layout({}) ", layout)?;
+        }
+
+        Ok(())
+    }
+
     /// Helper method used to write non images/sampler globals
     ///
     /// # Notes
@@ -1198,34 +1259,7 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::GlobalVariable>,
         global: &crate::GlobalVariable,
     ) -> BackendResult {
-        if self.options.version.supports_explicit_locations() {
-            if let Some(ref br) = global.binding {
-                match self.options.binding_map.get(br) {
-                    Some(binding) => {
-                        let layout = match global.space {
-                            crate::AddressSpace::Storage { .. } => {
-                                if self.options.version.supports_std430_layout() {
-                                    "std430, "
-                                } else {
-                                    "std140, "
-                                }
-                            }
-                            crate::AddressSpace::Uniform => "std140, ",
-                            _ => "",
-                        };
-                        write!(self.out, "layout({layout}binding = {binding}) ")?
-                    }
-                    None => {
-                        log::debug!("unassigned binding for {:?}", global.name);
-                        if let crate::AddressSpace::Storage { .. } = global.space {
-                            if self.options.version.supports_std430_layout() {
-                                write!(self.out, "layout(std430) ")?
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        self.write_global_layout(global)?;
 
         if let crate::AddressSpace::Storage { access } = global.space {
             self.write_storage_access(access)?;
