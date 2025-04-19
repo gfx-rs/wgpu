@@ -359,6 +359,8 @@ pub enum GPUFeatureName {
     TextureCompressionEtc2,
     #[webidl(rename = "texture-compression-astc")]
     TextureCompressionAstc,
+    #[webidl(rename = "texture-compression-astc-sliced-3d")]
+    TextureCompressionAstcSliced3d,
     #[webidl(rename = "rg11b10ufloat-renderable")]
     Rg11b10ufloatRenderable,
     #[webidl(rename = "bgra8unorm-storage")]

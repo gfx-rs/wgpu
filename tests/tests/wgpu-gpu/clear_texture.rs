@@ -405,9 +405,14 @@ static CLEAR_TEXTURE_COMPRESSED_BCN: GpuTestConfiguration = GpuTestConfiguration
 static CLEAR_TEXTURE_COMPRESSED_ASTC: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ASTC)
+            .features(
+                wgpu::Features::CLEAR_TEXTURE
+                    | wgpu::Features::TEXTURE_COMPRESSION_ASTC
+                    | wgpu::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+            )
             .limits(wgpu::Limits {
                 max_texture_dimension_2d: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 12,
+                max_texture_dimension_3d: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 12,
                 ..wgpu::Limits::downlevel_defaults()
             })
             // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056

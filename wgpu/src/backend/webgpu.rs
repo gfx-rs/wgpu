@@ -734,6 +734,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 13] = [
         webgpu_sys::GpuFeatureName::TextureCompressionAstc,
     ),
     (
+        wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+        webgpu_sys::GpuFeatureName::TextureCompressionAstcSliced3d,
+    ),
+    (
         wgt::Features::TIMESTAMP_QUERY,
         webgpu_sys::GpuFeatureName::TimestampQuery,
     ),

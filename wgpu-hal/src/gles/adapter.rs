@@ -531,6 +531,7 @@ impl super::Adapter {
                     .compressed_texture_astc_supports_ldr_profile()
                 {
                     features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                    features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_3D);
                 }
                 if context
                     .glow_context
