@@ -44,7 +44,7 @@ Bottom level categories:
 
 #### Naga
 
-### Bux Fixes
+### Bug Fixes
 
 #### Naga
 
@@ -63,6 +63,7 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 #### General
 
+- Add support for the astc-slice-3d feature. By @mehmetoguzderin in [#7577](https://github.com/gfx-rs/wgpu/issues/7577)
 - Removed `MaintainBase` in favor of using `PollType`. By @waywardmonkeys in [#7508](https://github.com/gfx-rs/wgpu/pull/7508).
 
 #### Naga
