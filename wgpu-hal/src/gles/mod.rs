@@ -369,6 +369,9 @@ pub enum TextureInner {
     ExternalFramebuffer {
         inner: web_sys::WebGlFramebuffer,
     },
+    ExternalGlFrameBuffer {
+        inner: glow::NativeFramebuffer,
+    },
 }
 
 #[cfg(send_sync)]
@@ -385,6 +388,7 @@ impl TextureInner {
             Self::Texture { raw, target } => (raw, target),
             #[cfg(webgl)]
             Self::ExternalFramebuffer { .. } => panic!("Unexpected external framebuffer"),
+            Self::ExternalGlFrameBuffer { .. } => panic!("unexpected external framebuffer"),
         }
     }
 }

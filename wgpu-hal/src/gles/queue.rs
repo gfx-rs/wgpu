@@ -152,6 +152,9 @@ impl super::Queue {
             super::TextureInner::ExternalFramebuffer { ref inner } => unsafe {
                 gl.bind_external_framebuffer(glow::FRAMEBUFFER, inner);
             },
+            super::TextureInner::ExternalGlFrameBuffer { ref inner } => unsafe {
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(*inner));
+            },
         }
     }
 

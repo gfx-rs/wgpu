@@ -969,6 +969,7 @@ impl crate::Device for super::Device {
                 }
                 #[cfg(webgl)]
                 super::TextureInner::ExternalFramebuffer { .. } => {}
+                super::TextureInner::ExternalGlFrameBuffer { .. } => {}
             }
         }
 

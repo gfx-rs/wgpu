@@ -523,6 +523,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .any(|at| match at.target.view.inner {
                 #[cfg(webgl)]
                 super::TextureInner::ExternalFramebuffer { .. } => true,
+                super::TextureInner::ExternalGlFrameBuffer { .. } => true,
                 _ => false,
             });
 
