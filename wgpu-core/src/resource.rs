@@ -2122,20 +2122,23 @@ impl Blas {
             _ => panic!("No pending mapping."),
         };
         let status = {
+            let compaction_buffer = self.compaction_buffer.as_ref().unwrap().as_ref();
             unsafe {
                 let map_res = self.device.raw().map_buffer(
-                    self.compaction_buffer.as_ref().unwrap().as_ref(),
+                    compaction_buffer,
                     0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress,
                 );
                 match map_res {
                     Ok(mapping) => {
-                        assert!(mapping.is_coherent);
+                        if !mapping.is_coherent {
+                            self.device.raw().flush_mapped_ranges(compaction_buffer, &[0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress]);
+                        }
                         let size = core::ptr::read_unaligned(
                             mapping.ptr.as_ptr().cast::<wgt::BufferAddress>(),
                         );
                         self.device
                             .raw()
-                            .unmap_buffer(self.compaction_buffer.as_ref().unwrap().as_ref());
+                            .unmap_buffer(compaction_buffer);
                         if self.size_info.acceleration_structure_size != 0 {
                             debug_assert_ne!(size, 0);
                         }
