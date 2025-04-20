@@ -2131,14 +2131,18 @@ impl Blas {
                 match map_res {
                     Ok(mapping) => {
                         if !mapping.is_coherent {
-                            self.device.raw().flush_mapped_ranges(compaction_buffer, &[0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress]);
+                            // Clippy complains about this because it might not be intended, but
+                            // this is intentional.
+                            #[allow(clippy::single_range_in_vec_init)]
+                            self.device.raw().flush_mapped_ranges(
+                                compaction_buffer,
+                                &[0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress],
+                            );
                         }
                         let size = core::ptr::read_unaligned(
                             mapping.ptr.as_ptr().cast::<wgt::BufferAddress>(),
                         );
-                        self.device
-                            .raw()
-                            .unmap_buffer(compaction_buffer);
+                        self.device.raw().unmap_buffer(compaction_buffer);
                         if self.size_info.acceleration_structure_size != 0 {
                             debug_assert_ne!(size, 0);
                         }
