@@ -58,13 +58,7 @@ arbitrary = [
 ]
 spv-in = ["dep:petgraph", "dep:spirv"]
 spv-out = ["dep:spirv"]
-wgsl-in = [
-    "dep:hexf-parse",
-    "dep:strum",
-    "dep:unicode-ident",
-    "indexmap/std",
-    "compact",
-]
+wgsl-in = ["dep:hexf-parse", "dep:strum", "dep:unicode-ident", "compact"]
 wgsl-out = []
 
 ## Enables outputting to HLSL (Microsoft's High-Level Shader Language).
