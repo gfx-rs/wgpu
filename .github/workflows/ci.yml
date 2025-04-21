@@ -292,7 +292,7 @@ jobs:
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --all-features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --all-features
 
-      # Building for no_std platforms where every feature is enabled except "std".
+      # Building for no_std platforms.
       - name: Check `no_std`
         if: matrix.kind == 'no_std'
         shell: bash
@@ -301,9 +301,11 @@ jobs:
 
           # check with no features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
 
-          # Check with all features except "std".
+          # Check with all compatible features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,compact
 
       # Building for native platforms with standard tests.
       - name: Check native
