@@ -460,7 +460,7 @@ pub struct Instance {
     supports_allow_tearing: bool,
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
 
 impl Instance {
@@ -591,7 +591,7 @@ pub struct Adapter {
     // Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
 
 unsafe impl Send for Adapter {}
@@ -653,7 +653,7 @@ pub struct Device {
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Arc<Mutex<Allocator>>,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
     counters: Arc<wgt::HalCounters>,
 }
 

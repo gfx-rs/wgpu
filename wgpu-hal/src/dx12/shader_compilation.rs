@@ -4,16 +4,204 @@ use crate::auxil::dxgi::result::HResult;
 use thiserror::Error;
 use windows::{
     core::{Interface, PCSTR, PCWSTR},
-    Win32::Graphics::Direct3D::{Dxc, Fxc},
+    Win32::Graphics::Direct3D::{Dxc, Fxc, ID3DBlob, ID3DInclude, D3D_SHADER_MACRO},
 };
 
-pub(super) fn compile_fxc(
+pub(super) enum CompilerContainer {
+    Fxc(CompilerFxc),
+    DynamicDxc(CompilerDynamicDxc),
+    StaticDxc(CompilerStaticDxc),
+}
+
+pub(super) struct CompilerFxc {
+    fxc: FxcLib,
+}
+
+pub(super) struct CompilerDynamicDxc {
+    max_shader_model: wgt::DxcShaderModel,
+    compiler: Dxc::IDxcCompiler3,
+    // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile.
+    // Only needed when using dynamic linking.
+    _dxc: DxcLib,
+}
+
+pub(super) struct CompilerStaticDxc {
+    max_shader_model: wgt::DxcShaderModel,
+    compiler: Dxc::IDxcCompiler3,
+}
+
+#[derive(Debug, Error)]
+pub(super) enum GetContainerError {
+    #[error(transparent)]
+    Device(#[from] crate::DeviceError),
+    #[error("Failed to load {0}: {1}")]
+    FailedToLoad(&'static str, libloading::Error),
+}
+
+impl CompilerContainer {
+    pub(super) fn new_fxc() -> Result<Self, GetContainerError> {
+        let fxc =
+            FxcLib::new_dynamic().map_err(|e| GetContainerError::FailedToLoad(FxcLib::PATH, e))?;
+
+        Ok(Self::Fxc(CompilerFxc { fxc }))
+    }
+
+    pub(super) fn new_dynamic_dxc(
+        dxc_path: PathBuf,
+        max_shader_model: wgt::DxcShaderModel,
+    ) -> Result<Self, GetContainerError> {
+        let dxc = DxcLib::new_dynamic(dxc_path)
+            .map_err(|e| GetContainerError::FailedToLoad("dxcompiler.dll", e))?;
+
+        let compiler = dxc.create_instance::<Dxc::IDxcCompiler3>()?;
+
+        Ok(Self::DynamicDxc(CompilerDynamicDxc {
+            max_shader_model,
+            compiler,
+            _dxc: dxc,
+        }))
+    }
+
+    /// Creates a [`CompilerContainer`] that delegates to the statically-linked version of DXC.
+    pub(super) fn new_static_dxc() -> Result<CompilerContainer, crate::DeviceError> {
+        #[cfg(static_dxc)]
+        {
+            unsafe {
+                let compiler = dxc_create_instance::<Dxc::IDxcCompiler3>(|clsid, iid, ppv| {
+                    windows_core::HRESULT(mach_dxcompiler_rs::DxcCreateInstance(
+                        clsid.cast(),
+                        iid.cast(),
+                        ppv,
+                    ))
+                })?;
+
+                Ok(CompilerContainer::StaticDxc(CompilerStaticDxc {
+                    max_shader_model: wgt::DxcShaderModel::V6_7,
+                    compiler,
+                }))
+            }
+        }
+        #[cfg(not(static_dxc))]
+        {
+            panic!("Attempted to create a static DXC shader compiler, but the static-dxc feature was not enabled")
+        }
+    }
+
+    pub(super) fn max_shader_model(&self) -> Option<wgt::DxcShaderModel> {
+        match self {
+            CompilerContainer::Fxc(..) => None,
+            CompilerContainer::DynamicDxc(CompilerDynamicDxc {
+                max_shader_model, ..
+            })
+            | CompilerContainer::StaticDxc(CompilerStaticDxc {
+                max_shader_model, ..
+            }) => Some(max_shader_model.clone()),
+        }
+    }
+
+    pub(super) fn compile(
+        &self,
+        device: &super::Device,
+        source: &str,
+        source_name: Option<&CStr>,
+        raw_ep: &str,
+        stage_bit: wgt::ShaderStages,
+        full_stage: &str,
+    ) -> Result<super::CompiledShader, crate::PipelineError> {
+        match self {
+            CompilerContainer::Fxc(CompilerFxc { fxc }) => compile_fxc(
+                device,
+                source,
+                source_name,
+                raw_ep,
+                stage_bit,
+                full_stage,
+                fxc,
+            ),
+            CompilerContainer::DynamicDxc(CompilerDynamicDxc { compiler, .. })
+            | CompilerContainer::StaticDxc(CompilerStaticDxc { compiler, .. }) => compile_dxc(
+                device,
+                source,
+                source_name,
+                raw_ep,
+                stage_bit,
+                full_stage,
+                compiler,
+            ),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct FxcLib {
+    lib: crate::dx12::DynLib,
+}
+
+impl FxcLib {
+    const PATH: &str = "d3dcompiler_47.dll";
+
+    fn new_dynamic() -> Result<Self, libloading::Error> {
+        unsafe { crate::dx12::DynLib::new(Self::PATH).map(|lib| Self { lib }) }
+    }
+
+    fn compile(
+        &self,
+        psrcdata: *const core::ffi::c_void,
+        srcdatasize: usize,
+        psourcename: PCSTR,
+        pdefines: Option<*const D3D_SHADER_MACRO>,
+        pinclude: Option<*mut ID3DInclude>,
+        pentrypoint: PCSTR,
+        ptarget: PCSTR,
+        flags1: u32,
+        flags2: u32,
+        ppcode: *mut Option<ID3DBlob>,
+        pperrormsgs: Option<*mut Option<ID3DBlob>>,
+    ) -> Result<windows_core::Result<()>, crate::DeviceError> {
+        unsafe {
+            type D3DCompileFn = unsafe extern "system" fn(
+                psrcdata: *const core::ffi::c_void,
+                srcdatasize: usize,
+                psourcename: PCSTR,
+                pdefines: *const D3D_SHADER_MACRO,
+                pinclude: *mut core::ffi::c_void,
+                pentrypoint: PCSTR,
+                ptarget: PCSTR,
+                flags1: u32,
+                flags2: u32,
+                ppcode: *mut *mut core::ffi::c_void,
+                pperrormsgs: *mut *mut core::ffi::c_void,
+            ) -> windows_core::HRESULT;
+
+            let d3dcompile_fn: libloading::Symbol<D3DCompileFn> =
+                self.lib.get(c"D3DCompile".to_bytes())?;
+
+            Ok(d3dcompile_fn(
+                psrcdata,
+                srcdatasize,
+                psourcename,
+                pdefines.unwrap_or(core::ptr::null()),
+                core::mem::transmute(pinclude.unwrap_or(core::ptr::null_mut())),
+                pentrypoint,
+                ptarget,
+                flags1,
+                flags2,
+                core::mem::transmute(ppcode),
+                core::mem::transmute(pperrormsgs.unwrap_or(core::ptr::null_mut())),
+            )
+            .ok())
+        }
+    }
+}
+
+fn compile_fxc(
     device: &super::Device,
     source: &str,
     source_name: Option<&CStr>,
     raw_ep: &str,
     stage_bit: wgt::ShaderStages,
     full_stage: &str,
+    fxc: &FxcLib,
 ) -> Result<super::CompiledShader, crate::PipelineError> {
     profiling::scope!("compile_fxc");
     let mut shader_data = None;
@@ -36,9 +224,9 @@ pub(super) fn compile_fxc(
         .unwrap_or(core::ptr::null());
 
     let mut error = None;
-    let hr = unsafe {
+    let hr = {
         profiling::scope!("Fxc::D3DCompile");
-        Fxc::D3DCompile(
+        fxc.compile(
             // TODO: Update low-level bindings to accept a slice here
             source.as_ptr().cast(),
             source.len(),
@@ -51,7 +239,7 @@ pub(super) fn compile_fxc(
             0,
             &mut shader_data,
             Some(&mut error),
-        )
+        )?
     };
 
     match hr {
@@ -130,64 +318,6 @@ unsafe fn dxc_create_instance<T: DxcObj>(
     result__.ok_or(crate::DeviceError::Unexpected)
 }
 
-pub(super) struct DxcContainer {
-    pub(super) max_shader_model: wgt::DxcShaderModel,
-    compiler: Dxc::IDxcCompiler3,
-    // Has to be held onto for the lifetime of the device otherwise shaders will fail to compile.
-    // Only needed when using dynamic linking.
-    _dxc: Option<DxcLib>,
-}
-
-#[derive(Debug, Error)]
-pub(super) enum GetDynamicDXCContainerError {
-    #[error(transparent)]
-    Device(#[from] crate::DeviceError),
-    #[error("Failed to load {0}: {1}")]
-    FailedToLoad(&'static str, libloading::Error),
-}
-
-pub(super) fn get_dynamic_dxc_container(
-    dxc_path: PathBuf,
-    max_shader_model: wgt::DxcShaderModel,
-) -> Result<DxcContainer, GetDynamicDXCContainerError> {
-    let dxc = DxcLib::new_dynamic(dxc_path)
-        .map_err(|e| GetDynamicDXCContainerError::FailedToLoad("dxcompiler.dll", e))?;
-
-    let compiler = dxc.create_instance::<Dxc::IDxcCompiler3>()?;
-
-    Ok(DxcContainer {
-        max_shader_model,
-        compiler,
-        _dxc: Some(dxc),
-    })
-}
-
-/// Creates a [`DxcContainer`] that delegates to the statically-linked version of DXC.
-pub(super) fn get_static_dxc_container() -> Result<DxcContainer, crate::DeviceError> {
-    #[cfg(static_dxc)]
-    {
-        unsafe {
-            let compiler = dxc_create_instance::<Dxc::IDxcCompiler3>(|clsid, iid, ppv| {
-                windows_core::HRESULT(mach_dxcompiler_rs::DxcCreateInstance(
-                    clsid.cast(),
-                    iid.cast(),
-                    ppv,
-                ))
-            })?;
-
-            Ok(DxcContainer {
-                max_shader_model: wgt::DxcShaderModel::V6_7,
-                compiler,
-                _dxc: None,
-            })
-        }
-    }
-    #[cfg(not(static_dxc))]
-    {
-        panic!("Attempted to create a static DXC shader compiler, but the static-dxc feature was not enabled")
-    }
-}
-
 /// Owned PCWSTR
 #[allow(clippy::upper_case_acronyms)]
 struct OPCWSTR {
@@ -223,14 +353,14 @@ fn as_err_str(blob: &Dxc::IDxcBlobUtf8) -> Result<&str, crate::DeviceError> {
         .map_err(|_| crate::DeviceError::Unexpected)
 }
 
-pub(super) fn compile_dxc(
+fn compile_dxc(
     device: &crate::dx12::Device,
     source: &str,
     source_name: Option<&CStr>,
     raw_ep: &str,
     stage_bit: wgt::ShaderStages,
     full_stage: &str,
-    dxc_container: &DxcContainer,
+    compiler: &Dxc::IDxcCompiler3,
 ) -> Result<crate::dx12::CompiledShader, crate::PipelineError> {
     profiling::scope!("compile_dxc");
 
@@ -277,12 +407,9 @@ pub(super) fn compile_dxc(
         Encoding: Dxc::DXC_CP_UTF8.0,
     };
 
-    let compile_res: Dxc::IDxcResult = unsafe {
-        dxc_container
-            .compiler
-            .Compile(&buffer, Some(&compile_args), None)
-    }
-    .into_device_result("Compile")?;
+    let compile_res: Dxc::IDxcResult =
+        unsafe { compiler.Compile(&buffer, Some(&compile_args), None) }
+            .into_device_result("Compile")?;
 
     drop(compile_args);
     drop(source_name);
