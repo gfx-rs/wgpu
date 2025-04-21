@@ -199,6 +199,8 @@ pub enum Error {
     UnsupportedBitCast(crate::TypeInner),
     #[error(transparent)]
     ResolveArraySizeError(#[from] crate::proc::ResolveArraySizeError),
+    #[error("entry point with name '{0}' not found")]
+    EntryPointNotFound(String),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -420,6 +422,12 @@ pub struct VertexBufferMapping {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
 pub struct PipelineOptions {
+    /// The entry point to write.
+    ///
+    /// If `None`, all entry points will be written. If `Some` and the entry
+    /// point is not found, an error will be thrown while writing.
+    pub entry_point: Option<String>,
+
     /// Allow `BuiltIn::PointSize` and inject it if doesn't exist.
     ///
     /// Metal doesn't like this for non-point primitive topologies and requires it for

@@ -1,4 +1,5 @@
 use alloc::{
+    borrow::ToOwned,
     format,
     string::{String, ToString},
     vec,
@@ -16,7 +17,7 @@ use half::f16;
 use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
 use crate::{
     arena::{Handle, HandleSet},
-    back::{self, Baked},
+    back::{self, get_entry_points, Baked},
     common,
     proc::{
         self,
@@ -5872,10 +5873,15 @@ template <typename A>
             self.named_expressions.clear();
         }
 
+        let ep_range = get_entry_points(module, pipeline_options.entry_point.as_deref())
+            .map_err(|name| Error::EntryPointNotFound(name.to_owned()))?;
+
         let mut info = TranslationInfo {
-            entry_point_names: Vec::with_capacity(module.entry_points.len()),
+            entry_point_names: Vec::with_capacity(ep_range.len()),
         };
-        for (ep_index, ep) in module.entry_points.iter().enumerate() {
+
+        for ep_index in ep_range {
+            let ep = &module.entry_points[ep_index];
             let fun = &ep.function;
             let fun_info = mod_info.get_entry_point(ep_index);
             let mut ep_error = None;
