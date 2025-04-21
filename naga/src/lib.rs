@@ -104,11 +104,6 @@ void main() {
     test,
     spv_out,
 
-    // Need OnceLock
-    hlsl_out,
-    msl_out,
-    wgsl_out,
-
     feature = "spv-in",
     feature = "wgsl-in",
 
@@ -130,6 +125,7 @@ pub mod ir;
 pub mod keywords;
 mod non_max_u32;
 pub mod proc;
+mod racy_lock;
 mod span;
 pub mod valid;
 

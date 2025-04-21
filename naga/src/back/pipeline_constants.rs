@@ -905,7 +905,7 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
                 return Err(PipelineConstantError::SrcNeedsToBeFinite);
             }
 
-            let value = value.trunc();
+            let value = <f64 as num_traits::float::FloatCore>::trunc(value);
             if value < f64::from(i32::MIN) || value > f64::from(i32::MAX) {
                 return Err(PipelineConstantError::DstRangeTooSmall);
             }
@@ -919,7 +919,7 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
                 return Err(PipelineConstantError::SrcNeedsToBeFinite);
             }
 
-            let value = value.trunc();
+            let value = <f64 as num_traits::float::FloatCore>::trunc(value);
             if value < f64::from(u32::MIN) || value > f64::from(u32::MAX) {
                 return Err(PipelineConstantError::DstRangeTooSmall);
             }
