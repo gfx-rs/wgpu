@@ -1,6 +1,9 @@
 #![cfg_attr(
     not(any(hlsl_out, msl_out, wgsl_out, glsl_out)),
-    allow(dead_code, reason = "RacyLock is only required for the above configurations")
+    allow(
+        dead_code,
+        reason = "RacyLock is only required for the above configurations"
+    )
 )]
 
 use alloc::boxed::Box;
