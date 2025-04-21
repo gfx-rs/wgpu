@@ -210,7 +210,7 @@ pub trait QueueInterface: CommonTraits {
         data_layout: crate::TexelCopyBufferLayout,
         size: crate::Extent3d,
     );
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     fn copy_external_image_to_texture(
         &self,
         source: &crate::CopyExternalImageSourceInfo,

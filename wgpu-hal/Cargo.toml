@@ -118,6 +118,7 @@ gles = [
     "dep:profiling",
     "dep:wasm-bindgen",
     "dep:web-sys",
+    "wgpu-types/web",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_System_LibraryLoader",

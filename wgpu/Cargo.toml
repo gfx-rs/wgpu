@@ -48,11 +48,9 @@ gles = ["wgpu-core?/gles"]
 
 ## Enables the WebGPU backend on WebAssembly.
 webgpu = [
+    "web",
     "naga?/wgsl-out",
     "dep:wasm-bindgen-futures",
-    "dep:wasm-bindgen",
-    "dep:js-sys",
-    "dep:web-sys",
     "web-sys/Document",
     "web-sys/Event",
     "web-sys/Navigator",
@@ -60,7 +58,6 @@ webgpu = [
     "web-sys/Window",
     "web-sys/WorkerGlobalScope",
     "web-sys/WorkerNavigator",
-    "wgpu-types/web",
 ]
 
 #! ### Conditional Backends
@@ -72,14 +69,7 @@ angle = ["wgpu-core?/angle"]
 vulkan-portability = ["wgpu-core?/vulkan-portability"]
 
 ## Enables the GLES backend on WebAssembly only.
-webgl = [
-    "wgpu-core/webgl",
-    "dep:wgpu-hal",
-    "dep:smallvec",
-    "dep:wasm-bindgen",
-    "dep:js-sys",
-    "dep:web-sys",
-]
+webgl = ["web", "wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
 
 ## Enables the noop backend for testing.
 ##
@@ -158,6 +148,13 @@ fragile-send-sync-non-atomic-wasm = [
     "wgpu-core?/fragile-send-sync-non-atomic-wasm",
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
+
+## Use web-specific libraries on WASM
+##
+## Those libraties (wasm-bindgen, web-sys, js-sys) can only be used when there is a JavaScript
+## context around the WASM VM, e.g., when the WASM binary is used in a browser.
+web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
+
 
 #########################
 # Standard Dependencies #
