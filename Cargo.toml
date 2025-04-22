@@ -81,7 +81,7 @@ wgpu-core-deps-apple = { version = "25.0.0", path = "./wgpu-core/platform-deps/a
 wgpu-core-deps-wasm = { version = "25.0.0", path = "./wgpu-core/platform-deps/wasm" }
 wgpu-core-deps-emscripten = { version = "25.0.0", path = "./wgpu-core/platform-deps/emscripten" }
 
-anyhow = { version = "1.0.97", default-features = false }
+anyhow = { version = "1.0.98", default-features = false }
 approx = "0.5"
 argh = "0.1.13"
 arrayvec = { version = "0.7.6", default-features = false }
