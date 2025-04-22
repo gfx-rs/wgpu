@@ -321,6 +321,35 @@ impl ContextWgpuCore {
                         source: source_error,
                     };
                 }
+                let device_error =
+                    if let Some(wgc::resource::CreateTextureError::Device(device_error)) =
+                        source.downcast_ref::<wgc::resource::CreateTextureError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::resource::CreateBufferError::Device(device_error)) =
+                        source.downcast_ref::<wgc::resource::CreateBufferError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::resource::CreateQuerySetError::Device(device_error)) =
+                        source.downcast_ref::<wgc::resource::CreateQuerySetError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::ray_tracing::CreateBlasError::Device(device_error)) =
+                        source.downcast_ref::<wgc::ray_tracing::CreateBlasError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::ray_tracing::CreateTlasError::Device(device_error)) =
+                        source.downcast_ref::<wgc::ray_tracing::CreateTlasError>()
+                    {
+                        Some(device_error)
+                    } else {
+                        None
+                    };
+                if let Some(wgc::device::DeviceError::OutOfMemory) = device_error {
+                    break crate::Error::OutOfMemory {
+                        source: source_error,
+                    };
+                }
                 source_opt = source.source();
             } else {
                 // Otherwise, it is a validation error

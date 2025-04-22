@@ -123,6 +123,7 @@ impl Instance {
         let hal_desc = hal::InstanceDescriptor {
             name: "wgpu",
             flags: self.flags,
+            memory_budget_thresholds: instance_desc.memory_budget_thresholds,
             backend_options: instance_desc.backend_options.clone(),
         };
 

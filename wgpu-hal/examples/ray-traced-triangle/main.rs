@@ -238,6 +238,7 @@ impl<A: hal::Api> Example<A> {
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: wgpu_types::InstanceFlags::default(),
+            memory_budget_thresholds: wgpu_types::MemoryBudgetThresholds::default(),
             backend_options: wgpu_types::BackendOptions {
                 dx12: Dx12BackendOptions {
                     shader_compiler: wgpu_types::Dx12Compiler::default_dynamic_dxc(),

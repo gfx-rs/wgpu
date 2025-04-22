@@ -1,8 +1,8 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
-use std::borrow::ToOwned as _;
-use std::mem::ManuallyDrop;
-use std::ptr::NonNull;
+use alloc::borrow::ToOwned as _;
+use core::mem::ManuallyDrop;
+use core::ptr::NonNull;
 use std::thread;
 
 use core_graphics_types::{
@@ -186,7 +186,7 @@ impl crate::Surface for super::Surface {
 
     unsafe fn acquire_texture(
         &self,
-        _timeout_ms: Option<std::time::Duration>, //TODO
+        _timeout_ms: Option<core::time::Duration>, //TODO
         _fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let render_layer = self.render_layer.lock();

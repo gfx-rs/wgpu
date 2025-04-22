@@ -1,4 +1,4 @@
-use std::{string::String, sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 use parking_lot::RwLock;
 use windows::{
@@ -107,6 +107,7 @@ impl crate::Instance for super::Instance {
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
             flags: desc.flags,
+            memory_budget_thresholds: desc.memory_budget_thresholds,
             compiler_container: Arc::new(compiler_container),
         })
     }
@@ -144,6 +145,7 @@ impl crate::Instance for super::Instance {
                     raw,
                     &self.library,
                     self.flags,
+                    self.memory_budget_thresholds,
                     self.compiler_container.clone(),
                 )
             })
