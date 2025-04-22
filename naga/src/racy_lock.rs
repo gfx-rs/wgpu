@@ -1,6 +1,6 @@
 #![cfg_attr(
     not(any(hlsl_out, msl_out, wgsl_out, glsl_out)),
-    allow(
+    expect(
         dead_code,
         reason = "RacyLock is only required for the above configurations"
     )
