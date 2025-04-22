@@ -14,7 +14,7 @@ use crate::command::{
 };
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::{RenderPipeline, VertexStep};
-use crate::resource::InvalidResourceError;
+use crate::resource::{InvalidResourceError, ResourceErrorIdent};
 use crate::snatch::SnatchGuard;
 use crate::{
     api_log,
@@ -621,6 +621,18 @@ pub enum ColorAttachmentError {
     TooMany { given: usize, limit: usize },
     #[error("The total number of bytes per sample in color attachments {total} exceeds the limit {limit}")]
     TooManyBytesPerSample { total: u32, limit: u32 },
+    #[error("Depth slice must be less than {limit} but is {given}")]
+    DepthSliceLimit { given: u32, limit: u32 },
+    #[error("Color attachment's view is 3D and requires depth slice to be provided")]
+    MissingDepthSlice,
+    #[error("Depth slice was provided but the color attachment's view is not 3D")]
+    UnneededDepthSlice,
+    #[error("{view}'s subresource at mip {mip_level} and depth/array layer {depth_or_array_layer} is already attached to this render pass")]
+    SubresourceOverlap {
+        view: ResourceErrorIdent,
+        mip_level: u32,
+        depth_or_array_layer: u32,
+    },
 }
 
 #[derive(Clone, Debug, Error)]
@@ -1096,6 +1108,8 @@ impl<'d> RenderPassInfo<'d> {
             });
         }
 
+        let mut attachment_set = crate::FastHashSet::default();
+
         let mut color_attachments_hal =
             ArrayVec::<Option<hal::ColorAttachment<_>>, { hal::MAX_COLOR_ATTACHMENTS }>::new();
         for (index, attachment) in color_attachments.iter().enumerate() {
@@ -1126,6 +1140,71 @@ impl<'d> RenderPassInfo<'d> {
                 ));
             }
 
+            if color_view.desc.dimension == TextureViewDimension::D3 {
+                if let Some(depth_slice) = at.depth_slice {
+                    let mip = color_view.desc.range.base_mip_level;
+                    let mip_size = color_view
+                        .parent
+                        .desc
+                        .size
+                        .mip_level_size(mip, color_view.parent.desc.dimension);
+                    let limit = mip_size.depth_or_array_layers;
+                    if depth_slice >= limit {
+                        return Err(RenderPassErrorInner::ColorAttachment(
+                            ColorAttachmentError::DepthSliceLimit {
+                                given: depth_slice,
+                                limit,
+                            },
+                        ));
+                    }
+                } else {
+                    return Err(RenderPassErrorInner::ColorAttachment(
+                        ColorAttachmentError::MissingDepthSlice,
+                    ));
+                }
+            } else if at.depth_slice.is_some() {
+                return Err(RenderPassErrorInner::ColorAttachment(
+                    ColorAttachmentError::UnneededDepthSlice,
+                ));
+            }
+
+            fn check_attachment_overlap(
+                attachment_set: &mut crate::FastHashSet<(crate::track::TrackerIndex, u32, u32)>,
+                view: &TextureView,
+                depth_slice: Option<u32>,
+            ) -> Result<(), ColorAttachmentError> {
+                let mut insert = |slice| {
+                    let mip_level = view.desc.range.base_mip_level;
+                    if attachment_set.insert((view.tracking_data.tracker_index(), mip_level, slice))
+                    {
+                        Ok(())
+                    } else {
+                        Err(ColorAttachmentError::SubresourceOverlap {
+                            view: view.error_ident(),
+                            mip_level,
+                            depth_or_array_layer: slice,
+                        })
+                    }
+                };
+                match view.desc.dimension {
+                    TextureViewDimension::D2 => {
+                        insert(view.desc.range.base_array_layer)?;
+                    }
+                    TextureViewDimension::D2Array => {
+                        for layer in view.selector.layers.clone() {
+                            insert(layer)?;
+                        }
+                    }
+                    TextureViewDimension::D3 => {
+                        insert(depth_slice.unwrap())?;
+                    }
+                    _ => unreachable!(),
+                };
+                Ok(())
+            }
+
+            check_attachment_overlap(&mut attachment_set, color_view, at.depth_slice)?;
+
             Self::add_pass_texture_init_actions(
                 at.load_op,
                 at.store_op,
@@ -1140,6 +1219,8 @@ impl<'d> RenderPassInfo<'d> {
             if let Some(resolve_view) = &at.resolve_target {
                 resolve_view.same_device(device)?;
                 check_multiview(resolve_view)?;
+
+                check_attachment_overlap(&mut attachment_set, resolve_view, None)?;
 
                 let resolve_location = AttachmentErrorLocation::Color {
                     index,

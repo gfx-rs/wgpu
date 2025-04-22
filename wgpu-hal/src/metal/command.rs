@@ -532,6 +532,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 if let Some(at) = at.as_ref() {
                     let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
                     at_descriptor.set_texture(Some(&at.target.view.raw));
+                    if let Some(depth_slice) = at.depth_slice {
+                        at_descriptor.set_depth_plane(depth_slice as u64);
+                    }
                     if let Some(ref resolve) = at.resolve_target {
                         //Note: the selection of levels and slices is already handled by `TextureView`
                         at_descriptor.set_resolve_texture(Some(&resolve.view.raw));

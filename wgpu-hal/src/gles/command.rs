@@ -557,6 +557,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         self.cmd_buffer.commands.push(C::BindAttachment {
                             attachment,
                             view: cat.target.view.clone(),
+                            depth_slice: cat.depth_slice,
                         });
                         if let Some(ref rat) = cat.resolve_target {
                             self.state
@@ -578,6 +579,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     self.cmd_buffer.commands.push(C::BindAttachment {
                         attachment,
                         view: dsat.target.view.clone(),
+                        depth_slice: None,
                     });
                     if aspects.contains(crate::FormatAspects::DEPTH)
                         && !dsat.depth_ops.contains(crate::AttachmentOps::STORE)

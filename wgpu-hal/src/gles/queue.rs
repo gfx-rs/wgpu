@@ -98,6 +98,7 @@ impl super::Queue {
         fbo_target: u32,
         attachment: u32,
         view: &super::TextureView,
+        depth_slice: Option<u32>,
     ) {
         match view.inner {
             super::TextureInner::Renderbuffer { raw } => {
@@ -126,13 +127,18 @@ impl super::Queue {
                         )
                     };
                 } else if is_layered_target(target) {
+                    let layer = if target == glow::TEXTURE_3D {
+                        depth_slice.unwrap() as i32
+                    } else {
+                        view.array_layers.start as i32
+                    };
                     unsafe {
                         gl.framebuffer_texture_layer(
                             fbo_target,
                             attachment,
                             Some(raw),
                             view.mip_levels.start as i32,
-                            view.array_layers.start as i32,
+                            layer,
                         )
                     };
                 } else {
@@ -1096,8 +1102,11 @@ impl super::Queue {
             C::BindAttachment {
                 attachment,
                 ref view,
+                depth_slice,
             } => {
-                unsafe { self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, attachment, view) };
+                unsafe {
+                    self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, attachment, view, depth_slice)
+                };
             }
             C::ResolveAttachment {
                 attachment,
@@ -1108,7 +1117,13 @@ impl super::Queue {
                 unsafe { gl.read_buffer(attachment) };
                 unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.copy_fbo)) };
                 unsafe {
-                    self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, dst)
+                    self.set_attachment(
+                        gl,
+                        glow::DRAW_FRAMEBUFFER,
+                        glow::COLOR_ATTACHMENT0,
+                        dst,
+                        None,
+                    )
                 };
                 unsafe {
                     gl.blit_framebuffer(

@@ -929,8 +929,11 @@ impl Device {
                     desc.format,
                 ));
             }
-            // Renderable textures can only be 2D
-            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+
+            // Renderable textures can only be 2D on Vulkan (until we implement 3D support)
+            if self.backend() == wgt::Backend::Vulkan
+                && desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+            {
                 return Err(CreateTextureError::InvalidDimensionUsages(
                     wgt::TextureUsages::RENDER_ATTACHMENT,
                     desc.dimension,
@@ -946,6 +949,14 @@ impl Device {
                 return Err(CreateTextureError::InvalidCompressedDimension(
                     desc.dimension,
                     desc.format,
+                ));
+            }
+
+            // Renderable textures can only be 2D or 3D
+            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::InvalidDimensionUsages(
+                    wgt::TextureUsages::RENDER_ATTACHMENT,
+                    desc.dimension,
                 ));
             }
         }
@@ -1124,16 +1135,12 @@ impl Device {
 
         let clear_mode = if hal_usage
             .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
+            && desc.dimension == wgt::TextureDimension::D2
         {
             let (is_color, usage) = if desc.format.is_depth_stencil_format() {
                 (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
             } else {
                 (true, wgt::TextureUses::COLOR_TARGET)
-            };
-            let dimension = match desc.dimension {
-                wgt::TextureDimension::D1 => TextureViewDimension::D1,
-                wgt::TextureDimension::D2 => TextureViewDimension::D2,
-                wgt::TextureDimension::D3 => unreachable!(),
             };
 
             let clear_label = hal_label(
@@ -1149,7 +1156,7 @@ impl Device {
                             let desc = hal::TextureViewDescriptor {
                                 label: clear_label,
                                 format: $format,
-                                dimension,
+                                dimension: TextureViewDimension::D2,
                                 usage,
                                 range: wgt::ImageSubresourceRange {
                                     aspect: $aspect,
@@ -1420,9 +1427,12 @@ impl Device {
                 break 'error Err(TextureViewNotRenderableReason::Usage(resolved_usage));
             }
 
-            if !(resolved_dimension == TextureViewDimension::D2
-                || resolved_dimension == TextureViewDimension::D2Array)
-            {
+            let allowed_view_dimensions = [
+                TextureViewDimension::D2,
+                TextureViewDimension::D2Array,
+                TextureViewDimension::D3,
+            ];
+            if !allowed_view_dimensions.contains(&resolved_dimension) {
                 break 'error Err(TextureViewNotRenderableReason::Dimension(
                     resolved_dimension,
                 ));
