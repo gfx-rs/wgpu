@@ -1,14 +1,17 @@
-use std::{
+use alloc::{
     borrow::ToOwned as _,
     boxed::Box,
-    ffi::{c_void, CStr, CString},
-    slice,
-    str::FromStr,
+    ffi::CString,
     string::{String, ToString as _},
     sync::Arc,
-    thread,
     vec::Vec,
 };
+use core::{
+    ffi::{c_void, CStr},
+    slice,
+    str::FromStr,
+};
+use std::thread;
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
@@ -20,7 +23,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     callback_data_ptr: *const vk::DebugUtilsMessengerCallbackDataEXT,
     user_data: *mut c_void,
 ) -> vk::Bool32 {
-    use std::borrow::Cow;
+    use alloc::borrow::Cow;
 
     if thread::panicking() {
         return vk::FALSE;
@@ -539,7 +542,7 @@ impl super::Instance {
     #[cfg(metal)]
     fn create_surface_from_view(
         &self,
-        view: std::ptr::NonNull<c_void>,
+        view: core::ptr::NonNull<c_void>,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&ext::metal_surface::NAME) {
             return Err(crate::InstanceError::new(String::from(
@@ -1016,7 +1019,7 @@ impl crate::Surface for super::Surface {
 
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<core::time::Duration>,
         fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let mut swapchain = self.swapchain.write();

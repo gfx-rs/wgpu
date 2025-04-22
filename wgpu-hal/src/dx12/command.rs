@@ -1,4 +1,5 @@
-use std::{mem, ops::Range, vec::Vec};
+use alloc::vec::Vec;
+use core::{mem, ops::Range};
 
 use windows::Win32::{
     Foundation,
@@ -784,7 +785,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 desc.color_attachments.len() as u32,
                 Some(color_views.as_ptr()),
                 false,
-                ds_view.as_ref().map(std::ptr::from_ref),
+                ds_view.as_ref().map(core::ptr::from_ref),
             )
         };
 
@@ -843,7 +844,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                             ds.clear_value.0,
                             ds.clear_value.1 as u8,
                             0,
-                            std::ptr::null(),
+                            core::ptr::null(),
                         )
                     }
                 }
@@ -864,8 +865,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             right: desc.extent.width as i32,
             bottom: desc.extent.height as i32,
         };
-        unsafe { list.RSSetViewports(std::slice::from_ref(&raw_vp)) };
-        unsafe { list.RSSetScissorRects(std::slice::from_ref(&raw_rect)) };
+        unsafe { list.RSSetViewports(core::slice::from_ref(&raw_vp)) };
+        unsafe { list.RSSetScissorRects(core::slice::from_ref(&raw_rect)) };
     }
 
     unsafe fn end_render_pass(&mut self) {
@@ -1127,7 +1128,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.list
                 .as_ref()
                 .unwrap()
-                .RSSetViewports(std::slice::from_ref(&raw_vp))
+                .RSSetViewports(core::slice::from_ref(&raw_vp))
         }
     }
     unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {
@@ -1141,7 +1142,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.list
                 .as_ref()
                 .unwrap()
-                .RSSetScissorRects(std::slice::from_ref(&raw_rect))
+                .RSSetScissorRects(core::slice::from_ref(&raw_rect))
         }
     }
     unsafe fn set_stencil_reference(&mut self, value: u32) {

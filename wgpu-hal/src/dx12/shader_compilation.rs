@@ -1,4 +1,6 @@
-use std::{ffi::CStr, path::PathBuf, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
+use core::ffi::CStr;
+use std::path::PathBuf;
 
 use crate::auxil::dxgi::result::HResult;
 use thiserror::Error;
@@ -27,8 +29,8 @@ pub(super) fn compile_fxc(
         compile_flags |= Fxc::D3DCOMPILE_DEBUG | Fxc::D3DCOMPILE_SKIP_OPTIMIZATION;
     }
 
-    let raw_ep = std::ffi::CString::new(raw_ep).unwrap();
-    let full_stage = std::ffi::CString::new(full_stage).unwrap();
+    let raw_ep = alloc::ffi::CString::new(raw_ep).unwrap();
+    let full_stage = alloc::ffi::CString::new(full_stage).unwrap();
 
     // If no name has been set, D3DCompile wants the null pointer.
     let source_name = source_name
@@ -62,9 +64,9 @@ pub(super) fn compile_fxc(
         Err(e) => {
             let mut full_msg = format!("FXC D3DCompile error ({e})");
             if let Some(error) = error {
-                use std::fmt::Write as _;
+                use core::fmt::Write as _;
                 let message = unsafe {
-                    std::slice::from_raw_parts(
+                    core::slice::from_raw_parts(
                         error.GetBufferPointer().cast(),
                         error.GetBufferSize(),
                     )

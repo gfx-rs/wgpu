@@ -1,13 +1,11 @@
-use std::{
+use alloc::{
     borrow::Cow,
-    ffi,
-    num::NonZeroU32,
-    ptr,
     string::{String, ToString as _},
     sync::Arc,
-    time::{Duration, Instant},
     vec::Vec,
 };
+use core::{ffi, num::NonZeroU32, ptr, time::Duration};
+use std::time::Instant;
 
 use bytemuck::TransparentWrapper;
 use parking_lot::Mutex;
@@ -868,7 +866,7 @@ impl crate::Device for super::Device {
             bind_cbv.space += 1;
         }
 
-        let mut dynamic_storage_buffer_offsets_targets = std::collections::BTreeMap::new();
+        let mut dynamic_storage_buffer_offsets_targets = alloc::collections::BTreeMap::new();
         let mut total_dynamic_storage_buffers = 0;
 
         // Collect the whole number of bindings we will create upfront.
@@ -1635,7 +1633,9 @@ impl crate::Device for super::Device {
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         self.counters.shader_modules.add(1);
 
-        let raw_name = desc.label.and_then(|label| ffi::CString::new(label).ok());
+        let raw_name = desc
+            .label
+            .and_then(|label| alloc::ffi::CString::new(label).ok());
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
                 naga,

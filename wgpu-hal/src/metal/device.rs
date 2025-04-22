@@ -853,7 +853,10 @@ impl crate::Device for super::Device {
                         );
 
                         let contents: &mut [metal::MTLResourceID] = unsafe {
-                            std::slice::from_raw_parts_mut(buffer.contents().cast(), count as usize)
+                            core::slice::from_raw_parts_mut(
+                                buffer.contents().cast(),
+                                count as usize,
+                            )
                         };
 
                         match layout.ty {
@@ -1541,7 +1544,7 @@ impl crate::Device for super::Device {
             if start.elapsed().as_millis() >= timeout_ms as u128 {
                 return Ok(false);
             }
-            thread::sleep(time::Duration::from_millis(1));
+            thread::sleep(core::time::Duration::from_millis(1));
         }
     }
 
