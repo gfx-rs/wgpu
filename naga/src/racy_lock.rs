@@ -7,7 +7,7 @@
 )]
 
 use alloc::boxed::Box;
-use core::sync::atomic::{AtomicPtr, Ordering};
+use once_cell::race::OnceBox;
 
 /// An alternative to [`LazyLock`] which will race to initialize rather than blocking.
 /// This makes it suitable for `no_std` environments, at the expense of possibly leaking
@@ -15,7 +15,7 @@ use core::sync::atomic::{AtomicPtr, Ordering};
 ///
 /// [`LazyLock`]: https://doc.rust-lang.org/stable/std/sync/struct.LazyLock.html
 pub struct RacyLock<T: 'static> {
-    inner: AtomicPtr<T>,
+    inner: OnceBox<T>,
     init: fn() -> T,
 }
 
@@ -23,47 +23,19 @@ impl<T: 'static> RacyLock<T> {
     /// Creates a new [`RacyLock`], which will initialize using the provided `init` function.
     pub const fn new(init: fn() -> T) -> Self {
         Self {
-            inner: AtomicPtr::new(core::ptr::null_mut()),
+            inner: OnceBox::new(),
             init,
         }
     }
 
     /// Attempts to load the internal value, returning [`None`] if it is not yet initialized.
     pub fn try_get(&self) -> Option<&T> {
-        let ptr = self.inner.load(Ordering::Acquire);
-
-        if ptr.is_null() {
-            None
-        } else {
-            // SAFETY: ptr can only ever be null, or a static-valid value from Box::leak,
-            // as it is private.
-            // The above check ensures ptr is not null, so it must be a valid pointer.
-            unsafe { Some(&*ptr) }
-        }
+        self.inner.get()
     }
 
     /// Loads the internal value, initializing it if required.
     pub fn get(&self) -> &T {
-        self.try_get().unwrap_or_else(|| {
-            let value = (self.init)();
-
-            // Refresh the static value just before leaking to minimize leaked memory.
-            let ptr = self.inner.load(Ordering::Acquire);
-
-            if ptr.is_null() {
-                // Explicit type used to assert the returned reference is 'static.
-                let ptr: &'static mut T = Box::leak(Box::new(value));
-
-                self.inner.store(ptr, Ordering::Release);
-
-                ptr
-            } else {
-                // SAFETY: ptr can only ever be null, or a static-valid value from Box::leak,
-                // as it is private.
-                // The above check ensures ptr is not null, so it must be a valid pointer.
-                unsafe { &*ptr }
-            }
-        })
+        self.inner.get_or_init(|| Box::new((self.init)()))
     }
 }
 
