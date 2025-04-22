@@ -169,6 +169,7 @@ impl FxcLib {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn compile(
         &self,
         source: &str,
@@ -188,6 +189,9 @@ impl FxcLib {
                 .map(|cstr| cstr.as_ptr().cast())
                 .unwrap_or(core::ptr::null());
 
+            let shader_data: *mut Option<ID3DBlob> = shader_data;
+            let error: *mut Option<ID3DBlob> = error;
+
             {
                 profiling::scope!("Fxc::D3DCompile");
                 Ok((self.d3dcompile_fn)(
@@ -200,10 +204,8 @@ impl FxcLib {
                     PCSTR(full_stage.as_ptr().cast()),
                     compile_flags,
                     0,
-                    core::mem::transmute::<&mut Option<_>, *mut *mut core::ffi::c_void>(
-                        shader_data,
-                    ),
-                    core::mem::transmute::<&mut Option<_>, *mut *mut core::ffi::c_void>(error),
+                    shader_data as *mut *mut core::ffi::c_void,
+                    error as *mut *mut core::ffi::c_void,
                 )
                 .ok())
             }
