@@ -89,8 +89,8 @@ mod view;
 use std::{borrow::ToOwned as _, ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc, vec::Vec};
 
 use arrayvec::ArrayVec;
-use gpu_allocator::d3d12::Allocator;
 use parking_lot::{Mutex, RwLock};
+use suballocation::Allocator;
 use windows::{
     core::{Free, Interface},
     Win32::{
@@ -460,6 +460,7 @@ pub struct Instance {
     supports_allow_tearing: bool,
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
 }
 
@@ -591,6 +592,7 @@ pub struct Adapter {
     // Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
 }
 
@@ -627,6 +629,7 @@ struct CommandSignatures {
 }
 
 struct DeviceShared {
+    adapter: DxgiAdapter,
     zero_buffer: Direct3D12::ID3D12Resource,
     cmd_signatures: CommandSignatures,
     heap_views: descriptor::GeneralHeap,
@@ -652,7 +655,7 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
-    mem_allocator: Arc<Mutex<Allocator>>,
+    mem_allocator: Allocator,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     counters: Arc<wgt::HalCounters>,
 }
@@ -794,7 +797,7 @@ pub struct CommandEncoder {
     allocator: Direct3D12::ID3D12CommandAllocator,
     device: Direct3D12::ID3D12Device,
     shared: Arc<DeviceShared>,
-    mem_allocator: Arc<Mutex<Allocator>>,
+    mem_allocator: Allocator,
 
     null_rtv_handle: descriptor::Handle,
     list: Option<Direct3D12::ID3D12GraphicsCommandList>,

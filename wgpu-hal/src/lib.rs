@@ -1020,6 +1020,8 @@ pub trait Device: WasmNotSendSync {
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         None
     }
+
+    fn check_if_oom(&self) -> Result<(), DeviceError>;
 }
 
 pub trait Queue: WasmNotSendSync {
@@ -1739,6 +1741,7 @@ bitflags!(
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
     pub flags: wgt::InstanceFlags,
+    pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     pub backend_options: wgt::BackendOptions,
 }
 

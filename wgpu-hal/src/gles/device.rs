@@ -1622,6 +1622,10 @@ impl crate::Device for super::Device {
     fn get_internal_counters(&self) -> wgt::HalCounters {
         self.counters.as_ref().clone()
     }
+
+    fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
+        Ok(())
+    }
 }
 
 #[cfg(send_sync)]

@@ -14,6 +14,8 @@ pub struct InstanceDescriptor {
     pub backends: Backends,
     /// Flags to tune the behavior of the instance.
     pub flags: InstanceFlags,
+    /// Memory budget thresholds used by some backends.
+    pub memory_budget_thresholds: MemoryBudgetThresholds,
     /// Options the control the behavior of various backends.
     pub backend_options: BackendOptions,
 }
@@ -23,6 +25,7 @@ impl Default for InstanceDescriptor {
         Self {
             backends: Backends::all(),
             flags: InstanceFlags::default(),
+            memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options: BackendOptions::default(),
         }
     }
@@ -48,6 +51,7 @@ impl InstanceDescriptor {
         Self {
             backends,
             flags,
+            memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options,
         }
     }
@@ -223,6 +227,24 @@ impl InstanceFlags {
 
         self
     }
+}
+
+/// Memory budget thresholds used by backends to try to avoid high memory pressure situations.
+///
+/// Currently only the D3D12 and (optionally) Vulkan backends support these options.
+#[derive(Default, Clone, Debug, Copy)]
+pub struct MemoryBudgetThresholds {
+    /// Threshold at which texture, buffer, query set and acceleration structure creation will start to return OOM errors.
+    /// This is a percent of the memory budget reported by native APIs.
+    ///
+    /// If not specified, resource creation might still return OOM errors.
+    pub for_resource_creation: Option<u8>,
+
+    /// Threshold at which devices will become lost due to memory pressure.
+    /// This is a percent of the memory budget reported by native APIs.
+    ///
+    /// If not specified, devices might still become lost due to memory pressure.
+    pub for_device_loss: Option<u8>,
 }
 
 /// Options that are passed to a given backend.

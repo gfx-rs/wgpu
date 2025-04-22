@@ -347,6 +347,7 @@ impl super::Instance {
         debug_utils_create_info: Option<super::DebugUtilsCreateInfo>,
         extensions: Vec<&'static CStr>,
         flags: wgt::InstanceFlags,
+        memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         has_nv_optimus: bool,
         drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
@@ -397,6 +398,7 @@ impl super::Instance {
                 extensions,
                 drop_guard,
                 flags,
+                memory_budget_thresholds,
                 debug_utils,
                 get_physical_device_properties,
                 entry,
@@ -860,6 +862,7 @@ impl crate::Instance for super::Instance {
                 debug_utils,
                 extensions,
                 desc.flags,
+                desc.memory_budget_thresholds,
                 has_nv_optimus,
                 None,
             )
