@@ -6,7 +6,7 @@ use crate::auxil::dxgi::result::HResult;
 use thiserror::Error;
 use windows::{
     core::{Interface, PCSTR, PCWSTR},
-    Win32::Graphics::Direct3D::{Dxc, Fxc, ID3DBlob, ID3DInclude, D3D_SHADER_MACRO},
+    Win32::Graphics::Direct3D::{Dxc, Fxc, ID3DBlob, D3D_SHADER_MACRO},
 };
 
 pub(super) enum CompilerContainer {
@@ -42,10 +42,7 @@ pub(super) enum GetContainerError {
 
 impl CompilerContainer {
     pub(super) fn new_fxc() -> Result<Self, GetContainerError> {
-        let fxc =
-            FxcLib::new_dynamic().map_err(|e| GetContainerError::FailedToLoad(FxcLib::PATH, e))?;
-
-        Ok(Self::Fxc(CompilerFxc { fxc }))
+        FxcLib::new_dynamic().map(|fxc| Self::Fxc(CompilerFxc { fxc }))
     }
 
     pub(super) fn new_dynamic_dxc(
@@ -134,64 +131,82 @@ impl CompilerContainer {
     }
 }
 
+type D3DCompileFn = unsafe extern "system" fn(
+    psrcdata: *const core::ffi::c_void,
+    srcdatasize: usize,
+    psourcename: PCSTR,
+    pdefines: *const D3D_SHADER_MACRO,
+    pinclude: *mut core::ffi::c_void,
+    pentrypoint: PCSTR,
+    ptarget: PCSTR,
+    flags1: u32,
+    flags2: u32,
+    ppcode: *mut *mut core::ffi::c_void,
+    pperrormsgs: *mut *mut core::ffi::c_void,
+) -> windows_core::HRESULT;
+
 #[derive(Debug)]
 struct FxcLib {
-    lib: crate::dx12::DynLib,
+    // `d3dcompile_fn` points into `_lib`, so `_lib` must be held for as long
+    // as we want to keep compiling shaders with FXC.
+    _lib: crate::dx12::DynLib,
+    d3dcompile_fn: D3DCompileFn,
 }
 
 impl FxcLib {
     const PATH: &str = "d3dcompiler_47.dll";
 
-    fn new_dynamic() -> Result<Self, libloading::Error> {
-        unsafe { crate::dx12::DynLib::new(Self::PATH).map(|lib| Self { lib }) }
+    fn new_dynamic() -> Result<Self, GetContainerError> {
+        unsafe {
+            let lib = crate::dx12::DynLib::new(Self::PATH)
+                .map_err(|e| GetContainerError::FailedToLoad(FxcLib::PATH, e))?;
+            let d3dcompile_fn: D3DCompileFn = *lib.get::<D3DCompileFn>(c"D3DCompile".to_bytes())?;
+
+            Ok(Self {
+                _lib: lib,
+                d3dcompile_fn,
+            })
+        }
     }
 
     fn compile(
         &self,
-        psrcdata: *const core::ffi::c_void,
-        srcdatasize: usize,
-        psourcename: PCSTR,
-        pdefines: Option<*const D3D_SHADER_MACRO>,
-        pinclude: Option<*mut ID3DInclude>,
-        pentrypoint: PCSTR,
-        ptarget: PCSTR,
-        flags1: u32,
-        flags2: u32,
-        ppcode: *mut Option<ID3DBlob>,
-        pperrormsgs: Option<*mut Option<ID3DBlob>>,
+        source: &str,
+        source_name: Option<&CStr>,
+        raw_ep: &str,
+        full_stage: &str,
+        compile_flags: u32,
+        shader_data: &mut Option<ID3DBlob>,
+        error: &mut Option<ID3DBlob>,
     ) -> Result<windows_core::Result<()>, crate::DeviceError> {
         unsafe {
-            type D3DCompileFn = unsafe extern "system" fn(
-                psrcdata: *const core::ffi::c_void,
-                srcdatasize: usize,
-                psourcename: PCSTR,
-                pdefines: *const D3D_SHADER_MACRO,
-                pinclude: *mut core::ffi::c_void,
-                pentrypoint: PCSTR,
-                ptarget: PCSTR,
-                flags1: u32,
-                flags2: u32,
-                ppcode: *mut *mut core::ffi::c_void,
-                pperrormsgs: *mut *mut core::ffi::c_void,
-            ) -> windows_core::HRESULT;
+            let raw_ep = alloc::ffi::CString::new(raw_ep).unwrap();
+            let full_stage = alloc::ffi::CString::new(full_stage).unwrap();
 
-            let d3dcompile_fn: libloading::Symbol<D3DCompileFn> =
-                self.lib.get(c"D3DCompile".to_bytes())?;
+            // If no name has been set, D3DCompile wants the null pointer.
+            let source_name = source_name
+                .map(|cstr| cstr.as_ptr().cast())
+                .unwrap_or(core::ptr::null());
 
-            Ok(d3dcompile_fn(
-                psrcdata,
-                srcdatasize,
-                psourcename,
-                pdefines.unwrap_or(core::ptr::null()),
-                core::mem::transmute(pinclude.unwrap_or(core::ptr::null_mut())),
-                pentrypoint,
-                ptarget,
-                flags1,
-                flags2,
-                core::mem::transmute(ppcode),
-                core::mem::transmute(pperrormsgs.unwrap_or(core::ptr::null_mut())),
-            )
-            .ok())
+            {
+                profiling::scope!("Fxc::D3DCompile");
+                Ok((self.d3dcompile_fn)(
+                    source.as_ptr().cast(),
+                    source.len(),
+                    PCSTR(source_name),
+                    core::ptr::null(),
+                    core::ptr::null_mut(),
+                    PCSTR(raw_ep.as_ptr().cast()),
+                    PCSTR(full_stage.as_ptr().cast()),
+                    compile_flags,
+                    0,
+                    core::mem::transmute::<&mut Option<_>, *mut *mut core::ffi::c_void>(
+                        shader_data,
+                    ),
+                    core::mem::transmute::<&mut Option<_>, *mut *mut core::ffi::c_void>(error),
+                )
+                .ok())
+            }
         }
     }
 }
@@ -206,7 +221,6 @@ fn compile_fxc(
     fxc: &FxcLib,
 ) -> Result<super::CompiledShader, crate::PipelineError> {
     profiling::scope!("compile_fxc");
-    let mut shader_data = None;
     let mut compile_flags = Fxc::D3DCOMPILE_ENABLE_STRICTNESS;
     if device
         .shared
@@ -217,32 +231,17 @@ fn compile_fxc(
         compile_flags |= Fxc::D3DCOMPILE_DEBUG | Fxc::D3DCOMPILE_SKIP_OPTIMIZATION;
     }
 
-    let raw_ep = alloc::ffi::CString::new(raw_ep).unwrap();
-    let full_stage = alloc::ffi::CString::new(full_stage).unwrap();
-
-    // If no name has been set, D3DCompile wants the null pointer.
-    let source_name = source_name
-        .map(|cstr| cstr.as_ptr().cast())
-        .unwrap_or(core::ptr::null());
-
+    let mut shader_data = None;
     let mut error = None;
-    let hr = {
-        profiling::scope!("Fxc::D3DCompile");
-        fxc.compile(
-            // TODO: Update low-level bindings to accept a slice here
-            source.as_ptr().cast(),
-            source.len(),
-            PCSTR(source_name),
-            None,
-            None,
-            PCSTR(raw_ep.as_ptr().cast()),
-            PCSTR(full_stage.as_ptr().cast()),
-            compile_flags,
-            0,
-            &mut shader_data,
-            Some(&mut error),
-        )?
-    };
+    let hr = fxc.compile(
+        source,
+        source_name,
+        raw_ep,
+        full_stage,
+        compile_flags,
+        &mut shader_data,
+        &mut error,
+    )?;
 
     match hr {
         Ok(()) => {
