@@ -204,8 +204,8 @@ impl FxcLib {
                     PCSTR(full_stage.as_ptr().cast()),
                     compile_flags,
                     0,
-                    shader_data as *mut *mut core::ffi::c_void,
-                    error as *mut *mut core::ffi::c_void,
+                    shader_data.cast(),
+                    error.cast(),
                 )
                 .ok())
             }
