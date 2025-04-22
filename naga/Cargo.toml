@@ -98,8 +98,8 @@ once_cell = { workspace = true, features = ["alloc", "race"] }
 strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.219", features = [
-    "default",
+serde = { version = "1.0.219", default-features = false, features = [
+    "alloc",
     "derive",
 ], optional = true }
 petgraph = { version = "0.8", optional = true }
