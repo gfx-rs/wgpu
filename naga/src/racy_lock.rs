@@ -28,11 +28,6 @@ impl<T: 'static> RacyLock<T> {
         }
     }
 
-    /// Attempts to load the internal value, returning [`None`] if it is not yet initialized.
-    pub fn try_get(&self) -> Option<&T> {
-        self.inner.get()
-    }
-
     /// Loads the internal value, initializing it if required.
     pub fn get(&self) -> &T {
         self.inner.get_or_init(|| Box::new((self.init)()))
