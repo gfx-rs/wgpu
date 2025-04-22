@@ -100,13 +100,7 @@ void main() {
 )]
 #![no_std]
 
-#[cfg(any(
-    test,
-    spv_out,
-    feature = "spv-in",
-    feature = "wgsl-in",
-    feature = "stderr",
-))]
+#[cfg(std)]
 extern crate std;
 
 extern crate alloc;

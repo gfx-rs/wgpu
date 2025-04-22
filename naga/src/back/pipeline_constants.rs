@@ -16,6 +16,9 @@ use crate::{
     Span, Statement, TypeInner, WithSpan,
 };
 
+#[cfg(no_std)]
+use num_traits::float::FloatCore as _;
+
 #[derive(Error, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum PipelineConstantError {
@@ -905,7 +908,7 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
                 return Err(PipelineConstantError::SrcNeedsToBeFinite);
             }
 
-            let value = <f64 as num_traits::float::FloatCore>::trunc(value);
+            let value = value.trunc();
             if value < f64::from(i32::MIN) || value > f64::from(i32::MAX) {
                 return Err(PipelineConstantError::DstRangeTooSmall);
             }
@@ -919,7 +922,7 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
                 return Err(PipelineConstantError::SrcNeedsToBeFinite);
             }
 
-            let value = <f64 as num_traits::float::FloatCore>::trunc(value);
+            let value = value.trunc();
             if value < f64::from(u32::MIN) || value > f64::from(u32::MAX) {
                 return Err(PipelineConstantError::DstRangeTooSmall);
             }
