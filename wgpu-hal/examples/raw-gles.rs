@@ -335,7 +335,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
     };
     unsafe {
         encoder.begin_encoding(None).unwrap();
-        encoder.begin_render_pass(&rp_desc);
+        encoder.begin_render_pass(&rp_desc).unwrap();
         encoder.end_render_pass();
         let cmd_buf = encoder.end_encoding().unwrap();
         od.queue.submit(&[&cmd_buf], &[], (&mut fence, 0)).unwrap();

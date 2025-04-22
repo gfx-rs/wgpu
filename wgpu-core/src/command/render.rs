@@ -1277,7 +1277,10 @@ impl<'d> RenderPassInfo<'d> {
             occlusion_query_set: occlusion_query_set_hal,
         };
         unsafe {
-            encoder.raw.begin_render_pass(&hal_desc);
+            encoder
+                .raw
+                .begin_render_pass(&hal_desc)
+                .map_err(|e| device.handle_hal_error(e))?;
         };
         drop(color_attachments_hal); // Drop, so we can consume `color_attachments` for the tracker.
 
@@ -1313,6 +1316,7 @@ impl<'d> RenderPassInfo<'d> {
 
     fn finish(
         mut self,
+        device: &Device,
         raw: &mut dyn hal::DynCommandEncoder,
         snatch_guard: &SnatchGuard,
     ) -> Result<(UsageScope<'d>, SurfacesInDiscardState), RenderPassErrorInner> {
@@ -1375,7 +1379,8 @@ impl<'d> RenderPassInfo<'d> {
                 occlusion_query_set: None,
             };
             unsafe {
-                raw.begin_render_pass(&desc);
+                raw.begin_render_pass(&desc)
+                    .map_err(|e| device.handle_hal_error(e))?;
                 raw.end_render_pass();
             }
         }
@@ -1974,7 +1979,7 @@ impl Global {
 
             let (trackers, pending_discard_init_fixups) = state
                 .info
-                .finish(state.raw_encoder, state.snatch_guard)
+                .finish(device, state.raw_encoder, state.snatch_guard)
                 .map_pass_err(pass_scope)?;
 
             encoder.close().map_pass_err(pass_scope)?;

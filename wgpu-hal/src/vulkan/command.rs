@@ -711,7 +711,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
-    ) {
+    ) -> Result<(), crate::DeviceError> {
         let mut vk_clear_values =
             ArrayVec::<vk::ClearValue, { super::MAX_TOTAL_ATTACHMENTS }>::new();
         let mut vk_image_views = ArrayVec::<vk::ImageView, { super::MAX_TOTAL_ATTACHMENTS }>::new();
@@ -851,6 +851,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
 
         self.bind_point = vk::PipelineBindPoint::GRAPHICS;
+
+        Ok(())
     }
     unsafe fn end_render_pass(&mut self) {
         unsafe {

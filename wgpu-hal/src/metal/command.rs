@@ -517,7 +517,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
-    ) {
+    ) -> Result<(), crate::DeviceError> {
         self.begin_pass();
         self.state.index = None;
 
@@ -650,6 +650,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
             self.state.render = Some(encoder.to_owned());
         });
+
+        Ok(())
     }
 
     unsafe fn end_render_pass(&mut self) {

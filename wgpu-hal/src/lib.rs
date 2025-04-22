@@ -1411,7 +1411,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<<Self::A as Api>::QuerySet, <Self::A as Api>::TextureView>,
-    );
+    ) -> Result<(), DeviceError>;
 
     /// End the current render pass.
     ///

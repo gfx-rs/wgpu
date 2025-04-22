@@ -745,7 +745,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
-    ) {
+    ) -> Result<(), crate::DeviceError> {
         unsafe { self.begin_pass(super::PassKind::Render, desc.label) };
 
         // Start timestamp if any (before all other commands but after debug marker)
@@ -867,6 +867,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
         unsafe { list.RSSetViewports(core::slice::from_ref(&raw_vp)) };
         unsafe { list.RSSetScissorRects(core::slice::from_ref(&raw_rect)) };
+
+        Ok(())
     }
 
     unsafe fn end_render_pass(&mut self) {

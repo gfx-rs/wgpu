@@ -496,7 +496,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
-    ) {
+    ) -> Result<(), crate::DeviceError> {
         debug_assert!(self.state.end_of_pass_timestamp.is_none());
         if let Some(ref t) = desc.timestamp_writes {
             if let Some(index) = t.beginning_of_pass_write_index {
@@ -665,6 +665,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .push(C::ClearStencil(dsat.clear_value.1));
             }
         }
+        Ok(())
     }
     unsafe fn end_render_pass(&mut self) {
         for (attachment, dst) in self.state.resolve_attachments.drain(..) {

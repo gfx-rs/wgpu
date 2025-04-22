@@ -724,7 +724,7 @@ impl<A: hal::Api> Example<A> {
             occlusion_query_set: None,
         };
         unsafe {
-            ctx.encoder.begin_render_pass(&pass_desc);
+            ctx.encoder.begin_render_pass(&pass_desc).unwrap();
             ctx.encoder.set_render_pipeline(&self.pipeline);
             ctx.encoder
                 .set_bind_group(&self.pipeline_layout, 0, &self.global_group, &[]);
