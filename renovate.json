@@ -3,6 +3,7 @@
   "extends": ["config:recommended"],
   "dependencyDashboard": true,
   "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
   "packageRules": [
     {
       "matchUpdateTypes": ["patch"],
@@ -49,7 +50,7 @@
     {
       "description": "IGNORE: libfuzzer-sys 0.4.8 has a broken build on Windows.",
       "matchPackageNames": ["libfuzzer-sys"],
-      "matchCurrentVersion": ">0.4.8,<0.5.0",
+      "matchCurrentVersion": "<0.5.0",
       "enabled": false
     },
     {
