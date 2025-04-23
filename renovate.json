@@ -1,9 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
+  "extends": ["config:recommended", "schedule:weekly"],
   "dependencyDashboard": true,
-  "prConcurrentLimit": 5,
+  "prConcurrentLimit": 20,
   "prHourlyLimit": 200,
+  "labels": ["dependencies"],
   "packageRules": [
     {
       "matchUpdateTypes": ["patch"],
