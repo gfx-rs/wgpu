@@ -188,8 +188,8 @@ impl crate::Attachment<'_, super::TextureView> {
         caps: &super::PrivateCapabilities,
     ) -> super::AttachmentKey {
         super::AttachmentKey {
-            format: caps.map_texture_format(self.view.attachment.view_format),
-            layout: derive_image_layout(self.usage, self.view.attachment.view_format),
+            format: caps.map_texture_format(self.view.view_format),
+            layout: derive_image_layout(self.usage, self.view.view_format),
             ops,
         }
     }
@@ -201,7 +201,6 @@ impl crate::ColorAttachment<'_, super::TextureView> {
         match self
             .target
             .view
-            .attachment
             .view_format
             .sample_type(None, None)
             .unwrap()

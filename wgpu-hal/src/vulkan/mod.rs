@@ -340,12 +340,10 @@ impl SwapchainImageSemaphores {
 
 struct Swapchain {
     raw: vk::SwapchainKHR,
-    raw_flags: vk::SwapchainCreateFlagsKHR,
     functor: khr::swapchain::Device,
     device: Arc<DeviceShared>,
     images: Vec<vk::Image>,
     config: crate::SurfaceConfiguration,
-    view_formats: Vec<wgt::TextureFormat>,
     /// One wait semaphore per swapchain image. This will be associated with the
     /// surface texture, and later collected during submission.
     ///
@@ -488,7 +486,6 @@ struct RayTracingDeviceExtensionFunctions {
 /// device geometry, but affect the code paths taken internally.
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
-    imageless_framebuffers: bool,
     image_view_usage: bool,
     timeline_semaphores: bool,
     texture_d24: bool,
@@ -605,19 +602,9 @@ struct RenderPassKey {
     multiview: Option<NonZeroU32>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct FramebufferAttachment {
-    /// Can be NULL if the framebuffer is image-less
-    raw: vk::ImageView,
-    raw_image_flags: vk::ImageCreateFlags,
-    view_usage: wgt::TextureUses,
-    view_format: wgt::TextureFormat,
-    raw_view_formats: Vec<vk::Format>,
-}
-
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct FramebufferKey {
-    attachments: ArrayVec<FramebufferAttachment, { MAX_TOTAL_ATTACHMENTS }>,
+    attachments: ArrayVec<vk::ImageView, { MAX_TOTAL_ATTACHMENTS }>,
     extent: wgt::Extent3d,
     sample_count: u32,
 }
@@ -797,11 +784,8 @@ pub struct Texture {
     drop_guard: Option<crate::DropGuard>,
     external_memory: Option<vk::DeviceMemory>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
-    usage: wgt::TextureUses,
     format: wgt::TextureFormat,
-    raw_flags: vk::ImageCreateFlags,
     copy_size: crate::CopyExtent,
-    view_formats: Vec<wgt::TextureFormat>,
 }
 
 impl crate::DynTexture for Texture {}
@@ -819,7 +803,7 @@ impl Texture {
 pub struct TextureView {
     raw: vk::ImageView,
     layers: NonZeroU32,
-    attachment: FramebufferAttachment,
+    view_format: wgt::TextureFormat,
 }
 
 impl crate::DynTextureView for TextureView {}

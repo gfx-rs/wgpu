@@ -44,9 +44,6 @@ pub struct PhysicalDeviceFeatures {
     pub(super) descriptor_indexing:
         Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT<'static>>,
 
-    /// Features provided by `VK_KHR_imageless_framebuffer`, promoted to Vulkan 1.2.
-    imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR<'static>>,
-
     /// Features provided by `VK_KHR_timeline_semaphore`, promoted to Vulkan 1.2
     timeline_semaphore: Option<vk::PhysicalDeviceTimelineSemaphoreFeaturesKHR<'static>>,
 
@@ -136,9 +133,6 @@ impl PhysicalDeviceFeatures {
     ) -> vk::DeviceCreateInfo<'a> {
         info = info.enabled_features(&self.core);
         if let Some(ref mut feature) = self.descriptor_indexing {
-            info = info.push_next(feature);
-        }
-        if let Some(ref mut feature) = self.imageless_framebuffer {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.timeline_semaphore {
@@ -325,16 +319,6 @@ impl PhysicalDeviceFeatures {
                         .descriptor_binding_storage_image_update_after_bind(needs_bindless)
                         .descriptor_binding_storage_buffer_update_after_bind(needs_bindless)
                         .descriptor_binding_partially_bound(needs_partially_bound),
-                )
-            } else {
-                None
-            },
-            imageless_framebuffer: if device_api_version >= vk::API_VERSION_1_2
-                || enabled_extensions.contains(&khr::imageless_framebuffer::NAME)
-            {
-                Some(
-                    vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::default()
-                        .imageless_framebuffer(private_caps.imageless_framebuffers),
                 )
             } else {
                 None
@@ -976,15 +960,6 @@ impl PhysicalDeviceProperties {
                 extensions.push(khr::image_format_list::NAME);
             }
 
-            // Optional `VK_KHR_imageless_framebuffer`
-            if self.supports_extension(khr::imageless_framebuffer::NAME) {
-                extensions.push(khr::imageless_framebuffer::NAME);
-                // Require `VK_KHR_maintenance2` due to it being a dependency
-                if self.device_api_version < vk::API_VERSION_1_1 {
-                    extensions.push(khr::maintenance2::NAME);
-                }
-            }
-
             // Optional `VK_KHR_driver_properties`
             if self.supports_extension(khr::driver_properties::NAME) {
                 extensions.push(khr::driver_properties::NAME);
@@ -1420,15 +1395,6 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
-            // `VK_KHR_imageless_framebuffer` is promoted to 1.2, but has no
-            // changes, so we can keep using the extension unconditionally.
-            if capabilities.supports_extension(khr::imageless_framebuffer::NAME) {
-                let next = features
-                    .imageless_framebuffer
-                    .insert(vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::default());
-                features2 = features2.push_next(next);
-            }
-
             // `VK_KHR_timeline_semaphore` is promoted to 1.2, but has no
             // changes, so we can keep using the extension unconditionally.
             if capabilities.supports_extension(khr::timeline_semaphore::NAME) {
@@ -1655,12 +1621,6 @@ impl super::Instance {
         }
 
         let private_caps = super::PrivateCapabilities {
-            imageless_framebuffers: match phd_features.imageless_framebuffer {
-                Some(features) => features.imageless_framebuffer == vk::TRUE,
-                None => phd_features
-                    .imageless_framebuffer
-                    .is_some_and(|ext| ext.imageless_framebuffer != 0),
-            },
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance2::NAME),
             timeline_semaphores: match phd_features.timeline_semaphore {

@@ -714,7 +714,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) -> Result<(), crate::DeviceError> {
         let mut vk_clear_values =
             ArrayVec::<vk::ClearValue, { super::MAX_TOTAL_ATTACHMENTS }>::new();
-        let mut vk_image_views = ArrayVec::<vk::ImageView, { super::MAX_TOTAL_ATTACHMENTS }>::new();
         let mut rp_key = super::RenderPassKey::default();
         let mut fb_key = super::FramebufferKey {
             attachments: ArrayVec::default(),
@@ -728,7 +727,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 vk_clear_values.push(vk::ClearValue {
                     color: unsafe { cat.make_vk_clear_color() },
                 });
-                vk_image_views.push(cat.target.view.raw);
                 let color = super::ColorAttachmentKey {
                     base: cat.target.make_attachment_key(cat.ops, caps),
                     resolve: cat.resolve_target.as_ref().map(|target| {
@@ -737,11 +735,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 };
 
                 rp_key.colors.push(Some(color));
-                fb_key.attachments.push(cat.target.view.attachment.clone());
+                fb_key.attachments.push(cat.target.view.raw);
                 if let Some(ref at) = cat.resolve_target {
                     vk_clear_values.push(unsafe { mem::zeroed() });
-                    vk_image_views.push(at.view.raw);
-                    fb_key.attachments.push(at.view.attachment.clone());
+                    fb_key.attachments.push(at.view.raw);
                 }
 
                 // Assert this attachment is valid for the detected multiview, as a sanity check
@@ -763,12 +760,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     stencil: ds.clear_value.1,
                 },
             });
-            vk_image_views.push(ds.target.view.raw);
             rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
                 base: ds.target.make_attachment_key(ds.depth_ops, caps),
                 stencil_ops: ds.stencil_ops,
             });
-            fb_key.attachments.push(ds.target.view.attachment.clone());
+            fb_key.attachments.push(ds.target.view.raw);
 
             // Assert this attachment is valid for the detected multiview, as a sanity check
             // The driver crash for this is really bad on AMD, so the check is worth it
@@ -801,19 +797,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .make_framebuffer(fb_key, raw_pass, desc.label)
             .unwrap();
 
-        let mut vk_info = vk::RenderPassBeginInfo::default()
+        let vk_info = vk::RenderPassBeginInfo::default()
             .render_pass(raw_pass)
             .render_area(render_area)
             .clear_values(&vk_clear_values)
             .framebuffer(raw_framebuffer);
-        let mut vk_attachment_info = if caps.imageless_framebuffers {
-            Some(vk::RenderPassAttachmentBeginInfo::default().attachments(&vk_image_views))
-        } else {
-            None
-        };
-        if let Some(attachment_info) = vk_attachment_info.as_mut() {
-            vk_info = vk_info.push_next(attachment_info);
-        }
 
         if let Some(label) = desc.label {
             unsafe { self.begin_debug_marker(label) };
