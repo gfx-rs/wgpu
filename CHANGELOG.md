@@ -47,7 +47,7 @@ Bottom level categories:
 - Add Dcomp support to DX12 backend. By @n1ght-hunter in [#7550](https://github.com/gfx-rs/wgpu/pull/7550).
 ```diff
 -pub struct Dx12BackendOptions { pub shader_compiler: Dx12Compiler }
-+pub struct Dx12BackendOptions { pub shader_compiler: Dx12Compiler, pub use_dcomp: bool }
++pub struct Dx12BackendOptions { pub shader_compiler: Dx12Compiler, pub presentation_system: Dx12PresentationSystem }
 ```
 
 #### Naga
