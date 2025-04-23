@@ -94,6 +94,12 @@ impl ComputePass<'_> {
         self.inner
             .dispatch_workgroups_indirect(&indirect_buffer.inner, indirect_offset);
     }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of ComputePass (if custom backend and is internally T)
+    pub fn as_custom<T: custom::ComputePassInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
 }
 
 /// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.

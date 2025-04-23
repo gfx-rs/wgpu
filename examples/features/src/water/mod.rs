@@ -832,7 +832,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
         .expect_fail(wgpu_test::FailureCase {
             backends: Some(wgpu::Backends::VULKAN),
             reasons: vec![wgpu_test::FailureReason::validation_error()
-                .with_message(concat!("Hazard WRITE_AFTER_"))],
+                .with_message("WRITE_AFTER_WRITE hazard detected.")],
             behavior: wgpu_test::FailureBehavior::AssertFailure,
             ..Default::default()
         }),

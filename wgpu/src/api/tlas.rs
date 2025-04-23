@@ -57,6 +57,12 @@ impl Tlas {
             hal_tlas_callback(None)
         }
     }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of Tlas (if custom backend and is internally T)
+    pub fn as_custom<T: crate::custom::TlasInterface>(&self) -> Option<&T> {
+        self.shared.inner.as_custom()
+    }
 }
 
 /// Entry for a top level acceleration structure build.

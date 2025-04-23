@@ -24,8 +24,6 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 !*/
 
-#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
-
 mod adapter;
 mod command;
 mod conv;
@@ -34,16 +32,8 @@ mod drm;
 mod instance;
 mod sampler;
 
-use std::{
-    borrow::Borrow,
-    boxed::Box,
-    ffi::{CStr, CString},
-    fmt, mem,
-    num::NonZeroU32,
-    ops::DerefMut,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
+use core::{borrow::Borrow, ffi::CStr, fmt, mem, num::NonZeroU32, ops::DerefMut};
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
@@ -162,6 +152,7 @@ pub struct InstanceShared {
     extensions: Vec<&'static CStr>,
     drop_guard: Option<crate::DropGuard>,
     flags: wgt::InstanceFlags,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::get_physical_device_properties2::Instance>,
     entry: ash::Entry,
@@ -1470,13 +1461,8 @@ fn get_unexpected_err(_err: vk::Result) -> crate::DeviceError {
     crate::DeviceError::Unexpected
 }
 
-/// Returns [`crate::DeviceError::OutOfMemory`] or panics if the `oom_panic`
-/// feature flag is enabled.
+/// Returns [`crate::DeviceError::OutOfMemory`].
 fn get_oom_err(_err: vk::Result) -> crate::DeviceError {
-    #[cfg(feature = "oom_panic")]
-    panic!("Out of memory ({_err:?})");
-
-    #[allow(unreachable_code)]
     crate::DeviceError::OutOfMemory
 }
 

@@ -54,8 +54,20 @@ pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>)
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
 
+// remove when rust 1.86
+#[cfg_attr(not(custom), expect(dead_code))]
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: 'static> AsAny for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 // Common traits on all the interface traits
-trait_alias!(CommonTraits: Any + Debug + WasmNotSendSync);
+trait_alias!(CommonTraits: AsAny + Any + Debug + WasmNotSendSync);
 
 pub trait InstanceInterface: CommonTraits {
     fn new(desc: &crate::InstanceDescriptor) -> Self
@@ -166,7 +178,7 @@ pub trait DeviceInterface: CommonTraits {
     unsafe fn start_graphics_debugger_capture(&self);
     unsafe fn stop_graphics_debugger_capture(&self);
 
-    fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError>;
+    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError>;
 
     fn get_internal_counters(&self) -> crate::InternalCounters;
     fn generate_allocator_report(&self) -> Option<crate::AllocatorReport>;
@@ -575,6 +587,16 @@ macro_rules! dispatch_types {
                 }
             }
 
+            #[cfg(custom)]
+            #[inline]
+            #[allow(clippy::allow_attributes, unused)]
+            pub fn as_custom<T: $interface>(&self) -> Option<&T> {
+                match self {
+                    Self::Custom(value) => value.downcast(),
+                    _ => None,
+                }
+            }
+
             #[cfg(webgpu)]
             #[inline]
             #[allow(clippy::allow_attributes, unused)]
@@ -689,6 +711,16 @@ macro_rules! dispatch_types {
             ) -> Option<&mut $core_type> {
                 match self {
                     Self::Core(value) => Some(value),
+                    _ => None,
+                }
+            }
+
+            #[cfg(custom)]
+            #[inline]
+            #[allow(clippy::allow_attributes, unused)]
+            pub fn as_custom<T: $interface>(&self) -> Option<&T> {
+                match self {
+                    Self::Custom(value) => value.downcast(),
                     _ => None,
                 }
             }

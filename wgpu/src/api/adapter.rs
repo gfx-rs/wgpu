@@ -134,6 +134,12 @@ impl Adapter {
     }
 
     #[cfg(custom)]
+    /// Returns custom implementation of adapter (if custom backend and is internally T)
+    pub fn as_custom<T: custom::AdapterInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+
+    #[cfg(custom)]
     /// Creates Adapter from custom implementation
     pub fn from_custom<T: custom::AdapterInterface>(adapter: T) -> Self {
         Self {

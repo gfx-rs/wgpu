@@ -262,6 +262,12 @@ impl CommandEncoder {
             hal_command_encoder_callback(None)
         }
     }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of CommandEncoder (if custom backend and is internally T)
+    pub fn as_custom<T: custom::CommandEncoderInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
 }
 
 /// [`Features::TIMESTAMP_QUERY_INSIDE_ENCODERS`] must be enabled on the device in order to call these functions.

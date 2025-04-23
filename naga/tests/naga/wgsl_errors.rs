@@ -3419,6 +3419,9 @@ fn too_many_arguments_2() {
   │                    ^^^^^^^^              ^^ argument #2 has type `i32`
   │
   = note: `distance` accepts the following types for argument #2:
+  = note: allowed type: f32
+  = note: allowed type: f16
+  = note: allowed type: f64
   = note: allowed type: vec2<f32>
   = note: allowed type: vec2<f16>
   = note: allowed type: vec2<f64>

@@ -108,8 +108,12 @@ impl crate::framework::Example for Example {
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
-        wgpu::DownlevelCapabilities::default()
+        wgpu::DownlevelCapabilities {
+            flags: wgpu::DownlevelFlags::COMPUTE_SHADERS,
+            ..Default::default()
+        }
     }
+
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
             max_push_constant_size: 12,
@@ -368,20 +372,12 @@ pub fn main() {
 #[cfg(test)]
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
-    name: "ray_cube_shadows",
+    name: "ray_shadows",
     image_path: "/examples/features/src/ray_shadows/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),
-    base_test_parameters: wgpu_test::TestParameters {
-        required_features: <Example as crate::framework::Example>::required_features(),
-        required_limits: <Example as crate::framework::Example>::required_limits(),
-        skips: vec![],
-        failures: Vec::new(),
-        required_downlevel_caps:
-            <Example as crate::framework::Example>::required_downlevel_capabilities(),
-        ..Default::default()
-    },
+    base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
 };

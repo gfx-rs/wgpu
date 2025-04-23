@@ -43,6 +43,10 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
     Instance::new(&wgpu::InstanceDescriptor {
         backends,
         flags,
+        memory_budget_thresholds: wgpu::MemoryBudgetThresholds {
+            for_resource_creation: Some(99),
+            for_device_loss: None,
+        },
         backend_options: wgpu::BackendOptions {
             dx12: wgpu::Dx12BackendOptions {
                 shader_compiler: dx12_shader_compiler,
