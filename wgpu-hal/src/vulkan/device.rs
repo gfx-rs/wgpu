@@ -205,23 +205,18 @@ impl super::DeviceShared {
     pub fn make_framebuffer(
         &self,
         key: super::FramebufferKey,
-        raw_pass: vk::RenderPass,
-        pass_label: crate::Label,
     ) -> Result<vk::Framebuffer, crate::DeviceError> {
         Ok(match self.framebuffers.lock().entry(key) {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
                 let vk_info = vk::FramebufferCreateInfo::default()
-                    .render_pass(raw_pass)
+                    .render_pass(e.key().raw_pass)
                     .width(e.key().extent.width)
                     .height(e.key().extent.height)
                     .layers(e.key().extent.depth_or_array_layers)
                     .attachments(&e.key().attachments);
 
                 let raw = unsafe { self.raw.create_framebuffer(&vk_info, None).unwrap() };
-                if let Some(label) = pass_label {
-                    unsafe { self.set_object_name(raw, label) };
-                }
                 *e.insert(raw)
             }
         })

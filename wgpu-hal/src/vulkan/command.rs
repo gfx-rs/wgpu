@@ -714,11 +714,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) -> Result<(), crate::DeviceError> {
         let mut vk_clear_values =
             ArrayVec::<vk::ClearValue, { super::MAX_TOTAL_ATTACHMENTS }>::new();
-        let mut rp_key = super::RenderPassKey::default();
+        let mut rp_key = super::RenderPassKey {
+            colors: ArrayVec::default(),
+            depth_stencil: None,
+            sample_count: desc.sample_count,
+            multiview: desc.multiview,
+        };
         let mut fb_key = super::FramebufferKey {
+            raw_pass: vk::RenderPass::null(),
             attachments: ArrayVec::default(),
             extent: desc.extent,
-            sample_count: desc.sample_count,
         };
         let caps = &self.device.private_caps;
 
@@ -772,8 +777,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 assert_eq!(ds.target.view.layers, multiview);
             }
         }
-        rp_key.sample_count = fb_key.sample_count;
-        rp_key.multiview = desc.multiview;
 
         let render_area = vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
@@ -792,10 +795,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }];
 
         let raw_pass = self.device.make_render_pass(rp_key).unwrap();
-        let raw_framebuffer = self
-            .device
-            .make_framebuffer(fb_key, raw_pass, desc.label)
-            .unwrap();
+        fb_key.raw_pass = raw_pass;
+        let raw_framebuffer = self.device.make_framebuffer(fb_key).unwrap();
 
         let vk_info = vk::RenderPassBeginInfo::default()
             .render_pass(raw_pass)

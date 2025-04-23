@@ -604,9 +604,9 @@ struct RenderPassKey {
 
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct FramebufferKey {
+    raw_pass: vk::RenderPass,
     attachments: ArrayVec<vk::ImageView, { MAX_TOTAL_ATTACHMENTS }>,
     extent: wgt::Extent3d,
-    sample_count: u32,
 }
 
 struct DeviceShared {
