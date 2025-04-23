@@ -46,7 +46,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
         backend_options: wgpu::BackendOptions {
             dx12: wgpu::Dx12BackendOptions {
                 shader_compiler: dx12_shader_compiler,
-                use_dcomp: false,
+                ..Default::default()
             },
             gl: wgpu::GlBackendOptions {
                 fence_behavior: if cfg!(target_family = "wasm") {

@@ -108,7 +108,7 @@ impl crate::Instance for super::Instance {
             factory,
             factory_media,
             library: Arc::new(lib_main),
-            use_dcomp: desc.backend_options.dx12.use_dcomp,
+            presentation_system: desc.backend_options.dx12.presentation_system,
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
             flags: desc.flags,
@@ -125,14 +125,14 @@ impl crate::Instance for super::Instance {
             raw_window_handle::RawWindowHandle::Win32(handle) => {
                 // https://github.com/rust-windowing/raw-window-handle/issues/171
                 let handle = Foundation::HWND(handle.hwnd.get() as *mut _);
-                let target = if self.use_dcomp {
-                    SurfaceTarget::VisualFromWndHandle {
+                let target = match self.presentation_system {
+                    wgt::Dx12PresentationSystem::Dxgi => SurfaceTarget::WndHandle(handle),
+                    wgt::Dx12PresentationSystem::Dcomp => SurfaceTarget::VisualFromWndHandle {
                         handle,
                         dcomp_state: Default::default(),
-                    }
-                } else {
-                    SurfaceTarget::WndHandle(handle)
+                    },
                 };
+
                 Ok(super::Surface {
                     factory: self.factory.clone(),
                     factory_media: self.factory_media.clone(),

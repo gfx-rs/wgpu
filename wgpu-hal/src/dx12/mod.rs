@@ -92,11 +92,12 @@ use std::{borrow::ToOwned as _, ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync
 use arrayvec::ArrayVec;
 use gpu_allocator::d3d12::Allocator;
 use parking_lot::{Mutex, RwLock};
+use wgt::Dx12PresentationSystem;
 use windows::{
     core::{Free, Interface},
     Win32::{
         Foundation,
-        Graphics::{Direct3D, Direct3D11, Direct3D11on12, Direct3D12, DirectComposition, Dxgi},
+        Graphics::{Direct3D, Direct3D12, DirectComposition, Dxgi},
         System::Threading,
     },
 };
@@ -459,7 +460,7 @@ pub struct Instance {
     factory_media: Option<Dxgi::IDXGIFactoryMedia>,
     library: Arc<D3D12Lib>,
     supports_allow_tearing: bool,
-    use_dcomp: bool,
+    presentation_system: Dx12PresentationSystem,
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
