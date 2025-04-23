@@ -790,10 +790,13 @@ impl Texture {
 
 #[derive(Debug)]
 pub struct TextureView {
+    raw_texture: vk::Image,
     raw: vk::ImageView,
     layers: NonZeroU32,
     format: wgt::TextureFormat,
     raw_format: vk::Format,
+    base_mip_level: u32,
+    dimension: wgt::TextureViewDimension,
 }
 
 impl crate::DynTextureView for TextureView {}
@@ -871,6 +874,14 @@ struct FramebufferKey {
     extent: wgt::Extent3d,
 }
 
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct TempTextureViewKey {
+    texture: vk::Image,
+    format: vk::Format,
+    mip_level: u32,
+    depth_slice: u32,
+}
+
 pub struct CommandEncoder {
     raw: vk::CommandPool,
     device: Arc<DeviceShared>,
@@ -908,6 +919,7 @@ pub struct CommandEncoder {
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
 
     framebuffers: FastHashMap<FramebufferKey, vk::Framebuffer>,
+    temp_texture_views: FastHashMap<TempTextureViewKey, vk::ImageView>,
 
     counters: Arc<wgt::HalCounters>,
 }
@@ -933,6 +945,10 @@ impl Drop for CommandEncoder {
 
         for (_, fb) in self.framebuffers.drain() {
             unsafe { self.device.raw.destroy_framebuffer(fb, None) };
+        }
+
+        for (_, view) in self.temp_texture_views.drain() {
+            unsafe { self.device.raw.destroy_image_view(view, None) };
         }
 
         self.counters.command_encoders.sub(1);

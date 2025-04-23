@@ -71,6 +71,31 @@ impl super::CommandEncoder {
             }
         })
     }
+
+    fn make_temp_texture_view(
+        &mut self,
+        key: super::TempTextureViewKey,
+    ) -> Result<vk::ImageView, crate::DeviceError> {
+        Ok(match self.temp_texture_views.entry(key) {
+            Entry::Occupied(e) => *e.get(),
+            Entry::Vacant(e) => {
+                let vk_info = vk::ImageViewCreateInfo::default()
+                    .image(e.key().texture)
+                    .view_type(vk::ImageViewType::TYPE_2D)
+                    .format(e.key().format)
+                    .subresource_range(vk::ImageSubresourceRange {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        base_mip_level: e.key().mip_level,
+                        level_count: 1,
+                        base_array_layer: e.key().depth_slice,
+                        layer_count: 1,
+                    });
+                let raw = unsafe { self.device.raw.create_image_view(&vk_info, None) }
+                    .map_err(super::map_host_device_oom_and_ioca_err)?;
+                *e.insert(raw)
+            }
+        })
+    }
 }
 
 impl crate::CommandEncoder for super::CommandEncoder {
@@ -747,6 +772,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         for cat in desc.color_attachments {
             if let Some(cat) = cat.as_ref() {
+                let color_view = if cat.target.view.dimension == wgt::TextureViewDimension::D3 {
+                    let key = super::TempTextureViewKey {
+                        texture: cat.target.view.raw_texture,
+                        format: cat.target.view.raw_format,
+                        mip_level: cat.target.view.base_mip_level,
+                        depth_slice: cat.depth_slice.unwrap(),
+                    };
+                    self.make_temp_texture_view(key)?
+                } else {
+                    cat.target.view.raw
+                };
+
                 vk_clear_values.push(vk::ClearValue {
                     color: unsafe { cat.make_vk_clear_color() },
                 });
@@ -759,7 +796,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 };
 
                 rp_key.colors.push(Some(color));
-                fb_key.attachments.push(cat.target.view.raw);
+                fb_key.attachments.push(color_view);
                 if let Some(ref at) = cat.resolve_target {
                     vk_clear_values.push(unsafe { mem::zeroed() });
                     fb_key.attachments.push(at.view.raw);

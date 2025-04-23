@@ -2,7 +2,7 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     vertex_attr_array,
 };
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 #[gpu_test]
 static DRAW_TO_2D_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -236,14 +236,10 @@ async fn run_test(
 
 #[gpu_test]
 static DRAW_TO_3D_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .limits(wgpu::Limits {
-                max_texture_dimension_3d: 512,
-                ..wgpu::Limits::downlevel_webgl2_defaults()
-            })
-            .skip(FailureCase::backend(wgpu::Backends::VULKAN)),
-    )
+    .parameters(TestParameters::default().limits(wgpu::Limits {
+        max_texture_dimension_3d: 512,
+        ..wgpu::Limits::downlevel_webgl2_defaults()
+    }))
     .run_async(run_test_3d);
 
 async fn run_test_3d(ctx: TestingContext) {

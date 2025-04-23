@@ -640,6 +640,11 @@ impl super::Device {
         let copy_size = desc.copy_extent();
 
         let mut raw_flags = vk::ImageCreateFlags::empty();
+        if desc.dimension == wgt::TextureDimension::D3
+            && desc.usage.contains(wgt::TextureUses::COLOR_TARGET)
+        {
+            raw_flags |= vk::ImageCreateFlags::TYPE_2D_ARRAY_COMPATIBLE;
+        }
         if desc.is_cube_compatible() {
             raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
         }
@@ -1287,10 +1292,13 @@ impl crate::Device for super::Device {
         self.counters.texture_views.add(1);
 
         Ok(super::TextureView {
+            raw_texture: texture.raw,
             raw,
             layers,
             format: desc.format,
             raw_format,
+            base_mip_level: desc.range.base_mip_level,
+            dimension: desc.dimension,
         })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
@@ -1387,6 +1395,7 @@ impl crate::Device for super::Device {
             rpass_debug_marker_active: false,
             end_of_pass_timer_query: None,
             framebuffers: Default::default(),
+            temp_texture_views: Default::default(),
             counters: Arc::clone(&self.counters),
         })
     }

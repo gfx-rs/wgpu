@@ -929,16 +929,6 @@ impl Device {
                     desc.format,
                 ));
             }
-
-            // Renderable textures can only be 2D on Vulkan (until we implement 3D support)
-            if self.backend() == wgt::Backend::Vulkan
-                && desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
-            {
-                return Err(CreateTextureError::InvalidDimensionUsages(
-                    wgt::TextureUsages::RENDER_ATTACHMENT,
-                    desc.dimension,
-                ));
-            }
         }
 
         if desc.dimension != wgt::TextureDimension::D2
