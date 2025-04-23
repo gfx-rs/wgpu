@@ -28,15 +28,11 @@
 //!
 //! [`lock/rank.rs`]: ../../../src/wgpu_core/lock/rank.rs.html
 
-#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
-
+use alloc::{format, string::String};
+use core::{cell::RefCell, panic::Location};
 use std::{
-    cell::RefCell,
-    format,
     fs::File,
-    panic::Location,
     path::{Path, PathBuf},
-    string::String,
 };
 
 use super::rank::{LockRank, LockRankSet};
