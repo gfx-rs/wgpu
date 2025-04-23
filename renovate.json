@@ -3,7 +3,7 @@
   "extends": ["config:recommended"],
   "dependencyDashboard": true,
   "prConcurrentLimit": 5,
-  "prHourlyLimit": 2,
+  "prHourlyLimit": 200,
   "packageRules": [
     {
       "matchUpdateTypes": ["patch"],
