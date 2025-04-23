@@ -158,7 +158,7 @@ walkdir = "2"
 winit = { version = "0.29", features = ["android-native-activity"] }
 
 # Metal dependencies
-metal = "0.31.0"
+metal = "0.32.0"
 block = "0.1"
 core-graphics-types = "0.1"
 objc = "0.2.5"
