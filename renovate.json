@@ -3,7 +3,7 @@
   "extends": ["config:recommended"],
   "packageRules": [
     {
-      "matchUpdateTypes": ["lockFileMaintenance"],
+      "matchUpdateTypes": ["bump"],
       "groupName": "Minor version updates"
     },
     {
