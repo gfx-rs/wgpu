@@ -3,7 +3,8 @@ use objc::{class, msg_send, sel, sel_impl};
 use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
 
-use std::{sync::Arc, thread};
+use alloc::sync::Arc;
+use std::thread;
 
 use super::TimestampQuerySupport;
 

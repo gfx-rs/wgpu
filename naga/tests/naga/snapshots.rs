@@ -853,7 +853,7 @@ fn convert_snapshots_spv() {
             &command.stdout,
             &naga::front::spv::Options {
                 adjust_coordinate_space,
-                strict_capabilities: false,
+                strict_capabilities: true,
                 block_ctx_dump_prefix: None,
             },
         )

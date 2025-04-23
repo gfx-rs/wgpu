@@ -56,15 +56,9 @@ arbitrary = [
     "half/arbitrary",
     "half/std",
 ]
-spv-in = ["dep:petgraph", "dep:spirv"]
+spv-in = ["dep:petgraph", "petgraph/graphmap", "dep:spirv"]
 spv-out = ["dep:spirv"]
-wgsl-in = [
-    "dep:hexf-parse",
-    "dep:strum",
-    "dep:unicode-ident",
-    "indexmap/std",
-    "compact",
-]
+wgsl-in = ["dep:hexf-parse", "dep:strum", "dep:unicode-ident", "compact"]
 wgsl-out = []
 
 ## Enables outputting to HLSL (Microsoft's High-Level Shader Language).
@@ -80,15 +74,19 @@ hlsl-out-if-target-windows = []
 
 compact = []
 
+## Enables colored output through codespan-reporting and termcolor.
+termcolor = ["codespan-reporting/termcolor"]
+
+## Enables writing output to stderr.
+stderr = ["codespan-reporting/std"]
+
 [dependencies]
 arbitrary = { version = "1.4", features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
-codespan-reporting = { workspace = true, default-features = false, features = [
-    "std",
-    "termcolor",
-] }
+cfg-if.workspace = true
+codespan-reporting = { workspace = true, default-features = false }
 hashbrown.workspace = true
 half = { workspace = true, default-features = false, features = ["num-traits"] }
 rustc-hash.workspace = true
@@ -100,11 +98,11 @@ once_cell = { workspace = true, features = ["alloc", "race"] }
 strum = { workspace = true, optional = true }
 spirv = { version = "0.3", optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.219", features = [
-    "default",
+serde = { version = "1.0.219", default-features = false, features = [
+    "alloc",
     "derive",
 ], optional = true }
-petgraph = { version = "0.8", optional = true }
+petgraph = { version = "0.8", optional = true, default-features = false }
 pp-rs = { version = "0.2.1", optional = true }
 hexf-parse = { version = "0.2.1", optional = true }
 unicode-ident = { version = "1.0", optional = true }

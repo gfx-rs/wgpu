@@ -98,7 +98,7 @@ cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.5"
 codespan-reporting = { version = "0.12", default-features = false }
-ctor = "0.2"
+ctor = "0.4"
 document-features = "0.2.11"
 encase = "0.10.0"
 env_logger = "0.11"
@@ -112,10 +112,10 @@ hashbrown = { version = "0.15.2", default-features = false, features = [
     "inline-more",
 ] }
 heck = "0.5.0"
-image = { version = "0.24", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 indexmap = { version = "2.7.1", default-features = false }
-itertools = { version = "0.13.0" }
-ktx2 = "0.3"
+itertools = { version = "0.14.0" }
+ktx2 = "0.4"
 libc = { version = "0.2", default-features = false }
 libloading = "0.8"
 libtest-mimic = "0.8.1"
@@ -141,7 +141,7 @@ profiling = { version = "1", default-features = false }
 raw-window-handle = { version = "0.6.2", default-features = false }
 rayon = "1"
 renderdoc-sys = "1.1.0"
-ron = "0.9"
+ron = "0.10"
 # NOTE: rustc-hash v2 is a completely different hasher with different performance characteristics
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
@@ -150,9 +150,9 @@ serde_json = "1.0.140"
 serde = { version = "1", default-features = false }
 smallvec = "1"
 static_assertions = "1.1.0"
-strum = { version = "0.26.3", default-features = false, features = ["derive"] }
+strum = { version = "0.27.1", default-features = false, features = ["derive"] }
 trybuild = "1"
-tracy-client = "0.17"
+tracy-client = "0.18"
 thiserror = { version = "2", default-features = false }
 walkdir = "2"
 winit = { version = "0.29", features = ["android-native-activity"] }
@@ -208,7 +208,7 @@ tokio = "1.44.2"
 termcolor = "1.4.1"
 
 # android dependencies
-ndk-sys = "0.5.0"
+ndk-sys = "0.6.0"
 
 # These overrides allow our examples to explicitly depend on release crates
 [patch.crates-io]

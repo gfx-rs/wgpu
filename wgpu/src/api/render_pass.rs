@@ -306,6 +306,12 @@ impl RenderPass<'_> {
         self.inner
             .multi_draw_indexed_indirect(&indirect_buffer.inner, indirect_offset, count);
     }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of RenderPass (if custom backend and is internally T)
+    pub fn as_custom<T: custom::RenderPassInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
 }
 
 /// [`Features::MULTI_DRAW_INDIRECT_COUNT`] must be enabled on the device in order to call these functions.

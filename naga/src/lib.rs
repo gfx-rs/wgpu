@@ -110,7 +110,9 @@ void main() {
     wgsl_out,
 
     feature = "spv-in",
-    feature = "wgsl-in"
+    feature = "wgsl-in",
+
+    feature = "stderr",
 ))]
 extern crate std;
 

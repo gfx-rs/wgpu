@@ -1517,12 +1517,13 @@ impl BlockContext<'_> {
                     Mf::Pack2x16float => MathOp::Ext(spirv::GLOp::PackHalf2x16),
                     Mf::Pack2x16unorm => MathOp::Ext(spirv::GLOp::PackUnorm2x16),
                     Mf::Pack2x16snorm => MathOp::Ext(spirv::GLOp::PackSnorm2x16),
-                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8 | Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp) => {
                         let (int_type, is_signed) = match fun {
-                            Mf::Pack4xI8 => (crate::ScalarKind::Sint, true),
-                            Mf::Pack4xU8 => (crate::ScalarKind::Uint, false),
+                            Mf::Pack4xI8 | Mf::Pack4xI8Clamp => (crate::ScalarKind::Sint, true),
+                            Mf::Pack4xU8 | Mf::Pack4xU8Clamp => (crate::ScalarKind::Uint, false),
                             _ => unreachable!(),
                         };
+                        let should_clamp = matches!(fun, Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp);
                         let uint_type_id =
                             self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
 
@@ -1562,6 +1563,34 @@ impl BlockContext<'_> {
                                     extracted,
                                 ));
                                 extracted = casted;
+                            }
+                            if should_clamp {
+                                let (min, max, clamp_op) = if is_signed {
+                                    (
+                                        crate::Literal::I32(-128),
+                                        crate::Literal::I32(127),
+                                        spirv::GLOp::SClamp,
+                                    )
+                                } else {
+                                    (
+                                        crate::Literal::U32(0),
+                                        crate::Literal::U32(255),
+                                        spirv::GLOp::UClamp,
+                                    )
+                                };
+                                let [min, max] =
+                                    [min, max].map(|lit| self.writer.get_constant_scalar(lit));
+
+                                let clamp_id = self.gen_id();
+                                block.body.push(Instruction::ext_inst(
+                                    self.writer.gl450_ext_inst_id,
+                                    clamp_op,
+                                    result_type_id,
+                                    clamp_id,
+                                    &[extracted, min, max],
+                                ));
+
+                                extracted = clamp_id;
                             }
                             let is_last = i == u32::from(VEC_LENGTH - 1);
                             if is_last {

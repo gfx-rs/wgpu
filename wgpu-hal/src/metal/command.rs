@@ -1,10 +1,10 @@
 use super::{conv, AsNative, TimestampQuerySupport};
 use crate::CommandEncoder as _;
-use std::{
+use alloc::{
     borrow::{Cow, ToOwned as _},
-    ops::Range,
     vec::Vec,
 };
+use core::ops::Range;
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -972,7 +972,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         if buffer_size > 0 {
             self.state.vertex_buffer_size_map.insert(
                 buffer_index,
-                std::num::NonZeroU64::new(buffer_size).unwrap(),
+                core::num::NonZeroU64::new(buffer_size).unwrap(),
             );
         } else {
             self.state.vertex_buffer_size_map.remove(&buffer_index);

@@ -72,8 +72,6 @@ Otherwise, we pass a range corresponding only to the current bind group.
 
 !*/
 
-#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
-
 mod adapter;
 mod command;
 mod conv;
@@ -87,12 +85,12 @@ mod suballocation;
 mod types;
 mod view;
 
-use std::{borrow::ToOwned as _, ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc, vec::Vec};
+use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
+use core::{ffi, fmt, mem, num::NonZeroU32, ops::Deref};
 
 use arrayvec::ArrayVec;
-use gpu_allocator::d3d12::Allocator;
 use parking_lot::{Mutex, RwLock};
-use wgt::Dx12PresentationSystem;
+use suballocation::Allocator;
 use windows::{
     core::{Free, Interface},
     Win32::{
@@ -118,7 +116,7 @@ struct DynLib {
 impl DynLib {
     unsafe fn new<P>(filename: P) -> Result<Self, libloading::Error>
     where
-        P: AsRef<ffi::OsStr>,
+        P: AsRef<std::ffi::OsStr>,
     {
         unsafe { libloading::Library::new(filename) }.map(|inner| Self { inner })
     }
@@ -156,10 +154,10 @@ impl D3D12Lib {
     ) -> Result<Option<Direct3D12::ID3D12Device>, crate::DeviceError> {
         // Calls windows::Win32::Graphics::Direct3D12::D3D12CreateDevice on d3d12.dll
         type Fun = extern "system" fn(
-            padapter: *mut core::ffi::c_void,
+            padapter: *mut ffi::c_void,
             minimumfeaturelevel: Direct3D::D3D_FEATURE_LEVEL,
             riid: *const windows_core::GUID,
-            ppdevice: *mut *mut core::ffi::c_void,
+            ppdevice: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"D3D12CreateDevice".to_bytes()) }?;
@@ -199,8 +197,8 @@ impl D3D12Lib {
         type Fun = extern "system" fn(
             prootsignature: *const Direct3D12::D3D12_ROOT_SIGNATURE_DESC,
             version: Direct3D12::D3D_ROOT_SIGNATURE_VERSION,
-            ppblob: *mut *mut core::ffi::c_void,
-            pperrorblob: *mut *mut core::ffi::c_void,
+            ppblob: *mut *mut ffi::c_void,
+            pperrorblob: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"D3D12SerializeRootSignature".to_bytes()) }?;
@@ -240,7 +238,7 @@ impl D3D12Lib {
         // Calls windows::Win32::Graphics::Direct3D12::D3D12GetDebugInterface on d3d12.dll
         type Fun = extern "system" fn(
             riid: *const windows_core::GUID,
-            ppvdebug: *mut *mut core::ffi::c_void,
+            ppvdebug: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"D3D12GetDebugInterface".to_bytes()) }?;
@@ -278,7 +276,7 @@ impl DxgiLib {
         type Fun = extern "system" fn(
             flags: u32,
             riid: *const windows_core::GUID,
-            pdebug: *mut *mut core::ffi::c_void,
+            pdebug: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"DXGIGetDebugInterface1".to_bytes()) }?;
@@ -308,7 +306,7 @@ impl DxgiLib {
         type Fun = extern "system" fn(
             flags: Dxgi::DXGI_CREATE_FACTORY_FLAGS,
             riid: *const windows_core::GUID,
-            ppfactory: *mut *mut core::ffi::c_void,
+            ppfactory: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"CreateDXGIFactory2".to_bytes()) }?;
@@ -331,7 +329,7 @@ impl DxgiLib {
         // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory1 on dxgi.dll
         type Fun = extern "system" fn(
             riid: *const windows_core::GUID,
-            ppfactory: *mut *mut core::ffi::c_void,
+            ppfactory: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"CreateDXGIFactory1".to_bytes()) }?;
@@ -387,7 +385,7 @@ impl Deref for D3DBlob {
 
 impl D3DBlob {
     unsafe fn as_slice(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.GetBufferPointer().cast(), self.GetBufferSize()) }
+        unsafe { core::slice::from_raw_parts(self.GetBufferPointer().cast(), self.GetBufferSize()) }
     }
 
     unsafe fn as_c_str(&self) -> Result<&ffi::CStr, ffi::FromBytesUntilNulError> {
@@ -460,9 +458,10 @@ pub struct Instance {
     factory_media: Option<Dxgi::IDXGIFactoryMedia>,
     library: Arc<D3D12Lib>,
     supports_allow_tearing: bool,
-    presentation_system: Dx12PresentationSystem,
+    presentation_system: wgt::Dx12PresentationSystem,
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
 }
 
@@ -599,6 +598,7 @@ pub struct Adapter {
     // Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
 }
 
@@ -635,6 +635,7 @@ struct CommandSignatures {
 }
 
 struct DeviceShared {
+    adapter: DxgiAdapter,
     zero_buffer: Direct3D12::ID3D12Resource,
     cmd_signatures: CommandSignatures,
     heap_views: descriptor::GeneralHeap,
@@ -660,7 +661,7 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
-    mem_allocator: Arc<Mutex<Allocator>>,
+    mem_allocator: Allocator,
     dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
     counters: Arc<wgt::HalCounters>,
 }
@@ -802,7 +803,7 @@ pub struct CommandEncoder {
     allocator: Direct3D12::ID3D12CommandAllocator,
     device: Direct3D12::ID3D12Device,
     shared: Arc<DeviceShared>,
-    mem_allocator: Arc<Mutex<Allocator>>,
+    mem_allocator: Allocator,
 
     null_rtv_handle: descriptor::Handle,
     list: Option<Direct3D12::ID3D12GraphicsCommandList>,
@@ -888,7 +889,7 @@ impl Texture {
 impl crate::DynTexture for Texture {}
 impl crate::DynSurfaceTexture for Texture {}
 
-impl std::borrow::Borrow<dyn crate::DynTexture> for Texture {
+impl core::borrow::Borrow<dyn crate::DynTexture> for Texture {
     fn borrow(&self) -> &dyn crate::DynTexture {
         self
     }
@@ -1028,13 +1029,13 @@ struct BindGroupInfo {
 #[derive(Debug, Clone)]
 struct RootConstantInfo {
     root_index: RootIndex,
-    range: std::ops::Range<u32>,
+    range: core::ops::Range<u32>,
 }
 
 #[derive(Debug, Clone)]
 struct DynamicStorageBufferOffsets {
     root_index: RootIndex,
-    range: std::ops::Range<usize>,
+    range: core::ops::Range<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -1072,7 +1073,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 #[derive(Debug)]
 pub struct ShaderModule {
     naga: crate::NagaShader,
-    raw_name: Option<ffi::CString>,
+    raw_name: Option<alloc::ffi::CString>,
     runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
@@ -1145,7 +1146,7 @@ impl SwapChain {
 
     unsafe fn wait(
         &mut self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<core::time::Duration>,
     ) -> Result<bool, crate::SurfaceError> {
         let timeout_ms = match timeout {
             Some(duration) => duration.as_millis() as u32,
@@ -1397,7 +1398,7 @@ impl crate::Surface for Surface {
 
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<core::time::Duration>,
         _fence: &Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         let mut swapchain = self.swap_chain.write();

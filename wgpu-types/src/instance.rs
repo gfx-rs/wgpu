@@ -14,6 +14,8 @@ pub struct InstanceDescriptor {
     pub backends: Backends,
     /// Flags to tune the behavior of the instance.
     pub flags: InstanceFlags,
+    /// Memory budget thresholds used by some backends.
+    pub memory_budget_thresholds: MemoryBudgetThresholds,
     /// Options the control the behavior of various backends.
     pub backend_options: BackendOptions,
 }
@@ -23,6 +25,7 @@ impl Default for InstanceDescriptor {
         Self {
             backends: Backends::all(),
             flags: InstanceFlags::default(),
+            memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options: BackendOptions::default(),
         }
     }
@@ -48,6 +51,7 @@ impl InstanceDescriptor {
         Self {
             backends,
             flags,
+            memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options,
         }
     }
@@ -223,6 +227,24 @@ impl InstanceFlags {
 
         self
     }
+}
+
+/// Memory budget thresholds used by backends to try to avoid high memory pressure situations.
+///
+/// Currently only the D3D12 and (optionally) Vulkan backends support these options.
+#[derive(Default, Clone, Debug, Copy)]
+pub struct MemoryBudgetThresholds {
+    /// Threshold at which texture, buffer, query set and acceleration structure creation will start to return OOM errors.
+    /// This is a percent of the memory budget reported by native APIs.
+    ///
+    /// If not specified, resource creation might still return OOM errors.
+    pub for_resource_creation: Option<u8>,
+
+    /// Threshold at which devices will become lost due to memory pressure.
+    /// This is a percent of the memory budget reported by native APIs.
+    ///
+    /// If not specified, devices might still become lost due to memory pressure.
+    pub for_device_loss: Option<u8>,
 }
 
 /// Options that are passed to a given backend.
@@ -443,9 +465,6 @@ pub enum DxcShaderModel {
 }
 
 /// Selects which DX12 shader compiler to use.
-///
-/// If the `DynamicDxc` option is selected, but `dxcompiler.dll` and `dxil.dll` files aren't found,
-/// then this will fall back to the Fxc compiler at runtime and log an error.
 #[derive(Clone, Debug, Default)]
 pub enum Dx12Compiler {
     /// The Fxc compiler (default) is old, slow and unmaintained.
@@ -455,17 +474,15 @@ pub enum Dx12Compiler {
     Fxc,
     /// The Dxc compiler is new, fast and maintained.
     ///
-    /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
+    /// However, it requires `dxcompiler.dll` to be shipped with the application.
     /// These files can be downloaded from <https://github.com/microsoft/DirectXShaderCompiler/releases>.
     ///
-    /// Minimum supported version: [v1.5.2010](https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.5.2010)
+    /// Minimum supported version: [v1.8.2502](https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.8.2502)
     ///
     /// It also requires WDDM 2.1 (Windows 10 version 1607).
     DynamicDxc {
         /// Path to `dxcompiler.dll`.
         dxc_path: String,
-        /// Path to `dxil.dll`.
-        dxil_path: String,
         /// Maximum shader model the given dll supports.
         max_shader_model: DxcShaderModel,
     },
@@ -479,12 +496,11 @@ pub enum Dx12Compiler {
 impl Dx12Compiler {
     /// Helper function to construct a `DynamicDxc` variant with default paths.
     ///
-    /// The dll must support at least shader model 6.5.
+    /// The dll must support at least shader model 6.8.
     pub fn default_dynamic_dxc() -> Self {
         Self::DynamicDxc {
             dxc_path: String::from("dxcompiler.dll"),
-            dxil_path: String::from("dxil.dll"),
-            max_shader_model: DxcShaderModel::V6_5,
+            max_shader_model: DxcShaderModel::V6_7, // should be 6.8 but the variant is missing
         }
     }
 

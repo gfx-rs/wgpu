@@ -171,6 +171,8 @@ pub trait DynDevice: DynResource {
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
+
+    fn check_if_oom(&self) -> Result<(), DeviceError>;
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -562,5 +564,9 @@ impl<D: Device + DynResource> DynDevice for D {
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         D::generate_allocator_report(self)
+    }
+
+    fn check_if_oom(&self) -> Result<(), DeviceError> {
+        D::check_if_oom(self)
     }
 }

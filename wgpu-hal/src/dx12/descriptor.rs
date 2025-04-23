@@ -1,4 +1,5 @@
-use std::{fmt, vec::Vec};
+use alloc::vec::Vec;
+use core::fmt;
 
 use bit_set::BitSet;
 use parking_lot::Mutex;

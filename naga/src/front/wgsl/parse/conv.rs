@@ -273,6 +273,8 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "pack2x16float" => Mf::Pack2x16float,
         "pack4xI8" => Mf::Pack4xI8,
         "pack4xU8" => Mf::Pack4xU8,
+        "pack4xI8Clamp" => Mf::Pack4xI8Clamp,
+        "pack4xU8Clamp" => Mf::Pack4xU8Clamp,
         // data unpacking
         "unpack4x8snorm" => Mf::Unpack4x8snorm,
         "unpack4x8unorm" => Mf::Unpack4x8unorm,

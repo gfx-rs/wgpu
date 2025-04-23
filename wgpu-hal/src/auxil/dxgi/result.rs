@@ -11,11 +11,7 @@ impl<T> HResult<T> for windows::core::Result<T> {
             log::error!("{} failed: {}", description, err);
 
             match err.code() {
-                Foundation::E_OUTOFMEMORY => {
-                    #[cfg(feature = "oom_panic")]
-                    panic!("{description} failed: Out of memory");
-                    crate::DeviceError::OutOfMemory
-                }
+                Foundation::E_OUTOFMEMORY => crate::DeviceError::OutOfMemory,
                 Dxgi::DXGI_ERROR_DEVICE_RESET | Dxgi::DXGI_ERROR_DEVICE_REMOVED => {
                     #[cfg(feature = "device_lost_panic")]
                     panic!("{description} failed: Device lost ({err})");

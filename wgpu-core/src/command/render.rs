@@ -2347,14 +2347,33 @@ fn set_viewport(
     depth_max: f32,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::set_viewport {rect:?}");
-    if rect.x < 0.0
-        || rect.y < 0.0
-        || rect.w <= 0.0
-        || rect.h <= 0.0
-        || rect.x + rect.w > state.info.extent.width as f32
-        || rect.y + rect.h > state.info.extent.height as f32
+
+    if rect.w < 0.0
+        || rect.h < 0.0
+        || rect.w > state.device.limits.max_texture_dimension_2d as f32
+        || rect.h > state.device.limits.max_texture_dimension_2d as f32
     {
-        return Err(RenderCommandError::InvalidViewportRect(rect, state.info.extent).into());
+        return Err(RenderCommandError::InvalidViewportRectSize {
+            w: rect.w,
+            h: rect.h,
+            max: state.device.limits.max_texture_dimension_2d,
+        }
+        .into());
+    }
+
+    let max_viewport_range = state.device.limits.max_texture_dimension_2d as f32 * 2.0;
+
+    if rect.x < -max_viewport_range
+        || rect.y < -max_viewport_range
+        || rect.x + rect.w > max_viewport_range - 1.0
+        || rect.y + rect.h > max_viewport_range - 1.0
+    {
+        return Err(RenderCommandError::InvalidViewportRectPosition {
+            rect,
+            min: -max_viewport_range,
+            max: max_viewport_range - 1.0,
+        }
+        .into());
     }
     if !(0.0..=1.0).contains(&depth_min) || !(0.0..=1.0).contains(&depth_max) {
         return Err(RenderCommandError::InvalidViewportDepth(depth_min, depth_max).into());

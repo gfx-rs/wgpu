@@ -1392,6 +1392,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     crate::MathFunction::Pack4xI8
                     | crate::MathFunction::Pack4xU8
+                    | crate::MathFunction::Pack4xI8Clamp
+                    | crate::MathFunction::Pack4xU8Clamp
                     | crate::MathFunction::Unpack4xI8
                     | crate::MathFunction::Unpack4xU8
                     | crate::MathFunction::QuantizeToF16 => {
@@ -3879,24 +3881,35 @@ impl<'a, W: Write> Writer<'a, W> {
                         }
                     }
 
-                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
-                        let was_signed = match fun {
-                            Mf::Pack4xI8 => true,
-                            Mf::Pack4xU8 => false,
-                            _ => unreachable!(),
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8 | Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp) => {
+                        let was_signed = matches!(fun, Mf::Pack4xI8 | Mf::Pack4xI8Clamp);
+                        let clamp_bounds = match fun {
+                            Mf::Pack4xI8Clamp => Some(("-128", "127")),
+                            Mf::Pack4xU8Clamp => Some(("0", "255")),
+                            _ => None,
                         };
                         let const_suffix = if was_signed { "" } else { "u" };
                         if was_signed {
                             write!(self.out, "uint(")?;
                         }
+                        let write_arg = |this: &mut Self| -> BackendResult {
+                            if let Some((min, max)) = clamp_bounds {
+                                write!(this.out, "clamp(")?;
+                                this.write_expr(arg, ctx)?;
+                                write!(this.out, ", {min}{const_suffix}, {max}{const_suffix})")?;
+                            } else {
+                                this.write_expr(arg, ctx)?;
+                            }
+                            Ok(())
+                        };
                         write!(self.out, "(")?;
-                        self.write_expr(arg, ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[0] & 0xFF{const_suffix}) | ((")?;
-                        self.write_expr(arg, ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[1] & 0xFF{const_suffix}) << 8) | ((")?;
-                        self.write_expr(arg, ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[2] & 0xFF{const_suffix}) << 16) | ((")?;
-                        self.write_expr(arg, ctx)?;
+                        write_arg(self)?;
                         write!(self.out, "[3] & 0xFF{const_suffix}) << 24)")?;
                         if was_signed {
                             write!(self.out, ")")?;

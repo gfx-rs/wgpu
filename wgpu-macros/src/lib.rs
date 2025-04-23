@@ -19,7 +19,7 @@ pub fn gpu_test(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     quote! {
         #[cfg(not(target_arch = "wasm32"))]
-        #[::wgpu_test::ctor]
+        #[::wgpu_test::ctor::ctor(crate_path = ::wgpu_test::ctor)]
         fn #register_test_name() {
             struct S;
 
