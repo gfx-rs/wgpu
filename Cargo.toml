@@ -127,7 +127,7 @@ obj = "0.10"
 # NOTE: once_cell/std is *required* for some commonly-used features, selecting this per crate
 once_cell = { version = "1.21.3", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
-ordered-float = { version = ">=3,<=4.6", default-features = false }
+ordered-float = { version = ">=3, <=5.0", default-features = false }
 parking_lot = "0.12.1"
 pico-args = { version = "0.5.0", features = [
     "eq-separator",
