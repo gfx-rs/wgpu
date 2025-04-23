@@ -27,7 +27,7 @@ pub struct ValidationCanary {
 
 impl ValidationCanary {
     #[allow(dead_code)] // in some configurations this function is dead
-    fn add(&self, msg: String) {
+    pub(crate) fn add(&self, msg: String) {
         self.inner.lock().push(msg);
     }
 
