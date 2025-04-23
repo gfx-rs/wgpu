@@ -387,7 +387,7 @@ impl NoopBackendOptions {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Copy, PartialEq, Eq)]
 /// Selects which presentation system to use on DX12.
 pub enum Dx12PresentationSystem {
     /// Use the DXGI presentation system.
