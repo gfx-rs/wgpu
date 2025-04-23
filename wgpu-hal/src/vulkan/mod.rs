@@ -602,13 +602,6 @@ struct RenderPassKey {
     multiview: Option<NonZeroU32>,
 }
 
-#[derive(Clone, Eq, Hash, PartialEq)]
-struct FramebufferKey {
-    raw_pass: vk::RenderPass,
-    attachments: ArrayVec<vk::ImageView, { MAX_TOTAL_ATTACHMENTS }>,
-    extent: wgt::Extent3d,
-}
-
 struct DeviceShared {
     raw: ash::Device,
     family_index: u32,
@@ -626,7 +619,6 @@ struct DeviceShared {
     workarounds: Workarounds,
     features: wgt::Features,
     render_passes: Mutex<FastHashMap<RenderPassKey, vk::RenderPass>>,
-    framebuffers: Mutex<FastHashMap<FramebufferKey, vk::Framebuffer>>,
     sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
 }
@@ -635,9 +627,6 @@ impl Drop for DeviceShared {
     fn drop(&mut self) {
         for &raw in self.render_passes.lock().values() {
             unsafe { self.raw.destroy_render_pass(raw, None) };
-        }
-        for &raw in self.framebuffers.lock().values() {
-            unsafe { self.raw.destroy_framebuffer(raw, None) };
         }
         if self.drop_guard.is_none() {
             unsafe { self.raw.destroy_device(None) };
@@ -874,6 +863,13 @@ impl Temp {
     }
 }
 
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct FramebufferKey {
+    raw_pass: vk::RenderPass,
+    attachments: ArrayVec<vk::ImageView, { MAX_TOTAL_ATTACHMENTS }>,
+    extent: wgt::Extent3d,
+}
+
 pub struct CommandEncoder {
     raw: vk::CommandPool,
     device: Arc<DeviceShared>,
@@ -910,6 +906,8 @@ pub struct CommandEncoder {
     /// the given pool & location.
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
 
+    framebuffers: FastHashMap<FramebufferKey, vk::Framebuffer>,
+
     counters: Arc<wgt::HalCounters>,
 }
 
@@ -931,6 +929,11 @@ impl Drop for CommandEncoder {
             // fields.
             self.device.raw.destroy_command_pool(self.raw, None);
         }
+
+        for (_, fb) in self.framebuffers.drain() {
+            unsafe { self.device.raw.destroy_framebuffer(fb, None) };
+        }
+
         self.counters.command_encoders.sub(1);
     }
 }

@@ -202,26 +202,6 @@ impl super::DeviceShared {
         })
     }
 
-    pub fn make_framebuffer(
-        &self,
-        key: super::FramebufferKey,
-    ) -> Result<vk::Framebuffer, crate::DeviceError> {
-        Ok(match self.framebuffers.lock().entry(key) {
-            Entry::Occupied(e) => *e.get(),
-            Entry::Vacant(e) => {
-                let vk_info = vk::FramebufferCreateInfo::default()
-                    .render_pass(e.key().raw_pass)
-                    .width(e.key().extent.width)
-                    .height(e.key().extent.height)
-                    .layers(e.key().extent.depth_or_array_layers)
-                    .attachments(&e.key().attachments);
-
-                let raw = unsafe { self.raw.create_framebuffer(&vk_info, None).unwrap() };
-                *e.insert(raw)
-            }
-        })
-    }
-
     fn make_memory_ranges<'a, I: 'a + Iterator<Item = crate::MemoryRange>>(
         &self,
         buffer: &'a super::Buffer,
@@ -1312,15 +1292,6 @@ impl crate::Device for super::Device {
         })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
-        {
-            let mut fbuf_lock = self.shared.framebuffers.lock();
-            for (key, &raw_fbuf) in fbuf_lock.iter() {
-                if key.attachments.iter().any(|at_view| *at_view == view.raw) {
-                    unsafe { self.shared.raw.destroy_framebuffer(raw_fbuf, None) };
-                }
-            }
-            fbuf_lock.retain(|key, _| !key.attachments.iter().any(|at_view| *at_view == view.raw));
-        }
         unsafe { self.shared.raw.destroy_image_view(view.raw, None) };
 
         self.counters.texture_views.sub(1);
@@ -1413,6 +1384,7 @@ impl crate::Device for super::Device {
             discarded: Vec::new(),
             rpass_debug_marker_active: false,
             end_of_pass_timer_query: None,
+            framebuffers: Default::default(),
             counters: Arc::clone(&self.counters),
         })
     }

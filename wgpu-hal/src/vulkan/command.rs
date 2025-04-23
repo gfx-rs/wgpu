@@ -1,9 +1,8 @@
 use super::conv;
-
 use arrayvec::ArrayVec;
 use ash::vk;
-
 use core::{mem, ops::Range};
+use hashbrown::hash_map::Entry;
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
@@ -51,6 +50,26 @@ impl super::CommandEncoder {
                 );
             }
         }
+    }
+
+    fn make_framebuffer(
+        &mut self,
+        key: super::FramebufferKey,
+    ) -> Result<vk::Framebuffer, crate::DeviceError> {
+        Ok(match self.framebuffers.entry(key) {
+            Entry::Occupied(e) => *e.get(),
+            Entry::Vacant(e) => {
+                let vk_info = vk::FramebufferCreateInfo::default()
+                    .render_pass(e.key().raw_pass)
+                    .width(e.key().extent.width)
+                    .height(e.key().extent.height)
+                    .layers(e.key().extent.depth_or_array_layers)
+                    .attachments(&e.key().attachments);
+
+                let raw = unsafe { self.device.raw.create_framebuffer(&vk_info, None).unwrap() };
+                *e.insert(raw)
+            }
+        })
     }
 }
 
@@ -796,7 +815,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         let raw_pass = self.device.make_render_pass(rp_key).unwrap();
         fb_key.raw_pass = raw_pass;
-        let raw_framebuffer = self.device.make_framebuffer(fb_key).unwrap();
+        let raw_framebuffer = self.make_framebuffer(fb_key).unwrap();
 
         let vk_info = vk::RenderPassBeginInfo::default()
             .render_pass(raw_pass)
