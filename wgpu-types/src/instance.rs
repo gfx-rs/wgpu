@@ -309,8 +309,8 @@ impl GlBackendOptions {
 pub struct Dx12BackendOptions {
     /// Which DX12 shader compiler to use.
     pub shader_compiler: Dx12Compiler,
-    /// Whether to use DirectComposition for managing presentation.
-    pub use_dcomp: bool,
+    /// Presentation system to use.
+    pub presentation_system: Dx12PresentationSystem,
 }
 
 impl Dx12BackendOptions {
@@ -320,9 +320,10 @@ impl Dx12BackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let compiler = Dx12Compiler::from_env().unwrap_or_default();
+        let presentation_system = Dx12PresentationSystem::from_env().unwrap_or_default();
         Self {
             shader_compiler: compiler,
-            use_dcomp: false,
+            presentation_system,
         }
     }
 
@@ -332,9 +333,10 @@ impl Dx12BackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let shader_compiler = self.shader_compiler.with_env();
+        let presentation_system = self.presentation_system.with_env();
         Self {
             shader_compiler,
-            use_dcomp: false,
+            presentation_system,
         }
     }
 }
@@ -381,6 +383,47 @@ impl NoopBackendOptions {
             "1" => Some(true),
             "0" => Some(false),
             _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+/// Selects which presentation system to use on DX12.
+pub enum Dx12PresentationSystem {
+    /// Use the DXGI presentation system.
+    #[default]
+    Dxgi,
+    /// Use the DirectComposition presentation system.
+    Dcomp,
+}
+
+impl Dx12PresentationSystem {
+    /// Choose which presentation system to use from the environment variable `WGPU_DX12_PRESENTATION_SYSTEM`.
+    ///
+    /// Valid values, case insensitive:
+    /// - `Dxgi`
+    /// - `Dcomp`
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        let value = crate::env::var("WGPU_DX12_PRESENTATION_SYSTEM")
+            .as_deref()?
+            .to_lowercase();
+        match value.as_str() {
+            "dcomp" => Some(Self::Dcomp),
+            "dxgi" => Some(Self::Dxgi),
+            _ => None,
+        }
+    }
+
+    /// Takes the given presentation system, modifies it based on the `WGPU_DX12_PRESENTATION_SYSTEM` environment variable, and returns the result.
+    ///
+    /// See [`from_env`](Self::from_env) for more information.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        if let Some(presentation_system) = Self::from_env() {
+            presentation_system
+        } else {
+            self
         }
     }
 }
