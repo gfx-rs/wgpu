@@ -77,6 +77,7 @@ Otherwise, we pass a range corresponding only to the current bind group.
 mod adapter;
 mod command;
 mod conv;
+mod dcomp;
 mod descriptor;
 mod device;
 mod instance;
@@ -528,20 +529,13 @@ struct SwapChain {
     size: wgt::Extent3d,
 }
 
-struct DCompState {
-    visual: DirectComposition::IDCompositionVisual,
-    device: DirectComposition::IDCompositionDevice,
-    // Must be kept alive but is otherwise unused after initialization.
-    _target: DirectComposition::IDCompositionTarget,
-}
-
 enum SurfaceTarget {
     /// Borrowed, lifetime externally managed
     WndHandle(Foundation::HWND),
     /// `handle` is borrowed, lifetime externally managed
     VisualFromWndHandle {
         handle: Foundation::HWND,
-        dcomp_state: RwLock<Option<DCompState>>,
+        dcomp_state: Mutex<dcomp::DCompState>,
     },
     Visual(DirectComposition::IDCompositionVisual),
     /// Borrowed, lifetime externally managed
@@ -1294,103 +1288,8 @@ impl crate::Surface for Surface {
                         handle,
                         dcomp_state,
                     } => {
-                        let mut dcomp_state = dcomp_state.write();
-                        let dcomp_state = match dcomp_state.as_mut() {
-                            Some(s) => s,
-                            None => {
-                                let mut d3d11_device = None;
-                                {
-                                    profiling::scope!("Direct3D11on12::D3D11On12CreateDevice");
-                                    unsafe {
-                                        Direct3D11on12::D3D11On12CreateDevice(
-                                            &device.raw,
-                                            Direct3D11::D3D11_CREATE_DEVICE_BGRA_SUPPORT.0,
-                                            None,
-                                            None,
-                                            0,
-                                            Some(&mut d3d11_device),
-                                            None,
-                                            None,
-                                        )
-                                    }
-                                    .map_err(|err| {
-                                        log::error!(
-                                            "Direct3D11on12::D3D11On12CreateDevice failed: {err}"
-                                        );
-                                        crate::SurfaceError::Other(
-                                            "Direct3D11on12::D3D11On12CreateDevice",
-                                        )
-                                    })?;
-                                }
-                                let d3d11_device = d3d11_device.unwrap();
-
-                                let dxgi_device = {
-                                    profiling::scope!("IDXGIDevice::QueryInterface");
-                                    d3d11_device.cast::<Dxgi::IDXGIDevice>().map_err(|err| {
-                                        log::error!("IDXGIDevice::QueryInterface failed: {err}");
-                                        crate::SurfaceError::Other("IDXGIDevice::QueryInterface")
-                                    })?
-                                };
-
-                                let dcomp_device = {
-                                    profiling::scope!(
-                                        "DirectComposition::DCompositionCreateDevice"
-                                    );
-                                    unsafe {
-                                        DirectComposition::DCompositionCreateDevice::<
-                                            _,
-                                            DirectComposition::IDCompositionDevice,
-                                        >(&dxgi_device)
-                                    }.map_err(|err| {
-                                        log::error!(
-                                            "DirectComposition::DCompositionCreateDevice failed: {err}"
-                                        );
-                                        crate::SurfaceError::Other(
-                                            "DirectComposition::DCompositionCreateDevice",
-                                        )
-                                    })?
-                                };
-
-                                let target = {
-                                    profiling::scope!("IDCompositionDevice::CreateTargetForHwnd");
-                                    unsafe {   dcomp_device.CreateTargetForHwnd(*handle, false)}
-                                        .map_err(|err| {
-                                            log::error!(
-                                                "IDCompositionDevice::CreateTargetForHwnd failed: {err}"
-                                            );
-                                            crate::SurfaceError::Other(
-                                                "IDCompositionDevice::CreateTargetForHwnd",
-                                            )
-                                        })?
-                                };
-
-                                let visual = {
-                                    profiling::scope!("IDCompositionDevice::CreateVisual");
-                                    unsafe { dcomp_device.CreateVisual() }.map_err(|err| {
-                                        log::error!(
-                                            "IDCompositionDevice::CreateVisual failed: {err}"
-                                        );
-                                        crate::SurfaceError::Other(
-                                            "IDCompositionDevice::CreateVisual",
-                                        )
-                                    })?
-                                };
-
-                                {
-                                    profiling::scope!("IDCompositionTarget::SetRoot");
-                                    unsafe { target.SetRoot(&visual) }.map_err(|err| {
-                                        log::error!("IDCompositionTarget::SetRoot failed: {err}");
-                                        crate::SurfaceError::Other("IDCompositionTarget::SetRoot")
-                                    })?;
-                                }
-
-                                dcomp_state.insert(DCompState {
-                                    visual,
-                                    device: dcomp_device,
-                                    _target: target,
-                                })
-                            }
-                        };
+                        let mut dcomp_state = dcomp_state.lock();
+                        let dcomp_state = dcomp_state.get_or_init(handle, device)?;
                         // Set the new swap chain as the content for the backing visual
                         // and commit the changes to the composition visual tree.
                         {
