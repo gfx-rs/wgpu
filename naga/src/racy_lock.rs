@@ -1,5 +1,5 @@
 #![cfg_attr(
-    not(any(hlsl_out, msl_out, wgsl_out, glsl_out)),
+    not(any(glsl_out, hlsl_out, msl_out, feature = "wgsl-in", wgsl_out)),
     expect(
         dead_code,
         reason = "RacyLock is only required for the above configurations"
