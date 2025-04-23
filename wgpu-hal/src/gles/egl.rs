@@ -1,5 +1,6 @@
 use alloc::{rc::Rc, string::String, sync::Arc, vec::Vec};
 use core::{ffi, mem::ManuallyDrop, ptr, time::Duration};
+use std::sync::LazyLock;
 
 use glow::HasContext;
 use hashbrown::HashMap;
@@ -469,10 +470,8 @@ struct Inner {
 // Different calls to `eglGetPlatformDisplay` may return the same `Display`, making it a global
 // state of all our `EglContext`s. This forces us to track the number of such context to prevent
 // terminating the display if it's currently used by another `EglContext`.
-static DISPLAYS_REFERENCE_COUNT: Mutex<HashMap<usize, usize>> =
-    Mutex::new(HashMap::with_hasher(core::hash::BuildHasherDefault::<
-        rustc_hash::FxHasher,
-    >::new()));
+static DISPLAYS_REFERENCE_COUNT: LazyLock<Mutex<HashMap<usize, usize>>> =
+    LazyLock::new(Default::default);
 
 fn initialize_display(
     egl: &EglInstance,

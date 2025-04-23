@@ -116,7 +116,6 @@ gles = [
     "dep:ndk-sys",
     "dep:objc",
     "dep:profiling",
-    "dep:rustc-hash",
     "dep:wasm-bindgen",
     "dep:web-sys",
     "windows/Win32_Graphics_OpenGL",
