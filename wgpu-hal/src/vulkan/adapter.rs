@@ -1,7 +1,7 @@
 use alloc::{borrow::ToOwned as _, collections::BTreeMap, sync::Arc, vec::Vec};
 use core::ffi::CStr;
 
-use ash::{amd, ext, google, khr, vk};
+use ash::{ext, google, khr, vk};
 use parking_lot::Mutex;
 
 use super::conv;
@@ -943,13 +943,8 @@ impl PhysicalDeviceProperties {
         extensions.push(khr::swapchain::NAME);
 
         if self.device_api_version < vk::API_VERSION_1_1 {
-            // Require either `VK_KHR_maintenance1` or `VK_AMD_negative_viewport_height`
-            if self.supports_extension(khr::maintenance1::NAME) {
-                extensions.push(khr::maintenance1::NAME);
-            } else {
-                // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1` and must not be enabled alongside it
-                extensions.push(amd::negative_viewport_height::NAME);
-            }
+            // Require `VK_KHR_maintenance1`
+            extensions.push(khr::maintenance1::NAME);
 
             // Optional `VK_KHR_maintenance2`
             if self.supports_extension(khr::maintenance2::NAME) {
@@ -1638,12 +1633,11 @@ impl super::Instance {
             );
             return None;
         }
-        if !phd_capabilities.supports_extension(amd::negative_viewport_height::NAME)
-            && !phd_capabilities.supports_extension(khr::maintenance1::NAME)
+        if !phd_capabilities.supports_extension(khr::maintenance1::NAME)
             && phd_capabilities.device_api_version < vk::API_VERSION_1_1
         {
             log::warn!(
-                "viewport Y-flip is not supported, hiding adapter: {}",
+                "VK_KHR_maintenance1 is not supported, hiding adapter: {}",
                 info.name
             );
             return None;
@@ -1661,8 +1655,6 @@ impl super::Instance {
         }
 
         let private_caps = super::PrivateCapabilities {
-            flip_y_requires_shift: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
-                || phd_capabilities.supports_extension(khr::maintenance1::NAME),
             imageless_framebuffers: match phd_features.imageless_framebuffer {
                 Some(features) => features.imageless_framebuffer == vk::TRUE,
                 None => phd_features

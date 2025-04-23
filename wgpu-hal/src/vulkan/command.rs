@@ -788,11 +788,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
         let vk_viewports = [vk::Viewport {
             x: 0.0,
-            y: if self.device.private_caps.flip_y_requires_shift {
-                desc.extent.height as f32
-            } else {
-                0.0
-            },
+            y: desc.extent.height as f32,
             width: desc.extent.width as f32,
             height: -(desc.extent.height as f32),
             min_depth: 0.0,
@@ -967,11 +963,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {
         let vk_viewports = [vk::Viewport {
             x: rect.x,
-            y: if self.device.private_caps.flip_y_requires_shift {
-                rect.y + rect.h
-            } else {
-                rect.y
-            },
+            y: rect.y + rect.h,
             width: rect.w,
             height: -rect.h, // flip Y
             min_depth: depth_range.start,
