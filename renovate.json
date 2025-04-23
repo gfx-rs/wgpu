@@ -3,8 +3,13 @@
   "extends": ["config:recommended"],
   "packageRules": [
     {
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": ["lockFileMaintenance"],
       "groupName": "Minor version updates"
+    },
+    {
+      "matchPackageNames": ["deno_*"],
+      "enabled": false,
+      "description": "Deno packages are rolled up explicitly by the Deno team, in lockstep with deno_webgpu."
     }
   ]
 }
