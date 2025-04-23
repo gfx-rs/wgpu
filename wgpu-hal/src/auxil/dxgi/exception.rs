@@ -86,6 +86,7 @@ unsafe extern "system" fn output_debug_string_handler(
         log::log!(level, "{}", message);
     });
 
+    #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && level == log::Level::Error {
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());

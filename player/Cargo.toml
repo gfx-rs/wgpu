@@ -19,7 +19,7 @@ name = "play"
 test = false
 
 [dependencies]
-wgpu-types = { workspace = true, features = ["serde"] }
+wgpu-types = { workspace = true, features = ["serde", "std"] }
 
 env_logger.workspace = true
 log.workspace = true

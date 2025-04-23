@@ -1086,6 +1086,7 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
         );
     });
 
+    #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && log_severity == log::Level::Error {
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());

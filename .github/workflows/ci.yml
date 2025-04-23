@@ -301,9 +301,11 @@ jobs:
 
           # check with no features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features
 
           # Check with all features except "std".
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features fragile-send-sync-non-atomic-wasm
 
       # Building for native platforms with standard tests.
       - name: Check native

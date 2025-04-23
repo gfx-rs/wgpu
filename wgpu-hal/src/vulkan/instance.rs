@@ -145,6 +145,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         });
     }
 
+    #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && level == log::Level::Error {
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());
