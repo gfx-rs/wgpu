@@ -1,12 +1,15 @@
-use std::{
+use alloc::{
     borrow::{Cow, ToOwned as _},
     collections::BTreeMap,
-    ffi::{CStr, CString},
+    ffi::CString,
+    sync::Arc,
+    vec::Vec,
+};
+use core::{
+    ffi::CStr,
     mem::{self, MaybeUninit},
     num::NonZeroU32,
     ptr,
-    sync::Arc,
-    vec::Vec,
 };
 
 use arrayvec::ArrayVec;
@@ -49,7 +52,7 @@ impl super::DeviceShared {
                 .as_bytes()
                 .iter()
                 .cloned()
-                .chain(std::iter::once(0))
+                .chain(core::iter::once(0))
                 .collect();
             &buffer_vec
         };

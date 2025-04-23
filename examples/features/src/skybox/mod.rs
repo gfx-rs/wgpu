@@ -322,7 +322,7 @@ impl crate::framework::Example for Example {
 
         let mut image = Vec::with_capacity(reader.data().len());
         for level in reader.levels() {
-            image.extend_from_slice(level);
+            image.extend_from_slice(level.data);
         }
 
         let texture = device.create_texture_with_data(

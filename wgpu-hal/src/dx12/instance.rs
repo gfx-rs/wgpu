@@ -1,4 +1,4 @@
-use std::{string::String, sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 use parking_lot::RwLock;
 use windows::{

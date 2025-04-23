@@ -1,4 +1,5 @@
-use std::{borrow::ToOwned as _, collections::BTreeMap, ffi::CStr, sync::Arc, vec::Vec};
+use alloc::{borrow::ToOwned as _, collections::BTreeMap, sync::Arc, vec::Vec};
+use core::ffi::CStr;
 
 use ash::{amd, ext, google, khr, vk};
 use parking_lot::Mutex;

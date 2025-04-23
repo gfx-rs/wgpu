@@ -24,8 +24,6 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 !*/
 
-#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
-
 mod adapter;
 mod command;
 mod conv;
@@ -34,16 +32,8 @@ mod drm;
 mod instance;
 mod sampler;
 
-use std::{
-    borrow::Borrow,
-    boxed::Box,
-    ffi::{CStr, CString},
-    fmt, mem,
-    num::NonZeroU32,
-    ops::DerefMut,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
+use core::{borrow::Borrow, ffi::CStr, fmt, mem, num::NonZeroU32, ops::DerefMut};
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};

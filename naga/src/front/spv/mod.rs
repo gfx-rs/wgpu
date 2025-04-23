@@ -617,7 +617,12 @@ pub struct Frontend<I> {
     // Graph of all function calls through the module.
     // It's used to sort the functions (as nodes) topologically,
     // so that in the IR any called function is already known.
-    function_call_graph: GraphMap<spirv::Word, (), petgraph::Directed>,
+    function_call_graph: GraphMap<
+        spirv::Word,
+        (),
+        petgraph::Directed,
+        core::hash::BuildHasherDefault<rustc_hash::FxHasher>,
+    >,
     options: Options,
 
     /// Maps for a switch from a case target to the respective body and associated literals that

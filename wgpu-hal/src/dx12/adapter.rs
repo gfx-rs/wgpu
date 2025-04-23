@@ -1,4 +1,6 @@
-use std::{ptr, string::String, sync::Arc, thread, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
+use core::ptr;
+use std::thread;
 
 use parking_lot::Mutex;
 use windows::{

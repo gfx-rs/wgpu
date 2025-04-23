@@ -1,4 +1,5 @@
-use std::{ops::Deref, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
+use core::ops::Deref;
 
 use windows::{core::Interface as _, Win32::Graphics::Dxgi};
 

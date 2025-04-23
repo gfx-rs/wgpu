@@ -1,6 +1,6 @@
+use alloc::sync::Arc;
 use gpu_allocator::{d3d12::AllocationCreateDesc, MemoryLocation};
 use parking_lot::Mutex;
-use std::sync::Arc;
 use windows::Win32::Graphics::{Direct3D12, Dxgi};
 
 use crate::{
@@ -563,7 +563,7 @@ impl<'a> DeviceAllocationContext<'a> {
     ) -> Result<Direct3D12::D3D12_RESOURCE_ALLOCATION_INFO, crate::DeviceError> {
         let allocation_info = unsafe {
             self.raw
-                .GetResourceAllocationInfo(0, std::slice::from_ref(desc))
+                .GetResourceAllocationInfo(0, core::slice::from_ref(desc))
         };
 
         let Some(threshold) = self
