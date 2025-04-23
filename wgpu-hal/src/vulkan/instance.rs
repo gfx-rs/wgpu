@@ -1,11 +1,4 @@
-use alloc::{
-    borrow::ToOwned as _,
-    boxed::Box,
-    ffi::CString,
-    string::{String, ToString as _},
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned as _, boxed::Box, ffi::CString, string::String, sync::Arc, vec::Vec};
 use core::{
     ffi::{c_void, CStr},
     slice,
@@ -16,6 +9,9 @@ use std::thread;
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use parking_lot::RwLock;
+
+#[cfg(feature = "validation_canary")]
+use alloc::string::ToString as _;
 
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,

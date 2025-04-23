@@ -1,10 +1,10 @@
-use alloc::{
-    borrow::Cow,
-    string::{String, ToString as _},
-};
+use alloc::{borrow::Cow, string::String};
 
 use parking_lot::Mutex;
 use windows::Win32::{Foundation, System::Diagnostics::Debug};
+
+#[cfg(feature = "validation_canary")]
+use alloc::string::ToString as _;
 
 // This is a mutex as opposed to an atomic as we need to completely
 // lock everyone out until we have registered or unregistered the
