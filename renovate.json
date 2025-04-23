@@ -3,8 +3,16 @@
   "extends": ["config:recommended"],
   "packageRules": [
     {
-      "matchUpdateTypes": ["bump"],
-      "groupName": "Minor version updates"
+      "matchUpdateTypes": ["patch"],
+      "matchCurrentVersion": "<1.0.0",
+      "groupName": "Minor Updates",
+      "description": "Patch updates to 0.x.y crates are treated as compatible by cargo"
+    },
+    {
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchCurrentVersion": ">=1.0.0",
+      "groupName": "Minor Updates",
+      "description": "Minor and patch updates to x.y.z crates are treated as compatible by cargo"
     },
     {
       "matchPackageNames": ["deno_*"],
