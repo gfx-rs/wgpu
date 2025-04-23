@@ -744,7 +744,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
             attachments: ArrayVec::default(),
             extent: desc.extent,
         };
-        let caps = &self.device.private_caps;
 
         for cat in desc.color_attachments {
             if let Some(cat) = cat.as_ref() {
@@ -752,10 +751,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     color: unsafe { cat.make_vk_clear_color() },
                 });
                 let color = super::ColorAttachmentKey {
-                    base: cat.target.make_attachment_key(cat.ops, caps),
-                    resolve: cat.resolve_target.as_ref().map(|target| {
-                        target.make_attachment_key(crate::AttachmentOps::STORE, caps)
-                    }),
+                    base: cat.target.make_attachment_key(cat.ops),
+                    resolve: cat
+                        .resolve_target
+                        .as_ref()
+                        .map(|target| target.make_attachment_key(crate::AttachmentOps::STORE)),
                 };
 
                 rp_key.colors.push(Some(color));
@@ -785,7 +785,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 },
             });
             rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
-                base: ds.target.make_attachment_key(ds.depth_ops, caps),
+                base: ds.target.make_attachment_key(ds.depth_ops),
                 stencil_ops: ds.stencil_ops,
             });
             fb_key.attachments.push(ds.target.view.raw);

@@ -1260,11 +1260,12 @@ impl crate::Device for super::Device {
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
         let subresource_range = conv::map_subresource_range(&desc.range, texture.format);
+        let raw_format = self.shared.private_caps.map_texture_format(desc.format);
         let mut vk_info = vk::ImageViewCreateInfo::default()
             .flags(vk::ImageViewCreateFlags::empty())
             .image(texture.raw)
             .view_type(conv::map_view_dimension(desc.dimension))
-            .format(self.shared.private_caps.map_texture_format(desc.format))
+            .format(raw_format)
             .subresource_range(subresource_range);
         let layers =
             NonZeroU32::new(subresource_range.layer_count).expect("Unexpected zero layer count");
@@ -1288,7 +1289,8 @@ impl crate::Device for super::Device {
         Ok(super::TextureView {
             raw,
             layers,
-            view_format: desc.format,
+            format: desc.format,
+            raw_format,
         })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
@@ -1727,10 +1729,8 @@ impl crate::Device for super::Device {
                     (image_infos, local_image_infos) =
                         image_infos.extend(desc.textures[start as usize..end as usize].iter().map(
                             |binding| {
-                                let layout = conv::derive_image_layout(
-                                    binding.usage,
-                                    binding.view.view_format,
-                                );
+                                let layout =
+                                    conv::derive_image_layout(binding.usage, binding.view.format);
                                 vk::DescriptorImageInfo::default()
                                     .image_view(binding.view.raw)
                                     .image_layout(layout)

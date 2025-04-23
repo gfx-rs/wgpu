@@ -792,7 +792,8 @@ impl Texture {
 pub struct TextureView {
     raw: vk::ImageView,
     layers: NonZeroU32,
-    view_format: wgt::TextureFormat,
+    format: wgt::TextureFormat,
+    raw_format: vk::Format,
 }
 
 impl crate::DynTextureView for TextureView {}
