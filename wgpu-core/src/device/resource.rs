@@ -1989,17 +1989,6 @@ impl Device {
                                 error: BindGroupLayoutEntryError::StorageTextureAtomic,
                             });
                         }
-                        wgt::StorageTextureAccess::ReadOnly
-                        | wgt::StorageTextureAccess::ReadWrite
-                            if !self.features.contains(
-                                wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                            ) =>
-                        {
-                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
-                                binding: entry.binding,
-                                error: BindGroupLayoutEntryError::StorageTextureReadWrite,
-                            });
-                        }
                         _ => (),
                     }
                     (
@@ -2009,16 +1998,8 @@ impl Device {
                         ),
                         match access {
                             wgt::StorageTextureAccess::WriteOnly => WritableStorage::Yes,
-                            wgt::StorageTextureAccess::ReadOnly => {
-                                required_features |=
-                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                                WritableStorage::No
-                            }
-                            wgt::StorageTextureAccess::ReadWrite => {
-                                required_features |=
-                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                                WritableStorage::Yes
-                            }
+                            wgt::StorageTextureAccess::ReadOnly => WritableStorage::No,
+                            wgt::StorageTextureAccess::ReadWrite => WritableStorage::Yes,
                             wgt::StorageTextureAccess::Atomic => {
                                 required_features |= wgt::Features::TEXTURE_ATOMIC;
                                 WritableStorage::Yes
