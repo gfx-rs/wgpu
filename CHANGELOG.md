@@ -44,7 +44,7 @@ Bottom level categories:
 
 #### Naga
 
-### Bux Fixes
+### Bug Fixes
 
 #### Naga
 
