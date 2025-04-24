@@ -902,7 +902,7 @@ impl FunctionInfo {
                         ExitFlags::empty()
                     },
                 },
-                S::Barrier(_) => FunctionUniformity {
+                S::ControlBarrier(_) | S::MemoryBarrier(_) => FunctionUniformity {
                     result: Uniformity {
                         non_uniform_result: None,
                         requirements: UniformityRequirements::WORK_GROUP_BARRIER,

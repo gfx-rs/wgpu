@@ -2676,7 +2676,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
-                                .push(ir::Statement::Barrier(ir::Barrier::STORAGE), span);
+                                .push(ir::Statement::ControlBarrier(ir::Barrier::STORAGE), span);
                             return Ok(None);
                         }
                         "workgroupBarrier" => {
@@ -2684,7 +2684,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
-                                .push(ir::Statement::Barrier(ir::Barrier::WORK_GROUP), span);
+                                .push(ir::Statement::ControlBarrier(ir::Barrier::WORK_GROUP), span);
                             return Ok(None);
                         }
                         "subgroupBarrier" => {
@@ -2692,7 +2692,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
-                                .push(ir::Statement::Barrier(ir::Barrier::SUB_GROUP), span);
+                                .push(ir::Statement::ControlBarrier(ir::Barrier::SUB_GROUP), span);
                             return Ok(None);
                         }
                         "textureBarrier" => {
@@ -2700,7 +2700,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
-                                .push(ir::Statement::Barrier(ir::Barrier::TEXTURE), span);
+                                .push(ir::Statement::ControlBarrier(ir::Barrier::TEXTURE), span);
                             return Ok(None);
                         }
                         "workgroupUniformLoad" => {

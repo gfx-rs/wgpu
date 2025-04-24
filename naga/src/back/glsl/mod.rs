@@ -2512,7 +2512,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // keyword which ceases all further processing in a fragment shader, it's called OpKill
             // in spir-v that's why it's called `Statement::Kill`
             Statement::Kill => writeln!(self.out, "{level}discard;")?,
-            Statement::Barrier(flags) => {
+            Statement::ControlBarrier(flags) | Statement::MemoryBarrier(flags) => {
                 self.write_barrier(flags, level)?;
             }
             // Stores in glsl are just variable assignments written as `pointer = value;`

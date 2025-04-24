@@ -837,7 +837,8 @@ impl super::Validator {
             crate::Statement::Break
             | crate::Statement::Continue
             | crate::Statement::Kill
-            | crate::Statement::Barrier(_) => Ok(()),
+            | crate::Statement::ControlBarrier(_)
+            | crate::Statement::MemoryBarrier(_) => Ok(()),
         })
     }
 }

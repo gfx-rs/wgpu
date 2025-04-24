@@ -2035,8 +2035,10 @@ impl MacroCall {
             )?,
             MacroCall::Barrier => {
                 ctx.emit_restart();
-                ctx.body
-                    .push(crate::Statement::Barrier(crate::Barrier::all()), meta);
+                ctx.body.push(
+                    crate::Statement::ControlBarrier(crate::Barrier::all()),
+                    meta,
+                );
                 return Ok(None);
             }
             MacroCall::SmoothStep { splatted } => {
