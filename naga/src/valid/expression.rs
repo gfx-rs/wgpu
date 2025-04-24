@@ -648,12 +648,8 @@ impl super::Validator {
                     return Err(ExpressionError::InvalidImageArrayIndex);
                 }
                 if let Some(expr) = array_index {
-                    match resolver[expr] {
-                        Ti::Scalar(Sc {
-                            kind: Sk::Sint | Sk::Uint,
-                            width: _,
-                        }) => {}
-                        _ => return Err(ExpressionError::InvalidImageArrayIndexType(expr)),
+                    if !matches!(resolver[expr], Ti::Scalar(Sc::I32 | Sc::U32)) {
+                        return Err(ExpressionError::InvalidImageArrayIndexType(expr));
                     }
                 }
 
