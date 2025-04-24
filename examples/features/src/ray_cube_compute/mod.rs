@@ -1,7 +1,6 @@
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
-
 use bytemuck::{Pod, Zeroable};
 use glam::{Affine3A, Mat4, Quat, Vec3};
+use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
 use wgpu::util::DeviceExt;
 
 use wgpu::StoreOp;

@@ -1,4 +1,4 @@
-use std::{
+use alloc::{
     borrow::Cow,
     string::{String, ToString as _},
 };

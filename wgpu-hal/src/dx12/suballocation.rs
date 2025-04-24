@@ -1,9 +1,7 @@
-use gpu_allocator::{
-    d3d12::{AllocationCreateDesc, Allocator},
-    MemoryLocation,
-};
+use alloc::sync::Arc;
+use gpu_allocator::{d3d12::AllocationCreateDesc, MemoryLocation};
 use parking_lot::Mutex;
-use windows::Win32::Graphics::Direct3D12;
+use windows::Win32::Graphics::{Direct3D12, Dxgi};
 
 use crate::{
     auxil::dxgi::{name::ObjectExt, result::HResult as _},
@@ -61,36 +59,91 @@ impl Allocation {
     }
 }
 
-pub(crate) fn create_allocator(
-    raw: &Direct3D12::ID3D12Device,
-    memory_hints: &wgt::MemoryHints,
-) -> Result<Mutex<Allocator>, crate::DeviceError> {
-    // TODO: the allocator's configuration should take hardware capability into
-    // account.
-    let mb = 1024 * 1024;
-    let allocation_sizes = match memory_hints {
-        wgt::MemoryHints::Performance => gpu_allocator::AllocationSizes::default(),
-        wgt::MemoryHints::MemoryUsage => gpu_allocator::AllocationSizes::new(8 * mb, 4 * mb),
-        wgt::MemoryHints::Manual {
-            suballocated_device_memory_block_size,
-        } => {
-            // TODO: Would it be useful to expose the host size in memory hints
-            // instead of always using half of the device size?
-            let device_size = suballocated_device_memory_block_size.start;
-            let host_size = device_size / 2;
-            gpu_allocator::AllocationSizes::new(device_size, host_size)
-        }
-    };
+#[derive(Clone)]
+pub(crate) struct Allocator {
+    inner: Arc<Mutex<gpu_allocator::d3d12::Allocator>>,
+    device_memblock_size: u64,
+    host_memblock_size: u64,
+    pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
+}
 
-    match Allocator::new(&gpu_allocator::d3d12::AllocatorCreateDesc {
-        device: gpu_allocator::d3d12::ID3D12DeviceVersion::Device(raw.clone()),
-        debug_settings: Default::default(),
-        allocation_sizes,
-    }) {
-        Ok(allocator) => Ok(Mutex::new(allocator)),
-        Err(e) => {
+impl Allocator {
+    pub(crate) fn new(
+        raw: &Direct3D12::ID3D12Device,
+        memory_hints: &wgt::MemoryHints,
+        memory_budget_thresholds: wgt::MemoryBudgetThresholds,
+    ) -> Result<Self, crate::DeviceError> {
+        // TODO: the allocator's configuration should take hardware capability into
+        // account.
+        const MB: u64 = 1024 * 1024;
+        let (device_memblock_size, host_memblock_size) = match memory_hints {
+            wgt::MemoryHints::Performance => (256 * MB, 64 * MB),
+            wgt::MemoryHints::MemoryUsage => (8 * MB, 4 * MB),
+            wgt::MemoryHints::Manual {
+                suballocated_device_memory_block_size,
+            } => {
+                // TODO: Would it be useful to expose the host size in memory hints
+                // instead of always using half of the device size?
+                let device_size = suballocated_device_memory_block_size.start;
+                let host_size = device_size / 2;
+                (device_size, host_size)
+            }
+        };
+
+        // gpu_allocator clamps the sizes between 4MiB and 256MiB, but we clamp them ourselves since we use
+        // the sizes when detecting high memory pressure and there is no way to query the values otherwise.
+
+        let device_memblock_size = device_memblock_size.clamp(4 * MB, 256 * MB);
+        let host_memblock_size = host_memblock_size.clamp(4 * MB, 256 * MB);
+
+        let allocation_sizes =
+            gpu_allocator::AllocationSizes::new(device_memblock_size, host_memblock_size);
+
+        let allocator_desc = gpu_allocator::d3d12::AllocatorCreateDesc {
+            device: gpu_allocator::d3d12::ID3D12DeviceVersion::Device(raw.clone()),
+            debug_settings: Default::default(),
+            allocation_sizes,
+        };
+
+        let allocator = gpu_allocator::d3d12::Allocator::new(&allocator_desc).inspect_err(|e| {
             log::error!("Failed to create d3d12 allocator, error: {}", e);
-            Err(e)?
+        })?;
+
+        Ok(Self {
+            inner: Arc::new(Mutex::new(allocator)),
+            device_memblock_size,
+            host_memblock_size,
+            memory_budget_thresholds,
+        })
+    }
+
+    pub(crate) fn generate_report(&self) -> wgt::AllocatorReport {
+        let mut upstream = self.inner.lock().generate_report();
+
+        let allocations = upstream
+            .allocations
+            .iter_mut()
+            .map(|alloc| wgt::AllocationReport {
+                name: core::mem::take(&mut alloc.name),
+                offset: alloc.offset,
+                size: alloc.size,
+            })
+            .collect();
+
+        let blocks = upstream
+            .blocks
+            .iter()
+            .map(|block| wgt::MemoryBlockReport {
+                size: block.size,
+                allocations: block.allocations.clone(),
+            })
+            .collect();
+
+        wgt::AllocatorReport {
+            allocations,
+            blocks,
+            total_allocated_bytes: upstream.total_allocated_bytes,
+            total_reserved_bytes: upstream.total_reserved_bytes,
         }
     }
 }
@@ -101,7 +154,7 @@ pub(crate) fn create_allocator(
 pub(crate) struct DeviceAllocationContext<'a> {
     pub(crate) raw: &'a Direct3D12::ID3D12Device,
     pub(crate) shared: &'a super::DeviceShared,
-    pub(crate) mem_allocator: &'a Mutex<Allocator>,
+    pub(crate) mem_allocator: &'a Allocator,
     pub(crate) counters: &'a wgt::HalCounters,
 }
 
@@ -146,10 +199,14 @@ impl<'a> DeviceAllocationContext<'a> {
             (false, false) => MemoryLocation::GpuOnly,
         };
 
+        let raw_desc = conv::map_buffer_descriptor(desc);
+        let allocation_info =
+            self.error_if_would_oom_on_resource_allocation(&raw_desc, location)?;
+
         let (resource, allocation) = if self.shared.private_caps.suballocation_supported {
-            self.create_placed_buffer(desc, location)?
+            self.create_placed_buffer(desc, raw_desc, allocation_info, location)?
         } else {
-            self.create_committed_buffer(desc, location)?
+            self.create_committed_buffer(raw_desc, location)?
         };
 
         if let Some(label) = desc.label {
@@ -166,8 +223,12 @@ impl<'a> DeviceAllocationContext<'a> {
         desc: &crate::TextureDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
+        let location = MemoryLocation::GpuOnly;
+        let allocation_info =
+            self.error_if_would_oom_on_resource_allocation(&raw_desc, location)?;
+
         let (resource, allocation) = if self.shared.private_caps.suballocation_supported {
-            self.create_placed_texture(desc, raw_desc)?
+            self.create_placed_texture(desc, raw_desc, allocation_info, location)?
         } else {
             self.create_committed_texture(desc, raw_desc)?
         };
@@ -186,8 +247,12 @@ impl<'a> DeviceAllocationContext<'a> {
         desc: &crate::AccelerationStructureDescriptor,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
+        let location = MemoryLocation::GpuOnly;
+        let allocation_info =
+            self.error_if_would_oom_on_resource_allocation(&raw_desc, location)?;
+
         let (resource, allocation) = if self.shared.private_caps.suballocation_supported {
-            self.create_placed_acceleration_structure(desc, raw_desc)?
+            self.create_placed_acceleration_structure(desc, raw_desc, allocation_info, location)?
         } else {
             self.create_committed_acceleration_structure(desc, raw_desc)?
         };
@@ -223,7 +288,7 @@ impl<'a> DeviceAllocationContext<'a> {
         counter.sub(allocation.size() as isize);
 
         if let AllocationInner::Placed { inner } = allocation.inner {
-            match self.mem_allocator.lock().free(inner) {
+            match self.mem_allocator.inner.lock().free(inner) {
                 Ok(_) => (),
                 // TODO: Don't panic here
                 Err(e) => panic!("Failed to destroy dx12 {:?}, {e}", allocation.ty),
@@ -238,20 +303,21 @@ impl<'a> DeviceAllocationContext<'a> {
     fn create_placed_buffer(
         &self,
         desc: &crate::BufferDescriptor<'_>,
+        raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
+        allocation_info: Direct3D12::D3D12_RESOURCE_ALLOCATION_INFO,
         location: MemoryLocation,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
-        let raw_desc = conv::map_buffer_descriptor(desc);
-
         let name = desc.label.unwrap_or("Unlabeled buffer");
 
-        let mut allocator = self.mem_allocator.lock();
+        let mut allocator = self.mem_allocator.inner.lock();
 
-        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-            allocator.device(),
-            &raw_desc,
+        let allocation_desc = AllocationCreateDesc {
             name,
             location,
-        );
+            size: allocation_info.SizeInBytes,
+            alignment: allocation_info.Alignment,
+            resource_category: gpu_allocator::d3d12::ResourceCategory::from(&raw_desc),
+        };
 
         let allocation = allocator.allocate(&allocation_desc)?;
         let mut resource = None;
@@ -277,19 +343,20 @@ impl<'a> DeviceAllocationContext<'a> {
         &self,
         desc: &crate::TextureDescriptor<'_>,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
+        allocation_info: Direct3D12::D3D12_RESOURCE_ALLOCATION_INFO,
+        location: MemoryLocation,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
-        let location = MemoryLocation::GpuOnly;
-
         let name = desc.label.unwrap_or("Unlabeled texture");
 
-        let mut allocator = self.mem_allocator.lock();
+        let mut allocator = self.mem_allocator.inner.lock();
 
-        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-            allocator.device(),
-            &raw_desc,
+        let allocation_desc = AllocationCreateDesc {
             name,
             location,
-        );
+            size: allocation_info.SizeInBytes,
+            alignment: allocation_info.Alignment,
+            resource_category: gpu_allocator::d3d12::ResourceCategory::from(&raw_desc),
+        };
 
         let allocation = allocator.allocate(&allocation_desc)?;
         let mut resource = None;
@@ -315,19 +382,20 @@ impl<'a> DeviceAllocationContext<'a> {
         &self,
         desc: &crate::AccelerationStructureDescriptor<'_>,
         raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
+        allocation_info: Direct3D12::D3D12_RESOURCE_ALLOCATION_INFO,
+        location: MemoryLocation,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
-        let location = MemoryLocation::GpuOnly;
-
         let name = desc.label.unwrap_or("Unlabeled acceleration structure");
 
-        let mut allocator = self.mem_allocator.lock();
+        let mut allocator = self.mem_allocator.inner.lock();
 
-        let allocation_desc = AllocationCreateDesc::from_d3d12_resource_desc(
-            allocator.device(),
-            &raw_desc,
+        let allocation_desc = AllocationCreateDesc {
             name,
             location,
-        );
+            size: allocation_info.SizeInBytes,
+            alignment: allocation_info.Alignment,
+            resource_category: gpu_allocator::d3d12::ResourceCategory::from(&raw_desc),
+        };
 
         let allocation = allocator.allocate(&allocation_desc)?;
         let mut resource = None;
@@ -356,11 +424,9 @@ impl<'a> DeviceAllocationContext<'a> {
 
     fn create_committed_buffer(
         &self,
-        desc: &crate::BufferDescriptor,
+        raw_desc: Direct3D12::D3D12_RESOURCE_DESC,
         location: MemoryLocation,
     ) -> Result<(Direct3D12::ID3D12Resource, Allocation), crate::DeviceError> {
-        let raw_desc = conv::map_buffer_descriptor(desc);
-
         let is_uma = matches!(
             self.shared.private_caps.memory_architecture,
             crate::dx12::MemoryArchitecture::Unified { .. }
@@ -402,7 +468,7 @@ impl<'a> DeviceAllocationContext<'a> {
         .into_device_result("Committed buffer creation")?;
 
         let resource = resource.ok_or(crate::DeviceError::Unexpected)?;
-        let wrapped_allocation = Allocation::none(AllocationType::Buffer, desc.size);
+        let wrapped_allocation = Allocation::none(AllocationType::Buffer, raw_desc.Width);
 
         Ok((resource, wrapped_allocation))
     }
@@ -488,6 +554,61 @@ impl<'a> DeviceAllocationContext<'a> {
         let wrapped_allocation = Allocation::none(AllocationType::AccelerationStructure, desc.size);
 
         Ok((resource, wrapped_allocation))
+    }
+
+    fn error_if_would_oom_on_resource_allocation(
+        &self,
+        desc: &Direct3D12::D3D12_RESOURCE_DESC,
+        location: MemoryLocation,
+    ) -> Result<Direct3D12::D3D12_RESOURCE_ALLOCATION_INFO, crate::DeviceError> {
+        let allocation_info = unsafe {
+            self.raw
+                .GetResourceAllocationInfo(0, core::slice::from_ref(desc))
+        };
+
+        let Some(threshold) = self
+            .mem_allocator
+            .memory_budget_thresholds
+            .for_resource_creation
+        else {
+            return Ok(allocation_info);
+        };
+
+        let memory_segment_group = match location {
+            MemoryLocation::Unknown => unreachable!(),
+            MemoryLocation::GpuOnly => Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL,
+            MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => {
+                match self.shared.private_caps.memory_architecture {
+                    super::MemoryArchitecture::Unified { .. } => {
+                        Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL
+                    }
+                    super::MemoryArchitecture::NonUnified => {
+                        Dxgi::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL
+                    }
+                }
+            }
+        };
+
+        let info = self
+            .shared
+            .adapter
+            .query_video_memory_info(memory_segment_group)?;
+
+        let memblock_size = match location {
+            MemoryLocation::Unknown => unreachable!(),
+            MemoryLocation::GpuOnly => self.mem_allocator.device_memblock_size,
+            MemoryLocation::CpuToGpu | MemoryLocation::GpuToCpu => {
+                self.mem_allocator.host_memblock_size
+            }
+        };
+
+        if info.CurrentUsage + allocation_info.SizeInBytes.max(memblock_size)
+            >= info.Budget / 100 * threshold as u64
+        {
+            return Err(crate::DeviceError::OutOfMemory);
+        }
+
+        Ok(allocation_info)
     }
 }
 

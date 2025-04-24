@@ -95,6 +95,7 @@ impl crate::Instance for Context {
                 },
             name: _,
             flags: _,
+            memory_budget_thresholds: _,
         } = *desc;
         if enable {
             Ok(Context)
@@ -456,5 +457,9 @@ impl crate::Device for Context {
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         Default::default()
+    }
+
+    fn check_if_oom(&self) -> DeviceResult<()> {
+        Ok(())
     }
 }

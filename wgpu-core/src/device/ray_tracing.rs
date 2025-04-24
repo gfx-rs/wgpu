@@ -3,9 +3,10 @@ use core::mem::{size_of, ManuallyDrop};
 
 #[cfg(feature = "trace")]
 use crate::device::trace;
+use crate::device::DeviceError;
 use crate::{
     api_log,
-    device::{Device, DeviceError},
+    device::Device,
     global::Global,
     id::{self, BlasId, TlasId},
     lock::RwLock,
@@ -114,7 +115,7 @@ impl Device {
                         .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION),
                 })
         }
-        .map_err(DeviceError::from_hal)?;
+        .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let compaction_buffer = if blas_desc
             .flags
@@ -203,7 +204,7 @@ impl Device {
                     allow_compaction: false,
                 })
         }
-        .map_err(DeviceError::from_hal)?;
+        .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let instance_buffer_size =
             self.alignments.raw_tlas_instance_size * desc.max_instances.max(1) as usize;
@@ -216,7 +217,7 @@ impl Device {
                 memory_flags: hal::MemoryFlags::PREFER_COHERENT,
             })
         }
-        .map_err(DeviceError::from_hal)?;
+        .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         Ok(Arc::new(resource::Tlas {
             raw: Snatchable::new(raw),
