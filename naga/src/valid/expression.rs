@@ -660,7 +660,7 @@ impl super::Validator {
                 match (sample, class.is_multisampled()) {
                     (None, false) => {}
                     (Some(sample), true) => {
-                        if resolver[sample].scalar_kind() != Some(Sk::Sint) {
+                        if !matches!(resolver[sample].scalar_kind(), Some(Sk::Sint | Sk::Uint)) {
                             return Err(ExpressionError::InvalidImageOtherIndexType(sample));
                         }
                     }
