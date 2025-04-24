@@ -3850,7 +3850,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let semantics = resolve_constant(ctx.gctx(), &semantics_const.inner)
                         .ok_or(Error::InvalidBarrierMemorySemantics(semantics_id))?;
 
-                    if exec_scope == spirv::Scope::Workgroup as u32 {
+                    if exec_scope == spirv::Scope::Workgroup as u32
+                        || exec_scope == spirv::Scope::Subgroup as u32
+                    {
                         let mut flags = crate::Barrier::empty();
                         flags.set(
                             crate::Barrier::STORAGE,
@@ -3858,11 +3860,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         );
                         flags.set(
                             crate::Barrier::WORK_GROUP,
-                            semantics
-                                & (spirv::MemorySemantics::SUBGROUP_MEMORY
-                                    | spirv::MemorySemantics::WORKGROUP_MEMORY)
-                                    .bits()
-                                != 0,
+                            semantics & (spirv::MemorySemantics::WORKGROUP_MEMORY).bits() != 0,
+                        );
+                        flags.set(
+                            crate::Barrier::SUB_GROUP,
+                            semantics & spirv::MemorySemantics::SUBGROUP_MEMORY.bits() != 0,
                         );
                         flags.set(
                             crate::Barrier::TEXTURE,
