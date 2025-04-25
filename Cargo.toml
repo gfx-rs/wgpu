@@ -76,6 +76,11 @@ wgpu-macros = { version = "25.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "25.0.0", path = "./tests" }
 wgpu-types = { version = "25.0.0", path = "./wgpu-types" }
 
+# These _cannot_ have a version specified. If it does, crates.io will look
+# for a version of the package on crates when we publish naga. Path dependencies
+# are allowed through though.
+hlsl-snapshots = { path = "naga/hlsl-snapshots" }
+
 wgpu-core-deps-windows-linux-android = { version = "25.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
 wgpu-core-deps-apple = { version = "25.0.0", path = "./wgpu-core/platform-deps/apple" }
 wgpu-core-deps-wasm = { version = "25.0.0", path = "./wgpu-core/platform-deps/wasm" }
@@ -83,6 +88,7 @@ wgpu-core-deps-emscripten = { version = "25.0.0", path = "./wgpu-core/platform-d
 
 anyhow = { version = "1.0.97", default-features = false }
 approx = "0.5"
+arbitrary = "1.4.1"
 argh = "0.1.13"
 arrayvec = { version = "0.7.6", default-features = false }
 bincode = "1"
@@ -99,6 +105,7 @@ cfg-if = "1"
 criterion = "0.5"
 codespan-reporting = { version = "0.12", default-features = false }
 ctor = "0.4"
+diff = "0.1"
 document-features = "0.2.11"
 encase = "0.11.0"
 env_logger = "0.11.8"
@@ -111,17 +118,23 @@ hashbrown = { version = "0.15.2", default-features = false, features = [
     "default-hasher",
     "inline-more",
 ] }
-heck = "0.5.0"
+heck = "0.5"
+hexf-parse = "0.2.1"
 image = { version = "0.25", default-features = false, features = ["png"] }
 indexmap = { version = "2.7.1", default-features = false }
 itertools = { version = "0.14.0" }
 ktx2 = "0.4"
 libc = { version = "0.2.168", default-features = false }
+# See https://github.com/rust-fuzz/libfuzzer/issues/126
+libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
 libtest-mimic = "0.8.1"
 log = "0.4.21"
+nanoserde = "0.2.1"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 noise = "0.9"
+# `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
+num-traits = { version = "0.2.16", default-features = false }
 nv-flip = "0.1"
 obj = "0.10"
 # NOTE: once_cell/std is *required* for some commonly-used features, selecting this per crate
@@ -129,6 +142,7 @@ once_cell = { version = "1.21.3", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3, <=5.0", default-features = false }
 parking_lot = "0.12.3"
+petgraph = { version = "0.8", default-features = false }
 pico-args = { version = "0.5.0", features = [
     "eq-separator",
     "short-space-opt",
@@ -137,10 +151,14 @@ pico-args = { version = "0.5.0", features = [
 png = "0.17.16"
 pollster = "0.4"
 portable-atomic = "1.10.0"
+pp-rs = "0.2.1"
 profiling = { version = "1", default-features = false }
+quote = "1.0.38"
 raw-window-handle = { version = "0.6.2", default-features = false }
+rwh_05 = { version = "0.5.2", package = "raw-window-handle" } # temporary compatibility for glutin-winit               
 rayon = "1.3.0"
 renderdoc-sys = "1.1.0"
+rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 ron = "0.10"
 # NOTE: rustc-hash v2 is a completely different hasher with different performance characteristics
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
@@ -149,11 +167,15 @@ rustc-hash = { version = "1.1.0", default-features = false }
 serde_json = "1.0.140"
 serde = { version = "1.0.219", default-features = false }
 smallvec = "1.9.0"
+spirv = "0.3"
 static_assertions = "1.1.0"
 strum = { version = "0.27.1", default-features = false, features = ["derive"] }
+syn = "2.0.98"
+toml = "0.8"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.3", default-features = false }
+unicode-ident = "1.0.5"
 walkdir = "2.3.0"
 winit = { version = "0.29", features = ["android-native-activity"] }
 

@@ -11,9 +11,8 @@ build = "build.rs"
 cargo-fuzz = true
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios")))'.dependencies]
-arbitrary = { version = "1.4.1", features = ["derive"] }
-# See https://github.com/rust-fuzz/libfuzzer/issues/126
-libfuzzer-sys = ">0.4.0,<=0.4.7"
+arbitrary = { workspace = true, features = ["derive"] }
+libfuzzer-sys.workspace = true
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dependencies.naga]
 workspace = true
