@@ -100,7 +100,7 @@ criterion = "0.5"
 codespan-reporting = { version = "0.12", default-features = false }
 ctor = "0.4"
 document-features = "0.2.11"
-encase = "0.10.0"
+encase = "0.11.0"
 env_logger = "0.11"
 fern = "0.7"
 flume = "0.11"

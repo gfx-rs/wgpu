@@ -1299,30 +1299,30 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "encase"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0a05902cf601ed11d564128448097b98ebe3c6574bd7b6a653a3d56d54aa020"
+checksum = "7e5ed952f01ce6a4feb6a2bc434995d420a99d91a5487502539451b42502bc73"
 dependencies = [
  "const_panic",
  "encase_derive",
- "glam",
- "thiserror 1.0.69",
+ "glam 0.30.2",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
 name = "encase_derive"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "181d475b694e2dd56ae919ce7699d344d1fd259292d590c723a50d1189a2ea85"
+checksum = "2fabf87a1be72212203c863fa3de2e62fd125204cea5e3f9b024a6f39f1af3ae"
 dependencies = [
  "encase_derive_impl",
 ]
 
 [[package]]
 name = "encase_derive_impl"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f97b51c5cc57ef7c5f7a0c57c250251c49ee4c28f819f87ac32f4aceabc36792"
+checksum = "1bac88a17c6aaa8f92e2cbb8a161ff6ccd88eac93878d4109727100016399a0c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1680,6 +1680,12 @@ checksum = "8babf46d4c1c9d92deac9f7be466f76dfc4482b6452fc5024b5e8daf6ffeb3ee"
 dependencies = [
  "bytemuck",
 ]
+
+[[package]]
+name = "glam"
+version = "0.30.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0e9b6647e9b41d3a5ef02964c6be01311a7f2472fea40595c635c6d046c259e"
 
 [[package]]
 name = "glob"
@@ -4807,7 +4813,7 @@ dependencies = [
  "env_logger",
  "fern",
  "flume",
- "glam",
+ "glam 0.29.3",
  "ktx2",
  "log",
  "nanorand",
@@ -4841,7 +4847,7 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "core-graphics-types 0.2.0",
  "env_logger",
- "glam",
+ "glam 0.29.3",
  "glow",
  "glutin",
  "glutin-winit",
@@ -4918,7 +4924,7 @@ dependencies = [
  "ctor",
  "env_logger",
  "futures-lite",
- "glam",
+ "glam 0.29.3",
  "half",
  "image",
  "itertools 0.14.0",
