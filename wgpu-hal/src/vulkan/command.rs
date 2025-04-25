@@ -59,12 +59,18 @@ impl super::CommandEncoder {
         Ok(match self.framebuffers.entry(key) {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
+                let super::FramebufferKey {
+                    raw_pass,
+                    ref attachments,
+                    extent,
+                } = *e.key();
+
                 let vk_info = vk::FramebufferCreateInfo::default()
-                    .render_pass(e.key().raw_pass)
-                    .width(e.key().extent.width)
-                    .height(e.key().extent.height)
-                    .layers(e.key().extent.depth_or_array_layers)
-                    .attachments(&e.key().attachments);
+                    .render_pass(raw_pass)
+                    .width(extent.width)
+                    .height(extent.height)
+                    .layers(extent.depth_or_array_layers)
+                    .attachments(attachments);
 
                 let raw = unsafe { self.device.raw.create_framebuffer(&vk_info, None).unwrap() };
                 *e.insert(raw)
@@ -79,15 +85,22 @@ impl super::CommandEncoder {
         Ok(match self.temp_texture_views.entry(key) {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
+                let super::TempTextureViewKey {
+                    texture,
+                    format,
+                    mip_level,
+                    depth_slice,
+                } = *e.key();
+
                 let vk_info = vk::ImageViewCreateInfo::default()
-                    .image(e.key().texture)
+                    .image(texture)
                     .view_type(vk::ImageViewType::TYPE_2D)
-                    .format(e.key().format)
+                    .format(format)
                     .subresource_range(vk::ImageSubresourceRange {
                         aspect_mask: vk::ImageAspectFlags::COLOR,
-                        base_mip_level: e.key().mip_level,
+                        base_mip_level: mip_level,
                         level_count: 1,
-                        base_array_layer: e.key().depth_slice,
+                        base_array_layer: depth_slice,
                         layer_count: 1,
                     });
                 let raw = unsafe { self.device.raw.create_image_view(&vk_info, None) }

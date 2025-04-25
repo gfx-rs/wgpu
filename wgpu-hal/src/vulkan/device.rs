@@ -75,76 +75,106 @@ impl super::DeviceShared {
         Ok(match self.render_passes.lock().entry(key) {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
+                let super::RenderPassKey {
+                    ref colors,
+                    ref depth_stencil,
+                    sample_count,
+                    multiview,
+                } = *e.key();
+
                 let mut vk_attachments = Vec::new();
-                let mut color_refs = Vec::with_capacity(e.key().colors.len());
+                let mut color_refs = Vec::with_capacity(colors.len());
                 let mut resolve_refs = Vec::with_capacity(color_refs.capacity());
                 let mut ds_ref = None;
-                let samples = vk::SampleCountFlags::from_raw(e.key().sample_count);
+                let samples = vk::SampleCountFlags::from_raw(sample_count);
                 let unused = vk::AttachmentReference {
                     attachment: vk::ATTACHMENT_UNUSED,
                     layout: vk::ImageLayout::UNDEFINED,
                 };
-                for cat in e.key().colors.iter() {
-                    let (color_ref, resolve_ref) = if let Some(cat) = cat.as_ref() {
-                        let color_ref = vk::AttachmentReference {
-                            attachment: vk_attachments.len() as u32,
-                            layout: cat.base.layout,
-                        };
-                        vk_attachments.push({
-                            let (load_op, store_op) = conv::map_attachment_ops(cat.base.ops);
-                            vk::AttachmentDescription::default()
-                                .format(cat.base.format)
-                                .samples(samples)
-                                .load_op(load_op)
-                                .store_op(store_op)
-                                .initial_layout(cat.base.layout)
-                                .final_layout(cat.base.layout)
-                        });
-                        let resolve_ref = if let Some(ref rat) = cat.resolve {
-                            let (load_op, store_op) = conv::map_attachment_ops(rat.ops);
-                            let vk_attachment = vk::AttachmentDescription::default()
-                                .format(rat.format)
-                                .samples(vk::SampleCountFlags::TYPE_1)
-                                .load_op(load_op)
-                                .store_op(store_op)
-                                .initial_layout(rat.layout)
-                                .final_layout(rat.layout);
-                            vk_attachments.push(vk_attachment);
+                for cat in colors.iter() {
+                    let (color_ref, resolve_ref) =
+                        if let Some(super::ColorAttachmentKey { base, resolve }) = cat {
+                            let super::AttachmentKey {
+                                format,
+                                layout,
+                                ops,
+                            } = *base;
 
-                            vk::AttachmentReference {
-                                attachment: vk_attachments.len() as u32 - 1,
-                                layout: rat.layout,
-                            }
+                            let color_ref = vk::AttachmentReference {
+                                attachment: vk_attachments.len() as u32,
+                                layout,
+                            };
+                            vk_attachments.push({
+                                let (load_op, store_op) = conv::map_attachment_ops(ops);
+                                vk::AttachmentDescription::default()
+                                    .format(format)
+                                    .samples(samples)
+                                    .load_op(load_op)
+                                    .store_op(store_op)
+                                    .initial_layout(layout)
+                                    .final_layout(layout)
+                            });
+                            let resolve_ref = if let Some(rat) = resolve {
+                                let super::AttachmentKey {
+                                    format,
+                                    layout,
+                                    ops,
+                                } = *rat;
+
+                                let (load_op, store_op) = conv::map_attachment_ops(ops);
+                                let vk_attachment = vk::AttachmentDescription::default()
+                                    .format(format)
+                                    .samples(vk::SampleCountFlags::TYPE_1)
+                                    .load_op(load_op)
+                                    .store_op(store_op)
+                                    .initial_layout(layout)
+                                    .final_layout(layout);
+                                vk_attachments.push(vk_attachment);
+
+                                vk::AttachmentReference {
+                                    attachment: vk_attachments.len() as u32 - 1,
+                                    layout,
+                                }
+                            } else {
+                                unused
+                            };
+
+                            (color_ref, resolve_ref)
                         } else {
-                            unused
+                            (unused, unused)
                         };
-
-                        (color_ref, resolve_ref)
-                    } else {
-                        (unused, unused)
-                    };
 
                     color_refs.push(color_ref);
                     resolve_refs.push(resolve_ref);
                 }
 
-                if let Some(ref ds) = e.key().depth_stencil {
+                if let Some(ds) = depth_stencil {
+                    let super::DepthStencilAttachmentKey {
+                        ref base,
+                        stencil_ops,
+                    } = *ds;
+
+                    let super::AttachmentKey {
+                        format,
+                        layout,
+                        ops,
+                    } = *base;
+
                     ds_ref = Some(vk::AttachmentReference {
                         attachment: vk_attachments.len() as u32,
-                        layout: ds.base.layout,
+                        layout,
                     });
-                    let (load_op, store_op) = conv::map_attachment_ops(ds.base.ops);
-                    let (stencil_load_op, stencil_store_op) =
-                        conv::map_attachment_ops(ds.stencil_ops);
+                    let (load_op, store_op) = conv::map_attachment_ops(ops);
+                    let (stencil_load_op, stencil_store_op) = conv::map_attachment_ops(stencil_ops);
                     let vk_attachment = vk::AttachmentDescription::default()
-                        .format(ds.base.format)
+                        .format(format)
                         .samples(samples)
                         .load_op(load_op)
                         .store_op(store_op)
                         .stencil_load_op(stencil_load_op)
                         .stencil_store_op(stencil_store_op)
-                        .initial_layout(ds.base.layout)
-                        .final_layout(ds.base.layout);
+                        .initial_layout(layout)
+                        .final_layout(layout);
                     vk_attachments.push(vk_attachment);
                 }
 
@@ -174,7 +204,7 @@ impl super::DeviceShared {
 
                 let mut multiview_info;
                 let mask;
-                if let Some(multiview) = e.key().multiview {
+                if let Some(multiview) = multiview {
                     // Sanity checks, better to panic here than cause a driver crash
                     assert!(multiview.get() <= 8);
                     assert!(multiview.get() > 1);
