@@ -1,4 +1,7 @@
-use metal::{MTLFeatureSet, MTLGPUFamily, MTLLanguageVersion, MTLReadWriteTextureTier};
+use metal::{
+    MTLArgumentBuffersTier, MTLCounterSamplingPoint, MTLFeatureSet, MTLGPUFamily,
+    MTLLanguageVersion, MTLPixelFormat, MTLReadWriteTextureTier, NSInteger,
+};
 use objc::{class, msg_send, sel, sel_impl};
 use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
@@ -575,19 +578,18 @@ impl super::PrivateCapabilities {
 
         let mut timestamp_query_support = TimestampQuerySupport::empty();
         if version.at_least((11, 0), (14, 0), os_is_mac)
-            && device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtStageBoundary)
+            && device.supports_counter_sampling(MTLCounterSamplingPoint::AtStageBoundary)
         {
             // If we don't support at stage boundary, don't support anything else.
             timestamp_query_support.insert(TimestampQuerySupport::STAGE_BOUNDARIES);
 
-            if device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDrawBoundary) {
+            if device.supports_counter_sampling(MTLCounterSamplingPoint::AtDrawBoundary) {
                 timestamp_query_support.insert(TimestampQuerySupport::ON_RENDER_ENCODER);
             }
-            if device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtDispatchBoundary)
-            {
+            if device.supports_counter_sampling(MTLCounterSamplingPoint::AtDispatchBoundary) {
                 timestamp_query_support.insert(TimestampQuerySupport::ON_COMPUTE_ENCODER);
             }
-            if device.supports_counter_sampling(metal::MTLCounterSamplingPoint::AtBlitBoundary) {
+            if device.supports_counter_sampling(MTLCounterSamplingPoint::AtBlitBoundary) {
                 timestamp_query_support.insert(TimestampQuerySupport::ON_BLIT_ENCODER);
             }
             // `TimestampQuerySupport::INSIDE_WGPU_PASSES` emerges from the other flags.
@@ -728,8 +730,7 @@ impl super::PrivateCapabilities {
                 31
             },
             max_samplers_per_stage: 16,
-            max_binding_array_elements: if argument_buffers == metal::MTLArgumentBuffersTier::Tier2
-            {
+            max_binding_array_elements: if argument_buffers == MTLArgumentBuffersTier::Tier2 {
                 1_000_000
             } else if family_check && device.supports_family(MTLGPUFamily::Apple4) {
                 96
@@ -753,8 +754,7 @@ impl super::PrivateCapabilities {
             buffer_alignment: if os_is_mac || os_is_xr { 256 } else { 64 },
             max_buffer_size: if version.at_least((10, 14), (12, 0), os_is_mac) {
                 // maxBufferLength available on macOS 10.14+ and iOS 12.0+
-                let buffer_size: metal::NSInteger =
-                    unsafe { msg_send![device.as_ref(), maxBufferLength] };
+                let buffer_size: NSInteger = unsafe { msg_send![device.as_ref(), maxBufferLength] };
                 buffer_size as _
             } else if os_is_mac {
                 1 << 30 // 1GB on macOS 10.11 and up
@@ -955,7 +955,7 @@ impl super::PrivateCapabilities {
                 | F::PARTIALLY_BOUND_BINDING_ARRAY,
             self.msl_version >= MTLLanguageVersion::V3_0
                 && self.supports_arrays_of_textures
-                && self.argument_buffers as u64 >= metal::MTLArgumentBuffersTier::Tier2 as u64,
+                && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
         );
         features.set(
             F::SHADER_INT64,
@@ -1080,9 +1080,9 @@ impl super::PrivateCapabilities {
         }
     }
 
-    pub fn map_format(&self, format: wgt::TextureFormat) -> metal::MTLPixelFormat {
-        use metal::MTLPixelFormat::*;
+    pub fn map_format(&self, format: wgt::TextureFormat) -> MTLPixelFormat {
         use wgt::TextureFormat as Tf;
+        use MTLPixelFormat::*;
         match format {
             Tf::R8Unorm => R8Unorm,
             Tf::R8Snorm => R8Snorm,
@@ -1229,10 +1229,10 @@ impl super::PrivateCapabilities {
         &self,
         format: wgt::TextureFormat,
         aspects: crate::FormatAspects,
-    ) -> metal::MTLPixelFormat {
+    ) -> MTLPixelFormat {
         use crate::FormatAspects as Fa;
-        use metal::MTLPixelFormat::*;
         use wgt::TextureFormat as Tf;
+        use MTLPixelFormat::*;
         match (format, aspects) {
             // map combined depth-stencil format to their stencil-only format
             // see https://developer.apple.com/library/archive/documentation/Miscellaneous/Conceptual/MetalProgrammingGuide/WhatsNewiniOS10tvOS10andOSX1012/WhatsNewiniOS10tvOS10andOSX1012.html#//apple_ref/doc/uid/TP40014221-CH14-DontLinkElementID_77
