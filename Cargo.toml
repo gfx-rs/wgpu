@@ -13,6 +13,7 @@ members = [
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
+    "naga/xtask",
     "player",
     "tests",
     "wgpu-core",
@@ -22,6 +23,7 @@ members = [
     "wgpu-macros",
     "wgpu-types",
     "wgpu",
+    "xtask",
 ]
 exclude = []
 default-members = [
@@ -33,6 +35,7 @@ default-members = [
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
+    "naga/xtask",
     "player",
     "tests",
     "wgpu-core",
@@ -42,6 +45,7 @@ default-members = [
     "wgpu-macros",
     "wgpu-types",
     "wgpu",
+    "xtask",
 ]
 
 [workspace.lints.clippy]

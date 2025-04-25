@@ -535,7 +535,6 @@ jobs:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           workspaces: |
             . -> target
-            xtask -> xtask/target
 
       - name: (Windows) Install DXC
         if: matrix.os == 'windows-2022'
@@ -751,8 +750,6 @@ jobs:
       - name: Run `cargo fmt`
         run: |
           cargo fmt -- --check
-          cargo fmt --manifest-path xtask/Cargo.toml -- --check
-          cargo fmt --manifest-path naga/xtask/Cargo.toml -- --check
 
       - name: Install Taplo
         uses: uncenter/setup-taplo@v1
