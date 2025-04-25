@@ -202,19 +202,19 @@ which = "8"
 xshell = "0.2.2"
 
 # Metal dependencies
-block2 = { version = "0.6.2", git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
-objc2 = { version = "0.6.3", git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+block2 = "0.6.2"
+objc2 = "0.6.3"
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
     "CFCGTypes",
-], git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
     "NSError",
     "NSProcessInfo",
     "NSRange",
     "NSString",
-], git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+] }
 objc2-metal = { version = "0.3.2", default-features = false, features = [
     "std",
     "block2",
@@ -247,14 +247,14 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLTexture",
     "MTLTypes",
     "MTLVertexDescriptor",
-], git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
     "objc2-core-foundation",
     "CALayer",
     "CAMetalLayer",
     "objc2-metal",
-], git = "https://github.com/madsmtm/objc2", branch = "metal-wgpu" }
+] }
 raw-window-metal = "1.0"
 
 # Vulkan dependencies

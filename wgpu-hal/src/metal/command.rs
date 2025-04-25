@@ -71,11 +71,11 @@ impl Encoder<'_> {
     ) {
         unsafe {
             match *self {
-                Self::Vertex(enc) => enc.setVertexBuffer_offset_atIndex_(buffer, offset, index),
-                Self::Fragment(enc) => enc.setFragmentBuffer_offset_atIndex_(buffer, offset, index),
-                Self::Task(enc) => enc.setObjectBuffer_offset_atIndex_(buffer, offset, index),
-                Self::Mesh(enc) => enc.setMeshBuffer_offset_atIndex_(buffer, offset, index),
-                Self::Compute(enc) => enc.setBuffer_offset_atIndex_(buffer, offset, index),
+                Self::Vertex(enc) => enc.setVertexBuffer_offset_atIndex(buffer, offset, index),
+                Self::Fragment(enc) => enc.setFragmentBuffer_offset_atIndex(buffer, offset, index),
+                Self::Task(enc) => enc.setObjectBuffer_offset_atIndex(buffer, offset, index),
+                Self::Mesh(enc) => enc.setMeshBuffer_offset_atIndex(buffer, offset, index),
+                Self::Compute(enc) => enc.setBuffer_offset_atIndex(buffer, offset, index),
             }
         }
     }
@@ -83,11 +83,11 @@ impl Encoder<'_> {
     fn set_bytes(&self, bytes: NonNull<core::ffi::c_void>, length: NSUInteger, index: NSUInteger) {
         unsafe {
             match *self {
-                Self::Vertex(enc) => enc.set_vertex_bytes_length_at_index(bytes, length, index),
-                Self::Fragment(enc) => enc.set_fragment_bytes_length_at_index(bytes, length, index),
-                Self::Task(enc) => enc.set_object_bytes_length_at_index(bytes, length, index),
-                Self::Mesh(enc) => enc.set_mesh_bytes_length_at_index(bytes, length, index),
-                Self::Compute(enc) => enc.set_bytes_length_at_index(bytes, length, index),
+                Self::Vertex(enc) => enc.setVertexBytes_length_atIndex(bytes, length, index),
+                Self::Fragment(enc) => enc.setFragmentBytes_length_atIndex(bytes, length, index),
+                Self::Task(enc) => enc.setObjectBytes_length_atIndex(bytes, length, index),
+                Self::Mesh(enc) => enc.setMeshBytes_length_atIndex(bytes, length, index),
+                Self::Compute(enc) => enc.setBytes_length_atIndex(bytes, length, index),
             }
         }
     }
@@ -99,11 +99,11 @@ impl Encoder<'_> {
     ) {
         unsafe {
             match *self {
-                Self::Vertex(enc) => enc.set_vertex_sampler_state_at_index(state, index),
-                Self::Fragment(enc) => enc.set_fragment_sampler_state_at_index(state, index),
-                Self::Task(enc) => enc.set_object_sampler_state_at_index(state, index),
-                Self::Mesh(enc) => enc.set_mesh_sampler_state_at_index(state, index),
-                Self::Compute(enc) => enc.set_sampler_state_at_index(state, index),
+                Self::Vertex(enc) => enc.setVertexSamplerState_atIndex(state, index),
+                Self::Fragment(enc) => enc.setFragmentSamplerState_atIndex(state, index),
+                Self::Task(enc) => enc.setObjectSamplerState_atIndex(state, index),
+                Self::Mesh(enc) => enc.setMeshSamplerState_atIndex(state, index),
+                Self::Compute(enc) => enc.setSamplerState_atIndex(state, index),
             }
         }
     }
@@ -111,11 +111,11 @@ impl Encoder<'_> {
     fn set_texture(&self, texture: Option<&ProtocolObject<dyn MTLTexture>>, index: NSUInteger) {
         unsafe {
             match *self {
-                Self::Vertex(enc) => enc.set_vertex_texture_at_index(texture, index),
-                Self::Fragment(enc) => enc.set_fragment_texture_at_index(texture, index),
-                Self::Task(enc) => enc.set_object_texture_at_index(texture, index),
-                Self::Mesh(enc) => enc.set_mesh_texture_at_index(texture, index),
-                Self::Compute(enc) => enc.set_texture_at_index(texture, index),
+                Self::Vertex(enc) => enc.setVertexTexture_atIndex(texture, index),
+                Self::Fragment(enc) => enc.setFragmentTexture_atIndex(texture, index),
+                Self::Task(enc) => enc.setObjectTexture_atIndex(texture, index),
+                Self::Mesh(enc) => enc.setMeshTexture_atIndex(texture, index),
+                Self::Compute(enc) => enc.setTexture_atIndex(texture, index),
             }
         }
     }
@@ -160,23 +160,23 @@ impl super::CommandEncoder {
                     {
                         let sba_descriptor = unsafe {
                             descriptor
-                                .sample_buffer_attachments()
-                                .object_at_indexed_subscript(i)
+                                .sampleBufferAttachments()
+                                .objectAtIndexedSubscript(i)
                         };
                         sba_descriptor
-                            .set_sample_buffer(Some(set.counter_sample_buffer.as_ref().unwrap()));
+                            .setSampleBuffer(Some(set.counter_sample_buffer.as_ref().unwrap()));
 
                         // Here be dragons:
                         // As mentioned above, for some reasons using the start of the encoder won't yield any results sometimes!
                         unsafe {
-                            sba_descriptor.set_start_of_encoder_sample_index(MTLCounterDontSample)
+                            sba_descriptor.setStartOfEncoderSampleIndex(MTLCounterDontSample)
                         };
-                        unsafe { sba_descriptor.set_end_of_encoder_sample_index(index as _) };
+                        unsafe { sba_descriptor.setEndOfEncoderSampleIndex(index as _) };
 
                         last_query = Some((set, index));
                     }
                     let encoder = cmd_buf
-                        .blit_command_encoder_with_descriptor(&descriptor)
+                        .blitCommandEncoderWithDescriptor(&descriptor)
                         .unwrap();
 
                     // As explained above, we need to do some write:
@@ -187,18 +187,18 @@ impl super::CommandEncoder {
                             * crate::QUERY_SIZE as usize,
                         length: 1,
                     };
-                    encoder.fill_buffer_range_value(
+                    encoder.fillBuffer_range_value(
                         &last_query.as_ref().unwrap().0.raw_buffer,
                         raw_range,
                         255, // Don't write 0, so it's easier to identify if something went wrong.
                     );
 
-                    encoder.end_encoding();
+                    encoder.endEncoding();
                 });
             }
 
             autoreleasepool(|_| {
-                self.state.blit = Some(cmd_buf.blit_command_encoder().unwrap());
+                self.state.blit = Some(cmd_buf.blitCommandEncoder().unwrap());
             });
 
             let encoder = self.state.blit.as_ref().unwrap();
@@ -208,12 +208,12 @@ impl super::CommandEncoder {
             for (set, index) in self.state.pending_timer_queries.drain(..) {
                 debug_assert!(supports_sample_counters_in_buffer);
                 unsafe {
-                    encoder.sample_counters_in_buffer_at_sample_index_with_barrier(
+                    encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
                         set.counter_sample_buffer.as_ref().unwrap(),
                         index as _,
                         true,
                     )
-                }
+                };
             }
         }
         self.state.blit.as_ref().unwrap().clone()
@@ -221,7 +221,7 @@ impl super::CommandEncoder {
 
     pub(super) fn leave_blit(&mut self) {
         if let Some(encoder) = self.state.blit.take() {
-            encoder.end_encoding();
+            encoder.endEncoding();
         }
     }
 
@@ -380,13 +380,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let retain_references = self.shared.settings.retain_command_buffer_references;
         let raw = autoreleasepool(move |_| {
             let cmd_buf_ref = if retain_references {
-                queue.command_buffer()
+                queue.commandBuffer()
             } else {
-                queue.command_buffer_with_unretained_references()
+                queue.commandBufferWithUnretainedReferences()
             }
             .unwrap();
             if let Some(label) = label {
-                cmd_buf_ref.set_label(Some(&NSString::from_str(label)));
+                cmd_buf_ref.setLabel(Some(&NSString::from_str(label)));
             }
             cmd_buf_ref.to_owned()
         });
@@ -401,10 +401,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         // when discarding, we don't have a guarantee that
         // everything is in a good state, so check carefully
         if let Some(encoder) = self.state.render.take() {
-            encoder.end_encoding();
+            encoder.endEncoding();
         }
         if let Some(encoder) = self.state.compute.take() {
-            encoder.end_encoding();
+            encoder.endEncoding();
         }
         self.raw_cmd_buf = None;
     }
@@ -447,7 +447,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
         let encoder = self.enter_blit();
-        encoder.fill_buffer_range_value(&buffer.raw, conv::map_range(&range), 0);
+        encoder.fillBuffer_range_value(&buffer.raw, conv::map_range(&range), 0);
     }
 
     unsafe fn copy_buffer_to_buffer<T>(
@@ -461,7 +461,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let encoder = self.enter_blit();
         for copy in regions {
             unsafe {
-                encoder.copy_from_buffer_source_offset_to_buffer_destination_offset_size(
+                encoder.copyFromBuffer_sourceOffset_toBuffer_destinationOffset_size(
                     &src.raw,
                     copy.src_offset as usize,
                     &dst.raw,
@@ -484,9 +484,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let dst_texture = if src.format != dst.format {
             let raw_format = self.shared.private_caps.map_format(src.format);
             Cow::Owned(autoreleasepool(|_| {
-                dst.raw
-                    .new_texture_view_with_pixel_format(raw_format)
-                    .unwrap()
+                dst.raw.newTextureViewWithPixelFormat(raw_format).unwrap()
             }))
         } else {
             Cow::Borrowed(&dst.raw)
@@ -498,7 +496,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // no clamping is done: Metal expects physical sizes here
             let extent = conv::map_copy_extent(&copy.size);
             unsafe {
-                encoder.copy_from_texture_source_slice_source_level_source_origin_source_size_to_texture_destination_slice_destination_level_destination_origin(
+                encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
                     &src.raw,
                     copy.src_base.array_layer as usize,
                     copy.src_base.mip_level as usize,
@@ -541,7 +539,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 0
             };
             unsafe {
-                encoder.copy_from_buffer_source_offset_source_bytes_per_row_source_bytes_per_image_source_size_to_texture_destination_slice_destination_level_destination_origin_options(
+                encoder.copyFromBuffer_sourceOffset_sourceBytesPerRow_sourceBytesPerImage_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin_options(
                     &src.raw,
                     copy.buffer_layout.offset as usize,
                     bytes_per_row as usize,
@@ -580,7 +578,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .rows_per_image
                 .map_or(0, |v| v as u64 * bytes_per_row);
             unsafe {
-                encoder.copy_from_texture_source_slice_source_level_source_origin_source_size_to_buffer_destination_offset_destination_bytes_per_row_destination_bytes_per_image_options(
+                encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage_options(
                     &src.raw,
                     copy.texture_base.array_layer as usize,
                     copy.texture_base.mip_level as usize,
@@ -612,7 +610,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .render
                     .as_ref()
                     .unwrap()
-                    .set_visibility_result_mode_offset(
+                    .setVisibilityResultMode_offset(
                         MTLVisibilityResultMode::Boolean,
                         index as usize * crate::QUERY_SIZE as usize,
                     );
@@ -627,7 +625,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .render
                     .as_ref()
                     .unwrap()
-                    .set_visibility_result_mode_offset(MTLVisibilityResultMode::Disabled, 0);
+                    .setVisibilityResultMode_offset(MTLVisibilityResultMode::Disabled, 0);
             }
             _ => {}
         }
@@ -648,7 +646,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.state.blit.as_ref(),
         ) {
             unsafe {
-                encoder.sample_counters_in_buffer_at_sample_index_with_barrier(
+                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
                     sample_buffer,
                     index as _,
                     with_barrier,
@@ -659,7 +657,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.state.render.as_ref(),
         ) {
             unsafe {
-                encoder.sample_counters_in_buffer_at_sample_index_with_barrier(
+                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
                     sample_buffer,
                     index as _,
                     with_barrier,
@@ -670,7 +668,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.state.compute.as_ref(),
         ) {
             unsafe {
-                encoder.sample_counters_in_buffer_at_sample_index_with_barrier(
+                encoder.sampleCountersInBuffer_atSampleIndex_withBarrier(
                     sample_buffer,
                     index as _,
                     with_barrier,
@@ -695,7 +693,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             location: range.start as usize * crate::QUERY_SIZE as usize,
             length: (range.end - range.start) as usize * crate::QUERY_SIZE as usize,
         };
-        encoder.fill_buffer_range_value(&set.raw_buffer, raw_range, 0);
+        encoder.fillBuffer_range_value(&set.raw_buffer, raw_range, 0);
     }
 
     unsafe fn copy_query_results(
@@ -711,7 +709,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             wgt::QueryType::Occlusion => {
                 let size = (range.end - range.start) as u64 * crate::QUERY_SIZE;
                 unsafe {
-                    encoder.copy_from_buffer_source_offset_to_buffer_destination_offset_size(
+                    encoder.copyFromBuffer_sourceOffset_toBuffer_destinationOffset_size(
                         &set.raw_buffer,
                         range.start as usize * crate::QUERY_SIZE as usize,
                         &buffer.raw,
@@ -722,7 +720,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
             wgt::QueryType::Timestamp => {
                 unsafe {
-                    encoder.resolve_counters_in_range_destination_buffer_destination_offset(
+                    encoder.resolveCounters_inRange_destinationBuffer_destinationOffset(
                         set.counter_sample_buffer.as_ref().unwrap(),
                         NSRange::new(range.start as usize, (range.end - range.start) as usize),
                         &buffer.raw,
@@ -752,25 +750,22 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
             for (i, at) in desc.color_attachments.iter().enumerate() {
                 if let Some(at) = at.as_ref() {
-                    let at_descriptor = unsafe {
-                        descriptor
-                            .color_attachments()
-                            .object_at_indexed_subscript(i)
-                    };
-                    at_descriptor.set_texture(Some(&at.target.view.raw));
+                    let at_descriptor =
+                        unsafe { descriptor.colorAttachments().objectAtIndexedSubscript(i) };
+                    at_descriptor.setTexture(Some(&at.target.view.raw));
                     if let Some(depth_slice) = at.depth_slice {
-                        at_descriptor.set_depth_plane(depth_slice as usize);
+                        at_descriptor.setDepthPlane(depth_slice as usize);
                     }
                     if let Some(ref resolve) = at.resolve_target {
                         //Note: the selection of levels and slices is already handled by `TextureView`
-                        at_descriptor.set_resolve_texture(Some(&resolve.view.raw));
+                        at_descriptor.setResolveTexture(Some(&resolve.view.raw));
                     }
                     let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
                     } else if at.ops.contains(crate::AttachmentOps::LOAD_DONT_CARE) {
                         MTLLoadAction::DontCare
                     } else if at.ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
-                        at_descriptor.set_clear_color(conv::map_clear_color(&at.clear_value));
+                        at_descriptor.setClearColor(conv::map_clear_color(&at.clear_value));
                         MTLLoadAction::Clear
                     } else {
                         unreachable!()
@@ -779,22 +774,22 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         at.ops.contains(crate::AttachmentOps::STORE),
                         at.resolve_target.is_some(),
                     );
-                    at_descriptor.set_load_action(load_action);
-                    at_descriptor.set_store_action(store_action);
+                    at_descriptor.setLoadAction(load_action);
+                    at_descriptor.setStoreAction(store_action);
                 }
             }
 
             if let Some(ref at) = desc.depth_stencil_attachment {
                 if at.target.view.aspects.contains(crate::FormatAspects::DEPTH) {
-                    let at_descriptor = descriptor.depth_attachment();
-                    at_descriptor.set_texture(Some(&at.target.view.raw));
+                    let at_descriptor = descriptor.depthAttachment();
+                    at_descriptor.setTexture(Some(&at.target.view.raw));
 
                     let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
                     } else if at.depth_ops.contains(crate::AttachmentOps::LOAD_DONT_CARE) {
                         MTLLoadAction::DontCare
                     } else if at.depth_ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
-                        at_descriptor.set_clear_depth(at.clear_value.0 as f64);
+                        at_descriptor.setClearDepth(at.clear_value.0 as f64);
                         MTLLoadAction::Clear
                     } else {
                         unreachable!();
@@ -804,8 +799,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     } else {
                         MTLStoreAction::DontCare
                     };
-                    at_descriptor.set_load_action(load_action);
-                    at_descriptor.set_store_action(store_action);
+                    at_descriptor.setLoadAction(load_action);
+                    at_descriptor.setStoreAction(store_action);
                 }
                 if at
                     .target
@@ -813,8 +808,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .aspects
                     .contains(crate::FormatAspects::STENCIL)
                 {
-                    let at_descriptor = descriptor.stencil_attachment();
-                    at_descriptor.set_texture(Some(&at.target.view.raw));
+                    let at_descriptor = descriptor.stencilAttachment();
+                    at_descriptor.setTexture(Some(&at.target.view.raw));
 
                     let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
@@ -824,7 +819,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     {
                         MTLLoadAction::DontCare
                     } else if at.stencil_ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
-                        at_descriptor.set_clear_stencil(at.clear_value.1);
+                        at_descriptor.setClearStencil(at.clear_value.1);
                         MTLLoadAction::Clear
                     } else {
                         unreachable!()
@@ -834,8 +829,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     } else {
                         MTLStoreAction::DontCare
                     };
-                    at_descriptor.set_load_action(load_action);
-                    at_descriptor.set_store_action(store_action);
+                    at_descriptor.setLoadAction(load_action);
+                    at_descriptor.setStoreAction(store_action);
                 }
             }
 
@@ -843,12 +838,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let mut next_sba_descriptor = || {
                 let sba_descriptor = unsafe {
                     descriptor
-                        .sample_buffer_attachments()
-                        .object_at_indexed_subscript(sba_index)
+                        .sampleBufferAttachments()
+                        .objectAtIndexedSubscript(sba_index)
                 };
 
-                unsafe { sba_descriptor.set_end_of_vertex_sample_index(MTLCounterDontSample) };
-                unsafe { sba_descriptor.set_start_of_fragment_sample_index(MTLCounterDontSample) };
+                unsafe { sba_descriptor.setEndOfVertexSampleIndex(MTLCounterDontSample) };
+                unsafe { sba_descriptor.setStartOfFragmentSampleIndex(MTLCounterDontSample) };
 
                 sba_index += 1;
                 sba_descriptor
@@ -856,14 +851,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
             for (set, index) in self.state.pending_timer_queries.drain(..) {
                 let sba_descriptor = next_sba_descriptor();
-                sba_descriptor.set_sample_buffer(Some(set.counter_sample_buffer.as_ref().unwrap()));
-                unsafe { sba_descriptor.set_start_of_vertex_sample_index(index as _) };
-                unsafe { sba_descriptor.set_end_of_fragment_sample_index(MTLCounterDontSample) };
+                sba_descriptor.setSampleBuffer(Some(set.counter_sample_buffer.as_ref().unwrap()));
+                unsafe { sba_descriptor.setStartOfVertexSampleIndex(index as _) };
+                unsafe { sba_descriptor.setEndOfFragmentSampleIndex(MTLCounterDontSample) };
             }
 
             if let Some(ref timestamp_writes) = desc.timestamp_writes {
                 let sba_descriptor = next_sba_descriptor();
-                sba_descriptor.set_sample_buffer(Some(
+                sba_descriptor.setSampleBuffer(Some(
                     timestamp_writes
                         .query_set
                         .counter_sample_buffer
@@ -872,14 +867,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 ));
 
                 unsafe {
-                    sba_descriptor.set_start_of_vertex_sample_index(
+                    sba_descriptor.setStartOfVertexSampleIndex(
                         timestamp_writes
                             .beginning_of_pass_write_index
                             .map_or(MTLCounterDontSample, |i| i as _),
                     )
                 };
                 unsafe {
-                    sba_descriptor.set_end_of_fragment_sample_index(
+                    sba_descriptor.setEndOfFragmentSampleIndex(
                         timestamp_writes
                             .end_of_pass_write_index
                             .map_or(MTLCounterDontSample, |i| i as _),
@@ -888,8 +883,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
 
             if let Some(occlusion_query_set) = desc.occlusion_query_set {
-                descriptor
-                    .set_visibility_result_buffer(Some(occlusion_query_set.raw_buffer.as_ref()))
+                descriptor.setVisibilityResultBuffer(Some(occlusion_query_set.raw_buffer.as_ref()))
             }
             // This strangely isn't mentioned in https://developer.apple.com/documentation/metal/improving-rendering-performance-with-vertex-amplification.
             // The docs for [`renderTargetArrayLength`](https://developer.apple.com/documentation/metal/mtlrenderpassdescriptor/rendertargetarraylength)
@@ -897,12 +891,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // However, when I don't set this, I get undefined behavior in nonzero layers, and all non-apple examples of vertex amplification set it.
             // So this is just one of those undocumented requirements.
             if let Some(mv) = desc.multiview_mask {
-                descriptor.set_render_target_array_length(32 - mv.leading_zeros() as usize);
+                descriptor.setRenderTargetArrayLength(32 - mv.leading_zeros() as usize);
             }
             let raw = self.raw_cmd_buf.as_ref().unwrap();
-            let encoder = raw
-                .render_command_encoder_with_descriptor(&descriptor)
-                .unwrap();
+            let encoder = raw.renderCommandEncoderWithDescriptor(&descriptor).unwrap();
             if let Some(mv) = desc.multiview_mask {
                 // Most likely the API just wasn't thought about enough. It's not like they ever allow you
                 // to use enough views to overflow a 32-bit bitmask.
@@ -918,14 +910,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     }
                 }
                 unsafe {
-                    encoder.set_vertex_amplification_count_view_mappings(
+                    encoder.setVertexAmplificationCount_viewMappings(
                         mv.count_ones() as usize,
                         maps.as_ptr(),
                     )
                 };
             }
             if let Some(label) = desc.label {
-                encoder.set_label(Some(&NSString::from_str(label)));
+                encoder.setLabel(Some(&NSString::from_str(label)));
             }
             self.state.render = Some(encoder);
         });
@@ -934,7 +926,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn end_render_pass(&mut self) {
-        self.state.render.take().unwrap().end_encoding();
+        self.state.render.take().unwrap().endEncoding();
     }
 
     unsafe fn set_bind_group(
@@ -994,7 +986,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             );
             // Call useResource on all textures and buffers used indirectly so they are alive
             for (resource, use_info) in group.resources_to_use.iter() {
-                encoder.use_resource_usage_stages(
+                encoder.useResource_usage_stages(
                     unsafe { resource.as_ref() },
                     use_info.uses,
                     use_info.stages,
@@ -1028,7 +1020,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 if !use_info.visible_in_compute {
                     continue;
                 }
-                encoder.use_resource_usage(unsafe { resource.as_ref() }, use_info.uses);
+                encoder.useResource_usage(unsafe { resource.as_ref() }, use_info.uses);
             }
         }
     }
@@ -1051,7 +1043,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let bytes = NonNull::new(state_pc.as_ptr().cast_mut().cast()).unwrap();
         if let Some(ref compute) = self.state.compute {
             unsafe {
-                compute.set_bytes_length_at_index(
+                compute.setBytes_length_atIndex(
                     bytes,
                     layout.total_immediates as usize * WORD_SIZE,
                     layout.immediates_infos.cs.unwrap().buffer_index as usize,
@@ -1061,7 +1053,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         if let Some(ref render) = self.state.render {
             if let Some(vs) = layout.immediates_infos.vs {
                 unsafe {
-                    render.set_vertex_bytes_length_at_index(
+                    render.setVertexBytes_length_atIndex(
                         bytes,
                         layout.total_immediates as usize * WORD_SIZE,
                         vs.buffer_index as _,
@@ -1070,7 +1062,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
             if let Some(fs) = layout.immediates_infos.fs {
                 unsafe {
-                    render.set_fragment_bytes_length_at_index(
+                    render.setFragmentBytes_length_atIndex(
                         bytes,
                         layout.total_immediates as usize * WORD_SIZE,
                         fs.buffer_index as _,
@@ -1080,7 +1072,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             if let Some(ts) = layout.immediates_infos.ts {
                 if self.shared.private_caps.mesh_shaders {
                     unsafe {
-                        render.set_object_bytes_length_at_index(
+                        render.setObjectBytes_length_atIndex(
                             bytes,
                             layout.total_immediates as usize * WORD_SIZE,
                             ts.buffer_index as _,
@@ -1091,7 +1083,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             if let Some(ms) = layout.immediates_infos.ms {
                 if self.shared.private_caps.mesh_shaders {
                     unsafe {
-                        render.set_object_bytes_length_at_index(
+                        render.setObjectBytes_length_atIndex(
                             bytes,
                             layout.total_immediates as usize * WORD_SIZE,
                             ms.buffer_index as _,
@@ -1104,21 +1096,21 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {
         if let Some(encoder) = self.active_encoder() {
-            encoder.insert_debug_signpost(&NSString::from_str(label));
+            encoder.insertDebugSignpost(&NSString::from_str(label));
         }
     }
     unsafe fn begin_debug_marker(&mut self, group_label: &str) {
         if let Some(encoder) = self.active_encoder() {
-            encoder.push_debug_group(&NSString::from_str(group_label));
+            encoder.pushDebugGroup(&NSString::from_str(group_label));
         } else if let Some(ref buf) = self.raw_cmd_buf {
-            buf.push_debug_group(&NSString::from_str(group_label));
+            buf.pushDebugGroup(&NSString::from_str(group_label));
         }
     }
     unsafe fn end_debug_marker(&mut self) {
         if let Some(encoder) = self.active_encoder() {
-            encoder.pop_debug_group();
+            encoder.popDebugGroup();
         } else if let Some(ref buf) = self.raw_cmd_buf {
-            buf.pop_debug_group();
+            buf.popDebugGroup();
         }
     }
 
@@ -1142,16 +1134,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.set_render_pipeline_state(&pipeline.raw);
-        encoder.set_front_facing_winding(pipeline.raw_front_winding);
-        encoder.set_cull_mode(pipeline.raw_cull_mode);
-        encoder.set_triangle_fill_mode(pipeline.raw_triangle_fill_mode);
+        encoder.setRenderPipelineState(&pipeline.raw);
+        encoder.setFrontFacingWinding(pipeline.raw_front_winding);
+        encoder.setCullMode(pipeline.raw_cull_mode);
+        encoder.setTriangleFillMode(pipeline.raw_triangle_fill_mode);
         if let Some(depth_clip) = pipeline.raw_depth_clip_mode {
-            encoder.set_depth_clip_mode(depth_clip);
+            encoder.setDepthClipMode(depth_clip);
         }
         if let Some((ref state, bias)) = pipeline.depth_stencil {
-            encoder.set_depth_stencil_state(Some(state));
-            encoder.set_depth_bias_slope_scale_clamp(
+            encoder.setDepthStencilState(Some(state));
+            encoder.setDepthBias_slopeScale_clamp(
                 bias.constant as f32,
                 bias.slope_scale,
                 bias.clamp,
@@ -1164,7 +1156,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .make_sizes_buffer_update(naga::ShaderStage::Vertex, &mut self.temp.binding_sizes)
             {
                 unsafe {
-                    encoder.set_vertex_bytes_length_at_index(
+                    encoder.setVertexBytes_length_atIndex(
                         NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                         sizes.len() * WORD_SIZE,
                         index as _,
@@ -1178,7 +1170,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .make_sizes_buffer_update(naga::ShaderStage::Fragment, &mut self.temp.binding_sizes)
             {
                 unsafe {
-                    encoder.set_fragment_bytes_length_at_index(
+                    encoder.setFragmentBytes_length_atIndex(
                         NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                         sizes.len() * WORD_SIZE,
                         index as _,
@@ -1205,9 +1197,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 let size = pipeline_size.next_multiple_of(16);
                 if *cur_size != size {
                     *cur_size = size;
-                    unsafe {
-                        encoder.set_object_threadgroup_memory_length_at_index(size as _, index)
-                    };
+                    unsafe { encoder.setObjectThreadgroupMemoryLength_atIndex(size as _, index) };
                 }
             }
             if let Some((index, sizes)) = self
@@ -1215,7 +1205,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .make_sizes_buffer_update(naga::ShaderStage::Task, &mut self.temp.binding_sizes)
             {
                 unsafe {
-                    encoder.set_object_bytes_length_at_index(
+                    encoder.setObjectBytes_length_atIndex(
                         NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                         sizes.len() * WORD_SIZE,
                         index as _,
@@ -1234,7 +1224,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .make_sizes_buffer_update(naga::ShaderStage::Mesh, &mut self.temp.binding_sizes)
             {
                 unsafe {
-                    encoder.set_mesh_bytes_length_at_index(
+                    encoder.setMeshBytes_length_atIndex(
                         NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                         sizes.len() * WORD_SIZE,
                         index as _,
@@ -1269,7 +1259,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let buffer_index = self.shared.private_caps.max_vertex_buffers as u64 - 1 - index as u64;
         let encoder = self.state.render.as_ref().unwrap();
         unsafe {
-            encoder.setVertexBuffer_offset_atIndex_(
+            encoder.setVertexBuffer_offset_atIndex(
                 Some(&binding.buffer.raw),
                 binding.offset as usize,
                 buffer_index as usize,
@@ -1291,7 +1281,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .make_sizes_buffer_update(naga::ShaderStage::Vertex, &mut self.temp.binding_sizes)
         {
             unsafe {
-                encoder.set_vertex_bytes_length_at_index(
+                encoder.setVertexBytes_length_atIndex(
                     NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                     sizes.len() * WORD_SIZE,
                     index as _,
@@ -1307,7 +1297,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             depth_range.end
         };
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.set_viewport(MTLViewport {
+        encoder.setViewport(MTLViewport {
             originX: rect.x as _,
             originY: rect.y as _,
             width: rect.w as _,
@@ -1325,15 +1315,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
             height: rect.h as _,
         };
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.set_scissor_rect(scissor);
+        encoder.setScissorRect(scissor);
     }
     unsafe fn set_stencil_reference(&mut self, value: u32) {
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.set_stencil_front_reference_value_back_reference_value(value, value);
+        encoder.setStencilFrontReferenceValue_backReferenceValue(value, value);
     }
     unsafe fn set_blend_constants(&mut self, color: &[f32; 4]) {
         let encoder = self.state.render.as_ref().unwrap();
-        encoder.set_blend_color_red_green_blue_alpha(color[0], color[1], color[2], color[3]);
+        encoder.setBlendColorRed_green_blue_alpha(color[0], color[1], color[2], color[3]);
     }
 
     unsafe fn draw(
@@ -1346,7 +1336,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let encoder = self.state.render.as_ref().unwrap();
         if first_instance != 0 {
             unsafe {
-                encoder.draw_primitives_vertex_start_vertex_count_instance_count_base_instance(
+                encoder.drawPrimitives_vertexStart_vertexCount_instanceCount_baseInstance(
                     self.state.raw_primitive_type,
                     first_vertex as _,
                     vertex_count as _,
@@ -1356,7 +1346,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             };
         } else if instance_count != 1 {
             unsafe {
-                encoder.draw_primitives_vertex_start_vertex_count_instance_count(
+                encoder.drawPrimitives_vertexStart_vertexCount_instanceCount(
                     self.state.raw_primitive_type,
                     first_vertex as _,
                     vertex_count as _,
@@ -1365,7 +1355,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             };
         } else {
             unsafe {
-                encoder.draw_primitives_vertex_start_vertex_count(
+                encoder.drawPrimitives_vertexStart_vertexCount(
                     self.state.raw_primitive_type,
                     first_vertex as _,
                     vertex_count as _,
@@ -1387,7 +1377,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let offset = (index.offset + index.stride * first_index as wgt::BufferAddress) as usize;
         if base_vertex != 0 || first_instance != 0 {
             unsafe {
-                encoder.draw_indexed_primitives_index_count_index_type_index_buffer_index_buffer_offset_instance_count_base_vertex_base_instance(
+                encoder.drawIndexedPrimitives_indexCount_indexType_indexBuffer_indexBufferOffset_instanceCount_baseVertex_baseInstance(
                     self.state.raw_primitive_type,
                     index_count as _,
                     index.raw_type,
@@ -1400,7 +1390,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             };
         } else if instance_count != 1 {
             unsafe {
-                encoder.draw_indexed_primitives_index_count_index_type_index_buffer_index_buffer_offset_instance_count(
+                encoder.drawIndexedPrimitives_indexCount_indexType_indexBuffer_indexBufferOffset_instanceCount(
                     self.state.raw_primitive_type,
                     index_count as _,
                     index.raw_type,
@@ -1411,7 +1401,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             };
         } else {
             unsafe {
-                encoder.draw_indexed_primitives_index_count_index_type_index_buffer_index_buffer_offset(
+                encoder.drawIndexedPrimitives_indexCount_indexType_indexBuffer_indexBufferOffset(
                     self.state.raw_primitive_type,
                     index_count as _,
                     index.raw_type,
@@ -1434,7 +1424,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             height: group_count_y as usize,
             depth: group_count_z as usize,
         };
-        encoder.draw_mesh_threadgroups_threads_per_object_threadgroup_threads_per_mesh_threadgroup(
+        encoder.drawMeshThreadgroups_threadsPerObjectThreadgroup_threadsPerMeshThreadgroup(
             size,
             self.state.stage_infos.ts.raw_wg_size,
             self.state.stage_infos.ms.raw_wg_size,
@@ -1450,7 +1440,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let encoder = self.state.render.as_ref().unwrap();
         for _ in 0..draw_count {
             unsafe {
-                encoder.draw_primitives_indirect_buffer_indirect_buffer_offset(
+                encoder.drawPrimitives_indirectBuffer_indirectBufferOffset(
                     self.state.raw_primitive_type,
                     &buffer.raw,
                     offset as usize,
@@ -1470,7 +1460,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let index = self.state.index.as_ref().unwrap();
         for _ in 0..draw_count {
             unsafe {
-                encoder.draw_indexed_primitives_index_type_index_buffer_index_buffer_offset_indirect_buffer_indirect_buffer_offset(
+                encoder.drawIndexedPrimitives_indexType_indexBuffer_indexBufferOffset_indirectBuffer_indirectBufferOffset(
                     self.state.raw_primitive_type,
                     index.raw_type,
                     index.buffer_ptr.as_ref(),
@@ -1492,7 +1482,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let encoder = self.state.render.as_ref().unwrap();
         for _ in 0..draw_count {
             unsafe {
-                encoder.draw_mesh_threadgroups_with_indirect_buffer_indirect_buffer_offset_threads_per_object_threadgroup_threads_per_mesh_threadgroup(
+                encoder.drawMeshThreadgroupsWithIndirectBuffer_indirectBufferOffset_threadsPerObjectThreadgroup_threadsPerMeshThreadgroup(
                     &buffer.raw,
                     offset as usize,
                     self.state.stage_infos.ts.raw_wg_size,
@@ -1550,7 +1540,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // TimeStamp Queries and ComputePassDescriptor were both introduced in Metal 2.3 (macOS 11, iOS 14)
             // and we currently only need ComputePassDescriptor for timestamp queries
             let encoder = if self.shared.private_caps.timestamp_query_support.is_empty() {
-                raw.compute_command_encoder().unwrap()
+                raw.computeCommandEncoder().unwrap()
             } else {
                 let descriptor = MTLComputePassDescriptor::new();
 
@@ -1558,8 +1548,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 let mut next_sba_descriptor = || {
                     let sba_descriptor = unsafe {
                         descriptor
-                            .sample_buffer_attachments()
-                            .object_at_indexed_subscript(sba_index)
+                            .sampleBufferAttachments()
+                            .objectAtIndexedSubscript(sba_index)
                     };
                     sba_index += 1;
                     sba_descriptor
@@ -1568,14 +1558,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 for (set, index) in self.state.pending_timer_queries.drain(..) {
                     let sba_descriptor = next_sba_descriptor();
                     sba_descriptor
-                        .set_sample_buffer(Some(set.counter_sample_buffer.as_ref().unwrap()));
-                    unsafe { sba_descriptor.set_start_of_encoder_sample_index(index as _) };
-                    unsafe { sba_descriptor.set_end_of_encoder_sample_index(MTLCounterDontSample) };
+                        .setSampleBuffer(Some(set.counter_sample_buffer.as_ref().unwrap()));
+                    unsafe { sba_descriptor.setStartOfEncoderSampleIndex(index as _) };
+                    unsafe { sba_descriptor.setEndOfEncoderSampleIndex(MTLCounterDontSample) };
                 }
 
                 if let Some(timestamp_writes) = desc.timestamp_writes.as_ref() {
                     let sba_descriptor = next_sba_descriptor();
-                    sba_descriptor.set_sample_buffer(Some(
+                    sba_descriptor.setSampleBuffer(Some(
                         timestamp_writes
                             .query_set
                             .counter_sample_buffer
@@ -1584,14 +1574,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     ));
 
                     unsafe {
-                        sba_descriptor.set_start_of_encoder_sample_index(
+                        sba_descriptor.setStartOfEncoderSampleIndex(
                             timestamp_writes
                                 .beginning_of_pass_write_index
                                 .map_or(MTLCounterDontSample, |i| i as _),
                         )
                     };
                     unsafe {
-                        sba_descriptor.set_end_of_encoder_sample_index(
+                        sba_descriptor.setEndOfEncoderSampleIndex(
                             timestamp_writes
                                 .end_of_pass_write_index
                                 .map_or(MTLCounterDontSample, |i| i as _),
@@ -1599,19 +1589,19 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     };
                 }
 
-                raw.compute_command_encoder_with_descriptor(&descriptor)
+                raw.computeCommandEncoderWithDescriptor(&descriptor)
                     .unwrap()
             };
 
             if let Some(label) = desc.label {
-                encoder.set_label(Some(&NSString::from_str(label)));
+                encoder.setLabel(Some(&NSString::from_str(label)));
             }
 
             self.state.compute = Some(encoder.to_owned());
         });
     }
     unsafe fn end_compute_pass(&mut self) {
-        self.state.compute.take().unwrap().end_encoding();
+        self.state.compute.take().unwrap().endEncoding();
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
@@ -1620,14 +1610,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.state.stage_infos.cs.assign_from(&pipeline.cs_info);
 
         let encoder = self.state.compute.as_ref().unwrap();
-        encoder.set_compute_pipeline_state(&pipeline.raw);
+        encoder.setComputePipelineState(&pipeline.raw);
 
         if let Some((index, sizes)) = self
             .state
             .make_sizes_buffer_update(naga::ShaderStage::Compute, &mut self.temp.binding_sizes)
         {
             unsafe {
-                encoder.set_bytes_length_at_index(
+                encoder.setBytes_length_atIndex(
                     NonNull::new(sizes.as_ptr().cast_mut().cast()).unwrap(),
                     sizes.len() * WORD_SIZE,
                     index as _,
@@ -1652,7 +1642,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let size: u32 = current_size.next_multiple_of(16);
             *current_size = size;
             if size != prev_size {
-                unsafe { encoder.set_threadgroup_memory_length_at_index(size as _, i) };
+                unsafe { encoder.setThreadgroupMemoryLength_atIndex(size as _, i) };
             }
         }
     }
@@ -1665,7 +1655,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 height: count[1] as usize,
                 depth: count[2] as usize,
             };
-            encoder.dispatch_threadgroups_threads_per_threadgroup(
+            encoder.dispatchThreadgroups_threadsPerThreadgroup(
                 raw_count,
                 self.state.stage_infos.cs.raw_wg_size,
             );
@@ -1675,11 +1665,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
         let encoder = self.state.compute.as_ref().unwrap();
         unsafe {
-            encoder.dispatch_threadgroups_with_indirect_buffer_indirect_buffer_offset_threads_per_threadgroup(
-                &buffer.raw,
-                offset as usize,
-                self.state.stage_infos.cs.raw_wg_size,
-            )
+            encoder
+                .dispatchThreadgroupsWithIndirectBuffer_indirectBufferOffset_threadsPerThreadgroup(
+                    &buffer.raw,
+                    offset as usize,
+                    self.state.stage_infos.cs.raw_wg_size,
+                )
         };
     }
 
@@ -1726,7 +1717,7 @@ impl Drop for super::CommandEncoder {
         // appears to be a requirement for all MTLCommandEncoder objects. Failing to call
         // endEncoding causes a crash with the message 'Command encoder released without
         // endEncoding'. To prevent this, we explicitiy call discard_encoding, which
-        // calls end_encoding on any still-held MTLCommandEncoders.
+        // calls endEncoding on any still-held MTLCommandEncoders.
         unsafe {
             self.discard_encoding();
         }
