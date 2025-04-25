@@ -11,7 +11,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)',
 ] }
 
-[dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # The dependencies in this config have no transitive dependencies.
 anyhow = "1.0.71"
 env_logger = { version = "0.11.0", default-features = false }
