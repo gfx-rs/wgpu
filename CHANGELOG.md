@@ -42,7 +42,9 @@ Bottom level categories:
 
 ### New Features
 
-#### Naga
+#### General
+
+- Add support for rendering to slices of 3D texture views and single layered 2D-Array texture views (this requires `VK_KHR_maintenance1` which should be widely available on newer drivers). By @teoxoy in [#7596](https://github.com/gfx-rs/wgpu/pull/7596)
 
 ### Bug Fixes
 
