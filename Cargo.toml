@@ -90,11 +90,11 @@ wgpu-core-deps-apple = { version = "25.0.0", path = "./wgpu-core/platform-deps/a
 wgpu-core-deps-wasm = { version = "25.0.0", path = "./wgpu-core/platform-deps/wasm" }
 wgpu-core-deps-emscripten = { version = "25.0.0", path = "./wgpu-core/platform-deps/emscripten" }
 
-anyhow = { version = "1.0.97", default-features = false }
+anyhow = { version = "1.0.87", default-features = false }
 approx = "0.5"
-arbitrary = "1.4.1"
+arbitrary = "1.4"
 argh = "0.1.13"
-arrayvec = { version = "0.7.6", default-features = false }
+arrayvec = { version = "0.7.1", default-features = false }
 bincode = "1"
 bit-set = { version = "0.8", default-features = false }
 bit-vec = { version = "0.8", default-features = false }
@@ -110,96 +110,96 @@ criterion = "0.5"
 codespan-reporting = { version = "0.12", default-features = false }
 ctor = "0.4"
 diff = "0.1"
-document-features = "0.2.11"
-encase = "0.11.0"
-env_logger = { version = "0.11.8", default-features = false }
+document-features = "0.2.10"
+encase = "0.11"
+env_logger = { version = "0.11", default-features = false }
 fern = "0.7"
 flume = "0.11"
 futures-lite = "2"
 glam = "0.30"
-glob = "0.3.1"
+glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
-hashbrown = { version = "0.15.2", default-features = false, features = [
+hashbrown = { version = "0.15", default-features = false, features = [
     "default-hasher",
     "inline-more",
 ] }
 heck = "0.5"
-hexf-parse = "0.2.1"
+hexf-parse = "0.2"
 image = { version = "0.25", default-features = false, features = ["png"] }
-indexmap = { version = "2.7.1", default-features = false }
+indexmap = { version = "2.7", default-features = false }
 indicatif = "0.17"
-itertools = { version = "0.14.0" }
+itertools = { version = "0.14" }
 jobserver = "0.1"
 ktx2 = "0.4"
 libc = { version = "0.2.168", default-features = false }
 # See https://github.com/rust-fuzz/libfuzzer/issues/126
 libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
-libtest-mimic = "0.8.1"
+libtest-mimic = "0.8"
 log = "0.4.21"
-nanoserde = "0.2.1"
+nanoserde = "0.2"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 noise = "0.9"
-num_cpus = "1.16"
+num_cpus = "1"
 # `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
 num-traits = { version = "0.2.16", default-features = false }
 nv-flip = "0.1"
 obj = "0.10"
 # NOTE: once_cell/std is *required* for some commonly-used features, selecting this per crate
-once_cell = { version = "1.21.3", default-features = false }
+once_cell = { version = "1.21", default-features = false }
 # Firefox has 3.4.0 vendored, so we allow that version in our dependencies
 ordered-float = { version = ">=3, <=5.0", default-features = false }
 parking_lot = "0.12.3"
 petgraph = { version = "0.8", default-features = false }
-pico-args = { version = "0.5.0", features = [
+pico-args = { version = "0.5", features = [
     "eq-separator",
     "short-space-opt",
     "combined-flags",
 ] }
-png = "0.17.16"
+png = "0.17.6"
 pollster = "0.4"
-portable-atomic = "1.10.0"
+portable-atomic = "1.2"
 pp-rs = "0.2.1"
 profiling = { version = "1", default-features = false }
 quote = "1.0.38"
 raw-window-handle = { version = "0.6.2", default-features = false }
 rwh_05 = { version = "0.5.2", package = "raw-window-handle" } # temporary compatibility for glutin-winit               
-rayon = "1.3.0"
-regex-lite = "0.1.5"
-renderdoc-sys = "1.1.0"
+rayon = "1.3"
+regex-lite = "0.1"
+renderdoc-sys = "1"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 ron = "0.10"
 # NOTE: rustc-hash v2 is a completely different hasher with different performance characteristics
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
-rustc-hash = { version = "1.1.0", default-features = false }
-serde_json = "1.0.140"
+rustc-hash = { version = "1.1", default-features = false }
+serde_json = "1.0.118"
 serde = { version = "1.0.219", default-features = false }
-shell-words = "1.1.0"
-smallvec = "1.9.0"
+shell-words = "1"
+smallvec = "1.9"
 spirv = "0.3"
-static_assertions = "1.1.0"
-strum = { version = "0.27.1", default-features = false, features = ["derive"] }
+static_assertions = "1.1"
+strum = { version = "0.27", default-features = false, features = ["derive"] }
 syn = "2.0.98"
 toml = "0.8"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.3", default-features = false }
 unicode-ident = "1.0.5"
-walkdir = "2.3.0"
+walkdir = "2.3"
 winit = { version = "0.29", features = ["android-native-activity"] }
 which = "7"
-xshell = "0.2.3"
+xshell = "0.2"
 
 # Metal dependencies
-metal = "0.32.0"
+metal = "0.32"
 block = "0.1.6"
 core-graphics-types = "0.2"
 objc = "0.2.5"
 
 # Vulkan dependencies
 android_system_properties = "0.1.1"
-ash = "0.38.0"
+ash = "0.38"
 gpu-alloc = "0.6"
 gpu-descriptor = "0.3"
 
@@ -220,14 +220,14 @@ glutin_wgl_sys = "0.6"
 windows = { version = "0.58", default-features = false }
 
 # wasm32 dependencies
-console_error_panic_hook = "0.1.7"
+console_error_panic_hook = "0.1.5"
 console_log = "1"
 js-sys = { version = "0.3.77", default-features = false }
 wasm-bindgen = "0.2.100"
-wasm-bindgen-futures = "0.4.45"
+wasm-bindgen-futures = "0.4.43"
 wasm-bindgen-test = "0.3"
 web-sys = { version = "0.3.77", default-features = false }
-web-time = "1.1.0"
+web-time = "1"
 
 # deno dependencies
 deno_console = "0.190.0"
@@ -238,11 +238,11 @@ deno_webidl = "0.190.0"
 deno_webgpu = { version = "0.157.0", path = "./deno_webgpu" }
 deno_unsync = "0.4.2"
 deno_error = "0.5.5"
-tokio = "1.44.2"
-termcolor = "1.4.1"
+tokio = "1.39"
+termcolor = "1.1.3"
 
 # android dependencies
-ndk-sys = "0.6.0"
+ndk-sys = "0.6"
 
 # These overrides allow our examples to explicitly depend on release crates
 [patch.crates-io]
