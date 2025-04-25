@@ -1,79 +1,108 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "schedule:weekly"],
+  "extends": [
+    "config:recommended",
+    "schedule:weekly"
+  ],
   "dependencyDashboard": true,
   "prConcurrentLimit": 20,
   "prHourlyLimit": 200,
-  "labels": ["dependencies"],
+  "labels": [
+    "dependencies"
+  ],
   "lockFileMaintenance": {
     "enabled": true,
     "recreateWhen": "always",
-    "rebaseStalePrs": true,
+    "rebaseWhen": "behind-base-branch",
     "branchTopic": "Cargo.lock update",
     "commitMessageAction": "Update Cargo.lock",
-    "schedule": ["before 4am on monday"],
+    "schedule": [
+      "before 4am on monday"
+    ],
     "prBodyDefinitions": {
       "Change": "All locks refreshed"
     }
   },
   "packageRules": [
     {
-      "matchUpdateTypes": ["patch"],
+      "matchUpdateTypes": [
+        "patch"
+      ],
       "matchCurrentVersion": "<1.0.0",
       "enabled": false,
       "description": "Patch updates to 0.x.y crates are compatible and handled by lockFileMaintenance"
     },
     {
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "matchCurrentVersion": ">=1.0.0",
       "enabled": false,
       "description": "Minor and patch updates to x.y.z crates are compatible and handled by lockFileMaintenance"
     },
     {
       "description": "IGNORE: Windows 0.59 is pending on https://github.com/gfx-rs/wgpu/pull/6876",
-      "matchPackageNames": ["windows", "windows-core"],
+      "matchPackageNames": [
+        "windows",
+        "windows-core"
+      ],
       "matchCurrentVersion": "<0.59.0",
       "enabled": false
     },
     {
       "description": "IGNORE: Winit 0.30 is pending a major refactor. https://github.com/gfx-rs/wgpu/pull/5709",
-      "matchPackageNames": ["winit"],
+      "matchPackageNames": [
+        "winit"
+      ],
       "matchCurrentVersion": "<0.30.0",
       "enabled": false
     },
     {
       "description": "IGNORE: glutin 0.32 depends on winit 0.30",
-      "matchPackageNames": ["glutin"],
+      "matchPackageNames": [
+        "glutin"
+      ],
       "matchCurrentVersion": "<0.32.0",
       "enabled": false
     },
     {
       "description": "IGNORE: glutin-winit 0.5 depends on winit 0.30",
-      "matchPackageNames": ["glutin-winit"],
+      "matchPackageNames": [
+        "glutin-winit"
+      ],
       "matchCurrentVersion": "<0.5.0",
       "enabled": false
     },
     {
       "description": "IGNORE: glutin 0.32 depends on winit 0.30, and previous version depend on rwh 0.5",
-      "matchPackageNames": ["raw-window-handle"],
+      "matchPackageNames": [
+        "raw-window-handle"
+      ],
       "matchCurrentVersion": "<0.6.0",
       "enabled": false
     },
     {
       "description": "IGNORE: libfuzzer-sys 0.4.8 has a broken build on Windows.",
-      "matchPackageNames": ["libfuzzer-sys"],
+      "matchPackageNames": [
+        "libfuzzer-sys"
+      ],
       "matchCurrentVersion": "<0.5.0",
       "enabled": false
     },
     {
       "description": "PERMA IGNORE: rustc-hash 2.0 is a different algorithm.",
-      "matchPackageNames": ["rustc-hash"],
+      "matchPackageNames": [
+        "rustc-hash"
+      ],
       "matchCurrentVersion": "<2",
       "enabled": false
     },
     {
       "description": "PERMA IGNORE: Deno packages are rolled up explicitly by the Deno team, in lockstep with deno_webgpu.",
-      "matchPackageNames": ["deno_*"],
+      "matchPackageNames": [
+        "deno_*"
+      ],
       "enabled": false
     }
   ]
