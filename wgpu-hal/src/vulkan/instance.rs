@@ -1108,16 +1108,6 @@ impl crate::Surface for super::Surface {
             return Err(crate::SurfaceError::Outdated);
         }
 
-        // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkRenderPassBeginInfo.html#VUID-VkRenderPassBeginInfo-framebuffer-03209
-        let raw_flags = if swapchain
-            .raw_flags
-            .contains(vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT)
-        {
-            vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE
-        } else {
-            vk::ImageCreateFlags::empty()
-        };
-
         let texture = super::SurfaceTexture {
             index,
             texture: super::Texture {
@@ -1125,15 +1115,12 @@ impl crate::Surface for super::Surface {
                 drop_guard: None,
                 block: None,
                 external_memory: None,
-                usage: swapchain.config.usage,
                 format: swapchain.config.format,
-                raw_flags,
                 copy_size: crate::CopyExtent {
                     width: swapchain.config.extent.width,
                     height: swapchain.config.extent.height,
                     depth: 1,
                 },
-                view_formats: swapchain.view_formats.clone(),
             },
             surface_semaphores: swapchain_semaphores_arc,
         };

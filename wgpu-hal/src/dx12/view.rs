@@ -250,16 +250,10 @@ impl ViewDescriptor {
                     PlaneSlice: aspects_to_plane(self.aspects),
                 }
             }
-            wgt::TextureViewDimension::D3 => {
-                desc.ViewDimension = Direct3D12::D3D12_RTV_DIMENSION_TEXTURE3D;
-                desc.Anonymous.Texture3D = Direct3D12::D3D12_TEX3D_RTV {
-                    MipSlice: self.mip_level_base,
-                    FirstWSlice: self.array_layer_base,
-                    WSize: self.array_layer_count,
-                }
-            }
-            wgt::TextureViewDimension::Cube | wgt::TextureViewDimension::CubeArray => {
-                panic!("Unable to view texture as cube RTV")
+            wgt::TextureViewDimension::D3
+            | wgt::TextureViewDimension::Cube
+            | wgt::TextureViewDimension::CubeArray => {
+                panic!("Unable to view texture as cube or 3D RTV")
             }
         }
 
@@ -337,7 +331,7 @@ impl ViewDescriptor {
             wgt::TextureViewDimension::D3
             | wgt::TextureViewDimension::Cube
             | wgt::TextureViewDimension::CubeArray => {
-                panic!("Unable to view texture as cube or 3D RTV")
+                panic!("Unable to view texture as cube or 3D DSV")
             }
         }
 

@@ -188,7 +188,7 @@ impl super::Device {
             },
             features,
             shared: Arc::new(shared),
-            rtv_pool: Mutex::new(rtv_pool),
+            rtv_pool: Arc::new(Mutex::new(rtv_pool)),
             dsv_pool: Mutex::new(descriptor::CpuPool::new(
                 raw.clone(),
                 Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
@@ -539,10 +539,14 @@ impl crate::Device for super::Device {
         Ok(super::TextureView {
             raw_format: view_desc.rtv_dsv_format,
             aspects: view_desc.aspects,
-            target_base: (
-                texture.resource.clone(),
-                texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
+            dimension: desc.dimension,
+            texture: texture.resource.clone(),
+            subresource_index: texture.calc_subresource(
+                desc.range.base_mip_level,
+                desc.range.base_array_layer,
+                0,
             ),
+            mip_slice: desc.range.base_mip_level,
             handle_srv: if desc.usage.intersects(wgt::TextureUses::RESOURCE) {
                 match unsafe { view_desc.to_srv() } {
                     Some(raw_desc) => {
@@ -584,7 +588,10 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_rtv: if desc.usage.intersects(wgt::TextureUses::COLOR_TARGET) {
+            handle_rtv: if desc.usage.intersects(wgt::TextureUses::COLOR_TARGET)
+                && desc.dimension != wgt::TextureViewDimension::D3
+            // 3D RTVs must be created in the render pass
+            {
                 let raw_desc = unsafe { view_desc.to_rtv() };
                 let handle = self.rtv_pool.lock().alloc_handle()?;
                 unsafe {
@@ -725,6 +732,8 @@ impl crate::Device for super::Device {
             device: self.raw.clone(),
             shared: Arc::clone(&self.shared),
             mem_allocator: self.mem_allocator.clone(),
+            rtv_pool: Arc::clone(&self.rtv_pool),
+            temp_rtv_handles: Vec::new(),
             null_rtv_handle: self.null_rtv_handle,
             list: None,
             free_lists: Vec::new(),

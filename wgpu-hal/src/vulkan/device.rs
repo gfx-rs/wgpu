@@ -75,76 +75,106 @@ impl super::DeviceShared {
         Ok(match self.render_passes.lock().entry(key) {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
+                let super::RenderPassKey {
+                    ref colors,
+                    ref depth_stencil,
+                    sample_count,
+                    multiview,
+                } = *e.key();
+
                 let mut vk_attachments = Vec::new();
-                let mut color_refs = Vec::with_capacity(e.key().colors.len());
+                let mut color_refs = Vec::with_capacity(colors.len());
                 let mut resolve_refs = Vec::with_capacity(color_refs.capacity());
                 let mut ds_ref = None;
-                let samples = vk::SampleCountFlags::from_raw(e.key().sample_count);
+                let samples = vk::SampleCountFlags::from_raw(sample_count);
                 let unused = vk::AttachmentReference {
                     attachment: vk::ATTACHMENT_UNUSED,
                     layout: vk::ImageLayout::UNDEFINED,
                 };
-                for cat in e.key().colors.iter() {
-                    let (color_ref, resolve_ref) = if let Some(cat) = cat.as_ref() {
-                        let color_ref = vk::AttachmentReference {
-                            attachment: vk_attachments.len() as u32,
-                            layout: cat.base.layout,
-                        };
-                        vk_attachments.push({
-                            let (load_op, store_op) = conv::map_attachment_ops(cat.base.ops);
-                            vk::AttachmentDescription::default()
-                                .format(cat.base.format)
-                                .samples(samples)
-                                .load_op(load_op)
-                                .store_op(store_op)
-                                .initial_layout(cat.base.layout)
-                                .final_layout(cat.base.layout)
-                        });
-                        let resolve_ref = if let Some(ref rat) = cat.resolve {
-                            let (load_op, store_op) = conv::map_attachment_ops(rat.ops);
-                            let vk_attachment = vk::AttachmentDescription::default()
-                                .format(rat.format)
-                                .samples(vk::SampleCountFlags::TYPE_1)
-                                .load_op(load_op)
-                                .store_op(store_op)
-                                .initial_layout(rat.layout)
-                                .final_layout(rat.layout);
-                            vk_attachments.push(vk_attachment);
+                for cat in colors.iter() {
+                    let (color_ref, resolve_ref) =
+                        if let Some(super::ColorAttachmentKey { base, resolve }) = cat {
+                            let super::AttachmentKey {
+                                format,
+                                layout,
+                                ops,
+                            } = *base;
 
-                            vk::AttachmentReference {
-                                attachment: vk_attachments.len() as u32 - 1,
-                                layout: rat.layout,
-                            }
+                            let color_ref = vk::AttachmentReference {
+                                attachment: vk_attachments.len() as u32,
+                                layout,
+                            };
+                            vk_attachments.push({
+                                let (load_op, store_op) = conv::map_attachment_ops(ops);
+                                vk::AttachmentDescription::default()
+                                    .format(format)
+                                    .samples(samples)
+                                    .load_op(load_op)
+                                    .store_op(store_op)
+                                    .initial_layout(layout)
+                                    .final_layout(layout)
+                            });
+                            let resolve_ref = if let Some(rat) = resolve {
+                                let super::AttachmentKey {
+                                    format,
+                                    layout,
+                                    ops,
+                                } = *rat;
+
+                                let (load_op, store_op) = conv::map_attachment_ops(ops);
+                                let vk_attachment = vk::AttachmentDescription::default()
+                                    .format(format)
+                                    .samples(vk::SampleCountFlags::TYPE_1)
+                                    .load_op(load_op)
+                                    .store_op(store_op)
+                                    .initial_layout(layout)
+                                    .final_layout(layout);
+                                vk_attachments.push(vk_attachment);
+
+                                vk::AttachmentReference {
+                                    attachment: vk_attachments.len() as u32 - 1,
+                                    layout,
+                                }
+                            } else {
+                                unused
+                            };
+
+                            (color_ref, resolve_ref)
                         } else {
-                            unused
+                            (unused, unused)
                         };
-
-                        (color_ref, resolve_ref)
-                    } else {
-                        (unused, unused)
-                    };
 
                     color_refs.push(color_ref);
                     resolve_refs.push(resolve_ref);
                 }
 
-                if let Some(ref ds) = e.key().depth_stencil {
+                if let Some(ds) = depth_stencil {
+                    let super::DepthStencilAttachmentKey {
+                        ref base,
+                        stencil_ops,
+                    } = *ds;
+
+                    let super::AttachmentKey {
+                        format,
+                        layout,
+                        ops,
+                    } = *base;
+
                     ds_ref = Some(vk::AttachmentReference {
                         attachment: vk_attachments.len() as u32,
-                        layout: ds.base.layout,
+                        layout,
                     });
-                    let (load_op, store_op) = conv::map_attachment_ops(ds.base.ops);
-                    let (stencil_load_op, stencil_store_op) =
-                        conv::map_attachment_ops(ds.stencil_ops);
+                    let (load_op, store_op) = conv::map_attachment_ops(ops);
+                    let (stencil_load_op, stencil_store_op) = conv::map_attachment_ops(stencil_ops);
                     let vk_attachment = vk::AttachmentDescription::default()
-                        .format(ds.base.format)
+                        .format(format)
                         .samples(samples)
                         .load_op(load_op)
                         .store_op(store_op)
                         .stencil_load_op(stencil_load_op)
                         .stencil_store_op(stencil_store_op)
-                        .initial_layout(ds.base.layout)
-                        .final_layout(ds.base.layout);
+                        .initial_layout(layout)
+                        .final_layout(layout);
                     vk_attachments.push(vk_attachment);
                 }
 
@@ -174,7 +204,7 @@ impl super::DeviceShared {
 
                 let mut multiview_info;
                 let mask;
-                if let Some(multiview) = e.key().multiview {
+                if let Some(multiview) = multiview {
                     // Sanity checks, better to panic here than cause a driver crash
                     assert!(multiview.get() <= 8);
                     assert!(multiview.get() > 1);
@@ -198,85 +228,6 @@ impl super::DeviceShared {
                 };
 
                 *e.insert(raw)
-            }
-        })
-    }
-
-    pub fn make_framebuffer(
-        &self,
-        key: super::FramebufferKey,
-        raw_pass: vk::RenderPass,
-        pass_label: crate::Label,
-    ) -> Result<vk::Framebuffer, crate::DeviceError> {
-        Ok(match self.framebuffers.lock().entry(key) {
-            Entry::Occupied(e) => *e.get(),
-            Entry::Vacant(e) => {
-                let vk_views = e
-                    .key()
-                    .attachments
-                    .iter()
-                    .map(|at| at.raw)
-                    .collect::<ArrayVec<_, { super::MAX_TOTAL_ATTACHMENTS }>>();
-                let vk_view_formats = e
-                    .key()
-                    .attachments
-                    .iter()
-                    .map(|at| self.private_caps.map_texture_format(at.view_format))
-                    .collect::<ArrayVec<_, { super::MAX_TOTAL_ATTACHMENTS }>>();
-                let vk_view_formats_list = e
-                    .key()
-                    .attachments
-                    .iter()
-                    .map(|at| at.raw_view_formats.clone())
-                    .collect::<ArrayVec<_, { super::MAX_TOTAL_ATTACHMENTS }>>();
-
-                let vk_image_infos = e
-                    .key()
-                    .attachments
-                    .iter()
-                    .enumerate()
-                    .map(|(i, at)| {
-                        let mut info = vk::FramebufferAttachmentImageInfo::default()
-                            .usage(conv::map_texture_usage(at.view_usage))
-                            .flags(at.raw_image_flags)
-                            .width(e.key().extent.width)
-                            .height(e.key().extent.height)
-                            .layer_count(e.key().extent.depth_or_array_layers);
-                        // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkRenderPassBeginInfo.html#VUID-VkRenderPassBeginInfo-framebuffer-03214
-                        if vk_view_formats_list[i].is_empty() {
-                            info = info.view_formats(&vk_view_formats[i..i + 1]);
-                        } else {
-                            info = info.view_formats(&vk_view_formats_list[i]);
-                        };
-                        info
-                    })
-                    .collect::<ArrayVec<_, { super::MAX_TOTAL_ATTACHMENTS }>>();
-
-                let mut vk_attachment_info = vk::FramebufferAttachmentsCreateInfo::default()
-                    .attachment_image_infos(&vk_image_infos);
-                let mut vk_info = vk::FramebufferCreateInfo::default()
-                    .render_pass(raw_pass)
-                    .width(e.key().extent.width)
-                    .height(e.key().extent.height)
-                    .layers(e.key().extent.depth_or_array_layers);
-
-                if self.private_caps.imageless_framebuffers {
-                    //TODO: https://github.com/MaikKlein/ash/issues/450
-                    vk_info = vk_info
-                        .flags(vk::FramebufferCreateFlags::IMAGELESS_KHR)
-                        .push_next(&mut vk_attachment_info);
-                    vk_info.attachment_count = e.key().attachments.len() as u32;
-                } else {
-                    vk_info = vk_info.attachments(&vk_views);
-                }
-
-                *e.insert(unsafe {
-                    let raw = self.raw.create_framebuffer(&vk_info, None).unwrap();
-                    if let Some(label) = pass_label {
-                        self.set_object_name(raw, label);
-                    }
-                    raw
-                })
             }
         })
     }
@@ -558,7 +509,6 @@ impl super::Device {
         let original_format = self.shared.private_caps.map_texture_format(config.format);
         let mut raw_flags = vk::SwapchainCreateFlagsKHR::empty();
         let mut raw_view_formats: Vec<vk::Format> = vec![];
-        let mut wgt_view_formats = vec![];
         if !config.view_formats.is_empty() {
             raw_flags |= vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT;
             raw_view_formats = config
@@ -567,9 +517,6 @@ impl super::Device {
                 .map(|f| self.shared.private_caps.map_texture_format(*f))
                 .collect();
             raw_view_formats.push(original_format);
-
-            wgt_view_formats.clone_from(&config.view_formats);
-            wgt_view_formats.push(config.format);
         }
 
         let mut info = vk::SwapchainCreateInfoKHR::default()
@@ -639,12 +586,10 @@ impl super::Device {
 
         Ok(super::Swapchain {
             raw,
-            raw_flags,
             functor,
             device: Arc::clone(&self.shared),
             images,
             config: config.clone(),
-            view_formats: wgt_view_formats,
             surface_semaphores,
             next_semaphore_index: 0,
             next_present_time: None,
@@ -686,11 +631,8 @@ impl super::Device {
             drop_guard,
             external_memory: None,
             block: None,
-            usage: desc.usage,
             format: desc.format,
-            raw_flags: vk::ImageCreateFlags::empty(),
             copy_size: desc.copy_extent(),
-            view_formats,
         }
     }
 
@@ -728,17 +670,19 @@ impl super::Device {
         let copy_size = desc.copy_extent();
 
         let mut raw_flags = vk::ImageCreateFlags::empty();
+        if desc.dimension == wgt::TextureDimension::D3
+            && desc.usage.contains(wgt::TextureUses::COLOR_TARGET)
+        {
+            raw_flags |= vk::ImageCreateFlags::TYPE_2D_ARRAY_COMPATIBLE;
+        }
         if desc.is_cube_compatible() {
             raw_flags |= vk::ImageCreateFlags::CUBE_COMPATIBLE;
         }
 
         let original_format = self.shared.private_caps.map_texture_format(desc.format);
         let mut vk_view_formats = vec![];
-        let mut wgt_view_formats = vec![];
         if !desc.view_formats.is_empty() {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
-            wgt_view_formats.clone_from(&desc.view_formats);
-            wgt_view_formats.push(desc.format);
 
             if self.shared.private_caps.image_format_list {
                 vk_view_formats = desc
@@ -788,8 +732,6 @@ impl super::Device {
             raw,
             requirements: req,
             copy_size,
-            view_formats: wgt_view_formats,
-            raw_flags,
         })
     }
 
@@ -851,11 +793,8 @@ impl super::Device {
             drop_guard: None,
             external_memory: Some(memory),
             block: None,
-            usage: desc.usage,
             format: desc.format,
-            raw_flags: image.raw_flags,
             copy_size: image.copy_size,
-            view_formats: image.view_formats,
         })
     }
 
@@ -1326,11 +1265,8 @@ impl crate::Device for super::Device {
             drop_guard: None,
             external_memory: None,
             block: Some(block),
-            usage: desc.usage,
             format: desc.format,
-            raw_flags: image.raw_flags,
             copy_size: image.copy_size,
-            view_formats: image.view_formats,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
@@ -1359,24 +1295,22 @@ impl crate::Device for super::Device {
         desc: &crate::TextureViewDescriptor,
     ) -> Result<super::TextureView, crate::DeviceError> {
         let subresource_range = conv::map_subresource_range(&desc.range, texture.format);
+        let raw_format = self.shared.private_caps.map_texture_format(desc.format);
         let mut vk_info = vk::ImageViewCreateInfo::default()
             .flags(vk::ImageViewCreateFlags::empty())
             .image(texture.raw)
             .view_type(conv::map_view_dimension(desc.dimension))
-            .format(self.shared.private_caps.map_texture_format(desc.format))
+            .format(raw_format)
             .subresource_range(subresource_range);
         let layers =
             NonZeroU32::new(subresource_range.layer_count).expect("Unexpected zero layer count");
 
         let mut image_view_info;
-        let view_usage = if self.shared.private_caps.image_view_usage && !desc.usage.is_empty() {
+        if self.shared.private_caps.image_view_usage && !desc.usage.is_empty() {
             image_view_info =
                 vk::ImageViewUsageCreateInfo::default().usage(conv::map_texture_usage(desc.usage));
             vk_info = vk_info.push_next(&mut image_view_info);
-            desc.usage
-        } else {
-            texture.usage
-        };
+        }
 
         let raw = unsafe { self.shared.raw.create_image_view(&vk_info, None) }
             .map_err(super::map_host_device_oom_and_ioca_err)?;
@@ -1385,40 +1319,19 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
-        let attachment = super::FramebufferAttachment {
-            raw: if self.shared.private_caps.imageless_framebuffers {
-                vk::ImageView::null()
-            } else {
-                raw
-            },
-            raw_image_flags: texture.raw_flags,
-            view_usage,
-            view_format: desc.format,
-            raw_view_formats: texture
-                .view_formats
-                .iter()
-                .map(|tf| self.shared.private_caps.map_texture_format(*tf))
-                .collect(),
-        };
-
         self.counters.texture_views.add(1);
 
         Ok(super::TextureView {
+            raw_texture: texture.raw,
             raw,
             layers,
-            attachment,
+            format: desc.format,
+            raw_format,
+            base_mip_level: desc.range.base_mip_level,
+            dimension: desc.dimension,
         })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
-        if !self.shared.private_caps.imageless_framebuffers {
-            let mut fbuf_lock = self.shared.framebuffers.lock();
-            for (key, &raw_fbuf) in fbuf_lock.iter() {
-                if key.attachments.iter().any(|at| at.raw == view.raw) {
-                    unsafe { self.shared.raw.destroy_framebuffer(raw_fbuf, None) };
-                }
-            }
-            fbuf_lock.retain(|key, _| !key.attachments.iter().any(|at| at.raw == view.raw));
-        }
         unsafe { self.shared.raw.destroy_image_view(view.raw, None) };
 
         self.counters.texture_views.sub(1);
@@ -1511,6 +1424,8 @@ impl crate::Device for super::Device {
             discarded: Vec::new(),
             rpass_debug_marker_active: false,
             end_of_pass_timer_query: None,
+            framebuffers: Default::default(),
+            temp_texture_views: Default::default(),
             counters: Arc::clone(&self.counters),
         })
     }
@@ -1853,10 +1768,8 @@ impl crate::Device for super::Device {
                     (image_infos, local_image_infos) =
                         image_infos.extend(desc.textures[start as usize..end as usize].iter().map(
                             |binding| {
-                                let layout = conv::derive_image_layout(
-                                    binding.usage,
-                                    binding.view.attachment.view_format,
-                                );
+                                let layout =
+                                    conv::derive_image_layout(binding.usage, binding.view.format);
                                 vk::DescriptorImageInfo::default()
                                     .image_view(binding.view.raw)
                                     .image_layout(layout)
@@ -3177,6 +3090,4 @@ struct ImageWithoutMemory {
     raw: vk::Image,
     requirements: vk::MemoryRequirements,
     copy_size: crate::CopyExtent,
-    view_formats: Vec<wgt::TextureFormat>,
-    raw_flags: vk::ImageCreateFlags,
 }

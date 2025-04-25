@@ -279,6 +279,7 @@ impl crate::framework::Example for Example {
             let rpass_color_attachment = if self.sample_count == 1 {
                 wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -288,6 +289,7 @@ impl crate::framework::Example for Example {
             } else {
                 wgpu::RenderPassColorAttachment {
                     view: &self.multisampled_framebuffer,
+                    depth_slice: None,
                     resolve_target: Some(view),
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
