@@ -1305,7 +1305,7 @@ checksum = "7e5ed952f01ce6a4feb6a2bc434995d420a99d91a5487502539451b42502bc73"
 dependencies = [
  "const_panic",
  "encase_derive",
- "glam 0.30.2",
+ "glam",
  "thiserror 2.0.12",
 ]
 
@@ -1674,18 +1674,12 @@ dependencies = [
 
 [[package]]
 name = "glam"
-version = "0.29.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8babf46d4c1c9d92deac9f7be466f76dfc4482b6452fc5024b5e8daf6ffeb3ee"
-dependencies = [
- "bytemuck",
-]
-
-[[package]]
-name = "glam"
 version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0e9b6647e9b41d3a5ef02964c6be01311a7f2472fea40595c635c6d046c259e"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "glob"
@@ -4813,7 +4807,7 @@ dependencies = [
  "env_logger",
  "fern",
  "flume",
- "glam 0.29.3",
+ "glam",
  "ktx2",
  "log",
  "nanorand",
@@ -4847,7 +4841,7 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "core-graphics-types 0.2.0",
  "env_logger",
- "glam 0.29.3",
+ "glam",
  "glow",
  "glutin",
  "glutin-winit",
@@ -4924,7 +4918,7 @@ dependencies = [
  "ctor",
  "env_logger",
  "futures-lite",
- "glam 0.29.3",
+ "glam",
  "half",
  "image",
  "itertools 0.14.0",
