@@ -112,11 +112,12 @@ ctor = "0.4"
 diff = "0.1"
 document-features = "0.2.11"
 encase = "0.11.0"
-env_logger = "0.11.8"
+env_logger = { version = "0.11.8", default-features = false }
 fern = "0.7"
 flume = "0.11"
 futures-lite = "2"
 glam = "0.30"
+glob = "0.3.1"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.15.2", default-features = false, features = [
     "default-hasher",
@@ -126,7 +127,9 @@ heck = "0.5"
 hexf-parse = "0.2.1"
 image = { version = "0.25", default-features = false, features = ["png"] }
 indexmap = { version = "2.7.1", default-features = false }
+indicatif = "0.17"
 itertools = { version = "0.14.0" }
+jobserver = "0.1"
 ktx2 = "0.4"
 libc = { version = "0.2.168", default-features = false }
 # See https://github.com/rust-fuzz/libfuzzer/issues/126
@@ -137,6 +140,7 @@ log = "0.4.21"
 nanoserde = "0.2.1"
 nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
 noise = "0.9"
+num_cpus = "1.16"
 # `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
 num-traits = { version = "0.2.16", default-features = false }
 nv-flip = "0.1"
@@ -161,6 +165,7 @@ quote = "1.0.38"
 raw-window-handle = { version = "0.6.2", default-features = false }
 rwh_05 = { version = "0.5.2", package = "raw-window-handle" } # temporary compatibility for glutin-winit               
 rayon = "1.3.0"
+regex-lite = "0.1.5"
 renderdoc-sys = "1.1.0"
 rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
 ron = "0.10"
@@ -170,6 +175,7 @@ ron = "0.10"
 rustc-hash = { version = "1.1.0", default-features = false }
 serde_json = "1.0.140"
 serde = { version = "1.0.219", default-features = false }
+shell-words = "1.1.0"
 smallvec = "1.9.0"
 spirv = "0.3"
 static_assertions = "1.1.0"
@@ -182,6 +188,8 @@ thiserror = { version = "2.0.3", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3.0"
 winit = { version = "0.29", features = ["android-native-activity"] }
+which = "7"
+xshell = "0.2.3"
 
 # Metal dependencies
 metal = "0.32.0"
