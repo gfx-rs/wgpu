@@ -42,58 +42,58 @@ pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) ->
 
 pub fn map_texture_view_dimension(dim: wgt::TextureViewDimension) -> MTLTextureType {
     use wgt::TextureViewDimension as Tvd;
-    use MTLTextureType::*;
+    use MTLTextureType as MTL;
     match dim {
-        Tvd::D1 => D1,
-        Tvd::D2 => D2,
-        Tvd::D2Array => D2Array,
-        Tvd::D3 => D3,
-        Tvd::Cube => Cube,
-        Tvd::CubeArray => CubeArray,
+        Tvd::D1 => MTL::D1,
+        Tvd::D2 => MTL::D2,
+        Tvd::D2Array => MTL::D2Array,
+        Tvd::D3 => MTL::D3,
+        Tvd::Cube => MTL::Cube,
+        Tvd::CubeArray => MTL::CubeArray,
     }
 }
 
 pub fn map_compare_function(fun: wgt::CompareFunction) -> MTLCompareFunction {
     use wgt::CompareFunction as Cf;
-    use MTLCompareFunction::*;
+    use MTLCompareFunction as MTL;
     match fun {
-        Cf::Never => Never,
-        Cf::Less => Less,
-        Cf::LessEqual => LessEqual,
-        Cf::Equal => Equal,
-        Cf::GreaterEqual => GreaterEqual,
-        Cf::Greater => Greater,
-        Cf::NotEqual => NotEqual,
-        Cf::Always => Always,
+        Cf::Never => MTL::Never,
+        Cf::Less => MTL::Less,
+        Cf::LessEqual => MTL::LessEqual,
+        Cf::Equal => MTL::Equal,
+        Cf::GreaterEqual => MTL::GreaterEqual,
+        Cf::Greater => MTL::Greater,
+        Cf::NotEqual => MTL::NotEqual,
+        Cf::Always => MTL::Always,
     }
 }
 
 pub fn map_filter_mode(filter: wgt::FilterMode) -> MTLSamplerMinMagFilter {
-    use MTLSamplerMinMagFilter::*;
+    use MTLSamplerMinMagFilter as MTL;
     match filter {
-        wgt::FilterMode::Nearest => Nearest,
-        wgt::FilterMode::Linear => Linear,
+        wgt::FilterMode::Nearest => MTL::Nearest,
+        wgt::FilterMode::Linear => MTL::Linear,
     }
 }
 
 pub fn map_address_mode(address: wgt::AddressMode) -> MTLSamplerAddressMode {
     use wgt::AddressMode as Fm;
-    use MTLSamplerAddressMode::*;
+    use MTLSamplerAddressMode as MTL;
     match address {
-        Fm::Repeat => Repeat,
-        Fm::MirrorRepeat => MirrorRepeat,
-        Fm::ClampToEdge => ClampToEdge,
-        Fm::ClampToBorder => ClampToBorderColor,
-        //Fm::MirrorClamp => MirrorClampToEdge,
+        Fm::Repeat => MTL::Repeat,
+        Fm::MirrorRepeat => MTL::MirrorRepeat,
+        Fm::ClampToEdge => MTL::ClampToEdge,
+        Fm::ClampToBorder => MTL::ClampToBorderColor,
+        //Fm::MirrorClamp => MTL::MirrorClampToEdge,
     }
 }
 
 pub fn map_border_color(border_color: wgt::SamplerBorderColor) -> MTLSamplerBorderColor {
-    use MTLSamplerBorderColor::*;
+    use MTLSamplerBorderColor as MTL;
     match border_color {
-        wgt::SamplerBorderColor::TransparentBlack => TransparentBlack,
-        wgt::SamplerBorderColor::OpaqueBlack => OpaqueBlack,
-        wgt::SamplerBorderColor::OpaqueWhite => OpaqueWhite,
+        wgt::SamplerBorderColor::TransparentBlack => MTL::TransparentBlack,
+        wgt::SamplerBorderColor::OpaqueBlack => MTL::OpaqueBlack,
+        wgt::SamplerBorderColor::OpaqueWhite => MTL::OpaqueWhite,
         wgt::SamplerBorderColor::Zero => unreachable!(),
     }
 }
@@ -138,39 +138,39 @@ pub fn map_color_write(mask: wgt::ColorWrites) -> MTLColorWriteMask {
 
 pub fn map_blend_factor(factor: wgt::BlendFactor) -> MTLBlendFactor {
     use wgt::BlendFactor as Bf;
-    use MTLBlendFactor::*;
+    use MTLBlendFactor as MTL;
 
     match factor {
-        Bf::Zero => Zero,
-        Bf::One => One,
-        Bf::Src => SourceColor,
-        Bf::OneMinusSrc => OneMinusSourceColor,
-        Bf::Dst => DestinationColor,
-        Bf::OneMinusDst => OneMinusDestinationColor,
-        Bf::SrcAlpha => SourceAlpha,
-        Bf::OneMinusSrcAlpha => OneMinusSourceAlpha,
-        Bf::DstAlpha => DestinationAlpha,
-        Bf::OneMinusDstAlpha => OneMinusDestinationAlpha,
-        Bf::Constant => BlendColor,
-        Bf::OneMinusConstant => OneMinusBlendColor,
-        Bf::SrcAlphaSaturated => SourceAlphaSaturated,
-        Bf::Src1 => Source1Color,
-        Bf::OneMinusSrc1 => OneMinusSource1Color,
-        Bf::Src1Alpha => Source1Alpha,
-        Bf::OneMinusSrc1Alpha => OneMinusSource1Alpha,
+        Bf::Zero => MTL::Zero,
+        Bf::One => MTL::One,
+        Bf::Src => MTL::SourceColor,
+        Bf::OneMinusSrc => MTL::OneMinusSourceColor,
+        Bf::Dst => MTL::DestinationColor,
+        Bf::OneMinusDst => MTL::OneMinusDestinationColor,
+        Bf::SrcAlpha => MTL::SourceAlpha,
+        Bf::OneMinusSrcAlpha => MTL::OneMinusSourceAlpha,
+        Bf::DstAlpha => MTL::DestinationAlpha,
+        Bf::OneMinusDstAlpha => MTL::OneMinusDestinationAlpha,
+        Bf::Constant => MTL::BlendColor,
+        Bf::OneMinusConstant => MTL::OneMinusBlendColor,
+        Bf::SrcAlphaSaturated => MTL::SourceAlphaSaturated,
+        Bf::Src1 => MTL::Source1Color,
+        Bf::OneMinusSrc1 => MTL::OneMinusSource1Color,
+        Bf::Src1Alpha => MTL::Source1Alpha,
+        Bf::OneMinusSrc1Alpha => MTL::OneMinusSource1Alpha,
     }
 }
 
 pub fn map_blend_op(operation: wgt::BlendOperation) -> MTLBlendOperation {
     use wgt::BlendOperation as Bo;
-    use MTLBlendOperation::*;
+    use MTLBlendOperation as MTL;
 
     match operation {
-        Bo::Add => Add,
-        Bo::Subtract => Subtract,
-        Bo::ReverseSubtract => ReverseSubtract,
-        Bo::Min => Min,
-        Bo::Max => Max,
+        Bo::Add => MTL::Add,
+        Bo::Subtract => MTL::Subtract,
+        Bo::ReverseSubtract => MTL::ReverseSubtract,
+        Bo::Min => MTL::Min,
+        Bo::Max => MTL::Max,
     }
 }
 
@@ -186,50 +186,50 @@ pub fn map_blend_component(
 
 pub fn map_vertex_format(format: wgt::VertexFormat) -> MTLVertexFormat {
     use wgt::VertexFormat as Vf;
-    use MTLVertexFormat::*;
+    use MTLVertexFormat as MTL;
 
     match format {
-        Vf::Unorm8 => UCharNormalized,
-        Vf::Snorm8 => CharNormalized,
-        Vf::Uint8 => UChar,
-        Vf::Sint8 => Char,
-        Vf::Unorm8x2 => UChar2Normalized,
-        Vf::Snorm8x2 => Char2Normalized,
-        Vf::Uint8x2 => UChar2,
-        Vf::Sint8x2 => Char2,
-        Vf::Unorm8x4 => UChar4Normalized,
-        Vf::Snorm8x4 => Char4Normalized,
-        Vf::Uint8x4 => UChar4,
-        Vf::Sint8x4 => Char4,
-        Vf::Unorm16 => UShortNormalized,
-        Vf::Snorm16 => ShortNormalized,
-        Vf::Uint16 => UShort,
-        Vf::Sint16 => Short,
-        Vf::Float16 => Half,
-        Vf::Unorm16x2 => UShort2Normalized,
-        Vf::Snorm16x2 => Short2Normalized,
-        Vf::Uint16x2 => UShort2,
-        Vf::Sint16x2 => Short2,
-        Vf::Float16x2 => Half2,
-        Vf::Unorm16x4 => UShort4Normalized,
-        Vf::Snorm16x4 => Short4Normalized,
-        Vf::Uint16x4 => UShort4,
-        Vf::Sint16x4 => Short4,
-        Vf::Float16x4 => Half4,
-        Vf::Uint32 => UInt,
-        Vf::Sint32 => Int,
-        Vf::Float32 => Float,
-        Vf::Uint32x2 => UInt2,
-        Vf::Sint32x2 => Int2,
-        Vf::Float32x2 => Float2,
-        Vf::Uint32x3 => UInt3,
-        Vf::Sint32x3 => Int3,
-        Vf::Float32x3 => Float3,
-        Vf::Uint32x4 => UInt4,
-        Vf::Sint32x4 => Int4,
-        Vf::Float32x4 => Float4,
-        Vf::Unorm10_10_10_2 => UInt1010102Normalized,
-        Vf::Unorm8x4Bgra => UChar4Normalized_BGRA,
+        Vf::Unorm8 => MTL::UCharNormalized,
+        Vf::Snorm8 => MTL::CharNormalized,
+        Vf::Uint8 => MTL::UChar,
+        Vf::Sint8 => MTL::Char,
+        Vf::Unorm8x2 => MTL::UChar2Normalized,
+        Vf::Snorm8x2 => MTL::Char2Normalized,
+        Vf::Uint8x2 => MTL::UChar2,
+        Vf::Sint8x2 => MTL::Char2,
+        Vf::Unorm8x4 => MTL::UChar4Normalized,
+        Vf::Snorm8x4 => MTL::Char4Normalized,
+        Vf::Uint8x4 => MTL::UChar4,
+        Vf::Sint8x4 => MTL::Char4,
+        Vf::Unorm16 => MTL::UShortNormalized,
+        Vf::Snorm16 => MTL::ShortNormalized,
+        Vf::Uint16 => MTL::UShort,
+        Vf::Sint16 => MTL::Short,
+        Vf::Float16 => MTL::Half,
+        Vf::Unorm16x2 => MTL::UShort2Normalized,
+        Vf::Snorm16x2 => MTL::Short2Normalized,
+        Vf::Uint16x2 => MTL::UShort2,
+        Vf::Sint16x2 => MTL::Short2,
+        Vf::Float16x2 => MTL::Half2,
+        Vf::Unorm16x4 => MTL::UShort4Normalized,
+        Vf::Snorm16x4 => MTL::Short4Normalized,
+        Vf::Uint16x4 => MTL::UShort4,
+        Vf::Sint16x4 => MTL::Short4,
+        Vf::Float16x4 => MTL::Half4,
+        Vf::Uint32 => MTL::UInt,
+        Vf::Sint32 => MTL::Int,
+        Vf::Float32 => MTL::Float,
+        Vf::Uint32x2 => MTL::UInt2,
+        Vf::Sint32x2 => MTL::Int2,
+        Vf::Float32x2 => MTL::Float2,
+        Vf::Uint32x3 => MTL::UInt3,
+        Vf::Sint32x3 => MTL::Int3,
+        Vf::Float32x3 => MTL::Float3,
+        Vf::Uint32x4 => MTL::UInt4,
+        Vf::Sint32x4 => MTL::Int4,
+        Vf::Float32x4 => MTL::Float4,
+        Vf::Unorm10_10_10_2 => MTL::UInt1010102Normalized,
+        Vf::Unorm8x4Bgra => MTL::UChar4Normalized_BGRA,
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
     }
 }
@@ -243,17 +243,17 @@ pub fn map_step_mode(mode: wgt::VertexStepMode) -> MTLVertexStepFunction {
 
 pub fn map_stencil_op(op: wgt::StencilOperation) -> MTLStencilOperation {
     use wgt::StencilOperation as So;
-    use MTLStencilOperation::*;
+    use MTLStencilOperation as MTL;
 
     match op {
-        So::Keep => Keep,
-        So::Zero => Zero,
-        So::Replace => Replace,
-        So::IncrementClamp => IncrementClamp,
-        So::IncrementWrap => IncrementWrap,
-        So::DecrementClamp => DecrementClamp,
-        So::DecrementWrap => DecrementWrap,
-        So::Invert => Invert,
+        So::Keep => MTL::Keep,
+        So::Zero => MTL::Zero,
+        So::Replace => MTL::Replace,
+        So::IncrementClamp => MTL::IncrementClamp,
+        So::IncrementWrap => MTL::IncrementWrap,
+        So::DecrementClamp => MTL::DecrementClamp,
+        So::DecrementWrap => MTL::DecrementWrap,
+        So::Invert => MTL::Invert,
     }
 }
 
@@ -296,12 +296,12 @@ pub fn map_origin(origin: &wgt::Origin3d) -> MTLOrigin {
 }
 
 pub fn map_store_action(store: bool, resolve: bool) -> MTLStoreAction {
-    use MTLStoreAction::*;
+    use MTLStoreAction as MTL;
     match (store, resolve) {
-        (true, true) => StoreAndMultisampleResolve,
-        (false, true) => MultisampleResolve,
-        (true, false) => Store,
-        (false, false) => DontCare,
+        (true, true) => MTL::StoreAndMultisampleResolve,
+        (false, true) => MTL::MultisampleResolve,
+        (true, false) => MTL::Store,
+        (false, false) => MTL::DontCare,
     }
 }
 
