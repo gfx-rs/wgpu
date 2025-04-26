@@ -1197,23 +1197,25 @@ impl<'a, W: Write> Writer<'a, W> {
     ///
     /// Adds trailing whitespace if any layout qualifier is written
     fn write_global_layout(&mut self, global: &crate::GlobalVariable) -> BackendResult {
-        // Determine which of the `std` layouts we can use (if any)
+        // Determine which (if any) explicit memory layout to use, and whether we support it
         let layout = match global.space {
             crate::AddressSpace::Uniform => {
-                if self.options.version.supports_std140_layout() {
-                    Some("std140")
-                } else {
-                    None
+                if !self.options.version.supports_std140_layout() {
+                    return Err(Error::Custom(
+                        "Uniform address space requires std140 layout support".to_string(),
+                    ));
                 }
+
+                Some("std140")
             }
             crate::AddressSpace::Storage { .. } => {
-                if self.options.version.supports_std430_layout() {
-                    Some("std430")
-                } else if self.options.version.supports_std140_layout() {
-                    Some("std140")
-                } else {
-                    None
+                if !self.options.version.supports_std430_layout() {
+                    return Err(Error::Custom(
+                        "Storage address space requires std430 layout support".to_string(),
+                    ));
                 }
+
+                Some("std430")
             }
             _ => None,
         };
@@ -1224,10 +1226,13 @@ impl<'a, W: Write> Writer<'a, W> {
             if let Some(ref br) = global.binding {
                 match self.options.binding_map.get(br) {
                     Some(binding) => {
-                        let layout_padded =
-                            layout.map(|l| format!("{}, ", l)).unwrap_or("".to_string());
+                        write!(self.out, "layout(")?;
 
-                        write!(self.out, "layout({layout_padded}binding = {binding}) ")?;
+                        if let Some(layout) = layout {
+                            write!(self.out, "{}, ", layout)?;
+                        }
+
+                        write!(self.out, "binding = {binding}) ")?;
 
                         return Ok(());
                     }
