@@ -402,8 +402,8 @@ pub(crate) struct GPURenderPassDescriptor {
 #[webidl(dictionary)]
 pub(crate) struct GPURenderPassColorAttachment {
     pub view: Ptr<GPUTextureView>,
-    /*#[options(enforce_range = true)]
-    pub depth_slice: Option<u32>,*/
+    #[options(enforce_range = true)]
+    pub depth_slice: Option<u32>,
     pub resolve_target: Option<Ptr<GPUTextureView>>,
     pub clear_value: Option<GPUColor>,
     pub load_op: GPULoadOp,

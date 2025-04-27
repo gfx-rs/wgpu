@@ -522,6 +522,8 @@ static_assertions::assert_impl_all!(RenderPassTimestampWrites<'_>: Send, Sync);
 pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
     pub view: &'tex TextureView,
+    /// The depth slice index of a 3D view. It must not be provided if the view is not 3D.
+    pub depth_slice: Option<u32>,
     /// The view that will receive the resolved output if multisampling is used.
     ///
     /// If set, it is always written to, regardless of how [`Self::ops`] is configured.

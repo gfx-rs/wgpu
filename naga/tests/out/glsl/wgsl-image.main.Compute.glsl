@@ -22,12 +22,14 @@ void main() {
     uvec4 value1_ = texelFetch(_group_0_binding_0_cs, itc, int(local_id.z));
     uvec4 value1_2_ = texelFetch(_group_0_binding_0_cs, itc, int(uint(local_id.z)));
     uvec4 value2_ = texelFetch(_group_0_binding_3_cs, itc, int(local_id.z));
+    uvec4 value3_ = texelFetch(_group_0_binding_3_cs, itc, int(uint(local_id.z)));
     uvec4 value4_ = imageLoad(_group_0_binding_1_cs, itc);
     uvec4 value5_ = texelFetch(_group_0_binding_5_cs, ivec3(itc, local_id.z), (int(local_id.z) + 1));
     uvec4 value6_ = texelFetch(_group_0_binding_5_cs, ivec3(itc, int(local_id.z)), (int(local_id.z) + 1));
     uvec4 value7_ = texelFetch(_group_0_binding_7_cs, int(local_id.x), int(local_id.z));
     uvec4 value1u = texelFetch(_group_0_binding_0_cs, ivec2(uvec2(itc)), int(local_id.z));
     uvec4 value2u = texelFetch(_group_0_binding_3_cs, ivec2(uvec2(itc)), int(local_id.z));
+    uvec4 value3u = texelFetch(_group_0_binding_3_cs, ivec2(uvec2(itc)), int(uint(local_id.z)));
     uvec4 value4u = imageLoad(_group_0_binding_1_cs, ivec2(uvec2(itc)));
     uvec4 value5u = texelFetch(_group_0_binding_5_cs, ivec3(uvec2(itc), local_id.z), (int(local_id.z) + 1));
     uvec4 value6u = texelFetch(_group_0_binding_5_cs, ivec3(uvec2(itc), int(local_id.z)), (int(local_id.z) + 1));

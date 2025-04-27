@@ -9,7 +9,7 @@ use core_graphics_types::{
     base::CGFloat,
     geometry::{CGRect, CGSize},
 };
-use metal::foreign_types::ForeignType;
+use metal::{foreign_types::ForeignType, MTLTextureType};
 use objc::{
     class, msg_send,
     rc::{autoreleasepool, StrongPtr},
@@ -205,7 +205,7 @@ impl crate::Surface for super::Surface {
             texture: super::Texture {
                 raw: texture,
                 format: swapchain_format,
-                raw_type: metal::MTLTextureType::D2,
+                raw_type: MTLTextureType::D2,
                 array_layers: 1,
                 mip_levels: 1,
                 copy_size: crate::CopyExtent {

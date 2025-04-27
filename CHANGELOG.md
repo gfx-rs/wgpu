@@ -50,9 +50,15 @@ Bottom level categories:
 +pub struct Dx12BackendOptions { pub shader_compiler: Dx12Compiler, pub presentation_system: Dx12PresentationSystem }
 ```
 
+#### General
+
+- Add support for rendering to slices of 3D texture views and single layered 2D-Array texture views (this requires `VK_KHR_maintenance1` which should be widely available on newer drivers). By @teoxoy in [#7596](https://github.com/gfx-rs/wgpu/pull/7596)
+
 #### Naga
 
-### Bux Fixes
+- When emitting GLSL, Uniform and Storage Buffer memory layouts are now emitted even if no explicit binding is given. By @cloone8 in [#7579](https://github.com/gfx-rs/wgpu/pull/7579).
+
+### Bug Fixes
 
 #### Naga
 
@@ -60,6 +66,11 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Add polyfills for `dot4U8Packed` and `dot4I8Packed` for all backends. By @robamler in [#7494](https://github.com/gfx-rs/wgpu/pull/7494).
 - Add polyfilled `pack4x{I,U}8Clamped` built-ins to all backends and WGSL frontend. By @ErichDonGubler in [#7546](https://github.com/gfx-rs/wgpu/pull/7546).
+- Allow textureLoad's sample index arg to be unsigned. By @jimblandy in [#7625](https://github.com/gfx-rs/wgpu/pull/7625).
+- Properly convert arguments to atomic operations. By @jimblandy in [#7573](https://github.com/gfx-rs/wgpu/pull/7573).
+- Apply necessary automatic conversions to the `value` argument of `textureStore`. By @jimblandy in [#7567](https://github.com/gfx-rs/wgpu/pull/7567).
+- Properly apply WGSL's automatic conversions to the arguments to texture sampling functions. By @jimblandy in [#7548](https://github.com/gfx-rs/wgpu/pull/7548).
+- Properly evaluate `abs(most negative abstract int)`. By @jimblandy in [#7507](https://github.com/gfx-rs/wgpu/pull/7507).
 
 #### DX12
 
@@ -382,6 +393,9 @@ By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](h
 - Apply automatic conversions to `let` declarations, and accept `vecN()` as a constructor for vectors (in any context). By @andyleiserson in [#7367](https://github.com/gfx-rs/wgpu/pull/7367).
 - The `&&` and `||` operators are no longer allowed on vectors. By @andyleiserson in [#7368](https://github.com/gfx-rs/wgpu/pull/7368).
 - Prevent ray intersection function overwriting each other. By @Vecvec in [#7497](https://github.com/gfx-rs/wgpu/pull/7497).
+- Require that the level operand of an ImageQuery::Size expression is i32 or u32, per spec. By @jimblandy in [#7426](https://github.com/gfx-rs/wgpu/pull/7426).
+- Implement constant evaluation for the cross builtin. By @jimblandy in [#7404](https://github.com/gfx-rs/wgpu/pull/7404).
+- Properly handle automatic type conversions in calls to `MathFunction` builtins. By @jimblandy in [#6833](https://github.com/gfx-rs/wgpu/pull/6833).
 
 #### General
 
@@ -398,6 +412,7 @@ By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](h
 #### Vulkan
 
 - Stop naga causing undefined behavior when a ray query misses. By @Vecvec in [#6752](https://github.com/gfx-rs/wgpu/pull/6752).
+- In Naga's SPIR-V backend, avoid duplicating SPIR-V OpTypePointer instructions. By @jimblandy in [#7246](https://github.com/gfx-rs/wgpu/pull/7246).
 
 #### Gles
 

@@ -199,6 +199,7 @@ impl TextureBlitter {
             label: Some("wgpu::util::TextureBlitter::pass"),
             color_attachments: &[Some(crate::RenderPassColorAttachment {
                 view: target,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgt::Operations {
                     load: LoadOp::Load,

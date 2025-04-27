@@ -18,11 +18,11 @@ struct Test3_ {
     mat4x3 a;
     float b;
 };
-uniform Test_block_0Vertex { Test _group_0_binding_0_vs; };
+layout(std140) uniform Test_block_0Vertex { Test _group_0_binding_0_vs; };
 
-uniform Test2_block_1Vertex { Test2_ _group_0_binding_1_vs; };
+layout(std140) uniform Test2_block_1Vertex { Test2_ _group_0_binding_1_vs; };
 
-uniform Test3_block_2Vertex { Test3_ _group_0_binding_2_vs; };
+layout(std140) uniform Test3_block_2Vertex { Test3_ _group_0_binding_2_vs; };
 
 
 void main() {

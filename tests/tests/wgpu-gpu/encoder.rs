@@ -55,6 +55,7 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
                 ops: wgpu::Operations::default(),
                 resolve_target: None,
                 view: &target_view,
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,
@@ -285,6 +286,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
                     .begin_render_pass(&wgpu::RenderPassDescriptor {
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                             view: &color_attachment_view,
+                            depth_slice: None,
                             resolve_target: None,
                             ops: wgpu::Operations::default(),
                         })],

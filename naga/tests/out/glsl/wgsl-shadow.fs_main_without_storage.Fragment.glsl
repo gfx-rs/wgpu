@@ -24,11 +24,11 @@ struct Light {
 const vec3 c_ambient = vec3(0.05, 0.05, 0.05);
 const uint c_max_lights = 10u;
 
-uniform Globals_block_0Fragment { Globals _group_0_binding_0_fs; };
+layout(std140) uniform Globals_block_0Fragment { Globals _group_0_binding_0_fs; };
 
-uniform Entity_block_1Fragment { Entity _group_1_binding_0_fs; };
+layout(std140) uniform Entity_block_1Fragment { Entity _group_1_binding_0_fs; };
 
-uniform type_9_block_2Fragment { Light _group_0_binding_1_fs[10]; };
+layout(std140) uniform type_9_block_2Fragment { Light _group_0_binding_1_fs[10]; };
 
 uniform highp sampler2DArrayShadow _group_0_binding_2_fs;
 
