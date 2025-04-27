@@ -3,25 +3,20 @@ use anyhow::Context;
 use pico_args::Arguments;
 use xshell::Shell;
 
-use crate::util::{check_all_programs, Program};
+use crate::dependencies;
 
 pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     let should_serve = !args.contains("--no-serve");
     let release = args.contains("--release");
 
-    let mut programs_needed = vec![Program {
-        crate_name: "wasm-bindgen-cli",
-        binary_name: "wasm-bindgen",
-    }];
-
-    if should_serve {
-        programs_needed.push(Program {
-            crate_name: "simple-http-server",
-            binary_name: "simple-http-server",
-        });
-    }
-
-    check_all_programs(&programs_needed)?;
+    dependencies::setup_prerequisites(
+        &shell,
+        dependencies::Prerequisites {
+            wasm_bindgen: true,
+            simple_http_server: should_serve,
+            ..dependencies::Prerequisites::NONE
+        },
+    )?;
 
     let release_flag: &[_] = if release { &["--release"] } else { &[] };
     let output_dir = if release { "release" } else { "debug" };

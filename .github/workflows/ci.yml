@@ -512,10 +512,10 @@ jobs:
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal -c llvm-tools
           cargo -V
 
-      - name: Install `cargo-nextest` and `cargo-llvm-cov`
+      - name: Install `cargo-binstall`
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest,cargo-llvm-cov
+          tool: cargo-binstall,cargo-llvm-cov
 
       - name: Debug symbols to line-tables-only
         shell: bash

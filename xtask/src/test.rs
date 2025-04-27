@@ -2,10 +2,23 @@ use anyhow::Context;
 use pico_args::Arguments;
 use xshell::Shell;
 
+use crate::dependencies;
+
 pub fn run_tests(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     let llvm_cov = args.contains("--llvm-cov");
     let list = args.contains("--list");
     // Retries handled by cargo nextest natively
+
+    dependencies::setup_prerequisites(
+        &shell,
+        dependencies::Prerequisites {
+            cargo_nextest: true,
+            cargo_llvm_cov: llvm_cov,
+            vulkan_sdk: true,
+            spirv_assembler: true,
+            ..dependencies::Prerequisites::NONE
+        },
+    )?;
 
     // These needs to match the command in "run wgpu-info" in `.github/workflows/ci.yml`
     let llvm_cov_flags: &[_] = if llvm_cov {

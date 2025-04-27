@@ -6,15 +6,19 @@ use std::process::ExitCode;
 use anyhow::Context;
 use pico_args::Arguments;
 
+mod dependencies;
 mod run_wasm;
 mod test;
-mod util;
 mod vendor_web_sys;
 
 const HELP: &str = "\
 Usage: xtask <COMMAND>
 
 Commands:
+  setup
+    Check or install all dependencies needed for development. Installable
+    dependencies are installed to .binaries in the repo root.
+
   run-wasm
     Build and run web examples
 
@@ -56,7 +60,8 @@ fn main() -> anyhow::Result<ExitCode> {
     env_logger::builder()
         .filter_level(log::LevelFilter::Info)
         .parse_default_env()
-        .format_indent(Some(0))
+        .format_target(false)
+        .format_timestamp(None)
         .init();
 
     let mut args = Arguments::from_env();
@@ -73,9 +78,13 @@ fn main() -> anyhow::Result<ExitCode> {
     // -- Shell Creation --
 
     let shell = xshell::Shell::new().context("Couldn't create xshell shell")?;
-    shell.change_dir(String::from(env!("CARGO_MANIFEST_DIR")) + "/..");
+
+    dependencies::set_path()?;
 
     match subcommand.as_deref() {
+        Some("setup") => {
+            dependencies::setup_prerequisites(&shell, dependencies::Prerequisites::ALL)?
+        }
         Some("run-wasm") => run_wasm::run_wasm(shell, args)?,
         Some("test") => test::run_tests(shell, args)?,
         Some("vendor-web-sys") => vendor_web_sys::run_vendor_web_sys(shell, args)?,
