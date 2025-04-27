@@ -85,6 +85,10 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Remove the need for dxil.dll. By @teoxoy in [#7566](https://github.com/gfx-rs/wgpu/pull/7566)
 
+#### Vulkan
+
+- Use highest SPIR-V version supported by Vulkan API version. By @robamler in [#7595](https://github.com/gfx-rs/wgpu/pull/7595)
+
 ### Bug Fixes
 
 #### Naga

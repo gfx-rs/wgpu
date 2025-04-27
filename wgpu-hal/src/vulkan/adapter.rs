@@ -1972,12 +1972,14 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::RayQueryPositionFetchKHR)
             }
             spv::Options {
-                lang_version: if features
-                    .intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX)
-                {
-                    (1, 3)
-                } else {
-                    (1, 0)
+                lang_version: match self.phd_capabilities.device_api_version {
+                    // Use maximum supported SPIR-V version according to
+                    // <https://github.com/KhronosGroup/Vulkan-Docs/blob/19b7651/appendices/spirvenv.adoc?plain=1#L21-L40>.
+                    vk::API_VERSION_1_0..vk::API_VERSION_1_1 => (1, 0),
+                    vk::API_VERSION_1_1..vk::API_VERSION_1_2 => (1, 3),
+                    vk::API_VERSION_1_2..vk::API_VERSION_1_3 => (1, 5),
+                    vk::API_VERSION_1_3.. => (1, 6),
+                    _ => unreachable!(),
                 },
                 flags,
                 capabilities: Some(capabilities.iter().cloned().collect()),
