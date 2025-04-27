@@ -1297,6 +1297,9 @@ bitflags_array! {
         /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with Unorm/UnormSrgb channel type.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
+        /// This feature does not guarantee availability of sliced 3d textures for ASTC formats.
+        /// If available, 3d support can be enabled by TEXTURE_COMPRESSION_ASTC_SLICED_3D feature.
+        ///
         /// Supported Platforms:
         /// - Vulkan on Intel
         /// - Mobile (some)
