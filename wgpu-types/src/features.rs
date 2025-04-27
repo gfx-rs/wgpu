@@ -1311,8 +1311,12 @@ bitflags_array! {
         /// It does not enable the ASTC formats by itself.
         ///
         /// Supported Platforms:
-        /// - Desktop (some)
-        /// - Mobile (some)
+        /// - Vulkan (some)
+        /// - Metal on Apple3+
+        /// - OpenGL/WebGL (some)
+        ///
+        /// Not Supported:
+        /// - DX12
         ///
         /// This is a web and native feature.
         const TEXTURE_COMPRESSION_ASTC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D;
