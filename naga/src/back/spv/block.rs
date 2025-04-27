@@ -1143,17 +1143,21 @@ impl BlockContext<'_> {
                         ),
                     },
                     fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed) => {
-                        if self.writer.lang_version() >= (1, 6)
-                            && self
-                                .writer
-                                .require_all(&[
-                                    spirv::Capability::DotProduct,
-                                    spirv::Capability::DotProductInput4x8BitPacked,
-                                ])
-                                .is_ok()
+                        if self
+                            .writer
+                            .require_all(&[
+                                spirv::Capability::DotProduct,
+                                spirv::Capability::DotProductInput4x8BitPacked,
+                            ])
+                            .is_ok()
                         {
                             // Write optimized code using `PackedVectorFormat4x8Bit`.
-                            self.writer.use_extension("SPV_KHR_integer_dot_product");
+                            if self.writer.lang_version() < (1, 6) {
+                                // SPIR-V 1.6 supports the required capabilities natively, so the extension
+                                // is only required for earlier versions. See right column of
+                                // <https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpSDot>.
+                                self.writer.use_extension("SPV_KHR_integer_dot_product");
+                            }
 
                             let op = match fun {
                                 Mf::Dot4I8Packed => spirv::Op::SDot,
