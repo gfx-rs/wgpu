@@ -242,7 +242,7 @@ impl Buffer {
     /// - If `bounds` has a length less than 1.
     #[track_caller]
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
-        let (offset, size) = std::dbg!(range_to_offset_size(bounds, self.size));
+        let (offset, size) = range_to_offset_size(bounds, self.size);
         check_buffer_bounds(self.size, offset, size);
         BufferSlice {
             buffer: self,
