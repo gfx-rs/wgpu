@@ -14,7 +14,7 @@ struct NeedsPadding {
     vec3 v3_needs_padding;
     float f3_;
 };
-uniform NeedsPadding_block_0Compute { NeedsPadding _group_0_binding_2_cs; };
+layout(std140) uniform NeedsPadding_block_0Compute { NeedsPadding _group_0_binding_2_cs; };
 
 layout(std430) buffer NeedsPadding_block_1Compute { NeedsPadding _group_0_binding_3_cs; };
 

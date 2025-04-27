@@ -47,6 +47,10 @@ Bottom level categories:
 - Add support for astc-sliced-3d feature. By @mehmetoguzderin in [#7577](https://github.com/gfx-rs/wgpu/issues/7577)
 - Add support for rendering to slices of 3D texture views and single layered 2D-Array texture views (this requires `VK_KHR_maintenance1` which should be widely available on newer drivers). By @teoxoy in [#7596](https://github.com/gfx-rs/wgpu/pull/7596)
 
+#### Naga
+
+- When emitting GLSL, Uniform and Storage Buffer memory layouts are now emitted even if no explicit binding is given. By @cloone8 in [#7579](https://github.com/gfx-rs/wgpu/pull/7579).
+
 ### Bug Fixes
 
 #### Naga

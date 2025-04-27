@@ -93,7 +93,7 @@ impl<'a> RenderBundleEncoder<'a> {
             &buffer_slice.buffer.inner,
             index_format,
             buffer_slice.offset,
-            buffer_slice.size,
+            Some(buffer_slice.size),
         );
     }
 
@@ -112,7 +112,7 @@ impl<'a> RenderBundleEncoder<'a> {
             slot,
             &buffer_slice.buffer.inner,
             buffer_slice.offset,
-            buffer_slice.size,
+            Some(buffer_slice.size),
         );
     }
 
