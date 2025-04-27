@@ -1,7 +1,7 @@
 # Explicitly turn off optimizations for `dot4I8Packed` and `dot4U8Packed`
-# on SPIRV and HLSL.
+# on SPIRV, HLSL, and Metal.
 
-targets = "SPIRV | HLSL"
+targets = "SPIRV | HLSL | METAL"
 
 [spv]
 # Provide some unrelated capability because an empty list of capabilities would
@@ -11,3 +11,6 @@ capabilities = ["Matrix"]
 
 [hlsl]
 shader_model = "V6_3"
+
+[msl]
+lang_version = [2, 0]

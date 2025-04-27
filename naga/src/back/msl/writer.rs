@@ -121,6 +121,9 @@ const fn scalar_is_int(scalar: crate::Scalar) -> bool {
 /// Prefix for cached clamped level-of-detail values for `ImageLoad` expressions.
 const CLAMPED_LOD_LOAD_PREFIX: &str = "clamped_lod_e";
 
+/// Prefix for reinterpreted expressions using `as_type<T>(...)`.
+const REINTERPRET_PREFIX: &str = "reinterpreted_";
+
 /// Wrapper for identifier names for clamped level-of-detail values
 ///
 /// Values of this type implement [`core::fmt::Display`], formatting as
@@ -153,6 +156,30 @@ struct ArraySizeMember(Handle<crate::GlobalVariable>);
 impl Display for ArraySizeMember {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "size")
+    }
+}
+
+/// Wrapper for reinterpreted variables using `as_type<target_type>(orig)`.
+///
+/// Implements [`core::fmt::Display`], formatting as a name derived from
+/// `target_type` and the variable name of `orig`.
+#[derive(Clone, Copy)]
+struct Reinterpreted<'a> {
+    target_type: &'a str,
+    orig: Handle<crate::Expression>,
+}
+
+impl<'a> Reinterpreted<'a> {
+    const fn new(target_type: &'a str, orig: Handle<crate::Expression>) -> Self {
+        Self { target_type, orig }
+    }
+}
+
+impl Display for Reinterpreted<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_str(REINTERPRET_PREFIX)?;
+        f.write_str(self.target_type)?;
+        self.orig.write_prefixed(f, "_e")
     }
 }
 
@@ -1470,14 +1497,14 @@ impl<W: Write> Writer<W> {
 
     /// Emit code for the arithmetic expression of the dot product.
     ///
-    /// The argument `extractor` is a function that accepts a `Writer`, a handle to a vector,
-    /// and an index. writes out the expression for the component at that index.
-    fn put_dot_product(
+    /// The argument `extractor` is a function that accepts a `Writer`, a vector, and
+    /// an index. It writes out the expression for the vector component at that index.
+    fn put_dot_product<T: Copy>(
         &mut self,
-        arg: Handle<crate::Expression>,
-        arg1: Handle<crate::Expression>,
+        arg: T,
+        arg1: T,
         size: usize,
-        extractor: impl Fn(&mut Self, Handle<crate::Expression>, usize) -> BackendResult,
+        extractor: impl Fn(&mut Self, T, usize) -> BackendResult,
     ) -> BackendResult {
         // Write parentheses around the dot product expression to prevent operators
         // with different precedences from applying earlier.
@@ -2206,27 +2233,53 @@ impl<W: Write> Writer<W> {
                         ),
                     },
                     fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed) => {
-                        let conversion = match fun {
-                            Mf::Dot4I8Packed => "int",
-                            Mf::Dot4U8Packed => "",
-                            _ => unreachable!(),
-                        };
+                        if context.lang_version >= (2, 1) {
+                            // Write potentially optimizable code using `packed_(u?)char4`.
+                            // The two function arguments were already reinterpreted as packed (signed
+                            // or unsigned) chars in `Self::put_block`.
+                            let packed_type = match fun {
+                                Mf::Dot4I8Packed => "packed_char4",
+                                Mf::Dot4U8Packed => "packed_uchar4",
+                                _ => unreachable!(),
+                            };
 
-                        return self.put_dot_product(
-                            arg,
-                            arg1.unwrap(),
-                            4,
-                            |writer, arg, index| {
-                                write!(writer.out, "({}(", conversion)?;
-                                writer.put_expression(arg, context, true)?;
-                                if index == 3 {
-                                    write!(writer.out, ") >> 24)")?;
-                                } else {
-                                    write!(writer.out, ") << {} >> 24)", (3 - index) * 8)?;
-                                }
-                                Ok(())
-                            },
-                        );
+                            return self.put_dot_product(
+                                Reinterpreted::new(packed_type, arg),
+                                Reinterpreted::new(packed_type, arg1.unwrap()),
+                                4,
+                                |writer, arg, index| {
+                                    // MSL implicitly promotes these (signed or unsigned) chars to
+                                    // `int` or `uint` in the multiplication, so no overflow can occur.
+                                    write!(writer.out, "{arg}[{index}]")?;
+                                    Ok(())
+                                },
+                            );
+                        } else {
+                            // Fall back to a polyfill since MSL < 2.1 doesn't seem to support
+                            // bitcasting from uint to `packed_char4` or `packed_uchar4`.
+                            // See <https://github.com/gfx-rs/wgpu/pull/7574#issuecomment-2835464472>.
+                            let conversion = match fun {
+                                Mf::Dot4I8Packed => "int",
+                                Mf::Dot4U8Packed => "",
+                                _ => unreachable!(),
+                            };
+
+                            return self.put_dot_product(
+                                arg,
+                                arg1.unwrap(),
+                                4,
+                                |writer, arg, index| {
+                                    write!(writer.out, "({}(", conversion)?;
+                                    writer.put_expression(arg, context, true)?;
+                                    if index == 3 {
+                                        write!(writer.out, ") >> 24)")?;
+                                    } else {
+                                        write!(writer.out, ") << {} >> 24)", (3 - index) * 8)?;
+                                    }
+                                    Ok(())
+                                },
+                            );
+                        }
                     }
                     Mf::Outer => return Err(Error::UnsupportedCall(format!("{fun:?}"))),
                     Mf::Cross => "cross",
@@ -3362,17 +3415,62 @@ impl<W: Write> Writer<W> {
             match *statement {
                 crate::Statement::Emit(ref range) => {
                     for handle in range.clone() {
-                        // `ImageLoad` expressions covered by the `Restrict` bounds check policy
-                        // may need to cache a clamped version of their level-of-detail argument.
-                        if let crate::Expression::ImageLoad {
-                            image,
-                            level: mip_level,
-                            ..
-                        } = context.expression.function.expressions[handle]
-                        {
-                            self.put_cache_restricted_level(
-                                handle, image, mip_level, level, context,
-                            )?;
+                        use crate::MathFunction as Mf;
+
+                        match context.expression.function.expressions[handle] {
+                            // `ImageLoad` expressions covered by the `Restrict` bounds check policy
+                            // may need to cache a clamped version of their level-of-detail argument.
+                            crate::Expression::ImageLoad {
+                                image,
+                                level: mip_level,
+                                ..
+                            } => {
+                                self.put_cache_restricted_level(
+                                    handle, image, mip_level, level, context,
+                                )?;
+                            }
+
+                            // If we are going to write a `Dot4I8Packed` or `Dot4U8Packed` on Metal
+                            // 2.1+ then we introduce two intermediate variables that recast the two
+                            // arguments as packed (signed or unsigned) chars. The actual dot product
+                            // is implemented in `Self::put_expression`, and it uses both of these
+                            // intermediate variables multiple times. There's no danger that the
+                            // original arguments get modified between the definition of these
+                            // intermediate variables and the implementation of the actual dot
+                            // product since we require the inputs of `Dot4{I, U}Packed` to be baked.
+                            crate::Expression::Math {
+                                fun: fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed),
+                                arg,
+                                arg1,
+                                ..
+                            } => {
+                                if context.expression.lang_version >= (2, 1) {
+                                    let arg1 = arg1.unwrap();
+                                    let packed_type = match fun {
+                                        Mf::Dot4I8Packed => "packed_char4",
+                                        Mf::Dot4U8Packed => "packed_uchar4",
+                                        _ => unreachable!(),
+                                    };
+
+                                    write!(
+                                        self.out,
+                                        "{level}{packed_type} {0} = as_type<{packed_type}>(",
+                                        Reinterpreted::new(packed_type, arg)
+                                    )?;
+                                    self.put_expression(arg, &context.expression, true)?;
+                                    writeln!(self.out, ");")?;
+
+                                    write!(
+                                        self.out,
+                                        "{level}{packed_type} {0} = as_type<{packed_type}>(",
+                                        Reinterpreted::new(packed_type, arg1)
+                                    )?;
+                                    self.put_expression(arg1, &context.expression, true)?;
+                                    writeln!(self.out, ");")?;
+                                }
+                            }
+
+                            _ => (),
                         }
 
                         let ptr_class = context.expression.resolve_type(handle).pointer_space();
