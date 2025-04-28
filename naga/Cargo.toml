@@ -23,6 +23,7 @@ default = []
 dot-out = []
 glsl-in = ["dep:pp-rs"]
 glsl-out = []
+std = []
 
 ## Enables outputting to the Metal Shading Language (MSL).
 ##

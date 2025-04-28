@@ -106,6 +106,7 @@ extern crate std;
 extern crate alloc;
 
 mod arena;
+mod as_path;
 pub mod back;
 pub mod common;
 #[cfg(feature = "compact")]
