@@ -554,7 +554,8 @@ impl super::Adapter {
             );
             features.set(
                 wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
-                extensions.contains("GL_KHR_texture_compression_astc_sliced_3d"),
+                extensions.contains("GL_KHR_texture_compression_astc_ldr")
+                    && extensions.contains("GL_KHR_texture_compression_astc_sliced_3d"),
             );
             features.set(
                 wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR,
