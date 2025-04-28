@@ -1,5 +1,4 @@
 use alloc::{
-    borrow::ToOwned,
     format,
     string::{String, ToString},
     vec::Vec,
@@ -389,8 +388,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             writeln!(self.out)?;
         }
 
-        let ep_range = get_entry_points(module, self.pipeline_options.entry_point.as_deref())
-            .map_err(|name| Error::EntryPointNotFound(name.to_owned()))?;
+        let ep_range = get_entry_points(module, self.pipeline_options.entry_point.as_ref())
+            .map_err(|(stage, name)| Error::EntryPointNotFound(stage, name))?;
 
         // Write all entry points wrapped structs
         for index in ep_range.clone() {

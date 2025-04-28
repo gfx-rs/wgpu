@@ -181,7 +181,7 @@ impl super::Device {
         };
 
         let pipeline_options = naga::back::msl::PipelineOptions {
-            entry_point: Some(stage.entry_point.to_owned()),
+            entry_point: Some((naga_stage, stage.entry_point.to_owned())),
             allow_and_force_point_size: match primitive_class {
                 MTLPrimitiveTopologyClass::Point => true,
                 _ => false,

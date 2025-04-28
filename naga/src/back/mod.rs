@@ -9,7 +9,7 @@ Backend functions that export shader [`Module`](super::Module)s into binary and 
     )
 )]
 
-use alloc::string::String;
+use alloc::{borrow::ToOwned, string::String};
 
 #[cfg(dot_out)]
 pub mod dot;
@@ -86,17 +86,17 @@ impl core::fmt::Display for Level {
 /// `entry_point` is given, returns the complete range of entry point indices.
 /// If `entry_point` is given but does not exist, returns an error.
 #[cfg(any(hlsl_out, msl_out))]
-fn get_entry_points<'a>(
+fn get_entry_points(
     module: &crate::ir::Module,
-    entry_point: Option<&'a str>,
-) -> Result<core::ops::Range<usize>, &'a str> {
-    if let Some(entry_point) = entry_point {
+    entry_point: Option<&(crate::ir::ShaderStage, String)>,
+) -> Result<core::ops::Range<usize>, (crate::ir::ShaderStage, String)> {
+    if let Some(&(stage, ref name)) = entry_point {
         let Some(ep_index) = module
             .entry_points
             .iter()
-            .position(|ep| ep.name == *entry_point)
+            .position(|ep| ep.stage == stage && ep.name == *name)
         else {
-            return Err(entry_point);
+            return Err((stage, name.to_owned()));
         };
         Ok(ep_index..ep_index + 1)
     } else {

@@ -824,7 +824,7 @@ fn write_output(
                     .unwrap_pretty();
 
             let mut buffer = String::new();
-            let pipeline_options = hlsl::PipelineOptions { entry_point: None };
+            let pipeline_options = Default::default();
             let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl, &pipeline_options);
             writer.write(&module, &info, None).unwrap_pretty();
             fs::write(output_path, buffer)?;

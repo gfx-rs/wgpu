@@ -300,7 +300,7 @@ impl super::Device {
         };
 
         let pipeline_options = hlsl::PipelineOptions {
-            entry_point: Some(stage.entry_point.to_string()),
+            entry_point: Some((naga_stage, stage.entry_point.to_string())),
         };
 
         //TODO: reuse the writer

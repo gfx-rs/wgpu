@@ -349,7 +349,7 @@ fn backends(c: &mut Criterion) {
             let options = naga::back::hlsl::Options::default();
             let mut string = String::new();
             for input in &inputs.inner {
-                let pipeline_options = naga::back::hlsl::PipelineOptions { entry_point: None };
+                let pipeline_options = Default::default();
                 let mut writer =
                     naga::back::hlsl::Writer::new(&mut string, &options, &pipeline_options);
                 let _ = writer.write(

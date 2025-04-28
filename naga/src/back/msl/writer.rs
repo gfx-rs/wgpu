@@ -1,5 +1,4 @@
 use alloc::{
-    borrow::ToOwned,
     format,
     string::{String, ToString},
     vec,
@@ -5873,8 +5872,8 @@ template <typename A>
             self.named_expressions.clear();
         }
 
-        let ep_range = get_entry_points(module, pipeline_options.entry_point.as_deref())
-            .map_err(|name| Error::EntryPointNotFound(name.to_owned()))?;
+        let ep_range = get_entry_points(module, pipeline_options.entry_point.as_ref())
+            .map_err(|(stage, name)| Error::EntryPointNotFound(stage, name))?;
 
         let mut info = TranslationInfo {
             entry_point_names: Vec::with_capacity(ep_range.len()),
