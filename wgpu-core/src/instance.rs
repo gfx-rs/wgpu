@@ -303,34 +303,28 @@ impl Instance {
         }
     }
 
+    /// Construct a surface from a pointer to a `CAMetalLayer`.
+    ///
     /// # Safety
     ///
-    /// `layer` must be a valid pointer.
+    /// The given layer pointer must point to a valid, non-NULL, initialized
+    /// instance of `CAMetalLayer`.
     #[cfg(metal)]
     pub unsafe fn create_surface_metal(
         &self,
         layer: *mut core::ffi::c_void,
     ) -> Result<Surface, CreateSurfaceError> {
+        use core::ptr::NonNull;
+
         profiling::scope!("Instance::create_surface_metal");
 
-        let instance = unsafe { self.as_hal::<hal::api::Metal>() }
+        let _instance = unsafe { self.as_hal::<hal::api::Metal>() }
             .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Metal))?;
 
-        let layer = layer.cast();
-        // SAFETY: We do this cast and deref. (rather than using `metal` to get the
-        // object we want) to avoid direct coupling on the `metal` crate.
-        //
-        // To wit, this pointer…
-        //
-        // - …is properly aligned.
-        // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
-        //   field.
-        // - …points to an _initialized_ `MetalLayerRef`.
-        // - …is only ever aliased via an immutable reference that lives within this
-        //   lexical scope.
-        let layer = unsafe { &*layer };
-        let raw_surface: Box<dyn hal::DynSurface> =
-            Box::new(instance.create_surface_from_layer(layer));
+        let layer = NonNull::new(layer).expect("layer pointer must not be NULL");
+        // SAFETY: Upheld by caller.
+        let raw_surface = unsafe { hal::metal::Surface::from_layer(layer) };
+        let raw_surface: Box<dyn hal::DynSurface> = Box::new(raw_surface);
 
         let surface = Surface {
             presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),

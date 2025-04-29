@@ -1,8 +1,8 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
 use alloc::borrow::ToOwned as _;
-use core::mem::ManuallyDrop;
 use core::ptr::NonNull;
+use core::{ffi::c_void, mem::ManuallyDrop};
 use std::thread;
 
 use core_graphics_types::{
@@ -34,10 +34,18 @@ impl super::Surface {
         }
     }
 
-    /// If not called on the main thread, this will panic.
-    #[allow(clippy::transmute_ptr_to_ref)]
-    pub unsafe fn from_view(view: NonNull<Object>) -> Self {
-        let layer = unsafe { Self::get_metal_layer(view) };
+    /// Construct a surface from a pointer to a `NSView`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called from a thread that is not the main thread.
+    ///
+    /// # Safety
+    ///
+    /// The given view pointer must be a valid instance of `NSView`.
+    pub unsafe fn from_ns_view(view: NonNull<c_void>) -> Self {
+        // SAFETY: Upheld by caller.
+        let layer = unsafe { Self::get_metal_layer(view.cast()) };
         let layer = ManuallyDrop::new(layer);
         // SAFETY: The layer is an initialized instance of `CAMetalLayer`, and
         // we transfer the retain count to `MetalLayer` using `ManuallyDrop`.
@@ -45,9 +53,38 @@ impl super::Surface {
         Self::new(layer)
     }
 
-    pub unsafe fn from_layer(layer: &metal::MetalLayerRef) -> Self {
+    /// Construct a surface from a pointer to a `UIView`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called from a thread that is not the main thread.
+    ///
+    /// # Safety
+    ///
+    /// The given view pointer must be a valid instance of `UIView`.
+    pub unsafe fn from_ui_view(view: NonNull<c_void>) -> Self {
+        // SAFETY: Upheld by caller.
+        let layer = unsafe { Self::get_metal_layer(view.cast()) };
+        let layer = ManuallyDrop::new(layer);
+        // SAFETY: The layer is an initialized instance of `CAMetalLayer`, and
+        // we transfer the retain count to `MetalLayer` using `ManuallyDrop`.
+        let layer = unsafe { metal::MetalLayer::from_ptr(layer.cast()) };
+        Self::new(layer)
+    }
+
+    /// Construct a surface from a pointer to a `CAMetalLayer`.
+    ///
+    /// # Safety
+    ///
+    /// The given view pointer must be a valid instance of `CAMetalLayer`.
+    pub unsafe fn from_layer(layer: NonNull<c_void>) -> Self {
+        // SAFETY: Validity of the pointer is upheld by the caller.
+        //
+        // We extend the lifetime of the layer with `to_owned` below.
+        let layer = unsafe { layer.cast::<metal::MetalLayerRef>().as_ref() };
+
         let class = class!(CAMetalLayer);
-        let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
+        let proper_kind: BOOL = unsafe { msg_send![layer, isKindOfClass: class] };
         assert_eq!(proper_kind, YES);
         Self::new(layer.to_owned())
     }

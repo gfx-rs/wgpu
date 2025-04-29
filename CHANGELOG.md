@@ -84,6 +84,10 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Remove the need for dxil.dll. By @teoxoy in [#7566](https://github.com/gfx-rs/wgpu/pull/7566)
 
+#### HAL
+
+- Do not expose the Metal backend's dependency on the `metal` and `objc` crates. By @madsmtm in [#7649](https://github.com/gfx-rs/wgpu/pull/7649)
+
 ### Bug Fixes
 
 #### Naga

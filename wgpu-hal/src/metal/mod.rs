@@ -103,12 +103,6 @@ crate::impl_dyn_resource!(
 
 pub struct Instance {}
 
-impl Instance {
-    pub fn create_surface_from_layer(&self, layer: &metal::MetalLayerRef) -> Surface {
-        unsafe { Surface::from_layer(layer) }
-    }
-}
-
 impl crate::Instance for Instance {
     type A = Api;
 
@@ -127,11 +121,11 @@ impl crate::Instance for Instance {
         match window_handle {
             #[cfg(any(target_os = "ios", target_os = "visionos"))]
             raw_window_handle::RawWindowHandle::UiKit(handle) => {
-                Ok(unsafe { Surface::from_view(handle.ui_view.cast()) })
+                Ok(unsafe { Surface::from_ui_view(handle.ui_view) })
             }
             #[cfg(target_os = "macos")]
             raw_window_handle::RawWindowHandle::AppKit(handle) => {
-                Ok(unsafe { Surface::from_view(handle.ns_view.cast()) })
+                Ok(unsafe { Surface::from_ns_view(handle.ns_view) })
             }
             _ => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Metal-compatible handle"
