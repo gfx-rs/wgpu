@@ -12,7 +12,7 @@ use super::{
         WrappedZeroValue,
     },
     storage::StoreValue,
-    BackendResult, Error, FragmentEntryPoint, Options,
+    BackendResult, Error, FragmentEntryPoint, Options, ShaderModel,
 };
 use crate::{
     back::{self, Baked},
@@ -3751,33 +3751,48 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     fun @ (Function::Dot4I8Packed | Function::Dot4U8Packed) => {
                         let arg1 = arg1.unwrap();
 
-                        write!(self.out, "dot(")?;
+                        if self.options.shader_model >= ShaderModel::V6_4 {
+                            // Intrinsics `dot4add_{i, u}8packed` are available in SM 6.4 and later.
+                            let function_name = match fun {
+                                Function::Dot4I8Packed => "dot4add_i8packed",
+                                Function::Dot4U8Packed => "dot4add_u8packed",
+                                _ => unreachable!(),
+                            };
+                            write!(self.out, "{function_name}(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, arg1, func_ctx)?;
+                            write!(self.out, ", 0)")?;
+                        } else {
+                            // Fall back to a polyfill as `dot4add_u8packed` is not available.
+                            write!(self.out, "dot(")?;
 
-                        if matches!(fun, Function::Dot4U8Packed) {
-                            write!(self.out, "u")?;
-                        }
-                        write!(self.out, "int4(")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 8, ")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 16, ")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 24) << 24 >> 24, ")?;
+                            if matches!(fun, Function::Dot4U8Packed) {
+                                write!(self.out, "u")?;
+                            }
+                            write!(self.out, "int4(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, " >> 8, ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, " >> 16, ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, " >> 24) << 24 >> 24, ")?;
 
-                        if matches!(fun, Function::Dot4U8Packed) {
-                            write!(self.out, "u")?;
+                            if matches!(fun, Function::Dot4U8Packed) {
+                                write!(self.out, "u")?;
+                            }
+                            write!(self.out, "int4(")?;
+                            self.write_expr(module, arg1, func_ctx)?;
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, arg1, func_ctx)?;
+                            write!(self.out, " >> 8, ")?;
+                            self.write_expr(module, arg1, func_ctx)?;
+                            write!(self.out, " >> 16, ")?;
+                            self.write_expr(module, arg1, func_ctx)?;
+                            write!(self.out, " >> 24) << 24 >> 24)")?;
                         }
-                        write!(self.out, "int4(")?;
-                        self.write_expr(module, arg1, func_ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(module, arg1, func_ctx)?;
-                        write!(self.out, " >> 8, ")?;
-                        self.write_expr(module, arg1, func_ctx)?;
-                        write!(self.out, " >> 16, ")?;
-                        self.write_expr(module, arg1, func_ctx)?;
-                        write!(self.out, " >> 24) << 24 >> 24)")?;
                     }
                     Function::QuantizeToF16 => {
                         write!(self.out, "f16tof32(f32tof16(")?;
