@@ -9,7 +9,7 @@ Backend functions that export shader [`Module`](super::Module)s into binary and 
     )
 )]
 
-use alloc::{borrow::ToOwned, string::String};
+use alloc::string::String;
 
 #[cfg(dot_out)]
 pub mod dot;
@@ -90,6 +90,8 @@ fn get_entry_points(
     module: &crate::ir::Module,
     entry_point: Option<&(crate::ir::ShaderStage, String)>,
 ) -> Result<core::ops::Range<usize>, (crate::ir::ShaderStage, String)> {
+    use alloc::borrow::ToOwned;
+
     if let Some(&(stage, ref name)) = entry_point {
         let Some(ep_index) = module
             .entry_points
