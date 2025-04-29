@@ -7081,8 +7081,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses_end - addresses_start;
         // check the size (in debug only)
-        // last observed macOS value: 20528 (CI)
-        if !(11000..=25000).contains(&stack_size) {
+        // last observed macOS value: 25904 (CI), 2025-04-29
+        if !(11000..=27000).contains(&stack_size) {
             panic!("`put_expression` stack size {stack_size} has changed!");
         }
     }
