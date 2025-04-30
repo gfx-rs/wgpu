@@ -43,13 +43,14 @@ use objc2::{
 };
 use objc2_foundation::ns_string;
 use objc2_metal::{
-    MTLAccelerationStructure, MTLArgumentBuffersTier, MTLBlitCommandEncoder, MTLBuffer,
-    MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue, MTLComputeCommandEncoder,
-    MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode, MTLDepthClipMode,
-    MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType, MTLLanguageVersion, MTLLibrary,
-    MTLPrimitiveType, MTLReadWriteTextureTier, MTLRenderCommandEncoder, MTLRenderPipelineState,
-    MTLRenderStages, MTLResource, MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize,
-    MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLWinding,
+    MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLArgumentBuffersTier,
+    MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue,
+    MTLComputeCommandEncoder, MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode,
+    MTLDepthClipMode, MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType,
+    MTLLanguageVersion, MTLLibrary, MTLPrimitiveType, MTLReadWriteTextureTier,
+    MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages, MTLResource,
+    MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture, MTLTextureType,
+    MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
 use parking_lot::{Mutex, RwLock};
@@ -995,6 +996,8 @@ struct Temp {
 
 struct CommandState {
     blit: Option<Retained<ProtocolObject<dyn MTLBlitCommandEncoder>>>,
+    acceleration_structure_builder:
+        Option<Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>>>,
     render: Option<Retained<ProtocolObject<dyn MTLRenderCommandEncoder>>>,
     compute: Option<Retained<ProtocolObject<dyn MTLComputeCommandEncoder>>>,
     raw_primitive_type: MTLPrimitiveType,

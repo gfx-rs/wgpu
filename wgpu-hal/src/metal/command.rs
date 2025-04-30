@@ -4,12 +4,12 @@ use objc2::{
 };
 use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLAccelerationStructure, MTLBlitCommandEncoder, MTLBlitPassDescriptor, MTLBuffer,
-    MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue, MTLComputeCommandEncoder,
-    MTLComputePassDescriptor, MTLCounterDontSample, MTLLoadAction, MTLPrimitiveType,
-    MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLSamplerState, MTLScissorRect, MTLSize,
-    MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
-    MTLVisibilityResultMode,
+    MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLBlitCommandEncoder,
+    MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue,
+    MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample, MTLLoadAction,
+    MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLSamplerState,
+    MTLScissorRect, MTLSize, MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping,
+    MTLViewport, MTLVisibilityResultMode,
 };
 
 use super::{conv, TimestampQuerySupport};
@@ -28,6 +28,7 @@ impl Default for super::CommandState {
     fn default() -> Self {
         Self {
             blit: None,
+            acceleration_structure_builder: None,
             render: None,
             compute: None,
             raw_primitive_type: MTLPrimitiveType::Point,
@@ -149,6 +150,7 @@ impl super::CommandEncoder {
 
     fn enter_blit(&mut self) -> Retained<ProtocolObject<dyn MTLBlitCommandEncoder>> {
         if self.state.blit.is_none() {
+            self.leave_acceleration_structure_builder();
             debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
             let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
 
@@ -248,8 +250,35 @@ impl super::CommandEncoder {
         }
     }
 
+    fn enter_acceleration_structure_builder(
+        &mut self,
+    ) -> Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>> {
+        if self.state.acceleration_structure_builder.is_none() {
+            self.leave_blit();
+            debug_assert!(
+                self.state.render.is_none()
+                    && self.state.compute.is_none()
+                    && self.state.blit.is_none()
+            );
+            let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
+            autoreleasepool(|_| {
+                self.state.acceleration_structure_builder =
+                    cmd_buf.accelerationStructureCommandEncoder().to_owned();
+            });
+        }
+        self.state.acceleration_structure_builder.clone().unwrap()
+    }
+
+    pub(super) fn leave_acceleration_structure_builder(&mut self) {
+        if let Some(encoder) = self.state.acceleration_structure_builder.take() {
+            encoder.endEncoding();
+        }
+    }
+
     fn active_encoder(&mut self) -> Option<&ProtocolObject<dyn MTLCommandEncoder>> {
         if let Some(ref encoder) = self.state.render {
+            Some(ProtocolObject::from_ref(&**encoder))
+        } else if let Some(ref encoder) = self.state.acceleration_structure_builder {
             Some(ProtocolObject::from_ref(&**encoder))
         } else if let Some(ref encoder) = self.state.compute {
             Some(ProtocolObject::from_ref(&**encoder))
@@ -263,6 +292,7 @@ impl super::CommandEncoder {
     fn begin_pass(&mut self) {
         self.state.reset();
         self.leave_blit();
+        self.leave_acceleration_structure_builder();
     }
 
     /// Updates the bindings for a single shader stage, called in `set_bind_group`.
@@ -439,6 +469,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn discard_encoding(&mut self) {
         self.leave_blit();
+        self.leave_acceleration_structure_builder();
         // when discarding, we don't have a guarantee that
         // everything is in a good state, so check carefully
         if let Some(encoder) = self.state.render.take() {
@@ -458,6 +489,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         self.leave_blit();
+        self.leave_acceleration_structure_builder();
         debug_assert!(self.state.render.is_none());
         debug_assert!(self.state.compute.is_none());
         debug_assert!(self.state.pending_timer_queries.is_empty());
