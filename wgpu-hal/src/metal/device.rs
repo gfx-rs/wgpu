@@ -1574,9 +1574,28 @@ impl crate::Device for super::Device {
 
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Buffer>,
+        descriptor: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Buffer>,
     ) -> crate::AccelerationStructureBuildSizes {
-        unimplemented!()
+        let acceleration_structure_descriptor =
+            conv::map_acceleration_structure_descriptor(descriptor.entries);
+        /* The Rust metal crate does not expose metal::MTLAccelerationStructureUsage yet
+        let mut usage = metal::MTLAccelerationStructureUsage::None;
+        if descriptor.flags.contains(wgt::AccelerationStructureFlags::ALLOW_UPDATE) {
+            usage |= metal::MTLAccelerationStructureUsage::Refit;
+        }
+        if descriptor.flags.contains(wgt::AccelerationStructureFlags::PREFER_FAST_BUILD) {
+            usage |= metal::MTLAccelerationStructureUsage::PreferFastBuild;
+        }
+        acceleration_structure_descriptor.set_usage(usage);
+        */
+        let device = self.shared.device.lock();
+        let info =
+            device.acceleration_structure_sizes_with_descriptor(&acceleration_structure_descriptor);
+        crate::AccelerationStructureBuildSizes {
+            acceleration_structure_size: info.acceleration_structure_size,
+            update_scratch_size: info.refit_scratch_buffer_size,
+            build_scratch_size: info.build_scratch_buffer_size,
+        }
     }
 
     unsafe fn get_acceleration_structure_device_address(
