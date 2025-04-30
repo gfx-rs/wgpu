@@ -1373,7 +1373,40 @@ impl crate::CommandEncoder for super::CommandEncoder {
             >,
         >,
     {
-        unimplemented!()
+        let command_encoder = self.enter_acceleration_structure_builder();
+        for descriptor in descriptors {
+            let acceleration_structure_descriptor =
+                conv::map_acceleration_structure_descriptor(descriptor.entries);
+            /* The Rust metal crate does not expose metal::MTLAccelerationStructureUsage yet
+            let mut usage = metal::MTLAccelerationStructureUsage::None;
+            if descriptor.flags.contains(wgt::AccelerationStructureFlags::ALLOW_UPDATE) {
+                usage |= metal::MTLAccelerationStructureUsage::Refit;
+            }
+            if descriptor.flags.contains(wgt::AccelerationStructureFlags::PREFER_FAST_BUILD) {
+                usage |= metal::MTLAccelerationStructureUsage::PreferFastBuild;
+            }
+            acceleration_structure_descriptor.set_usage(usage);
+            */
+            match descriptor.mode {
+                crate::AccelerationStructureBuildMode::Build => {
+                    command_encoder.build_acceleration_structure(
+                        &descriptor.destination_acceleration_structure.raw,
+                        &acceleration_structure_descriptor,
+                        &descriptor.scratch_buffer.raw,
+                        descriptor.scratch_buffer_offset,
+                    );
+                }
+                crate::AccelerationStructureBuildMode::Update => {
+                    command_encoder.refit_acceleration_structure(
+                        &descriptor.source_acceleration_structure.unwrap().raw,
+                        &acceleration_structure_descriptor,
+                        Some(&descriptor.destination_acceleration_structure.raw),
+                        &descriptor.scratch_buffer.raw,
+                        descriptor.scratch_buffer_offset,
+                    );
+                }
+            }
+        }
     }
 
     unsafe fn place_acceleration_structure_barrier(
