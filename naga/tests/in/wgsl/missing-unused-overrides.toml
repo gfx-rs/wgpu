@@ -1,0 +1,13 @@
+pipeline_constants = { ov_for_vertex = 1.5 }
+#targets = "IR | ANALYSIS | SPIRV | METAL | HLSL | GLSL"
+targets = "METAL"
+
+[msl]
+lang_version = [2, 1]
+
+[msl_pipeline]
+entry_point = ["Vertex", "vert_main"]
+
+[spv]
+separate_entry_points = true
+version = [1, 0]

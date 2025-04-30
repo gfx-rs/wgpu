@@ -14,7 +14,7 @@ use crate::{Arena, UniqueArena};
 #[cfg(test)]
 use alloc::string::ToString;
 
-impl super::Validator {
+impl super::Validator<'_> {
     /// Validates that all handles within `module` are:
     ///
     /// * Valid, in the sense that they contain indices within each arena structure inside the

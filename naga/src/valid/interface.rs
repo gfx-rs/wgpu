@@ -487,7 +487,7 @@ impl VaryingContext<'_> {
     }
 }
 
-impl super::Validator {
+impl super::Validator<'_> {
     pub(super) fn validate_global_var(
         &self,
         var: &crate::GlobalVariable,

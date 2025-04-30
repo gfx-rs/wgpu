@@ -219,7 +219,7 @@ impl<'source> ParsingContext<'source> {
                 kind: ErrorKind::SemanticError("int constant overflows".into()),
                 meta,
             }),
-            Err(U32EvalError::NonConst) => Err(Error {
+            Err(U32EvalError::Runtime | U32EvalError::Override(_)) => Err(Error {
                 kind: ErrorKind::SemanticError("Expected a uint constant".into()),
                 meta,
             }),

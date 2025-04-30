@@ -3138,7 +3138,7 @@ fn local_const_from_override() {
             const c = o;
         }
         ",
-        r###"error: Unexpected override-expression
+        r###"error: Can't use pipeline-overridable constants in const-expressions
   ┌─ wgsl:4:23
   │
 4 │             const c = o;

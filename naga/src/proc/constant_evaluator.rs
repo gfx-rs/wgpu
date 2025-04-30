@@ -558,11 +558,11 @@ pub enum ConstantEvaluatorError {
     #[error(transparent)]
     Literal(#[from] crate::valid::LiteralError),
     #[error("Can't use pipeline-overridable constants in const-expressions")]
-    Override,
+    Override(Handle<Override>),
     #[error("Unexpected runtime-expression")]
     RuntimeExpr,
-    #[error("Unexpected override-expression")]
-    OverrideExpr,
+    #[error("Unexpectedly able to evaluate an override expression")]
+    EvaluatedOverrideExpr,
 }
 
 impl<'a> ConstantEvaluator<'a> {
@@ -740,7 +740,8 @@ impl<'a> ConstantEvaluator<'a> {
     /// contributing to some function's expression arena, then append `expr` to
     /// that arena unchanged (and thus unevaluated). Otherwise, `self` must be
     /// contributing to the module's constant expression arena; since `expr`'s
-    /// value is not a constant, return an error.
+    /// value is not a constant, return an error (along with the original
+    /// expression, in case the caller needs it).
     ///
     /// We only consider `expr` itself, without recursing into its operands. Its
     /// operands must all have been produced by prior calls to
@@ -755,7 +756,7 @@ impl<'a> ConstantEvaluator<'a> {
         &mut self,
         expr: Expression,
         span: Span,
-    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+    ) -> Result<Handle<Expression>, (Expression, ConstantEvaluatorError)> {
         match self.expression_kind_tracker.type_of_with_expr(&expr) {
             ExpressionKind::Const => {
                 let eval_result = self.try_eval_and_append_impl(&expr, span);
@@ -772,7 +773,7 @@ impl<'a> ConstantEvaluator<'a> {
                 {
                     Ok(self.append_expr(expr, span, ExpressionKind::Runtime))
                 } else {
-                    eval_result
+                    eval_result.map_err(|err| (expr, err))
                 }
             }
             ExpressionKind::Override => match self.behavior {
@@ -780,7 +781,19 @@ impl<'a> ConstantEvaluator<'a> {
                     Ok(self.append_expr(expr, span, ExpressionKind::Override))
                 }
                 Behavior::Wgsl(WgslRestrictions::Const(_)) => {
-                    Err(ConstantEvaluatorError::OverrideExpr)
+                    // We should always get `ConstantEvaluatorError::Override`
+                    // here. If we get something else, then it's probably a bug
+                    // in the expression kind determination. We attempt evaluation
+                    // here in order to identify the overrides that would be
+                    // required to evaluate this expression, for use in diagnostics.
+                    match self.try_eval_and_append_impl(&expr, span) {
+                        Err(ov_err @ ConstantEvaluatorError::Override(_)) => Err((expr, ov_err)),
+                        Err(err) => {
+                            log::debug!("expected an override error, but got {:?}", err);
+                            Err((expr, err))
+                        }
+                        Ok(_) => Err((expr, ConstantEvaluatorError::EvaluatedOverrideExpr)),
+                    }
                 }
                 Behavior::Glsl(_) => {
                     unreachable!()
@@ -790,7 +803,7 @@ impl<'a> ConstantEvaluator<'a> {
                 if self.behavior.has_runtime_restrictions() {
                     Ok(self.append_expr(expr, span, ExpressionKind::Runtime))
                 } else {
-                    Err(ConstantEvaluatorError::RuntimeExpr)
+                    Err((expr, ConstantEvaluatorError::RuntimeExpr))
                 }
             }
         }
@@ -830,7 +843,7 @@ impl<'a> ConstantEvaluator<'a> {
                 // This is mainly done to avoid having constants pointing to other constants.
                 Ok(self.constants[c].init)
             }
-            Expression::Override(_) => Err(ConstantEvaluatorError::Override),
+            Expression::Override(ov) => Err(ConstantEvaluatorError::Override(ov)),
             Expression::Literal(_) | Expression::ZeroValue(_) | Expression::Constant(_) => {
                 self.register_evaluated_expr(expr.clone(), span)
             }

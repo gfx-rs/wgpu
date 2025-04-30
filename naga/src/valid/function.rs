@@ -217,6 +217,8 @@ pub enum FunctionError {
     EmitResult(Handle<crate::Expression>),
     #[error("Expression not visited by the appropriate statement")]
     UnvisitedExpression(Handle<crate::Expression>),
+    #[error("Missing value for pipeline-overridable constant {0:?}")]
+    UnresolvedOverride(Handle<crate::Override>),
 }
 
 bitflags::bitflags! {
@@ -318,7 +320,7 @@ impl<'a> BlockContext<'a> {
     }
 }
 
-impl super::Validator {
+impl super::Validator<'_> {
     fn validate_call(
         &mut self,
         function: Handle<crate::Function>,
@@ -1760,6 +1762,9 @@ impl super::Validator {
                     &local_expr_kind,
                 ) {
                     Ok(stages) => info.available_stages &= stages,
+                    Err(ExpressionError::UnresolvedOverride(handle)) => {
+                        return Err(FunctionError::UnresolvedOverride(handle).with_span())
+                    }
                     Err(source) => {
                         return Err(FunctionError::Expression { handle, source }
                             .with_span_handle(handle, &fun.expressions))

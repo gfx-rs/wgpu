@@ -277,10 +277,11 @@ impl<'a> Context<'a> {
             )
         };
 
-        eval.try_eval_and_append(expr, meta).map_err(|e| Error {
-            kind: e.into(),
-            meta,
-        })
+        eval.try_eval_and_append(expr, meta)
+            .map_err(|(_expr, err)| Error {
+                kind: err.into(),
+                meta,
+            })
     }
 
     /// Add variable to current scope

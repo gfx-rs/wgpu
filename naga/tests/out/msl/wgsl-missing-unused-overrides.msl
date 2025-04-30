@@ -1,0 +1,35 @@
+// language: metal2.1
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct FragmentIn {
+    metal::float4 color;
+};
+constant float ov_for_vertex = 1.5;
+
+void compute_helper(
+    thread uint& foo,
+    threadgroup type_4& arr
+) {
+    uint phony = foo;
+    uint phony_1 = arr.inner[0];
+    return;
+}
+
+struct vert_mainInput {
+    metal::float2 pos [[attribute(0)]];
+};
+struct vert_mainOutput {
+    metal::float4 member [[position]];
+};
+vertex vert_mainOutput vert_main(
+  vert_mainInput varyings [[stage_in]]
+, uint ii [[instance_id]]
+, uint vi [[vertex_id]]
+) {
+    const auto pos = varyings.pos;
+    return vert_mainOutput { metal::float4(pos.x * ov_for_vertex, pos.y, 0.0, 1.0) };
+}
+

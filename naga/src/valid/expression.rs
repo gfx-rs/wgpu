@@ -139,6 +139,8 @@ pub enum ExpressionError {
     Literal(#[from] LiteralError),
     #[error("{0:?} is not supported for Width {2} {1:?} arguments yet, see https://github.com/gfx-rs/wgpu/issues/5276")]
     UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
+    #[error("Missing value for pipeline-overridable constant {0:?}")]
+    UnresolvedOverride(Handle<crate::Override>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -194,7 +196,7 @@ impl core::ops::Index<Handle<crate::Expression>> for ExpressionTypeResolver<'_> 
     }
 }
 
-impl super::Validator {
+impl super::Validator<'_> {
     pub(super) fn validate_const_expression(
         &self,
         handle: Handle<crate::Expression>,
@@ -224,7 +226,7 @@ impl super::Validator {
                 crate::TypeInner::Scalar { .. } => {}
                 _ => return Err(ConstExpressionError::InvalidSplatType(value)),
             },
-            _ if global_expr_kind.is_const(handle) || self.overrides_resolved => {
+            _ if global_expr_kind.is_const(handle) => {
                 return Err(ConstExpressionError::NonFullyEvaluatedConst)
             }
             // the constant evaluator will report errors about override-expressions
@@ -302,7 +304,9 @@ impl super::Validator {
                     Err(crate::proc::U32EvalError::Negative) => {
                         return Err(ExpressionError::NegativeIndex(base))
                     }
-                    Err(crate::proc::U32EvalError::NonConst) => {}
+                    Err(
+                        crate::proc::U32EvalError::Runtime | crate::proc::U32EvalError::Override(_),
+                    ) => {}
                 }
 
                 ShaderStages::all()
@@ -373,7 +377,14 @@ impl super::Validator {
                 self.validate_literal(literal)?;
                 ShaderStages::all()
             }
-            E::Constant(_) | E::Override(_) | E::ZeroValue(_) => ShaderStages::all(),
+            E::Constant(_) | E::ZeroValue(_) => ShaderStages::all(),
+            E::Override(handle) => {
+                if self.overrides_resolved {
+                    return Err(ExpressionError::UnresolvedOverride(handle));
+                } else {
+                    ShaderStages::all()
+                }
+            }
             E::Compose { ref components, ty } => {
                 validate_compose(
                     ty,

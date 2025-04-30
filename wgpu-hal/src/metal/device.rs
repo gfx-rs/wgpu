@@ -134,9 +134,14 @@ impl super::Device {
             panic!("load_shader required a naga shader");
         };
         let stage_bit = map_naga_stage(naga_stage);
-        let (module, module_info) = naga::back::pipeline_constants::process_overrides(
+        let naga::back::pipeline_constants::ProcessOverridesOutput {
+            module,
+            info: module_info,
+            unresolved: unresolved_overrides,
+        } = naga::back::pipeline_constants::process_overrides(
             &naga_shader.module,
             &naga_shader.info,
+            Some((naga_stage, stage.entry_point)),
             stage.constants,
         )
         .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {:?}", e)))?;
@@ -182,6 +187,7 @@ impl super::Device {
 
         let pipeline_options = naga::back::msl::PipelineOptions {
             entry_point: Some((naga_stage, stage.entry_point.to_owned())),
+            unresolved_overrides,
             allow_and_force_point_size: match primitive_class {
                 MTLPrimitiveTopologyClass::Point => true,
                 _ => false,

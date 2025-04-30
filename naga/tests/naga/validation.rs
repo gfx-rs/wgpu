@@ -1,4 +1,8 @@
-use naga::{valid, Expression, Function, Scalar};
+use naga::{
+    ir,
+    valid::{self, ModuleInfo},
+    Expression, Function, Module, Scalar,
+};
 
 /// Validation should fail if `AtomicResult` expressions are not
 /// populated by `Atomic` statements.
@@ -536,16 +540,16 @@ fn main(input: VertexOutput) {{
 }
 
 #[allow(dead_code)]
-struct BindingArrayFixture {
+struct BindingArrayFixture<'a> {
     module: naga::Module,
     span: naga::Span,
     ty_u32: naga::Handle<naga::Type>,
     ty_array: naga::Handle<naga::Type>,
     ty_struct: naga::Handle<naga::Type>,
-    validator: naga::valid::Validator,
+    validator: naga::valid::Validator<'a>,
 }
 
-impl BindingArrayFixture {
+impl BindingArrayFixture<'_> {
     fn new() -> Self {
         let mut module = naga::Module::default();
         let span = naga::Span::default();
@@ -770,7 +774,6 @@ fn bad_texture_dimensions_level() {
 fn arity_check() {
     use ir::MathFunction as Mf;
     use naga::Span;
-    use naga::{ir, valid};
     let _ = env_logger::builder().is_test(true).try_init();
 
     type Result = core::result::Result<naga::valid::ModuleInfo, naga::valid::ValidationError>;
@@ -921,5 +924,159 @@ fn main() {
     assert_eq!(
         info.get_entry_point(0)[global],
         naga::valid::GlobalUse::QUERY
+    );
+}
+
+fn parse_validate(source: &str) -> (Module, ModuleInfo) {
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+    (module, info)
+}
+
+/// Helper for `process_overrides` tests.
+///
+/// The goal of these tests is to verify that `process_overrides` accepts cases
+/// where all necessary overrides are specified (even if some unnecessary ones
+/// are not), and does not accept cases where necessary overrides are missing.
+/// "Necessary" means that the entry point is referenced in some way by some
+/// function reachable from the specified entry point.
+///
+/// Each test passes a source snippet containing a compute entry point `used`
+/// that makes use of the override `ov` in some way. We augment that with (1)
+/// the definition of `ov` and (2) a dummy entrypoint that does not use the
+/// override, and then test the matrix of (specified or not) x (used or not).
+///
+/// Since `process_overrides` leaves unresolved overrides in the output module,
+/// there could be bugs where a backend to reaches one of the remaining overrides
+/// and fails. That is not exercised here, but is covered by the
+/// `missing-unused-overrides` snapshot test.
+fn override_test(test_case: &str) {
+    use hashbrown::HashMap;
+    use naga::back::pipeline_constants::PipelineConstantError;
+
+    let source = [
+        "override ov: u32;\n",
+        test_case,
+        "@compute @workgroup_size(64)
+fn unused() {
+}
+",
+    ]
+    .concat();
+    let (module, info) = parse_validate(&source);
+
+    let overrides = HashMap::from([(String::from("ov"), 1.)]);
+
+    // Can translate `unused` with or without the override
+    naga::back::pipeline_constants::process_overrides(
+        &module,
+        &info,
+        Some((ir::ShaderStage::Compute, "unused")),
+        &HashMap::new(),
+    )
+    .unwrap();
+    naga::back::pipeline_constants::process_overrides(
+        &module,
+        &info,
+        Some((ir::ShaderStage::Compute, "unused")),
+        &overrides,
+    )
+    .unwrap();
+
+    // Cannot translate `used` without the override
+    let err = naga::back::pipeline_constants::process_overrides(
+        &module,
+        &info,
+        Some((ir::ShaderStage::Compute, "used")),
+        &HashMap::new(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, PipelineConstantError::MissingValue(name) if name == "ov"));
+
+    // Can translate `used` if the override is specified
+    naga::back::pipeline_constants::process_overrides(
+        &module,
+        &info,
+        Some((ir::ShaderStage::Compute, "used")),
+        &overrides,
+    )
+    .unwrap();
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_workgroup_size() {
+    override_test(
+        "
+@compute @workgroup_size(ov)
+fn used() {
+}
+",
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_function() {
+    override_test(
+        "
+fn foo() -> u32 {
+    return ov;
+}
+
+@compute @workgroup_size(64)
+fn used() {
+    foo();
+}
+",
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_entrypoint() {
+    override_test(
+        "
+fn foo() -> u32 {
+    return ov;
+}
+
+@compute @workgroup_size(64)
+fn used() {
+    foo();
+}
+",
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_array_size() {
+    override_test(
+        "
+var<workgroup> arr: array<u32, ov>;
+
+@compute @workgroup_size(64)
+fn used() {
+    _ = arr[5];
+}
+",
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_global_init() {
+    override_test(
+        "
+var<private> foo: u32 = ov;
+
+@compute @workgroup_size(64)
+fn used() {
+    _ = foo;
+}
+",
     );
 }

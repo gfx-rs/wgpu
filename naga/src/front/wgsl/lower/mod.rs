@@ -520,7 +520,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     ) -> Result<'source, Handle<ir::Expression>> {
         let mut eval = self.as_const_evaluator();
         eval.try_eval_and_append(expr, span)
-            .map_err(|e| Box::new(Error::ConstantEvaluatorError(e.into(), span)))
+            .map_err(|(_expr, err)| Box::new(Error::ConstantEvaluatorError(err.into(), span)))
     }
 
     fn const_eval_expr_to_u32(
@@ -530,7 +530,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => {
                 if !ctx.local_expression_kind_tracker.is_const(handle) {
-                    return Err(proc::U32EvalError::NonConst);
+                    return Err(proc::U32EvalError::Runtime);
                 }
 
                 self.module
@@ -544,7 +544,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     .eval_expr_to_u32_from(handle, &ctx.function.expressions)
             }
             ExpressionContextType::Constant(None) => self.module.to_ctx().eval_expr_to_u32(handle),
-            ExpressionContextType::Override => Err(proc::U32EvalError::NonConst),
+            ExpressionContextType::Override => Err(proc::U32EvalError::Runtime),
         }
     }
 
@@ -628,7 +628,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     .to_ctx()
                     .eval_expr_to_u32_from(expr, &rctx.function.expressions)
                     .map_err(|err| match err {
-                        proc::U32EvalError::NonConst => {
+                        proc::U32EvalError::Runtime | proc::U32EvalError::Override(_) => {
                             Error::ExpectedConstExprConcreteIntegerScalar(component_span)
                         }
                         proc::U32EvalError::Negative => Error::ExpectedNonNegative(component_span),
@@ -1431,7 +1431,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             Err(err) => {
                                 if let Error::ConstantEvaluatorError(ref ty, _) = *err {
                                     match **ty {
-                                        proc::ConstantEvaluatorError::OverrideExpr => {
+                                        proc::ConstantEvaluatorError::Override(_) => {
                                             workgroup_size_overrides_out[i] =
                                                 Some(self.workgroup_size_override(
                                                     size_expr,
@@ -1739,12 +1739,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                         .to_ctx()
                                         .eval_expr_to_literal_from(expr, &ctx.function.expressions)
                                     {
-                                        Some(ir::Literal::I32(value)) => {
-                                            ir::SwitchValue::I32(value)
-                                        }
-                                        Some(ir::Literal::U32(value)) => {
-                                            ir::SwitchValue::U32(value)
-                                        }
+                                        Ok(ir::Literal::I32(value)) => ir::SwitchValue::I32(value),
+                                        Ok(ir::Literal::U32(value)) => ir::SwitchValue::U32(value),
                                         _ => {
                                             return Err(Box::new(Error::InvalidSwitchCase {
                                                 span,
@@ -3587,7 +3583,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .to_ctx()
             .eval_expr_to_u32(expr)
             .map_err(|err| match err {
-                proc::U32EvalError::NonConst => Error::ExpectedConstExprConcreteIntegerScalar(span),
+                proc::U32EvalError::Runtime | proc::U32EvalError::Override(_) => {
+                    Error::ExpectedConstExprConcreteIntegerScalar(span)
+                }
                 proc::U32EvalError::Negative => Error::ExpectedNonNegative(span),
             })?;
         Ok((value, span))
@@ -3606,7 +3604,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     Ok(value) => {
                         let len = ctx.const_eval_expr_to_u32(value).map_err(|err| {
                             Box::new(match err {
-                                proc::U32EvalError::NonConst => {
+                                proc::U32EvalError::Runtime | proc::U32EvalError::Override(_) => {
                                     Error::ExpectedConstExprConcreteIntegerScalar(span)
                                 }
                                 proc::U32EvalError::Negative => {
@@ -3621,7 +3619,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     Err(err) => {
                         if let Error::ConstantEvaluatorError(ref ty, _) = *err {
                             match **ty {
-                                proc::ConstantEvaluatorError::OverrideExpr => {
+                                proc::ConstantEvaluatorError::Override(_) => {
                                     ir::ArraySize::Pending(self.array_size_override(
                                         expr,
                                         &mut ctx.as_global().as_override(),

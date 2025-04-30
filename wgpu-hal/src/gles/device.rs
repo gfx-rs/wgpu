@@ -216,9 +216,14 @@ impl super::Device {
             multiview: context.multiview,
         };
 
-        let (module, info) = naga::back::pipeline_constants::process_overrides(
+        let naga::back::pipeline_constants::ProcessOverridesOutput {
+            module,
+            info,
+            unresolved: _,
+        } = naga::back::pipeline_constants::process_overrides(
             &stage.module.naga.module,
             &stage.module.naga.info,
+            None,
             stage.constants,
         )
         .map_err(|e| {

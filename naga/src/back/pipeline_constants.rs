@@ -10,10 +10,13 @@ use thiserror::Error;
 use super::PipelineConstants;
 use crate::{
     arena::HandleVec,
-    proc::{ConstantEvaluator, ConstantEvaluatorError, Emitter},
-    valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator},
-    Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
-    Span, Statement, TypeInner, WithSpan,
+    ir,
+    proc::{ConstantEvaluator, ConstantEvaluatorError, Emitter, U32EvalError},
+    valid::{
+        Capabilities, ModuleInfo, UnresolvedOverrides, ValidationError, ValidationFlags, Validator,
+    },
+    Arena, Block, Constant, Expression, FastHashMap, Function, Handle, Literal, Module, Override,
+    Range, Scalar, Span, Statement, TypeInner, WithSpan,
 };
 
 #[cfg(no_std)]
@@ -37,28 +40,69 @@ pub enum PipelineConstantError {
     ValidationError(#[from] WithSpan<ValidationError>),
     #[error("workgroup_size override isn't strictly positive")]
     NegativeWorkgroupSize,
+    #[error("unable to evaluate workgroup_size override")]
+    WorkgroupSizeOverrideEvaluationError,
 }
 
-/// Replace all overrides in `module` with constants.
+// Returns the key to use for an override in `pipeline_constants`.
+fn override_key(ov: &Override) -> Cow<'_, str> {
+    if let Some(id) = ov.id {
+        Cow::Owned(id.to_string())
+    } else if let Some(ref name) = ov.name {
+        Cow::Borrowed(name)
+    } else {
+        unreachable!()
+    }
+}
+
+#[derive(Debug)]
+pub struct ProcessOverridesOutput<'a> {
+    pub module: Cow<'a, Module>,
+    pub info: Cow<'a, ModuleInfo>,
+    pub unresolved: UnresolvedOverrides,
+}
+
+/// Replace overrides in `module` with constants.
 ///
 /// If no changes are needed, this just returns `Cow::Borrowed`
 /// references to `module` and `module_info`. Otherwise, it clones
-/// `module`, edits its [`global_expressions`] arena to contain only
-/// fully-evaluated expressions, and returns `Cow::Owned` values
-/// holding the simplified module and its validation results.
+/// `module`, updates it with evaluated override expressions, and returns
+/// `Cow::Owned` values holding the simplified module and its validation
+/// results.
 ///
-/// In either case, the module returned has an empty `overrides`
-/// arena, and the `global_expressions` arena contains only
-/// fully-evaluated expressions.
+/// If `entry_point` is specified, then any override referenced by
+/// that entry point must be supplied, and other overrides are
+/// optional. The returned module may still have override expressions,
+/// but they should not be reachable from the specified entry point.
 ///
-/// [`global_expressions`]: Module::global_expressions
+/// If `entry_point` is not specified, then all overrides must be specified.
+///
+/// This function completely rewrites both the [`global`] and function-local
+/// arenas, replacing [`Expression::Override`] with [`Expression::Constant`].
+/// It then updates expressions, statements, and initializers that refer to a
+/// an updated expression.
+///
+/// The types arena is not updated. This means that the size of an array (in the
+/// workgroup space, because this is the only place override-sized arrays are
+/// permitted) may still require indirection through an override handle to the
+/// initializer expression, which will be an evaluated constant. See
+/// [#6787](https://github.com/gfx-rs/wgpu/pull/6787).
+///
+/// [`global`]: Module::global_expressions
 pub fn process_overrides<'a>(
     module: &'a Module,
     module_info: &'a ModuleInfo,
+    entry_point: Option<(ir::ShaderStage, &str)>,
     pipeline_constants: &PipelineConstants,
-) -> Result<(Cow<'a, Module>, Cow<'a, ModuleInfo>), PipelineConstantError> {
+) -> Result<ProcessOverridesOutput<'a>, PipelineConstantError> {
+    let mut unresolved = UnresolvedOverrides::default();
+
     if module.overrides.is_empty() {
-        return Ok((Cow::Borrowed(module), Cow::Borrowed(module_info)));
+        return Ok(ProcessOverridesOutput {
+            module: Cow::Borrowed(module),
+            info: Cow::Borrowed(module_info),
+            unresolved,
+        });
     }
 
     let mut module = module.clone();
@@ -84,6 +128,7 @@ pub fn process_overrides<'a>(
     let mut adjusted_constant_initializers = HashSet::with_capacity(module.constants.len());
 
     let mut global_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
+    let mut global_expressions_missing_overrides = FastHashMap::default();
     let mut layouter = crate::proc::Layouter::default();
 
     // An iterator through the original overrides table, consumed in
@@ -93,10 +138,9 @@ pub fn process_overrides<'a>(
 
     // Do two things in tandem:
     //
-    // - Rebuild the global expression arena from scratch, fully
-    //   evaluating all expressions, and replacing each `Override`
-    //   expression in `module.global_expressions` with a `Constant`
-    //   expression.
+    // - Rebuild the global expression arena from scratch, replacing
+    //   `Override` expressions in `module.global_expressions` that can
+    //   now be evaluated with `Constant` expressions.
     //
     // - Build a new `Constant` in `module.constants` to take the
     //   place of each `Override`.
@@ -123,28 +167,43 @@ pub fn process_overrides<'a>(
     for (old_h, expr, span) in module.global_expressions.drain() {
         let mut expr = match expr {
             Expression::Override(h) => {
-                let c_h = if let Some(new_h) = override_map.get(h) {
-                    *new_h
-                } else {
-                    let mut new_h = None;
-                    for entry in override_iter.by_ref() {
-                        let stop = entry.0 == h;
-                        new_h = Some(process_override(
-                            entry,
-                            pipeline_constants,
-                            &mut module,
-                            &mut override_map,
-                            &adjusted_global_expressions,
-                            &mut adjusted_constant_initializers,
-                            &mut global_expression_kind_tracker,
-                        )?);
-                        if stop {
-                            break;
+                match override_map.get(h) {
+                    Some(&Some(new_h)) => {
+                        // Already evaluated.
+                        Expression::Constant(new_h)
+                    }
+                    Some(&None) => {
+                        // Already processed and could not evaluate. Leave
+                        // expression unchanged.
+                        expr
+                    }
+                    None => {
+                        let mut result = None;
+                        for entry in override_iter.by_ref() {
+                            let stop = entry.0 == h;
+                            result = process_override(
+                                entry,
+                                pipeline_constants,
+                                &mut module,
+                                &mut override_map,
+                                &adjusted_global_expressions,
+                                &mut adjusted_constant_initializers,
+                                &mut global_expression_kind_tracker,
+                            )?;
+                            if stop {
+                                break;
+                            }
+                        }
+                        match result {
+                            None => {
+                                // Could not evaluate. Leave expression
+                                // unchanged.
+                                expr
+                            }
+                            Some(new_h) => Expression::Constant(new_h),
                         }
                     }
-                    new_h.unwrap()
-                };
-                Expression::Constant(c_h)
+                }
             }
             Expression::Constant(c_h) => {
                 if adjusted_constant_initializers.insert(c_h) {
@@ -155,6 +214,9 @@ pub fn process_overrides<'a>(
             }
             expr => expr,
         };
+        // Attempt constant evaluation now that overrides referenced by this
+        // expression may have been resolved. If they have not been resolved,
+        // the expression will remain with `ExpressionKind::Override`.
         let mut evaluator = ConstantEvaluator::for_wgsl_module(
             &mut module,
             &mut global_expression_kind_tracker,
@@ -162,8 +224,17 @@ pub fn process_overrides<'a>(
             false,
         );
         adjust_expr(&adjusted_global_expressions, &mut expr);
-        let h = evaluator.try_eval_and_append(expr, span)?;
-        adjusted_global_expressions.insert(old_h, h);
+        match evaluator.try_eval_and_append(expr, span) {
+            Err((expr, ConstantEvaluatorError::Override(ov_h))) => {
+                let h = module.global_expressions.append(expr, span);
+                global_expression_kind_tracker.insert(h, crate::proc::ExpressionKind::Override);
+                adjusted_global_expressions.insert(old_h, h);
+                global_expressions_missing_overrides.insert(h, ov_h);
+                log::trace!("global {:?} initializer missing override {:?}", h, ov_h);
+            }
+            Err((_, e)) => return Err(e.into()),
+            Ok(h) => adjusted_global_expressions.insert(old_h, h),
+        }
     }
 
     // Finish processing any overrides we didn't visit in the loop above.
@@ -184,6 +255,9 @@ pub fn process_overrides<'a>(
                 init: Some(ref mut init),
                 ..
             } => {
+                // Anonymous override representing by an array size expression.
+                // These are not handled through `process_override`, are not
+                // replaced by a constant, and are not added to `override_map`.
                 *init = adjusted_global_expressions[*init];
             }
             _ => {}
@@ -201,23 +275,137 @@ pub fn process_overrides<'a>(
         c.init = adjusted_global_expressions[c.init];
     }
 
-    for (_, v) in module.global_variables.iter_mut() {
+    // Identify which global variables are still unusable due to missing
+    // overrides. Overrides can appear in the initializer, and in the
+    // case of workgroup space arrays, in the array size.
+    for (v_handle, v) in module.global_variables.iter_mut() {
         if let Some(ref mut init) = v.init {
             *init = adjusted_global_expressions[*init];
+            if let Some(&o_handle) = global_expressions_missing_overrides.get(init) {
+                log::trace!(
+                    "global {:?} initializer missing override {:?}",
+                    v.name,
+                    overrides[o_handle].name
+                );
+                unresolved.global_variables.insert(v_handle, o_handle);
+            }
+        } else if let TypeInner::Array {
+            size: crate::ArraySize::Pending(o_handle),
+            ..
+        } = module.types[v.ty].inner
+        {
+            let resolved = match override_map.get(o_handle) {
+                Some(&Some(_)) => {
+                    // Override was processed successfully.
+                    true
+                }
+                Some(&None) => {
+                    // Override could not be processed.
+                    false
+                }
+                None => {
+                    // Anonymous override for array size expression
+                    // These are not added to override_map.
+                    match overrides[o_handle].init {
+                        Some(init) => global_expression_kind_tracker.is_const(init),
+                        None => {
+                            // This should not happen.
+                            log::error!("anonymous override with no initializer?");
+                            true
+                        }
+                    }
+                }
+            };
+            if !resolved {
+                log::trace!(
+                    "array size of global {:?} missing override {:?}",
+                    v.name,
+                    overrides[o_handle].name
+                );
+                unresolved.global_variables.insert(v_handle, o_handle);
+            }
         }
     }
 
+    // Process functions, taking note of which ones require overrides that were
+    // not specified. Like expressions, callees are guarenteed to appear before
+    // their callers.
     let mut functions = mem::take(&mut module.functions);
-    for (_, function) in functions.iter_mut() {
-        process_function(&mut module, &override_map, &mut layouter, function)?;
+    for (f_handle, function) in functions.iter_mut() {
+        if let Some(o_handle) = process_function(
+            &mut module,
+            &override_map,
+            &unresolved.functions,
+            &mut layouter,
+            function,
+        )? {
+            log::trace!(
+                "function {:?} missing override {:?}",
+                function.name,
+                overrides[o_handle].name
+            );
+            unresolved.functions.insert(f_handle, o_handle);
+        }
     }
     module.functions = functions;
 
+    // Process entry points
     let mut entry_points = mem::take(&mut module.entry_points);
-    for ep in entry_points.iter_mut() {
-        process_function(&mut module, &override_map, &mut layouter, &mut ep.function)?;
-        process_workgroup_size_override(&mut module, &adjusted_global_expressions, ep)?;
+    for (ep_index, ep) in entry_points.iter_mut().enumerate() {
+        let result = if let Some(o_handle) = process_function(
+            &mut module,
+            &override_map,
+            &unresolved.functions,
+            &mut layouter,
+            &mut ep.function,
+        )? {
+            log::trace!(
+                "entry point {} missing override {:?}",
+                ep.name,
+                overrides[o_handle].name
+            );
+            Some(o_handle)
+        } else if let Some(o_handle) =
+            process_workgroup_size_override(&mut module, &adjusted_global_expressions, ep)?
+        {
+            Some(o_handle)
+        } else {
+            // See if we use any global variables that are missing overrides.
+            let mut missing = None;
+            for (var_handle, _) in module.global_variables.iter() {
+                let global_use = module_info.get_entry_point(ep_index)[var_handle];
+                match unresolved.global_variables.get(&var_handle) {
+                    Some(&o_handle) if !global_use.is_empty() => {
+                        missing = Some(o_handle);
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            missing
+        };
+        if let Some(o_handle) = result {
+            // We found a missing override that is required by this entry point.
+            // Decide whether that is an error.
+            match entry_point {
+                Some((tgt_stage, tgt_name)) if ep.stage != tgt_stage || ep.name != tgt_name => {
+                    // An entry point was specified, and we are not currently
+                    // processing that one, so it is okay not to have this
+                    // override.
+                    unresolved.entry_points.insert(ep_index, o_handle);
+                }
+                _ => {
+                    // Either we are missing an override for the active entry point,
+                    // or no entry point was specified. Either way, this override
+                    // is required.
+                    return Err(PipelineConstantError::MissingValue(
+                        override_key(&overrides[o_handle]).to_string(),
+                    ));
+                }
+            }
+        }
     }
+
     module.entry_points = entry_points;
     module.overrides = overrides;
 
@@ -225,66 +413,84 @@ pub fn process_overrides<'a>(
     // recompute their types and other metadata. For the time being,
     // do a full re-validation.
     let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
-    let module_info = validator.validate_resolved_overrides(&module)?;
+    let module_info = validator.validate_with_resolved_overrides(&module, &unresolved)?;
 
-    Ok((Cow::Owned(module), Cow::Owned(module_info)))
+    Ok(ProcessOverridesOutput {
+        module: Cow::Owned(module),
+        info: Cow::Owned(module_info),
+        unresolved,
+    })
 }
 
+/// Process override expressions in the WGSL `@workgroup_size` attribute.
+///
+/// If all expressions are resolved, returns `Ok(None)`. If any expression could
+/// not be resolved due to missing override values, returns `Ok(Some(handle))`,
+/// with the handle of the first identified missing override. The caller is
+/// responsible for determining whether translation can proceed despite the
+/// missing override.
 fn process_workgroup_size_override(
     module: &mut Module,
     adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
     ep: &mut crate::EntryPoint,
-) -> Result<(), PipelineConstantError> {
+) -> Result<Option<Handle<Override>>, PipelineConstantError> {
     match ep.workgroup_size_overrides {
         None => {}
         Some(overrides) => {
-            overrides.iter().enumerate().try_for_each(
-                |(i, overridden)| -> Result<(), PipelineConstantError> {
-                    match *overridden {
-                        None => Ok(()),
-                        Some(h) => {
-                            ep.workgroup_size[i] = module
-                                .to_ctx()
-                                .eval_expr_to_u32(adjusted_global_expressions[h])
-                                .map(|n| {
-                                    if n == 0 {
-                                        Err(PipelineConstantError::NegativeWorkgroupSize)
-                                    } else {
-                                        Ok(n)
-                                    }
-                                })
-                                .map_err(|_| PipelineConstantError::NegativeWorkgroupSize)??;
-                            Ok(())
+            for (ov_index, ov) in overrides.iter().enumerate() {
+                match *ov {
+                    None => continue,
+                    Some(h) => {
+                        match module
+                            .to_ctx()
+                            .eval_expr_to_u32(adjusted_global_expressions[h])
+                        {
+                            Ok(n) => {
+                                if n == 0 {
+                                    return Err(PipelineConstantError::NegativeWorkgroupSize);
+                                } else {
+                                    ep.workgroup_size[ov_index] = n;
+                                }
+                            }
+                            Err(U32EvalError::Override(handle)) => {
+                                return Ok(Some(handle));
+                            }
+                            Err(U32EvalError::Runtime) => {
+                                return Err(
+                                    PipelineConstantError::WorkgroupSizeOverrideEvaluationError,
+                                );
+                            }
+                            Err(U32EvalError::Negative) => {
+                                return Err(PipelineConstantError::NegativeWorkgroupSize);
+                            }
                         }
                     }
-                },
-            )?;
+                }
+            }
             ep.workgroup_size_overrides = None;
         }
     }
-    Ok(())
+    Ok(None)
 }
 
-/// Add a [`Constant`] to `module` for the override `old_h`.
+/// If a value for the override `old_h` is given in `self.pipeline_constants`,
+/// add a [`Constant`] for that override to `module`.
 ///
-/// Add the new `Constant` to `override_map` and `adjusted_constant_initializers`.
+/// If a value is found, adds the new `Constant` to `override_map` and
+/// `adjusted_constant_initializers`, and returns it.
+///
+/// If no value is found, returns `Ok(None)`. The caller is responsible for
+/// determining whether translation can proceed despite the missing override.
 fn process_override(
     (old_h, r#override, span): (Handle<Override>, &mut Override, &Span),
     pipeline_constants: &PipelineConstants,
     module: &mut Module,
-    override_map: &mut HandleVec<Override, Handle<Constant>>,
+    override_map: &mut HandleVec<Override, Option<Handle<Constant>>>,
     adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
     adjusted_constant_initializers: &mut HashSet<Handle<Constant>>,
     global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
-) -> Result<Handle<Constant>, PipelineConstantError> {
-    // Determine which key to use for `r#override` in `pipeline_constants`.
-    let key = if let Some(id) = r#override.id {
-        Cow::Owned(id.to_string())
-    } else if let Some(ref name) = r#override.name {
-        Cow::Borrowed(name)
-    } else {
-        unreachable!();
-    };
+) -> Result<Option<Handle<Constant>>, PipelineConstantError> {
+    let key = override_key(r#override);
 
     // Generate a global expression for `r#override`'s value, either
     // from the provided `pipeline_constants` table or its initializer
@@ -299,10 +505,16 @@ fn process_override(
             .append(Expression::Literal(literal), Span::UNDEFINED);
         global_expression_kind_tracker.insert(expr, crate::proc::ExpressionKind::Const);
         expr
-    } else if let Some(init) = r#override.init {
-        adjusted_global_expressions[init]
     } else {
-        return Err(PipelineConstantError::MissingValue(key.to_string()));
+        match r#override.init {
+            Some(init) if global_expression_kind_tracker.is_const(init) => {
+                adjusted_global_expressions[init]
+            }
+            _ => {
+                override_map.insert(old_h, None);
+                return Ok(None);
+            }
+        }
     };
 
     // Generate a new `Constant` to represent the override's value.
@@ -312,27 +524,35 @@ fn process_override(
         init,
     };
     let h = module.constants.append(constant, *span);
-    override_map.insert(old_h, h);
+    override_map.insert(old_h, Some(h));
     adjusted_constant_initializers.insert(h);
     r#override.init = Some(init);
-    Ok(h)
+    Ok(Some(h))
 }
 
-/// Replace all override expressions in `function` with fully-evaluated constants.
+/// Replace override expressions in `function` with fully-evaluated constants.
 ///
-/// Replace all `Expression::Override`s in `function`'s expression arena with
+/// Replace `Expression::Override`s in `function`'s expression arena with
 /// the corresponding `Expression::Constant`s, as given in `override_map`.
 /// Replace any expressions whose values are now known with their fully
 /// evaluated form.
 ///
 /// If `h` is a `Handle<Override>`, then `override_map[h]` is the
 /// `Handle<Constant>` for the override's final value.
+///
+/// If all override expressions are replaced, returns `Ok(None)`. If any
+/// expression could not be replaced due to missing override values, or if
+/// the function calls another function that is present in
+/// `functions_missing_overrides`, returns `Ok(Some(handle))`, with the handle
+/// of the first identified missing override. The caller is responsible for
+/// determining whether translation can proceed despite the missing override.
 fn process_function(
     module: &mut Module,
-    override_map: &HandleVec<Override, Handle<Constant>>,
+    override_map: &HandleVec<Override, Option<Handle<Constant>>>,
+    functions_missing_overrides: &FastHashMap<Handle<Function>, Handle<Override>>,
     layouter: &mut crate::proc::Layouter,
     function: &mut Function,
-) -> Result<(), ConstantEvaluatorError> {
+) -> Result<Option<Handle<Override>>, ConstantEvaluatorError> {
     // A map from original local expression handles to
     // handles in the new, local expression arena.
     let mut adjusted_local_expressions = HandleVec::with_capacity(function.expressions.len());
@@ -340,6 +560,8 @@ fn process_function(
     let mut local_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
 
     let mut expressions = mem::take(&mut function.expressions);
+
+    let mut missing_override = None;
 
     // Dummy `emitter` and `block` for the constant evaluator.
     // We can ignore the concept of emitting expressions here since
@@ -363,14 +585,29 @@ fn process_function(
 
     for (old_h, mut expr, span) in expressions.drain() {
         if let Expression::Override(h) = expr {
-            expr = Expression::Constant(override_map[h]);
+            if let Some(&Some(const_h)) = override_map.get(h) {
+                expr = Expression::Constant(const_h);
+            } else if missing_override.is_none() {
+                missing_override = Some(h);
+            }
         }
         adjust_expr(&adjusted_local_expressions, &mut expr);
-        let h = evaluator.try_eval_and_append(expr, span)?;
+        let h = evaluator
+            .try_eval_and_append(expr, span)
+            .map_err(|(_expr, err)| err)?;
         adjusted_local_expressions.insert(old_h, h);
     }
 
-    adjust_block(&adjusted_local_expressions, &mut function.body);
+    match adjust_block(
+        &adjusted_local_expressions,
+        functions_missing_overrides,
+        &mut function.body,
+    ) {
+        missing @ Some(_) if missing_override.is_none() => {
+            missing_override = missing;
+        }
+        _ => {}
+    }
 
     filter_emits_in_block(&mut function.body, &function.expressions);
 
@@ -390,7 +627,7 @@ fn process_function(
             .insert(adjusted_local_expressions[expr_h], name);
     }
 
-    Ok(())
+    Ok(missing_override)
 }
 
 /// Replace every expression handle in `expr` with its counterpart
@@ -606,15 +843,39 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
 
 /// Replace every expression handle in `block` with its counterpart
 /// given by `new_pos`.
-fn adjust_block(new_pos: &HandleVec<Expression, Handle<Expression>>, block: &mut Block) {
+///
+/// On success, returns `Ok(None)`. If `block` calls a function that is present
+/// in `functions_missing_overrides`, returns `Ok(Some(handle))`, with the
+/// handle of the first identified missing override.
+fn adjust_block(
+    new_pos: &HandleVec<Expression, Handle<Expression>>,
+    functions_missing_overrides: &FastHashMap<Handle<Function>, Handle<Override>>,
+    block: &mut Block,
+) -> Option<Handle<Override>> {
+    let mut missing_override = None;
     for stmt in block.iter_mut() {
-        adjust_stmt(new_pos, stmt);
+        match adjust_stmt(new_pos, functions_missing_overrides, stmt) {
+            missing @ Some(_) if missing_override.is_none() => {
+                missing_override = missing;
+            }
+            _ => {}
+        }
     }
+    missing_override
 }
 
 /// Replace every expression handle in `stmt` with its counterpart
 /// given by `new_pos`.
-fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut Statement) {
+///
+/// On success, returns `Ok(None)`. If `stmt` calls a function that is present
+/// in `functions_missing_overrides`, returns `Ok(Some(handle))`, with the
+/// handle of the first identified missing override.
+fn adjust_stmt(
+    new_pos: &HandleVec<Expression, Handle<Expression>>,
+    functions_missing_overrides: &FastHashMap<Handle<Function>, Handle<Override>>,
+    stmt: &mut Statement,
+) -> Option<Handle<Override>> {
+    let mut missing_override = None;
     let adjust = |expr: &mut Handle<Expression>| {
         *expr = new_pos[*expr];
     };
@@ -627,7 +888,7 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
             }
         }
         Statement::Block(ref mut block) => {
-            adjust_block(new_pos, block);
+            adjust_block(new_pos, functions_missing_overrides, block);
         }
         Statement::If {
             ref mut condition,
@@ -635,8 +896,8 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
             ref mut reject,
         } => {
             adjust(condition);
-            adjust_block(new_pos, accept);
-            adjust_block(new_pos, reject);
+            adjust_block(new_pos, functions_missing_overrides, accept);
+            adjust_block(new_pos, functions_missing_overrides, reject);
         }
         Statement::Switch {
             ref mut selector,
@@ -644,7 +905,7 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
         } => {
             adjust(selector);
             for case in cases.iter_mut() {
-                adjust_block(new_pos, &mut case.body);
+                adjust_block(new_pos, functions_missing_overrides, &mut case.body);
             }
         }
         Statement::Loop {
@@ -652,8 +913,8 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
             ref mut continuing,
             ref mut break_if,
         } => {
-            adjust_block(new_pos, body);
-            adjust_block(new_pos, continuing);
+            adjust_block(new_pos, functions_missing_overrides, body);
+            adjust_block(new_pos, functions_missing_overrides, continuing);
             if let Some(e) = break_if.as_mut() {
                 adjust(e);
             }
@@ -769,8 +1030,14 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
         Statement::Call {
             ref mut arguments,
             ref mut result,
-            function: _,
+            function,
         } => {
+            match functions_missing_overrides.get(&function).copied() {
+                missing @ Some(_) if missing_override.is_none() => {
+                    missing_override = missing;
+                }
+                _ => {}
+            }
             for argument in arguments.iter_mut() {
                 adjust(argument);
             }
@@ -803,6 +1070,7 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
         }
         Statement::Break | Statement::Continue | Statement::Kill | Statement::Barrier(_) => {}
     }
+    missing_override
 }
 
 /// Adjust [`Emit`] statements in `block` to skip [`needs_pre_emit`] expressions we have introduced.

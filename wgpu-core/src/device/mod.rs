@@ -371,11 +371,11 @@ impl ImplicitPipelineIds<'_> {
 }
 
 /// Create a validator with the given validation flags.
-pub fn create_validator(
+pub fn create_validator<'a>(
     features: wgt::Features,
     downlevel: wgt::DownlevelFlags,
     flags: naga::valid::ValidationFlags,
-) -> naga::valid::Validator {
+) -> naga::valid::Validator<'a> {
     use naga::valid::Capabilities as Caps;
     let mut caps = Caps::empty();
     caps.set(

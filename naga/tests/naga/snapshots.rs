@@ -145,6 +145,8 @@ struct Parameters {
     // -- HLSL options --
     #[cfg(all(feature = "deserialize", hlsl_out))]
     hlsl: naga::back::hlsl::Options,
+    #[serde(default)]
+    hlsl_pipeline: naga::back::hlsl::PipelineOptions,
 
     // -- WGSL options --
     wgsl: WgslOutParameters,
@@ -548,6 +550,7 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
                 module,
                 &info,
                 &params.hlsl,
+                &params.hlsl_pipeline,
                 &params.pipeline_constants,
                 frag_ep,
             );
@@ -598,9 +601,12 @@ fn write_output_spv(
         debug_info,
     };
 
-    let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
-            .expect("override evaluation failed");
+    let naga::back::pipeline_constants::ProcessOverridesOutput {
+        module,
+        info,
+        unresolved: _,
+    } = naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
+        .expect("override evaluation failed");
 
     if params.separate_entry_points {
         for ep in module.entry_points.iter() {
@@ -660,15 +666,28 @@ fn write_output_msl(
 ) {
     use naga::back::msl;
 
-    println!("generating MSL");
+    println!("generating MSL for {:?}", pipeline_options.entry_point);
 
-    let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
-            .expect("override evaluation failed");
+    let naga::back::pipeline_constants::ProcessOverridesOutput {
+        module,
+        info,
+        unresolved,
+    } = naga::back::pipeline_constants::process_overrides(
+        module,
+        info,
+        pipeline_options
+            .entry_point
+            .as_ref()
+            .map(|&(stage, ref name)| (stage, name.as_str())),
+        pipeline_constants,
+    )
+    .expect("override evaluation failed");
 
     let mut options = options.clone();
     options.bounds_check_policies = bounds_check_policies;
-    let (string, tr_info) = msl::write_string(&module, &info, &options, pipeline_options)
+    let mut pipeline_options = pipeline_options.clone();
+    pipeline_options.unresolved_overrides = unresolved;
+    let (string, tr_info) = msl::write_string(&module, &info, &options, &pipeline_options)
         .unwrap_or_else(|err| panic!("Metal write failed: {err}"));
 
     for (ep, result) in module.entry_points.iter().zip(tr_info.entry_point_names) {
@@ -704,9 +723,12 @@ fn write_output_glsl(
     };
 
     let mut buffer = String::new();
-    let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
-            .expect("override evaluation failed");
+    let naga::back::pipeline_constants::ProcessOverridesOutput {
+        module,
+        info,
+        unresolved: _,
+    } = naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
+        .expect("override evaluation failed");
     let mut writer = glsl::Writer::new(
         &mut buffer,
         &module,
@@ -728,6 +750,7 @@ fn write_output_hlsl(
     module: &naga::Module,
     info: &naga::valid::ModuleInfo,
     options: &naga::back::hlsl::Options,
+    pipeline_options: &naga::back::hlsl::PipelineOptions,
     pipeline_constants: &naga::back::PipelineConstants,
     frag_ep: Option<naga::back::hlsl::FragmentEntryPoint>,
 ) {
@@ -736,9 +759,20 @@ fn write_output_hlsl(
 
     println!("generating HLSL");
 
-    let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
-            .expect("override evaluation failed");
+    let naga::back::pipeline_constants::ProcessOverridesOutput {
+        module,
+        info,
+        unresolved: _,
+    } = naga::back::pipeline_constants::process_overrides(
+        module,
+        info,
+        pipeline_options
+            .entry_point
+            .as_ref()
+            .map(|&(stage, ref name)| (stage, name.as_str())),
+        pipeline_constants,
+    )
+    .expect("override evaluation failed");
 
     let mut buffer = String::new();
     let pipeline_options = Default::default();

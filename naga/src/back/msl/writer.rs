@@ -21,9 +21,10 @@ use crate::{
     proc::{
         self,
         index::{self, BoundsCheck},
-        NameKey, TypeResolution,
+        NameKey, ResolveArraySizeError, TypeResolution,
     },
-    valid, FastHashMap, FastHashSet,
+    valid::{self, UnresolvedOverrides},
+    FastHashMap, FastHashSet,
 };
 
 #[cfg(test)]
@@ -436,6 +437,7 @@ pub struct Writer<W> {
     /// Set of (struct type, struct field index) denoting which fields require
     /// padding inserted **before** them (i.e. between fields at index - 1 and index)
     struct_member_pads: FastHashSet<(Handle<crate::Type>, u32)>,
+    unresolved_overrides: Option<UnresolvedOverrides>,
 }
 
 impl crate::Scalar {
@@ -775,6 +777,7 @@ impl<W: Write> Writer<W> {
             #[cfg(test)]
             put_block_stack_pointers: Default::default(),
             struct_member_pads: FastHashSet::default(),
+            unresolved_overrides: None,
         }
     }
 
@@ -4032,6 +4035,7 @@ impl<W: Write> Writer<W> {
         );
         self.wrapped_functions.clear();
         self.struct_member_pads.clear();
+        self.unresolved_overrides = Some(pipeline_options.unresolved_overrides.clone());
 
         writeln!(
             self.out,
@@ -4216,8 +4220,20 @@ impl<W: Write> Writer<W> {
                         first_time: false,
                     };
 
-                    match size.resolve(module.to_ctx())? {
-                        proc::IndexableLength::Known(size) => {
+                    match size.resolve(module.to_ctx()) {
+                        Err(ResolveArraySizeError::NonConstArrayLength) => {
+                            // The array size was never resolved. This _should_
+                            // be because it is an override expression and the
+                            // type is not needed for the entry point being
+                            // written.
+                            // TODO: do we want to assemble `UnresolvedOverrides.types` to make this safer?
+                            // (And if so, do we also want to validate that those types are truly unused?)
+                            continue;
+                        }
+                        Err(err @ ResolveArraySizeError::ExpectedPositiveArrayLength) => {
+                            return Err(err.into());
+                        }
+                        Ok(proc::IndexableLength::Known(size)) => {
                             writeln!(self.out, "struct {name} {{")?;
                             writeln!(
                                 self.out,
@@ -4229,7 +4245,7 @@ impl<W: Write> Writer<W> {
                             )?;
                             writeln!(self.out, "}};")?;
                         }
-                        proc::IndexableLength::Dynamic => {
+                        Ok(proc::IndexableLength::Dynamic) => {
                             writeln!(self.out, "typedef {base_name} {name}[1];")?;
                         }
                     }
@@ -5757,6 +5773,17 @@ template <typename A>
                 fun_handle
             );
 
+            if self
+                .unresolved_overrides
+                .as_ref()
+                .unwrap()
+                .functions
+                .contains_key(&fun_handle)
+            {
+                log::trace!("skipping due to unresolved overrides");
+                continue;
+            }
+
             let ctx = back::FunctionCtx {
                 ty: back::FunctionType::Function(fun_handle),
                 info: &mod_info[fun_handle],
@@ -5880,6 +5907,19 @@ template <typename A>
         };
 
         for ep_index in ep_range {
+            if self
+                .unresolved_overrides
+                .as_ref()
+                .unwrap()
+                .entry_points
+                .contains_key(&ep_index)
+            {
+                log::error!(
+                    "must write the same entry point that was passed to `process_overrides`"
+                );
+                return Err(Error::Override);
+            }
+
             let ep = &module.entry_points[ep_index];
             let fun = &ep.function;
             let fun_info = mod_info.get_entry_point(ep_index);
@@ -6288,7 +6328,15 @@ template <typename A>
             // within the entry point.
             for (handle, var) in module.global_variables.iter() {
                 let usage = fun_info[handle];
-                if usage.is_empty() || var.space == crate::AddressSpace::Private {
+                if usage.is_empty()
+                    || var.space == crate::AddressSpace::Private
+                    || self
+                        .unresolved_overrides
+                        .as_ref()
+                        .unwrap()
+                        .global_variables
+                        .contains_key(&handle)
+                {
                     continue;
                 }
 

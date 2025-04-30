@@ -18,7 +18,7 @@ use bit_set::BitSet;
 use crate::{
     arena::{Handle, HandleSet},
     proc::{ExpressionKindTracker, LayoutError, Layouter, TypeResolution},
-    FastHashSet,
+    FastHashMap, FastHashSet,
 };
 
 //TODO: analyze the model at the same time as we validate it,
@@ -268,8 +268,22 @@ impl ops::Index<Handle<crate::Expression>> for ModuleInfo {
     }
 }
 
+/// Information about overrides that remain unresolved after [`process_overrides`].
+///
+/// This struct may be passed to the various backend writers.
+///
+/// [`process_overrides`]: crate::back::pipeline_constants::process_overrides
+#[cfg(any(hlsl_out, msl_out, spv_out, glsl_out))]
+#[derive(Clone, Debug, Default)]
+pub struct UnresolvedOverrides {
+    pub(crate) global_variables:
+        FastHashMap<Handle<crate::GlobalVariable>, Handle<crate::Override>>,
+    pub(crate) functions: FastHashMap<Handle<crate::Function>, Handle<crate::Override>>,
+    pub(crate) entry_points: FastHashMap<usize, Handle<crate::Override>>,
+}
+
 #[derive(Debug)]
-pub struct Validator {
+pub struct Validator<'a> {
     flags: ValidationFlags,
     capabilities: Capabilities,
     subgroup_stages: ShaderStages,
@@ -288,6 +302,8 @@ pub struct Validator {
     /// Treat overrides whose initializers are not fully-evaluated
     /// constant expressions as errors.
     overrides_resolved: bool,
+
+    unresolved_overrides: Option<&'a UnresolvedOverrides>,
 
     /// A checklist of expressions that must be visited by a specific kind of
     /// statement.
@@ -452,7 +468,7 @@ impl crate::TypeInner {
     }
 }
 
-impl Validator {
+impl<'a> Validator<'a> {
     /// Construct a new validator instance.
     pub fn new(flags: ValidationFlags, capabilities: Capabilities) -> Self {
         let subgroup_operations = if capabilities.contains(Capabilities::SUBGROUP) {
@@ -487,6 +503,7 @@ impl Validator {
             valid_expression_set: HandleSet::new(),
             override_ids: FastHashSet::default(),
             overrides_resolved: false,
+            unresolved_overrides: None,
             needs_visit: HandleSet::new(),
         }
     }
@@ -574,8 +591,6 @@ impl Validator {
             if !gctx.compare_types(&TypeResolution::Handle(o.ty), &mod_info[init]) {
                 return Err(OverrideError::InvalidType);
             }
-        } else if self.overrides_resolved {
-            return Err(OverrideError::UninitializedOverride);
         }
 
         Ok(())
@@ -590,18 +605,19 @@ impl Validator {
         self.validate_impl(module)
     }
 
-    /// Check the given module to be valid, requiring overrides to be resolved.
+    /// Check the given module to be valid, after resolving overrides.
     ///
-    /// This is the same as [`validate`], except that any override
-    /// whose value is not a fully-evaluated constant expression is
-    /// treated as an error.
+    /// This is the same as [`validate`], but override expressions are allowed
+    /// in items that appear in one of the maps in `unresolved`.
     ///
     /// [`validate`]: Validator::validate
-    pub fn validate_resolved_overrides(
+    pub(crate) fn validate_with_resolved_overrides(
         &mut self,
         module: &crate::Module,
+        unresolved: &'a UnresolvedOverrides,
     ) -> Result<ModuleInfo, WithSpan<ValidationError>> {
         self.overrides_resolved = true;
+        self.unresolved_overrides = Some(unresolved);
         self.validate_impl(module)
     }
 
@@ -703,19 +719,36 @@ impl Validator {
         }
 
         for (var_handle, var) in module.global_variables.iter() {
-            self.validate_global_var(var, module.to_ctx(), &mod_info, &global_expr_kind)
-                .map_err(|source| {
-                    ValidationError::GlobalVariable {
-                        handle: var_handle,
-                        name: var.name.clone().unwrap_or_default(),
-                        source,
-                    }
-                    .with_span_handle(var_handle, &module.global_variables)
-                })?;
+            let save_overrides_resolved = self.overrides_resolved;
+            match self.unresolved_overrides {
+                Some(unres) if unres.global_variables.contains_key(&var_handle) => {
+                    self.overrides_resolved = false;
+                }
+                _ => {}
+            }
+            let res = self.validate_global_var(var, module.to_ctx(), &mod_info, &global_expr_kind);
+            self.overrides_resolved = save_overrides_resolved;
+            res.map_err(|source| {
+                ValidationError::GlobalVariable {
+                    handle: var_handle,
+                    name: var.name.clone().unwrap_or_default(),
+                    source,
+                }
+                .with_span_handle(var_handle, &module.global_variables)
+            })?;
         }
 
         for (handle, fun) in module.functions.iter() {
-            match self.validate_function(fun, module, &mod_info, false) {
+            let save_overrides_resolved = self.overrides_resolved;
+            match self.unresolved_overrides {
+                Some(unres) if unres.functions.contains_key(&handle) => {
+                    self.overrides_resolved = false;
+                }
+                _ => {}
+            }
+            let res = self.validate_function(fun, module, &mod_info, false);
+            self.overrides_resolved = save_overrides_resolved;
+            match res {
                 Ok(info) => mod_info.functions.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {
@@ -731,7 +764,7 @@ impl Validator {
         }
 
         let mut ep_map = FastHashSet::default();
-        for ep in module.entry_points.iter() {
+        for (ep_index, ep) in module.entry_points.iter().enumerate() {
             if !ep_map.insert((ep.stage, &ep.name)) {
                 return Err(ValidationError::EntryPoint {
                     stage: ep.stage,
@@ -741,7 +774,16 @@ impl Validator {
                 .with_span()); // TODO: keep some EP span information?
             }
 
-            match self.validate_entry_point(ep, module, &mod_info) {
+            let save_overrides_resolved = self.overrides_resolved;
+            match self.unresolved_overrides {
+                Some(unres) if unres.entry_points.contains_key(&ep_index) => {
+                    self.overrides_resolved = false;
+                }
+                _ => {}
+            }
+            let res = self.validate_entry_point(ep, module, &mod_info);
+            self.overrides_resolved = save_overrides_resolved;
+            match res {
                 Ok(info) => mod_info.entry_points.push(info),
                 Err(error) => {
                     return Err(error.and_then(|source| {

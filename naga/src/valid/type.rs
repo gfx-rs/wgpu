@@ -252,7 +252,7 @@ impl TypeInfo {
     }
 }
 
-impl super::Validator {
+impl super::Validator<'_> {
     const fn require_type_capability(&self, capability: Capabilities) -> Result<(), TypeError> {
         if self.capabilities.contains(capability) {
             Ok(())

@@ -686,6 +686,8 @@ fn write_output(
     params: &Parameters,
     output_path: &str,
 ) -> anyhow::Result<()> {
+    use naga::back::pipeline_constants::ProcessOverridesOutput;
+
     match Path::new(&output_path)
         .extension()
         .ok_or(CliError("Output filename has no extension"))?
@@ -717,9 +719,14 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let ProcessOverridesOutput { module, info, .. } =
+                naga::back::pipeline_constants::process_overrides(
+                    module,
+                    info,
+                    None,
+                    &params.overrides,
+                )
+                .unwrap_pretty();
 
             let pipeline_options = msl::PipelineOptions::default();
             let (msl, _) =
@@ -751,9 +758,17 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let naga::back::pipeline_constants::ProcessOverridesOutput {
+                module,
+                info,
+                unresolved: _,
+            } = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                None,
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
             let spv =
                 spv::write_vec(&module, &info, &params.spv_out, pipeline_options).unwrap_pretty();
@@ -788,9 +803,17 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let naga::back::pipeline_constants::ProcessOverridesOutput {
+                module,
+                info,
+                unresolved: _,
+            } = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                None,
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
             let mut buffer = String::new();
             let mut writer = glsl::Writer::new(
@@ -819,9 +842,17 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let naga::back::pipeline_constants::ProcessOverridesOutput {
+                module,
+                info,
+                unresolved: _,
+            } = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                None,
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
             let mut buffer = String::new();
             let pipeline_options = Default::default();

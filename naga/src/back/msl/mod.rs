@@ -52,7 +52,12 @@ use alloc::{
 };
 use core::fmt::{Error as FmtError, Write};
 
-use crate::{arena::Handle, ir, proc::index, valid::ModuleInfo};
+use crate::{
+    arena::Handle,
+    ir,
+    proc::index,
+    valid::{ModuleInfo, UnresolvedOverrides},
+};
 
 mod keywords;
 pub mod sampler;
@@ -430,6 +435,14 @@ pub struct PipelineOptions {
     /// If `None`, all entry points will be written. If `Some` and the entry
     /// point is not found, an error will be thrown while writing.
     pub entry_point: Option<(ir::ShaderStage, String)>,
+
+    /// Information about unresolved overrides.
+    ///
+    /// This struct is returned by `process_overrides`. It tells the writer
+    /// which items to omit from the output because they are not used and refer
+    /// to overrides that were not resolved to a concrete value.
+    #[cfg_attr(feature = "serialize", serde(skip))]
+    pub unresolved_overrides: UnresolvedOverrides,
 
     /// Allow `BuiltIn::PointSize` and inject it if doesn't exist.
     ///

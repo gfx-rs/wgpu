@@ -889,9 +889,14 @@ impl super::Device {
                     &self.naga_options
                 };
 
-                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                let naga::back::pipeline_constants::ProcessOverridesOutput {
+                    module,
+                    info,
+                    unresolved: _,
+                } = naga::back::pipeline_constants::process_overrides(
                     &naga_shader.module,
                     &naga_shader.info,
+                    None,
                     stage.constants,
                 )
                 .map_err(|e| {

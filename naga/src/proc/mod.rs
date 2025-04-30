@@ -415,7 +415,12 @@ impl crate::Module {
 
 #[derive(Debug)]
 pub(super) enum U32EvalError {
-    NonConst,
+    /// Expression is not constant.
+    Runtime,
+
+    /// Expression is not constant because the indicated override value is not supplied.
+    Override(crate::Handle<crate::Override>),
+
     Negative,
 }
 
@@ -444,11 +449,10 @@ impl GlobalCtx<'_> {
         arena: &crate::Arena<crate::Expression>,
     ) -> Result<u32, U32EvalError> {
         match self.eval_expr_to_literal_from(handle, arena) {
-            Some(crate::Literal::U32(value)) => Ok(value),
-            Some(crate::Literal::I32(value)) => {
-                value.try_into().map_err(|_| U32EvalError::Negative)
-            }
-            _ => Err(U32EvalError::NonConst),
+            Ok(crate::Literal::U32(value)) => Ok(value),
+            Ok(crate::Literal::I32(value)) => value.try_into().map_err(|_| U32EvalError::Negative),
+            Err(Some(ov_handle)) => Err(U32EvalError::Override(ov_handle)),
+            _ => Err(U32EvalError::Runtime),
         }
     }
 
@@ -460,7 +464,7 @@ impl GlobalCtx<'_> {
         arena: &crate::Arena<crate::Expression>,
     ) -> Option<bool> {
         match self.eval_expr_to_literal_from(handle, arena) {
-            Some(crate::Literal::Bool(value)) => Some(value),
+            Ok(crate::Literal::Bool(value)) => Some(value),
             _ => None,
         }
     }
@@ -469,7 +473,7 @@ impl GlobalCtx<'_> {
     pub(crate) fn eval_expr_to_literal(
         &self,
         handle: crate::Handle<crate::Expression>,
-    ) -> Option<crate::Literal> {
+    ) -> Result<crate::Literal, Option<crate::Handle<crate::Override>>> {
         self.eval_expr_to_literal_from(handle, self.global_expressions)
     }
 
@@ -477,25 +481,26 @@ impl GlobalCtx<'_> {
         &self,
         handle: crate::Handle<crate::Expression>,
         arena: &crate::Arena<crate::Expression>,
-    ) -> Option<crate::Literal> {
+    ) -> Result<crate::Literal, Option<crate::Handle<crate::Override>>> {
         fn get(
             gctx: GlobalCtx,
             handle: crate::Handle<crate::Expression>,
             arena: &crate::Arena<crate::Expression>,
-        ) -> Option<crate::Literal> {
+        ) -> Result<crate::Literal, Option<crate::Handle<crate::Override>>> {
             match arena[handle] {
-                crate::Expression::Literal(literal) => Some(literal),
+                crate::Expression::Literal(literal) => Ok(literal),
                 crate::Expression::ZeroValue(ty) => match gctx.types[ty].inner {
-                    crate::TypeInner::Scalar(scalar) => crate::Literal::zero(scalar),
-                    _ => None,
+                    crate::TypeInner::Scalar(scalar) => crate::Literal::zero(scalar).ok_or(None),
+                    _ => Err(None),
                 },
-                _ => None,
+                _ => Err(None),
             }
         }
         match arena[handle] {
             crate::Expression::Constant(c) => {
                 get(*self, self.constants[c].init, self.global_expressions)
             }
+            crate::Expression::Override(handle) => Err(Some(handle)),
             _ => get(*self, handle, arena),
         }
     }
@@ -531,7 +536,9 @@ impl crate::ArraySize {
                     return Err(ResolveArraySizeError::NonConstArrayLength);
                 };
                 let length = gctx.eval_expr_to_u32(expr).map_err(|err| match err {
-                    U32EvalError::NonConst => ResolveArraySizeError::NonConstArrayLength,
+                    U32EvalError::Runtime | U32EvalError::Override(_) => {
+                        ResolveArraySizeError::NonConstArrayLength
+                    }
                     U32EvalError::Negative => ResolveArraySizeError::ExpectedPositiveArrayLength,
                 })?;
 
