@@ -1758,7 +1758,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn build_acceleration_structures<'a, T>(
         &mut self,
         _descriptor_count: u32,
-        _descriptors: T,
+        descriptors: T,
     ) where
         super::Api: 'a,
         T: IntoIterator<
@@ -1769,7 +1769,31 @@ impl crate::CommandEncoder for super::CommandEncoder {
             >,
         >,
     {
-        unimplemented!()
+        let command_encoder = self.enter_acceleration_structure_builder();
+        for descriptor in descriptors {
+            let acceleration_structure_descriptor =
+                conv::map_acceleration_structure_descriptor(descriptor.entries, descriptor.flags);
+            match descriptor.mode {
+                crate::AccelerationStructureBuildMode::Build => {
+                    command_encoder
+                        .buildAccelerationStructure_descriptor_scratchBuffer_scratchBufferOffset(
+                            &descriptor.destination_acceleration_structure.raw,
+                            &acceleration_structure_descriptor,
+                            &descriptor.scratch_buffer.raw,
+                            descriptor.scratch_buffer_offset as usize,
+                        );
+                }
+                crate::AccelerationStructureBuildMode::Update => unsafe {
+                    command_encoder.refitAccelerationStructure_descriptor_destination_scratchBuffer_scratchBufferOffset(
+                        &descriptor.source_acceleration_structure.unwrap().raw,
+                        &acceleration_structure_descriptor,
+                        Some(&descriptor.destination_acceleration_structure.raw),
+                        Some(&descriptor.scratch_buffer.raw),
+                        descriptor.scratch_buffer_offset as usize,
+                    );
+                },
+            }
+        }
     }
 
     unsafe fn place_acceleration_structure_barrier(
