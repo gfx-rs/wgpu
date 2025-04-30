@@ -6,8 +6,8 @@ use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
     MTLBlitCommandEncoder, MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder,
     MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample,
-    MTLIndexType, MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder,
-    MTLRenderPassDescriptor, MTLSamplerState, MTLScissorRect, MTLSize, MTLStoreAction, MTLTexture,
+    MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
+    MTLSamplerState, MTLScissorRect, MTLSize, MTLStoreAction, MTLTexture,
     MTLVertexAmplificationViewMapping, MTLViewport, MTLVisibilityResultMode,
 };
 
@@ -1245,10 +1245,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         binding: crate::BufferBinding<'a, super::Buffer>,
         format: wgt::IndexFormat,
     ) {
-        let (stride, raw_type) = match format {
-            wgt::IndexFormat::Uint16 => (2, MTLIndexType::UInt16),
-            wgt::IndexFormat::Uint32 => (4, MTLIndexType::UInt32),
-        };
+        let (stride, raw_type) = conv::map_index_format(format);
         self.state.index = Some(super::IndexState {
             buffer_ptr: NonNull::from(&*binding.buffer.raw),
             offset: binding.offset,
