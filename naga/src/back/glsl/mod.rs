@@ -349,7 +349,8 @@ pub struct PipelineOptions {
     pub shader_stage: ShaderStage,
     /// The name of the entry point.
     ///
-    /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
+    /// If no entry point that matches is found while creating a [`Writer`], an
+    /// error will be thrown.
     pub entry_point: String,
     /// How many views to render to, if doing multiview rendering.
     pub multiview: Option<core::num::NonZeroU32>,

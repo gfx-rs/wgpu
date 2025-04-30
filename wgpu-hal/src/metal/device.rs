@@ -181,6 +181,7 @@ impl super::Device {
         };
 
         let pipeline_options = naga::back::msl::PipelineOptions {
+            entry_point: Some((naga_stage, stage.entry_point.to_owned())),
             allow_and_force_point_size: match primitive_class {
                 MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
@@ -223,7 +224,7 @@ impl super::Device {
             .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
         let ep = &module.entry_points[ep_index];
-        let ep_name = info.entry_point_names[ep_index]
+        let translated_ep_name = info.entry_point_names[0]
             .as_ref()
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
 
@@ -233,10 +234,12 @@ impl super::Device {
             depth: ep.workgroup_size[2] as _,
         };
 
-        let function = library.get_function(ep_name, None).map_err(|e| {
-            log::error!("get_function: {:?}", e);
-            crate::PipelineError::EntryPoint(naga_stage)
-        })?;
+        let function = library
+            .get_function(translated_ep_name, None)
+            .map_err(|e| {
+                log::error!("get_function: {:?}", e);
+                crate::PipelineError::EntryPoint(naga_stage)
+            })?;
 
         // collect sizes indices, immutable buffers, and work group memory sizes
         let ep_info = &module_info.get_entry_point(ep_index);

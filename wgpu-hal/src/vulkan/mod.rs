@@ -528,6 +528,14 @@ struct PrivateCapabilities {
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
     maximum_samplers: u32,
+
+    /// True if this adapter supports the [`VK_KHR_shader_integer_dot_product`] extension
+    /// (promoted to Vulkan 1.3).
+    ///
+    /// This is used to generate optimized code for WGSL's `dot4{I, U}8Packed`.
+    ///
+    /// [`VK_KHR_shader_integer_dot_product`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_shader_integer_dot_product.html
+    shader_integer_dot_product: bool,
 }
 
 bitflags::bitflags!(

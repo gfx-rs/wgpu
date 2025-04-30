@@ -299,9 +299,13 @@ impl super::Device {
             &layout.naga_options
         };
 
+        let pipeline_options = hlsl::PipelineOptions {
+            entry_point: Some((naga_stage, stage.entry_point.to_string())),
+        };
+
         //TODO: reuse the writer
         let mut source = String::new();
-        let mut writer = hlsl::Writer::new(&mut source, naga_options);
+        let mut writer = hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
         let reflection_info = {
             profiling::scope!("naga::back::hlsl::write");
             writer
@@ -315,13 +319,7 @@ impl super::Device {
             naga_options.shader_model.to_str()
         );
 
-        let ep_index = module
-            .entry_points
-            .iter()
-            .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
-            .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
-
-        let raw_ep = reflection_info.entry_point_names[ep_index]
+        let raw_ep = reflection_info.entry_point_names[0]
             .as_ref()
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
 
