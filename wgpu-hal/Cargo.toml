@@ -76,6 +76,7 @@ metal = [
     "dep:arrayvec",
     "dep:block2",
     "dep:dispatch2",
+    "dep:bytemuck",
     "dep:hashbrown",
     "dep:libc",
     "dep:log",
@@ -285,6 +286,7 @@ mach-dxcompiler-rs = { workspace = true, optional = true }
 # Backend: Metal
 block2 = { workspace = true, optional = true }
 dispatch2 = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true }
 objc2 = { workspace = true, optional = true }
 objc2-core-foundation = { workspace = true, optional = true }
 objc2-foundation = { workspace = true, optional = true }

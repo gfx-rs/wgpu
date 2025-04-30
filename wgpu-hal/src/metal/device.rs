@@ -7,6 +7,7 @@ use core::{
 use dispatch2::DispatchData;
 use std::{thread, time};
 
+use bytemuck::TransparentWrapper;
 use objc2::{
     available, msg_send,
     rc::{autoreleasepool, Retained},
@@ -14,16 +15,18 @@ use objc2::{
 };
 use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLAccelerationStructure, MTLBuffer, MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer,
-    MTLCommandBufferStatus, MTLCompileOptions, MTLComputePipelineDescriptor,
-    MTLComputePipelineState, MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode,
-    MTLDepthStencilDescriptor, MTLDevice, MTLFunction, MTLLanguageVersion, MTLLibrary,
-    MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPipelineBufferDescriptorArray,
-    MTLPixelFormat, MTLPrimitiveTopologyClass, MTLRenderPipelineColorAttachmentDescriptorArray,
-    MTLRenderPipelineDescriptor, MTLResource, MTLResourceID, MTLResourceOptions,
-    MTLSamplerAddressMode, MTLSamplerDescriptor, MTLSamplerMipFilter, MTLSamplerState, MTLSize,
-    MTLStencilDescriptor, MTLStorageMode, MTLTexture, MTLTextureDescriptor, MTLTextureType,
-    MTLTriangleFillMode, MTLVertexDescriptor, MTLVertexStepFunction,
+    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBuffer,
+    MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
+    MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
+    MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
+    MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
+    MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
+    MTLPipelineBufferDescriptorArray, MTLPixelFormat, MTLPrimitiveTopologyClass,
+    MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
+    MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
+    MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
+    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
+    MTLVertexStepFunction,
 };
 
 use super::{conv, PassthroughShader, ShaderModuleSource};
@@ -1967,8 +1970,42 @@ impl crate::Device for super::Device {
         // self.counters.acceleration_structures.sub(1);
     }
 
-    fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
-        unimplemented!()
+    fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
+        let temp = MTLIndirectAccelerationStructureInstanceDescriptor {
+            transformationMatrix: MTLPackedFloat4x3 {
+                columns: [
+                    MTLPackedFloat3 {
+                        x: instance.transform[0],
+                        y: instance.transform[4],
+                        z: instance.transform[8],
+                    },
+                    MTLPackedFloat3 {
+                        x: instance.transform[1],
+                        y: instance.transform[5],
+                        z: instance.transform[9],
+                    },
+                    MTLPackedFloat3 {
+                        x: instance.transform[2],
+                        y: instance.transform[6],
+                        z: instance.transform[10],
+                    },
+                    MTLPackedFloat3 {
+                        x: instance.transform[3],
+                        y: instance.transform[7],
+                        z: instance.transform[11],
+                    },
+                ],
+            },
+            options: MTLAccelerationStructureInstanceOptions::None,
+            mask: instance.mask as u32,
+            intersectionFunctionTableOffset: 0,
+            userID: instance.custom_data,
+            accelerationStructureID: unsafe { MTLResourceID::from_raw(instance.blas_address) },
+        };
+
+        wgt::bytemuck_wrapper!(unsafe struct Desc(MTLIndirectAccelerationStructureInstanceDescriptor));
+
+        bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()
     }
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
