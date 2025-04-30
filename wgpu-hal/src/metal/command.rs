@@ -437,11 +437,19 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn copy_acceleration_structure_to_acceleration_structure(
         &mut self,
-        _src: &super::AccelerationStructure,
-        _dst: &super::AccelerationStructure,
-        _copy: wgt::AccelerationStructureCopy,
+        src: &super::AccelerationStructure,
+        dst: &super::AccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
     ) {
-        unimplemented!()
+        let command_encoder = self.enter_acceleration_structure_builder();
+        match copy {
+            wgt::AccelerationStructureCopy::Clone => {
+                command_encoder.copy_acceleration_structure(&src.raw, &dst.raw);
+            }
+            wgt::AccelerationStructureCopy::Compact => {
+                command_encoder.copy_and_compact_acceleration_structure(&src.raw, &dst.raw);
+            }
+        };
     }
 
     unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {
