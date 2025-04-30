@@ -351,6 +351,7 @@ struct PrivateCapabilities {
     supported_vertex_amplification_factor: u32,
     shader_barycentrics: bool,
     supports_memoryless_storage: bool,
+    supports_raytracing: bool,
 }
 
 #[derive(Clone, Debug)]

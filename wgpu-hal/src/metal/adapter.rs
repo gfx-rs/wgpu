@@ -979,6 +979,11 @@ impl super::PrivateCapabilities {
             supports_cooperative_matrix: family_check
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
+            supports_raytracing: if available!(macos = 15.0, ios = 18.0) {
+                device.supportsRaytracing() && device.supportsRaytracingFromRender()
+            } else {
+                false
+            },
         }
     }
 
@@ -1107,6 +1112,8 @@ impl super::PrivateCapabilities {
         if self.supported_vertex_amplification_factor > 1 {
             features.insert(F::MULTIVIEW);
         }
+
+        features.set(F::EXPERIMENTAL_RAY_QUERY, self.supports_raytracing);
 
         features
     }
