@@ -9,9 +9,7 @@
 use alloc::boxed::Box;
 use once_cell::race::OnceBox;
 
-/// An alternative to [`LazyLock`] which will race to initialize rather than blocking.
-/// This makes it suitable for `no_std` environments, at the expense of possibly leaking
-/// memory during initialization.
+/// An alternative to [`LazyLock`] based on [`OnceBox`].
 ///
 /// [`LazyLock`]: https://doc.rust-lang.org/stable/std/sync/struct.LazyLock.html
 pub struct RacyLock<T: 'static> {
