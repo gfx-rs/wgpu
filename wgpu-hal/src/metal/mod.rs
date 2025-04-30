@@ -952,6 +952,7 @@ struct Temp {
 
 struct CommandState {
     blit: Option<metal::BlitCommandEncoder>,
+    acceleration_structure_builder: Option<metal::AccelerationStructureCommandEncoder>,
     render: Option<metal::RenderCommandEncoder>,
     compute: Option<metal::ComputeCommandEncoder>,
     raw_primitive_type: MTLPrimitiveType,

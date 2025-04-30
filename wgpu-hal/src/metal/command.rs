@@ -17,6 +17,7 @@ impl Default for super::CommandState {
     fn default() -> Self {
         Self {
             blit: None,
+            acceleration_structure_builder: None,
             render: None,
             compute: None,
             raw_primitive_type: MTLPrimitiveType::Point,
@@ -35,6 +36,7 @@ impl Default for super::CommandState {
 impl super::CommandEncoder {
     fn enter_blit(&mut self) -> &metal::BlitCommandEncoderRef {
         if self.state.blit.is_none() {
+            self.leave_acceleration_structure_builder();
             debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
             let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
 
@@ -125,10 +127,40 @@ impl super::CommandEncoder {
         }
     }
 
+    fn enter_acceleration_structure_builder(
+        &mut self,
+    ) -> &metal::AccelerationStructureCommandEncoderRef {
+        if self.state.acceleration_structure_builder.is_none() {
+            self.leave_blit();
+            debug_assert!(
+                self.state.render.is_none()
+                    && self.state.compute.is_none()
+                    && self.state.blit.is_none()
+            );
+            let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
+            objc::rc::autoreleasepool(|| {
+                self.state.acceleration_structure_builder = Some(
+                    cmd_buf
+                        .new_acceleration_structure_command_encoder()
+                        .to_owned(),
+                );
+            });
+        }
+        self.state.acceleration_structure_builder.as_ref().unwrap()
+    }
+
+    pub(super) fn leave_acceleration_structure_builder(&mut self) {
+        if let Some(encoder) = self.state.acceleration_structure_builder.take() {
+            encoder.end_encoding();
+        }
+    }
+
     fn active_encoder(&mut self) -> Option<&metal::CommandEncoderRef> {
         if let Some(ref encoder) = self.state.render {
             Some(encoder)
         } else if let Some(ref encoder) = self.state.compute {
+            Some(encoder)
+        } else if let Some(ref encoder) = self.state.acceleration_structure_builder {
             Some(encoder)
         } else if let Some(ref encoder) = self.state.blit {
             Some(encoder)
@@ -140,6 +172,7 @@ impl super::CommandEncoder {
     fn begin_pass(&mut self) {
         self.state.reset();
         self.leave_blit();
+        self.leave_acceleration_structure_builder();
     }
 }
 
@@ -212,6 +245,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn discard_encoding(&mut self) {
         self.leave_blit();
+        self.leave_acceleration_structure_builder();
         // when discarding, we don't have a guarantee that
         // everything is in a good state, so check carefully
         if let Some(encoder) = self.state.render.take() {
@@ -231,6 +265,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         self.leave_blit();
+        self.leave_acceleration_structure_builder();
         debug_assert!(self.state.render.is_none());
         debug_assert!(self.state.compute.is_none());
         debug_assert!(self.state.pending_timer_queries.is_empty());
