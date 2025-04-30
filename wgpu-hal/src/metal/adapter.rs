@@ -892,6 +892,12 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
+            supports_raytracing: if version.at_least((14, 0), (17, 0), os_is_mac) {
+                // The Rust metal crate does not expose device.supports_raytracing_from_render() yet
+                device.supports_raytracing()
+            } else {
+                false
+            },
         }
     }
 
@@ -992,6 +998,11 @@ impl super::PrivateCapabilities {
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
         }
+
+        features.set(
+            F::EXPERIMENTAL_RAY_QUERY | F::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+            self.supports_raytracing,
+        );
 
         features
     }
