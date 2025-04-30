@@ -1964,7 +1964,7 @@ impl crate::Device for super::Device {
         &self,
         _acceleration_structure: super::AccelerationStructure,
     ) {
-        unimplemented!()
+        // self.counters.acceleration_structures.sub(1);
     }
 
     fn tlas_instance_to_bytes(&self, _instance: TlasInstance) -> Vec<u8> {
