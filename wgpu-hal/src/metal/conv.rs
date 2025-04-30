@@ -1,9 +1,9 @@
 use metal::{
     MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor, MTLColorWriteMask,
-    MTLCompareFunction, MTLCullMode, MTLOrigin, MTLPrimitiveTopologyClass, MTLPrimitiveType,
-    MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
-    MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureType,
-    MTLTextureUsage, MTLVertexFormat, MTLVertexStepFunction, MTLWinding, NSRange,
+    MTLCompareFunction, MTLCullMode, MTLIndexType, MTLOrigin, MTLPrimitiveTopologyClass,
+    MTLPrimitiveType, MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode,
+    MTLSamplerBorderColor, MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction,
+    MTLTextureType, MTLTextureUsage, MTLVertexFormat, MTLVertexStepFunction, MTLWinding, NSRange,
 };
 
 pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) -> MTLTextureUsage {
@@ -231,6 +231,13 @@ pub fn map_vertex_format(format: wgt::VertexFormat) -> MTLVertexFormat {
         Vf::Unorm10_10_10_2 => MTL::UInt1010102Normalized,
         Vf::Unorm8x4Bgra => MTL::UChar4Normalized_BGRA,
         Vf::Float64 | Vf::Float64x2 | Vf::Float64x3 | Vf::Float64x4 => unimplemented!(),
+    }
+}
+
+pub fn map_index_format(format: wgt::IndexFormat) -> (u64, MTLIndexType) {
+    match format {
+        wgt::IndexFormat::Uint16 => (2, MTLIndexType::UInt16),
+        wgt::IndexFormat::Uint32 => (4, MTLIndexType::UInt32),
     }
 }
 

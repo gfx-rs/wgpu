@@ -6,8 +6,8 @@ use alloc::{
 };
 use core::ops::Range;
 use metal::{
-    MTLIndexType, MTLLoadAction, MTLPrimitiveType, MTLScissorRect, MTLSize, MTLStoreAction,
-    MTLViewport, MTLVisibilityResultMode, NSRange,
+    MTLLoadAction, MTLPrimitiveType, MTLScissorRect, MTLSize, MTLStoreAction, MTLViewport,
+    MTLVisibilityResultMode, NSRange,
 };
 
 // has to match `Temp::binding_sizes`
@@ -956,10 +956,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         binding: crate::BufferBinding<'a, super::Buffer>,
         format: wgt::IndexFormat,
     ) {
-        let (stride, raw_type) = match format {
-            wgt::IndexFormat::Uint16 => (2, MTLIndexType::UInt16),
-            wgt::IndexFormat::Uint32 => (4, MTLIndexType::UInt32),
-        };
+        let (stride, raw_type) = conv::map_index_format(format);
         self.state.index = Some(super::IndexState {
             buffer_ptr: AsNative::from(binding.buffer.raw.as_ref()),
             offset: binding.offset,
@@ -1322,7 +1319,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn build_acceleration_structures<'a, T>(
         &mut self,
         _descriptor_count: u32,
-        _descriptors: T,
+        descriptors: T,
     ) where
         super::Api: 'a,
         T: IntoIterator<
