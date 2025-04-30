@@ -1804,10 +1804,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn read_acceleration_structure_compact_size(
         &mut self,
-        _acceleration_structure: &super::AccelerationStructure,
-        _buf: &super::Buffer,
+        acceleration_structure: &super::AccelerationStructure,
+        buffer: &super::Buffer,
     ) {
-        unimplemented!()
+        let command_encoder = self.enter_acceleration_structure_builder();
+        command_encoder.writeCompactedAccelerationStructureSize_toBuffer_offset(
+            &acceleration_structure.raw,
+            &buffer.raw,
+            0,
+        );
     }
 }
 
