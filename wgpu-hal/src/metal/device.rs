@@ -1607,9 +1607,15 @@ impl crate::Device for super::Device {
 
     unsafe fn create_acceleration_structure(
         &self,
-        _desc: &crate::AccelerationStructureDescriptor,
+        descriptor: &crate::AccelerationStructureDescriptor,
     ) -> Result<super::AccelerationStructure, crate::DeviceError> {
-        unimplemented!()
+        // self.counters.acceleration_structures.add(1);
+        let device = self.shared.device.lock();
+        objc::rc::autoreleasepool(|| {
+            Ok(super::AccelerationStructure {
+                raw: device.new_acceleration_structure_with_size(descriptor.size),
+            })
+        })
     }
 
     unsafe fn destroy_acceleration_structure(
