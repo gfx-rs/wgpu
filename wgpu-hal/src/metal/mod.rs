@@ -43,13 +43,13 @@ use objc2::{
 };
 use objc2_foundation::ns_string;
 use objc2_metal::{
-    MTLArgumentBuffersTier, MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer,
-    MTLCommandBufferStatus, MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePipelineState,
-    MTLCounterSampleBuffer, MTLCullMode, MTLDepthClipMode, MTLDepthStencilState, MTLDevice,
-    MTLDrawable, MTLIndexType, MTLLanguageVersion, MTLLibrary, MTLPrimitiveType,
-    MTLReadWriteTextureTier, MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages,
-    MTLResource, MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture,
-    MTLTextureType, MTLTriangleFillMode, MTLWinding,
+    MTLAccelerationStructure, MTLArgumentBuffersTier, MTLBlitCommandEncoder, MTLBuffer,
+    MTLCommandBuffer, MTLCommandBufferStatus, MTLCommandQueue, MTLComputeCommandEncoder,
+    MTLComputePipelineState, MTLCounterSampleBuffer, MTLCullMode, MTLDepthClipMode,
+    MTLDepthStencilState, MTLDevice, MTLDrawable, MTLIndexType, MTLLanguageVersion, MTLLibrary,
+    MTLPrimitiveType, MTLReadWriteTextureTier, MTLRenderCommandEncoder, MTLRenderPipelineState,
+    MTLRenderStages, MTLResource, MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize,
+    MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLWinding,
 };
 use objc2_quartz_core::CAMetalLayer;
 use parking_lot::{Mutex, RwLock};
@@ -1064,9 +1064,19 @@ pub struct PipelineCache;
 impl crate::DynPipelineCache for PipelineCache {}
 
 #[derive(Debug)]
-pub struct AccelerationStructure;
+pub struct AccelerationStructure {
+    raw: Retained<ProtocolObject<dyn MTLAccelerationStructure>>,
+}
+
+impl AccelerationStructure {
+    fn as_raw(&self) -> NonNull<ProtocolObject<dyn MTLAccelerationStructure>> {
+        unsafe { NonNull::new_unchecked(Retained::as_ptr(&self.raw) as *mut _) }
+    }
+}
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
+unsafe impl Send for AccelerationStructure {}
+unsafe impl Sync for AccelerationStructure {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OsType {
