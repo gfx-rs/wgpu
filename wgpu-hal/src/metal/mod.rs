@@ -34,10 +34,11 @@ use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use hashbrown::HashMap;
 use metal::{
-    foreign_types::ForeignTypeRef as _, MTLArgumentBuffersTier, MTLBuffer, MTLCommandBufferStatus,
-    MTLCullMode, MTLDepthClipMode, MTLIndexType, MTLLanguageVersion, MTLPrimitiveType,
-    MTLReadWriteTextureTier, MTLRenderStages, MTLResource, MTLResourceUsage, MTLSamplerState,
-    MTLSize, MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLWinding,
+    foreign_types::ForeignTypeRef as _, MTLAccelerationStructure, MTLArgumentBuffersTier,
+    MTLBuffer, MTLCommandBufferStatus, MTLCullMode, MTLDepthClipMode, MTLIndexType,
+    MTLLanguageVersion, MTLPrimitiveType, MTLReadWriteTextureTier, MTLRenderStages, MTLResource,
+    MTLResourceUsage, MTLSamplerState, MTLSize, MTLTexture, MTLTextureType, MTLTriangleFillMode,
+    MTLWinding,
 };
 use naga::FastHashMap;
 use parking_lot::{Mutex, RwLock};
@@ -679,6 +680,7 @@ type ResourcePtr = NonNull<MTLResource>;
 type BufferPtr = NonNull<MTLBuffer>;
 type TexturePtr = NonNull<MTLTexture>;
 type SamplerPtr = NonNull<MTLSamplerState>;
+type AccelerationStructurePtr = NonNull<MTLAccelerationStructure>;
 
 impl AsNative for ResourcePtr {
     type Native = metal::ResourceRef;
@@ -718,6 +720,18 @@ impl AsNative for TexturePtr {
 
 impl AsNative for SamplerPtr {
     type Native = metal::SamplerStateRef;
+    #[inline]
+    fn from(native: &Self::Native) -> Self {
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+    }
+    #[inline]
+    fn as_native(&self) -> &Self::Native {
+        unsafe { Self::Native::from_ptr(self.as_ptr()) }
+    }
+}
+
+impl AsNative for AccelerationStructurePtr {
+    type Native = metal::AccelerationStructureRef;
     #[inline]
     fn from(native: &Self::Native) -> Self {
         unsafe { NonNull::new_unchecked(native.as_ptr()) }
