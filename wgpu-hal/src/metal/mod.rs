@@ -1026,6 +1026,14 @@ pub struct PipelineCache;
 impl crate::DynPipelineCache for PipelineCache {}
 
 #[derive(Debug)]
-pub struct AccelerationStructure;
+pub struct AccelerationStructure {
+    raw: metal::AccelerationStructure,
+}
+
+impl AccelerationStructure {
+    fn as_raw(&self) -> AccelerationStructurePtr {
+        unsafe { NonNull::new_unchecked(self.raw.as_ptr()) }
+    }
+}
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
