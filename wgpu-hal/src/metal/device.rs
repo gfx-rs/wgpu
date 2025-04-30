@@ -1922,9 +1922,19 @@ impl crate::Device for super::Device {
 
     unsafe fn get_acceleration_structure_build_sizes(
         &self,
-        _desc: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Buffer>,
+        descriptor: &crate::GetAccelerationStructureBuildSizesDescriptor<super::Buffer>,
     ) -> crate::AccelerationStructureBuildSizes {
-        unimplemented!()
+        let acceleration_structure_descriptor =
+            conv::map_acceleration_structure_descriptor(descriptor.entries, descriptor.flags);
+        let info = self
+            .shared
+            .device
+            .accelerationStructureSizesWithDescriptor(&acceleration_structure_descriptor);
+        crate::AccelerationStructureBuildSizes {
+            acceleration_structure_size: info.accelerationStructureSize as u64,
+            update_scratch_size: info.refitScratchBufferSize as u64,
+            build_scratch_size: info.buildScratchBufferSize as u64,
+        }
     }
 
     unsafe fn get_acceleration_structure_device_address(
