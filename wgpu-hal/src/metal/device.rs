@@ -1946,9 +1946,18 @@ impl crate::Device for super::Device {
 
     unsafe fn create_acceleration_structure(
         &self,
-        _desc: &crate::AccelerationStructureDescriptor,
+        descriptor: &crate::AccelerationStructureDescriptor,
     ) -> Result<super::AccelerationStructure, crate::DeviceError> {
-        unimplemented!()
+        // self.counters.acceleration_structures.add(1);
+        autoreleasepool(|_| {
+            Ok(super::AccelerationStructure {
+                raw: self
+                    .shared
+                    .device
+                    .newAccelerationStructureWithSize(descriptor.size as usize)
+                    .ok_or(crate::DeviceError::OutOfMemory)?,
+            })
+        })
     }
 
     unsafe fn destroy_acceleration_structure(
