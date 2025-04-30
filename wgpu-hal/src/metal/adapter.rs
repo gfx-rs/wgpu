@@ -2,7 +2,8 @@ use objc2::{available, runtime::ProtocolObject};
 use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
 use objc2_metal::{
     MTLArgumentBuffersTier, MTLCounterSamplingPoint, MTLDevice, MTLFeatureSet, MTLGPUFamily,
-    MTLLanguageVersion, MTLPixelFormat, MTLReadWriteTextureTier,
+    MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion, MTLPixelFormat,
+    MTLReadWriteTextureTier,
 };
 use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
@@ -1243,7 +1244,8 @@ impl super::PrivateCapabilities {
                 // Metal Shading Language it generates, so from `wgpu_hal`'s
                 // users' point of view, references are tightly checked.
                 uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
-                raw_tlas_instance_size: 0,
+                raw_tlas_instance_size: size_of::<MTLIndirectAccelerationStructureInstanceDescriptor>(
+                ),
                 ray_tracing_scratch_buffer_alignment: 0,
             },
             downlevel,
