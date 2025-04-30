@@ -45,26 +45,29 @@ Bottom level categories:
 #### General
 - Fix a possible deadlock within `Queue::write_buffer`. By @RedMindZ in [#7582](https://github.com/gfx-rs/wgpu/pull/7582)
 
-### v24.0.4 (2025-04-03)
+#### WebGPU
+- Insert fragment pipeline constants into fragment descriptor instead of vertex descriptor. By @DerSchmale in [#7621](https://github.com/gfx-rs/wgpu/pull/7621)
 
-#### Metal
+## v24.0.4 (2025-04-03)
+
+### Metal
  - Use resize observers for smoother resizing. By @madsmtm in [#7026](https://github.com/gfx-rs/wgpu/pull/7026).
 
-### v24.0.3 (2025-03-19)
+## v24.0.3 (2025-03-19)
 
-#### Bug Fixes
+### Bug Fixes
 - Fix drop order in `Surface`, solving segfaults on exit on some systems. By @ed-2100 in [#6997](https://github.com/gfx-rs/wgpu/pull/6997)
 
-### v24.0.2 (2025-02-26)
+## v24.0.2 (2025-02-26)
 
-#### Bug Fixes
+### Bug Fixes
 - Fix GLES renderpass clears causing violation of `max_color_attachments` limit. By @adrian17 in [#6994](https://github.com/gfx-rs/wgpu/pull/6994).
 - Fix a possible deadlock within `Queue::write_texture`. By @metamuffin in [#7004](https://github.com/gfx-rs/wgpu/pull/7004)
 - Decrement `max_storage_buffer_binding_size` by 1 to match `max_buffer_size`. By @minus1ms in [#7217](https://github.com/gfx-rs/wgpu/pull/7217)
 
-### v24.0.1 (2025-01-22)
+## v24.0.1 (2025-01-22)
 
-#### Bug Fixes
+### Bug Fixes
 
 * Fix `wgpu` not building with `--no-default-features` on when targeting `wasm32-unknown-unknown`. By @wumpf in [#6946](https://github.com/gfx-rs/wgpu/pull/6946).
 * Implement `Clone` on `ShaderModule`. By @a1phyr in [#6937](https://github.com/gfx-rs/wgpu/pull/6937).
