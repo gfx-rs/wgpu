@@ -75,6 +75,7 @@ metal = [
     "naga/msl-out",
     "dep:arrayvec",
     "dep:block",
+    "dep:bytemuck",
     "dep:core-graphics-types",
     "dep:hashbrown",
     "dep:libc",
