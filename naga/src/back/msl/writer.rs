@@ -6990,9 +6990,20 @@ mod workgroup_mem_init {
 
             let mut access_stack = AccessStack::new();
 
-            let vars = module.global_variables.iter().filter(|&(handle, var)| {
-                !fun_info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
-            });
+            let vars = module
+                .global_variables
+                .iter()
+                .filter(|&(handle, var)| {
+                    !fun_info[handle].is_empty()
+                        && var.space == crate::AddressSpace::WorkGroup
+                        && !self
+                            .unresolved_overrides
+                            .as_ref()
+                            .unwrap()
+                            .global_variables
+                            .contains_key(&handle)
+                })
+                .collect::<Vec<_>>();
 
             for (handle, var) in vars {
                 access_stack.enter(Access::GlobalVariable(handle), |access_stack| {

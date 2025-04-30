@@ -13,7 +13,8 @@ use crate::{
     ir,
     proc::{ConstantEvaluator, ConstantEvaluatorError, Emitter, U32EvalError},
     valid::{
-        Capabilities, ModuleInfo, UnresolvedOverrides, ValidationError, ValidationFlags, Validator,
+        Capabilities, FunctionInfo, ModuleInfo, UnresolvedOverrides, ValidationError,
+        ValidationFlags, Validator,
     },
     Arena, Block, Constant, Expression, FastHashMap, Function, Handle, Literal, Module, Override,
     Range, Scalar, Span, Statement, TypeInner, WithSpan,
@@ -60,6 +61,26 @@ pub struct ProcessOverridesOutput<'a> {
     pub module: Cow<'a, Module>,
     pub info: Cow<'a, ModuleInfo>,
     pub unresolved: UnresolvedOverrides,
+}
+
+/// Check the global usage in `fun_info` for any globals affected by unresolved
+/// overrides.
+///
+/// If any is found, returns `Some`, otherwise returns `None`.
+fn check_for_unresolved_global_use<'a>(
+    globals: impl Iterator<Item = (Handle<ir::GlobalVariable>, &'a ir::GlobalVariable)>,
+    unresolved: &UnresolvedOverrides,
+    fun_info: &FunctionInfo,
+) -> Option<Handle<Override>> {
+    for (var_handle, _) in globals {
+        match unresolved.global_variables.get(&var_handle) {
+            Some(&o_handle) if !fun_info[var_handle].is_empty() => {
+                return Some(o_handle);
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Replace overrides in `module` with constants.
@@ -328,11 +349,11 @@ pub fn process_overrides<'a>(
     }
 
     // Process functions, taking note of which ones require overrides that were
-    // not specified. Like expressions, callees are guarenteed to appear before
+    // not specified. Like expressions, callees are guaranteed to appear before
     // their callers.
     let mut functions = mem::take(&mut module.functions);
     for (f_handle, function) in functions.iter_mut() {
-        if let Some(o_handle) = process_function(
+        let result = if let Some(o_handle) = process_function(
             &mut module,
             &override_map,
             &unresolved.functions,
@@ -344,6 +365,15 @@ pub fn process_overrides<'a>(
                 function.name,
                 overrides[o_handle].name
             );
+            Some(o_handle)
+        } else {
+            check_for_unresolved_global_use(
+                module.global_variables.iter(),
+                &unresolved,
+                &module_info[f_handle],
+            )
+        };
+        if let Some(o_handle) = result {
             unresolved.functions.insert(f_handle, o_handle);
         }
     }
@@ -370,19 +400,11 @@ pub fn process_overrides<'a>(
         {
             Some(o_handle)
         } else {
-            // See if we use any global variables that are missing overrides.
-            let mut missing = None;
-            for (var_handle, _) in module.global_variables.iter() {
-                let global_use = module_info.get_entry_point(ep_index)[var_handle];
-                match unresolved.global_variables.get(&var_handle) {
-                    Some(&o_handle) if !global_use.is_empty() => {
-                        missing = Some(o_handle);
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-            missing
+            check_for_unresolved_global_use(
+                module.global_variables.iter(),
+                &unresolved,
+                module_info.get_entry_point(ep_index),
+            )
         };
         if let Some(o_handle) = result {
             // We found a missing override that is required by this entry point.

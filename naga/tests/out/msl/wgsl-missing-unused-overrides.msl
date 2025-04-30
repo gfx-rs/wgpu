@@ -9,15 +9,6 @@ struct FragmentIn {
 };
 constant float ov_for_vertex = 1.5;
 
-void compute_helper(
-    thread uint& foo,
-    threadgroup type_4& arr
-) {
-    uint phony = foo;
-    uint phony_1 = arr.inner[0];
-    return;
-}
-
 struct vert_mainInput {
     metal::float2 pos [[attribute(0)]];
 };

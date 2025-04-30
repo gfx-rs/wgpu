@@ -235,6 +235,12 @@ impl Input {
                 return None;
             }
 
+            if let Ok(pat) = std::env::var("NAGA_SNAPSHOT") {
+                if !file_name.to_string_lossy().contains(&pat) {
+                    return None;
+                }
+            }
+
             let input = Input::new(
                 subdirectory,
                 file_name.file_stem().unwrap().to_str().unwrap(),

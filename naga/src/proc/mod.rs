@@ -414,6 +414,7 @@ impl crate::Module {
 }
 
 #[derive(Debug)]
+#[cfg_attr(not(any(hlsl_out, msl_out, spv_out, glsl_out)), allow(dead_code))]
 pub(super) enum U32EvalError {
     /// Expression is not constant.
     Runtime,

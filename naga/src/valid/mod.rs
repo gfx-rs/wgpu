@@ -273,7 +273,6 @@ impl ops::Index<Handle<crate::Expression>> for ModuleInfo {
 /// This struct may be passed to the various backend writers.
 ///
 /// [`process_overrides`]: crate::back::pipeline_constants::process_overrides
-#[cfg(any(hlsl_out, msl_out, spv_out, glsl_out))]
 #[derive(Clone, Debug, Default)]
 pub struct UnresolvedOverrides {
     pub(crate) global_variables:
@@ -611,7 +610,7 @@ impl<'a> Validator<'a> {
     /// in items that appear in one of the maps in `unresolved`.
     ///
     /// [`validate`]: Validator::validate
-    pub(crate) fn validate_with_resolved_overrides(
+    pub fn validate_with_resolved_overrides(
         &mut self,
         module: &crate::Module,
         unresolved: &'a UnresolvedOverrides,
