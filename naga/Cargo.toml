@@ -91,7 +91,8 @@ hashbrown.workspace = true
 half = { workspace = true, features = ["num-traits"] }
 rustc-hash.workspace = true
 indexmap.workspace = true
-libm = { version = "0.2", default-features = false }
+# Earliest version of libm with rint and rintf
+libm = { version = "0.2.6", default-features = false }
 log.workspace = true
 num-traits.workspace = true
 once_cell = { workspace = true, features = ["alloc", "race"] }
