@@ -743,7 +743,7 @@ impl AsNative for AccelerationStructurePtr {
 }
 
 #[derive(Debug)]
-struct BufferResource {
+struct BufferResourceBinding {
     ptr: BufferPtr,
     offset: wgt::BufferAddress,
     dynamic_index: Option<u32>,
@@ -759,6 +759,12 @@ struct BufferResource {
     binding_size: Option<wgt::BufferSize>,
 
     binding_location: u32,
+}
+
+#[derive(Debug)]
+enum BufferResource {
+    Buffer(BufferResourceBinding),
+    AccelerationStructure(AccelerationStructurePtr),
 }
 
 #[derive(Debug)]

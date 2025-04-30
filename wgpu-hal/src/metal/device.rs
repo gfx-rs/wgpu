@@ -746,7 +746,10 @@ impl crate::Device for super::Device {
                                     wgt::StorageTextureAccess::Atomic => true,
                                 };
                             }
-                            wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                            wgt::BindingType::AccelerationStructure { .. } => {
+                                target.buffer = Some(info.counters.buffers as _);
+                                info.counters.buffers += 1;
+                            }
                         }
                     }
 
@@ -896,18 +899,41 @@ impl crate::Device for super::Device {
                                     // need to be passed to useResource
                                 }
                             }
+                            wgt::BindingType::AccelerationStructure { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + count as usize;
+                                let acceleration_structures =
+                                    &desc.acceleration_structures[start..end];
+
+                                for (idx, &acceleration_structure) in
+                                    acceleration_structures.iter().enumerate()
+                                {
+                                    contents[idx] = acceleration_structure.raw.gpu_resource_id();
+
+                                    let use_info = bg
+                                        .resources_to_use
+                                        .entry(acceleration_structure.as_raw().cast())
+                                        .or_default();
+                                    use_info.stages |= stages;
+                                    use_info.uses |= uses;
+                                    use_info.visible_in_compute |=
+                                        layout.visibility.contains(wgt::ShaderStages::COMPUTE);
+                                }
+                            }
                             _ => {
                                 unimplemented!();
                             }
                         }
 
-                        bg.buffers.push(super::BufferResource {
-                            ptr: unsafe { NonNull::new_unchecked(buffer.as_ptr()) },
-                            offset: 0,
-                            dynamic_index: None,
-                            binding_size: None,
-                            binding_location: layout.binding,
-                        });
+                        bg.buffers.push(super::BufferResource::Buffer(
+                            super::BufferResourceBinding {
+                                ptr: unsafe { NonNull::new_unchecked(buffer.as_ptr()) },
+                                offset: 0,
+                                dynamic_index: None,
+                                binding_size: None,
+                                binding_location: layout.binding,
+                            },
+                        ));
                         counter.buffers += 1;
 
                         bg.argument_buffers.push(buffer)
@@ -945,17 +971,19 @@ impl crate::Device for super::Device {
                                             }
                                             _ => None,
                                         };
-                                        super::BufferResource {
-                                            ptr: source.buffer.as_raw(),
-                                            offset: source.offset,
-                                            dynamic_index: if has_dynamic_offset {
-                                                Some(dynamic_offsets_count - 1)
-                                            } else {
-                                                None
+                                        super::BufferResource::Buffer(
+                                            super::BufferResourceBinding {
+                                                ptr: source.buffer.as_raw(),
+                                                offset: source.offset,
+                                                dynamic_index: if has_dynamic_offset {
+                                                    Some(dynamic_offsets_count - 1)
+                                                } else {
+                                                    None
+                                                },
+                                                binding_size,
+                                                binding_location: layout.binding,
                                             },
-                                            binding_size,
-                                            binding_location: layout.binding,
-                                        }
+                                        )
                                     }));
                                 counter.buffers += 1;
                             }
@@ -978,7 +1006,20 @@ impl crate::Device for super::Device {
                                 );
                                 counter.textures += 1;
                             }
-                            wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                            wgt::BindingType::AccelerationStructure { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + 1;
+                                bg.buffers.extend(
+                                    desc.acceleration_structures[start..end].iter().map(
+                                        |acceleration_structure| {
+                                            super::BufferResource::AccelerationStructure(
+                                                acceleration_structure.as_raw(),
+                                            )
+                                        },
+                                    ),
+                                );
+                                counter.buffers += 1;
+                            }
                         }
                     }
                 }
