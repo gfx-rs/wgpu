@@ -94,6 +94,10 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Use highest SPIR-V version supported by Vulkan API version. By @robamler in [#7595](https://github.com/gfx-rs/wgpu/pull/7595)
 
+#### Metal
+
+- Implements ray-tracing acceleration structures for metal backend. By @lichtso in [#7660](https://github.com/gfx-rs/wgpu/pull/7660)
+
 ### Bug Fixes
 
 #### Naga
