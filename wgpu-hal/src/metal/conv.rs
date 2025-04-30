@@ -1,9 +1,10 @@
 use metal::{
-    MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor, MTLColorWriteMask,
-    MTLCompareFunction, MTLCullMode, MTLIndexType, MTLOrigin, MTLPrimitiveTopologyClass,
-    MTLPrimitiveType, MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode,
-    MTLSamplerBorderColor, MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction,
-    MTLTextureType, MTLTextureUsage, MTLVertexFormat, MTLVertexStepFunction, MTLWinding, NSRange,
+    MTLAttributeFormat, MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor,
+    MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLIndexType, MTLOrigin,
+    MTLPrimitiveTopologyClass, MTLPrimitiveType, MTLRenderStages, MTLResourceUsage,
+    MTLSamplerAddressMode, MTLSamplerBorderColor, MTLSamplerMinMagFilter, MTLSize,
+    MTLStencilOperation, MTLStoreAction, MTLTextureType, MTLTextureUsage, MTLVertexFormat,
+    MTLVertexStepFunction, MTLWinding, NSRange,
 };
 
 pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) -> MTLTextureUsage {
@@ -358,5 +359,95 @@ pub fn map_resource_usage(ty: &wgt::BindingType) -> MTLResourceUsage {
         },
         wgt::BindingType::Sampler(..) => MTLResourceUsage::empty(),
         _ => unreachable!(),
+    }
+}
+
+pub fn map_acceleration_structure_descriptor<'a>(
+    entries: &crate::AccelerationStructureEntries<'a, super::Buffer>,
+) -> metal::AccelerationStructureDescriptor {
+    match entries {
+        crate::AccelerationStructureEntries::Instances(instances) => {
+            let descriptor = metal::InstanceAccelerationStructureDescriptor::descriptor();
+            descriptor.set_instance_descriptor_type(
+                metal::MTLAccelerationStructureInstanceDescriptorType::Indirect,
+            );
+            descriptor.set_instance_count(instances.count as u64);
+            descriptor.set_instance_descriptor_buffer(&instances.buffer.raw);
+            descriptor.set_instance_descriptor_buffer_offset(instances.offset as u64);
+            metal::AccelerationStructureDescriptor::from(descriptor)
+        }
+        crate::AccelerationStructureEntries::Triangles(entries) => {
+            let geometry_descriptors = entries
+                .iter()
+                .map(|triangles| {
+                    let descriptor =
+                        metal::AccelerationStructureTriangleGeometryDescriptor::descriptor();
+                    if let Some(indices) = triangles.indices.as_ref() {
+                        descriptor.set_index_buffer(Some(&*indices.buffer.raw));
+                        descriptor.set_index_buffer_offset(indices.offset as u64);
+                        descriptor.set_index_type(map_index_format(indices.format).1);
+                        descriptor.set_triangle_count(indices.count as u64 / 3);
+                    } else {
+                        descriptor.set_triangle_count(triangles.vertex_count as u64 / 3);
+                    }
+                    descriptor.set_vertex_buffer(Some(&*triangles.vertex_buffer.raw));
+                    descriptor.set_vertex_buffer_offset(
+                        triangles.first_vertex as u64 * triangles.vertex_stride,
+                    );
+                    descriptor.set_vertex_stride(triangles.vertex_stride);
+                    // Safety: MTLVertexFormat and MTLAttributeFormat are identical.
+                    // https://docs.rs/metal/latest/metal/enum.MTLAttributeFormat.html
+                    // https://docs.rs/metal/latest/metal/enum.MTLVertexFormat.html
+                    descriptor.set_vertex_format(unsafe {
+                        core::mem::transmute::<MTLVertexFormat, MTLAttributeFormat>(
+                            map_vertex_format(triangles.vertex_format),
+                        )
+                    });
+                    if let Some(transform) = triangles.transform.as_ref() {
+                        descriptor.set_transformation_matrix_buffer(Some(&*transform.buffer.raw));
+                        descriptor.set_transformation_matrix_buffer_offset(transform.offset as u64);
+                    }
+                    descriptor.set_opaque(
+                        triangles
+                            .flags
+                            .contains(wgt::AccelerationStructureGeometryFlags::OPAQUE),
+                    );
+                    // wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION
+                    // descriptor.set_intersection_function_table_offset(offset);
+                    metal::AccelerationStructureGeometryDescriptor::from(descriptor)
+                })
+                .collect::<alloc::vec::Vec<_>>();
+            let descriptor = metal::PrimitiveAccelerationStructureDescriptor::descriptor();
+            descriptor.set_geometry_descriptors(metal::Array::from_owned_slice(
+                geometry_descriptors.as_slice(),
+            ));
+            metal::AccelerationStructureDescriptor::from(descriptor)
+        }
+        crate::AccelerationStructureEntries::AABBs(entries) => {
+            let geometry_descriptors = entries
+                .iter()
+                .map(|aabbs| {
+                    let descriptor =
+                        metal::AccelerationStructureBoundingBoxGeometryDescriptor::descriptor();
+                    descriptor.set_bounding_box_buffer(Some(&*aabbs.buffer.raw));
+                    descriptor.set_bounding_box_count(aabbs.count as u64);
+                    descriptor.set_bounding_box_stride(aabbs.stride);
+                    descriptor.set_bounding_box_buffer_offset(aabbs.offset as u64);
+                    descriptor.set_opaque(
+                        aabbs
+                            .flags
+                            .contains(wgt::AccelerationStructureGeometryFlags::OPAQUE),
+                    );
+                    // wgt::AccelerationStructureGeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION
+                    // descriptor.set_intersection_function_table_offset(offset);
+                    metal::AccelerationStructureGeometryDescriptor::from(descriptor)
+                })
+                .collect::<alloc::vec::Vec<_>>();
+            let descriptor = metal::PrimitiveAccelerationStructureDescriptor::descriptor();
+            descriptor.set_geometry_descriptors(metal::Array::from_owned_slice(
+                geometry_descriptors.as_slice(),
+            ));
+            metal::AccelerationStructureDescriptor::from(descriptor)
+        }
     }
 }
