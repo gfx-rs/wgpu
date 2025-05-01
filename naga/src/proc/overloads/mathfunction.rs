@@ -13,8 +13,6 @@ use crate::ir;
 
 impl ir::MathFunction {
     pub fn overloads(self) -> impl OverloadSet {
-        
-
         let set: AnyOverloadSet = match self {
             // Component-wise unary numeric operations
             Self::Abs | Self::Sign => regular!(1, SCALAR|VECN of NUMERIC).into(),
@@ -78,7 +76,9 @@ impl ir::MathFunction {
             Self::Pack4xU8Clamp => regular!(1, VEC4 of U32 -> U32).into(),
 
             // Unpacking functions
-            Self::Unpack4x8snorm | Self::Unpack4x8unorm => regular!(1, SCALAR of U32 -> Vec4F).into(),
+            Self::Unpack4x8snorm | Self::Unpack4x8unorm => {
+                regular!(1, SCALAR of U32 -> Vec4F).into()
+            }
             Self::Unpack2x16snorm | Self::Unpack2x16unorm | Self::Unpack2x16float => {
                 regular!(1, SCALAR of U32 -> Vec2F).into()
             }
@@ -97,7 +97,9 @@ impl ir::MathFunction {
             Self::Distance => {
                 regular!(2, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into()
             }
-            Self::Length => regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into(),
+            Self::Length => {
+                regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into()
+            }
             Self::Normalize => regular!(1, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
             Self::FaceForward => regular!(3, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
             Self::Reflect => regular!(2, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),

@@ -236,27 +236,15 @@ pub enum BindingTypeMaxCountErrorKind {
 impl BindingTypeMaxCountErrorKind {
     fn to_config_str(&self) -> &'static str {
         match self {
-            Self::DynamicUniformBuffers => {
-                "max_dynamic_uniform_buffers_per_pipeline_layout"
-            }
-            Self::DynamicStorageBuffers => {
-                "max_dynamic_storage_buffers_per_pipeline_layout"
-            }
-            Self::SampledTextures => {
-                "max_sampled_textures_per_shader_stage"
-            }
+            Self::DynamicUniformBuffers => "max_dynamic_uniform_buffers_per_pipeline_layout",
+            Self::DynamicStorageBuffers => "max_dynamic_storage_buffers_per_pipeline_layout",
+            Self::SampledTextures => "max_sampled_textures_per_shader_stage",
             Self::Samplers => "max_samplers_per_shader_stage",
             Self::StorageBuffers => "max_storage_buffers_per_shader_stage",
-            Self::StorageTextures => {
-                "max_storage_textures_per_shader_stage"
-            }
+            Self::StorageTextures => "max_storage_textures_per_shader_stage",
             Self::UniformBuffers => "max_uniform_buffers_per_shader_stage",
-            Self::BindingArrayElements => {
-                "max_binding_array_elements_per_shader_stage"
-            }
-            Self::BindingArraySamplerElements => {
-                "max_binding_array_elements_per_shader_stage"
-            }
+            Self::BindingArrayElements => "max_binding_array_elements_per_shader_stage",
+            Self::BindingArraySamplerElements => "max_binding_array_elements_per_shader_stage",
         }
     }
 }

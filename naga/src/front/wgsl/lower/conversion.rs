@@ -345,7 +345,6 @@ impl crate::TypeInner {
         &self,
         types: &crate::UniqueArena<crate::Type>,
     ) -> Option<crate::Scalar> {
-        
         match *self {
             Self::Scalar(scalar) | Self::Vector { scalar, .. } | Self::Matrix { scalar, .. } => {
                 Some(scalar)
@@ -370,7 +369,6 @@ impl crate::TypeInner {
         &self,
         types: &crate::UniqueArena<crate::Type>,
     ) -> Option<crate::Scalar> {
-        
         match *self {
             Self::Scalar(scalar) | Self::Vector { scalar, .. } | Self::Matrix { scalar, .. } => {
                 Some(scalar)

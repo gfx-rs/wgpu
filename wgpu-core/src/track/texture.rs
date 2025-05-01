@@ -98,8 +98,7 @@ impl ComplexTextureState {
         strict_assert_eq!(full_range.layers.start, 0);
         strict_assert_eq!(full_range.mips.start, 0);
 
-        let mut complex =
-            Self::new(full_range.mips.len() as u32, full_range.layers.len() as u32);
+        let mut complex = Self::new(full_range.mips.len() as u32, full_range.layers.len() as u32);
         for (selector, desired_state) in state_iter {
             strict_assert!(selector.layers.end <= full_range.layers.end);
             strict_assert!(selector.mips.end <= full_range.mips.end);

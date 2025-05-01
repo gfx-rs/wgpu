@@ -7,7 +7,6 @@ use alloc::string::String;
 
 impl ir::PredeclaredType {
     pub fn struct_name(&self) -> String {
-        
         match *self {
             Self::AtomicCompareExchangeWeakResult(scalar) => {
                 format!(

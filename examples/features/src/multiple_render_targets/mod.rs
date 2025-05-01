@@ -372,12 +372,7 @@ struct TextureTargets {
 }
 
 impl TextureTargets {
-    fn new(
-        device: &wgpu::Device,
-        format: wgpu::TextureFormat,
-        width: u32,
-        height: u32,
-    ) -> Self {
+    fn new(device: &wgpu::Device, format: wgpu::TextureFormat, width: u32, height: u32) -> Self {
         let size = wgpu::Extent3d {
             width,
             height,

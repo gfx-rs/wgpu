@@ -8,8 +8,7 @@ use crate::Backends;
 use crate::{Backend, DownlevelFlags};
 
 /// Options for creating an instance.
-#[derive(Clone, Debug)]
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub struct InstanceDescriptor {
     /// Which `Backends` to enable.
     pub backends: Backends,
@@ -20,7 +19,6 @@ pub struct InstanceDescriptor {
     /// Options the control the behavior of various backends.
     pub backend_options: BackendOptions,
 }
-
 
 impl InstanceDescriptor {
     /// Choose instance options entirely from environment variables.

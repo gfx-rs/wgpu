@@ -734,11 +734,9 @@ impl From<CreateShaderModuleError> for CompilationInfo {
             CreateShaderModuleError::Validation(v) => v.into(),
             // Device errors are reported through the error sink, and are not compilation errors.
             // Same goes for native shader module generation errors.
-            CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
-                Self {
-                    messages: Vec::new(),
-                }
-            }
+            CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => Self {
+                messages: Vec::new(),
+            },
             // Everything else is an error message without location information.
             _ => Self {
                 messages: vec![CompilationMessage {

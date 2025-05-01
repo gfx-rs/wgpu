@@ -265,9 +265,7 @@ impl RenderCommand {
                             size,
                         },
 
-                        Self::SetBlendConstant(color) => {
-                            ArcRenderCommand::SetBlendConstant(color)
-                        }
+                        Self::SetBlendConstant(color) => ArcRenderCommand::SetBlendConstant(color),
 
                         Self::SetStencilReference(reference) => {
                             ArcRenderCommand::SetStencilReference(reference)

@@ -170,9 +170,7 @@ impl super::AddressSpace {
     pub fn access(self) -> crate::StorageAccess {
         use crate::StorageAccess as Sa;
         match self {
-            Self::Function
-            | Self::Private
-            | Self::WorkGroup => Sa::LOAD | Sa::STORE,
+            Self::Function | Self::Private | Self::WorkGroup => Sa::LOAD | Sa::STORE,
             Self::Uniform => Sa::LOAD,
             Self::Storage { access } => access,
             Self::Handle => Sa::LOAD,

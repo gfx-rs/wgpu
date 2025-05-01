@@ -516,7 +516,6 @@ impl crate::TypeInner {
         &self,
         module: &crate::Module,
     ) -> Result<IndexableLength, IndexableLengthError> {
-        
         let known_length = match *self {
             Self::Vector { size, .. } => size as _,
             Self::Matrix { columns, .. } => columns as _,

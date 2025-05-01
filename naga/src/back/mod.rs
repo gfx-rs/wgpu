@@ -283,9 +283,7 @@ impl crate::TypeInner {
     /// Returns true if this is a handle to a type rather than the type directly.
     pub const fn is_handle(&self) -> bool {
         match *self {
-            Self::Image { .. }
-            | Self::Sampler { .. }
-            | Self::AccelerationStructure { .. } => true,
+            Self::Image { .. } | Self::Sampler { .. } | Self::AccelerationStructure { .. } => true,
             _ => false,
         }
     }
@@ -297,10 +295,7 @@ impl crate::Statement {
     /// Used to decide whether case blocks require a explicit `break`.
     pub const fn is_terminator(&self) -> bool {
         match *self {
-            Self::Break
-            | Self::Continue
-            | Self::Return { .. }
-            | Self::Kill => true,
+            Self::Break | Self::Continue | Self::Return { .. } | Self::Kill => true,
             _ => false,
         }
     }

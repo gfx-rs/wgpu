@@ -316,9 +316,9 @@ impl NumericType {
 
     const fn scalar(self) -> crate::Scalar {
         match self {
-            Self::Scalar(scalar)
-            | Self::Vector { scalar, .. }
-            | Self::Matrix { scalar, .. } => scalar,
+            Self::Scalar(scalar) | Self::Vector { scalar, .. } | Self::Matrix { scalar, .. } => {
+                scalar
+            }
         }
     }
 

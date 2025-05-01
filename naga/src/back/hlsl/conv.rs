@@ -109,9 +109,7 @@ impl crate::TypeInner {
                 "array{size}_{}_",
                 Self::hlsl_type_id(base, gctx, names)?
             )),
-            Self::Struct { .. } => {
-                Cow::Borrowed(&names[&crate::proc::NameKey::Type(base)])
-            }
+            Self::Struct { .. } => Cow::Borrowed(&names[&crate::proc::NameKey::Type(base)]),
             _ => unreachable!(),
         })
     }

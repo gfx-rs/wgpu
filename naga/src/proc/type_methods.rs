@@ -4,17 +4,12 @@
 //! [`Scalar`]: crate::Scalar
 //! [`ScalarKind`]: crate::ScalarKind
 
-
 use super::TypeResolution;
 
 impl crate::ScalarKind {
     pub const fn is_numeric(self) -> bool {
         match self {
-            Self::Sint
-            | Self::Uint
-            | Self::Float
-            | Self::AbstractInt
-            | Self::AbstractFloat => true,
+            Self::Sint | Self::Uint | Self::Float | Self::AbstractInt | Self::AbstractFloat => true,
             Self::Bool => false,
         }
     }
@@ -110,7 +105,6 @@ impl crate::TypeInner {
     /// [`Array`]: crate::TypeInner::Array
     /// [`scalar_for_conversions`]: crate::TypeInner::scalar_for_conversions
     pub const fn scalar(&self) -> Option<crate::Scalar> {
-        
         match *self {
             Self::Scalar(scalar) | Self::Vector { scalar, .. } => Some(scalar),
             Self::Matrix { scalar, .. } => Some(scalar),
@@ -142,7 +136,6 @@ impl crate::TypeInner {
         &self,
         types: &crate::UniqueArena<crate::Type>,
     ) -> Option<crate::Scalar> {
-        
         match *self {
             Self::Scalar(scalar) | Self::Vector { scalar, .. } | Self::Matrix { scalar, .. } => {
                 Some(scalar)
@@ -171,10 +164,7 @@ impl crate::TypeInner {
                 size: Some(size),
                 scalar,
                 ..
-            } => Some(TypeResolution::Value(Self::Vector {
-                size,
-                scalar,
-            })),
+            } => Some(TypeResolution::Value(Self::Vector { size, scalar })),
             _ => None,
         }
     }
@@ -233,11 +223,7 @@ impl crate::TypeInner {
     /// representative of their class, so that simply applying `Eq` to the
     /// result indicates whether the types are equivalent, as far as Naga IR is
     /// concerned.
-    pub fn canonical_form(
-        &self,
-        types: &crate::UniqueArena<crate::Type>,
-    ) -> Option<Self> {
-        
+    pub fn canonical_form(&self, types: &crate::UniqueArena<crate::Type>) -> Option<Self> {
         match *self {
             Self::Pointer { base, space } => match types[base].inner {
                 Self::Scalar(scalar) => Some(Self::ValuePointer {
@@ -292,7 +278,6 @@ impl crate::TypeInner {
     }
 
     pub fn is_dynamically_sized(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
-        
         match *self {
             Self::Array { size, .. } => size == crate::ArraySize::Dynamic,
             Self::Struct { ref members, .. } => members
@@ -410,7 +395,6 @@ impl crate::TypeInner {
         types: &crate::UniqueArena<crate::Type>,
     ) -> Option<(crate::Scalar, crate::Scalar)> {
         use crate::ScalarKind as Sk;
-        
 
         // Automatic conversions only change the scalar type of a value's leaves
         // (e.g., `vec4<AbstractFloat>` to `vec4<f32>`), never the type

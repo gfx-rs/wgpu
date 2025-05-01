@@ -68,8 +68,6 @@ impl TryToWgsl for crate::MathFunction {
     const DESCRIPTION: &'static str = "math function";
 
     fn try_to_wgsl(self) -> Option<&'static str> {
-        
-
         Some(match self {
             Self::Abs => "abs",
             Self::Min => "min",
@@ -159,7 +157,6 @@ impl TryToWgsl for crate::BuiltIn {
     const DESCRIPTION: &'static str = "builtin value";
 
     fn try_to_wgsl(self) -> Option<&'static str> {
-        
         Some(match self {
             Self::Position { .. } => "position",
             Self::ViewIndex => "view_index",
@@ -217,8 +214,6 @@ impl ToWgsl for crate::Sampling {
 
 impl ToWgsl for crate::StorageFormat {
     fn to_wgsl(self) -> &'static str {
-        
-
         match self {
             Self::R8Unorm => "r8unorm",
             Self::R8Snorm => "r8snorm",
@@ -269,8 +264,6 @@ impl TryToWgsl for crate::Scalar {
     const DESCRIPTION: &'static str = "scalar type";
 
     fn try_to_wgsl(self) -> Option<&'static str> {
-        
-
         Some(match self {
             Self::F16 => "f16",
             Self::F32 => "f32",
@@ -301,8 +294,6 @@ impl TryToWgsl for crate::Scalar {
 
 impl ToWgsl for crate::ImageDimension {
     fn to_wgsl(self) -> &'static str {
-        
-
         match self {
             Self::D1 => "1d",
             Self::D2 => "2d",

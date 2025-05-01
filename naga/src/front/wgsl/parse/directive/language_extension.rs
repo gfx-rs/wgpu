@@ -73,12 +73,8 @@ impl ImplementedLanguageExtension {
             Self::ReadOnlyAndReadWriteStorageTextures => {
                 LanguageExtension::READONLY_AND_READWRITE_STORAGE_TEXTURES
             }
-            Self::Packed4x8IntegerDotProduct => {
-                LanguageExtension::PACKED4X8_INTEGER_DOT_PRODUCT
-            }
-            Self::PointerCompositeAccess => {
-                LanguageExtension::POINTER_COMPOSITE_ACCESS
-            }
+            Self::Packed4x8IntegerDotProduct => LanguageExtension::PACKED4X8_INTEGER_DOT_PRODUCT,
+            Self::PointerCompositeAccess => LanguageExtension::POINTER_COMPOSITE_ACCESS,
         }
     }
 }

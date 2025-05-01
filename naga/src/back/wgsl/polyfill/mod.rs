@@ -24,10 +24,7 @@ impl InversePolyfill {
         Self::polyfill_overload(columns, scalar.width)
     }
 
-    const fn polyfill_overload(
-        dimension: VectorSize,
-        width: crate::Bytes,
-    ) -> Option<Self> {
+    const fn polyfill_overload(dimension: VectorSize, width: crate::Bytes) -> Option<Self> {
         const INVERSE_2X2_F32: &str = include_str!("inverse/inverse_2x2_f32.wgsl");
         const INVERSE_3X3_F32: &str = include_str!("inverse/inverse_3x3_f32.wgsl");
         const INVERSE_4X4_F32: &str = include_str!("inverse/inverse_4x4_f32.wgsl");

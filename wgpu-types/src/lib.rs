@@ -1463,10 +1463,7 @@ impl BlendFactor {
     #[must_use]
     pub fn ref_second_blend_source(&self) -> bool {
         match self {
-            Self::Src1
-            | Self::OneMinusSrc1
-            | Self::Src1Alpha
-            | Self::OneMinusSrc1Alpha => true,
+            Self::Src1 | Self::OneMinusSrc1 | Self::Src1Alpha | Self::OneMinusSrc1Alpha => true,
             _ => false,
         }
     }
@@ -1835,8 +1832,6 @@ impl TextureFormatFeatureFlags {
     /// returns `true` if `count` is a supported sample count.
     #[must_use]
     pub fn sample_count_supported(&self, count: u32) -> bool {
-        
-
         match count {
             1 => true,
             2 => self.contains(Self::MULTISAMPLE_X2),

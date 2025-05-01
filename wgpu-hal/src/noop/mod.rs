@@ -267,11 +267,7 @@ impl crate::Queue for Context {
         fence.value.store(fence_value, Ordering::Release);
         Ok(())
     }
-    unsafe fn present(
-        &self,
-        surface: &Self,
-        texture: Resource,
-    ) -> Result<(), crate::SurfaceError> {
+    unsafe fn present(&self, surface: &Self, texture: Resource) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
 
