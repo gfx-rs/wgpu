@@ -16,6 +16,9 @@ use crate::{
     Span, Statement, TypeInner, WithSpan,
 };
 
+#[cfg(no_std)]
+use num_traits::float::FloatCore as _;
+
 #[derive(Error, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum PipelineConstantError {

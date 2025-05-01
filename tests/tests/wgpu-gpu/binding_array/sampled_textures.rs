@@ -210,6 +210,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
             label: Some("Render Pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &output_view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),

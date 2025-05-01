@@ -42,9 +42,6 @@ jobs:
           EOF
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            naga/xtask -> naga/xtask/target
 
       # We must have the FXC job before the DXC job, so the DXC PATH has priority
       # over the FXC PATH. This is because the windows kits also include an older
@@ -97,9 +94,6 @@ jobs:
           EOF
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            naga/xtask -> naga/xtask/target
 
       - run: |
           cd naga
@@ -139,9 +133,6 @@ jobs:
           EOF
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            naga/xtask -> naga/xtask/target
 
       - run: cd naga; cargo xtask validate spv
 

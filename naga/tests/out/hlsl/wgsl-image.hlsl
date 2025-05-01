@@ -44,12 +44,14 @@ void main(uint3 local_id : SV_GroupThreadID)
     uint4 value1_ = image_mipmapped_src.Load(int3(itc, int(local_id.z)));
     uint4 value1_2_ = image_mipmapped_src.Load(int3(itc, int(uint(local_id.z))));
     uint4 value2_ = image_multisampled_src.Load(itc, int(local_id.z));
+    uint4 value3_ = image_multisampled_src.Load(itc, uint(local_id.z));
     uint4 value4_ = image_storage_src.Load(itc);
     uint4 value5_ = image_array_src.Load(int4(itc, local_id.z, asint(asuint(int(local_id.z)) + asuint(int(1)))));
     uint4 value6_ = image_array_src.Load(int4(itc, int(local_id.z), asint(asuint(int(local_id.z)) + asuint(int(1)))));
     uint4 value7_ = image_1d_src.Load(int2(int(local_id.x), int(local_id.z)));
     uint4 value1u = image_mipmapped_src.Load(int3(uint2(itc), int(local_id.z)));
     uint4 value2u = image_multisampled_src.Load(uint2(itc), int(local_id.z));
+    uint4 value3u = image_multisampled_src.Load(uint2(itc), uint(local_id.z));
     uint4 value4u = image_storage_src.Load(uint2(itc));
     uint4 value5u = image_array_src.Load(int4(uint2(itc), local_id.z, asint(asuint(int(local_id.z)) + asuint(int(1)))));
     uint4 value6u = image_array_src.Load(int4(uint2(itc), int(local_id.z), asint(asuint(int(local_id.z)) + asuint(int(1)))));

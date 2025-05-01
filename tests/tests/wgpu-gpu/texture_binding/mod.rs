@@ -2,9 +2,9 @@ use std::time::Duration;
 use wgpu::wgt::BufferDescriptor;
 use wgpu::{
     include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferUsages,
-    ComputePassDescriptor, ComputePipelineDescriptor, DownlevelFlags, Extent3d, Features, MapMode,
-    Origin3d, PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo,
-    TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    ComputePassDescriptor, ComputePipelineDescriptor, DownlevelFlags, Extent3d, MapMode, Origin3d,
+    PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo, TextureAspect,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
 };
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
@@ -14,8 +14,7 @@ static TEXTURE_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .downlevel_flags(DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT)
-            .features(Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES),
+            .downlevel_flags(DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT),
     )
     .run_sync(texture_binding);
 
@@ -71,8 +70,7 @@ static SINGLE_SCALAR_LOAD: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .downlevel_flags(DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT)
-            .features(Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES),
+            .downlevel_flags(DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT),
     )
     .run_sync(single_scalar_load);
 
