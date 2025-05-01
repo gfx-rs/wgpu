@@ -98,7 +98,7 @@ impl From<crate::naga::error::ShaderError<crate::naga::front::wgsl::ParseError>>
     for CompilationInfo
 {
     fn from(value: crate::naga::error::ShaderError<crate::naga::front::wgsl::ParseError>) -> Self {
-        CompilationInfo {
+        Self {
             messages: vec![CompilationMessage {
                 message: value.to_string(),
                 message_type: CompilationMessageType::Error,
@@ -148,7 +148,7 @@ impl
             crate::naga::WithSpan<crate::naga::valid::ValidationError>,
         >,
     ) -> Self {
-        CompilationInfo {
+        Self {
             messages: vec![CompilationMessage {
                 message: value.to_string(),
                 message_type: CompilationMessageType::Error,
@@ -161,7 +161,7 @@ impl
 #[cfg(any(wgpu_core, naga))]
 impl From<crate::naga::SourceLocation> for SourceLocation {
     fn from(value: crate::naga::SourceLocation) -> Self {
-        SourceLocation {
+        Self {
             length: value.length,
             offset: value.offset,
             line_number: value.line_number,

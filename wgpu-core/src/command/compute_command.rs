@@ -72,7 +72,7 @@ impl ComputeCommand {
     #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn resolve_compute_command_ids(
         hub: &crate::hub::Hub,
-        commands: &[ComputeCommand],
+        commands: &[Self],
     ) -> Result<alloc::vec::Vec<ArcComputeCommand>, super::ComputePassError> {
         use super::{ComputePassError, PassErrorScope};
         use alloc::vec::Vec;
@@ -86,7 +86,7 @@ impl ComputeCommand {
             .iter()
             .map(|c| -> Result<ArcComputeCommand, ComputePassError> {
                 Ok(match *c {
-                    ComputeCommand::SetBindGroup {
+                    Self::SetBindGroup {
                         index,
                         num_dynamic_offsets,
                         bind_group_id,
@@ -113,7 +113,7 @@ impl ComputeCommand {
                             bind_group: Some(bg),
                         }
                     }
-                    ComputeCommand::SetPipeline(pipeline_id) => ArcComputeCommand::SetPipeline(
+                    Self::SetPipeline(pipeline_id) => ArcComputeCommand::SetPipeline(
                         pipelines_guard
                             .get(pipeline_id)
                             .get()
@@ -123,7 +123,7 @@ impl ComputeCommand {
                             })?,
                     ),
 
-                    ComputeCommand::SetPushConstant {
+                    Self::SetPushConstant {
                         offset,
                         size_bytes,
                         values_offset,
@@ -133,9 +133,9 @@ impl ComputeCommand {
                         values_offset,
                     },
 
-                    ComputeCommand::Dispatch(dim) => ArcComputeCommand::Dispatch(dim),
+                    Self::Dispatch(dim) => ArcComputeCommand::Dispatch(dim),
 
-                    ComputeCommand::DispatchIndirect { buffer_id, offset } => {
+                    Self::DispatchIndirect { buffer_id, offset } => {
                         ArcComputeCommand::DispatchIndirect {
                             buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
                                 ComputePassError {
@@ -147,17 +147,17 @@ impl ComputeCommand {
                         }
                     }
 
-                    ComputeCommand::PushDebugGroup { color, len } => {
+                    Self::PushDebugGroup { color, len } => {
                         ArcComputeCommand::PushDebugGroup { color, len }
                     }
 
-                    ComputeCommand::PopDebugGroup => ArcComputeCommand::PopDebugGroup,
+                    Self::PopDebugGroup => ArcComputeCommand::PopDebugGroup,
 
-                    ComputeCommand::InsertDebugMarker { color, len } => {
+                    Self::InsertDebugMarker { color, len } => {
                         ArcComputeCommand::InsertDebugMarker { color, len }
                     }
 
-                    ComputeCommand::WriteTimestamp {
+                    Self::WriteTimestamp {
                         query_set_id,
                         query_index,
                     } => ArcComputeCommand::WriteTimestamp {
@@ -170,7 +170,7 @@ impl ComputeCommand {
                         query_index,
                     },
 
-                    ComputeCommand::BeginPipelineStatisticsQuery {
+                    Self::BeginPipelineStatisticsQuery {
                         query_set_id,
                         query_index,
                     } => ArcComputeCommand::BeginPipelineStatisticsQuery {
@@ -183,7 +183,7 @@ impl ComputeCommand {
                         query_index,
                     },
 
-                    ComputeCommand::EndPipelineStatisticsQuery => {
+                    Self::EndPipelineStatisticsQuery => {
                         ArcComputeCommand::EndPipelineStatisticsQuery
                     }
                 })

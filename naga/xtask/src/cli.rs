@@ -54,7 +54,7 @@ pub(crate) enum Subcommand {
 }
 
 impl Subcommand {
-    fn parse(mut args: Arguments) -> anyhow::Result<Subcommand> {
+    fn parse(mut args: Arguments) -> anyhow::Result<Self> {
         let subcmd = args
             .subcommand()
             .context("failed to parse subcommand")?

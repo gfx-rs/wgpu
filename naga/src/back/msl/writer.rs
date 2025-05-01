@@ -763,7 +763,7 @@ struct StatementContext<'a> {
 impl<W: Write> Writer<W> {
     /// Creates a new `Writer` instance.
     pub fn new(out: W) -> Self {
-        Writer {
+        Self {
             out,
             names: FastHashMap::default(),
             named_expressions: Default::default(),
@@ -6852,13 +6852,13 @@ mod workgroup_mem_init {
             names: &FastHashMap<NameKey, String>,
         ) -> Result<(), core::fmt::Error> {
             match *self {
-                Access::GlobalVariable(handle) => {
+                Self::GlobalVariable(handle) => {
                     write!(writer, "{}", &names[&NameKey::GlobalVariable(handle)])
                 }
-                Access::StructMember(handle, index) => {
+                Self::StructMember(handle, index) => {
                     write!(writer, ".{}", &names[&NameKey::StructMember(handle, index)])
                 }
-                Access::Array(depth) => write!(writer, ".{WRAPPED_ARRAY_FIELD}[__i{depth}]"),
+                Self::Array(depth) => write!(writer, ".{WRAPPED_ARRAY_FIELD}[__i{depth}]"),
             }
         }
     }

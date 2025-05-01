@@ -17,8 +17,8 @@ use crate::{
 impl crate::ScalarKind {
     const fn dummy_storage_format(&self) -> crate::StorageFormat {
         match *self {
-            Sk::Sint => crate::StorageFormat::R16Sint,
-            Sk::Uint => crate::StorageFormat::R16Uint,
+            Self::Sint => crate::StorageFormat::R16Sint,
+            Self::Uint => crate::StorageFormat::R16Uint,
             _ => crate::StorageFormat::R16Float,
         }
     }
@@ -1593,17 +1593,17 @@ impl MacroCall {
         meta: Span,
     ) -> Result<Option<Handle<Expression>>> {
         Ok(Some(match *self {
-            MacroCall::Sampler => {
+            Self::Sampler => {
                 ctx.samplers.insert(args[0], args[1]);
                 args[0]
             }
-            MacroCall::SamplerShadow => {
+            Self::SamplerShadow => {
                 sampled_to_depth(ctx, args[0], meta, &mut frontend.errors);
                 ctx.invalidate_expression(args[0], meta)?;
                 ctx.samplers.insert(args[0], args[1]);
                 args[0]
             }
-            MacroCall::Texture {
+            Self::Texture {
                 proj,
                 offset,
                 shadow,
@@ -1716,7 +1716,7 @@ impl MacroCall {
                 texture_call(ctx, args[0], level, comps, texture_offset, meta)?
             }
 
-            MacroCall::TextureSize { arrayed } => {
+            Self::TextureSize { arrayed } => {
                 let mut expr = ctx.add_expression(
                     Expression::ImageQuery {
                         image: args[0],
@@ -1781,7 +1781,7 @@ impl MacroCall {
                     Span::default(),
                 )?
             }
-            MacroCall::TextureQueryLevels => {
+            Self::TextureQueryLevels => {
                 let expr = ctx.add_expression(
                     Expression::ImageQuery {
                         image: args[0],
@@ -1799,7 +1799,7 @@ impl MacroCall {
                     Span::default(),
                 )?
             }
-            MacroCall::ImageLoad { multi } => {
+            Self::ImageLoad { multi } => {
                 let comps = frontend.coordinate_components(ctx, args[0], args[1], None, meta)?;
                 let (sample, level) = match (multi, args.get(2)) {
                     (_, None) => (None, None),
@@ -1817,7 +1817,7 @@ impl MacroCall {
                     Span::default(),
                 )?
             }
-            MacroCall::ImageStore => {
+            Self::ImageStore => {
                 let comps = frontend.coordinate_components(ctx, args[0], args[1], None, meta)?;
                 ctx.emit_restart();
                 ctx.body.push(
@@ -1831,7 +1831,7 @@ impl MacroCall {
                 );
                 return Ok(None);
             }
-            MacroCall::MathFunction(fun) => ctx.add_expression(
+            Self::MathFunction(fun) => ctx.add_expression(
                 Expression::Math {
                     fun,
                     arg: args[0],
@@ -1841,10 +1841,10 @@ impl MacroCall {
                 },
                 Span::default(),
             )?,
-            mc @ (MacroCall::FindLsbUint | MacroCall::FindMsbUint) => {
+            mc @ (Self::FindLsbUint | Self::FindMsbUint) => {
                 let fun = match mc {
-                    MacroCall::FindLsbUint => MathFunction::FirstTrailingBit,
-                    MacroCall::FindMsbUint => MathFunction::FirstLeadingBit,
+                    Self::FindLsbUint => MathFunction::FirstTrailingBit,
+                    Self::FindMsbUint => MathFunction::FirstLeadingBit,
                     _ => unreachable!(),
                 };
                 let res = ctx.add_expression(
@@ -1866,7 +1866,7 @@ impl MacroCall {
                     Span::default(),
                 )?
             }
-            MacroCall::BitfieldInsert => {
+            Self::BitfieldInsert => {
                 let conv_arg_2 = ctx.add_expression(
                     Expression::As {
                         expr: args[2],
@@ -1894,7 +1894,7 @@ impl MacroCall {
                     Span::default(),
                 )?
             }
-            MacroCall::BitfieldExtract => {
+            Self::BitfieldExtract => {
                 let conv_arg_1 = ctx.add_expression(
                     Expression::As {
                         expr: args[1],
@@ -1922,17 +1922,17 @@ impl MacroCall {
                     Span::default(),
                 )?
             }
-            MacroCall::Relational(fun) => ctx.add_expression(
+            Self::Relational(fun) => ctx.add_expression(
                 Expression::Relational {
                     fun,
                     argument: args[0],
                 },
                 Span::default(),
             )?,
-            MacroCall::Unary(op) => {
+            Self::Unary(op) => {
                 ctx.add_expression(Expression::Unary { op, expr: args[0] }, Span::default())?
             }
-            MacroCall::Binary(op) => ctx.add_expression(
+            Self::Binary(op) => ctx.add_expression(
                 Expression::Binary {
                     op,
                     left: args[0],
@@ -1940,7 +1940,7 @@ impl MacroCall {
                 },
                 Span::default(),
             )?,
-            MacroCall::Mod(size) => {
+            Self::Mod(size) => {
                 ctx.implicit_splat(&mut args[1], meta, size)?;
 
                 // x - y * floor(x / y)
@@ -1980,7 +1980,7 @@ impl MacroCall {
                     Span::default(),
                 )?
             }
-            MacroCall::Splatted(fun, size, i) => {
+            Self::Splatted(fun, size, i) => {
                 ctx.implicit_splat(&mut args[i], meta, size)?;
 
                 ctx.add_expression(
@@ -1994,7 +1994,7 @@ impl MacroCall {
                     Span::default(),
                 )?
             }
-            MacroCall::MixBoolean => ctx.add_expression(
+            Self::MixBoolean => ctx.add_expression(
                 Expression::Select {
                     condition: args[2],
                     accept: args[1],
@@ -2002,7 +2002,7 @@ impl MacroCall {
                 },
                 Span::default(),
             )?,
-            MacroCall::Clamp(size) => {
+            Self::Clamp(size) => {
                 ctx.implicit_splat(&mut args[1], meta, size)?;
                 ctx.implicit_splat(&mut args[2], meta, size)?;
 
@@ -2017,7 +2017,7 @@ impl MacroCall {
                     Span::default(),
                 )?
             }
-            MacroCall::BitCast(kind) => ctx.add_expression(
+            Self::BitCast(kind) => ctx.add_expression(
                 Expression::As {
                     expr: args[0],
                     kind,
@@ -2025,7 +2025,7 @@ impl MacroCall {
                 },
                 Span::default(),
             )?,
-            MacroCall::Derivate(axis, ctrl) => ctx.add_expression(
+            Self::Derivate(axis, ctrl) => ctx.add_expression(
                 Expression::Derivative {
                     axis,
                     ctrl,
@@ -2033,13 +2033,13 @@ impl MacroCall {
                 },
                 Span::default(),
             )?,
-            MacroCall::Barrier => {
+            Self::Barrier => {
                 ctx.emit_restart();
                 ctx.body
                     .push(crate::Statement::Barrier(crate::Barrier::all()), meta);
                 return Ok(None);
             }
-            MacroCall::SmoothStep { splatted } => {
+            Self::SmoothStep { splatted } => {
                 ctx.implicit_splat(&mut args[0], meta, splatted)?;
                 ctx.implicit_splat(&mut args[1], meta, splatted)?;
 
@@ -2291,15 +2291,15 @@ bitflags::bitflags! {
 
 impl From<BuiltinVariations> for TextureArgsOptions {
     fn from(variations: BuiltinVariations) -> Self {
-        let mut options = TextureArgsOptions::empty();
+        let mut options = Self::empty();
         if variations.contains(BuiltinVariations::STANDARD) {
-            options |= TextureArgsOptions::STANDARD
+            options |= Self::STANDARD
         }
         if variations.contains(BuiltinVariations::CUBE_TEXTURES_ARRAY) {
-            options |= TextureArgsOptions::CUBE_ARRAY
+            options |= Self::CUBE_ARRAY
         }
         if variations.contains(BuiltinVariations::D2_MULTI_TEXTURES_ARRAY) {
-            options |= TextureArgsOptions::D2_MULTI_ARRAY
+            options |= Self::D2_MULTI_ARRAY
         }
         options
     }

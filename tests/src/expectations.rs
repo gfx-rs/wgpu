@@ -90,22 +90,22 @@ impl FailureCase {
 
     /// This case applies to all tests.
     pub fn always() -> Self {
-        FailureCase::default()
+        Self::default()
     }
 
     /// This case applies to no tests.
     pub fn never() -> Self {
-        FailureCase {
+        Self {
             backends: Some(wgpu::Backends::empty()),
-            ..FailureCase::default()
+            ..Self::default()
         }
     }
 
     /// Tests running on any of the given backends.
     pub fn backend(backends: wgpu::Backends) -> Self {
-        FailureCase {
+        Self {
             backends: Some(backends),
-            ..FailureCase::default()
+            ..Self::default()
         }
     }
 
@@ -117,9 +117,9 @@ impl FailureCase {
     ///
     /// [`AdapterInfo::name`]: wgpu::AdapterInfo::name
     pub fn adapter(adapter: &'static str) -> Self {
-        FailureCase {
+        Self {
             adapter: Some(adapter),
-            ..FailureCase::default()
+            ..Self::default()
         }
     }
 
@@ -132,10 +132,10 @@ impl FailureCase {
     ///
     /// [`AdapterInfo::name`]: wgpu::AdapterInfo::name
     pub fn backend_adapter(backends: wgpu::Backends, adapter: &'static str) -> Self {
-        FailureCase {
+        Self {
             backends: Some(backends),
             adapter: Some(adapter),
-            ..FailureCase::default()
+            ..Self::default()
         }
     }
 
@@ -144,16 +144,16 @@ impl FailureCase {
         #[cfg(target_arch = "wasm32")]
         let case = FailureCase::backend(wgpu::Backends::GL);
         #[cfg(not(target_arch = "wasm32"))]
-        let case = FailureCase::never();
+        let case = Self::never();
         case
     }
 
     /// Tests running on the MoltenVK Vulkan driver on macOS.
     pub fn molten_vk() -> Self {
-        FailureCase {
+        Self {
             backends: Some(wgpu::Backends::VULKAN),
             driver: Some("MoltenVK"),
-            ..FailureCase::default()
+            ..Self::default()
         }
     }
 
@@ -191,7 +191,7 @@ impl FailureCase {
     ///
     /// Use this _very_ sparyingly, and match as tightly as you can, including giving a specific failure message.
     pub fn flaky(self) -> Self {
-        FailureCase {
+        Self {
             behavior: FailureBehavior::Ignore,
             ..self
         }
@@ -358,8 +358,8 @@ pub(crate) enum FailureResultKind {
 impl fmt::Display for FailureResultKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            FailureResultKind::ValidationError => write!(f, "Validation Error"),
-            FailureResultKind::Panic => write!(f, "Panic"),
+            Self::ValidationError => write!(f, "Validation Error"),
+            Self::Panic => write!(f, "Panic"),
         }
     }
 }

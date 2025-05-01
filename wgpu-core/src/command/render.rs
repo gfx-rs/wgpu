@@ -124,15 +124,15 @@ pub enum ResolvedPassChannel<V> {
 impl<V: Copy + Default> ResolvedPassChannel<V> {
     fn load_op(&self) -> LoadOp<V> {
         match self {
-            ResolvedPassChannel::ReadOnly => LoadOp::Load,
-            ResolvedPassChannel::Operational(wgt::Operations { load, .. }) => *load,
+            Self::ReadOnly => LoadOp::Load,
+            Self::Operational(wgt::Operations { load, .. }) => *load,
         }
     }
 
     fn store_op(&self) -> StoreOp {
         match self {
-            ResolvedPassChannel::ReadOnly => StoreOp::Store,
-            ResolvedPassChannel::Operational(wgt::Operations { store, .. }) => *store,
+            Self::ReadOnly => StoreOp::Store,
+            Self::Operational(wgt::Operations { store, .. }) => *store,
         }
     }
 
@@ -596,18 +596,18 @@ pub enum AttachmentErrorLocation {
 impl fmt::Display for AttachmentErrorLocation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            AttachmentErrorLocation::Color {
+            Self::Color {
                 index,
                 resolve: false,
             } => write!(f, "color attachment at index {index}'s texture view"),
-            AttachmentErrorLocation::Color {
+            Self::Color {
                 index,
                 resolve: true,
             } => write!(
                 f,
                 "color attachment at index {index}'s resolve texture view"
             ),
-            AttachmentErrorLocation::Depth => write!(f, "depth attachment's texture view"),
+            Self::Depth => write!(f, "depth attachment's texture view"),
         }
     }
 }

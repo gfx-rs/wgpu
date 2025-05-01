@@ -53,7 +53,7 @@ impl Device {
     /// This is a convenience function which avoids the configuration, `async`, and fallibility
     /// aspects of constructing a device through `Instance`.
     #[cfg(feature = "noop")]
-    pub fn noop(desc: &DeviceDescriptor<'_>) -> (Device, Queue) {
+    pub fn noop(desc: &DeviceDescriptor<'_>) -> (Self, Queue) {
         use core::future::Future as _;
         use core::pin::pin;
         use core::task;
@@ -734,9 +734,9 @@ static_assertions::assert_impl_all!(Error: Send, Sync);
 impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            Error::OutOfMemory { source } => Some(source.as_ref()),
-            Error::Validation { source, .. } => Some(source.as_ref()),
-            Error::Internal { source, .. } => Some(source.as_ref()),
+            Self::OutOfMemory { source } => Some(source.as_ref()),
+            Self::Validation { source, .. } => Some(source.as_ref()),
+            Self::Internal { source, .. } => Some(source.as_ref()),
         }
     }
 }
@@ -744,9 +744,9 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
-            Error::Validation { description, .. } => f.write_str(description),
-            Error::Internal { description, .. } => f.write_str(description),
+            Self::OutOfMemory { .. } => f.write_str("Out of Memory"),
+            Self::Validation { description, .. } => f.write_str(description),
+            Self::Internal { description, .. } => f.write_str(description),
         }
     }
 }

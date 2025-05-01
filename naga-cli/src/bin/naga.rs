@@ -209,10 +209,10 @@ impl FromStr for InputKind {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s.to_lowercase().as_str() {
-            "bin" => InputKind::Bincode,
-            "glsl" => InputKind::Glsl,
-            "spv" => InputKind::SpirV,
-            "wgsl" => InputKind::Wgsl,
+            "bin" => Self::Bincode,
+            "glsl" => Self::Glsl,
+            "spv" => Self::SpirV,
+            "wgsl" => Self::Wgsl,
             _ => return Err(anyhow!("Invalid value for --input-kind: {s}")),
         })
     }
@@ -278,7 +278,7 @@ impl FromStr for Overrides {
             let value = f64::from_str(value.trim()).map_err(|err| format!("{err}: {value:?}"))?;
             pairs.push((name.trim().to_string(), value));
         }
-        Ok(Overrides { pairs })
+        Ok(Self { pairs })
     }
 }
 
@@ -299,7 +299,7 @@ impl FromStr for Defines {
             };
             pairs.push((name.trim().to_string(), value.trim().to_string()));
         }
-        Ok(Defines { pairs })
+        Ok(Self { pairs })
     }
 }
 
@@ -348,8 +348,8 @@ impl<T, E: Error> PrettyResult for Result<T, E> {
     type Target = T;
     fn unwrap_pretty(self) -> T {
         match self {
-            Result::Ok(value) => value,
-            Result::Err(error) => {
+            Self::Ok(value) => value,
+            Self::Err(error) => {
                 print_err(&error);
                 std::process::exit(1);
             }

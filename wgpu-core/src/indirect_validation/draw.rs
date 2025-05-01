@@ -430,7 +430,7 @@ impl Draw {
     }
 
     pub(super) fn dispose(self, device: &dyn hal::DynDevice) {
-        let Draw {
+        let Self {
             module,
             metadata_bind_group_layout,
             src_bind_group_layout,
@@ -722,7 +722,7 @@ impl Drop for DrawResources {
 
 impl DrawResources {
     pub(crate) fn new(device: Arc<Device>) -> Self {
-        DrawResources {
+        Self {
             device,
             dst_entries: Vec::new(),
             metadata_entries: Vec::new(),

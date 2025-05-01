@@ -86,7 +86,7 @@ pub struct Writer<W> {
 
 impl<W: Write> Writer<W> {
     pub fn new(out: W, flags: WriterFlags) -> Self {
-        Writer {
+        Self {
             out,
             flags,
             names: crate::FastHashMap::default(),

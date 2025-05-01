@@ -29,7 +29,7 @@ pub(crate) fn has_copy_partial_init_tracker_coverage(
 
 impl From<TextureSelector> for TextureInitRange {
     fn from(selector: TextureSelector) -> Self {
-        TextureInitRange {
+        Self {
             mip_range: selector.mips,
             layer_range: selector.layers,
         }
@@ -52,7 +52,7 @@ pub(crate) struct TextureInitTracker {
 
 impl TextureInitTracker {
     pub(crate) fn new(mip_level_count: u32, depth_or_array_layers: u32) -> Self {
-        TextureInitTracker {
+        Self {
             mips: core::iter::repeat_n(
                 TextureLayerInitTracker::new(depth_or_array_layers),
                 mip_level_count as usize,

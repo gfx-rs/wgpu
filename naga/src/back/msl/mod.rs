@@ -269,7 +269,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options {
+        Self {
             lang_version: (1, 0),
             per_entry_point_map: EntryPointResourceMap::default(),
             inline_samplers: Vec::new(),

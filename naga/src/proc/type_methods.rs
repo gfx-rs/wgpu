@@ -4,19 +4,18 @@
 //! [`Scalar`]: crate::Scalar
 //! [`ScalarKind`]: crate::ScalarKind
 
-use crate::ir;
 
 use super::TypeResolution;
 
 impl crate::ScalarKind {
     pub const fn is_numeric(self) -> bool {
         match self {
-            crate::ScalarKind::Sint
-            | crate::ScalarKind::Uint
-            | crate::ScalarKind::Float
-            | crate::ScalarKind::AbstractInt
-            | crate::ScalarKind::AbstractFloat => true,
-            crate::ScalarKind::Bool => false,
+            Self::Sint
+            | Self::Uint
+            | Self::Float
+            | Self::AbstractInt
+            | Self::AbstractFloat => true,
+            Self::Bool => false,
         }
     }
 }
@@ -111,10 +110,10 @@ impl crate::TypeInner {
     /// [`Array`]: crate::TypeInner::Array
     /// [`scalar_for_conversions`]: crate::TypeInner::scalar_for_conversions
     pub const fn scalar(&self) -> Option<crate::Scalar> {
-        use crate::TypeInner as Ti;
+        
         match *self {
-            Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => Some(scalar),
-            Ti::Matrix { scalar, .. } => Some(scalar),
+            Self::Scalar(scalar) | Self::Vector { scalar, .. } => Some(scalar),
+            Self::Matrix { scalar, .. } => Some(scalar),
             _ => None,
         }
     }
@@ -143,12 +142,12 @@ impl crate::TypeInner {
         &self,
         types: &crate::UniqueArena<crate::Type>,
     ) -> Option<crate::Scalar> {
-        use crate::TypeInner as Ti;
+        
         match *self {
-            Ti::Scalar(scalar) | Ti::Vector { scalar, .. } | Ti::Matrix { scalar, .. } => {
+            Self::Scalar(scalar) | Self::Vector { scalar, .. } | Self::Matrix { scalar, .. } => {
                 Some(scalar)
             }
-            Ti::Array { base, .. } => types[base].inner.scalar_for_conversions(types),
+            Self::Array { base, .. } => types[base].inner.scalar_for_conversions(types),
             _ => None,
         }
     }
@@ -164,15 +163,15 @@ impl crate::TypeInner {
     /// If `self` is a pointer type, return its base type.
     pub const fn pointer_base_type(&self) -> Option<TypeResolution> {
         match *self {
-            crate::TypeInner::Pointer { base, .. } => Some(TypeResolution::Handle(base)),
-            crate::TypeInner::ValuePointer {
+            Self::Pointer { base, .. } => Some(TypeResolution::Handle(base)),
+            Self::ValuePointer {
                 size: None, scalar, ..
-            } => Some(TypeResolution::Value(crate::TypeInner::Scalar(scalar))),
-            crate::TypeInner::ValuePointer {
+            } => Some(TypeResolution::Value(Self::Scalar(scalar))),
+            Self::ValuePointer {
                 size: Some(size),
                 scalar,
                 ..
-            } => Some(TypeResolution::Value(crate::TypeInner::Vector {
+            } => Some(TypeResolution::Value(Self::Vector {
                 size,
                 scalar,
             })),
@@ -182,8 +181,8 @@ impl crate::TypeInner {
 
     pub fn is_atomic_pointer(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
         match *self {
-            crate::TypeInner::Pointer { base, .. } => match types[base].inner {
-                crate::TypeInner::Atomic { .. } => true,
+            Self::Pointer { base, .. } => match types[base].inner {
+                Self::Atomic { .. } => true,
                 _ => false,
             },
             _ => false,
@@ -237,16 +236,16 @@ impl crate::TypeInner {
     pub fn canonical_form(
         &self,
         types: &crate::UniqueArena<crate::Type>,
-    ) -> Option<crate::TypeInner> {
-        use crate::TypeInner as Ti;
+    ) -> Option<Self> {
+        
         match *self {
-            Ti::Pointer { base, space } => match types[base].inner {
-                Ti::Scalar(scalar) => Some(Ti::ValuePointer {
+            Self::Pointer { base, space } => match types[base].inner {
+                Self::Scalar(scalar) => Some(Self::ValuePointer {
                     size: None,
                     scalar,
                     space,
                 }),
-                Ti::Vector { size, scalar } => Some(Ti::ValuePointer {
+                Self::Vector { size, scalar } => Some(Self::ValuePointer {
                     size: Some(size),
                     scalar,
                     space,
@@ -278,14 +277,14 @@ impl crate::TypeInner {
     /// [`Pointer`]: ir::TypeInner::Pointer
     pub fn non_struct_equivalent(
         &self,
-        rhs: &ir::TypeInner,
+        rhs: &Self,
         types: &crate::UniqueArena<crate::Type>,
     ) -> bool {
         let left = self.canonical_form(types);
         let right = rhs.canonical_form(types);
 
-        let left_struct = matches!(*self, ir::TypeInner::Struct { .. });
-        let right_struct = matches!(*rhs, ir::TypeInner::Struct { .. });
+        let left_struct = matches!(*self, Self::Struct { .. });
+        let right_struct = matches!(*rhs, Self::Struct { .. });
 
         assert!(!left_struct || !right_struct);
 
@@ -293,10 +292,10 @@ impl crate::TypeInner {
     }
 
     pub fn is_dynamically_sized(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
-        use crate::TypeInner as Ti;
+        
         match *self {
-            Ti::Array { size, .. } => size == crate::ArraySize::Dynamic,
-            Ti::Struct { ref members, .. } => members
+            Self::Array { size, .. } => size == crate::ArraySize::Dynamic,
+            Self::Struct { ref members, .. } => members
                 .last()
                 .map(|last| types[last.ty].inner.is_dynamically_sized(types))
                 .unwrap_or(false),
@@ -319,9 +318,9 @@ impl crate::TypeInner {
 
     pub fn component_type(&self, index: usize) -> Option<TypeResolution> {
         Some(match *self {
-            Self::Vector { scalar, .. } => TypeResolution::Value(crate::TypeInner::Scalar(scalar)),
+            Self::Vector { scalar, .. } => TypeResolution::Value(Self::Scalar(scalar)),
             Self::Matrix { rows, scalar, .. } => {
-                TypeResolution::Value(crate::TypeInner::Vector { size: rows, scalar })
+                TypeResolution::Value(Self::Vector { size: rows, scalar })
             }
             Self::Array {
                 base,
@@ -339,19 +338,19 @@ impl crate::TypeInner {
         &self,
     ) -> Option<(Option<crate::VectorSize>, crate::Scalar)> {
         match *self {
-            crate::TypeInner::Scalar(scalar) => Some((None, scalar)),
-            crate::TypeInner::Vector { size, scalar } => Some((Some(size), scalar)),
-            crate::TypeInner::Matrix { .. }
-            | crate::TypeInner::Atomic(_)
-            | crate::TypeInner::Pointer { .. }
-            | crate::TypeInner::ValuePointer { .. }
-            | crate::TypeInner::Array { .. }
-            | crate::TypeInner::Struct { .. }
-            | crate::TypeInner::Image { .. }
-            | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure { .. }
-            | crate::TypeInner::RayQuery { .. }
-            | crate::TypeInner::BindingArray { .. } => None,
+            Self::Scalar(scalar) => Some((None, scalar)),
+            Self::Vector { size, scalar } => Some((Some(size), scalar)),
+            Self::Matrix { .. }
+            | Self::Atomic(_)
+            | Self::Pointer { .. }
+            | Self::ValuePointer { .. }
+            | Self::Array { .. }
+            | Self::Struct { .. }
+            | Self::Image { .. }
+            | Self::Sampler { .. }
+            | Self::AccelerationStructure { .. }
+            | Self::RayQuery { .. }
+            | Self::BindingArray { .. } => None,
         }
     }
 
@@ -361,19 +360,19 @@ impl crate::TypeInner {
     /// recognize abstract arrays.
     pub fn is_abstract(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
         match *self {
-            crate::TypeInner::Scalar(scalar)
-            | crate::TypeInner::Vector { scalar, .. }
-            | crate::TypeInner::Matrix { scalar, .. }
-            | crate::TypeInner::Atomic(scalar) => scalar.is_abstract(),
-            crate::TypeInner::Array { base, .. } => types[base].inner.is_abstract(types),
-            crate::TypeInner::ValuePointer { .. }
-            | crate::TypeInner::Pointer { .. }
-            | crate::TypeInner::Struct { .. }
-            | crate::TypeInner::Image { .. }
-            | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure { .. }
-            | crate::TypeInner::RayQuery { .. }
-            | crate::TypeInner::BindingArray { .. } => false,
+            Self::Scalar(scalar)
+            | Self::Vector { scalar, .. }
+            | Self::Matrix { scalar, .. }
+            | Self::Atomic(scalar) => scalar.is_abstract(),
+            Self::Array { base, .. } => types[base].inner.is_abstract(types),
+            Self::ValuePointer { .. }
+            | Self::Pointer { .. }
+            | Self::Struct { .. }
+            | Self::Image { .. }
+            | Self::Sampler { .. }
+            | Self::AccelerationStructure { .. }
+            | Self::RayQuery { .. }
+            | Self::BindingArray { .. } => false,
         }
     }
 
@@ -411,7 +410,7 @@ impl crate::TypeInner {
         types: &crate::UniqueArena<crate::Type>,
     ) -> Option<(crate::Scalar, crate::Scalar)> {
         use crate::ScalarKind as Sk;
-        use crate::TypeInner as Ti;
+        
 
         // Automatic conversions only change the scalar type of a value's leaves
         // (e.g., `vec4<AbstractFloat>` to `vec4<f32>`), never the type
@@ -421,16 +420,16 @@ impl crate::TypeInner {
         let expr_scalar;
         let goal_scalar;
         match (self, goal) {
-            (&Ti::Scalar(expr), &Ti::Scalar(goal)) => {
+            (&Self::Scalar(expr), &Self::Scalar(goal)) => {
                 expr_scalar = expr;
                 goal_scalar = goal;
             }
             (
-                &Ti::Vector {
+                &Self::Vector {
                     size: expr_size,
                     scalar: expr,
                 },
-                &Ti::Vector {
+                &Self::Vector {
                     size: goal_size,
                     scalar: goal,
                 },
@@ -439,12 +438,12 @@ impl crate::TypeInner {
                 goal_scalar = goal;
             }
             (
-                &Ti::Matrix {
+                &Self::Matrix {
                     rows: expr_rows,
                     columns: expr_columns,
                     scalar: expr,
                 },
-                &Ti::Matrix {
+                &Self::Matrix {
                     rows: goal_rows,
                     columns: goal_columns,
                     scalar: goal,
@@ -454,12 +453,12 @@ impl crate::TypeInner {
                 goal_scalar = goal;
             }
             (
-                &Ti::Array {
+                &Self::Array {
                     base: expr_base,
                     size: expr_size,
                     stride: _,
                 },
-                &Ti::Array {
+                &Self::Array {
                     base: goal_base,
                     size: goal_size,
                     stride: _,

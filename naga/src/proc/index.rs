@@ -129,7 +129,7 @@ pub struct BoundsCheckPolicies {
 /// The default `BoundsCheckPolicy` is `Unchecked`.
 impl Default for BoundsCheckPolicy {
     fn default() -> Self {
-        BoundsCheckPolicy::Unchecked
+        Self::Unchecked
     }
 }
 
@@ -473,8 +473,8 @@ impl GuardedIndex {
         expressions: &crate::Arena<crate::Expression>,
         module: &crate::Module,
     ) {
-        if let GuardedIndex::Expression(expr) = *self {
-            *self = GuardedIndex::from_expression(expr, expressions, module);
+        if let Self::Expression(expr) = *self {
+            *self = Self::from_expression(expr, expressions, module);
         }
     }
 
@@ -516,25 +516,25 @@ impl crate::TypeInner {
         &self,
         module: &crate::Module,
     ) -> Result<IndexableLength, IndexableLengthError> {
-        use crate::TypeInner as Ti;
+        
         let known_length = match *self {
-            Ti::Vector { size, .. } => size as _,
-            Ti::Matrix { columns, .. } => columns as _,
-            Ti::Array { size, .. } | Ti::BindingArray { size, .. } => {
+            Self::Vector { size, .. } => size as _,
+            Self::Matrix { columns, .. } => columns as _,
+            Self::Array { size, .. } | Self::BindingArray { size, .. } => {
                 return size.to_indexable_length(module);
             }
-            Ti::ValuePointer {
+            Self::ValuePointer {
                 size: Some(size), ..
             } => size as _,
-            Ti::Pointer { base, .. } => {
+            Self::Pointer { base, .. } => {
                 // When assigning types to expressions, ResolveContext::Resolve
                 // does a separate sub-match here instead of a full recursion,
                 // so we'll do the same.
                 let base_inner = &module.types[base].inner;
                 match *base_inner {
-                    Ti::Vector { size, .. } => size as _,
-                    Ti::Matrix { columns, .. } => columns as _,
-                    Ti::Array { size, .. } | Ti::BindingArray { size, .. } => {
+                    Self::Vector { size, .. } => size as _,
+                    Self::Matrix { columns, .. } => columns as _,
+                    Self::Array { size, .. } | Self::BindingArray { size, .. } => {
                         return size.to_indexable_length(module)
                     }
                     _ => return Err(IndexableLengthError::TypeNotIndexable),

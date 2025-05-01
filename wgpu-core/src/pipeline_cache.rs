@@ -26,13 +26,13 @@ impl PipelineCacheValidationError {
     /// That is, is there a mistake in user code interacting with the cache
     pub fn was_avoidable(&self) -> bool {
         match self {
-            PipelineCacheValidationError::DeviceMismatch => true,
-            PipelineCacheValidationError::Truncated
-            | PipelineCacheValidationError::Unsupported
-            | PipelineCacheValidationError::Extended
+            Self::DeviceMismatch => true,
+            Self::Truncated
+            | Self::Unsupported
+            | Self::Extended
             // It's unusual, but not implausible, to be downgrading wgpu
-            | PipelineCacheValidationError::Outdated
-            | PipelineCacheValidationError::Corrupted => false,
+            | Self::Outdated
+            | Self::Corrupted => false,
         }
     }
 }
@@ -165,7 +165,7 @@ struct PipelineCacheHeader {
 }
 
 impl PipelineCacheHeader {
-    fn read(data: &[u8]) -> Option<(PipelineCacheHeader, &[u8])> {
+    fn read(data: &[u8]) -> Option<(Self, &[u8])> {
         let mut reader = Reader {
             data,
             total_read: 0,
@@ -179,10 +179,10 @@ impl PipelineCacheHeader {
         let data_size = reader.read_u64()?;
         let data_hash = reader.read_u64()?;
 
-        assert_eq!(reader.total_read, size_of::<PipelineCacheHeader>());
+        assert_eq!(reader.total_read, size_of::<Self>());
 
         Some((
-            PipelineCacheHeader {
+            Self {
                 magic,
                 header_version,
                 cache_abi,

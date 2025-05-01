@@ -89,7 +89,7 @@ impl<T> hash::Hash for Handle<T> {
 
 impl<T> Handle<T> {
     pub(crate) const fn new(index: Index) -> Self {
-        Handle {
+        Self {
             index,
             marker: PhantomData,
         }
@@ -106,12 +106,12 @@ impl<T> Handle<T> {
             .ok()
             .and_then(Index::new)
             .expect("Failed to insert into arena. Handle overflows");
-        Handle::new(handle_index)
+        Self::new(handle_index)
     }
 
     /// Convert a `usize` index into a `Handle<T>`, without range checks.
     pub(super) const unsafe fn from_usize_unchecked(index: usize) -> Self {
-        Handle::new(Index::new_unchecked(index as u32))
+        Self::new(Index::new_unchecked(index as u32))
     }
 
     /// Write this handle's index to `formatter`, preceded by `prefix`.

@@ -201,7 +201,7 @@ pub enum ResolveError {
 
 impl From<crate::proc::MissingSpecialType> for ResolveError {
     fn from(_unit_struct: crate::proc::MissingSpecialType) -> Self {
-        ResolveError::MissingSpecialType
+        Self::MissingSpecialType
     }
 }
 

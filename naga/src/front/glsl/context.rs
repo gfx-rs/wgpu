@@ -35,11 +35,11 @@ impl ExprPos {
     /// Returns an lhs position if the current position is lhs otherwise AccessBase
     const fn maybe_access_base(&self, constant_index: bool) -> Self {
         match *self {
-            ExprPos::Lhs
-            | ExprPos::AccessBase {
+            Self::Lhs
+            | Self::AccessBase {
                 constant_index: false,
             } => *self,
-            _ => ExprPos::AccessBase { constant_index },
+            _ => Self::AccessBase { constant_index },
         }
     }
 }
@@ -1500,7 +1500,7 @@ pub struct StmtContext {
 
 impl StmtContext {
     const fn new() -> Self {
-        StmtContext {
+        Self {
             hir_exprs: Arena::new(),
         }
     }

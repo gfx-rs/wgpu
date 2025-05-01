@@ -82,9 +82,9 @@ pub enum SimplifiedQueryType {
 impl From<wgt::QueryType> for SimplifiedQueryType {
     fn from(q: wgt::QueryType) -> Self {
         match q {
-            wgt::QueryType::Occlusion => SimplifiedQueryType::Occlusion,
-            wgt::QueryType::Timestamp => SimplifiedQueryType::Timestamp,
-            wgt::QueryType::PipelineStatistics(..) => SimplifiedQueryType::PipelineStatistics,
+            wgt::QueryType::Occlusion => Self::Occlusion,
+            wgt::QueryType::Timestamp => Self::Timestamp,
+            wgt::QueryType::PipelineStatistics(..) => Self::PipelineStatistics,
         }
     }
 }

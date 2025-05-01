@@ -120,7 +120,7 @@ impl Instruction {
 impl crate::TypeInner {
     fn can_comparison_sample(&self, module: &crate::Module) -> bool {
         match *self {
-            crate::TypeInner::Image {
+            Self::Image {
                 class:
                     crate::ImageClass::Sampled {
                         kind: crate::ScalarKind::Float,
@@ -128,8 +128,8 @@ impl crate::TypeInner {
                     },
                 ..
             } => true,
-            crate::TypeInner::Sampler { .. } => true,
-            crate::TypeInner::BindingArray { base, .. } => {
+            Self::Sampler { .. } => true,
+            Self::BindingArray { base, .. } => {
                 module.types[base].inner.can_comparison_sample(module)
             }
             _ => false,
@@ -169,10 +169,10 @@ impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
 impl crate::ImageDimension {
     const fn required_coordinate_size(&self) -> Option<crate::VectorSize> {
         match *self {
-            crate::ImageDimension::D1 => None,
-            crate::ImageDimension::D2 => Some(crate::VectorSize::Bi),
-            crate::ImageDimension::D3 => Some(crate::VectorSize::Tri),
-            crate::ImageDimension::Cube => Some(crate::VectorSize::Tri),
+            Self::D1 => None,
+            Self::D2 => Some(crate::VectorSize::Bi),
+            Self::D3 => Some(crate::VectorSize::Tri),
+            Self::Cube => Some(crate::VectorSize::Tri),
         }
     }
 }
@@ -190,10 +190,10 @@ bitflags::bitflags! {
 impl DecorationFlags {
     fn to_storage_access(self) -> crate::StorageAccess {
         let mut access = crate::StorageAccess::LOAD | crate::StorageAccess::STORE;
-        if self.contains(DecorationFlags::NON_READABLE) {
+        if self.contains(Self::NON_READABLE) {
             access &= !crate::StorageAccess::LOAD;
         }
-        if self.contains(DecorationFlags::NON_WRITABLE) {
+        if self.contains(Self::NON_WRITABLE) {
             access &= !crate::StorageAccess::STORE;
         }
         access
@@ -235,7 +235,7 @@ impl Decoration {
 
     const fn resource_binding(&self) -> Option<crate::ResourceBinding> {
         match *self {
-            Decoration {
+            Self {
                 desc_set: Some(group),
                 desc_index: Some(binding),
                 ..
@@ -246,13 +246,13 @@ impl Decoration {
 
     fn io_binding(&self) -> Result<crate::Binding, Error> {
         match *self {
-            Decoration {
+            Self {
                 built_in: Some(built_in),
                 location: None,
                 invariant,
                 ..
             } => Ok(crate::Binding::BuiltIn(map_builtin(built_in, invariant)?)),
-            Decoration {
+            Self {
                 built_in: None,
                 location: Some(location),
                 interpolation,
@@ -386,7 +386,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options {
+        Self {
             adjust_coordinate_space: true,
             strict_capabilities: true,
             block_ctx_dump_prefix: None,
@@ -452,7 +452,7 @@ struct Body {
 impl Body {
     /// Creates a new empty `Body` with the specified `parent`
     pub const fn with_parent(parent: usize) -> Self {
-        Body {
+        Self {
             parent,
             data: Vec::new(),
         }
@@ -644,7 +644,7 @@ pub struct Frontend<I> {
 
 impl<I: Iterator<Item = u32>> Frontend<I> {
     pub fn new(data: I, options: &Options) -> Self {
-        Frontend {
+        Self {
             data,
             data_offset: 0,
             state: ModuleState::Empty,

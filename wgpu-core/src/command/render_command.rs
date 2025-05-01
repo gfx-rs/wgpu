@@ -126,7 +126,7 @@ impl RenderCommand {
     #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn resolve_render_command_ids(
         hub: &crate::hub::Hub,
-        commands: &[RenderCommand],
+        commands: &[Self],
     ) -> Result<alloc::vec::Vec<ArcRenderCommand>, super::RenderPassError> {
         use super::{DrawKind, PassErrorScope, RenderPassError};
         use alloc::vec::Vec;
@@ -142,7 +142,7 @@ impl RenderCommand {
                 .iter()
                 .map(|c| -> Result<ArcRenderCommand, RenderPassError> {
                     Ok(match *c {
-                        RenderCommand::SetBindGroup {
+                        Self::SetBindGroup {
                             index,
                             num_dynamic_offsets,
                             bind_group_id,
@@ -170,7 +170,7 @@ impl RenderCommand {
                             }
                         }
 
-                        RenderCommand::SetPipeline(pipeline_id) => ArcRenderCommand::SetPipeline(
+                        Self::SetPipeline(pipeline_id) => ArcRenderCommand::SetPipeline(
                             pipelines_guard.get(pipeline_id).get().map_err(|e| {
                                 RenderPassError {
                                     scope: PassErrorScope::SetPipelineRender,
@@ -179,7 +179,7 @@ impl RenderCommand {
                             })?,
                         ),
 
-                        RenderCommand::SetPushConstant {
+                        Self::SetPushConstant {
                             offset,
                             size_bytes,
                             values_offset,
@@ -191,17 +191,17 @@ impl RenderCommand {
                             stages,
                         },
 
-                        RenderCommand::PushDebugGroup { color, len } => {
+                        Self::PushDebugGroup { color, len } => {
                             ArcRenderCommand::PushDebugGroup { color, len }
                         }
 
-                        RenderCommand::PopDebugGroup => ArcRenderCommand::PopDebugGroup,
+                        Self::PopDebugGroup => ArcRenderCommand::PopDebugGroup,
 
-                        RenderCommand::InsertDebugMarker { color, len } => {
+                        Self::InsertDebugMarker { color, len } => {
                             ArcRenderCommand::InsertDebugMarker { color, len }
                         }
 
-                        RenderCommand::WriteTimestamp {
+                        Self::WriteTimestamp {
                             query_set_id,
                             query_index,
                         } => ArcRenderCommand::WriteTimestamp {
@@ -214,7 +214,7 @@ impl RenderCommand {
                             query_index,
                         },
 
-                        RenderCommand::BeginPipelineStatisticsQuery {
+                        Self::BeginPipelineStatisticsQuery {
                             query_set_id,
                             query_index,
                         } => ArcRenderCommand::BeginPipelineStatisticsQuery {
@@ -227,11 +227,11 @@ impl RenderCommand {
                             query_index,
                         },
 
-                        RenderCommand::EndPipelineStatisticsQuery => {
+                        Self::EndPipelineStatisticsQuery => {
                             ArcRenderCommand::EndPipelineStatisticsQuery
                         }
 
-                        RenderCommand::SetIndexBuffer {
+                        Self::SetIndexBuffer {
                             buffer_id,
                             index_format,
                             offset,
@@ -248,7 +248,7 @@ impl RenderCommand {
                             size,
                         },
 
-                        RenderCommand::SetVertexBuffer {
+                        Self::SetVertexBuffer {
                             slot,
                             buffer_id,
                             offset,
@@ -265,15 +265,15 @@ impl RenderCommand {
                             size,
                         },
 
-                        RenderCommand::SetBlendConstant(color) => {
+                        Self::SetBlendConstant(color) => {
                             ArcRenderCommand::SetBlendConstant(color)
                         }
 
-                        RenderCommand::SetStencilReference(reference) => {
+                        Self::SetStencilReference(reference) => {
                             ArcRenderCommand::SetStencilReference(reference)
                         }
 
-                        RenderCommand::SetViewport {
+                        Self::SetViewport {
                             rect,
                             depth_min,
                             depth_max,
@@ -283,9 +283,9 @@ impl RenderCommand {
                             depth_max,
                         },
 
-                        RenderCommand::SetScissor(scissor) => ArcRenderCommand::SetScissor(scissor),
+                        Self::SetScissor(scissor) => ArcRenderCommand::SetScissor(scissor),
 
-                        RenderCommand::Draw {
+                        Self::Draw {
                             vertex_count,
                             instance_count,
                             first_vertex,
@@ -297,7 +297,7 @@ impl RenderCommand {
                             first_instance,
                         },
 
-                        RenderCommand::DrawIndexed {
+                        Self::DrawIndexed {
                             index_count,
                             instance_count,
                             first_index,
@@ -311,7 +311,7 @@ impl RenderCommand {
                             first_instance,
                         },
 
-                        RenderCommand::DrawIndirect {
+                        Self::DrawIndirect {
                             buffer_id,
                             offset,
                             count,
@@ -338,7 +338,7 @@ impl RenderCommand {
                             instance_limit: 0,
                         },
 
-                        RenderCommand::MultiDrawIndirectCount {
+                        Self::MultiDrawIndirectCount {
                             buffer_id,
                             offset,
                             count_buffer_id,
@@ -370,13 +370,13 @@ impl RenderCommand {
                             }
                         }
 
-                        RenderCommand::BeginOcclusionQuery { query_index } => {
+                        Self::BeginOcclusionQuery { query_index } => {
                             ArcRenderCommand::BeginOcclusionQuery { query_index }
                         }
 
-                        RenderCommand::EndOcclusionQuery => ArcRenderCommand::EndOcclusionQuery,
+                        Self::EndOcclusionQuery => ArcRenderCommand::EndOcclusionQuery,
 
-                        RenderCommand::ExecuteBundle(bundle) => ArcRenderCommand::ExecuteBundle(
+                        Self::ExecuteBundle(bundle) => ArcRenderCommand::ExecuteBundle(
                             render_bundles_guard.get(bundle).get().map_err(|e| {
                                 RenderPassError {
                                     scope: PassErrorScope::ExecuteBundle,

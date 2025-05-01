@@ -67,7 +67,7 @@ impl Block {
     }
 
     pub fn span_into_iter(self) -> impl Iterator<Item = (Statement, Span)> {
-        let Block { body, span_info } = self;
+        let Self { body, span_info } = self;
         body.into_iter().zip(span_info)
     }
 

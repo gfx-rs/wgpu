@@ -48,19 +48,19 @@ pub enum ExpectedToken {
 }
 impl From<TokenValue> for ExpectedToken {
     fn from(token: TokenValue) -> Self {
-        ExpectedToken::Token(token)
+        Self::Token(token)
     }
 }
 impl core::fmt::Display for ExpectedToken {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match *self {
-            ExpectedToken::Token(ref token) => write!(f, "{token:?}"),
-            ExpectedToken::TypeName => write!(f, "a type"),
-            ExpectedToken::Identifier => write!(f, "identifier"),
-            ExpectedToken::IntLiteral => write!(f, "integer literal"),
-            ExpectedToken::FloatLiteral => write!(f, "float literal"),
-            ExpectedToken::BoolLiteral => write!(f, "bool literal"),
-            ExpectedToken::Eof => write!(f, "end of file"),
+            Self::Token(ref token) => write!(f, "{token:?}"),
+            Self::TypeName => write!(f, "a type"),
+            Self::Identifier => write!(f, "identifier"),
+            Self::IntLiteral => write!(f, "integer literal"),
+            Self::FloatLiteral => write!(f, "float literal"),
+            Self::BoolLiteral => write!(f, "bool literal"),
+            Self::Eof => write!(f, "end of file"),
         }
     }
 }
@@ -135,7 +135,7 @@ pub enum ErrorKind {
 
 impl From<ConstantEvaluatorError> for ErrorKind {
     fn from(err: ConstantEvaluatorError) -> Self {
-        ErrorKind::SemanticError(err.to_string().into())
+        Self::SemanticError(err.to_string().into())
     }
 }
 

@@ -100,9 +100,9 @@ pub enum ConfigureSurfaceError {
 impl From<WaitIdleError> for ConfigureSurfaceError {
     fn from(e: WaitIdleError) -> Self {
         match e {
-            WaitIdleError::Device(d) => ConfigureSurfaceError::Device(d),
+            WaitIdleError::Device(d) => Self::Device(d),
             WaitIdleError::WrongSubmissionIndex(..) => unreachable!(),
-            WaitIdleError::Timeout => ConfigureSurfaceError::GpuWaitTimeout,
+            WaitIdleError::Timeout => Self::GpuWaitTimeout,
         }
     }
 }

@@ -173,6 +173,6 @@ impl Error {
 
 impl From<atomic_upgrade::Error> for Error {
     fn from(source: atomic_upgrade::Error) -> Self {
-        Error::AtomicUpgradeError(source)
+        Self::AtomicUpgradeError(source)
     }
 }

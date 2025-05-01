@@ -68,7 +68,7 @@ impl Writer {
         let gl450_ext_inst_id = id_gen.next();
         let void_type = id_gen.next();
 
-        Ok(Writer {
+        Ok(Self {
             physical_layout: PhysicalLayout::new(major, minor),
             logical_layout: LogicalLayout::default(),
             id_gen,
@@ -122,7 +122,7 @@ impl Writer {
 
         // Every field of the old writer that is not determined by the `Options`
         // passed to `Writer::new` should be reset somehow.
-        let fresh = Writer {
+        let fresh = Self {
             // Copied from the old Writer:
             flags: self.flags,
             bounds_check_policies: self.bounds_check_policies,

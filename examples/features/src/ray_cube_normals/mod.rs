@@ -387,7 +387,7 @@ impl crate::framework::Example for Example {
 
         let start_inst = Instant::now();
 
-        Example {
+        Self {
             rt_target,
             tlas_package,
             compute_pipeline,

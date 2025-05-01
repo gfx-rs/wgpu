@@ -2987,7 +2987,7 @@ impl Device {
         };
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
+            Self::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
         let cache = match desc.cache {
             Some(cache) => {
@@ -3604,7 +3604,7 @@ impl Device {
         }
 
         let late_sized_buffer_groups =
-            Device::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
+            Self::make_late_sized_buffer_groups(&shader_binding_sizes, &pipeline_layout);
 
         let cache = match desc.cache {
             Some(cache) => {

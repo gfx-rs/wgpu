@@ -117,7 +117,7 @@ pub enum WaitIdleError {
 impl WaitIdleError {
     pub fn to_poll_error(&self) -> Option<wgt::PollError> {
         match self {
-            WaitIdleError::Timeout => Some(wgt::PollError::Timeout),
+            Self::Timeout => Some(wgt::PollError::Timeout),
             _ => None,
         }
     }

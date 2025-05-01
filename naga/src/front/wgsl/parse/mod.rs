@@ -282,7 +282,7 @@ pub struct Parser {
 
 impl Parser {
     pub const fn new() -> Self {
-        Parser {
+        Self {
             rules: Vec::new(),
             recursion_depth: 0,
         }

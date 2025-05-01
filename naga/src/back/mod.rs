@@ -69,7 +69,7 @@ pub struct Level(pub usize);
 
 impl Level {
     pub const fn next(&self) -> Self {
-        Level(self.0 + 1)
+        Self(self.0 + 1)
     }
 }
 
@@ -135,10 +135,10 @@ impl FunctionType {
     /// Returns true if the function is an entry point for a compute shader.
     pub fn is_compute_entry_point(&self, module: &crate::Module) -> bool {
         match *self {
-            FunctionType::EntryPoint(index) => {
+            Self::EntryPoint(index) => {
                 module.entry_points[index as usize].stage == crate::ShaderStage::Compute
             }
-            FunctionType::Function(_) => false,
+            Self::Function(_) => false,
         }
     }
 }
@@ -239,15 +239,15 @@ impl crate::Expression {
     pub const fn bake_ref_count(&self) -> usize {
         match *self {
             // accesses are never cached, only loads are
-            crate::Expression::Access { .. } | crate::Expression::AccessIndex { .. } => usize::MAX,
+            Self::Access { .. } | Self::AccessIndex { .. } => usize::MAX,
             // sampling may use the control flow, and image ops look better by themselves
-            crate::Expression::ImageSample { .. } | crate::Expression::ImageLoad { .. } => 1,
+            Self::ImageSample { .. } | Self::ImageLoad { .. } => 1,
             // derivatives use the control flow
-            crate::Expression::Derivative { .. } => 1,
+            Self::Derivative { .. } => 1,
             // TODO: We need a better fix for named `Load` expressions
             // More info - https://github.com/gfx-rs/naga/pull/914
             // And https://github.com/gfx-rs/naga/issues/910
-            crate::Expression::Load { .. } => 1,
+            Self::Load { .. } => 1,
             // cache expressions that are referenced multiple times
             _ => 2,
         }
@@ -283,9 +283,9 @@ impl crate::TypeInner {
     /// Returns true if this is a handle to a type rather than the type directly.
     pub const fn is_handle(&self) -> bool {
         match *self {
-            crate::TypeInner::Image { .. }
-            | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure { .. } => true,
+            Self::Image { .. }
+            | Self::Sampler { .. }
+            | Self::AccelerationStructure { .. } => true,
             _ => false,
         }
     }
@@ -297,10 +297,10 @@ impl crate::Statement {
     /// Used to decide whether case blocks require a explicit `break`.
     pub const fn is_terminator(&self) -> bool {
         match *self {
-            crate::Statement::Break
-            | crate::Statement::Continue
-            | crate::Statement::Return { .. }
-            | crate::Statement::Kill => true,
+            Self::Break
+            | Self::Continue
+            | Self::Return { .. }
+            | Self::Kill => true,
             _ => false,
         }
     }

@@ -33,9 +33,9 @@ enum InputStorageType {
 impl InputStorageType {
     fn as_str(&self) -> &'static str {
         match self {
-            InputStorageType::Uniform => "uniform",
-            InputStorageType::Storage => "storage",
-            InputStorageType::PushConstant => "push_constant",
+            Self::Uniform => "uniform",
+            Self::Storage => "storage",
+            Self::PushConstant => "push_constant",
         }
     }
 }

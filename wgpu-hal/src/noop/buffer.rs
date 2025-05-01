@@ -46,7 +46,7 @@ impl Buffer {
         let storage: Arc<UnsafeCell<[u8]>> =
             unsafe { Arc::from_raw(Arc::into_raw(storage) as *mut UnsafeCell<[u8]>) };
 
-        Ok(Buffer { storage, size })
+        Ok(Self { storage, size })
     }
 
     /// Returns a pointer to the memory owned by this buffer within the given `range`.

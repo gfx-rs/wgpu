@@ -2694,8 +2694,8 @@ trait TryFromAbstract<T>: Sized {
 }
 
 impl TryFromAbstract<i64> for i32 {
-    fn try_from_abstract(value: i64) -> Result<i32, ConstantEvaluatorError> {
-        i32::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
+    fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
+        Self::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
             value: format!("{value:?}"),
             to_type: "i32",
         })
@@ -2703,8 +2703,8 @@ impl TryFromAbstract<i64> for i32 {
 }
 
 impl TryFromAbstract<i64> for u32 {
-    fn try_from_abstract(value: i64) -> Result<u32, ConstantEvaluatorError> {
-        u32::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
+    fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
+        Self::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
             value: format!("{value:?}"),
             to_type: "u32",
         })
@@ -2712,23 +2712,23 @@ impl TryFromAbstract<i64> for u32 {
 }
 
 impl TryFromAbstract<i64> for u64 {
-    fn try_from_abstract(value: i64) -> Result<u64, ConstantEvaluatorError> {
-        u64::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
+    fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
+        Self::try_from(value).map_err(|_| ConstantEvaluatorError::AutomaticConversionLossy {
             value: format!("{value:?}"),
             to_type: "u64",
         })
     }
 }
 
-impl TryFromAbstract<i64> for i64 {
-    fn try_from_abstract(value: i64) -> Result<i64, ConstantEvaluatorError> {
+impl TryFromAbstract<Self> for i64 {
+    fn try_from_abstract(value: Self) -> Result<Self, ConstantEvaluatorError> {
         Ok(value)
     }
 }
 
 impl TryFromAbstract<i64> for f32 {
     fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
-        let f = value as f32;
+        let f = value as Self;
         // The range of `i64` is roughly ±18 × 10¹⁸, whereas the range of
         // `f32` is roughly ±3.4 × 10³⁸, so there's no opportunity for
         // overflow here.
@@ -2737,8 +2737,8 @@ impl TryFromAbstract<i64> for f32 {
 }
 
 impl TryFromAbstract<f64> for f32 {
-    fn try_from_abstract(value: f64) -> Result<f32, ConstantEvaluatorError> {
-        let f = value as f32;
+    fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
+        let f = value as Self;
         if f.is_infinite() {
             return Err(ConstantEvaluatorError::AutomaticConversionLossy {
                 value: format!("{value:?}"),
@@ -2751,7 +2751,7 @@ impl TryFromAbstract<f64> for f32 {
 
 impl TryFromAbstract<i64> for f64 {
     fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
-        let f = value as f64;
+        let f = value as Self;
         // The range of `i64` is roughly ±18 × 10¹⁸, whereas the range of
         // `f64` is roughly ±1.8 × 10³⁰⁸, so there's no opportunity for
         // overflow here.
@@ -2759,8 +2759,8 @@ impl TryFromAbstract<i64> for f64 {
     }
 }
 
-impl TryFromAbstract<f64> for f64 {
-    fn try_from_abstract(value: f64) -> Result<f64, ConstantEvaluatorError> {
+impl TryFromAbstract<Self> for f64 {
+    fn try_from_abstract(value: Self) -> Result<Self, ConstantEvaluatorError> {
         Ok(value)
     }
 }
@@ -2779,7 +2779,7 @@ impl TryFromAbstract<f64> for i32 {
         // is... exactly representable in the original floating point type".
         // However, i32::MIN and i32::MAX are exactly representable by f64, so
         // we're all good.
-        Ok(value as i32)
+        Ok(value as Self)
     }
 }
 
@@ -2787,7 +2787,7 @@ impl TryFromAbstract<f64> for u32 {
     fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
         // As above, u32::MIN and u32::MAX are exactly representable by f64,
         // so a simple rust cast is sufficient.
-        Ok(value as u32)
+        Ok(value as Self)
     }
 }
 
@@ -2796,7 +2796,7 @@ impl TryFromAbstract<f64> for i64 {
         // As above, except we clamp to the minimum and maximum values
         // representable by both f64 and i64.
         use crate::proc::type_methods::IntFloatLimits;
-        Ok(value.clamp(i64::min_float(), i64::max_float()) as i64)
+        Ok(value.clamp(Self::min_float(), Self::max_float()) as Self)
     }
 }
 
@@ -2805,13 +2805,13 @@ impl TryFromAbstract<f64> for u64 {
         // As above, this time clamping to the minimum and maximum values
         // representable by both f64 and u64.
         use crate::proc::type_methods::IntFloatLimits;
-        Ok(value.clamp(u64::min_float(), u64::max_float()) as u64)
+        Ok(value.clamp(Self::min_float(), Self::max_float()) as Self)
     }
 }
 
 impl TryFromAbstract<f64> for f16 {
-    fn try_from_abstract(value: f64) -> Result<f16, ConstantEvaluatorError> {
-        let f = f16::from_f64(value);
+    fn try_from_abstract(value: f64) -> Result<Self, ConstantEvaluatorError> {
+        let f = Self::from_f64(value);
         if f.is_infinite() {
             return Err(ConstantEvaluatorError::AutomaticConversionLossy {
                 value: format!("{value:?}"),
@@ -2823,8 +2823,8 @@ impl TryFromAbstract<f64> for f16 {
 }
 
 impl TryFromAbstract<i64> for f16 {
-    fn try_from_abstract(value: i64) -> Result<f16, ConstantEvaluatorError> {
-        let f = f16::from_i64(value);
+    fn try_from_abstract(value: i64) -> Result<Self, ConstantEvaluatorError> {
+        let f = Self::from_i64(value);
         if f.is_none() {
             return Err(ConstantEvaluatorError::AutomaticConversionLossy {
                 value: format!("{value:?}"),

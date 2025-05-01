@@ -120,7 +120,7 @@ struct TerminatedBlock {
 
 impl Block {
     const fn new(label_id: Word) -> Self {
-        Block {
+        Self {
             label_id,
             body: Vec::new(),
         }
@@ -254,13 +254,13 @@ impl LocalImageType {
         let dim = spirv::Dim::from(dim);
 
         match class {
-            crate::ImageClass::Sampled { kind, multi } => LocalImageType {
+            crate::ImageClass::Sampled { kind, multi } => Self {
                 sampled_type: crate::Scalar { kind, width: 4 },
                 dim,
                 flags: make_flags(multi, ImageTypeFlags::SAMPLED),
                 image_format: spirv::ImageFormat::Unknown,
             },
-            crate::ImageClass::Depth { multi } => LocalImageType {
+            crate::ImageClass::Depth { multi } => Self {
                 sampled_type: crate::Scalar {
                     kind: crate::ScalarKind::Float,
                     width: 4,
@@ -269,7 +269,7 @@ impl LocalImageType {
                 flags: make_flags(multi, ImageTypeFlags::DEPTH | ImageTypeFlags::SAMPLED),
                 image_format: spirv::ImageFormat::Unknown,
             },
-            crate::ImageClass::Storage { format, access: _ } => LocalImageType {
+            crate::ImageClass::Storage { format, access: _ } => Self {
                 sampled_type: format.into(),
                 dim,
                 flags: make_flags(false, ImageTypeFlags::empty()),
@@ -298,14 +298,14 @@ impl NumericType {
     const fn from_inner(inner: &crate::TypeInner) -> Option<Self> {
         match *inner {
             crate::TypeInner::Scalar(scalar) | crate::TypeInner::Atomic(scalar) => {
-                Some(NumericType::Scalar(scalar))
+                Some(Self::Scalar(scalar))
             }
-            crate::TypeInner::Vector { size, scalar } => Some(NumericType::Vector { size, scalar }),
+            crate::TypeInner::Vector { size, scalar } => Some(Self::Vector { size, scalar }),
             crate::TypeInner::Matrix {
                 columns,
                 rows,
                 scalar,
-            } => Some(NumericType::Matrix {
+            } => Some(Self::Matrix {
                 columns,
                 rows,
                 scalar,
@@ -316,17 +316,17 @@ impl NumericType {
 
     const fn scalar(self) -> crate::Scalar {
         match self {
-            NumericType::Scalar(scalar)
-            | NumericType::Vector { scalar, .. }
-            | NumericType::Matrix { scalar, .. } => scalar,
+            Self::Scalar(scalar)
+            | Self::Vector { scalar, .. }
+            | Self::Matrix { scalar, .. } => scalar,
         }
     }
 
     const fn with_scalar(self, scalar: crate::Scalar) -> Self {
         match self {
-            NumericType::Scalar(_) => NumericType::Scalar(scalar),
-            NumericType::Vector { size, .. } => NumericType::Vector { size, scalar },
-            NumericType::Matrix { columns, rows, .. } => NumericType::Matrix {
+            Self::Scalar(_) => Self::Scalar(scalar),
+            Self::Vector { size, .. } => Self::Vector { size, scalar },
+            Self::Matrix { columns, rows, .. } => Self::Matrix {
                 columns,
                 rows,
                 scalar,
@@ -499,7 +499,7 @@ impl ops::IndexMut<Handle<crate::Expression>> for CachedExpressions {
 }
 impl recyclable::Recyclable for CachedExpressions {
     fn recycle(self) -> Self {
-        CachedExpressions {
+        Self {
             ids: self.ids.recycle(),
         }
     }

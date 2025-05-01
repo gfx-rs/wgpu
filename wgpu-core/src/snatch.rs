@@ -19,14 +19,14 @@ pub struct Snatchable<T> {
 
 impl<T> Snatchable<T> {
     pub fn new(val: T) -> Self {
-        Snatchable {
+        Self {
             value: UnsafeCell::new(Some(val)),
         }
     }
 
     #[allow(dead_code)]
     pub fn empty() -> Self {
-        Snatchable {
+        Self {
             value: UnsafeCell::new(None),
         }
     }
@@ -85,7 +85,7 @@ mod trace {
     impl LockTrace {
         #[track_caller]
         pub(super) fn enter(purpose: &'static str) {
-            let new = LockTrace {
+            let new = Self {
                 purpose,
                 caller: Location::caller(),
                 backtrace: Backtrace::capture(),
@@ -136,7 +136,7 @@ impl SnatchLock {
     /// to force force sers to think twice about creating a SnatchLock. The only place this
     /// method should be called is when creating the device.
     pub unsafe fn new(rank: rank::LockRank) -> Self {
-        SnatchLock {
+        Self {
             lock: RwLock::new(rank, ()),
         }
     }

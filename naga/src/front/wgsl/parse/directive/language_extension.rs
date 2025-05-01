@@ -70,13 +70,13 @@ impl ImplementedLanguageExtension {
     /// Maps this [`ImplementedLanguageExtension`] into the sentinel word associated with it in WGSL.
     pub const fn to_ident(self) -> &'static str {
         match self {
-            ImplementedLanguageExtension::ReadOnlyAndReadWriteStorageTextures => {
+            Self::ReadOnlyAndReadWriteStorageTextures => {
                 LanguageExtension::READONLY_AND_READWRITE_STORAGE_TEXTURES
             }
-            ImplementedLanguageExtension::Packed4x8IntegerDotProduct => {
+            Self::Packed4x8IntegerDotProduct => {
                 LanguageExtension::PACKED4X8_INTEGER_DOT_PRODUCT
             }
-            ImplementedLanguageExtension::PointerCompositeAccess => {
+            Self::PointerCompositeAccess => {
                 LanguageExtension::POINTER_COMPOSITE_ACCESS
             }
         }

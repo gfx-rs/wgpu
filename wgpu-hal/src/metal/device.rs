@@ -331,8 +331,8 @@ impl super::Device {
         }
     }
 
-    pub unsafe fn device_from_raw(raw: metal::Device, features: wgt::Features) -> super::Device {
-        super::Device {
+    pub unsafe fn device_from_raw(raw: metal::Device, features: wgt::Features) -> Self {
+        Self {
             shared: Arc::new(super::AdapterShared::new(raw)),
             features,
             counters: Default::default(),

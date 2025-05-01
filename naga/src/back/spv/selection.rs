@@ -240,7 +240,7 @@ impl MergeTuple for Word {
         ctx: &mut BlockContext,
         block: &mut Block,
         predecessors: &[(Word, Word)],
-    ) -> Word {
+    ) -> Self {
         let merged_value = ctx.gen_id();
         block
             .body

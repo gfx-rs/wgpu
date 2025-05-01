@@ -40,8 +40,8 @@ impl Error {
     /// Produce an [`Unsupported`] error for `value`.
     ///
     /// [`Unsupported`]: Error::Unsupported
-    fn unsupported<T: core::fmt::Debug>(kind: &'static str, value: T) -> Error {
-        Error::Unsupported {
+    fn unsupported<T: core::fmt::Debug>(kind: &'static str, value: T) -> Self {
+        Self::Unsupported {
             kind,
             value: format!("{value:?}"),
         }

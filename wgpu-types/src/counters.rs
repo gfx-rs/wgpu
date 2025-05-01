@@ -17,7 +17,7 @@ impl InternalCounter {
     #[inline]
     #[must_use]
     pub const fn new() -> Self {
-        InternalCounter {
+        Self {
             #[cfg(feature = "counters")]
             value: AtomicIsize::new(0),
         }
@@ -83,7 +83,7 @@ impl InternalCounter {
 
 impl Clone for InternalCounter {
     fn clone(&self) -> Self {
-        InternalCounter {
+        Self {
             #[cfg(feature = "counters")]
             value: AtomicIsize::new(self.read()),
         }

@@ -368,7 +368,7 @@ impl crate::framework::Example for Example {
 
         let depth_view = Self::create_depth_texture(config, device);
 
-        Example {
+        Self {
             camera,
             sky_pipeline,
             entity_pipeline,

@@ -17,7 +17,7 @@ struct State {
 }
 
 impl State {
-    async fn new(window: Arc<Window>) -> State {
+    async fn new(window: Arc<Window>) -> Self {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
@@ -34,7 +34,7 @@ impl State {
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
 
-        let state = State {
+        let state = Self {
             window,
             device,
             queue,

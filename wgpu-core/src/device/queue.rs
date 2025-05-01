@@ -92,7 +92,7 @@ impl Queue {
                 }]);
         }
 
-        Ok(Queue {
+        Ok(Self {
             raw,
             device,
             pending_writes: Mutex::new(rank::QUEUE_PENDING_WRITES, pending_writes),

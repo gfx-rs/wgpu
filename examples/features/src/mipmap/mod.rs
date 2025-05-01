@@ -446,7 +446,7 @@ impl crate::framework::Example for Example {
             }
         }
 
-        Example {
+        Self {
             bind_group,
             uniform_buf,
             draw_pipeline,

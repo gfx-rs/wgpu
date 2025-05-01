@@ -517,7 +517,7 @@ impl<A: hal::Api> Example<A> {
             fence
         };
 
-        Ok(Example {
+        Ok(Self {
             instance,
             surface,
             surface_format: surface_config.format,

@@ -83,7 +83,7 @@ impl Conclusion {
             }
         };
 
-        Conclusion::Predeclared(predeclared)
+        Self::Predeclared(predeclared)
     }
 
     pub fn into_resolution(
@@ -91,8 +91,8 @@ impl Conclusion {
         special_types: &ir::SpecialTypes,
     ) -> Result<TypeResolution, MissingSpecialType> {
         match self {
-            Conclusion::Value(inner) => Ok(TypeResolution::Value(inner)),
-            Conclusion::Predeclared(predeclared) => {
+            Self::Value(inner) => Ok(TypeResolution::Value(inner)),
+            Self::Predeclared(predeclared) => {
                 let handle = *special_types
                     .predeclared_types
                     .get(&predeclared)

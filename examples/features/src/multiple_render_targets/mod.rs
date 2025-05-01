@@ -85,7 +85,7 @@ impl MultiTargetRenderer {
         queue: &wgpu::Queue,
         shader: &wgpu::ShaderModule,
         target_states: &[Option<wgpu::ColorTargetState>],
-    ) -> MultiTargetRenderer {
+    ) -> Self {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -204,7 +204,7 @@ impl TargetRenderer {
         shader: &wgpu::ShaderModule,
         format: wgpu::TextureFormat,
         targets: &TextureTargets,
-    ) -> TargetRenderer {
+    ) -> Self {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -377,7 +377,7 @@ impl TextureTargets {
         format: wgpu::TextureFormat,
         width: u32,
         height: u32,
-    ) -> TextureTargets {
+    ) -> Self {
         let size = wgpu::Extent3d {
             width,
             height,
@@ -418,7 +418,7 @@ impl TextureTargets {
             dimension: Some(wgpu::TextureViewDimension::D2),
             ..wgpu::TextureViewDescriptor::default()
         });
-        TextureTargets {
+        Self {
             red_view,
             green_view,
         }

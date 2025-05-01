@@ -81,7 +81,7 @@ impl Padding {
             .for_each(|ln| log::debug!("{self}{ln}"));
     }
 
-    fn inc_padding(&self) -> Padding {
+    fn inc_padding(&self) -> Self {
         let _ = self.0.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         self.clone()
     }

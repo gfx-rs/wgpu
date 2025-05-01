@@ -583,7 +583,7 @@ impl BindingArrayFixture {
             span,
         );
         let validator = naga::valid::Validator::new(Default::default(), Default::default());
-        BindingArrayFixture {
+        Self {
             module,
             span,
             ty_u32,

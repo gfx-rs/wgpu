@@ -329,7 +329,7 @@ impl Dispatch {
     }
 
     pub(super) fn dispose(self, device: &dyn hal::DynDevice) {
-        let Dispatch {
+        let Self {
             module,
             dst_bind_group_layout,
             src_bind_group_layout,

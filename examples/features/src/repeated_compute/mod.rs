@@ -151,7 +151,7 @@ struct WgpuContext {
 }
 
 impl WgpuContext {
-    async fn new(buffer_size: usize) -> WgpuContext {
+    async fn new(buffer_size: usize) -> Self {
         let instance = wgpu::Instance::default();
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
@@ -234,7 +234,7 @@ impl WgpuContext {
             cache: None,
         });
 
-        WgpuContext {
+        Self {
             device,
             queue,
             pipeline,

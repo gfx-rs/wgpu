@@ -39,7 +39,7 @@ pub struct UniqueArena<T> {
 impl<T> UniqueArena<T> {
     /// Create a new arena with no initial capacity allocated.
     pub fn new() -> Self {
-        UniqueArena {
+        Self {
             set: FastIndexSet::default(),
             span_info: Vec::new(),
         }

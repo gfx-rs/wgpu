@@ -319,8 +319,8 @@ pub enum Fallible<T: ParentDevice> {
 impl<T: ParentDevice> Fallible<T> {
     pub fn get(self) -> Result<Arc<T>, InvalidResourceError> {
         match self {
-            Fallible::Valid(v) => Ok(v),
-            Fallible::Invalid(label) => Err(InvalidResourceError(ResourceErrorIdent {
+            Self::Valid(v) => Ok(v),
+            Self::Invalid(label) => Err(InvalidResourceError(ResourceErrorIdent {
                 r#type: Cow::Borrowed(T::TYPE),
                 label: (*label).clone(),
             })),
@@ -876,7 +876,7 @@ impl StagingBuffer {
         let mapping = unsafe { device.raw().map_buffer(raw.as_ref(), 0..size.get()) }
             .map_err(|e| device.handle_hal_error(e))?;
 
-        let staging_buffer = StagingBuffer {
+        let staging_buffer = Self {
             raw,
             device: device.clone(),
             size,
@@ -942,7 +942,7 @@ impl StagingBuffer {
         }
         unsafe { device.unmap_buffer(self.raw.as_ref()) };
 
-        let StagingBuffer {
+        let Self {
             raw, device, size, ..
         } = self;
 
@@ -1043,7 +1043,7 @@ impl Texture {
         clear_mode: TextureClearMode,
         init: bool,
     ) -> Self {
-        Texture {
+        Self {
             inner: Snatchable::new(inner),
             device: device.clone(),
             desc: desc.map_label(|_| ()),
@@ -1865,9 +1865,9 @@ pub enum SamplerFilterErrorType {
 impl fmt::Debug for SamplerFilterErrorType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            SamplerFilterErrorType::MagFilter => write!(f, "magFilter"),
-            SamplerFilterErrorType::MinFilter => write!(f, "minFilter"),
-            SamplerFilterErrorType::MipmapFilter => write!(f, "mipmapFilter"),
+            Self::MagFilter => write!(f, "magFilter"),
+            Self::MinFilter => write!(f, "minFilter"),
+            Self::MipmapFilter => write!(f, "mipmapFilter"),
         }
     }
 }

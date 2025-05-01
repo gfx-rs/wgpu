@@ -165,7 +165,7 @@ impl crate::framework::Example for Example {
         });
 
         let multisampled_framebuffer =
-            Example::create_multisampled_framebuffer(device, config, sample_count);
+            Self::create_multisampled_framebuffer(device, config, sample_count);
 
         let mut vertex_data = vec![];
 
@@ -190,7 +190,7 @@ impl crate::framework::Example for Example {
         });
         let vertex_count = vertex_data.len() as u32;
 
-        let bundle = Example::create_bundle(
+        let bundle = Self::create_bundle(
             device,
             config,
             &shader,
@@ -200,7 +200,7 @@ impl crate::framework::Example for Example {
             vertex_count,
         );
 
-        Example {
+        Self {
             bundle,
             shader,
             pipeline_layout,
@@ -254,12 +254,12 @@ impl crate::framework::Example for Example {
     ) {
         self.config = config.clone();
         self.multisampled_framebuffer =
-            Example::create_multisampled_framebuffer(device, config, self.sample_count);
+            Self::create_multisampled_framebuffer(device, config, self.sample_count);
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         if self.rebuild_bundle {
-            self.bundle = Example::create_bundle(
+            self.bundle = Self::create_bundle(
                 device,
                 &self.config,
                 &self.shader,
@@ -269,7 +269,7 @@ impl crate::framework::Example for Example {
                 self.vertex_count,
             );
             self.multisampled_framebuffer =
-                Example::create_multisampled_framebuffer(device, &self.config, self.sample_count);
+                Self::create_multisampled_framebuffer(device, &self.config, self.sample_count);
             self.rebuild_bundle = false;
         }
 

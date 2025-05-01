@@ -69,7 +69,7 @@ impl QueryResults {
         let compute_inside_timestamp = timestamps_inside_passes.then(|| get_next_slot());
         encoder_timestamps[1] = get_next_slot();
 
-        QueryResults {
+        Self {
             encoder_timestamps,
             render_start_end_timestamps,
             render_inside_timestamp,
@@ -117,7 +117,7 @@ impl QueryResults {
 
 impl Queries {
     fn new(device: &wgpu::Device, num_queries: u64) -> Self {
-        Queries {
+        Self {
             set: device.create_query_set(&wgpu::QuerySetDescriptor {
                 label: Some("Timestamp query set"),
                 count: num_queries as _,

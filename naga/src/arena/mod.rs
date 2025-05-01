@@ -71,7 +71,7 @@ impl<T: fmt::Debug> fmt::Debug for Arena<T> {
 impl<T> Arena<T> {
     /// Create a new arena with no initial capacity allocated.
     pub const fn new() -> Self {
-        Arena {
+        Self {
             data: Vec::new(),
             span_info: Vec::new(),
         }

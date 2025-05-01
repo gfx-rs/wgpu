@@ -130,7 +130,7 @@ impl DiagnosticBuffer {
 
 impl<E> Error for ShaderError<E>
 where
-    ShaderError<E>: fmt::Display,
+    Self: fmt::Display,
     E: Error + 'static,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {

@@ -85,13 +85,13 @@ impl crate::TypeInner {
         names: &'a crate::FastHashMap<crate::proc::NameKey, String>,
     ) -> Result<Cow<'a, str>, Error> {
         Ok(match gctx.types[base].inner {
-            crate::TypeInner::Scalar(scalar) => Cow::Borrowed(scalar.to_hlsl_str()?),
-            crate::TypeInner::Vector { size, scalar } => Cow::Owned(format!(
+            Self::Scalar(scalar) => Cow::Borrowed(scalar.to_hlsl_str()?),
+            Self::Vector { size, scalar } => Cow::Owned(format!(
                 "{}{}",
                 scalar.to_hlsl_str()?,
                 common::vector_size_str(size)
             )),
-            crate::TypeInner::Matrix {
+            Self::Matrix {
                 columns,
                 rows,
                 scalar,
@@ -101,7 +101,7 @@ impl crate::TypeInner {
                 common::vector_size_str(columns),
                 common::vector_size_str(rows),
             )),
-            crate::TypeInner::Array {
+            Self::Array {
                 base,
                 size: crate::ArraySize::Constant(size),
                 ..
@@ -109,7 +109,7 @@ impl crate::TypeInner {
                 "array{size}_{}_",
                 Self::hlsl_type_id(base, gctx, names)?
             )),
-            crate::TypeInner::Struct { .. } => {
+            Self::Struct { .. } => {
                 Cow::Borrowed(&names[&crate::proc::NameKey::Type(base)])
             }
             _ => unreachable!(),

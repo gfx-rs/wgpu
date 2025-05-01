@@ -41,13 +41,13 @@ impl Severity {
         log_handler: impl FnOnce(E, log::Level),
     ) -> Result<(), E> {
         let log_level = match self {
-            Severity::Off => return Ok(()),
+            Self::Off => return Ok(()),
 
             // NOTE: These severities are not yet reported.
-            Severity::Info => log::Level::Info,
-            Severity::Warning => log::Level::Warn,
+            Self::Info => log::Level::Info,
+            Self::Warning => log::Level::Warn,
 
-            Severity::Error => return Err(err),
+            Self::Error => return Err(err),
         };
         log_handler(err, log_level);
         Ok(())

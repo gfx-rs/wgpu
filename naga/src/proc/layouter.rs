@@ -65,9 +65,9 @@ impl ops::Mul<u32> for Alignment {
 }
 
 impl ops::Mul for Alignment {
-    type Output = Alignment;
+    type Output = Self;
 
-    fn mul(self, rhs: Alignment) -> Self::Output {
+    fn mul(self, rhs: Self) -> Self::Output {
         // SAFETY: both lhs and rhs are powers of 2, the result will be a power of 2
         Self(unsafe { NonZeroU32::new_unchecked(self.0.get() * rhs.0.get()) })
     }
@@ -76,9 +76,9 @@ impl ops::Mul for Alignment {
 impl From<crate::VectorSize> for Alignment {
     fn from(size: crate::VectorSize) -> Self {
         match size {
-            crate::VectorSize::Bi => Alignment::TWO,
-            crate::VectorSize::Tri => Alignment::FOUR,
-            crate::VectorSize::Quad => Alignment::FOUR,
+            crate::VectorSize::Bi => Self::TWO,
+            crate::VectorSize::Tri => Self::FOUR,
+            crate::VectorSize::Quad => Self::FOUR,
         }
     }
 }

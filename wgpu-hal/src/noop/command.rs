@@ -51,8 +51,8 @@ impl crate::CommandEncoder for CommandBuffer {
     unsafe fn discard_encoding(&mut self) {
         self.commands.clear();
     }
-    unsafe fn end_encoding(&mut self) -> DeviceResult<CommandBuffer> {
-        Ok(CommandBuffer {
+    unsafe fn end_encoding(&mut self) -> DeviceResult<Self> {
+        Ok(Self {
             commands: mem::take(&mut self.commands),
         })
     }
@@ -309,14 +309,14 @@ impl Command {
     /// such as ensuring that buffers are not accessed by a command while aliasing references exist.
     unsafe fn execute(&self) {
         match self {
-            Command::ClearBuffer { ref buffer, range } => {
+            Self::ClearBuffer { ref buffer, range } => {
                 // SAFETY:
                 // Caller is responsible for ensuring this does not alias.
                 let buffer_slice: &mut [u8] = unsafe { &mut *buffer.get_slice_ptr(range.clone()) };
                 buffer_slice.fill(0);
             }
 
-            Command::CopyBufferToBuffer { src, dst, regions } => {
+            Self::CopyBufferToBuffer { src, dst, regions } => {
                 for &crate::BufferCopy {
                     src_offset,
                     dst_offset,

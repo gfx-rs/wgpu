@@ -7,7 +7,7 @@ use crate::{Interpolation, Sampling, Span, Type};
 
 impl From<Location> for Span {
     fn from(loc: Location) -> Self {
-        Span::new(loc.start, loc.end)
+        Self::new(loc.start, loc.end)
     }
 }
 

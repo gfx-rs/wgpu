@@ -39,24 +39,24 @@ pub enum BindingTypeName {
 }
 
 impl From<&ResourceType> for BindingTypeName {
-    fn from(ty: &ResourceType) -> BindingTypeName {
+    fn from(ty: &ResourceType) -> Self {
         match ty {
-            ResourceType::Buffer { .. } => BindingTypeName::Buffer,
-            ResourceType::Texture { .. } => BindingTypeName::Texture,
-            ResourceType::Sampler { .. } => BindingTypeName::Sampler,
-            ResourceType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+            ResourceType::Buffer { .. } => Self::Buffer,
+            ResourceType::Texture { .. } => Self::Texture,
+            ResourceType::Sampler { .. } => Self::Sampler,
+            ResourceType::AccelerationStructure { .. } => Self::AccelerationStructure,
         }
     }
 }
 
 impl From<&BindingType> for BindingTypeName {
-    fn from(ty: &BindingType) -> BindingTypeName {
+    fn from(ty: &BindingType) -> Self {
         match ty {
-            BindingType::Buffer { .. } => BindingTypeName::Buffer,
-            BindingType::Texture { .. } => BindingTypeName::Texture,
-            BindingType::StorageTexture { .. } => BindingTypeName::Texture,
-            BindingType::Sampler { .. } => BindingTypeName::Sampler,
-            BindingType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+            BindingType::Buffer { .. } => Self::Buffer,
+            BindingType::Texture { .. } => Self::Texture,
+            BindingType::StorageTexture { .. } => Self::Texture,
+            BindingType::Sampler { .. } => Self::Sampler,
+            BindingType::AccelerationStructure { .. } => Self::AccelerationStructure,
         }
     }
 }
@@ -124,7 +124,7 @@ pub struct InterfaceVar {
 
 impl InterfaceVar {
     pub fn vertex_attribute(format: wgt::VertexFormat) -> Self {
-        InterfaceVar {
+        Self {
             ty: NumericType::from_vertex_format(format),
             interpolation: None,
             sampling: None,
@@ -707,7 +707,7 @@ impl NumericType {
             Vf::Float64x4 => (NumericDimension::Vector(Vs::Quad), Scalar::F64),
         };
 
-        NumericType {
+        Self {
             dim,
             //Note: Shader always sees data as int, uint, or float.
             // It doesn't know if the original is normalized in a tighter form.
@@ -790,7 +790,7 @@ impl NumericType {
             } => (NumericDimension::Vector(Vs::Quad), Scalar::F32),
         };
 
-        NumericType {
+        Self {
             dim,
             //Note: Shader always sees data as int, uint, or float.
             // It doesn't know if the original is normalized in a tighter form.
@@ -798,7 +798,7 @@ impl NumericType {
         }
     }
 
-    fn is_subtype_of(&self, other: &NumericType) -> bool {
+    fn is_subtype_of(&self, other: &Self) -> bool {
         if self.scalar.width > other.scalar.width {
             return false;
         }

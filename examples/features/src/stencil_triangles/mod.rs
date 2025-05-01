@@ -156,7 +156,7 @@ impl crate::framework::Example for Example {
         });
 
         // Done
-        Example {
+        Self {
             outer_vertex_buffer,
             mask_vertex_buffer,
             outer_pipeline,

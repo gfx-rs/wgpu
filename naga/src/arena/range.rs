@@ -59,7 +59,7 @@ impl BadRangeError {
 
 impl<T> Clone for Range<T> {
     fn clone(&self) -> Self {
-        Range {
+        Self {
             inner: self.inner.clone(),
             marker: self.marker,
         }

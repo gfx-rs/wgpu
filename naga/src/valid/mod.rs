@@ -472,7 +472,7 @@ impl Validator {
             stages
         };
 
-        Validator {
+        Self {
             flags,
             capabilities,
             subgroup_stages,

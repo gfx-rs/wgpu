@@ -266,7 +266,7 @@ impl crate::framework::Example for Example {
 
         let start_inst = Instant::now();
 
-        Example {
+        Self {
             uniforms,
             uniform_buf,
             blas,

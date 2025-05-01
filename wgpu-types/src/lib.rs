@@ -155,7 +155,7 @@ pub enum Backend {
 
 impl Backend {
     /// Array of all [`Backend`] values, corresponding to [`Backends::all()`].
-    pub const ALL: [Backend; Backends::all().bits().count_ones() as usize] = [
+    pub const ALL: [Self; Backends::all().bits().count_ones() as usize] = [
         Self::Noop,
         Self::Vulkan,
         Self::Metal,
@@ -168,12 +168,12 @@ impl Backend {
     #[must_use]
     pub const fn to_str(self) -> &'static str {
         match self {
-            Backend::Noop => "noop",
-            Backend::Vulkan => "vulkan",
-            Backend::Metal => "metal",
-            Backend::Dx12 => "dx12",
-            Backend::Gl => "gl",
-            Backend::BrowserWebGpu => "webgpu",
+            Self::Noop => "noop",
+            Self::Vulkan => "vulkan",
+            Self::Metal => "metal",
+            Self::Dx12 => "dx12",
+            Self::Gl => "gl",
+            Self::BrowserWebGpu => "webgpu",
         }
     }
 }
@@ -402,7 +402,7 @@ impl core::error::Error for RequestAdapterError {}
 impl fmt::Display for RequestAdapterError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RequestAdapterError::NotFound {
+            Self::NotFound {
                 active_backends,
                 requested_backends,
                 supported_backends,
@@ -442,7 +442,7 @@ impl fmt::Display for RequestAdapterError {
                     write!(f, "{comma}{backend} {explanation}")?;
                 }
             }
-            RequestAdapterError::EnvNotSet => f.write_str("WGPU_ADAPTER_NAME not set")?,
+            Self::EnvNotSet => f.write_str("WGPU_ADAPTER_NAME not set")?,
         }
         Ok(())
     }
@@ -953,7 +953,7 @@ pub struct DownlevelLimits {}
 #[allow(clippy::derivable_impls)]
 impl Default for DownlevelLimits {
     fn default() -> Self {
-        DownlevelLimits {}
+        Self {}
     }
 }
 
@@ -1463,10 +1463,10 @@ impl BlendFactor {
     #[must_use]
     pub fn ref_second_blend_source(&self) -> bool {
         match self {
-            BlendFactor::Src1
-            | BlendFactor::OneMinusSrc1
-            | BlendFactor::Src1Alpha
-            | BlendFactor::OneMinusSrc1Alpha => true,
+            Self::Src1
+            | Self::OneMinusSrc1
+            | Self::Src1Alpha
+            | Self::OneMinusSrc1Alpha => true,
             _ => false,
         }
     }
@@ -1783,7 +1783,7 @@ pub struct MultisampleState {
 
 impl Default for MultisampleState {
     fn default() -> Self {
-        MultisampleState {
+        Self {
             count: 1,
             mask: !0,
             alpha_to_coverage_enabled: false,
@@ -1835,14 +1835,14 @@ impl TextureFormatFeatureFlags {
     /// returns `true` if `count` is a supported sample count.
     #[must_use]
     pub fn sample_count_supported(&self, count: u32) -> bool {
-        use TextureFormatFeatureFlags as tfsc;
+        
 
         match count {
             1 => true,
-            2 => self.contains(tfsc::MULTISAMPLE_X2),
-            4 => self.contains(tfsc::MULTISAMPLE_X4),
-            8 => self.contains(tfsc::MULTISAMPLE_X8),
-            16 => self.contains(tfsc::MULTISAMPLE_X16),
+            2 => self.contains(Self::MULTISAMPLE_X2),
+            4 => self.contains(Self::MULTISAMPLE_X4),
+            8 => self.contains(Self::MULTISAMPLE_X8),
+            16 => self.contains(Self::MULTISAMPLE_X16),
             _ => false,
         }
     }
@@ -2418,82 +2418,82 @@ impl Serialize for TextureFormat {
     {
         let s: String;
         let name = match *self {
-            TextureFormat::R8Unorm => "r8unorm",
-            TextureFormat::R8Snorm => "r8snorm",
-            TextureFormat::R8Uint => "r8uint",
-            TextureFormat::R8Sint => "r8sint",
-            TextureFormat::R16Uint => "r16uint",
-            TextureFormat::R16Sint => "r16sint",
-            TextureFormat::R16Unorm => "r16unorm",
-            TextureFormat::R16Snorm => "r16snorm",
-            TextureFormat::R16Float => "r16float",
-            TextureFormat::Rg8Unorm => "rg8unorm",
-            TextureFormat::Rg8Snorm => "rg8snorm",
-            TextureFormat::Rg8Uint => "rg8uint",
-            TextureFormat::Rg8Sint => "rg8sint",
-            TextureFormat::R32Uint => "r32uint",
-            TextureFormat::R32Sint => "r32sint",
-            TextureFormat::R32Float => "r32float",
-            TextureFormat::Rg16Uint => "rg16uint",
-            TextureFormat::Rg16Sint => "rg16sint",
-            TextureFormat::Rg16Unorm => "rg16unorm",
-            TextureFormat::Rg16Snorm => "rg16snorm",
-            TextureFormat::Rg16Float => "rg16float",
-            TextureFormat::Rgba8Unorm => "rgba8unorm",
-            TextureFormat::Rgba8UnormSrgb => "rgba8unorm-srgb",
-            TextureFormat::Rgba8Snorm => "rgba8snorm",
-            TextureFormat::Rgba8Uint => "rgba8uint",
-            TextureFormat::Rgba8Sint => "rgba8sint",
-            TextureFormat::Bgra8Unorm => "bgra8unorm",
-            TextureFormat::Bgra8UnormSrgb => "bgra8unorm-srgb",
-            TextureFormat::Rgb10a2Uint => "rgb10a2uint",
-            TextureFormat::Rgb10a2Unorm => "rgb10a2unorm",
-            TextureFormat::Rg11b10Ufloat => "rg11b10ufloat",
-            TextureFormat::R64Uint => "r64uint",
-            TextureFormat::Rg32Uint => "rg32uint",
-            TextureFormat::Rg32Sint => "rg32sint",
-            TextureFormat::Rg32Float => "rg32float",
-            TextureFormat::Rgba16Uint => "rgba16uint",
-            TextureFormat::Rgba16Sint => "rgba16sint",
-            TextureFormat::Rgba16Unorm => "rgba16unorm",
-            TextureFormat::Rgba16Snorm => "rgba16snorm",
-            TextureFormat::Rgba16Float => "rgba16float",
-            TextureFormat::Rgba32Uint => "rgba32uint",
-            TextureFormat::Rgba32Sint => "rgba32sint",
-            TextureFormat::Rgba32Float => "rgba32float",
-            TextureFormat::Stencil8 => "stencil8",
-            TextureFormat::Depth32Float => "depth32float",
-            TextureFormat::Depth16Unorm => "depth16unorm",
-            TextureFormat::Depth32FloatStencil8 => "depth32float-stencil8",
-            TextureFormat::Depth24Plus => "depth24plus",
-            TextureFormat::Depth24PlusStencil8 => "depth24plus-stencil8",
-            TextureFormat::NV12 => "nv12",
-            TextureFormat::Rgb9e5Ufloat => "rgb9e5ufloat",
-            TextureFormat::Bc1RgbaUnorm => "bc1-rgba-unorm",
-            TextureFormat::Bc1RgbaUnormSrgb => "bc1-rgba-unorm-srgb",
-            TextureFormat::Bc2RgbaUnorm => "bc2-rgba-unorm",
-            TextureFormat::Bc2RgbaUnormSrgb => "bc2-rgba-unorm-srgb",
-            TextureFormat::Bc3RgbaUnorm => "bc3-rgba-unorm",
-            TextureFormat::Bc3RgbaUnormSrgb => "bc3-rgba-unorm-srgb",
-            TextureFormat::Bc4RUnorm => "bc4-r-unorm",
-            TextureFormat::Bc4RSnorm => "bc4-r-snorm",
-            TextureFormat::Bc5RgUnorm => "bc5-rg-unorm",
-            TextureFormat::Bc5RgSnorm => "bc5-rg-snorm",
-            TextureFormat::Bc6hRgbUfloat => "bc6h-rgb-ufloat",
-            TextureFormat::Bc6hRgbFloat => "bc6h-rgb-float",
-            TextureFormat::Bc7RgbaUnorm => "bc7-rgba-unorm",
-            TextureFormat::Bc7RgbaUnormSrgb => "bc7-rgba-unorm-srgb",
-            TextureFormat::Etc2Rgb8Unorm => "etc2-rgb8unorm",
-            TextureFormat::Etc2Rgb8UnormSrgb => "etc2-rgb8unorm-srgb",
-            TextureFormat::Etc2Rgb8A1Unorm => "etc2-rgb8a1unorm",
-            TextureFormat::Etc2Rgb8A1UnormSrgb => "etc2-rgb8a1unorm-srgb",
-            TextureFormat::Etc2Rgba8Unorm => "etc2-rgba8unorm",
-            TextureFormat::Etc2Rgba8UnormSrgb => "etc2-rgba8unorm-srgb",
-            TextureFormat::EacR11Unorm => "eac-r11unorm",
-            TextureFormat::EacR11Snorm => "eac-r11snorm",
-            TextureFormat::EacRg11Unorm => "eac-rg11unorm",
-            TextureFormat::EacRg11Snorm => "eac-rg11snorm",
-            TextureFormat::Astc { block, channel } => {
+            Self::R8Unorm => "r8unorm",
+            Self::R8Snorm => "r8snorm",
+            Self::R8Uint => "r8uint",
+            Self::R8Sint => "r8sint",
+            Self::R16Uint => "r16uint",
+            Self::R16Sint => "r16sint",
+            Self::R16Unorm => "r16unorm",
+            Self::R16Snorm => "r16snorm",
+            Self::R16Float => "r16float",
+            Self::Rg8Unorm => "rg8unorm",
+            Self::Rg8Snorm => "rg8snorm",
+            Self::Rg8Uint => "rg8uint",
+            Self::Rg8Sint => "rg8sint",
+            Self::R32Uint => "r32uint",
+            Self::R32Sint => "r32sint",
+            Self::R32Float => "r32float",
+            Self::Rg16Uint => "rg16uint",
+            Self::Rg16Sint => "rg16sint",
+            Self::Rg16Unorm => "rg16unorm",
+            Self::Rg16Snorm => "rg16snorm",
+            Self::Rg16Float => "rg16float",
+            Self::Rgba8Unorm => "rgba8unorm",
+            Self::Rgba8UnormSrgb => "rgba8unorm-srgb",
+            Self::Rgba8Snorm => "rgba8snorm",
+            Self::Rgba8Uint => "rgba8uint",
+            Self::Rgba8Sint => "rgba8sint",
+            Self::Bgra8Unorm => "bgra8unorm",
+            Self::Bgra8UnormSrgb => "bgra8unorm-srgb",
+            Self::Rgb10a2Uint => "rgb10a2uint",
+            Self::Rgb10a2Unorm => "rgb10a2unorm",
+            Self::Rg11b10Ufloat => "rg11b10ufloat",
+            Self::R64Uint => "r64uint",
+            Self::Rg32Uint => "rg32uint",
+            Self::Rg32Sint => "rg32sint",
+            Self::Rg32Float => "rg32float",
+            Self::Rgba16Uint => "rgba16uint",
+            Self::Rgba16Sint => "rgba16sint",
+            Self::Rgba16Unorm => "rgba16unorm",
+            Self::Rgba16Snorm => "rgba16snorm",
+            Self::Rgba16Float => "rgba16float",
+            Self::Rgba32Uint => "rgba32uint",
+            Self::Rgba32Sint => "rgba32sint",
+            Self::Rgba32Float => "rgba32float",
+            Self::Stencil8 => "stencil8",
+            Self::Depth32Float => "depth32float",
+            Self::Depth16Unorm => "depth16unorm",
+            Self::Depth32FloatStencil8 => "depth32float-stencil8",
+            Self::Depth24Plus => "depth24plus",
+            Self::Depth24PlusStencil8 => "depth24plus-stencil8",
+            Self::NV12 => "nv12",
+            Self::Rgb9e5Ufloat => "rgb9e5ufloat",
+            Self::Bc1RgbaUnorm => "bc1-rgba-unorm",
+            Self::Bc1RgbaUnormSrgb => "bc1-rgba-unorm-srgb",
+            Self::Bc2RgbaUnorm => "bc2-rgba-unorm",
+            Self::Bc2RgbaUnormSrgb => "bc2-rgba-unorm-srgb",
+            Self::Bc3RgbaUnorm => "bc3-rgba-unorm",
+            Self::Bc3RgbaUnormSrgb => "bc3-rgba-unorm-srgb",
+            Self::Bc4RUnorm => "bc4-r-unorm",
+            Self::Bc4RSnorm => "bc4-r-snorm",
+            Self::Bc5RgUnorm => "bc5-rg-unorm",
+            Self::Bc5RgSnorm => "bc5-rg-snorm",
+            Self::Bc6hRgbUfloat => "bc6h-rgb-ufloat",
+            Self::Bc6hRgbFloat => "bc6h-rgb-float",
+            Self::Bc7RgbaUnorm => "bc7-rgba-unorm",
+            Self::Bc7RgbaUnormSrgb => "bc7-rgba-unorm-srgb",
+            Self::Etc2Rgb8Unorm => "etc2-rgb8unorm",
+            Self::Etc2Rgb8UnormSrgb => "etc2-rgb8unorm-srgb",
+            Self::Etc2Rgb8A1Unorm => "etc2-rgb8a1unorm",
+            Self::Etc2Rgb8A1UnormSrgb => "etc2-rgb8a1unorm-srgb",
+            Self::Etc2Rgba8Unorm => "etc2-rgba8unorm",
+            Self::Etc2Rgba8UnormSrgb => "etc2-rgba8unorm-srgb",
+            Self::EacR11Unorm => "eac-r11unorm",
+            Self::EacR11Snorm => "eac-r11snorm",
+            Self::EacRg11Unorm => "eac-rg11unorm",
+            Self::EacRg11Snorm => "eac-rg11snorm",
+            Self::Astc { block, channel } => {
                 let block = match block {
                     AstcBlock::B4x4 => "4x4",
                     AstcBlock::B5x4 => "5x4",
@@ -3511,7 +3511,7 @@ impl TextureFormat {
 
     /// Strips the `Srgb` suffix from the given texture format.
     #[must_use]
-    pub fn remove_srgb_suffix(&self) -> TextureFormat {
+    pub fn remove_srgb_suffix(&self) -> Self {
         match *self {
             Self::Rgba8UnormSrgb => Self::Rgba8Unorm,
             Self::Bgra8UnormSrgb => Self::Bgra8Unorm,
@@ -3535,7 +3535,7 @@ impl TextureFormat {
 
     /// Adds an `Srgb` suffix to the given texture format, if the format supports it.
     #[must_use]
-    pub fn add_srgb_suffix(&self) -> TextureFormat {
+    pub fn add_srgb_suffix(&self) -> Self {
         match *self {
             Self::Rgba8Unorm => Self::Rgba8UnormSrgb,
             Self::Bgra8Unorm => Self::Bgra8UnormSrgb,
@@ -4462,7 +4462,7 @@ impl<V> LoadOp<V> {
     pub fn eq_variant<T>(&self, other: LoadOp<T>) -> bool {
         matches!(
             (self, other),
-            (LoadOp::Clear(_), LoadOp::Clear(_)) | (LoadOp::Load, LoadOp::Load)
+            (Self::Clear(_), LoadOp::Clear(_)) | (Self::Load, LoadOp::Load)
         )
     }
 }
@@ -4593,8 +4593,8 @@ impl IndexFormat {
     /// Returns the size in bytes of the index format
     pub fn byte_size(&self) -> usize {
         match self {
-            IndexFormat::Uint16 => 2,
-            IndexFormat::Uint32 => 4,
+            Self::Uint16 => 2,
+            Self::Uint32 => 4,
         }
     }
 }
@@ -4653,7 +4653,7 @@ pub struct StencilFaceState {
 
 impl StencilFaceState {
     /// Ignore the stencil state for the face.
-    pub const IGNORE: Self = StencilFaceState {
+    pub const IGNORE: Self = Self {
         compare: CompareFunction::Always,
         fail_op: StencilOperation::Keep,
         depth_fail_op: StencilOperation::Keep,

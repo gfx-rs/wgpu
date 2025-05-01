@@ -9,6 +9,7 @@ use crate::{Backend, DownlevelFlags};
 
 /// Options for creating an instance.
 #[derive(Clone, Debug)]
+#[derive(Default)]
 pub struct InstanceDescriptor {
     /// Which `Backends` to enable.
     pub backends: Backends,
@@ -20,16 +21,6 @@ pub struct InstanceDescriptor {
     pub backend_options: BackendOptions,
 }
 
-impl Default for InstanceDescriptor {
-    fn default() -> Self {
-        Self {
-            backends: Backends::all(),
-            flags: InstanceFlags::default(),
-            memory_budget_thresholds: MemoryBudgetThresholds::default(),
-            backend_options: BackendOptions::default(),
-        }
-    }
-}
 
 impl InstanceDescriptor {
     /// Choose instance options entirely from environment variables.
@@ -152,13 +143,13 @@ impl InstanceFlags {
     /// Enable recommended debugging and validation flags.
     #[must_use]
     pub fn debugging() -> Self {
-        InstanceFlags::DEBUG | InstanceFlags::VALIDATION | InstanceFlags::VALIDATION_INDIRECT_CALL
+        Self::DEBUG | Self::VALIDATION | Self::VALIDATION_INDIRECT_CALL
     }
 
     /// Enable advanced debugging and validation flags (potentially very slow).
     #[must_use]
     pub fn advanced_debugging() -> Self {
-        Self::debugging() | InstanceFlags::GPU_BASED_VALIDATION
+        Self::debugging() | Self::GPU_BASED_VALIDATION
     }
 
     /// Infer decent defaults from the build type.
@@ -168,10 +159,10 @@ impl InstanceFlags {
     #[must_use]
     pub fn from_build_config() -> Self {
         if cfg!(debug_assertions) {
-            return InstanceFlags::debugging();
+            return Self::debugging();
         }
 
-        InstanceFlags::VALIDATION_INDIRECT_CALL
+        Self::VALIDATION_INDIRECT_CALL
     }
 
     /// Derive defaults from environment variables. See [`Self::with_env()`] for more information.

@@ -673,8 +673,8 @@ struct ErrorSinkRaw {
 }
 
 impl ErrorSinkRaw {
-    fn new() -> ErrorSinkRaw {
-        ErrorSinkRaw {
+    fn new() -> Self {
+        Self {
             scopes: Vec::new(),
             uncaptured_handler: None,
         }
@@ -735,12 +735,12 @@ impl From<CreateShaderModuleError> for CompilationInfo {
             // Device errors are reported through the error sink, and are not compilation errors.
             // Same goes for native shader module generation errors.
             CreateShaderModuleError::Device(_) | CreateShaderModuleError::Generation => {
-                CompilationInfo {
+                Self {
                     messages: Vec::new(),
                 }
             }
             // Everything else is an error message without location information.
-            _ => CompilationInfo {
+            _ => Self {
                 messages: vec![CompilationMessage {
                     message: value.to_string(),
                     message_type: CompilationMessageType::Error,

@@ -28,9 +28,9 @@ enum BadRonParseKind {
 impl Display for BadRonParseKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BadRonParseKind::Read { source } => Display::fmt(source, f),
-            BadRonParseKind::Parse { source } => Display::fmt(source, f),
-            BadRonParseKind::Empty => write!(f, "no configuration was specified"),
+            Self::Read { source } => Display::fmt(source, f),
+            Self::Parse { source } => Display::fmt(source, f),
+            Self::Empty => write!(f, "no configuration was specified"),
         }
     }
 }
@@ -38,9 +38,9 @@ impl Display for BadRonParseKind {
 impl Error for BadRonParseKind {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            BadRonParseKind::Read { source } => source.source(),
-            BadRonParseKind::Parse { source } => source.source(),
-            BadRonParseKind::Empty => None,
+            Self::Read { source } => source.source(),
+            Self::Parse { source } => source.source(),
+            Self::Empty => None,
         }
     }
 }
@@ -62,11 +62,11 @@ impl Config {
         }
     }
 
-    pub fn from_path(path: impl AsRef<Path>) -> anyhow::Result<Config> {
+    pub fn from_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = path.as_ref();
         let raw_config = fs::read_to_string(path)
             .map_err(|source| BadRonParse(BadRonParseKind::Read { source }))?;
-        let config = Config::deserialize_ron(&raw_config)
+        let config = Self::deserialize_ron(&raw_config)
             .map_err(|source| BadRonParse(BadRonParseKind::Parse { source }))?;
         ensure!(!config.is_empty(), BadRonParse(BadRonParseKind::Empty));
         Ok(config)

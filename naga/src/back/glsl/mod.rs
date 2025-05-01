@@ -134,12 +134,12 @@ impl crate::AddressSpace {
     /// Whether a variable with this address space can be initialized
     const fn initializable(&self) -> bool {
         match *self {
-            crate::AddressSpace::Function | crate::AddressSpace::Private => true,
-            crate::AddressSpace::WorkGroup
-            | crate::AddressSpace::Uniform
-            | crate::AddressSpace::Storage { .. }
-            | crate::AddressSpace::Handle
-            | crate::AddressSpace::PushConstant => false,
+            Self::Function | Self::Private => true,
+            Self::WorkGroup
+            | Self::Uniform
+            | Self::Storage { .. }
+            | Self::Handle
+            | Self::PushConstant => false,
         }
     }
 }
@@ -167,16 +167,16 @@ impl Version {
     /// Returns true if self is `Version::Embedded` (i.e. is a es version)
     const fn is_es(&self) -> bool {
         match *self {
-            Version::Desktop(_) => false,
-            Version::Embedded { .. } => true,
+            Self::Desktop(_) => false,
+            Self::Embedded { .. } => true,
         }
     }
 
     /// Returns true if targeting WebGL
     const fn is_webgl(&self) -> bool {
         match *self {
-            Version::Desktop(_) => false,
-            Version::Embedded { is_webgl, .. } => is_webgl,
+            Self::Desktop(_) => false,
+            Self::Embedded { is_webgl, .. } => is_webgl,
         }
     }
 
@@ -188,13 +188,13 @@ impl Version {
     /// so this also checks for version validity
     fn is_supported(&self) -> bool {
         match *self {
-            Version::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(&v),
-            Version::Embedded { version: v, .. } => SUPPORTED_ES_VERSIONS.contains(&v),
+            Self::Desktop(v) => SUPPORTED_CORE_VERSIONS.contains(&v),
+            Self::Embedded { version: v, .. } => SUPPORTED_ES_VERSIONS.contains(&v),
         }
     }
 
     fn supports_io_locations(&self) -> bool {
-        *self >= Version::Desktop(330) || *self >= Version::new_gles(300)
+        *self >= Self::Desktop(330) || *self >= Self::new_gles(300)
     }
 
     /// Checks if the version supports all of the explicit layouts:
@@ -204,35 +204,35 @@ impl Version {
     /// Note: `location=` for vertex inputs and fragment outputs is supported
     /// unconditionally for GLES 300.
     fn supports_explicit_locations(&self) -> bool {
-        *self >= Version::Desktop(420) || *self >= Version::new_gles(310)
+        *self >= Self::Desktop(420) || *self >= Self::new_gles(310)
     }
 
     fn supports_early_depth_test(&self) -> bool {
-        *self >= Version::Desktop(130) || *self >= Version::new_gles(310)
+        *self >= Self::Desktop(130) || *self >= Self::new_gles(310)
     }
 
     fn supports_std140_layout(&self) -> bool {
-        *self >= Version::Desktop(140) || *self >= Version::new_gles(300)
+        *self >= Self::Desktop(140) || *self >= Self::new_gles(300)
     }
 
     fn supports_std430_layout(&self) -> bool {
-        *self >= Version::Desktop(430) || *self >= Version::new_gles(310)
+        *self >= Self::Desktop(430) || *self >= Self::new_gles(310)
     }
 
     fn supports_fma_function(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(320)
+        *self >= Self::Desktop(400) || *self >= Self::new_gles(320)
     }
 
     fn supports_integer_functions(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
+        *self >= Self::Desktop(400) || *self >= Self::new_gles(310)
     }
 
     fn supports_frexp_function(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
+        *self >= Self::Desktop(400) || *self >= Self::new_gles(310)
     }
 
     fn supports_derivative_control(&self) -> bool {
-        *self >= Version::Desktop(450)
+        *self >= Self::Desktop(450)
     }
 
     // For supports_pack_unpack_4x8, supports_pack_unpack_snorm_2x16, supports_pack_unpack_unorm_2x16
@@ -242,13 +242,13 @@ impl Version {
     // https://registry.khronos.org/OpenGL-Refpages/gl4/html/packUnorm.xhtml
     // https://registry.khronos.org/OpenGL-Refpages/es3/html/packUnorm.xhtml
     fn supports_pack_unpack_4x8(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(310)
+        *self >= Self::Desktop(400) || *self >= Self::new_gles(310)
     }
     fn supports_pack_unpack_snorm_2x16(&self) -> bool {
-        *self >= Version::Desktop(420) || *self >= Version::new_gles(300)
+        *self >= Self::Desktop(420) || *self >= Self::new_gles(300)
     }
     fn supports_pack_unpack_unorm_2x16(&self) -> bool {
-        *self >= Version::Desktop(400) || *self >= Version::new_gles(300)
+        *self >= Self::Desktop(400) || *self >= Self::new_gles(300)
     }
 
     // https://registry.khronos.org/OpenGL-Refpages/gl4/html/unpackHalf2x16.xhtml
@@ -256,15 +256,15 @@ impl Version {
     // https://registry.khronos.org/OpenGL-Refpages/es3/html/unpackHalf2x16.xhtml
     // https://registry.khronos.org/OpenGL-Refpages/es3/html/packHalf2x16.xhtml
     fn supports_pack_unpack_half_2x16(&self) -> bool {
-        *self >= Version::Desktop(420) || *self >= Version::new_gles(300)
+        *self >= Self::Desktop(420) || *self >= Self::new_gles(300)
     }
 }
 
 impl PartialOrd for Version {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (*self, *other) {
-            (Version::Desktop(x), Version::Desktop(y)) => Some(x.cmp(&y)),
-            (Version::Embedded { version: x, .. }, Version::Embedded { version: y, .. }) => {
+            (Self::Desktop(x), Self::Desktop(y)) => Some(x.cmp(&y)),
+            (Self::Embedded { version: x, .. }, Self::Embedded { version: y, .. }) => {
                 Some(x.cmp(&y))
             }
             _ => None,
@@ -275,8 +275,8 @@ impl PartialOrd for Version {
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Version::Desktop(v) => write!(f, "{v} core"),
-            Version::Embedded { version: v, .. } => write!(f, "{v} es"),
+            Self::Desktop(v) => write!(f, "{v} core"),
+            Self::Embedded { version: v, .. } => write!(f, "{v} es"),
         }
     }
 }
@@ -331,7 +331,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options {
+        Self {
             version: Version::new_gles(310),
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
@@ -515,10 +515,10 @@ impl fmt::Display for VaryingName<'_> {
 impl ShaderStage {
     const fn to_str(self) -> &'static str {
         match self {
-            ShaderStage::Compute => "cs",
-            ShaderStage::Fragment => "fs",
-            ShaderStage::Vertex => "vs",
-            ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
+            Self::Compute => "cs",
+            Self::Fragment => "fs",
+            Self::Vertex => "vs",
+            Self::Task | Self::Mesh => unreachable!(),
         }
     }
 }

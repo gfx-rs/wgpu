@@ -98,7 +98,7 @@ impl crate::Instance for Context {
             memory_budget_thresholds: _,
         } = *desc;
         if enable {
-            Ok(Context)
+            Ok(Self)
         } else {
             Err(crate::InstanceError::new(String::from(
                 "noop backend disabled because NoopBackendOptions::enable is false",
@@ -109,15 +109,15 @@ impl crate::Instance for Context {
         &self,
         _display_handle: raw_window_handle::RawDisplayHandle,
         _window_handle: raw_window_handle::RawWindowHandle,
-    ) -> Result<Context, crate::InstanceError> {
-        Ok(Context)
+    ) -> Result<Self, crate::InstanceError> {
+        Ok(Self)
     }
     unsafe fn enumerate_adapters(
         &self,
-        _surface_hint: Option<&Context>,
+        _surface_hint: Option<&Self>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
         vec![crate::ExposedAdapter {
-            adapter: Context,
+            adapter: Self,
             info: wgt::AdapterInfo {
                 name: String::from("noop wgpu backend"),
                 vendor: 0,
@@ -199,13 +199,13 @@ impl crate::Surface for Context {
 
     unsafe fn configure(
         &self,
-        device: &Context,
+        device: &Self,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
     }
 
-    unsafe fn unconfigure(&self, device: &Context) {}
+    unsafe fn unconfigure(&self, device: &Self) {}
 
     unsafe fn acquire_texture(
         &self,
@@ -227,8 +227,8 @@ impl crate::Adapter for Context {
         _memory_hints: &wgt::MemoryHints,
     ) -> DeviceResult<crate::OpenDevice<Api>> {
         Ok(crate::OpenDevice {
-            device: Context,
-            queue: Context,
+            device: Self,
+            queue: Self,
         })
     }
     unsafe fn texture_format_capabilities(
@@ -238,7 +238,7 @@ impl crate::Adapter for Context {
         crate::TextureFormatCapabilities::empty()
     }
 
-    unsafe fn surface_capabilities(&self, surface: &Context) -> Option<crate::SurfaceCapabilities> {
+    unsafe fn surface_capabilities(&self, surface: &Self) -> Option<crate::SurfaceCapabilities> {
         None
     }
 
@@ -269,7 +269,7 @@ impl crate::Queue for Context {
     }
     unsafe fn present(
         &self,
-        surface: &Context,
+        surface: &Self,
         texture: Resource,
     ) -> Result<(), crate::SurfaceError> {
         Ok(())
@@ -328,7 +328,7 @@ impl crate::Device for Context {
 
     unsafe fn create_command_encoder(
         &self,
-        desc: &crate::CommandEncoderDescriptor<Context>,
+        desc: &crate::CommandEncoderDescriptor<Self>,
     ) -> DeviceResult<CommandBuffer> {
         Ok(CommandBuffer::new())
     }

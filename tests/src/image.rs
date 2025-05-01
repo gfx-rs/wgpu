@@ -118,7 +118,7 @@ impl ComparisonType {
     #[cfg(not(target_arch = "wasm32"))]
     fn check(&self, pool: &mut nv_flip::FlipPool) -> bool {
         match *self {
-            ComparisonType::Mean(v) => {
+            Self::Mean(v) => {
                 let mean = pool.mean();
                 let within = mean <= v;
                 println!(
@@ -129,7 +129,7 @@ impl ComparisonType {
                 );
                 within
             }
-            ComparisonType::Percentile {
+            Self::Percentile {
                 percentile: p,
                 threshold: v,
             } => {
@@ -529,7 +529,7 @@ impl ReadbackBuffers {
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
                 contents: &vec![255; buffer_stencil_size as usize],
             });
-            ReadbackBuffers {
+            Self {
                 texture_format: texture.format(),
                 texture_width: texture.width(),
                 texture_height: texture.height(),
@@ -550,7 +550,7 @@ impl ReadbackBuffers {
                 usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
                 contents: &vec![255; buffer_size as usize],
             });
-            ReadbackBuffers {
+            Self {
                 texture_format: texture.format(),
                 texture_width: texture.width(),
                 texture_height: texture.height(),

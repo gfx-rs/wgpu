@@ -831,7 +831,7 @@ impl<T> Handle<T> {
         if depends_on < self {
             Ok(self)
         } else {
-            let erase_handle_type = |handle: Handle<_>| {
+            let erase_handle_type = |handle: Self| {
                 Handle::new(NonMaxU32::new((handle.index()).try_into().unwrap()).unwrap())
             };
             Err(FwdDepError {

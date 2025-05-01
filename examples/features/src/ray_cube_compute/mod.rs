@@ -394,7 +394,7 @@ impl crate::framework::Example for Example {
 
         let start_inst = Instant::now();
 
-        Example {
+        Self {
             rt_target,
             rt_view,
             sampler,

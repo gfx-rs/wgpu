@@ -447,7 +447,7 @@ struct ModuleMap {
 
 impl From<ModuleTracer<'_>> for ModuleMap {
     fn from(used: ModuleTracer) -> Self {
-        ModuleMap {
+        Self {
             types: HandleMap::from_set(used.types_used),
             constants: HandleMap::from_set(used.constants_used),
             overrides: HandleMap::from_set(used.overrides_used),
@@ -488,7 +488,7 @@ struct FunctionMap {
 
 impl From<FunctionTracer<'_>> for FunctionMap {
     fn from(used: FunctionTracer) -> Self {
-        FunctionMap {
+        Self {
             expressions: HandleMap::from_set(used.expressions_used),
         }
     }

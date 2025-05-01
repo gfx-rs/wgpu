@@ -387,7 +387,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options {
+        Self {
             shader_model: ShaderModel::V5_1,
             binding_map: BindingMap::default(),
             fake_missing_bindings: true,

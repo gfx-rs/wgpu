@@ -231,7 +231,7 @@ impl crate::framework::Example for Example {
 
         // returns Example struct and No encoder commands
 
-        Example {
+        Self {
             particle_bind_groups,
             particle_buffers,
             vertices_buffer,

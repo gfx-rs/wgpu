@@ -37,9 +37,9 @@ enum ExpectedData {
 impl ExpectedData {
     fn len(&self) -> usize {
         match self {
-            ExpectedData::Raw(vec) => vec.len(),
-            ExpectedData::U64(vec) => vec.len() * size_of::<u64>(),
-            ExpectedData::File(_, size) => *size,
+            Self::Raw(vec) => vec.len(),
+            Self::U64(vec) => vec.len() * size_of::<u64>(),
+            Self::File(_, size) => *size,
         }
     }
 }
@@ -189,7 +189,7 @@ impl Corpus {
     fn run_from(path: PathBuf) {
         println!("Corpus {path:?}");
         let dir = path.parent().unwrap();
-        let corpus: Corpus = ron::de::from_reader(File::open(&path).unwrap()).unwrap();
+        let corpus: Self = ron::de::from_reader(File::open(&path).unwrap()).unwrap();
 
         for &backend in BACKENDS {
             if !corpus.backends.contains(backend.into()) {

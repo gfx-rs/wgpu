@@ -341,7 +341,7 @@ impl crate::framework::Example for Example {
 
         let rng = WyRand::new_seed(42);
 
-        let mut ex = Example {
+        let mut ex = Self {
             view,
             sampler,
             global_bind_group_layout,

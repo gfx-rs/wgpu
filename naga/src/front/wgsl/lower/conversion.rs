@@ -345,21 +345,21 @@ impl crate::TypeInner {
         &self,
         types: &crate::UniqueArena<crate::Type>,
     ) -> Option<crate::Scalar> {
-        use crate::TypeInner as Ti;
+        
         match *self {
-            Ti::Scalar(scalar) | Ti::Vector { scalar, .. } | Ti::Matrix { scalar, .. } => {
+            Self::Scalar(scalar) | Self::Vector { scalar, .. } | Self::Matrix { scalar, .. } => {
                 Some(scalar)
             }
-            Ti::Array { base, .. } => types[base].inner.automatically_convertible_scalar(types),
-            Ti::Atomic(_)
-            | Ti::Pointer { .. }
-            | Ti::ValuePointer { .. }
-            | Ti::Struct { .. }
-            | Ti::Image { .. }
-            | Ti::Sampler { .. }
-            | Ti::AccelerationStructure { .. }
-            | Ti::RayQuery { .. }
-            | Ti::BindingArray { .. } => None,
+            Self::Array { base, .. } => types[base].inner.automatically_convertible_scalar(types),
+            Self::Atomic(_)
+            | Self::Pointer { .. }
+            | Self::ValuePointer { .. }
+            | Self::Struct { .. }
+            | Self::Image { .. }
+            | Self::Sampler { .. }
+            | Self::AccelerationStructure { .. }
+            | Self::RayQuery { .. }
+            | Self::BindingArray { .. } => None,
         }
     }
 
@@ -370,22 +370,22 @@ impl crate::TypeInner {
         &self,
         types: &crate::UniqueArena<crate::Type>,
     ) -> Option<crate::Scalar> {
-        use crate::TypeInner as Ti;
+        
         match *self {
-            Ti::Scalar(scalar) | Ti::Vector { scalar, .. } | Ti::Matrix { scalar, .. } => {
+            Self::Scalar(scalar) | Self::Vector { scalar, .. } | Self::Matrix { scalar, .. } => {
                 Some(scalar)
             }
-            Ti::Atomic(_) => None,
-            Ti::Pointer { base, .. } | Ti::Array { base, .. } => {
+            Self::Atomic(_) => None,
+            Self::Pointer { base, .. } | Self::Array { base, .. } => {
                 types[base].inner.automatically_convertible_scalar(types)
             }
-            Ti::ValuePointer { scalar, .. } => Some(scalar),
-            Ti::Struct { .. }
-            | Ti::Image { .. }
-            | Ti::Sampler { .. }
-            | Ti::AccelerationStructure { .. }
-            | Ti::RayQuery { .. }
-            | Ti::BindingArray { .. } => None,
+            Self::ValuePointer { scalar, .. } => Some(scalar),
+            Self::Struct { .. }
+            | Self::Image { .. }
+            | Self::Sampler { .. }
+            | Self::AccelerationStructure { .. }
+            | Self::RayQuery { .. }
+            | Self::BindingArray { .. } => None,
         }
     }
 }
@@ -397,7 +397,7 @@ impl crate::Scalar {
     /// If there are any scalars to which WGSL's automatic conversions
     /// will convert both `self` and `other`, return the best such
     /// scalar. Otherwise, return `None`.
-    pub const fn automatic_conversion_combine(self, other: Self) -> Option<crate::Scalar> {
+    pub const fn automatic_conversion_combine(self, other: Self) -> Option<Self> {
         use crate::ScalarKind as Sk;
 
         match (self.kind, other.kind) {

@@ -112,7 +112,7 @@ impl Load {
         image_id: Word,
         image_class: crate::ImageClass,
         result_type_id: Word,
-    ) -> Result<Load, Error> {
+    ) -> Result<Self, Error> {
         let opcode = match image_class {
             crate::ImageClass::Storage { .. } => spirv::Op::ImageRead,
             crate::ImageClass::Depth { .. } | crate::ImageClass::Sampled { .. } => {
@@ -133,7 +133,7 @@ impl Load {
             _ => result_type_id,
         };
 
-        Ok(Load {
+        Ok(Self {
             opcode,
             type_id,
             image_id,

@@ -505,7 +505,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
     for wgpu_test::GpuTestConfiguration
 {
     fn from(params: ExampleTestParams<E>) -> Self {
-        wgpu_test::GpuTestConfiguration::new()
+        Self::new()
             .name(params.name)
             .parameters({
                 assert_eq!(params.width % 64, 0, "width needs to be aligned 64");

@@ -100,7 +100,7 @@ impl ScalarSet {
     /// Return an iterator over this set's members.
     ///
     /// Members are produced as singleton, in order from most general to least.
-    pub fn members(self) -> impl Iterator<Item = ScalarSet> {
+    pub fn members(self) -> impl Iterator<Item = Self> {
         OneBitsIter::new(self.bits() as u64).map(|bit| Self::from_bits(bit as u16).unwrap())
     }
 

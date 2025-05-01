@@ -151,7 +151,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
         });
 
         // Done
-        Example {
+        Self {
             vertex_buf,
             index_buf,
             index_count: index_data.len(),

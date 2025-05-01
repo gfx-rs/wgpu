@@ -56,7 +56,7 @@ pub struct Uniformity {
 
 impl Uniformity {
     const fn new() -> Self {
-        Uniformity {
+        Self {
             non_uniform_result: None,
             requirements: UniformityRequirements::empty(),
         }
@@ -88,7 +88,7 @@ struct FunctionUniformity {
 impl ops::BitOr for FunctionUniformity {
     type Output = Self;
     fn bitor(self, other: Self) -> Self {
-        FunctionUniformity {
+        Self {
             result: Uniformity {
                 non_uniform_result: self
                     .result
@@ -103,7 +103,7 @@ impl ops::BitOr for FunctionUniformity {
 
 impl FunctionUniformity {
     const fn new() -> Self {
-        FunctionUniformity {
+        Self {
             result: Uniformity::new(),
             exit: ExitFlags::empty(),
         }
@@ -186,7 +186,7 @@ pub struct ExpressionInfo {
 
 impl ExpressionInfo {
     const fn new() -> Self {
-        ExpressionInfo {
+        Self {
             uniformity: Uniformity::new(),
             ref_count: 0,
             assignable_global: None,
@@ -211,13 +211,13 @@ impl GlobalOrArgument {
     fn from_expression(
         expression_arena: &Arena<crate::Expression>,
         expression: Handle<crate::Expression>,
-    ) -> Result<GlobalOrArgument, ExpressionError> {
+    ) -> Result<Self, ExpressionError> {
         Ok(match expression_arena[expression] {
-            crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
-            crate::Expression::FunctionArgument(i) => GlobalOrArgument::Argument(i),
+            crate::Expression::GlobalVariable(var) => Self::Global(var),
+            crate::Expression::FunctionArgument(i) => Self::Argument(i),
             crate::Expression::Access { base, .. }
             | crate::Expression::AccessIndex { base, .. } => match expression_arena[base] {
-                crate::Expression::GlobalVariable(var) => GlobalOrArgument::Global(var),
+                crate::Expression::GlobalVariable(var) => Self::Global(var),
                 _ => return Err(ExpressionError::ExpectedGlobalOrArgument),
             },
             _ => return Err(ExpressionError::ExpectedGlobalOrArgument),
@@ -516,7 +516,7 @@ impl FunctionInfo {
         &mut self,
         handle: Handle<crate::Expression>,
         expression_arena: &Arena<crate::Expression>,
-        other_functions: &[FunctionInfo],
+        other_functions: &[Self],
         resolve_context: &ResolveContext,
         capabilities: super::Capabilities,
     ) -> Result<(), ExpressionError> {
@@ -846,7 +846,7 @@ impl FunctionInfo {
     fn process_block(
         &mut self,
         statements: &crate::Block,
-        other_functions: &[FunctionInfo],
+        other_functions: &[Self],
         mut disruptor: Option<UniformityDisruptor>,
         expression_arena: &Arena<crate::Expression>,
         diagnostic_filter_arena: &Arena<DiagnosticFilterNode>,

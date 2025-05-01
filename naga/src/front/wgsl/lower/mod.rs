@@ -891,14 +891,14 @@ enum Declared<T> {
 impl<T> Declared<T> {
     fn runtime(self) -> T {
         match self {
-            Declared::Const(t) | Declared::Runtime(t) => t,
+            Self::Const(t) | Self::Runtime(t) => t,
         }
     }
 
     fn const_time(self) -> Option<T> {
         match self {
-            Declared::Const(t) => Some(t),
-            Declared::Runtime(_) => None,
+            Self::Const(t) => Some(t),
+            Self::Runtime(_) => None,
         }
     }
 }
@@ -990,7 +990,7 @@ impl Components {
     /// Use `name_span` for reporting errors in parsing the component string.
     fn new(name: &str, name_span: Span) -> Result<Self> {
         let size = match name.len() {
-            1 => return Ok(Components::Single(Self::single_component(name, name_span)?)),
+            1 => return Ok(Self::Single(Self::single_component(name, name_span)?)),
             2 => ir::VectorSize::Bi,
             3 => ir::VectorSize::Tri,
             4 => ir::VectorSize::Quad,
@@ -1005,7 +1005,7 @@ impl Components {
         if name.chars().all(|c| matches!(c, 'x' | 'y' | 'z' | 'w'))
             || name.chars().all(|c| matches!(c, 'r' | 'g' | 'b' | 'a'))
         {
-            Ok(Components::Swizzle { size, pattern })
+            Ok(Self::Swizzle { size, pattern })
         } else {
             Err(Box::new(Error::BadAccessor(name_span)))
         }
@@ -3837,14 +3837,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 impl ir::AtomicFunction {
     pub fn map(word: &str) -> Option<Self> {
         Some(match word {
-            "atomicAdd" => ir::AtomicFunction::Add,
-            "atomicSub" => ir::AtomicFunction::Subtract,
-            "atomicAnd" => ir::AtomicFunction::And,
-            "atomicOr" => ir::AtomicFunction::InclusiveOr,
-            "atomicXor" => ir::AtomicFunction::ExclusiveOr,
-            "atomicMin" => ir::AtomicFunction::Min,
-            "atomicMax" => ir::AtomicFunction::Max,
-            "atomicExchange" => ir::AtomicFunction::Exchange { compare: None },
+            "atomicAdd" => Self::Add,
+            "atomicSub" => Self::Subtract,
+            "atomicAnd" => Self::And,
+            "atomicOr" => Self::InclusiveOr,
+            "atomicXor" => Self::ExclusiveOr,
+            "atomicMin" => Self::Min,
+            "atomicMax" => Self::Max,
+            "atomicExchange" => Self::Exchange { compare: None },
             _ => return None,
         })
     }

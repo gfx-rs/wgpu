@@ -13,102 +13,102 @@ use crate::ir;
 
 impl ir::MathFunction {
     pub fn overloads(self) -> impl OverloadSet {
-        use ir::MathFunction as Mf;
+        
 
         let set: AnyOverloadSet = match self {
             // Component-wise unary numeric operations
-            Mf::Abs | Mf::Sign => regular!(1, SCALAR|VECN of NUMERIC).into(),
+            Self::Abs | Self::Sign => regular!(1, SCALAR|VECN of NUMERIC).into(),
 
             // Component-wise binary numeric operations
-            Mf::Min | Mf::Max => regular!(2, SCALAR|VECN of NUMERIC).into(),
+            Self::Min | Self::Max => regular!(2, SCALAR|VECN of NUMERIC).into(),
 
             // Component-wise ternary numeric operations
-            Mf::Clamp => regular!(3, SCALAR|VECN of NUMERIC).into(),
+            Self::Clamp => regular!(3, SCALAR|VECN of NUMERIC).into(),
 
             // Component-wise unary floating-point operations
-            Mf::Sin
-            | Mf::Cos
-            | Mf::Tan
-            | Mf::Asin
-            | Mf::Acos
-            | Mf::Atan
-            | Mf::Sinh
-            | Mf::Cosh
-            | Mf::Tanh
-            | Mf::Asinh
-            | Mf::Acosh
-            | Mf::Atanh
-            | Mf::Saturate
-            | Mf::Radians
-            | Mf::Degrees
-            | Mf::Ceil
-            | Mf::Floor
-            | Mf::Round
-            | Mf::Fract
-            | Mf::Trunc
-            | Mf::Exp
-            | Mf::Exp2
-            | Mf::Log
-            | Mf::Log2
-            | Mf::Sqrt
-            | Mf::InverseSqrt => regular!(1, SCALAR|VECN of FLOAT).into(),
+            Self::Sin
+            | Self::Cos
+            | Self::Tan
+            | Self::Asin
+            | Self::Acos
+            | Self::Atan
+            | Self::Sinh
+            | Self::Cosh
+            | Self::Tanh
+            | Self::Asinh
+            | Self::Acosh
+            | Self::Atanh
+            | Self::Saturate
+            | Self::Radians
+            | Self::Degrees
+            | Self::Ceil
+            | Self::Floor
+            | Self::Round
+            | Self::Fract
+            | Self::Trunc
+            | Self::Exp
+            | Self::Exp2
+            | Self::Log
+            | Self::Log2
+            | Self::Sqrt
+            | Self::InverseSqrt => regular!(1, SCALAR|VECN of FLOAT).into(),
 
             // Component-wise binary floating-point operations
-            Mf::Atan2 | Mf::Pow | Mf::Step => regular!(2, SCALAR|VECN of FLOAT).into(),
+            Self::Atan2 | Self::Pow | Self::Step => regular!(2, SCALAR|VECN of FLOAT).into(),
 
             // Component-wise ternary floating-point operations
-            Mf::Fma | Mf::SmoothStep => regular!(3, SCALAR|VECN of FLOAT).into(),
+            Self::Fma | Self::SmoothStep => regular!(3, SCALAR|VECN of FLOAT).into(),
 
             // Component-wise unary concrete integer operations
-            Mf::CountTrailingZeros
-            | Mf::CountLeadingZeros
-            | Mf::CountOneBits
-            | Mf::ReverseBits
-            | Mf::FirstTrailingBit
-            | Mf::FirstLeadingBit => regular!(1, SCALAR|VECN of CONCRETE_INTEGER).into(),
+            Self::CountTrailingZeros
+            | Self::CountLeadingZeros
+            | Self::CountOneBits
+            | Self::ReverseBits
+            | Self::FirstTrailingBit
+            | Self::FirstLeadingBit => regular!(1, SCALAR|VECN of CONCRETE_INTEGER).into(),
 
             // Packing functions
-            Mf::Pack4x8snorm | Mf::Pack4x8unorm => regular!(1, VEC4 of F32 -> U32).into(),
-            Mf::Pack2x16snorm | Mf::Pack2x16unorm | Mf::Pack2x16float => {
+            Self::Pack4x8snorm | Self::Pack4x8unorm => regular!(1, VEC4 of F32 -> U32).into(),
+            Self::Pack2x16snorm | Self::Pack2x16unorm | Self::Pack2x16float => {
                 regular!(1, VEC2 of F32 -> U32).into()
             }
-            Mf::Pack4xI8 => regular!(1, VEC4 of I32 -> U32).into(),
-            Mf::Pack4xU8 => regular!(1, VEC4 of U32 -> U32).into(),
-            Mf::Pack4xI8Clamp => regular!(1, VEC4 of I32 -> U32).into(),
-            Mf::Pack4xU8Clamp => regular!(1, VEC4 of U32 -> U32).into(),
+            Self::Pack4xI8 => regular!(1, VEC4 of I32 -> U32).into(),
+            Self::Pack4xU8 => regular!(1, VEC4 of U32 -> U32).into(),
+            Self::Pack4xI8Clamp => regular!(1, VEC4 of I32 -> U32).into(),
+            Self::Pack4xU8Clamp => regular!(1, VEC4 of U32 -> U32).into(),
 
             // Unpacking functions
-            Mf::Unpack4x8snorm | Mf::Unpack4x8unorm => regular!(1, SCALAR of U32 -> Vec4F).into(),
-            Mf::Unpack2x16snorm | Mf::Unpack2x16unorm | Mf::Unpack2x16float => {
+            Self::Unpack4x8snorm | Self::Unpack4x8unorm => regular!(1, SCALAR of U32 -> Vec4F).into(),
+            Self::Unpack2x16snorm | Self::Unpack2x16unorm | Self::Unpack2x16float => {
                 regular!(1, SCALAR of U32 -> Vec2F).into()
             }
-            Mf::Unpack4xI8 => regular!(1, SCALAR of U32 -> Vec4I).into(),
-            Mf::Unpack4xU8 => regular!(1, SCALAR of U32 -> Vec4U).into(),
-            Mf::Dot4I8Packed => regular!(2, SCALAR of U32 -> I32).into(),
-            Mf::Dot4U8Packed => regular!(2, SCALAR of U32 -> U32).into(),
+            Self::Unpack4xI8 => regular!(1, SCALAR of U32 -> Vec4I).into(),
+            Self::Unpack4xU8 => regular!(1, SCALAR of U32 -> Vec4U).into(),
+            Self::Dot4I8Packed => regular!(2, SCALAR of U32 -> I32).into(),
+            Self::Dot4U8Packed => regular!(2, SCALAR of U32 -> U32).into(),
 
             // One-off operations
-            Mf::Dot => regular!(2, VECN of NUMERIC -> Scalar).into(),
-            Mf::Modf => regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Modf).into(),
-            Mf::Frexp => regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Frexp).into(),
-            Mf::Ldexp => ldexp().into(),
-            Mf::Outer => outer().into(),
-            Mf::Cross => regular!(2, VEC3 of FLOAT).into(),
-            Mf::Distance => {
+            Self::Dot => regular!(2, VECN of NUMERIC -> Scalar).into(),
+            Self::Modf => regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Modf).into(),
+            Self::Frexp => regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Frexp).into(),
+            Self::Ldexp => ldexp().into(),
+            Self::Outer => outer().into(),
+            Self::Cross => regular!(2, VEC3 of FLOAT).into(),
+            Self::Distance => {
                 regular!(2, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into()
             }
-            Mf::Length => regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into(),
-            Mf::Normalize => regular!(1, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
-            Mf::FaceForward => regular!(3, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
-            Mf::Reflect => regular!(2, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
-            Mf::Refract => refract().into(),
-            Mf::Mix => mix().into(),
-            Mf::Inverse => regular!(1, MAT2X2|MAT3X3|MAT4X4 of FLOAT).into(),
-            Mf::Transpose => transpose().into(),
-            Mf::Determinant => regular!(1, MAT2X2|MAT3X3|MAT4X4 of FLOAT -> Scalar).into(),
-            Mf::QuantizeToF16 => regular!(1, SCALAR|VECN of F32).into(),
-            Mf::ExtractBits => extract_bits().into(),
-            Mf::InsertBits => insert_bits().into(),
+            Self::Length => regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into(),
+            Self::Normalize => regular!(1, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
+            Self::FaceForward => regular!(3, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
+            Self::Reflect => regular!(2, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
+            Self::Refract => refract().into(),
+            Self::Mix => mix().into(),
+            Self::Inverse => regular!(1, MAT2X2|MAT3X3|MAT4X4 of FLOAT).into(),
+            Self::Transpose => transpose().into(),
+            Self::Determinant => regular!(1, MAT2X2|MAT3X3|MAT4X4 of FLOAT -> Scalar).into(),
+            Self::QuantizeToF16 => regular!(1, SCALAR|VECN of F32).into(),
+            Self::ExtractBits => extract_bits().into(),
+            Self::InsertBits => insert_bits().into(),
         };
 
         set

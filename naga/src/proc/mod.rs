@@ -75,7 +75,7 @@ impl From<super::StorageFormat> for super::Scalar {
             Sf::R64Uint => 8,
             _ => 4,
         };
-        super::Scalar { kind, width }
+        Self { kind, width }
     }
 }
 
@@ -170,13 +170,13 @@ impl super::AddressSpace {
     pub fn access(self) -> crate::StorageAccess {
         use crate::StorageAccess as Sa;
         match self {
-            crate::AddressSpace::Function
-            | crate::AddressSpace::Private
-            | crate::AddressSpace::WorkGroup => Sa::LOAD | Sa::STORE,
-            crate::AddressSpace::Uniform => Sa::LOAD,
-            crate::AddressSpace::Storage { access } => access,
-            crate::AddressSpace::Handle => Sa::LOAD,
-            crate::AddressSpace::PushConstant => Sa::LOAD,
+            Self::Function
+            | Self::Private
+            | Self::WorkGroup => Sa::LOAD | Sa::STORE,
+            Self::Uniform => Sa::LOAD,
+            Self::Storage { access } => access,
+            Self::Handle => Sa::LOAD,
+            Self::PushConstant => Sa::LOAD,
         }
     }
 }
@@ -351,7 +351,7 @@ impl crate::SampleLevel {
 impl crate::Binding {
     pub const fn to_built_in(&self) -> Option<crate::BuiltIn> {
         match *self {
-            crate::Binding::BuiltIn(built_in) => Some(built_in),
+            Self::BuiltIn(built_in) => Some(built_in),
             Self::Location { .. } => None,
         }
     }
@@ -381,20 +381,20 @@ impl super::SwizzleComponent {
 impl super::ImageClass {
     pub const fn is_multisampled(self) -> bool {
         match self {
-            crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => multi,
-            crate::ImageClass::Storage { .. } => false,
+            Self::Sampled { multi, .. } | Self::Depth { multi } => multi,
+            Self::Storage { .. } => false,
         }
     }
 
     pub const fn is_mipmapped(self) -> bool {
         match self {
-            crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => !multi,
-            crate::ImageClass::Storage { .. } => false,
+            Self::Sampled { multi, .. } | Self::Depth { multi } => !multi,
+            Self::Storage { .. } => false,
         }
     }
 
     pub const fn is_depth(self) -> bool {
-        matches!(self, crate::ImageClass::Depth { .. })
+        matches!(self, Self::Depth { .. })
     }
 }
 
@@ -525,8 +525,8 @@ impl crate::ArraySize {
     /// [`pipeline_constants::process_overrides`]: crate::back::pipeline_constants::process_overrides
     pub fn resolve(&self, gctx: GlobalCtx) -> Result<IndexableLength, ResolveArraySizeError> {
         match *self {
-            crate::ArraySize::Constant(length) => Ok(IndexableLength::Known(length.get())),
-            crate::ArraySize::Pending(handle) => {
+            Self::Constant(length) => Ok(IndexableLength::Known(length.get())),
+            Self::Pending(handle) => {
                 let Some(expr) = gctx.overrides[handle].init else {
                     return Err(ResolveArraySizeError::NonConstArrayLength);
                 };
@@ -541,7 +541,7 @@ impl crate::ArraySize {
 
                 Ok(IndexableLength::Known(length))
             }
-            crate::ArraySize::Dynamic => Ok(IndexableLength::Dynamic),
+            Self::Dynamic => Ok(IndexableLength::Dynamic),
         }
     }
 }

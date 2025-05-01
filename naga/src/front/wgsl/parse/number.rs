@@ -31,7 +31,7 @@ pub enum Number {
 impl Number {
     pub(super) const fn requires_enable_extension(&self) -> Option<ImplementedEnableExtension> {
         match *self {
-            Number::F16(_) => Some(ImplementedEnableExtension::F16),
+            Self::F16(_) => Some(ImplementedEnableExtension::F16),
             _ => None,
         }
     }

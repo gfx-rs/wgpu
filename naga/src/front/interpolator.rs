@@ -39,7 +39,7 @@ impl crate::Binding {
     /// [`Flat`]: crate::Interpolation::Flat
     /// [`Center`]: crate::Sampling::Center
     pub fn apply_default_interpolation(&mut self, ty: &crate::TypeInner) {
-        if let crate::Binding::Location {
+        if let Self::Location {
             location: _,
             interpolation: ref mut interpolation @ None,
             ref mut sampling,

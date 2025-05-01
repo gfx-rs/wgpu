@@ -33,8 +33,8 @@ pub(in crate::proc::overloads) struct List {
 }
 
 impl List {
-    pub(in crate::proc::overloads) fn from_rules(rules: Vec<Rule>) -> List {
-        List {
+    pub(in crate::proc::overloads) fn from_rules(rules: Vec<Rule>) -> Self {
+        Self {
             members: len_to_full_mask(rules.len()),
             rules: Rc::new(rules),
         }
@@ -47,7 +47,7 @@ impl List {
         })
     }
 
-    fn filter<F>(&self, mut pred: F) -> List
+    fn filter<F>(&self, mut pred: F) -> Self
     where
         F: FnMut(&Rule) -> bool,
     {
@@ -58,7 +58,7 @@ impl List {
             }
         }
 
-        List {
+        Self {
             members: filtered_members,
             rules: self.rules.clone(),
         }

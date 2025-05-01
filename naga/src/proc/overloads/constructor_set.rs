@@ -29,7 +29,7 @@ bitflags::bitflags! {
 
 impl ConstructorSet {
     /// Return the single-member set containing `inner`'s constructor.
-    pub const fn singleton(inner: &ir::TypeInner) -> ConstructorSet {
+    pub const fn singleton(inner: &ir::TypeInner) -> Self {
         use ir::TypeInner as Ti;
         use ir::VectorSize as Vs;
         match *inner {
@@ -65,7 +65,7 @@ impl ConstructorSet {
     /// Return an iterator over this set's members.
     ///
     /// Members are produced as singleton, in order from most general to least.
-    pub fn members(self) -> impl Iterator<Item = ConstructorSet> {
+    pub fn members(self) -> impl Iterator<Item = Self> {
         OneBitsIter::new(self.bits() as u64).map(|bit| Self::from_bits(bit as u16).unwrap())
     }
 
@@ -79,43 +79,43 @@ impl ConstructorSet {
         use ConstructorSize as Cs;
 
         match self {
-            ConstructorSet::SCALAR => Cs::Scalar,
-            ConstructorSet::VEC2 => Cs::Vector(Vs::Bi),
-            ConstructorSet::VEC3 => Cs::Vector(Vs::Tri),
-            ConstructorSet::VEC4 => Cs::Vector(Vs::Quad),
-            ConstructorSet::MAT2X2 => Cs::Matrix {
+            Self::SCALAR => Cs::Scalar,
+            Self::VEC2 => Cs::Vector(Vs::Bi),
+            Self::VEC3 => Cs::Vector(Vs::Tri),
+            Self::VEC4 => Cs::Vector(Vs::Quad),
+            Self::MAT2X2 => Cs::Matrix {
                 columns: Vs::Bi,
                 rows: Vs::Bi,
             },
-            ConstructorSet::MAT2X3 => Cs::Matrix {
+            Self::MAT2X3 => Cs::Matrix {
                 columns: Vs::Bi,
                 rows: Vs::Tri,
             },
-            ConstructorSet::MAT2X4 => Cs::Matrix {
+            Self::MAT2X4 => Cs::Matrix {
                 columns: Vs::Bi,
                 rows: Vs::Quad,
             },
-            ConstructorSet::MAT3X2 => Cs::Matrix {
+            Self::MAT3X2 => Cs::Matrix {
                 columns: Vs::Tri,
                 rows: Vs::Bi,
             },
-            ConstructorSet::MAT3X3 => Cs::Matrix {
+            Self::MAT3X3 => Cs::Matrix {
                 columns: Vs::Tri,
                 rows: Vs::Tri,
             },
-            ConstructorSet::MAT3X4 => Cs::Matrix {
+            Self::MAT3X4 => Cs::Matrix {
                 columns: Vs::Tri,
                 rows: Vs::Quad,
             },
-            ConstructorSet::MAT4X2 => Cs::Matrix {
+            Self::MAT4X2 => Cs::Matrix {
                 columns: Vs::Quad,
                 rows: Vs::Bi,
             },
-            ConstructorSet::MAT4X3 => Cs::Matrix {
+            Self::MAT4X3 => Cs::Matrix {
                 columns: Vs::Quad,
                 rows: Vs::Tri,
             },
-            ConstructorSet::MAT4X4 => Cs::Matrix {
+            Self::MAT4X4 => Cs::Matrix {
                 columns: Vs::Quad,
                 rows: Vs::Quad,
             },

@@ -52,12 +52,12 @@ impl Constructor<Handle<crate::Type>> {
         module: &crate::Module,
     ) -> Constructor<(Handle<crate::Type>, &crate::TypeInner)> {
         match self {
-            Constructor::PartialVector { size } => Constructor::PartialVector { size },
-            Constructor::PartialMatrix { columns, rows } => {
+            Self::PartialVector { size } => Constructor::PartialVector { size },
+            Self::PartialMatrix { columns, rows } => {
                 Constructor::PartialMatrix { columns, rows }
             }
-            Constructor::PartialArray => Constructor::PartialArray,
-            Constructor::Type(handle) => Constructor::Type((handle, &module.types[handle].inner)),
+            Self::PartialArray => Constructor::PartialArray,
+            Self::Type(handle) => Constructor::Type((handle, &module.types[handle].inner)),
         }
     }
 }

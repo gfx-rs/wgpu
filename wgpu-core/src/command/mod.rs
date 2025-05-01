@@ -534,7 +534,7 @@ impl CommandBuffer {
         device: &Arc<Device>,
         label: &Label,
     ) -> Self {
-        CommandBuffer {
+        Self {
             device: device.clone(),
             support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
             label: label.to_string(),
@@ -568,7 +568,7 @@ impl CommandBuffer {
     }
 
     pub(crate) fn new_invalid(device: &Arc<Device>, label: &Label) -> Self {
-        CommandBuffer {
+        Self {
             device: device.clone(),
             support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
             label: label.to_string(),
@@ -763,10 +763,7 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
-        let error = match cmd_buf.data.lock().finish() {
-            Ok(_) => None,
-            Err(e) => Some(e),
-        };
+        let error = cmd_buf.data.lock().finish().err();
 
         (encoder_id.into_command_buffer_id(), error)
     }

@@ -39,12 +39,12 @@ bitflags::bitflags! {
 impl Targets {
     /// Defaults for `spv` and `glsl` snapshots.
     fn non_wgsl_default() -> Self {
-        Targets::WGSL
+        Self::WGSL
     }
 
     /// Defaults for `wgsl` snapshots.
     fn wgsl_default() -> Self {
-        Targets::HLSL | Targets::SPIRV | Targets::GLSL | Targets::METAL | Targets::WGSL
+        Self::HLSL | Self::SPIRV | Self::GLSL | Self::METAL | Self::WGSL
     }
 }
 
@@ -52,7 +52,7 @@ impl Targets {
 struct SpvOutVersion(u8, u8);
 impl Default for SpvOutVersion {
     fn default() -> Self {
-        SpvOutVersion(1, 1)
+        Self(1, 1)
     }
 }
 
@@ -192,8 +192,8 @@ impl Input {
     /// The `input` path is interpreted relative to the `BASE_DIR_IN`
     /// subdirectory of the directory given by the `CARGO_MANIFEST_DIR`
     /// environment variable.
-    fn new(subdirectory: &str, name: &str, extension: &str) -> Input {
-        Input {
+    fn new(subdirectory: &str, name: &str, extension: &str) -> Self {
+        Self {
             subdirectory: PathBuf::from(subdirectory),
             // Don't wipe out any extensions on `name`, as
             // `with_extension` would do.
@@ -206,7 +206,7 @@ impl Input {
     fn files_in_dir(
         subdirectory: &'static str,
         file_extensions: &'static [&'static str],
-    ) -> impl Iterator<Item = Input> + 'static {
+    ) -> impl Iterator<Item = Self> + 'static {
         let input_directory = Path::new(CRATE_ROOT).join(BASE_DIR_IN).join(subdirectory);
 
         let entries = match std::fs::read_dir(&input_directory) {
@@ -233,7 +233,7 @@ impl Input {
                 return None;
             }
 
-            let input = Input::new(
+            let input = Self::new(
                 subdirectory,
                 file_name.file_stem().unwrap().to_str().unwrap(),
                 extension.to_str().unwrap(),

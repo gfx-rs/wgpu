@@ -236,25 +236,25 @@ pub enum BindingTypeMaxCountErrorKind {
 impl BindingTypeMaxCountErrorKind {
     fn to_config_str(&self) -> &'static str {
         match self {
-            BindingTypeMaxCountErrorKind::DynamicUniformBuffers => {
+            Self::DynamicUniformBuffers => {
                 "max_dynamic_uniform_buffers_per_pipeline_layout"
             }
-            BindingTypeMaxCountErrorKind::DynamicStorageBuffers => {
+            Self::DynamicStorageBuffers => {
                 "max_dynamic_storage_buffers_per_pipeline_layout"
             }
-            BindingTypeMaxCountErrorKind::SampledTextures => {
+            Self::SampledTextures => {
                 "max_sampled_textures_per_shader_stage"
             }
-            BindingTypeMaxCountErrorKind::Samplers => "max_samplers_per_shader_stage",
-            BindingTypeMaxCountErrorKind::StorageBuffers => "max_storage_buffers_per_shader_stage",
-            BindingTypeMaxCountErrorKind::StorageTextures => {
+            Self::Samplers => "max_samplers_per_shader_stage",
+            Self::StorageBuffers => "max_storage_buffers_per_shader_stage",
+            Self::StorageTextures => {
                 "max_storage_textures_per_shader_stage"
             }
-            BindingTypeMaxCountErrorKind::UniformBuffers => "max_uniform_buffers_per_shader_stage",
-            BindingTypeMaxCountErrorKind::BindingArrayElements => {
+            Self::UniformBuffers => "max_uniform_buffers_per_shader_stage",
+            Self::BindingArrayElements => {
                 "max_binding_array_elements_per_shader_stage"
             }
-            BindingTypeMaxCountErrorKind::BindingArraySamplerElements => {
+            Self::BindingArraySamplerElements => {
                 "max_binding_array_elements_per_shader_stage"
             }
         }
@@ -567,15 +567,15 @@ pub(crate) enum ExclusivePipeline {
 impl fmt::Display for ExclusivePipeline {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ExclusivePipeline::None => f.write_str("None"),
-            ExclusivePipeline::Render(p) => {
+            Self::None => f.write_str("None"),
+            Self::Render(p) => {
                 if let Some(p) = p.upgrade() {
                     p.error_ident().fmt(f)
                 } else {
                     f.write_str("RenderPipeline")
                 }
             }
-            ExclusivePipeline::Compute(p) => {
+            Self::Compute(p) => {
                 if let Some(p) = p.upgrade() {
                     p.error_ident().fmt(f)
                 } else {

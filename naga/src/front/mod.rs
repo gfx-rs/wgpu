@@ -59,7 +59,7 @@ pub struct Typifier {
 
 impl Typifier {
     pub const fn new() -> Self {
-        Typifier {
+        Self {
             resolutions: HandleVec::new(),
         }
     }

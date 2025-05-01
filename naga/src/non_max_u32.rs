@@ -60,7 +60,7 @@ impl NonMaxU32 {
         // so `NonZeroU32::new` returns `None` in exactly the case
         // where we must return `None`.
         match NonZeroU32::new(n.wrapping_add(1)) {
-            Some(non_zero) => Some(NonMaxU32(non_zero)),
+            Some(non_zero) => Some(Self(non_zero)),
             None => None,
         }
     }
@@ -75,8 +75,8 @@ impl NonMaxU32 {
     /// # Safety
     ///
     /// The value of `n` must not be [`u32::MAX`].
-    pub const unsafe fn new_unchecked(n: u32) -> NonMaxU32 {
-        NonMaxU32(unsafe { NonZeroU32::new_unchecked(n + 1) })
+    pub const unsafe fn new_unchecked(n: u32) -> Self {
+        Self(unsafe { NonZeroU32::new_unchecked(n + 1) })
     }
 
     /// Construct a [`NonMaxU32`] whose value is `index`.
@@ -85,7 +85,7 @@ impl NonMaxU32 {
     ///
     /// - The value of `index` must be strictly less than [`u32::MAX`].
     pub const unsafe fn from_usize_unchecked(index: usize) -> Self {
-        NonMaxU32(unsafe { NonZeroU32::new_unchecked(index as u32 + 1) })
+        Self(unsafe { NonZeroU32::new_unchecked(index as u32 + 1) })
     }
 
     pub fn checked_add(self, n: u32) -> Option<Self> {
@@ -93,7 +93,7 @@ impl NonMaxU32 {
         // adding `n` to `self.0` produces `0`. So we can simply
         // call `NonZeroU32::checked_add` and let its check for zero
         // determine whether our add would have produced `u32::MAX`.
-        Some(NonMaxU32(self.0.checked_add(n)?))
+        Some(Self(self.0.checked_add(n)?))
     }
 }
 
@@ -129,7 +129,7 @@ impl<'de> serde::Deserialize<'de> for NonMaxU32 {
         let n = <u32 as serde::Deserialize>::deserialize(deserializer)?;
 
         // Constrain the range of the value further.
-        NonMaxU32::new(n).ok_or_else(|| {
+        Self::new(n).ok_or_else(|| {
             <D::Error as serde::de::Error>::invalid_value(
                 serde::de::Unexpected::Unsigned(n as u64),
                 &"a value no less than 0 and no greater than 4294967294 (2^32 - 2)",

@@ -41,7 +41,7 @@ pub struct RawId(NonZeroU64);
 
 impl RawId {
     /// Zip together an identifier and return its raw underlying representation.
-    pub fn zip(index: Index, epoch: Epoch) -> RawId {
+    pub fn zip(index: Index, epoch: Epoch) -> Self {
         let v = (index as u64) | ((epoch as u64) << 32);
         Self(NonZeroU64::new(v).unwrap())
     }
@@ -104,7 +104,7 @@ impl From<RawId> for SerialId {
 impl From<SerialId> for RawId {
     fn from(id: SerialId) -> Self {
         match id {
-            SerialId::Id(index, epoch) => RawId::zip(index, epoch),
+            SerialId::Id(index, epoch) => Self::zip(index, epoch),
         }
     }
 }
@@ -127,7 +127,7 @@ where
 
     #[inline]
     pub fn zip(index: Index, epoch: Epoch) -> Self {
-        Id(RawId::zip(index, epoch), PhantomData)
+        Self(RawId::zip(index, epoch), PhantomData)
     }
 
     #[inline]

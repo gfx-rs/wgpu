@@ -150,11 +150,11 @@ impl From<crate::ImageQuery> for ImageQuery {
     fn from(q: crate::ImageQuery) -> Self {
         use crate::ImageQuery as Iq;
         match q {
-            Iq::Size { level: Some(_) } => ImageQuery::SizeLevel,
-            Iq::Size { level: None } => ImageQuery::Size,
-            Iq::NumLevels => ImageQuery::NumLevels,
-            Iq::NumLayers => ImageQuery::NumLayers,
-            Iq::NumSamples => ImageQuery::NumSamples,
+            Iq::Size { level: Some(_) } => Self::SizeLevel,
+            Iq::Size { level: None } => Self::Size,
+            Iq::NumLevels => Self::NumLevels,
+            Iq::NumLayers => Self::NumLayers,
+            Iq::NumSamples => Self::NumSamples,
         }
     }
 }
@@ -1932,19 +1932,19 @@ impl crate::StorageFormat {
     /// Returns `true` if there is just one component, otherwise `false`
     pub(super) const fn single_component(&self) -> bool {
         match *self {
-            crate::StorageFormat::R16Float
-            | crate::StorageFormat::R32Float
-            | crate::StorageFormat::R8Unorm
-            | crate::StorageFormat::R16Unorm
-            | crate::StorageFormat::R8Snorm
-            | crate::StorageFormat::R16Snorm
-            | crate::StorageFormat::R8Uint
-            | crate::StorageFormat::R16Uint
-            | crate::StorageFormat::R32Uint
-            | crate::StorageFormat::R8Sint
-            | crate::StorageFormat::R16Sint
-            | crate::StorageFormat::R32Sint
-            | crate::StorageFormat::R64Uint => true,
+            Self::R16Float
+            | Self::R32Float
+            | Self::R8Unorm
+            | Self::R16Unorm
+            | Self::R8Snorm
+            | Self::R16Snorm
+            | Self::R8Uint
+            | Self::R16Uint
+            | Self::R32Uint
+            | Self::R8Sint
+            | Self::R16Sint
+            | Self::R32Sint
+            | Self::R64Uint => true,
             _ => false,
         }
     }

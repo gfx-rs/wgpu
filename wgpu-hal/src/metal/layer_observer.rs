@@ -114,7 +114,7 @@ extern "C" fn observe_value(
     context: *mut c_void,
 ) {
     // An unrecognized context must belong to the super class.
-    if context != context_ptr() {
+    if !core::ptr::eq(context, context_ptr()) {
         // SAFETY: The signature is correct, and it's safe to forward to
         // the superclass' method when we're overriding the method.
         return unsafe {

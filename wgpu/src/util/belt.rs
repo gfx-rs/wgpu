@@ -50,7 +50,7 @@ impl StagingBelt {
     /// * bigger is better, within these bounds.
     pub fn new(chunk_size: BufferAddress) -> Self {
         let (sender, receiver) = mpsc::channel();
-        StagingBelt {
+        Self {
             chunk_size,
             active_chunks: Vec::new(),
             closed_chunks: Vec::new(),

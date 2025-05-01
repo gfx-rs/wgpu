@@ -7,16 +7,16 @@ use alloc::string::String;
 
 impl ir::PredeclaredType {
     pub fn struct_name(&self) -> String {
-        use crate::PredeclaredType as Pt;
+        
         match *self {
-            Pt::AtomicCompareExchangeWeakResult(scalar) => {
+            Self::AtomicCompareExchangeWeakResult(scalar) => {
                 format!(
                     "__atomic_compare_exchange_result<{:?},{}>",
                     scalar.kind, scalar.width,
                 )
             }
-            Pt::ModfResult { size, scalar } => frexp_mod_name("modf", size, scalar),
-            Pt::FrexpResult { size, scalar } => frexp_mod_name("frexp", size, scalar),
+            Self::ModfResult { size, scalar } => frexp_mod_name("modf", size, scalar),
+            Self::FrexpResult { size, scalar } => frexp_mod_name("frexp", size, scalar),
         }
     }
 }

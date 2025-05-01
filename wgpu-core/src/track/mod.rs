@@ -154,7 +154,7 @@ struct TrackerIndexAllocator {
 
 impl TrackerIndexAllocator {
     pub fn new() -> Self {
-        TrackerIndexAllocator {
+        Self {
             unused: Vec::new(),
             next_index: TrackerIndex(0),
         }
@@ -195,7 +195,7 @@ pub(crate) struct SharedTrackerIndexAllocator {
 
 impl SharedTrackerIndexAllocator {
     pub fn new() -> Self {
-        SharedTrackerIndexAllocator {
+        Self {
             inner: Mutex::new(
                 rank::SHARED_TRACKER_INDEX_ALLOCATOR_INNER,
                 TrackerIndexAllocator::new(),
@@ -232,7 +232,7 @@ pub(crate) struct TrackerIndexAllocators {
 
 impl TrackerIndexAllocators {
     pub fn new() -> Self {
-        TrackerIndexAllocators {
+        Self {
             buffers: Arc::new(SharedTrackerIndexAllocator::new()),
             textures: Arc::new(SharedTrackerIndexAllocator::new()),
             texture_views: Arc::new(SharedTrackerIndexAllocator::new()),

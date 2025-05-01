@@ -458,7 +458,7 @@ impl<'a> BufferSlice<'a> {
     /// - If `bounds` is outside of the bounds of `self`.
     /// - If `bounds` has a length less than 1.
     #[track_caller]
-    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'a> {
+    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> Self {
         let (offset, size) = range_to_offset_size(bounds, self.size.get());
         check_buffer_bounds(self.size.get(), offset, size);
         BufferSlice {

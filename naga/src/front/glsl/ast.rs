@@ -325,7 +325,7 @@ pub enum StorageQualifier {
 
 impl Default for StorageQualifier {
     fn default() -> Self {
-        StorageQualifier::AddressSpace(AddressSpace::Function)
+        Self::AddressSpace(AddressSpace::Function)
     }
 }
 
@@ -375,7 +375,7 @@ impl ParameterQualifier {
     /// Returns true if the argument should be passed as a lhs expression
     pub const fn is_lhs(&self) -> bool {
         match *self {
-            ParameterQualifier::Out | ParameterQualifier::InOut => true,
+            Self::Out | Self::InOut => true,
             _ => false,
         }
     }

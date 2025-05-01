@@ -62,7 +62,7 @@ pub struct Options {
 
 impl From<ShaderStage> for Options {
     fn from(stage: ShaderStage) -> Self {
-        Options {
+        Self {
             stage,
             defines: FastHashMap::default(),
         }
@@ -115,7 +115,7 @@ impl ShaderMetadata {
 
 impl Default for ShaderMetadata {
     fn default() -> Self {
-        ShaderMetadata {
+        Self {
             version: 0,
             profile: Profile::Core,
             stage: ShaderStage::Vertex,

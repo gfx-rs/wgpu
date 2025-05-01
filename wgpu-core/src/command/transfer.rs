@@ -172,7 +172,7 @@ pub enum CopyError {
 
 impl From<DeviceError> for CopyError {
     fn from(err: DeviceError) -> Self {
-        CopyError::Encoder(CommandEncoderError::Device(err))
+        Self::Encoder(CommandEncoderError::Device(err))
     }
 }
 

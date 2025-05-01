@@ -666,7 +666,7 @@ impl crate::framework::Example for Example {
 
         let forward_depth = Self::create_depth_texture(config, device);
 
-        Example {
+        Self {
             entities,
             lights,
             lights_are_dirty: true,

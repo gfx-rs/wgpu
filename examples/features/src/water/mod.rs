@@ -631,7 +631,7 @@ impl crate::framework::Example for Example {
         };
 
         // Done
-        Example {
+        Self {
             water_vertex_buf,
             water_vertex_count: water_vertices.len(),
             water_bind_group_layout,

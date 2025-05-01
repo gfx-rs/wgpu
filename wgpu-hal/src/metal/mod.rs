@@ -116,7 +116,7 @@ impl crate::Instance for Instance {
         profiling::scope!("Init Metal Backend");
         // We do not enable metal validation based on the validation flags as it affects the entire
         // process. Instead, we enable the validation inside the test harness itself in tests/src/native.rs.
-        Ok(Instance {})
+        Ok(Self {})
     }
 
     unsafe fn create_surface(
@@ -682,7 +682,7 @@ impl AsNative for ResourcePtr {
     type Native = metal::ResourceRef;
     #[inline]
     fn from(native: &Self::Native) -> Self {
-        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+        unsafe { Self::new_unchecked(native.as_ptr()) }
     }
     #[inline]
     fn as_native(&self) -> &Self::Native {
@@ -694,7 +694,7 @@ impl AsNative for BufferPtr {
     type Native = metal::BufferRef;
     #[inline]
     fn from(native: &Self::Native) -> Self {
-        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+        unsafe { Self::new_unchecked(native.as_ptr()) }
     }
     #[inline]
     fn as_native(&self) -> &Self::Native {
@@ -706,7 +706,7 @@ impl AsNative for TexturePtr {
     type Native = metal::TextureRef;
     #[inline]
     fn from(native: &Self::Native) -> Self {
-        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+        unsafe { Self::new_unchecked(native.as_ptr()) }
     }
     #[inline]
     fn as_native(&self) -> &Self::Native {
@@ -718,7 +718,7 @@ impl AsNative for SamplerPtr {
     type Native = metal::SamplerStateRef;
     #[inline]
     fn from(native: &Self::Native) -> Self {
-        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+        unsafe { Self::new_unchecked(native.as_ptr()) }
     }
     #[inline]
     fn as_native(&self) -> &Self::Native {

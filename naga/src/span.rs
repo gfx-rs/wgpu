@@ -23,12 +23,12 @@ impl Span {
     ///
     /// Note: end is exclusive, it doesn't belong to the `Span`
     pub const fn new(start: u32, end: u32) -> Self {
-        Span { start, end }
+        Self { start, end }
     }
 
     /// Returns a new `Span` starting at `self` and ending at `other`
     pub const fn until(&self, other: &Self) -> Self {
-        Span {
+        Self {
             start: self.start,
             end: other.end,
         }
@@ -45,7 +45,7 @@ impl Span {
             *self
         } else {
             // Both self and other are defined so calculate the span that contains them both
-            Span {
+            Self {
                 start: self.start.min(other.start),
                 end: self.end.max(other.end),
             }
@@ -94,7 +94,7 @@ impl Span {
 
 impl From<Range<usize>> for Span {
     fn from(range: Range<usize>) -> Self {
-        Span {
+        Self {
             start: range.start as u32,
             end: range.end as u32,
         }
@@ -102,10 +102,10 @@ impl From<Range<usize>> for Span {
 }
 
 impl core::ops::Index<Span> for str {
-    type Output = str;
+    type Output = Self;
 
     #[inline]
-    fn index(&self, span: Span) -> &str {
+    fn index(&self, span: Span) -> &Self {
         &self[span.start as usize..span.end as usize]
     }
 }

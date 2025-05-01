@@ -35,7 +35,7 @@ impl OneTestPerProcessGuard {
             // Hard exit to call attention to the error
             std::process::abort();
         }
-        OneTestPerProcessGuard(())
+        Self(())
     }
 }
 
