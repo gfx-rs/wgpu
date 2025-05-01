@@ -3399,6 +3399,38 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Convert the arguments of `Dot4{I, U}Packed` to `packed_(u?)char4`.
+    ///
+    /// Caches the results in temporary variables (whose names are derived from
+    /// the original variable names). This caching avoids the need to redo the
+    /// casting for each vector component when emitting the dot product.
+    fn put_casting_to_packed_chars(
+        &mut self,
+        fun: crate::MathFunction,
+        arg0: Handle<crate::Expression>,
+        arg1: Handle<crate::Expression>,
+        indent: back::Level,
+        context: &StatementContext<'_>,
+    ) -> Result<(), Error> {
+        let packed_type = match fun {
+            crate::MathFunction::Dot4I8Packed => "packed_char4",
+            crate::MathFunction::Dot4U8Packed => "packed_uchar4",
+            _ => unreachable!(),
+        };
+
+        for arg in [arg0, arg1] {
+            write!(
+                self.out,
+                "{indent}{packed_type} {0} = as_type<{packed_type}>(",
+                Reinterpreted::new(packed_type, arg)
+            )?;
+            self.put_expression(arg, &context.expression, true)?;
+            writeln!(self.out, ");")?;
+        }
+
+        Ok(())
+    }
+
     fn put_block(
         &mut self,
         level: back::Level,
@@ -3443,31 +3475,14 @@ impl<W: Write> Writer<W> {
                                 arg,
                                 arg1,
                                 ..
-                            } => {
-                                if context.expression.lang_version >= (2, 1) {
-                                    let arg1 = arg1.unwrap();
-                                    let packed_type = match fun {
-                                        Mf::Dot4I8Packed => "packed_char4",
-                                        Mf::Dot4U8Packed => "packed_uchar4",
-                                        _ => unreachable!(),
-                                    };
-
-                                    write!(
-                                        self.out,
-                                        "{level}{packed_type} {0} = as_type<{packed_type}>(",
-                                        Reinterpreted::new(packed_type, arg)
-                                    )?;
-                                    self.put_expression(arg, &context.expression, true)?;
-                                    writeln!(self.out, ");")?;
-
-                                    write!(
-                                        self.out,
-                                        "{level}{packed_type} {0} = as_type<{packed_type}>(",
-                                        Reinterpreted::new(packed_type, arg1)
-                                    )?;
-                                    self.put_expression(arg1, &context.expression, true)?;
-                                    writeln!(self.out, ");")?;
-                                }
+                            } if context.expression.lang_version >= (2, 1) => {
+                                self.put_casting_to_packed_chars(
+                                    fun,
+                                    arg,
+                                    arg1.unwrap(),
+                                    level,
+                                    context,
+                                )?;
                             }
 
                             _ => (),
