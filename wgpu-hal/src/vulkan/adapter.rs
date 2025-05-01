@@ -387,7 +387,9 @@ impl PhysicalDeviceFeatures {
                 None
             },
             shader_float16: if requested_features.contains(wgt::Features::SHADER_F16) {
-                let supported_f16_features = _phd_features.shader_float16.map(|(_, s)| s)
+                let supported_f16_features = _phd_features
+                    .shader_float16
+                    .map(|(_, s)| s)
                     .unwrap_or_default();
 
                 Some((
@@ -395,14 +397,12 @@ impl PhysicalDeviceFeatures {
                     // Only enable the 16bit storage features that are actually supported by the hardware
                     vk::PhysicalDevice16BitStorageFeatures::default()
                         .storage_buffer16_bit_access(
-                            supported_f16_features.storage_buffer16_bit_access != 0
+                            supported_f16_features.storage_buffer16_bit_access != 0,
                         )
                         .uniform_and_storage_buffer16_bit_access(
-                            supported_f16_features.uniform_and_storage_buffer16_bit_access != 0
+                            supported_f16_features.uniform_and_storage_buffer16_bit_access != 0,
                         )
-                        .storage_input_output16(
-                            supported_f16_features.storage_input_output16 != 0
-                        ),
+                        .storage_input_output16(supported_f16_features.storage_input_output16 != 0),
                 ))
             } else {
                 None
@@ -732,7 +732,7 @@ impl PhysicalDeviceFeatures {
                 F::SHADER_F16,
                 f16_i8.shader_float16 != 0
                     && bit16.storage_buffer16_bit_access != 0
-                    && bit16.uniform_and_storage_buffer16_bit_access != 0
+                    && bit16.uniform_and_storage_buffer16_bit_access != 0,
             );
         }
 
