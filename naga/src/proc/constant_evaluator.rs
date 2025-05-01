@@ -1845,6 +1845,10 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => v,
                         _ => return make_error(),
                     }),
+                    Sc::ABSTRACT_INT => Literal::AbstractInt(match literal {
+                        Literal::AbstractInt(v) => v,
+                        _ => return make_error(),
+                    }),
                     _ => {
                         log::debug!("Constant evaluator refused to convert value to {target:?}");
                         return make_error();
