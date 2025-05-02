@@ -860,7 +860,15 @@ impl<'a, W: Write> Writer<'a, W> {
                         )?;
                     }
                 }
-                &crate::PredeclaredType::AtomicCompareExchangeWeakResult { .. } => {}
+                &crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar) => {
+                    let scalar_str = glsl_scalar(scalar)?.full;
+                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
+                    writeln!(
+                        self.out,
+                        "struct {} {{\n    {} old_value;\n    bool exchanged;\n}};",
+                        struct_name, scalar_str
+                    )?;
+                }
             }
         }
 
@@ -1118,6 +1126,17 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Notes
     /// Adds no trailing or leading whitespace
     fn write_type(&mut self, ty: Handle<crate::Type>) -> BackendResult {
+        for (key, &handle) in self.module.special_types.predeclared_types.iter() {
+            if handle == ty {
+                if let crate::PredeclaredType::AtomicCompareExchangeWeakResult(_) = key {
+                    let name = &self.names[&NameKey::Type(ty)];
+                    write!(self.out, "{name}")?;
+                    return Ok(());
+                }
+                break;
+            }
+        }
+
         match self.module.types[ty].inner {
             // glsl has no pointer types so just write types as normal and loads are skipped
             TypeInner::Pointer { base, .. } => self.write_type(base),
@@ -2572,33 +2591,49 @@ impl<'a, W: Write> Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                if let Some(result) = result {
-                    let res_name = Baked(result).to_string();
-                    let res_ty = ctx.resolve_type(result, &self.module.types);
-                    self.write_value_type(res_ty)?;
-                    write!(self.out, " {res_name} = ")?;
-                    self.named_expressions.insert(result, res_name);
-                }
 
-                let fun_str = fun.to_glsl();
-                write!(self.out, "atomic{fun_str}(")?;
-                self.write_expr(pointer, ctx)?;
-                write!(self.out, ", ")?;
-                // handle the special cases
                 match *fun {
-                    crate::AtomicFunction::Subtract => {
-                        // we just wrote `InterlockedAdd`, so negate the argument
-                        write!(self.out, "-")?;
+                    crate::AtomicFunction::Exchange {
+                        compare: Some(compare_expr),
+                    } => {
+                        let result_handle = result.expect("CompareExchange must have a result");
+                        let res_name = Baked(result_handle).to_string();
+                        self.write_type(ctx.info[result_handle].ty.handle().unwrap())?;
+                        write!(self.out, " {res_name};")?;
+                        write!(self.out, " {res_name}.old_value = atomicCompSwap(")?;
+                        self.write_expr(pointer, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(compare_expr, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(value, ctx)?;
+                        writeln!(self.out, ");")?;
+
+                        write!(
+                            self.out,
+                            "{level}{res_name}.exchanged = ({res_name}.old_value == "
+                        )?;
+                        self.write_expr(compare_expr, ctx)?;
+                        writeln!(self.out, ");")?;
+                        self.named_expressions.insert(result_handle, res_name);
                     }
-                    crate::AtomicFunction::Exchange { compare: Some(_) } => {
-                        return Err(Error::Custom(
-                            "atomic CompareExchange is not implemented".to_string(),
-                        ));
+                    _ => {
+                        if let Some(result) = result {
+                            let res_name = Baked(result).to_string();
+                            self.write_type(ctx.info[result].ty.handle().unwrap())?;
+                            write!(self.out, " {res_name} = ")?;
+                            self.named_expressions.insert(result, res_name);
+                        }
+                        let fun_str = fun.to_glsl();
+                        write!(self.out, "atomic{fun_str}(")?;
+                        self.write_expr(pointer, ctx)?;
+                        write!(self.out, ", ")?;
+                        if let crate::AtomicFunction::Subtract = *fun {
+                            write!(self.out, "-")?;
+                        }
+                        self.write_expr(value, ctx)?;
+                        writeln!(self.out, ");")?;
                     }
-                    _ => {}
                 }
-                self.write_expr(value, ctx)?;
-                writeln!(self.out, ");")?;
             }
             // Stores a value into an image.
             Statement::ImageAtomic {
