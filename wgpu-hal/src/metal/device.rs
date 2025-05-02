@@ -1939,9 +1939,9 @@ impl crate::Device for super::Device {
 
     unsafe fn get_acceleration_structure_device_address(
         &self,
-        _acceleration_structure: &super::AccelerationStructure,
+        acceleration_structure: &super::AccelerationStructure,
     ) -> wgt::BufferAddress {
-        unimplemented!()
+        acceleration_structure.raw.gpuResourceID().to_raw()
     }
 
     unsafe fn create_acceleration_structure(
