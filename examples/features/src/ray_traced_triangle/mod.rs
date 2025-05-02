@@ -120,7 +120,7 @@ impl crate::framework::Example for Example {
         });
 
         let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("vertex buffer"),
+            label: Some("index buffer"),
             contents: bytemuck::cast_slice(&indices),
             usage: BufferUsages::BLAS_INPUT,
         });
