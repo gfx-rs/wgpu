@@ -1128,7 +1128,7 @@ impl<'a, W: Write> Writer<'a, W> {
     fn write_type(&mut self, ty: Handle<crate::Type>) -> BackendResult {
         for (key, &handle) in self.module.special_types.predeclared_types.iter() {
             if handle == ty {
-                if let crate::PredeclaredType::AtomicCompareExchangeWeakResult(_) = key {
+                if let crate::PredeclaredType::AtomicCompareExchangeWeakResult(_) = *key {
                     let name = &self.names[&NameKey::Type(ty)];
                     write!(self.out, "{name}")?;
                     return Ok(());
