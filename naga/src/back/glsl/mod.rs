@@ -621,6 +621,9 @@ pub struct Writer<'a, W> {
     multiview: Option<core::num::NonZeroU32>,
     /// Mapping of varying variables to their location. Needed for reflections.
     varying: crate::FastHashMap<String, VaryingLocation>,
+
+    /// Set of special type names whose definitions have already been written. To prevent duplicates.
+    written_special_struct_names: crate::FastHashSet<String>,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -688,6 +691,7 @@ impl<'a, W: Write> Writer<'a, W> {
             need_bake_expressions: Default::default(),
             continue_ctx: back::continue_forward::ContinueCtx::default(),
             varying: Default::default(),
+            written_special_struct_names: Default::default(),
         };
 
         // Find all features required to print this module
@@ -787,6 +791,12 @@ impl<'a, W: Write> Writer<'a, W> {
         // you can't make a struct without adding all of its members first.
         for (handle, ty) in self.module.types.iter() {
             if let TypeInner::Struct { ref members, .. } = ty.inner {
+                // Skip special atomic compare exchange result structs (generated in next loop)
+                let struct_name = &self.names[&NameKey::Type(handle)];
+                if struct_name.starts_with("_atomic_compare_exchange_result") {
+                    continue;
+                }
+
                 // Structures ending with runtime-sized arrays can only be
                 // rendered as shader storage blocks in GLSL, not stand-alone
                 // struct types.
@@ -794,16 +804,23 @@ impl<'a, W: Write> Writer<'a, W> {
                     .inner
                     .is_dynamically_sized(&self.module.types)
                 {
-                    let name = &self.names[&NameKey::Type(handle)];
-                    write!(self.out, "struct {name} ")?;
+                    write!(self.out, "struct {struct_name} ")?;
                     self.write_struct_body(handle, members)?;
                     writeln!(self.out, ";")?;
                 }
             }
         }
 
-        // Write functions to create special types.
+        // Write functions and struct definitions for special types.
         for (type_key, struct_ty) in self.module.special_types.predeclared_types.iter() {
+            let struct_name = &self.names[&NameKey::Type(*struct_ty)];
+            if !self
+                .written_special_struct_names
+                .insert(struct_name.clone())
+            {
+                continue;
+            }
+
             match type_key {
                 &crate::PredeclaredType::ModfResult { size, scalar }
                 | &crate::PredeclaredType::FrexpResult { size, scalar } => {
@@ -835,8 +852,6 @@ impl<'a, W: Write> Writer<'a, W> {
                             (FREXP_FUNCTION, "frexp", other_type_name)
                         };
 
-                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
-
                     writeln!(self.out)?;
                     if !self.options.version.supports_frexp_function()
                         && matches!(type_key, &crate::PredeclaredType::FrexpResult { .. })
@@ -862,7 +877,6 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 &crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar) => {
                     let scalar_str = glsl_scalar(scalar)?.full;
-                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
                     writeln!(
                         self.out,
                         "struct {} {{\n    {} old_value;\n    bool exchanged;\n}};",
