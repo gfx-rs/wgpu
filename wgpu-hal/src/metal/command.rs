@@ -1800,7 +1800,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
         &mut self,
         _barriers: crate::AccelerationStructureBarrier,
     ) {
-        unimplemented!()
     }
 
     unsafe fn read_acceleration_structure_compact_size(
