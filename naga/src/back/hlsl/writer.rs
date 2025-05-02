@@ -2382,33 +2382,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 };
                 match pointer_space {
                     crate::AddressSpace::WorkGroup => {
-                        let final_fun_name = match func_ctx.resolve_type(value, &module.types) {
-                            &TypeInner::Scalar(Scalar { width: 8, .. }) => {
-                                format!("Interlocked{fun_str}64")
-                            }
-                            _ => format!("Interlocked{fun_str}"),
-                        };
-                        write!(self.out, "{final_fun_name}(")?;
+                        write!(self.out, "Interlocked{fun_str}(")?;
                         self.write_expr(module, pointer, func_ctx)?;
-                        if let Some(cmp) = compare_expr {
-                            write!(self.out, ", ")?;
-                            self.write_expr(module, cmp, func_ctx)?;
-                        }
-                        write!(self.out, ", ")?;
-                        if let crate::AtomicFunction::Subtract = *fun {
-                            write!(self.out, "-")?;
-                        }
-                        self.write_expr(module, value, func_ctx)?;
-                        if let Some((res_handle, ref res_name)) = res_var_info {
-                            write!(self.out, ", ")?;
-                            if compare_expr.is_some() {
-                                write!(self.out, "{res_name}.old_value")?;
-                            } else {
-                                write!(self.out, "{res_name}")?;
-                            }
-                            self.named_expressions.insert(res_handle, res_name.clone());
-                        }
-                        writeln!(self.out, ");")?;
+                        self.emit_hlsl_atomic_tail(module, func_ctx, fun, compare_expr, value, &res_var_info)?;
                     }
                     crate::AddressSpace::Storage { .. } => {
                         let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
@@ -2417,25 +2393,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         let chain = mem::take(&mut self.temp_access_chain);
                         self.write_storage_address(module, &chain, func_ctx)?;
                         self.temp_access_chain = chain;
-                        if let Some(cmp) = compare_expr {
-                            write!(self.out, ", ")?;
-                            self.write_expr(module, cmp, func_ctx)?;
-                        }
-                        write!(self.out, ", ")?;
-                        if let crate::AtomicFunction::Subtract = *fun {
-                            write!(self.out, "-")?;
-                        }
-                        self.write_expr(module, value, func_ctx)?;
-                        if let Some((res_handle, ref res_name)) = res_var_info {
-                            write!(self.out, ", ")?;
-                            if compare_expr.is_some() {
-                                write!(self.out, "{res_name}.old_value")?;
-                            } else {
-                                write!(self.out, "{res_name}")?;
-                            }
-                            self.named_expressions.insert(res_handle, res_name.clone());
-                        }
-                        writeln!(self.out, ");")?;
+                        self.emit_hlsl_atomic_tail(module, func_ctx, fun, compare_expr, value, &res_var_info)?;
                     }
                     ref other => {
                         return Err(Error::Custom(format!(
@@ -4307,6 +4265,38 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if barrier.contains(crate::Barrier::TEXTURE) {
             writeln!(self.out, "{level}DeviceMemoryBarrierWithGroupSync();")?;
         }
+        Ok(())
+    }
+
+    /// Helper to emit the shared tail of an HLSL atomic call (arguments, value, result)
+    fn emit_hlsl_atomic_tail(
+        &mut self,
+        module: &Module,
+        func_ctx: &back::FunctionCtx<'_>,
+        fun: &crate::AtomicFunction,
+        compare_expr: Option<Handle<crate::Expression>>,
+        value: Handle<crate::Expression>,
+        res_var_info: &Option<(Handle<crate::Expression>, String)>,
+    ) -> BackendResult {
+        if let Some(cmp) = compare_expr {
+            write!(self.out, ", ")?;
+            self.write_expr(module, cmp, func_ctx)?;
+        }
+        write!(self.out, ", ")?;
+        if let crate::AtomicFunction::Subtract = *fun {
+            write!(self.out, "-")?;
+        }
+        self.write_expr(module, value, func_ctx)?;
+        if let Some((res_handle, ref res_name)) = res_var_info {
+            write!(self.out, ", ")?;
+            if compare_expr.is_some() {
+                write!(self.out, "{res_name}.old_value")?;
+            } else {
+                write!(self.out, "{res_name}")?;
+            }
+            self.named_expressions.insert(*res_handle, res_name.clone());
+        }
+        writeln!(self.out, ");")?;
         Ok(())
     }
 }
