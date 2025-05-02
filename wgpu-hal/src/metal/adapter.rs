@@ -1246,7 +1246,7 @@ impl super::PrivateCapabilities {
                 uniform_bounds_check_alignment: wgt::BufferSize::new(1).unwrap(),
                 raw_tlas_instance_size: size_of::<MTLIndirectAccelerationStructureInstanceDescriptor>(
                 ),
-                ray_tracing_scratch_buffer_alignment: 0,
+                ray_tracing_scratch_buffer_alignment: 1,
             },
             downlevel,
             cooperative_matrix_properties: self.cooperative_matrix_properties(),
