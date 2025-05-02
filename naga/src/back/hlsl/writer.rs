@@ -2416,13 +2416,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 }
                 if let Some(cmp) = compare_expr {
-                    if let Some((_res_handle, ref res_name)) = res_var_info {
+                    if let Some(&(res_handle, ref res_name)) = res_var_info.as_ref() {
                         write!(
                             self.out,
                             "{level}{res_name}.exchanged = ({res_name}.old_value == "
                         )?;
                         self.write_expr(module, cmp, func_ctx)?;
                         writeln!(self.out, ");")?;
+                        self.named_expressions.insert(res_handle, res_name.clone());
                     }
                 }
             }
@@ -4301,14 +4302,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             write!(self.out, "-")?;
         }
         self.write_expr(module, value, func_ctx)?;
-        if let Some((res_handle, ref res_name)) = res_var_info {
+        if let Some(&(res_handle, ref res_name)) = res_var_info.as_ref() {
             write!(self.out, ", ")?;
             if compare_expr.is_some() {
                 write!(self.out, "{res_name}.old_value")?;
             } else {
                 write!(self.out, "{res_name}")?;
             }
-            self.named_expressions.insert(*res_handle, res_name.clone());
+            self.named_expressions.insert(res_handle, res_name.clone());
         }
         writeln!(self.out, ");")?;
         Ok(())
