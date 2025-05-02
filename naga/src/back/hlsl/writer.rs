@@ -2384,7 +2384,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     crate::AddressSpace::WorkGroup => {
                         write!(self.out, "Interlocked{fun_str}(")?;
                         self.write_expr(module, pointer, func_ctx)?;
-                        self.emit_hlsl_atomic_tail(module, func_ctx, fun, compare_expr, value, &res_var_info)?;
+                        self.emit_hlsl_atomic_tail(
+                            module,
+                            func_ctx,
+                            fun,
+                            compare_expr,
+                            value,
+                            &res_var_info,
+                        )?;
                     }
                     crate::AddressSpace::Storage { .. } => {
                         let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
@@ -2393,7 +2400,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         let chain = mem::take(&mut self.temp_access_chain);
                         self.write_storage_address(module, &chain, func_ctx)?;
                         self.temp_access_chain = chain;
-                        self.emit_hlsl_atomic_tail(module, func_ctx, fun, compare_expr, value, &res_var_info)?;
+                        self.emit_hlsl_atomic_tail(
+                            module,
+                            func_ctx,
+                            fun,
+                            compare_expr,
+                            value,
+                            &res_var_info,
+                        )?;
                     }
                     ref other => {
                         return Err(Error::Custom(format!(
