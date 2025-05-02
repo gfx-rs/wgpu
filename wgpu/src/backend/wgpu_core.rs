@@ -2228,7 +2228,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             source_offset,
             destination.id,
             destination_offset,
-            copy_size,
+            Some(copy_size),
         ) {
             self.context.handle_error_nolabel(
                 &self.error_sink,

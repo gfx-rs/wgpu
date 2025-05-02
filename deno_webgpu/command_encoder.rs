@@ -188,7 +188,7 @@ impl GPUCommandEncoder {
                 source_offset,
                 destination.id,
                 destination_offset,
-                size,
+                Some(size),
             )
             .err();
 
