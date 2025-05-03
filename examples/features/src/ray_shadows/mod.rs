@@ -116,7 +116,7 @@ impl crate::framework::Example for Example {
 
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
-            max_push_constant_size: 12,
+            max_push_constant_size: 16,
             ..wgpu::Limits::default()
         }
     }
@@ -209,7 +209,7 @@ impl crate::framework::Example for Example {
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[wgpu::PushConstantRange {
                 stages: wgpu::ShaderStages::FRAGMENT,
-                range: 0..12,
+                range: 0..16,
             }],
         });
 

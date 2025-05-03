@@ -35,6 +35,7 @@ var acc_struct: acceleration_structure;
 
 struct PushConstants {
     light: vec3<f32>,
+    padding: f32,
 }
 var<push_constant> pc: PushConstants;
 
