@@ -2396,7 +2396,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     crate::AddressSpace::Storage { .. } => {
                         let var_handle = self.fill_access_chain(module, pointer, func_ctx)?;
                         let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
-                        write!(self.out, "{var_name}.Interlocked{fun_str}(")?;
+                        let width = match func_ctx.resolve_type(value, &module.types) {
+                            &TypeInner::Scalar(Scalar { width: 8, .. }) => "64",
+                            _ => "",
+                        };
+                        write!(self.out, "{var_name}.Interlocked{fun_str}{width}(")?;
                         let chain = mem::take(&mut self.temp_access_chain);
                         self.write_storage_address(module, &chain, func_ctx)?;
                         self.temp_access_chain = chain;
