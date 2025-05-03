@@ -571,7 +571,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     // TODO: Code is so large that rustfmt refuses to treat this... :(
                     )
                     .data(vk::DeviceOrHostAddressConstKHR {
-                        device_address: get_device_address(instances.buffer),
+                        device_address: get_device_address(Some(instances.buffer)),
                     });
 
                     let geometry = vk::AccelerationStructureGeometryKHR::default()

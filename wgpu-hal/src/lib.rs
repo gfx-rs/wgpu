@@ -2517,7 +2517,7 @@ pub struct AccelerationStructureCopy {
 /// * `offset` - offset in bytes
 #[derive(Clone, Debug)]
 pub struct AccelerationStructureInstances<'a, B: DynBuffer + ?Sized> {
-    pub buffer: Option<&'a B>,
+    pub buffer: &'a B,
     pub offset: u32,
     pub count: u32,
 }

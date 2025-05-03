@@ -1476,13 +1476,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let num_desc;
             match descriptor.entries {
                 AccelerationStructureEntries::Instances(instances) => {
-                    let desc_address = unsafe {
-                        instances
-                            .buffer
-                            .expect("needs buffer to build")
-                            .resource
-                            .GetGPUVirtualAddress()
-                    } + instances.offset as u64;
+                    let desc_address = unsafe { instances.buffer.resource.GetGPUVirtualAddress() }
+                        + instances.offset as u64;
                     ty = Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
                     inputs0 = Direct3D12::D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0 {
                         InstanceDescs: desc_address,

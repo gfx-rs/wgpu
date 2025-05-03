@@ -158,7 +158,7 @@ impl Device {
                 &hal::GetAccelerationStructureBuildSizesDescriptor {
                     entries: &hal::AccelerationStructureEntries::Instances(
                         hal::AccelerationStructureInstances {
-                            buffer: None,
+                            buffer: self.zero_buffer.as_ref(),
                             offset: 0,
                             count: desc.max_instances,
                         },

@@ -280,7 +280,7 @@ impl Global {
                 tlas,
                 entries: hal::AccelerationStructureEntries::Instances(
                     hal::AccelerationStructureInstances {
-                        buffer: Some(instance_buffer),
+                        buffer: instance_buffer,
                         offset: 0,
                         count: entry.instance_count,
                     },
@@ -602,7 +602,7 @@ impl Global {
                     tlas: tlas.clone(),
                     entries: hal::AccelerationStructureEntries::Instances(
                         hal::AccelerationStructureInstances {
-                            buffer: Some(tlas.instance_buffer.as_ref()),
+                            buffer: tlas.instance_buffer.as_ref(),
                             offset: 0,
                             count: instance_count,
                         },

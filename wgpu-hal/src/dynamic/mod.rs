@@ -159,7 +159,7 @@ impl<'a> AccelerationStructureEntries<'a, dyn DynBuffer> {
         match self {
             AccelerationStructureEntries::Instances(instances) => {
                 AccelerationStructureEntries::Instances(AccelerationStructureInstances {
-                    buffer: instances.buffer.map(|b| b.expect_downcast_ref()),
+                    buffer: instances.buffer.expect_downcast_ref(),
                     offset: instances.offset,
                     count: instances.count,
                 })
