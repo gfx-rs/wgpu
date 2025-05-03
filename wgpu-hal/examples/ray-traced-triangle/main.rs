@@ -473,7 +473,7 @@ impl<A: hal::Api> Example<A> {
         };
 
         let blas_triangles = vec![hal::AccelerationStructureTriangles {
-            vertex_buffer: Some(&vertices_buffer),
+            vertex_buffer: &vertices_buffer,
             first_vertex: 0,
             vertex_format: wgpu_types::VertexFormat::Float32x3,
             // each vertex is 3 floats, and floats are stored raw in the array

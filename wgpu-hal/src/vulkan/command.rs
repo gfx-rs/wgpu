@@ -600,7 +600,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 // index buffer we need to have IndexType::NONE_KHR as our index type.
                                 .index_type(vk::IndexType::NONE_KHR)
                                 .vertex_data(vk::DeviceOrHostAddressConstKHR {
-                                    device_address: get_device_address(triangles.vertex_buffer),
+                                    device_address: get_device_address(Some(
+                                        triangles.vertex_buffer,
+                                    )),
                                 })
                                 .vertex_format(conv::map_vertex_format(triangles.vertex_format))
                                 .max_vertex(triangles.vertex_count)

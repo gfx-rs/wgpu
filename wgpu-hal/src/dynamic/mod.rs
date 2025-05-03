@@ -169,7 +169,7 @@ impl<'a> AccelerationStructureEntries<'a, dyn DynBuffer> {
                     triangles
                         .iter()
                         .map(|t| AccelerationStructureTriangles {
-                            vertex_buffer: t.vertex_buffer.map(|b| b.expect_downcast_ref()),
+                            vertex_buffer: t.vertex_buffer.expect_downcast_ref(),
                             vertex_format: t.vertex_format,
                             first_vertex: t.first_vertex,
                             vertex_count: t.vertex_count,

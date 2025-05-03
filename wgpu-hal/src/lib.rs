@@ -2489,7 +2489,7 @@ pub enum AccelerationStructureEntries<'a, B: DynBuffer + ?Sized> {
 /// * `transform` - optional transform
 #[derive(Clone, Debug)]
 pub struct AccelerationStructureTriangles<'a, B: DynBuffer + ?Sized> {
-    pub vertex_buffer: Option<&'a B>,
+    pub vertex_buffer: &'a B,
     pub vertex_format: wgt::VertexFormat,
     pub first_vertex: u32,
     pub vertex_count: u32,

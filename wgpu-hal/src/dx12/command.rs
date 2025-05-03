@@ -1511,11 +1511,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                             indices.buffer.resource.GetGPUVirtualAddress() + indices.offset as u64
                         });
                         let vertex_address = unsafe {
-                            triangle
-                                .vertex_buffer
-                                .expect("needs buffer to build")
-                                .resource
-                                .GetGPUVirtualAddress()
+                            triangle.vertex_buffer.resource.GetGPUVirtualAddress()
                                 + (triangle.first_vertex as u64 * triangle.vertex_stride)
                         };
 

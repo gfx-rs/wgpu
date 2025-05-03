@@ -78,7 +78,7 @@ impl Device {
                     }
 
                     entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> {
-                        vertex_buffer: None,
+                        vertex_buffer: self.zero_buffer.as_ref(),
                         vertex_format: desc.vertex_format,
                         first_vertex: 0,
                         vertex_count: desc.vertex_count,

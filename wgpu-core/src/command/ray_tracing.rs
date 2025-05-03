@@ -1141,7 +1141,7 @@ fn iter_buffers<'a, 'b>(
         };
 
         let triangles = hal::AccelerationStructureTriangles {
-            vertex_buffer: Some(vertex_buffer),
+            vertex_buffer,
             vertex_format: mesh.size.vertex_format,
             first_vertex: mesh.first_vertex,
             vertex_count: mesh.size.vertex_count,
