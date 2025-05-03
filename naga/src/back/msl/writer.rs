@@ -1497,6 +1497,58 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Emit code for the WGSL functions `pack4x{I, U}8[Clamp]`.
+    fn put_pack4x8(
+        &mut self,
+        arg: Handle<crate::Expression>,
+        context: &ExpressionContext<'_>,
+        was_signed: bool,
+        clamp_bounds: Option<(&str, &str)>,
+    ) -> Result<(), Error> {
+        let write_arg = |this: &mut Self| -> BackendResult {
+            if let Some((min, max)) = clamp_bounds {
+                // Clamping with scalar bounds works (component-wise) even for packed_[u]char4.
+                write!(this.out, "{NAMESPACE}::clamp(")?;
+                this.put_expression(arg, context, true)?;
+                write!(this.out, ", {min}, {max})")?;
+            } else {
+                this.put_expression(arg, context, true)?;
+            }
+            Ok(())
+        };
+
+        if context.lang_version >= (2, 1) {
+            let packed_type = if was_signed {
+                "packed_char4"
+            } else {
+                "packed_uchar4"
+            };
+            // Metal uses little endian byte order, which matches what WGSL expects here.
+            write!(self.out, "as_type<uint>({packed_type}(")?;
+            write_arg(self)?;
+            write!(self.out, "))")?;
+        } else {
+            // MSL < 2.1 doesn't support `as_type` casting between packed chars and scalars.
+            if was_signed {
+                write!(self.out, "uint(")?;
+            }
+            write!(self.out, "(")?;
+            write_arg(self)?;
+            write!(self.out, "[0] & 0xFF) | ((")?;
+            write_arg(self)?;
+            write!(self.out, "[1] & 0xFF) << 8) | ((")?;
+            write_arg(self)?;
+            write!(self.out, "[2] & 0xFF) << 16) | ((")?;
+            write_arg(self)?;
+            write!(self.out, "[3] & 0xFF) << 24)")?;
+            if was_signed {
+                write!(self.out, ")")?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Emit code for the isign expression.
     ///
     fn put_isign(
@@ -2437,53 +2489,41 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "{fun_name}")?;
                         self.put_call_parameters(iter::once(arg), context)?;
                     }
-                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8 | Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp) => {
-                        let was_signed = matches!(fun, Mf::Pack4xI8 | Mf::Pack4xI8Clamp);
-                        let clamp_bounds = match fun {
-                            Mf::Pack4xI8Clamp => Some(("-128", "127")),
-                            Mf::Pack4xU8Clamp => Some(("0", "255")),
-                            _ => None,
-                        };
-                        if was_signed {
-                            write!(self.out, "uint(")?;
-                        }
-                        let write_arg = |this: &mut Self| -> BackendResult {
-                            if let Some((min, max)) = clamp_bounds {
-                                write!(this.out, "{NAMESPACE}::clamp(")?;
-                                this.put_expression(arg, context, true)?;
-                                write!(this.out, ", {min}, {max})")?;
-                            } else {
-                                this.put_expression(arg, context, true)?;
-                            }
-                            Ok(())
-                        };
-                        write!(self.out, "(")?;
-                        write_arg(self)?;
-                        write!(self.out, "[0] & 0xFF) | ((")?;
-                        write_arg(self)?;
-                        write!(self.out, "[1] & 0xFF) << 8) | ((")?;
-                        write_arg(self)?;
-                        write!(self.out, "[2] & 0xFF) << 16) | ((")?;
-                        write_arg(self)?;
-                        write!(self.out, "[3] & 0xFF) << 24)")?;
-                        if was_signed {
-                            write!(self.out, ")")?;
-                        }
+                    Mf::Pack4xI8 => self.put_pack4x8(arg, context, true, None)?,
+                    Mf::Pack4xU8 => self.put_pack4x8(arg, context, false, None)?,
+                    Mf::Pack4xI8Clamp => {
+                        self.put_pack4x8(arg, context, true, Some(("-128", "127")))?
+                    }
+                    Mf::Pack4xU8Clamp => {
+                        self.put_pack4x8(arg, context, false, Some(("0", "255")))?
                     }
                     fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
-                        write!(self.out, "(")?;
-                        if matches!(fun, Mf::Unpack4xU8) {
-                            write!(self.out, "u")?;
+                        let sign_prefix = if matches!(fun, Mf::Unpack4xU8) {
+                            "u"
+                        } else {
+                            ""
+                        };
+
+                        if context.lang_version >= (2, 1) {
+                            // Metal uses little endian byte order, which matches what WGSL expects here.
+                            write!(
+                                self.out,
+                                "{sign_prefix}int4(as_type<packed_{sign_prefix}char4>("
+                            )?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, "))")?;
+                        } else {
+                            // MSL < 2.1 doesn't support `as_type` casting between packed chars and scalars.
+                            write!(self.out, "({sign_prefix}int4(")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " >> 8, ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " >> 16, ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " >> 24) << 24 >> 24)")?;
                         }
-                        write!(self.out, "int4(")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, ", ")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, " >> 8, ")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, " >> 16, ")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, " >> 24) << 24 >> 24)")?;
                     }
                     Mf::QuantizeToF16 => {
                         match *context.resolve_type(arg) {
@@ -3226,14 +3266,20 @@ impl<W: Write> Writer<W> {
                         self.need_bake_expressions.insert(arg);
                         self.need_bake_expressions.insert(arg1.unwrap());
                     }
-                    crate::MathFunction::FirstLeadingBit
-                    | crate::MathFunction::Pack4xI8
+                    crate::MathFunction::FirstLeadingBit => {
+                        self.need_bake_expressions.insert(arg);
+                    }
+                    crate::MathFunction::Pack4xI8
                     | crate::MathFunction::Pack4xU8
                     | crate::MathFunction::Pack4xI8Clamp
                     | crate::MathFunction::Pack4xU8Clamp
                     | crate::MathFunction::Unpack4xI8
                     | crate::MathFunction::Unpack4xU8 => {
-                        self.need_bake_expressions.insert(arg);
+                        // On MSL < 2.1, we emit a polyfill for these functions that uses the
+                        // argument multiple times. This is no longer necessary on MSL >= 2.1.
+                        if context.lang_version < (2, 1) {
+                            self.need_bake_expressions.insert(arg);
+                        }
                     }
                     crate::MathFunction::ExtractBits => {
                         // Only argument 1 is re-used.
