@@ -1150,7 +1150,7 @@ fn iter_buffers<'a, 'b>(
                 let index_stride = mesh.size.index_format.unwrap().byte_size() as u32;
                 hal::AccelerationStructureTriangleIndices::<dyn hal::DynBuffer> {
                     format: mesh.size.index_format.unwrap(),
-                    buffer: Some(index_buffer),
+                    buffer: index_buffer,
                     offset: mesh.first_index.unwrap() * index_stride,
                     count: mesh.size.index_count.unwrap(),
                 }

@@ -1508,12 +1508,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         let index_count =
                             triangle.indices.as_ref().map_or(0, |indices| indices.count);
                         let index_address = triangle.indices.as_ref().map_or(0, |indices| unsafe {
-                            indices
-                                .buffer
-                                .expect("needs buffer to build")
-                                .resource
-                                .GetGPUVirtualAddress()
-                                + indices.offset as u64
+                            indices.buffer.resource.GetGPUVirtualAddress() + indices.offset as u64
                         });
                         let vertex_address = unsafe {
                             triangle

@@ -50,7 +50,7 @@ impl Device {
                                 dyn hal::DynBuffer,
                             > {
                                 format: desc.index_format.unwrap(),
-                                buffer: None,
+                                buffer: self.zero_buffer.as_ref(),
                                 offset: 0,
                                 count,
                             });

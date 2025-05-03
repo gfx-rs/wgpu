@@ -611,7 +611,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         if let Some(ref indices) = triangles.indices {
                             triangle_data = triangle_data
                                 .index_data(vk::DeviceOrHostAddressConstKHR {
-                                    device_address: get_device_address(indices.buffer),
+                                    device_address: get_device_address(Some(indices.buffer)),
                                 })
                                 .index_type(conv::map_index_format(indices.format));
 

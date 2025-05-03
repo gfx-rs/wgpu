@@ -176,7 +176,7 @@ impl<'a> AccelerationStructureEntries<'a, dyn DynBuffer> {
                             vertex_stride: t.vertex_stride,
                             indices: t.indices.as_ref().map(|i| {
                                 AccelerationStructureTriangleIndices {
-                                    buffer: i.buffer.map(|b| b.expect_downcast_ref()),
+                                    buffer: i.buffer.expect_downcast_ref(),
                                     format: i.format,
                                     offset: i.offset,
                                     count: i.count,

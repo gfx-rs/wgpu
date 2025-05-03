@@ -479,9 +479,9 @@ impl<A: hal::Api> Example<A> {
             // each vertex is 3 floats, and floats are stored raw in the array
             vertex_count: vertices.len() as u32 / 3,
             vertex_stride: 3 * 4,
-            indices: indices_buffer.as_ref().map(|(buf, len)| {
+            indices: indices_buffer.as_ref().map(|(buffer, len)| {
                 hal::AccelerationStructureTriangleIndices {
-                    buffer: Some(buf),
+                    buffer,
                     format: wgpu_types::IndexFormat::Uint32,
                     offset: 0,
                     count: *len as u32,
