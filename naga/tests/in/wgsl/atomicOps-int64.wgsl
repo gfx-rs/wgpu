@@ -129,7 +129,6 @@ fn cs_main(@builtin(local_invocation_id) id: vec3<u32>) {
     atomicExchange(&workgroup_struct.atomic_scalar, 1lu);
     atomicExchange(&workgroup_struct.atomic_arr[1], 1li);
 
-    // // TODO: https://github.com/gpuweb/gpuweb/issues/2021
     let cas_res_0 = atomicCompareExchangeWeak(&storage_atomic_scalar, 1lu, 2lu);
     let cas_res_1 = atomicCompareExchangeWeak(&storage_atomic_arr[1], 1li, 2li);
     let cas_res_2 = atomicCompareExchangeWeak(&storage_struct.atomic_scalar, 1lu, 2lu);
