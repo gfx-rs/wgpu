@@ -1546,10 +1546,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     geometry_desc = Vec::with_capacity(aabbs.len());
                     for aabb in aabbs {
                         let aabb_address = unsafe {
-                            aabb.buffer
-                                .expect("needs buffer to build")
-                                .resource
-                                .GetGPUVirtualAddress()
+                            aabb.buffer.resource.GetGPUVirtualAddress()
                                 + (aabb.offset as u64 * aabb.stride)
                         };
 

@@ -197,7 +197,7 @@ impl<'a> AccelerationStructureEntries<'a, dyn DynBuffer> {
                 entries
                     .iter()
                     .map(|e| AccelerationStructureAABBs {
-                        buffer: e.buffer.map(|b| b.expect_downcast_ref()),
+                        buffer: e.buffer.expect_downcast_ref(),
                         offset: e.offset,
                         count: e.count,
                         stride: e.stride,

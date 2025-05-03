@@ -668,7 +668,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     for aabb in in_geometries {
                         let aabbs_data = vk::AccelerationStructureGeometryAabbsDataKHR::default()
                             .data(vk::DeviceOrHostAddressConstKHR {
-                                device_address: get_device_address(aabb.buffer),
+                                device_address: get_device_address(Some(aabb.buffer)),
                             })
                             .stride(aabb.stride);
 
