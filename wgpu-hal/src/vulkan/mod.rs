@@ -536,6 +536,21 @@ struct PrivateCapabilities {
     ///
     /// [`VK_KHR_shader_integer_dot_product`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_shader_integer_dot_product.html
     shader_integer_dot_product: bool,
+
+    /// True if this adapter supports 8-bit integers provided by the
+    /// [`VK_KHR_shader_float16_int8`] extension (promoted to Vulkan 1.2).
+    ///
+    /// Allows shaders to declare the "Int8" capability. Note, however, that this
+    /// feature alone allows the use of 8-bit integers "only in the `Private`,
+    /// `Workgroup` (for non-Block variables), and `Function` storage classes"
+    /// ([see spec]). To use 8-bit integers in the interface storage classes (e.g.,
+    /// `StorageBuffer`), you also need to enable the corresponding feature in
+    /// `VkPhysicalDevice8BitStorageFeatures` and declare the corresponding SPIR-V
+    /// capability (e.g., `StorageBuffer8BitAccess`).
+    ///
+    /// [`VK_KHR_shader_float16_int8`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_shader_float16_int8.html
+    /// [see spec]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceShaderFloat16Int8Features.html#extension-features-shaderInt8
+    shader_int8: bool,
 }
 
 bitflags::bitflags!(

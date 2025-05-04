@@ -386,10 +386,13 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            shader_float16_int8: if requested_features.contains(wgt::Features::SHADER_F16) {
-                Some(vk::PhysicalDeviceShaderFloat16Int8Features::default().shader_float16(true))
-            } else {
-                None
+            shader_float16_int8: match requested_features.contains(wgt::Features::SHADER_F16) {
+                shader_float16 if shader_float16 || private_caps.shader_int8 => Some(
+                    vk::PhysicalDeviceShaderFloat16Int8Features::default()
+                        .shader_float16(shader_float16)
+                        .shader_int8(private_caps.shader_int8),
+                ),
+                _ => None,
             },
             _16bit_storage: if requested_features.contains(wgt::Features::SHADER_F16) {
                 Some(
@@ -981,6 +984,15 @@ impl PhysicalDeviceProperties {
             if requested_features.contains(wgt::Features::TEXTURE_FORMAT_NV12) {
                 extensions.push(khr::sampler_ycbcr_conversion::NAME);
             }
+
+            // Require `VK_KHR_16bit_storage` if the feature `SHADER_F16` was requested
+            if requested_features.contains(wgt::Features::SHADER_F16) {
+                // - Feature `SHADER_F16` also requires `VK_KHR_shader_float16_int8`, but we always
+                //   require that anyway (if it is available) below.
+                // - `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however
+                //   we require that one already.
+                extensions.push(khr::_16bit_storage::NAME);
+            }
         }
 
         if self.device_api_version < vk::API_VERSION_1_2 {
@@ -1004,13 +1016,13 @@ impl PhysicalDeviceProperties {
                 extensions.push(ext::descriptor_indexing::NAME);
             }
 
-            // Require `VK_KHR_shader_float16_int8` and `VK_KHR_16bit_storage` if the associated feature was requested
-            if requested_features.contains(wgt::Features::SHADER_F16) {
+            // Always require `VK_KHR_shader_float16_int8` if available as it enables
+            // Int8 optimizations. Also require it even if it's not available but
+            // requested so that we get a corresponding error message.
+            if requested_features.contains(wgt::Features::SHADER_F16)
+                || self.supports_extension(khr::shader_float16_int8::NAME)
+            {
                 extensions.push(khr::shader_float16_int8::NAME);
-                // `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however we require that one already
-                if self.device_api_version < vk::API_VERSION_1_1 {
-                    extensions.push(khr::_16bit_storage::NAME);
-                }
             }
 
             if requested_features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
@@ -1479,12 +1491,17 @@ impl super::InstanceShared {
                     .insert(vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT::default());
                 features2 = features2.push_next(next);
             }
-            if capabilities.supports_extension(khr::shader_float16_int8::NAME) {
+
+            // `VK_KHR_shader_float16_int8` is promoted to 1.2
+            if capabilities.device_api_version >= vk::API_VERSION_1_2
+                || capabilities.supports_extension(khr::shader_float16_int8::NAME)
+            {
                 let next = features
                     .shader_float16_int8
                     .insert(vk::PhysicalDeviceShaderFloat16Int8FeaturesKHR::default());
                 features2 = features2.push_next(next);
             }
+
             if capabilities.supports_extension(khr::_16bit_storage::NAME) {
                 let next = features
                     ._16bit_storage
@@ -1728,6 +1745,9 @@ impl super::Instance {
             shader_integer_dot_product: phd_features
                 .shader_integer_dot_product
                 .is_some_and(|ext| ext.shader_integer_dot_product != 0),
+            shader_int8: phd_features
+                .shader_float16_int8
+                .is_some_and(|features| features.shader_int8 != 0),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -2028,6 +2048,10 @@ impl super::Adapter {
                     spv::Capability::DotProductInput4x8BitPackedKHR,
                     spv::Capability::DotProductKHR,
                 ]);
+            }
+            if self.private_caps.shader_int8 {
+                // See <https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceShaderFloat16Int8Features.html#extension-features-shaderInt8>.
+                capabilities.extend(&[spv::Capability::Int8]);
             }
             spv::Options {
                 lang_version: match self.phd_capabilities.device_api_version {
