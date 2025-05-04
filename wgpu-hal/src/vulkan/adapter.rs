@@ -62,13 +62,11 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_EXT_texture_compression_astc_hdr`, promoted to Vulkan 1.3.
     astc_hdr: Option<vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT<'static>>,
 
-    /// Features provided by `VK_KHR_shader_float16_int8` (promoted to Vulkan
-    /// 1.2) and `VK_KHR_16bit_storage` (promoted to Vulkan 1.1). We use these
-    /// features together, or not at all.
-    shader_float16: Option<(
-        vk::PhysicalDeviceShaderFloat16Int8Features<'static>,
-        vk::PhysicalDevice16BitStorageFeatures<'static>,
-    )>,
+    /// Features provided by `VK_KHR_shader_float16_int8`, promoted to Vulkan 1.2
+    shader_float16_int8: Option<vk::PhysicalDeviceShaderFloat16Int8Features<'static>>,
+
+    /// Features provided by `VK_KHR_16bit_storage`, promoted to Vulkan 1.1
+    _16bit_storage: Option<vk::PhysicalDevice16BitStorageFeatures<'static>>,
 
     /// Features provided by `VK_KHR_acceleration_structure`.
     acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR<'static>>,
@@ -154,9 +152,11 @@ impl PhysicalDeviceFeatures {
         if let Some(ref mut feature) = self.astc_hdr {
             info = info.push_next(feature);
         }
-        if let Some((ref mut f16_i8_feature, ref mut _16bit_feature)) = self.shader_float16 {
-            info = info.push_next(f16_i8_feature);
-            info = info.push_next(_16bit_feature);
+        if let Some(ref mut feature) = self.shader_float16_int8 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self._16bit_storage {
+            info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.zero_initialize_workgroup_memory {
             info = info.push_next(feature);
@@ -386,14 +386,18 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            shader_float16: if requested_features.contains(wgt::Features::SHADER_F16) {
-                Some((
-                    vk::PhysicalDeviceShaderFloat16Int8Features::default().shader_float16(true),
+            shader_float16_int8: if requested_features.contains(wgt::Features::SHADER_F16) {
+                Some(vk::PhysicalDeviceShaderFloat16Int8Features::default().shader_float16(true))
+            } else {
+                None
+            },
+            _16bit_storage: if requested_features.contains(wgt::Features::SHADER_F16) {
+                Some(
                     vk::PhysicalDevice16BitStorageFeatures::default()
                         .storage_buffer16_bit_access(true)
                         .storage_input_output16(true)
                         .uniform_and_storage_buffer16_bit_access(true),
-                ))
+                )
             } else {
                 None
             },
@@ -724,7 +728,8 @@ impl PhysicalDeviceFeatures {
             );
         }
 
-        if let Some((ref f16_i8, ref bit16)) = self.shader_float16 {
+        if let (Some(ref f16_i8), Some(ref bit16)) = (self.shader_float16_int8, self._16bit_storage)
+        {
             features.set(
                 F::SHADER_F16,
                 f16_i8.shader_float16 != 0
@@ -1474,15 +1479,17 @@ impl super::InstanceShared {
                     .insert(vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT::default());
                 features2 = features2.push_next(next);
             }
-            if capabilities.supports_extension(khr::shader_float16_int8::NAME)
-                && capabilities.supports_extension(khr::_16bit_storage::NAME)
-            {
-                let next = features.shader_float16.insert((
-                    vk::PhysicalDeviceShaderFloat16Int8FeaturesKHR::default(),
-                    vk::PhysicalDevice16BitStorageFeaturesKHR::default(),
-                ));
-                features2 = features2.push_next(&mut next.0);
-                features2 = features2.push_next(&mut next.1);
+            if capabilities.supports_extension(khr::shader_float16_int8::NAME) {
+                let next = features
+                    .shader_float16_int8
+                    .insert(vk::PhysicalDeviceShaderFloat16Int8FeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+            if capabilities.supports_extension(khr::_16bit_storage::NAME) {
+                let next = features
+                    ._16bit_storage
+                    .insert(vk::PhysicalDevice16BitStorageFeaturesKHR::default());
+                features2 = features2.push_next(next);
             }
             if capabilities.supports_extension(khr::acceleration_structure::NAME) {
                 let next = features
