@@ -16,7 +16,7 @@ use half::f16;
 use super::{sampler as sm, Error, LocationMode, Options, PipelineOptions, TranslationInfo};
 use crate::{
     arena::{Handle, HandleSet},
-    back::{self, Baked},
+    back::{self, get_entry_points, Baked},
     common,
     proc::{
         self,
@@ -5872,10 +5872,15 @@ template <typename A>
             self.named_expressions.clear();
         }
 
+        let ep_range = get_entry_points(module, pipeline_options.entry_point.as_ref())
+            .map_err(|(stage, name)| Error::EntryPointNotFound(stage, name))?;
+
         let mut info = TranslationInfo {
-            entry_point_names: Vec::with_capacity(module.entry_points.len()),
+            entry_point_names: Vec::with_capacity(ep_range.len()),
         };
-        for (ep_index, ep) in module.entry_points.iter().enumerate() {
+
+        for ep_index in ep_range {
+            let ep = &module.entry_points[ep_index];
             let fun = &ep.function;
             let fun_info = mod_info.get_entry_point(ep_index);
             let mut ep_error = None;
@@ -7076,8 +7081,8 @@ fn test_stack_size() {
         }
         let stack_size = addresses_end - addresses_start;
         // check the size (in debug only)
-        // last observed macOS value: 20528 (CI)
-        if !(11000..=25000).contains(&stack_size) {
+        // last observed macOS value: 25904 (CI), 2025-04-29
+        if !(11000..=27000).contains(&stack_size) {
             panic!("`put_expression` stack size {stack_size} has changed!");
         }
     }

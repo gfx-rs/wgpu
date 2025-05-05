@@ -20,7 +20,7 @@ struct SimParams {
 };
 const uint NUM_PARTICLES = 1500u;
 
-uniform SimParams_block_0Compute { SimParams _group_0_binding_0_cs; };
+layout(std140) uniform SimParams_block_0Compute { SimParams _group_0_binding_0_cs; };
 
 layout(std430) readonly buffer Particles_block_1Compute {
     Particle particles[];

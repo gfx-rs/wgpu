@@ -1,4 +1,5 @@
-use std::{ffi::OsString, os::windows::ffi::OsStringExt, string::String};
+use alloc::string::String;
+use std::{ffi::OsString, os::windows::ffi::OsStringExt};
 
 use windows::Win32::Graphics::Dxgi;
 

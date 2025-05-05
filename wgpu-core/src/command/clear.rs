@@ -324,10 +324,10 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
             dst_raw,
         ),
         TextureClearMode::Surface { .. } => {
-            clear_texture_via_render_passes(dst_texture, range, true, encoder)
+            clear_texture_via_render_passes(dst_texture, range, true, encoder)?
         }
         TextureClearMode::RenderPass { is_color, .. } => {
-            clear_texture_via_render_passes(dst_texture, range, is_color, encoder)
+            clear_texture_via_render_passes(dst_texture, range, is_color, encoder)?
         }
         TextureClearMode::None => {
             return Err(ClearError::NoValidTextureClearMode(
@@ -437,7 +437,7 @@ fn clear_texture_via_render_passes(
     range: TextureInitRange,
     is_color: bool,
     encoder: &mut dyn hal::DynCommandEncoder,
-) {
+) -> Result<(), ClearError> {
     assert_eq!(dst_texture.desc.dimension, wgt::TextureDimension::D2);
 
     let extent_base = wgt::Extent3d {
@@ -461,6 +461,7 @@ fn clear_texture_via_render_passes(
                         ),
                         usage: wgt::TextureUses::COLOR_TARGET,
                     },
+                    depth_slice: None,
                     resolve_target: None,
                     ops: hal::AttachmentOps::STORE,
                     clear_value: wgt::Color::TRANSPARENT,
@@ -486,18 +487,22 @@ fn clear_texture_via_render_passes(
                 )
             };
             unsafe {
-                encoder.begin_render_pass(&hal::RenderPassDescriptor {
-                    label: Some("(wgpu internal) clear_texture clear pass"),
-                    extent,
-                    sample_count: dst_texture.desc.sample_count,
-                    color_attachments,
-                    depth_stencil_attachment,
-                    multiview: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
+                encoder
+                    .begin_render_pass(&hal::RenderPassDescriptor {
+                        label: Some("(wgpu internal) clear_texture clear pass"),
+                        extent,
+                        sample_count: dst_texture.desc.sample_count,
+                        color_attachments,
+                        depth_stencil_attachment,
+                        multiview: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                    })
+                    .map_err(|e| dst_texture.device.handle_hal_error(e))?;
                 encoder.end_render_pass();
             }
         }
     }
+
+    Ok(())
 }

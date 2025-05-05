@@ -741,7 +741,8 @@ fn write_output_hlsl(
             .expect("override evaluation failed");
 
     let mut buffer = String::new();
-    let mut writer = hlsl::Writer::new(&mut buffer, options);
+    let pipeline_options = Default::default();
+    let mut writer = hlsl::Writer::new(&mut buffer, options, &pipeline_options);
     let reflection_info = writer
         .write(&module, &info, frag_ep.as_ref())
         .expect("HLSL write failed");

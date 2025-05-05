@@ -227,6 +227,7 @@ impl<'ctx> TestCase<'ctx> {
                 color_attachments: &[self.format.has_color_aspect().then_some(
                     RenderPassColorAttachment {
                         view: &self.texture.create_view(&TextureViewDescriptor::default()),
+                        depth_slice: None,
                         resolve_target: None,
                         ops: Operations {
                             load: LoadOp::Load,

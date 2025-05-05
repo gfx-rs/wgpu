@@ -76,6 +76,7 @@ async fn test_impl(ctx: &TestingContext) {
                 label: Some("Renderpass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &texture_view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         // Important: this isn't the color expected below

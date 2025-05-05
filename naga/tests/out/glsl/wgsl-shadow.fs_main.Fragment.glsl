@@ -24,9 +24,9 @@ struct Light {
 const vec3 c_ambient = vec3(0.05, 0.05, 0.05);
 const uint c_max_lights = 10u;
 
-uniform Globals_block_0Fragment { Globals _group_0_binding_0_fs; };
+layout(std140) uniform Globals_block_0Fragment { Globals _group_0_binding_0_fs; };
 
-uniform Entity_block_1Fragment { Entity _group_1_binding_0_fs; };
+layout(std140) uniform Entity_block_1Fragment { Entity _group_1_binding_0_fs; };
 
 layout(std430) readonly buffer type_8_block_2Fragment { Light _group_0_binding_1_fs[]; };
 

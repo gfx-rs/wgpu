@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches-ignore: [
-        # We don't need to run on dependabot PRs.
-        "dependabot/**",
+        # We don't need to run on renovate PRs.
+        "renovate/**",
         # This is the branch the merge queue creates.
         "gh-readonly-queue/**",
       ]
@@ -405,32 +405,29 @@ jobs:
           # check `wgpu-core` with all features. This will also get `wgpu-hal` and `wgpu-types`.
           cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
 
-  naga-minimal-versions:
+  # Check that the libraries build — but not that there are no warnings or that tests pass -
+  # with `-Zdirect-minimal-versions` which lowers all dependencies from the workspace packages
+  # to non-workspace packages to their minimum allowed version.
+  check-minimal-versions:
     # runtime is normally 2 minutes
     timeout-minutes: 10
 
-    name: MSRV naga Minimal Versions
+    name: MSRV Minimal Versions
     runs-on: ubuntu-22.04
+    env:
+      # Override flags to NOT include `-D warnings`, because warnings may be due to harmless problems in deps.
+      # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
+      RUSTFLAGS: -A unexpected_cfgs
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install core MSRV toolchain
-        run: |
-          rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy
-          rustup override set ${{ env.CORE_MSRV }}
-          cargo -V
-
-      - name: Install Nightly toolchain
+      - name: Install toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
-          cargo +${{ env.REPO_MSRV }} -V
-
-      - name: Install `cargo-hack`
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-hack
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
       - name: Disable debug symbols
         shell: bash
@@ -445,16 +442,16 @@ jobs:
         run: |
           set -e
 
-          cargo +${{ env.REPO_MSRV }} hack generate-lockfile --remove-dev-deps -Z minimal-versions -p naga -p naga-cli
+          cargo +${{ env.REPO_MSRV }} update -Zdirect-minimal-versions
         env:
           RUSTC_BOOTSTRAP: 1
 
-      - name: Run Clippy
+      - name: Run cargo check
         shell: bash
         run: |
           set -e
 
-          cargo clippy --all-features -p naga -p naga-cli
+          cargo check --all-targets --all-features
 
   wasm-test:
     # runtime is normally 2 minutes
@@ -538,7 +535,6 @@ jobs:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           workspaces: |
             . -> target
-            xtask -> xtask/target
 
       - name: (Windows) Install DXC
         if: matrix.os == 'windows-2022'
@@ -700,7 +696,7 @@ jobs:
           cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
@@ -754,8 +750,6 @@ jobs:
       - name: Run `cargo fmt`
         run: |
           cargo fmt -- --check
-          cargo fmt --manifest-path xtask/Cargo.toml -- --check
-          cargo fmt --manifest-path naga/xtask/Cargo.toml -- --check
 
       - name: Install Taplo
         uses: uncenter/setup-taplo@v1
@@ -766,7 +760,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.31.1
+        uses: crate-ci/typos@v1.32.0
 
   check-cts-runner:
     # runtime is normally 2 minutes

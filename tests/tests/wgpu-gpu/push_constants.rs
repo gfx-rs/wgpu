@@ -301,6 +301,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         label: Some("Render Pass"),
         color_attachments: &[Some(RenderPassColorAttachment {
             view: &output_texture_view,
+            depth_slice: None,
             resolve_target: None,
             ops: Operations {
                 load: LoadOp::Clear(Color::default()),

@@ -1,16 +1,6 @@
-#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
-
-use std::{
-    ffi,
-    mem::ManuallyDrop,
-    os::raw,
-    ptr,
-    rc::Rc,
-    string::String,
-    sync::{Arc, LazyLock},
-    time::Duration,
-    vec::Vec,
-};
+use alloc::{rc::Rc, string::String, sync::Arc, vec::Vec};
+use core::{ffi, mem::ManuallyDrop, ptr, time::Duration};
+use std::{os::raw, sync::LazyLock};
 
 use glow::HasContext;
 use hashbrown::HashMap;
@@ -399,7 +389,7 @@ pub struct AdapterContextLock<'a> {
     egl: Option<EglContextLock<'a>>,
 }
 
-impl<'a> std::ops::Deref for AdapterContextLock<'a> {
+impl<'a> core::ops::Deref for AdapterContextLock<'a> {
     type Target = glow::Context;
 
     fn deref(&self) -> &Self::Target {
@@ -922,7 +912,7 @@ impl crate::Instance for Instance {
             log::debug!("Enabling EGL debug output");
             let function: EglDebugMessageControlFun = {
                 let addr = egl.get_proc_address("eglDebugMessageControlKHR").unwrap();
-                unsafe { std::mem::transmute(addr) }
+                unsafe { core::mem::transmute(addr) }
             };
             let attributes = [
                 EGL_DEBUG_MSG_CRITICAL_KHR as khronos_egl::Attrib,
@@ -1018,7 +1008,7 @@ impl crate::Instance for Instance {
                      */
                     log::warn!("Re-initializing Gles context due to Wayland window");
 
-                    use std::ops::DerefMut;
+                    use core::ops::DerefMut;
                     let display_attributes = [khronos_egl::ATTRIB_NONE];
 
                     let display = unsafe {
@@ -1042,7 +1032,7 @@ impl crate::Instance for Instance {
                         inner.force_gles_minor_version,
                     )?;
 
-                    let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
+                    let old_inner = core::mem::replace(inner.deref_mut(), new_inner);
                     inner.wl_display = Some(display_handle.display.as_ptr());
 
                     drop(old_inner);
