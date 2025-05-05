@@ -717,6 +717,13 @@ impl PhysicalDeviceFeatures {
             );
         }
 
+        if self.core.texture_compression_astc_ldr != 0 {
+            features.set(
+                F::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+                supports_astc_3d(instance, phd),
+            );
+        }
+
         if let Some((ref f16_i8, ref bit16)) = self.shader_float16 {
             features.set(
                 F::SHADER_F16,
@@ -2602,6 +2609,60 @@ fn supports_format(
         vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
         _ => false,
     }
+}
+
+fn supports_astc_3d(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {
+    let mut supports = true;
+
+    let astc_formats = [
+        vk::Format::ASTC_4X4_UNORM_BLOCK,
+        vk::Format::ASTC_4X4_SRGB_BLOCK,
+        vk::Format::ASTC_5X4_UNORM_BLOCK,
+        vk::Format::ASTC_5X4_SRGB_BLOCK,
+        vk::Format::ASTC_5X5_UNORM_BLOCK,
+        vk::Format::ASTC_5X5_SRGB_BLOCK,
+        vk::Format::ASTC_6X5_UNORM_BLOCK,
+        vk::Format::ASTC_6X5_SRGB_BLOCK,
+        vk::Format::ASTC_6X6_UNORM_BLOCK,
+        vk::Format::ASTC_6X6_SRGB_BLOCK,
+        vk::Format::ASTC_8X5_UNORM_BLOCK,
+        vk::Format::ASTC_8X5_SRGB_BLOCK,
+        vk::Format::ASTC_8X6_UNORM_BLOCK,
+        vk::Format::ASTC_8X6_SRGB_BLOCK,
+        vk::Format::ASTC_8X8_UNORM_BLOCK,
+        vk::Format::ASTC_8X8_SRGB_BLOCK,
+        vk::Format::ASTC_10X5_UNORM_BLOCK,
+        vk::Format::ASTC_10X5_SRGB_BLOCK,
+        vk::Format::ASTC_10X6_UNORM_BLOCK,
+        vk::Format::ASTC_10X6_SRGB_BLOCK,
+        vk::Format::ASTC_10X8_UNORM_BLOCK,
+        vk::Format::ASTC_10X8_SRGB_BLOCK,
+        vk::Format::ASTC_10X10_UNORM_BLOCK,
+        vk::Format::ASTC_10X10_SRGB_BLOCK,
+        vk::Format::ASTC_12X10_UNORM_BLOCK,
+        vk::Format::ASTC_12X10_SRGB_BLOCK,
+        vk::Format::ASTC_12X12_UNORM_BLOCK,
+        vk::Format::ASTC_12X12_SRGB_BLOCK,
+    ];
+
+    for &format in &astc_formats {
+        let result = unsafe {
+            instance.get_physical_device_image_format_properties(
+                phd,
+                format,
+                vk::ImageType::TYPE_3D,
+                vk::ImageTiling::OPTIMAL,
+                vk::ImageUsageFlags::SAMPLED,
+                vk::ImageCreateFlags::empty(),
+            )
+        };
+        if result.is_err() {
+            supports = false;
+            break;
+        }
+    }
+
+    supports
 }
 
 fn supports_bgra8unorm_storage(
