@@ -1143,59 +1143,93 @@ impl BlockContext<'_> {
                         ),
                     },
                     fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed) => {
-                        // TODO: consider using packed integer dot product if PackedVectorFormat4x8Bit is available
-                        let (extract_op, arg0_id, arg1_id) = match fun {
-                            Mf::Dot4U8Packed => (spirv::Op::BitFieldUExtract, arg0_id, arg1_id),
-                            Mf::Dot4I8Packed => {
-                                // Convert both packed arguments to signed integers so that we can apply the
-                                // `BitFieldSExtract` operation on them in `write_dot_product` below.
-                                let new_arg0_id = self.gen_id();
-                                block.body.push(Instruction::unary(
-                                    spirv::Op::Bitcast,
-                                    result_type_id,
-                                    new_arg0_id,
-                                    arg0_id,
-                                ));
-
-                                let new_arg1_id = self.gen_id();
-                                block.body.push(Instruction::unary(
-                                    spirv::Op::Bitcast,
-                                    result_type_id,
-                                    new_arg1_id,
-                                    arg1_id,
-                                ));
-
-                                (spirv::Op::BitFieldSExtract, new_arg0_id, new_arg1_id)
+                        if self
+                            .writer
+                            .require_all(&[
+                                spirv::Capability::DotProduct,
+                                spirv::Capability::DotProductInput4x8BitPacked,
+                            ])
+                            .is_ok()
+                        {
+                            // Write optimized code using `PackedVectorFormat4x8Bit`.
+                            if self.writer.lang_version() < (1, 6) {
+                                // SPIR-V 1.6 supports the required capabilities natively, so the extension
+                                // is only required for earlier versions. See right column of
+                                // <https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpSDot>.
+                                self.writer.use_extension("SPV_KHR_integer_dot_product");
                             }
-                            _ => unreachable!(),
-                        };
 
-                        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+                            let op = match fun {
+                                Mf::Dot4I8Packed => spirv::Op::SDot,
+                                Mf::Dot4U8Packed => spirv::Op::UDot,
+                                _ => unreachable!(),
+                            };
 
-                        const VEC_LENGTH: u8 = 4;
-                        let bit_shifts: [_; VEC_LENGTH as usize] = core::array::from_fn(|index| {
-                            self.writer
-                                .get_constant_scalar(crate::Literal::U32(index as u32 * 8))
-                        });
+                            block.body.push(Instruction::ternary(
+                                op,
+                                result_type_id,
+                                id,
+                                arg0_id,
+                                arg1_id,
+                                spirv::PackedVectorFormat::PackedVectorFormat4x8Bit as Word,
+                            ));
+                        } else {
+                            // Fall back to a polyfill since `PackedVectorFormat4x8Bit` is not available.
+                            let (extract_op, arg0_id, arg1_id) = match fun {
+                                Mf::Dot4U8Packed => (spirv::Op::BitFieldUExtract, arg0_id, arg1_id),
+                                Mf::Dot4I8Packed => {
+                                    // Convert both packed arguments to signed integers so that we can apply the
+                                    // `BitFieldSExtract` operation on them in `write_dot_product` below.
+                                    let new_arg0_id = self.gen_id();
+                                    block.body.push(Instruction::unary(
+                                        spirv::Op::Bitcast,
+                                        result_type_id,
+                                        new_arg0_id,
+                                        arg0_id,
+                                    ));
 
-                        self.write_dot_product(
-                            id,
-                            result_type_id,
-                            arg0_id,
-                            arg1_id,
-                            VEC_LENGTH as Word,
-                            block,
-                            |result_id, composite_id, index| {
-                                Instruction::ternary(
-                                    extract_op,
-                                    result_type_id,
-                                    result_id,
-                                    composite_id,
-                                    bit_shifts[index as usize],
-                                    eight,
-                                )
-                            },
-                        );
+                                    let new_arg1_id = self.gen_id();
+                                    block.body.push(Instruction::unary(
+                                        spirv::Op::Bitcast,
+                                        result_type_id,
+                                        new_arg1_id,
+                                        arg1_id,
+                                    ));
+
+                                    (spirv::Op::BitFieldSExtract, new_arg0_id, new_arg1_id)
+                                }
+                                _ => unreachable!(),
+                            };
+
+                            let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+
+                            const VEC_LENGTH: u8 = 4;
+                            let bit_shifts: [_; VEC_LENGTH as usize] =
+                                core::array::from_fn(|index| {
+                                    self.writer
+                                        .get_constant_scalar(crate::Literal::U32(index as u32 * 8))
+                                });
+
+                            self.write_dot_product(
+                                id,
+                                result_type_id,
+                                arg0_id,
+                                arg1_id,
+                                VEC_LENGTH as Word,
+                                block,
+                                |result_id, composite_id, index| {
+                                    Instruction::ternary(
+                                        extract_op,
+                                        result_type_id,
+                                        result_id,
+                                        composite_id,
+                                        bit_shifts[index as usize],
+                                        eight,
+                                    )
+                                },
+                            );
+                        }
+
                         self.cached[expr_handle] = id;
                         return Ok(());
                     }

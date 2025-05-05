@@ -531,6 +531,7 @@ impl super::Adapter {
                     .compressed_texture_astc_supports_ldr_profile()
                 {
                     features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                    features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D);
                 }
                 if context
                     .glow_context
@@ -543,12 +544,18 @@ impl super::Adapter {
             #[cfg(any(native, Emscripten))]
             {
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D);
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
             }
         } else {
             features.set(
                 wgt::Features::TEXTURE_COMPRESSION_ASTC,
                 extensions.contains("GL_KHR_texture_compression_astc_ldr"),
+            );
+            features.set(
+                wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+                extensions.contains("GL_KHR_texture_compression_astc_ldr")
+                    && extensions.contains("GL_KHR_texture_compression_astc_sliced_3d"),
             );
             features.set(
                 wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR,

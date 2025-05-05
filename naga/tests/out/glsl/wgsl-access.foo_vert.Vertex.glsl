@@ -39,11 +39,11 @@ layout(std430) buffer Bar_block_0Vertex {
     AlignedWrapper data[];
 } _group_0_binding_0_vs;
 
-uniform Baz_block_1Vertex { Baz _group_0_binding_1_vs; };
+layout(std140) uniform Baz_block_1Vertex { Baz _group_0_binding_1_vs; };
 
 layout(std430) buffer type_13_block_2Vertex { ivec2 _group_0_binding_2_vs; };
 
-uniform MatCx2InArray_block_3Vertex { MatCx2InArray _group_0_binding_3_vs; };
+layout(std140) uniform MatCx2InArray_block_3Vertex { MatCx2InArray _group_0_binding_3_vs; };
 
 
 void test_matrix_within_struct_accesses() {

@@ -1,4 +1,5 @@
-use std::{mem, ops::Range, vec::Vec};
+use alloc::vec::Vec;
+use core::{mem, ops::Range};
 
 use windows::Win32::{
     Foundation,
@@ -72,6 +73,13 @@ impl Drop for super::CommandEncoder {
     fn drop(&mut self) {
         use crate::CommandEncoder;
         unsafe { self.discard_encoding() }
+
+        let mut rtv_pool = self.rtv_pool.lock();
+        for handle in self.temp_rtv_handles.drain(..) {
+            rtv_pool.free_handle(handle);
+        }
+        drop(rtv_pool);
+
         self.counters.command_encoders.sub(1);
     }
 }
@@ -744,7 +752,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
-    ) {
+    ) -> Result<(), crate::DeviceError> {
         unsafe { self.begin_pass(super::PassKind::Render, desc.label) };
 
         // Start timestamp if any (before all other commands but after debug marker)
@@ -761,13 +769,39 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         let mut color_views =
             [Direct3D12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 }; crate::MAX_COLOR_ATTACHMENTS];
+        let mut rtv_pool = self.rtv_pool.lock();
         for (rtv, cat) in color_views.iter_mut().zip(desc.color_attachments.iter()) {
             if let Some(cat) = cat.as_ref() {
-                *rtv = cat.target.view.handle_rtv.unwrap().raw;
+                if cat.target.view.dimension == wgt::TextureViewDimension::D3 {
+                    let desc = Direct3D12::D3D12_RENDER_TARGET_VIEW_DESC {
+                        Format: cat.target.view.raw_format,
+                        ViewDimension: Direct3D12::D3D12_RTV_DIMENSION_TEXTURE3D,
+                        Anonymous: Direct3D12::D3D12_RENDER_TARGET_VIEW_DESC_0 {
+                            Texture3D: Direct3D12::D3D12_TEX3D_RTV {
+                                MipSlice: cat.target.view.mip_slice,
+                                FirstWSlice: cat.depth_slice.unwrap(),
+                                WSize: 1,
+                            },
+                        },
+                    };
+                    let handle = rtv_pool.alloc_handle()?;
+                    unsafe {
+                        self.device.CreateRenderTargetView(
+                            &cat.target.view.texture,
+                            Some(&desc),
+                            handle.raw,
+                        )
+                    };
+                    *rtv = handle.raw;
+                    self.temp_rtv_handles.push(handle);
+                } else {
+                    *rtv = cat.target.view.handle_rtv.unwrap().raw;
+                }
             } else {
                 *rtv = self.null_rtv_handle.raw;
             }
         }
+        drop(rtv_pool);
 
         let ds_view = desc.depth_stencil_attachment.as_ref().map(|ds| {
             if ds.target.usage == wgt::TextureUses::DEPTH_STENCIL_WRITE {
@@ -784,7 +818,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 desc.color_attachments.len() as u32,
                 Some(color_views.as_ptr()),
                 false,
-                ds_view.as_ref().map(std::ptr::from_ref),
+                ds_view.as_ref().map(core::ptr::from_ref),
             )
         };
 
@@ -802,8 +836,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 }
                 if let Some(ref target) = cat.resolve_target {
                     self.pass.resolves.push(super::PassResolve {
-                        src: cat.target.view.target_base.clone(),
-                        dst: target.view.target_base.clone(),
+                        src: (
+                            cat.target.view.texture.clone(),
+                            cat.target.view.subresource_index,
+                        ),
+                        dst: (target.view.texture.clone(), target.view.subresource_index),
                         format: target.view.raw_format,
                     });
                 }
@@ -843,7 +880,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                             ds.clear_value.0,
                             ds.clear_value.1 as u8,
                             0,
-                            std::ptr::null(),
+                            core::ptr::null(),
                         )
                     }
                 }
@@ -864,8 +901,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
             right: desc.extent.width as i32,
             bottom: desc.extent.height as i32,
         };
-        unsafe { list.RSSetViewports(std::slice::from_ref(&raw_vp)) };
-        unsafe { list.RSSetScissorRects(std::slice::from_ref(&raw_rect)) };
+        unsafe { list.RSSetViewports(core::slice::from_ref(&raw_vp)) };
+        unsafe { list.RSSetScissorRects(core::slice::from_ref(&raw_rect)) };
+
+        Ok(())
     }
 
     unsafe fn end_render_pass(&mut self) {
@@ -1127,7 +1166,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.list
                 .as_ref()
                 .unwrap()
-                .RSSetViewports(std::slice::from_ref(&raw_vp))
+                .RSSetViewports(core::slice::from_ref(&raw_vp))
         }
     }
     unsafe fn set_scissor_rect(&mut self, rect: &crate::Rect<u32>) {
@@ -1141,7 +1180,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.list
                 .as_ref()
                 .unwrap()
-                .RSSetScissorRects(std::slice::from_ref(&raw_rect))
+                .RSSetScissorRects(core::slice::from_ref(&raw_rect))
         }
     }
     unsafe fn set_stencil_reference(&mut self, value: u32) {

@@ -359,6 +359,8 @@ pub enum GPUFeatureName {
     TextureCompressionEtc2,
     #[webidl(rename = "texture-compression-astc")]
     TextureCompressionAstc,
+    #[webidl(rename = "texture-compression-astc-sliced-3d")]
+    TextureCompressionAstcSliced3d,
     #[webidl(rename = "rg11b10ufloat-renderable")]
     Rg11b10ufloatRenderable,
     #[webidl(rename = "bgra8unorm-storage")]
@@ -451,6 +453,7 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
       GPUFeatureName::TextureCompressionBcSliced3d => Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
       GPUFeatureName::TextureCompressionEtc2 => Features::TEXTURE_COMPRESSION_ETC2,
       GPUFeatureName::TextureCompressionAstc => Features::TEXTURE_COMPRESSION_ASTC,
+      GPUFeatureName::TextureCompressionAstcSliced3d => Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
       GPUFeatureName::Rg11b10ufloatRenderable => Features::RG11B10UFLOAT_RENDERABLE,
       GPUFeatureName::Bgra8unormStorage => Features::BGRA8UNORM_STORAGE,
       GPUFeatureName::Float32Filterable => Features::FLOAT32_FILTERABLE,
@@ -528,6 +531,9 @@ pub fn features_to_feature_names(features: wgpu_types::Features) -> HashSet<GPUF
     }
     if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC) {
         return_features.insert(TextureCompressionAstc);
+    }
+    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D) {
+        return_features.insert(TextureCompressionAstcSliced3d);
     }
     if features.contains(wgpu_types::Features::RG11B10UFLOAT_RENDERABLE) {
         return_features.insert(Rg11b10ufloatRenderable);

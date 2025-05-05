@@ -357,6 +357,7 @@ async fn vertex_index_common(ctx: TestingContext) {
                 ops: wgpu::Operations::default(),
                 resolve_target: None,
                 view: &dummy,
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,

@@ -12,10 +12,10 @@ use super::{
         WrappedZeroValue,
     },
     storage::StoreValue,
-    BackendResult, Error, FragmentEntryPoint, Options,
+    BackendResult, Error, FragmentEntryPoint, Options, PipelineOptions, ShaderModel,
 };
 use crate::{
-    back::{self, Baked},
+    back::{self, get_entry_points, Baked},
     common,
     proc::{self, index, NameKey},
     valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
@@ -123,13 +123,14 @@ struct BindingArraySamplerInfo {
 }
 
 impl<'a, W: fmt::Write> super::Writer<'a, W> {
-    pub fn new(out: W, options: &'a Options) -> Self {
+    pub fn new(out: W, options: &'a Options, pipeline_options: &'a PipelineOptions) -> Self {
         Self {
             out,
             names: crate::FastHashMap::default(),
             namer: proc::Namer::default(),
             options,
-            entry_point_io: Vec::new(),
+            pipeline_options,
+            entry_point_io: crate::FastHashMap::default(),
             named_expressions: crate::NamedExpressions::default(),
             wrapped: super::Wrapped::default(),
             written_committed_intersection: false,
@@ -387,8 +388,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             writeln!(self.out)?;
         }
 
+        let ep_range = get_entry_points(module, self.pipeline_options.entry_point.as_ref())
+            .map_err(|(stage, name)| Error::EntryPointNotFound(stage, name))?;
+
         // Write all entry points wrapped structs
-        for (index, ep) in module.entry_points.iter().enumerate() {
+        for index in ep_range.clone() {
+            let ep = &module.entry_points[index];
             let ep_name = self.names[&NameKey::EntryPoint(index as u16)].clone();
             let ep_io = self.write_ep_interface(
                 module,
@@ -397,7 +402,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 &ep_name,
                 fragment_entry_point,
             )?;
-            self.entry_point_io.push(ep_io);
+            self.entry_point_io.insert(index, ep_io);
         }
 
         // Write all regular functions
@@ -442,10 +447,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             writeln!(self.out)?;
         }
 
-        let mut entry_point_names = Vec::with_capacity(module.entry_points.len());
+        let mut translated_ep_names = Vec::with_capacity(ep_range.len());
 
         // Write all entry points
-        for (index, ep) in module.entry_points.iter().enumerate() {
+        for index in ep_range {
+            let ep = &module.entry_points[index];
             let info = module_info.get_entry_point(index);
 
             if !self.options.fake_missing_bindings {
@@ -462,7 +468,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 }
                 if let Some(err) = ep_error {
-                    entry_point_names.push(Err(err));
+                    translated_ep_names.push(Err(err));
                     continue;
                 }
             }
@@ -493,10 +499,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out)?;
             }
 
-            entry_point_names.push(Ok(name));
+            translated_ep_names.push(Ok(name));
         }
 
-        Ok(super::ReflectionInfo { entry_point_names })
+        Ok(super::ReflectionInfo {
+            entry_point_names: translated_ep_names,
+        })
     }
 
     fn write_modifier(&mut self, binding: &crate::Binding) -> BackendResult {
@@ -816,7 +824,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         ep_index: u16,
     ) -> BackendResult {
         let ep = &module.entry_points[ep_index as usize];
-        let ep_input = match self.entry_point_io[ep_index as usize].input.take() {
+        let ep_input = match self
+            .entry_point_io
+            .get_mut(&(ep_index as usize))
+            .unwrap()
+            .input
+            .take()
+        {
             Some(ep_input) => ep_input,
             None => return Ok(()),
         };
@@ -1432,7 +1446,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 }
                 back::FunctionType::EntryPoint(index) => {
-                    if let Some(ref ep_output) = self.entry_point_io[index as usize].output {
+                    if let Some(ref ep_output) =
+                        self.entry_point_io.get(&(index as usize)).unwrap().output
+                    {
                         write!(self.out, "{}", ep_output.ty_name)?;
                     } else {
                         self.write_type(module, result.ty)?;
@@ -1479,7 +1495,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             back::FunctionType::EntryPoint(ep_index) => {
-                if let Some(ref ep_input) = self.entry_point_io[ep_index as usize].input {
+                if let Some(ref ep_input) =
+                    self.entry_point_io.get(&(ep_index as usize)).unwrap().input
+                {
                     write!(self.out, "{} {}", ep_input.ty_name, ep_input.arg_name)?;
                 } else {
                     let stage = module.entry_points[ep_index as usize].stage;
@@ -1501,7 +1519,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 }
                 if need_workgroup_variables_initialization {
-                    if self.entry_point_io[ep_index as usize].input.is_some()
+                    if self
+                        .entry_point_io
+                        .get(&(ep_index as usize))
+                        .unwrap()
+                        .input
+                        .is_some()
                         || !func.arguments.is_empty()
                     {
                         write!(self.out, ", ")?;
@@ -1870,9 +1893,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     // for entry point returns, we may need to reshuffle the outputs into a different struct
                     let ep_output = match func_ctx.ty {
                         back::FunctionType::Function(_) => None,
-                        back::FunctionType::EntryPoint(index) => {
-                            self.entry_point_io[index as usize].output.as_ref()
-                        }
+                        back::FunctionType::EntryPoint(index) => self
+                            .entry_point_io
+                            .get(&(index as usize))
+                            .unwrap()
+                            .output
+                            .as_ref(),
                     };
                     let final_name = match ep_output {
                         Some(ep_output) => {
@@ -3751,33 +3777,48 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     fun @ (Function::Dot4I8Packed | Function::Dot4U8Packed) => {
                         let arg1 = arg1.unwrap();
 
-                        write!(self.out, "dot(")?;
+                        if self.options.shader_model >= ShaderModel::V6_4 {
+                            // Intrinsics `dot4add_{i, u}8packed` are available in SM 6.4 and later.
+                            let function_name = match fun {
+                                Function::Dot4I8Packed => "dot4add_i8packed",
+                                Function::Dot4U8Packed => "dot4add_u8packed",
+                                _ => unreachable!(),
+                            };
+                            write!(self.out, "{function_name}(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, arg1, func_ctx)?;
+                            write!(self.out, ", 0)")?;
+                        } else {
+                            // Fall back to a polyfill as `dot4add_u8packed` is not available.
+                            write!(self.out, "dot(")?;
 
-                        if matches!(fun, Function::Dot4U8Packed) {
-                            write!(self.out, "u")?;
-                        }
-                        write!(self.out, "int4(")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 8, ")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 16, ")?;
-                        self.write_expr(module, arg, func_ctx)?;
-                        write!(self.out, " >> 24) << 24 >> 24, ")?;
+                            if matches!(fun, Function::Dot4U8Packed) {
+                                write!(self.out, "u")?;
+                            }
+                            write!(self.out, "int4(")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, " >> 8, ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, " >> 16, ")?;
+                            self.write_expr(module, arg, func_ctx)?;
+                            write!(self.out, " >> 24) << 24 >> 24, ")?;
 
-                        if matches!(fun, Function::Dot4U8Packed) {
-                            write!(self.out, "u")?;
+                            if matches!(fun, Function::Dot4U8Packed) {
+                                write!(self.out, "u")?;
+                            }
+                            write!(self.out, "int4(")?;
+                            self.write_expr(module, arg1, func_ctx)?;
+                            write!(self.out, ", ")?;
+                            self.write_expr(module, arg1, func_ctx)?;
+                            write!(self.out, " >> 8, ")?;
+                            self.write_expr(module, arg1, func_ctx)?;
+                            write!(self.out, " >> 16, ")?;
+                            self.write_expr(module, arg1, func_ctx)?;
+                            write!(self.out, " >> 24) << 24 >> 24)")?;
                         }
-                        write!(self.out, "int4(")?;
-                        self.write_expr(module, arg1, func_ctx)?;
-                        write!(self.out, ", ")?;
-                        self.write_expr(module, arg1, func_ctx)?;
-                        write!(self.out, " >> 8, ")?;
-                        self.write_expr(module, arg1, func_ctx)?;
-                        write!(self.out, " >> 16, ")?;
-                        self.write_expr(module, arg1, func_ctx)?;
-                        write!(self.out, " >> 24) << 24 >> 24)")?;
                     }
                     Function::QuantizeToF16 => {
                         write!(self.out, "f16tof32(f32tof16(")?;
