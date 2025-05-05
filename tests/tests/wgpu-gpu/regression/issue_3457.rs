@@ -141,6 +141,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             label: Some("double renderpass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),
@@ -176,6 +177,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             label: Some("single renderpass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 view: &view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(Color::BLACK),

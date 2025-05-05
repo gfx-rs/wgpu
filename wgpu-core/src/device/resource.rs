@@ -929,13 +929,6 @@ impl Device {
                     desc.format,
                 ));
             }
-            // Renderable textures can only be 2D
-            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                return Err(CreateTextureError::InvalidDimensionUsages(
-                    wgt::TextureUsages::RENDER_ATTACHMENT,
-                    desc.dimension,
-                ));
-            }
         }
 
         if desc.dimension != wgt::TextureDimension::D2
@@ -946,6 +939,14 @@ impl Device {
                 return Err(CreateTextureError::InvalidCompressedDimension(
                     desc.dimension,
                     desc.format,
+                ));
+            }
+
+            // Renderable textures can only be 2D or 3D
+            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::InvalidDimensionUsages(
+                    wgt::TextureUsages::RENDER_ATTACHMENT,
+                    desc.dimension,
                 ));
             }
         }
@@ -977,6 +978,9 @@ impl Device {
                 // Only BCn formats with Sliced 3D feature can be used for 3D textures
                 if desc.format.is_bcn() {
                     self.require_features(wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D)
+                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+                } else if desc.format.is_astc() {
+                    self.require_features(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
                         .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
                 } else {
                     return Err(CreateTextureError::InvalidCompressedDimension(
@@ -1124,16 +1128,12 @@ impl Device {
 
         let clear_mode = if hal_usage
             .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
+            && desc.dimension == wgt::TextureDimension::D2
         {
             let (is_color, usage) = if desc.format.is_depth_stencil_format() {
                 (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
             } else {
                 (true, wgt::TextureUses::COLOR_TARGET)
-            };
-            let dimension = match desc.dimension {
-                wgt::TextureDimension::D1 => TextureViewDimension::D1,
-                wgt::TextureDimension::D2 => TextureViewDimension::D2,
-                wgt::TextureDimension::D3 => unreachable!(),
             };
 
             let clear_label = hal_label(
@@ -1149,7 +1149,7 @@ impl Device {
                             let desc = hal::TextureViewDescriptor {
                                 label: clear_label,
                                 format: $format,
-                                dimension,
+                                dimension: TextureViewDimension::D2,
                                 usage,
                                 range: wgt::ImageSubresourceRange {
                                     aspect: $aspect,
@@ -1420,10 +1420,12 @@ impl Device {
                 break 'error Err(TextureViewNotRenderableReason::Usage(resolved_usage));
             }
 
-            if !(resolved_dimension == TextureViewDimension::D2
-                || (self.features.contains(wgt::Features::MULTIVIEW)
-                    && resolved_dimension == TextureViewDimension::D2Array))
-            {
+            let allowed_view_dimensions = [
+                TextureViewDimension::D2,
+                TextureViewDimension::D2Array,
+                TextureViewDimension::D3,
+            ];
+            if !allowed_view_dimensions.contains(&resolved_dimension) {
                 break 'error Err(TextureViewNotRenderableReason::Dimension(
                     resolved_dimension,
                 ));
@@ -1989,17 +1991,6 @@ impl Device {
                                 error: BindGroupLayoutEntryError::StorageTextureAtomic,
                             });
                         }
-                        wgt::StorageTextureAccess::ReadOnly
-                        | wgt::StorageTextureAccess::ReadWrite
-                            if !self.features.contains(
-                                wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                            ) =>
-                        {
-                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
-                                binding: entry.binding,
-                                error: BindGroupLayoutEntryError::StorageTextureReadWrite,
-                            });
-                        }
                         _ => (),
                     }
                     (
@@ -2009,16 +2000,8 @@ impl Device {
                         ),
                         match access {
                             wgt::StorageTextureAccess::WriteOnly => WritableStorage::Yes,
-                            wgt::StorageTextureAccess::ReadOnly => {
-                                required_features |=
-                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                                WritableStorage::No
-                            }
-                            wgt::StorageTextureAccess::ReadWrite => {
-                                required_features |=
-                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                                WritableStorage::Yes
-                            }
+                            wgt::StorageTextureAccess::ReadOnly => WritableStorage::No,
+                            wgt::StorageTextureAccess::ReadWrite => WritableStorage::Yes,
                             wgt::StorageTextureAccess::Atomic => {
                                 required_features |= wgt::Features::TEXTURE_ATOMIC;
                                 WritableStorage::Yes

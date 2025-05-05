@@ -100,20 +100,7 @@ void main() {
 )]
 #![no_std]
 
-#[cfg(any(
-    test,
-    spv_out,
-
-    // Need OnceLock
-    hlsl_out,
-    msl_out,
-    wgsl_out,
-
-    feature = "spv-in",
-    feature = "wgsl-in",
-
-    feature = "stderr",
-))]
+#[cfg(std)]
 extern crate std;
 
 extern crate alloc;
@@ -130,6 +117,7 @@ pub mod ir;
 pub mod keywords;
 mod non_max_u32;
 pub mod proc;
+mod racy_lock;
 mod span;
 pub mod valid;
 

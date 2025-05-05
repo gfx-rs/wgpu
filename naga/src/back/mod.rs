@@ -79,6 +79,33 @@ impl core::fmt::Display for Level {
     }
 }
 
+/// Locate the entry point(s) to write.
+///
+/// If `entry_point` is given, and the specified entry point exists, returns a
+/// length-1 `Range` containing the index of that entry point.  If no
+/// `entry_point` is given, returns the complete range of entry point indices.
+/// If `entry_point` is given but does not exist, returns an error.
+#[cfg(any(hlsl_out, msl_out))]
+fn get_entry_points(
+    module: &crate::ir::Module,
+    entry_point: Option<&(crate::ir::ShaderStage, String)>,
+) -> Result<core::ops::Range<usize>, (crate::ir::ShaderStage, String)> {
+    use alloc::borrow::ToOwned;
+
+    if let Some(&(stage, ref name)) = entry_point {
+        let Some(ep_index) = module
+            .entry_points
+            .iter()
+            .position(|ep| ep.stage == stage && ep.name == *name)
+        else {
+            return Err((stage, name.to_owned()));
+        };
+        Ok(ep_index..ep_index + 1)
+    } else {
+        Ok(0..module.entry_points.len())
+    }
+}
+
 /// Whether we're generating an entry point or a regular function.
 ///
 /// Backend languages often require different code for a [`Function`]

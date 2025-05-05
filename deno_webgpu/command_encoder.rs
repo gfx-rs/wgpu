@@ -63,6 +63,7 @@ impl GPUCommandEncoder {
                     attachment.into_option().map(|attachment| {
                         wgpu_core::command::RenderPassColorAttachment {
                             view: attachment.view.id,
+                            depth_slice: attachment.depth_slice,
                             resolve_target: attachment.resolve_target.map(|target| target.id),
                             load_op: attachment
                                 .load_op

@@ -187,6 +187,7 @@ async fn draw_test_with_reports(
             ops: wgpu::Operations::default(),
             resolve_target: None,
             view: &texture_view,
+            depth_slice: None,
         })],
         depth_stencil_attachment: None,
         timestamp_writes: None,

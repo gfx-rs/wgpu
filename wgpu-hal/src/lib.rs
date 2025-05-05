@@ -1411,7 +1411,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<<Self::A as Api>::QuerySet, <Self::A as Api>::TextureView>,
-    );
+    ) -> Result<(), DeviceError>;
 
     /// End the current render pass.
     ///
@@ -2336,6 +2336,7 @@ pub struct Attachment<'a, T: DynTextureView + ?Sized> {
 #[derive(Clone, Debug)]
 pub struct ColorAttachment<'a, T: DynTextureView + ?Sized> {
     pub target: Attachment<'a, T>,
+    pub depth_slice: Option<u32>,
     pub resolve_target: Option<Attachment<'a, T>>,
     pub ops: AttachmentOps,
     pub clear_value: wgt::Color,

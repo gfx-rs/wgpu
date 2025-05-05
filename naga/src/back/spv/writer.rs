@@ -60,7 +60,6 @@ impl Writer {
         if major != 1 {
             return Err(Error::UnsupportedVersion(major, minor));
         }
-        let raw_version = ((major as u32) << 16) | ((minor as u32) << 8);
 
         let mut capabilities_used = crate::FastIndexSet::default();
         capabilities_used.insert(spirv::Capability::Shader);
@@ -70,7 +69,7 @@ impl Writer {
         let void_type = id_gen.next();
 
         Ok(Writer {
-            physical_layout: PhysicalLayout::new(raw_version),
+            physical_layout: PhysicalLayout::new(major, minor),
             logical_layout: LogicalLayout::default(),
             id_gen,
             capabilities_available: options.capabilities.clone(),
@@ -97,6 +96,11 @@ impl Writer {
             ray_get_committed_intersection_function: None,
             ray_get_candidate_intersection_function: None,
         })
+    }
+
+    /// Returns `(major, minor)` of the SPIR-V language version.
+    pub const fn lang_version(&self) -> (u8, u8) {
+        self.physical_layout.lang_version()
     }
 
     /// Reset `Writer` to its initial state, retaining any allocations.
@@ -200,6 +204,43 @@ impl Writer {
                 Ok(())
             }
         }
+    }
+
+    /// Indicate that the code requires all of the listed capabilities.
+    ///
+    /// If all entries of `capabilities` appear in the available capabilities
+    /// specified in the [`Options`] from which this `Writer` was created
+    /// (including the case where [`Options::capabilities`] is `None`), add
+    /// them all to this `Writer`'s [`capabilities_used`] table, and return
+    /// `Ok(())`. If at least one of the listed capabilities is not available,
+    /// do not add anything to the `capabilities_used` table, and return the
+    /// first unavailable requested capability, wrapped in `Err()`.
+    ///
+    /// This method is does not return an [`enum@Error`] in case of failure
+    /// because it may be used in cases where the caller can recover (e.g.,
+    /// with a polyfill) if the requested capabilities are not available. In
+    /// this case, it would be unnecessary work to find *all* the unavailable
+    /// requested capabilities, and to allocate a `Vec` for them, just so we
+    /// could return an [`Error::MissingCapabilities`]).
+    ///
+    /// [`capabilities_used`]: Writer::capabilities_used
+    pub(super) fn require_all(
+        &mut self,
+        capabilities: &[spirv::Capability],
+    ) -> Result<(), spirv::Capability> {
+        if let Some(ref available) = self.capabilities_available {
+            for requested in capabilities {
+                if !available.contains(requested) {
+                    return Err(*requested);
+                }
+            }
+        }
+
+        for requested in capabilities {
+            self.capabilities_used.insert(*requested);
+        }
+
+        Ok(())
     }
 
     /// Indicate that the code uses the given extension.

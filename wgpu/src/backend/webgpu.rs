@@ -708,7 +708,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 13] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 14] = [
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
         webgpu_sys::GpuFeatureName::DepthClipControl,
@@ -732,6 +732,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 13] = [
     (
         wgt::Features::TEXTURE_COMPRESSION_ASTC,
         webgpu_sys::GpuFeatureName::TextureCompressionAstc,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+        webgpu_sys::GpuFeatureName::TextureCompressionAstcSliced3d,
     ),
     (
         wgt::Features::TIMESTAMP_QUERY,
@@ -2130,7 +2134,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 .collect::<js_sys::Array>();
             let module = frag.module.inner.as_webgpu();
             let mapped_fragment_desc = webgpu_sys::GpuFragmentState::new(&module.module, &targets);
-            insert_constants_map(&mapped_vertex_state, frag.compilation_options.constants);
+            insert_constants_map(&mapped_fragment_desc, frag.compilation_options.constants);
             if let Some(ep) = frag.entry_point {
                 mapped_fragment_desc.set_entry_point(ep);
             }
