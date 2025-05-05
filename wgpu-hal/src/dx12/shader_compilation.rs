@@ -12,6 +12,7 @@ use windows::{
 pub(super) enum CompilerContainer {
     Fxc(CompilerFxc),
     DynamicDxc(CompilerDynamicDxc),
+    #[cfg_attr(not(static_dxc), allow(unused))]
     StaticDxc(CompilerStaticDxc),
 }
 
