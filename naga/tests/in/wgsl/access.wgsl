@@ -159,7 +159,6 @@ fn assign_array_through_ptr_fn(foo: ptr<function, array<vec4<f32>, 2>>) {
     *foo = array<vec4<f32>, 2>(vec4(1.0), vec4(2.0));
 }
 
-@compute @workgroup_size(1)
 fn assign_through_ptr() {
     var val = 33u;
     assign_through_ptr_fn(&val);
@@ -188,7 +187,6 @@ fn assign_to_arg_ptr_array_element(p: ptr<function, array<u32, 4>>) {
   (*p)[1] = 10u;
 }
 
-@compute @workgroup_size(1)
 fn assign_to_ptr_components() {
    var s1: AssignToMember;
    assign_to_arg_ptr_member(&s1);
@@ -241,4 +239,14 @@ fn var_members_of_members() -> i32 {
     }
 
     return thing.om_nom_nom.delicious;
+}
+
+@compute @workgroup_size(1)
+fn foo_compute() {
+    assign_through_ptr();
+    assign_to_ptr_components();
+    index_ptr(true);
+    member_ptr();
+    let_members_of_members();
+    var_members_of_members();
 }

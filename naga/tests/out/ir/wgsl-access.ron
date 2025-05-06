@@ -1762,6 +1762,82 @@
             diagnostic_filter_leaf: None,
         ),
         (
+            name: Some("assign_through_ptr"),
+            arguments: [],
+            result: None,
+            local_variables: [
+                (
+                    name: Some("val"),
+                    ty: 0,
+                    init: Some(0),
+                ),
+                (
+                    name: Some("arr"),
+                    ty: 27,
+                    init: Some(6),
+                ),
+            ],
+            expressions: [
+                Literal(U32(33)),
+                LocalVariable(0),
+                Literal(F32(6.0)),
+                Splat(
+                    size: Quad,
+                    value: 2,
+                ),
+                Literal(F32(7.0)),
+                Splat(
+                    size: Quad,
+                    value: 4,
+                ),
+                Compose(
+                    ty: 27,
+                    components: [
+                        3,
+                        5,
+                    ],
+                ),
+                LocalVariable(1),
+            ],
+            named_expressions: {},
+            body: [
+                Call(
+                    function: 4,
+                    arguments: [
+                        1,
+                    ],
+                    result: None,
+                ),
+                Emit((
+                    start: 0,
+                    end: 0,
+                )),
+                Emit((
+                    start: 0,
+                    end: 0,
+                )),
+                Emit((
+                    start: 3,
+                    end: 4,
+                )),
+                Emit((
+                    start: 5,
+                    end: 7,
+                )),
+                Call(
+                    function: 5,
+                    arguments: [
+                        7,
+                    ],
+                    result: None,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
             name: Some("fetch_arg_ptr_member"),
             arguments: [
                 (
@@ -1904,6 +1980,64 @@
                 Store(
                     pointer: 1,
                     value: 2,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("assign_to_ptr_components"),
+            arguments: [],
+            result: None,
+            local_variables: [
+                (
+                    name: Some("s1"),
+                    ty: 29,
+                    init: None,
+                ),
+                (
+                    name: Some("a1"),
+                    ty: 31,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                LocalVariable(0),
+                CallResult(7),
+                LocalVariable(1),
+                CallResult(9),
+            ],
+            named_expressions: {},
+            body: [
+                Call(
+                    function: 8,
+                    arguments: [
+                        0,
+                    ],
+                    result: None,
+                ),
+                Call(
+                    function: 7,
+                    arguments: [
+                        0,
+                    ],
+                    result: Some(1),
+                ),
+                Call(
+                    function: 10,
+                    arguments: [
+                        2,
+                    ],
+                    result: None,
+                ),
+                Call(
+                    function: 9,
+                    arguments: [
+                        2,
+                    ],
+                    result: Some(3),
                 ),
                 Return(
                     value: None,
@@ -2705,145 +2839,56 @@
             ),
         ),
         (
-            name: "assign_through_ptr",
+            name: "foo_compute",
             stage: Compute,
             early_depth_test: None,
             workgroup_size: (1, 1, 1),
             workgroup_size_overrides: None,
             function: (
-                name: Some("assign_through_ptr"),
+                name: Some("foo_compute"),
                 arguments: [],
                 result: None,
-                local_variables: [
-                    (
-                        name: Some("val"),
-                        ty: 0,
-                        init: Some(0),
-                    ),
-                    (
-                        name: Some("arr"),
-                        ty: 27,
-                        init: Some(6),
-                    ),
-                ],
+                local_variables: [],
                 expressions: [
-                    Literal(U32(33)),
-                    LocalVariable(0),
-                    Literal(F32(6.0)),
-                    Splat(
-                        size: Quad,
-                        value: 2,
-                    ),
-                    Literal(F32(7.0)),
-                    Splat(
-                        size: Quad,
-                        value: 4,
-                    ),
-                    Compose(
-                        ty: 27,
-                        components: [
-                            3,
-                            5,
-                        ],
-                    ),
-                    LocalVariable(1),
+                    Literal(Bool(true)),
+                    CallResult(12),
+                    CallResult(13),
+                    CallResult(14),
+                    CallResult(15),
                 ],
                 named_expressions: {},
                 body: [
-                    Call(
-                        function: 4,
-                        arguments: [
-                            1,
-                        ],
-                        result: None,
-                    ),
-                    Emit((
-                        start: 0,
-                        end: 0,
-                    )),
-                    Emit((
-                        start: 0,
-                        end: 0,
-                    )),
-                    Emit((
-                        start: 3,
-                        end: 4,
-                    )),
-                    Emit((
-                        start: 5,
-                        end: 7,
-                    )),
-                    Call(
-                        function: 5,
-                        arguments: [
-                            7,
-                        ],
-                        result: None,
-                    ),
-                    Return(
-                        value: None,
-                    ),
-                ],
-                diagnostic_filter_leaf: None,
-            ),
-        ),
-        (
-            name: "assign_to_ptr_components",
-            stage: Compute,
-            early_depth_test: None,
-            workgroup_size: (1, 1, 1),
-            workgroup_size_overrides: None,
-            function: (
-                name: Some("assign_to_ptr_components"),
-                arguments: [],
-                result: None,
-                local_variables: [
-                    (
-                        name: Some("s1"),
-                        ty: 29,
-                        init: None,
-                    ),
-                    (
-                        name: Some("a1"),
-                        ty: 31,
-                        init: None,
-                    ),
-                ],
-                expressions: [
-                    LocalVariable(0),
-                    CallResult(6),
-                    LocalVariable(1),
-                    CallResult(8),
-                ],
-                named_expressions: {},
-                body: [
-                    Call(
-                        function: 7,
-                        arguments: [
-                            0,
-                        ],
-                        result: None,
-                    ),
                     Call(
                         function: 6,
+                        arguments: [],
+                        result: None,
+                    ),
+                    Call(
+                        function: 11,
+                        arguments: [],
+                        result: None,
+                    ),
+                    Call(
+                        function: 12,
                         arguments: [
                             0,
                         ],
                         result: Some(1),
                     ),
                     Call(
-                        function: 9,
-                        arguments: [
-                            2,
-                        ],
-                        result: None,
+                        function: 13,
+                        arguments: [],
+                        result: Some(2),
                     ),
                     Call(
-                        function: 8,
-                        arguments: [
-                            2,
-                        ],
+                        function: 14,
+                        arguments: [],
                         result: Some(3),
+                    ),
+                    Call(
+                        function: 15,
+                        arguments: [],
+                        result: Some(4),
                     ),
                     Return(
                         value: None,

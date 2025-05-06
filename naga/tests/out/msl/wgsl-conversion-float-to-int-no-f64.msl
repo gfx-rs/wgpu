@@ -197,3 +197,25 @@ metal::ulong2 test_f32_to_u64_vec(
 ) {
     return naga_f2u64(f_15);
 }
+
+kernel void main_(
+) {
+    test_const_eval();
+    int _e1 = test_f16_to_i32_(1.0h);
+    uint _e3 = test_f16_to_u32_(1.0h);
+    long _e5 = test_f16_to_i64_(1.0h);
+    ulong _e7 = test_f16_to_u64_(1.0h);
+    int _e9 = test_f32_to_i32_(1.0);
+    uint _e11 = test_f32_to_u32_(1.0);
+    long _e13 = test_f32_to_i64_(1.0);
+    ulong _e15 = test_f32_to_u64_(1.0);
+    metal::int2 _e19 = test_f16_to_i32_vec(metal::half2(1.0h, 2.0h));
+    metal::uint2 _e23 = test_f16_to_u32_vec(metal::half2(1.0h, 2.0h));
+    metal::long2 _e27 = test_f16_to_i64_vec(metal::half2(1.0h, 2.0h));
+    metal::ulong2 _e31 = test_f16_to_u64_vec(metal::half2(1.0h, 2.0h));
+    metal::int2 _e35 = test_f32_to_i32_vec(metal::float2(1.0, 2.0));
+    metal::uint2 _e39 = test_f32_to_u32_vec(metal::float2(1.0, 2.0));
+    metal::long2 _e43 = test_f32_to_i64_vec(metal::float2(1.0, 2.0));
+    metal::ulong2 _e47 = test_f32_to_u64_vec(metal::float2(1.0, 2.0));
+    return;
+}

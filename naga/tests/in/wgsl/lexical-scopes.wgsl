@@ -52,3 +52,13 @@ fn switchLexicalScope(a: i32) {
     }
     let test = a == 2;
 }
+
+@compute @workgroup_size(1)
+fn main() {
+    blockLexicalScope(false);
+    ifLexicalScope(true);
+    loopLexicalScope(false);
+    forLexicalScope(1.);
+    whileLexicalScope(1);
+    switchLexicalScope(1);
+}

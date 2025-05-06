@@ -24,3 +24,10 @@ fn index_dynamic_array(i: i32, v: u32) {
    let val = (*p)[i];
    (*p)[i] = val + v;
 }
+
+@compute @workgroup_size(1)
+fn main() {
+    f();
+    index_unsized(1, 1);
+    index_dynamic_array(1, 1);
+}

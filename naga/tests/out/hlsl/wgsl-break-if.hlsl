@@ -88,5 +88,9 @@ void breakIfSeparateVariable()
 [numthreads(1, 1, 1)]
 void main()
 {
+    breakIfEmpty();
+    breakIfEmptyBody(false);
+    breakIf(false);
+    breakIfSeparateVariable();
     return;
 }

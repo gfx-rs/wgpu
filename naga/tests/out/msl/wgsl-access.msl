@@ -178,6 +178,15 @@ void assign_array_through_ptr_fn(
     return;
 }
 
+void assign_through_ptr(
+) {
+    uint val = 33u;
+    type_22 arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
+    assign_through_ptr_fn(val);
+    assign_array_through_ptr_fn(arr);
+    return;
+}
+
 uint fetch_arg_ptr_member(
     thread AssignToMember& p_1
 ) {
@@ -203,6 +212,17 @@ void assign_to_arg_ptr_array_element(
     thread type_25& p_4
 ) {
     p_4.inner[1] = 10u;
+    return;
+}
+
+void assign_to_ptr_components(
+) {
+    AssignToMember s1_ = {};
+    type_25 a1_ = {};
+    assign_to_arg_ptr_member(s1_);
+    uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    uint _e3 = fetch_arg_ptr_array_element(a1_);
     return;
 }
 
@@ -302,23 +322,13 @@ fragment foo_fragOutput foo_frag(
 }
 
 
-kernel void assign_through_ptr(
+kernel void foo_compute(
 ) {
-    uint val = 33u;
-    type_22 arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
-    assign_through_ptr_fn(val);
-    assign_array_through_ptr_fn(arr);
-    return;
-}
-
-
-kernel void assign_to_ptr_components(
-) {
-    AssignToMember s1_ = {};
-    type_25 a1_ = {};
-    assign_to_arg_ptr_member(s1_);
-    uint _e1 = fetch_arg_ptr_member(s1_);
-    assign_to_arg_ptr_array_element(a1_);
-    uint _e3 = fetch_arg_ptr_array_element(a1_);
+    assign_through_ptr();
+    assign_to_ptr_components();
+    bool _e1 = index_ptr(true);
+    int _e2 = member_ptr();
+    int _e3 = let_members_of_members();
+    int _e4 = var_members_of_members();
     return;
 }

@@ -275,3 +275,9 @@ fn mixed_constant_and_runtime_arguments() {
     xvusu = vec2(u);
     xvfsf = vec2(f);
 }
+
+@compute @workgroup_size(1)
+fn main() {
+    all_constant_arguments();
+    mixed_constant_and_runtime_arguments();
+}

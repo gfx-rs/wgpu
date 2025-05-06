@@ -143,6 +143,15 @@ fn assign_array_through_ptr_fn(foo_2: ptr<function, array<vec4<f32>, 2>>) {
     return;
 }
 
+fn assign_through_ptr() {
+    var val: u32 = 33u;
+    var arr: array<vec4<f32>, 2> = array<vec4<f32>, 2>(vec4(6f), vec4(7f));
+
+    assign_through_ptr_fn((&val));
+    assign_array_through_ptr_fn((&arr));
+    return;
+}
+
 fn fetch_arg_ptr_member(p_1: ptr<function, AssignToMember>) -> u32 {
     let _e2 = (*p_1).x;
     return _e2;
@@ -160,6 +169,17 @@ fn fetch_arg_ptr_array_element(p_3: ptr<function, array<u32, 4>>) -> u32 {
 
 fn assign_to_arg_ptr_array_element(p_4: ptr<function, array<u32, 4>>) {
     (*p_4)[1] = 10u;
+    return;
+}
+
+fn assign_to_ptr_components() {
+    var s1_: AssignToMember;
+    var a1_: array<u32, 4>;
+
+    assign_to_arg_ptr_member((&s1_));
+    let _e1 = fetch_arg_ptr_member((&s1_));
+    assign_to_arg_ptr_array_element((&a1_));
+    let _e3 = fetch_arg_ptr_array_element((&a1_));
     return;
 }
 
@@ -237,23 +257,12 @@ fn foo_frag() -> @location(0) vec4<f32> {
 }
 
 @compute @workgroup_size(1, 1, 1) 
-fn assign_through_ptr() {
-    var val: u32 = 33u;
-    var arr: array<vec4<f32>, 2> = array<vec4<f32>, 2>(vec4(6f), vec4(7f));
-
-    assign_through_ptr_fn((&val));
-    assign_array_through_ptr_fn((&arr));
-    return;
-}
-
-@compute @workgroup_size(1, 1, 1) 
-fn assign_to_ptr_components() {
-    var s1_: AssignToMember;
-    var a1_: array<u32, 4>;
-
-    assign_to_arg_ptr_member((&s1_));
-    let _e1 = fetch_arg_ptr_member((&s1_));
-    assign_to_arg_ptr_array_element((&a1_));
-    let _e3 = fetch_arg_ptr_array_element((&a1_));
+fn foo_compute() {
+    assign_through_ptr();
+    assign_to_ptr_components();
+    let _e1 = index_ptr(true);
+    let _e2 = member_ptr();
+    let _e3 = let_members_of_members();
+    let _e4 = var_members_of_members();
     return;
 }

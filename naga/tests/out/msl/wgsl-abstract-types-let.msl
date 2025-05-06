@@ -129,3 +129,10 @@ void mixed_constant_and_runtime_arguments(
     metal::float2 xvfsf = metal::float2(_e89);
     return;
 }
+
+kernel void main_(
+) {
+    all_constant_arguments();
+    mixed_constant_and_runtime_arguments();
+    return;
+}

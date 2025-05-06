@@ -41,3 +41,8 @@ fn break_from_loop() {
       break;
     }
 }
+
+@compute @workgroup_size(1)
+fn main() {
+    break_from_loop();
+}

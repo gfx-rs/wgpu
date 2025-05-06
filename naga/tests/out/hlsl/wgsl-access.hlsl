@@ -247,6 +247,16 @@ void assign_array_through_ptr_fn(inout float4 foo_2[2])
     return;
 }
 
+void assign_through_ptr()
+{
+    uint val = 33u;
+    float4 arr[2] = Constructarray2_float4_((6.0).xxxx, (7.0).xxxx);
+
+    assign_through_ptr_fn(val);
+    assign_array_through_ptr_fn(arr);
+    return;
+}
+
 uint fetch_arg_ptr_member(inout AssignToMember p_1)
 {
     uint _e2 = p_1.x;
@@ -268,6 +278,18 @@ uint fetch_arg_ptr_array_element(inout uint p_3[4])
 void assign_to_arg_ptr_array_element(inout uint p_4[4])
 {
     p_4[1] = 10u;
+    return;
+}
+
+void assign_to_ptr_components()
+{
+    AssignToMember s1_ = (AssignToMember)0;
+    uint a1_[4] = (uint[4])0;
+
+    assign_to_arg_ptr_member(s1_);
+    const uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    const uint _e3 = fetch_arg_ptr_array_element(a1_);
     return;
 }
 
@@ -406,25 +428,13 @@ float4 foo_frag() : SV_Target0
 }
 
 [numthreads(1, 1, 1)]
-void assign_through_ptr()
+void foo_compute()
 {
-    uint val = 33u;
-    float4 arr[2] = Constructarray2_float4_((6.0).xxxx, (7.0).xxxx);
-
-    assign_through_ptr_fn(val);
-    assign_array_through_ptr_fn(arr);
-    return;
-}
-
-[numthreads(1, 1, 1)]
-void assign_to_ptr_components()
-{
-    AssignToMember s1_ = (AssignToMember)0;
-    uint a1_[4] = (uint[4])0;
-
-    assign_to_arg_ptr_member(s1_);
-    const uint _e1 = fetch_arg_ptr_member(s1_);
-    assign_to_arg_ptr_array_element(a1_);
-    const uint _e3 = fetch_arg_ptr_array_element(a1_);
+    assign_through_ptr();
+    assign_to_ptr_components();
+    const bool _e1 = index_ptr(true);
+    const int _e2 = member_ptr();
+    const int _e3 = let_members_of_members();
+    const int _e4 = var_members_of_members();
     return;
 }

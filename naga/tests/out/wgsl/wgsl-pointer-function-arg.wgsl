@@ -72,5 +72,19 @@ fn let_binding(a_1: ptr<function, array<i32, 4>>, i_7: u32) {
 
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
+    var vec: array<vec2<i32>, 4>;
+    var mat: array<mat2x2<f32>, 4>;
+    var arr1d: array<i32, 4>;
+    var arr2d: array<array<i32, 4>, 4>;
+    var arr3d: array<array<array<i32, 4>, 4>, 4>;
+
+    local_var(1u);
+    mat_vec_ptrs((&vec), (&mat), 1u);
+    argument((&arr1d), 1u);
+    argument_nested_x2_((&arr2d), 1u, 2u);
+    argument_nested_x3_((&arr3d), 1u, 2u);
+    index_from_self((&arr1d), 1u);
+    local_var_from_arg(array<i32, 4>(1i, 2i, 3i, 4i), 5u);
+    let_binding((&arr1d), 1u);
     return;
 }
