@@ -116,14 +116,14 @@ impl CommandEncoder {
         source_offset: BufferAddress,
         destination: &Buffer,
         destination_offset: BufferAddress,
-        copy_size: BufferAddress,
+        copy_size: impl Into<Option<BufferAddress>>,
     ) {
         self.inner.copy_buffer_to_buffer(
             &source.inner,
             source_offset,
             &destination.inner,
             destination_offset,
-            copy_size,
+            copy_size.into(),
         );
     }
 
