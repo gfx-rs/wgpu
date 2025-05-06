@@ -54,6 +54,10 @@ fn switchNoLastBreak(a_6: i32) {
 }
 
 fn main_1() {
+    switchEmpty(1i);
+    switchNoDefault(2i);
+    switchCaseImplConv(3u);
+    switchNoLastBreak(4i);
     return;
 }
 

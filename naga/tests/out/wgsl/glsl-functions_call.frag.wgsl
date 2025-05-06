@@ -50,6 +50,14 @@ fn swizzleImplicitCastCaller(a_7: vec3<f32>) {
 }
 
 fn main_1() {
+    var a_9: u32;
+    var b: vec2<u32>;
+
+    swizzleCaller(vec3(0f));
+    outImplicitCastCallee((&a_9));
+    outImplicitCastCaller(1f);
+    swizzleImplicitCastCallee((&b));
+    swizzleImplicitCastCaller(vec3(0f));
     return;
 }
 
