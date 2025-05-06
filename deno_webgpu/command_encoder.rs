@@ -178,7 +178,7 @@ impl GPUCommandEncoder {
         #[webidl(options(enforce_range = true))] source_offset: u64,
         #[webidl] destination: Ptr<GPUBuffer>,
         #[webidl(options(enforce_range = true))] destination_offset: u64,
-        #[webidl(options(enforce_range = true))] size: u64,
+        #[webidl(options(enforce_range = true))] size: Option<u64>,
     ) {
         let err = self
             .instance
@@ -188,7 +188,7 @@ impl GPUCommandEncoder {
                 source_offset,
                 destination.id,
                 destination_offset,
-                Some(size),
+                size,
             )
             .err();
 

@@ -2217,7 +2217,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         source_offset: crate::BufferAddress,
         destination: &dispatch::DispatchBuffer,
         destination_offset: crate::BufferAddress,
-        copy_size: crate::BufferAddress,
+        copy_size: Option<crate::BufferAddress>,
     ) {
         let source = source.as_core();
         let destination = destination.as_core();
@@ -2228,7 +2228,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             source_offset,
             destination.id,
             destination_offset,
-            Some(copy_size),
+            copy_size,
         ) {
             self.context.handle_error_nolabel(
                 &self.error_sink,
