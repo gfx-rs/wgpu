@@ -29,6 +29,7 @@ import * as performance from "ext:deno_web/15_performance.js";
 import { loadWebGPU } from "ext:deno_webgpu/00_init.js";
 import * as imageData from "ext:deno_web/16_image_data.js";
 const webgpu = loadWebGPU();
+webgpu.initGPU();
 
 // imports needed to pass module evaluation
 import "ext:deno_url/01_urlpattern.js";

@@ -119,6 +119,7 @@ impl GPUDevice {
     fn queue(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
         self.queue_obj.get(scope, |_| GPUQueue {
             id: self.queue,
+            device: self.id,
             error_handler: self.error_handler.clone(),
             instance: self.instance.clone(),
             label: self.label.clone(),
@@ -134,15 +135,12 @@ impl GPUDevice {
 
     #[required(1)]
     #[cppgc]
-    fn create_buffer(
-        &self,
-        #[webidl] descriptor: super::buffer::GPUBufferDescriptor,
-    ) -> Result<GPUBuffer, JsErrorBox> {
+    fn create_buffer(&self, #[webidl] descriptor: super::buffer::GPUBufferDescriptor) -> GPUBuffer {
         let wgpu_descriptor = wgpu_core::resource::BufferDescriptor {
             label: crate::transform_label(descriptor.label.clone()),
             size: descriptor.size,
             usage: wgpu_types::BufferUsages::from_bits(descriptor.usage)
-                .ok_or_else(|| JsErrorBox::type_error("usage is not valid"))?,
+                .unwrap_or(wgpu_types::BufferUsages::empty()),
             mapped_at_creation: descriptor.mapped_at_creation,
         };
 
@@ -152,7 +150,7 @@ impl GPUDevice {
 
         self.error_handler.push_error(err);
 
-        Ok(GPUBuffer {
+        GPUBuffer {
             instance: self.instance.clone(),
             error_handler: self.error_handler.clone(),
             id,
@@ -171,7 +169,7 @@ impl GPUDevice {
                 None
             }),
             mapped_js_buffers: RefCell::new(vec![]),
-        })
+        }
     }
 
     #[required(1)]

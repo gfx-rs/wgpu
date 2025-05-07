@@ -231,11 +231,11 @@ web-sys = { version = "0.3.77", default-features = false }
 web-time = "1"
 
 # deno dependencies
-deno_console = "0.190.0"
-deno_core = "0.336.0"
-deno_url = "0.190.0"
-deno_web = "0.221.0"
-deno_webidl = "0.190.0"
+deno_console = "0.192.0"
+deno_core = "0.338.0"
+deno_url = "0.192.0"
+deno_web = "0.224.0"
+deno_webidl = "0.192.0"
 deno_webgpu = { version = "0.157.0", path = "./deno_webgpu" }
 deno_unsync = "0.4.2"
 deno_error = "0.5.5"
