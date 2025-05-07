@@ -6,6 +6,7 @@ on:
     tags: [v*]
   pull_request:
     types: [labeled, opened, synchronize]
+  workflow_dispatch:
 
 env:
   CARGO_INCREMENTAL: false
@@ -16,7 +17,7 @@ env:
 jobs:
   cts:
     # Only run if we add this label
-    if: contains(github.event.pull_request.labels.*.name, 'needs testing')
+    #if: contains(github.event.pull_request.labels.*.name, 'needs testing')
 
     strategy:
       fail-fast: false
