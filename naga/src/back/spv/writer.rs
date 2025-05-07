@@ -1133,27 +1133,38 @@ impl Writer {
             crate::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
             crate::ShaderStage::Fragment => {
                 self.write_execution_mode(function_id, spirv::ExecutionMode::OriginUpperLeft)?;
-                if let Some(ref early_depth_test) = entry_point.early_depth_test {
-                    self.write_execution_mode(
-                        function_id,
-                        spirv::ExecutionMode::EarlyFragmentTests,
-                    )?;
-                    if let Some(conservative) = early_depth_test.conservative {
+                match entry_point.early_depth_test {
+                    Some(crate::EarlyDepthTest::Force) => {
+                        self.write_execution_mode(
+                            function_id,
+                            spirv::ExecutionMode::EarlyFragmentTests,
+                        )?;
+                    }
+                    Some(crate::EarlyDepthTest::Allow { conservative }) => {
+                        // TODO: Consider emitting EarlyAndLateFragmentTestsAMD here, if available.
+                        // https://github.khronos.org/SPIRV-Registry/extensions/AMD/SPV_AMD_shader_early_and_late_fragment_tests.html
+                        // This permits early depth tests even if the shader writes to a storage
+                        // binding
                         match conservative {
-                            crate::ConservativeDepth::GreaterEqual => self.write_execution_mode(
-                                function_id,
-                                spirv::ExecutionMode::DepthGreater,
-                            )?,
-                            crate::ConservativeDepth::LessEqual => self.write_execution_mode(
-                                function_id,
-                                spirv::ExecutionMode::DepthLess,
-                            )?,
-                            crate::ConservativeDepth::Unchanged => self.write_execution_mode(
-                                function_id,
-                                spirv::ExecutionMode::DepthUnchanged,
-                            )?,
+                            Some(crate::ConservativeDepth::GreaterEqual) => self
+                                .write_execution_mode(
+                                    function_id,
+                                    spirv::ExecutionMode::DepthGreater,
+                                )?,
+                            Some(crate::ConservativeDepth::LessEqual) => self
+                                .write_execution_mode(
+                                    function_id,
+                                    spirv::ExecutionMode::DepthLess,
+                                )?,
+                            Some(crate::ConservativeDepth::Unchanged) => self
+                                .write_execution_mode(
+                                    function_id,
+                                    spirv::ExecutionMode::DepthUnchanged,
+                                )?,
+                            _ => {}
                         }
                     }
+                    None => {}
                 }
                 if let Some(ref result) = entry_point.function.result {
                     if contains_builtin(

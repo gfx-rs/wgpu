@@ -750,22 +750,25 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Enable early depth tests if needed
-        if let Some(depth_test) = self.entry_point.early_depth_test {
+        if let Some(early_depth_test) = self.entry_point.early_depth_test {
             // If early depth test is supported for this version of GLSL
             if self.options.version.supports_early_depth_test() {
-                writeln!(self.out, "layout(early_fragment_tests) in;")?;
-
-                if let Some(conservative) = depth_test.conservative {
-                    use crate::ConservativeDepth as Cd;
-
-                    let depth = match conservative {
-                        Cd::GreaterEqual => "greater",
-                        Cd::LessEqual => "less",
-                        Cd::Unchanged => "unchanged",
-                    };
-                    writeln!(self.out, "layout (depth_{depth}) out float gl_FragDepth;")?;
+                match early_depth_test {
+                    crate::EarlyDepthTest::Force => {
+                        writeln!(self.out, "layout(early_fragment_tests) in;")?;
+                    }
+                    crate::EarlyDepthTest::Allow { conservative, .. } => {
+                        if let Some(conservative) = conservative {
+                            use crate::ConservativeDepth as Cd;
+                            let depth = match conservative {
+                                Cd::GreaterEqual => "greater",
+                                Cd::LessEqual => "less",
+                                Cd::Unchanged => "unchanged",
+                            };
+                            writeln!(self.out, "layout (depth_{depth}) out float gl_FragDepth;")?;
+                        }
+                    }
                 }
-                writeln!(self.out)?;
             } else {
                 log::warn!(
                     "Early depth testing is not supported for this version of GLSL: {}",

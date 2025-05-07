@@ -4825,24 +4825,49 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         match mode {
             ExecutionMode::EarlyFragmentTests => {
-                if ep.early_depth_test.is_none() {
-                    ep.early_depth_test = Some(crate::EarlyDepthTest { conservative: None });
-                }
+                ep.early_depth_test = Some(crate::EarlyDepthTest::Force);
             }
             ExecutionMode::DepthUnchanged => {
-                ep.early_depth_test = Some(crate::EarlyDepthTest {
-                    conservative: Some(crate::ConservativeDepth::Unchanged),
-                });
+                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
+                    if let &mut crate::EarlyDepthTest::Allow {
+                        ref mut conservative,
+                    } = early_depth_test
+                    {
+                        *conservative = Some(crate::ConservativeDepth::Unchanged);
+                    }
+                } else {
+                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
+                        conservative: Some(crate::ConservativeDepth::Unchanged),
+                    });
+                }
             }
             ExecutionMode::DepthGreater => {
-                ep.early_depth_test = Some(crate::EarlyDepthTest {
-                    conservative: Some(crate::ConservativeDepth::GreaterEqual),
-                });
+                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
+                    if let &mut crate::EarlyDepthTest::Allow {
+                        ref mut conservative,
+                    } = early_depth_test
+                    {
+                        *conservative = Some(crate::ConservativeDepth::GreaterEqual);
+                    }
+                } else {
+                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
+                        conservative: Some(crate::ConservativeDepth::GreaterEqual),
+                    });
+                }
             }
             ExecutionMode::DepthLess => {
-                ep.early_depth_test = Some(crate::EarlyDepthTest {
-                    conservative: Some(crate::ConservativeDepth::LessEqual),
-                });
+                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
+                    if let &mut crate::EarlyDepthTest::Allow {
+                        ref mut conservative,
+                    } = early_depth_test
+                    {
+                        *conservative = Some(crate::ConservativeDepth::LessEqual);
+                    }
+                } else {
+                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
+                        conservative: Some(crate::ConservativeDepth::LessEqual),
+                    });
+                }
             }
             ExecutionMode::DepthReplacing => {
                 // Ignored because it can be deduced from the IR.

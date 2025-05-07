@@ -2838,15 +2838,23 @@ impl Parser {
                     workgroup_size.set(new_workgroup_size, name_span)?;
                 }
                 "early_depth_test" => {
-                    let conservative = if lexer.skip(Token::Paren('(')) {
+                    let value = if lexer.skip(Token::Paren('(')) {
                         let (ident, ident_span) = lexer.next_ident_with_span()?;
-                        let value = conv::map_conservative_depth(ident, ident_span)?;
+                        let value = if ident == "force" {
+                            crate::EarlyDepthTest::Force
+                        } else {
+                            crate::EarlyDepthTest::Allow {
+                                conservative: Some(conv::map_conservative_depth(
+                                    ident, ident_span,
+                                )?),
+                            }
+                        };
                         lexer.expect(Token::Paren(')'))?;
-                        Some(value)
+                        value
                     } else {
-                        None
+                        crate::EarlyDepthTest::Allow { conservative: None }
                     };
-                    early_depth_test.set(crate::EarlyDepthTest { conservative }, name_span)?;
+                    early_depth_test.set(value, name_span)?;
                 }
                 "must_use" => {
                     must_use.set(name_span, name_span)?;
