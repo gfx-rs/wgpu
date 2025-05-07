@@ -50,7 +50,7 @@ pub struct GPUDevice {
     pub queue_obj: SameObject<GPUQueue>,
 
     pub error_handler: super::error::ErrorHandler,
-    pub lost_receiver: tokio::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+    pub lost_promise: v8::Global<v8::Promise>,
 }
 
 impl Drop for GPUDevice {
@@ -118,6 +118,7 @@ impl GPUDevice {
     fn queue(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
         self.queue_obj.get(scope, |_| GPUQueue {
             id: self.queue,
+            device: self.id,
             error_handler: self.error_handler.clone(),
             instance: self.instance.clone(),
             label: self.label.clone(),
@@ -560,16 +561,10 @@ impl GPUDevice {
         }
     }
 
-    // TODO(@crowlKats): support returning same promise
-    #[async_method]
     #[getter]
-    #[cppgc]
-    async fn lost(&self) -> GPUDeviceLostInfo {
-        if let Some(lost_receiver) = self.lost_receiver.lock().await.take() {
-            let _ = lost_receiver.await;
-        }
-
-        GPUDeviceLostInfo
+    #[global]
+    fn lost(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Promise> {
+        self.lost_promise.clone()
     }
 
     #[required(1)]

@@ -5,6 +5,8 @@ use std::fmt::Formatter;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
+use deno_core::v8;
+
 use wgpu_core::binding_model::CreateBindGroupError;
 use wgpu_core::binding_model::CreateBindGroupLayoutError;
 use wgpu_core::binding_model::CreatePipelineLayoutError;
@@ -35,7 +37,7 @@ pub type ErrorHandler = std::sync::Arc<DeviceErrorHandler>;
 
 pub struct DeviceErrorHandler {
     pub is_lost: OnceLock<()>,
-    lost_sender: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    lost_resolver: Mutex<Option<v8::Global<v8::PromiseResolver>>>,
     uncaptured_sender_is_closed: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
 
     pub uncaptured_sender: tokio::sync::mpsc::UnboundedSender<GPUError>,
@@ -53,13 +55,13 @@ impl Drop for DeviceErrorHandler {
 
 impl DeviceErrorHandler {
     pub fn new(
-        lost_sender: tokio::sync::oneshot::Sender<()>,
+        lost_resolver: v8::Global<v8::PromiseResolver>,
         uncaptured_sender: tokio::sync::mpsc::UnboundedSender<GPUError>,
         uncaptured_sender_is_closed: tokio::sync::oneshot::Sender<()>,
     ) -> Self {
         Self {
             is_lost: Default::default(),
-            lost_sender: Mutex::new(Some(lost_sender)),
+            lost_resolver: Mutex::new(Some(lost_resolver)),
             uncaptured_sender,
             uncaptured_sender_is_closed: Mutex::new(Some(uncaptured_sender_is_closed)),
             scopes: Mutex::new(vec![]),
@@ -80,8 +82,8 @@ impl DeviceErrorHandler {
         if matches!(err, GPUError::Lost) {
             let _ = self.is_lost.set(());
 
-            if let Some(sender) = self.lost_sender.lock().unwrap().take() {
-                let _ = sender.send(());
+            if let Some(resolver) = self.lost_resolver.lock().unwrap().take() {
+                // TODO: Need a scope to call resolver here.
             }
             return;
         }

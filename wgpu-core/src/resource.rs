@@ -713,7 +713,7 @@ impl Buffer {
             let raw = match self.raw.snatch(&mut snatch_guard) {
                 Some(raw) => raw,
                 None => {
-                    return Err(DestroyError::AlreadyDestroyed);
+                    return Ok(());
                 }
             };
 
@@ -1189,7 +1189,7 @@ impl Texture {
                     return Ok(());
                 }
                 None => {
-                    return Err(DestroyError::AlreadyDestroyed);
+                    return Ok(());
                 }
             };
 

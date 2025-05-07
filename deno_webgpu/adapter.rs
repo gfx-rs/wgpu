@@ -128,7 +128,9 @@ impl GPUAdapter {
         let required_limits =
             serde_json::from_value(serde_json::to_value(descriptor.required_limits)?)?;
 
-        let webgpu_trace = std::env::var_os("DENO_WEBGPU_TRACE").unwrap();
+        let trace = std::env::var_os("DENO_WEBGPU_TRACE")
+            .map(|path| wgpu_types::Trace::Directory(std::path::PathBuf::from(path)))
+            .unwrap_or_default();
 
         let wgpu_descriptor = wgpu_types::DeviceDescriptor {
             label: crate::transform_label(descriptor.label.clone()),
@@ -137,18 +139,19 @@ impl GPUAdapter {
             ),
             required_limits,
             memory_hints: Default::default(),
-            trace: wgpu_types::Trace::Directory(std::path::PathBuf::from(webgpu_trace)),
+            trace,
         };
 
         let (device, queue) =
             self.instance
                 .adapter_request_device(self.id, &wgpu_descriptor, None, None)?;
 
-        let (lost_sender, lost_receiver) = tokio::sync::oneshot::channel();
         let (uncaptured_sender, mut uncaptured_receiver) = tokio::sync::mpsc::unbounded_channel();
         let (uncaptured_sender_is_closed_sender, mut uncaptured_sender_is_closed_receiver) =
             tokio::sync::oneshot::channel::<()>();
 
+        let resolver = v8::PromiseResolver::new(scope).unwrap();
+        let promise = resolver.get_promise(scope);
         let device = GPUDevice {
             instance: self.instance.clone(),
             id: device,
@@ -157,12 +160,12 @@ impl GPUAdapter {
             queue_obj: SameObject::new(),
             adapter_info: self.info.clone(),
             error_handler: Arc::new(super::error::DeviceErrorHandler::new(
-                lost_sender,
+                v8::Global::new(scope, resolver),
                 uncaptured_sender,
                 uncaptured_sender_is_closed_sender,
             )),
             adapter: self.id,
-            lost_receiver: Mutex::new(Some(lost_receiver)),
+            lost_promise: v8::Global::new(scope, promise),
             limits: SameObject::new(),
             features: SameObject::new(),
         };
