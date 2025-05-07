@@ -1133,6 +1133,28 @@ impl Writer {
             crate::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
             crate::ShaderStage::Fragment => {
                 self.write_execution_mode(function_id, spirv::ExecutionMode::OriginUpperLeft)?;
+                if let Some(ref early_depth_test) = entry_point.early_depth_test {
+                    self.write_execution_mode(
+                        function_id,
+                        spirv::ExecutionMode::EarlyFragmentTests,
+                    )?;
+                    if let Some(conservative) = early_depth_test.conservative {
+                        match conservative {
+                            crate::ConservativeDepth::GreaterEqual => self.write_execution_mode(
+                                function_id,
+                                spirv::ExecutionMode::DepthGreater,
+                            )?,
+                            crate::ConservativeDepth::LessEqual => self.write_execution_mode(
+                                function_id,
+                                spirv::ExecutionMode::DepthLess,
+                            )?,
+                            crate::ConservativeDepth::Unchanged => self.write_execution_mode(
+                                function_id,
+                                spirv::ExecutionMode::DepthUnchanged,
+                            )?,
+                        }
+                    }
+                }
                 if let Some(ref result) = entry_point.function.result {
                     if contains_builtin(
                         result.binding.as_ref(),

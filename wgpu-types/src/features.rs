@@ -1041,6 +1041,7 @@ bitflags_array! {
         /// Allows shaders to use the `early_depth_test` attribute.
         ///
         /// Supported platforms:
+        /// - Vulkan
         /// - GLES 3.1+
         ///
         /// This is a native only feature.

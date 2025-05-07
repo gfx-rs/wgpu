@@ -546,6 +546,7 @@ impl PhysicalDeviceFeatures {
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE
             | F::PIPELINE_CACHE
+            | F::SHADER_EARLY_DEPTH_TEST
             | F::TEXTURE_ATOMIC;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
