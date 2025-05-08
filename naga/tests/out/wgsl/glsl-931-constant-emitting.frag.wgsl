@@ -5,6 +5,7 @@ fn function() -> f32 {
 }
 
 fn main_1() {
+    let _e0 = function();
     return;
 }
 
