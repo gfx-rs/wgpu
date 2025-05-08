@@ -54,6 +54,7 @@ Bottom level categories:
 #### Naga
 
 - When emitting GLSL, Uniform and Storage Buffer memory layouts are now emitted even if no explicit binding is given. By @cloone8 in [#7579](https://github.com/gfx-rs/wgpu/pull/7579).
+- Span error emission now accepts Paths as more than just a &str. By @atlv24 in [#7643](https://github.com/gfx-rs/wgpu/pull/7643).
 
 ### Bug Fixes
 
