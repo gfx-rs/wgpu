@@ -135,6 +135,7 @@ libc = { version = "0.2.168", default-features = false }
 # See https://github.com/rust-fuzz/libfuzzer/issues/126
 libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
+libm = { version = "0.2.6", default-features = false }
 libtest-mimic = "0.8"
 log = "0.4.21"
 nanoserde = "0.2"
