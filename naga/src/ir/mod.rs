@@ -238,18 +238,18 @@ use crate::{FastIndexMap, NamedExpressions};
 pub use block::Block;
 
 /// Explicitly allows early depth/stencil tests.
-/// 
+///
 /// Normally, depth/stencil tests are performed after fragment shading. However, as an optimization,
 /// most drivers will move the depth/stencil tests before fragment shading if this does not
 /// have any observable consequences. This optimization is disabled in the following circumstances:
 ///   - `discard` is called in the fragment shader.
 ///   - The fragment shader writes to the depth buffer.
 ///   - The fragment shader writes to any storage bindings.
-/// 
+///
 /// When `EarlyDepthTest` is set, it is allowed to perform an early depth/stencil test even if the
 /// above conditions are not met. When [`EarlyDepthTest::Force`] is used, depth/stencil tests
 /// **must** be performed before fragment shading.
-/// 
+///
 /// To force early depth/stencil tests in a shader:
 ///   - GLSL: `layout(early_fragment_tests) in;`
 ///   - HLSL: `Attribute earlydepthstencil`
@@ -266,20 +266,20 @@ pub use block::Block;
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum EarlyDepthTest {
     /// Requires depth/stencil tests to be performed before fragment shading.
-    /// 
+    ///
     /// This will disable depth/stencil tests after fragment shading, so discarding the fragment
     /// or overwriting the fragment depth will have no effect.
     Force,
 
     /// Allows an additional depth/stencil test to be performed before fragment shading, even
     /// if this would have observable consequences.
-    /// 
+    ///
     /// Unlike `Force`, this does not disable depth/stencil tests after fragment shading.
     Allow {
         /// Specifies restrictions on how the depth value can be modified within the fragment
         /// shader.
         conservative: Option<ConservativeDepth>,
-    }
+    },
 }
 
 /// Enables adjusting depth without disabling early Z.
