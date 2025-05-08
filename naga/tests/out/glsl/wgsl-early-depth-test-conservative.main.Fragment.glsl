@@ -1,9 +1,4 @@
-#version 310 es
-#extension GL_EXT_conservative_depth : require
-
-precision highp float;
-precision highp int;
-
+#version 420 core
 layout (depth_less) out float gl_FragDepth;
 
 void main() {
