@@ -34,7 +34,7 @@ impl AsPath for String {
 #[cfg(not(feature = "std"))]
 impl AsPath for str {
     fn to_string_lossy(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self)
+        Cow::Borrowed(self)
     }
 }
 
