@@ -65,6 +65,9 @@ Naga now infers the correct binding layout when a resource appears only in an as
 - Properly apply WGSL's automatic conversions to the arguments to texture sampling functions. By @jimblandy in [#7548](https://github.com/gfx-rs/wgpu/pull/7548).
 - Properly evaluate `abs(most negative abstract int)`. By @jimblandy in [#7507](https://github.com/gfx-rs/wgpu/pull/7507).
 
+#### General
+- Allow using `Device::create_texture_with_data` with mipmapped nPOT textures. By @atlv24 in [#7678](https://github.com/gfx-rs/wgpu/pull/7678).
+
 #### DX12
 
 - Get `vertex_index` & `instance_index` builtins working for indirect draws. By @teoxoy in [#7535](https://github.com/gfx-rs/wgpu/pull/7535)
