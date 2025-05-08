@@ -82,10 +82,14 @@ impl DeviceExt for crate::Device {
         order: TextureDataOrder,
         data: &[u8],
     ) -> crate::Texture {
-        // Implicitly add the COPY_DST usage
-        let mut desc = desc.to_owned();
-        desc.usage |= crate::TextureUsages::COPY_DST;
-        let texture = self.create_texture(&desc);
+        let texture = self.create_texture(&{
+            let mut desc = desc.to_owned();
+            // Implicitly add the COPY_DST usage
+            desc.usage |= crate::TextureUsages::COPY_DST;
+            // Implicitly expand to blocksize
+            desc.size = desc.size.physical_size(desc.format);
+            desc
+        });
 
         // Will return None only if it's a combined depth-stencil format
         // If so, default to 4, validation will fail later anyway since the depth or stencil
