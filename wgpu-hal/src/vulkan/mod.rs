@@ -32,6 +32,8 @@ mod drm;
 mod instance;
 mod sampler;
 
+pub use adapter::PhysicalDeviceFeatures;
+
 use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
 use core::{borrow::Borrow, ffi::CStr, fmt, mem, num::NonZeroU32, ops::DerefMut};
 
@@ -455,7 +457,7 @@ pub struct Adapter {
     //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
     phd_capabilities: adapter::PhysicalDeviceProperties,
-    phd_features: adapter::PhysicalDeviceFeatures,
+    phd_features: PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
