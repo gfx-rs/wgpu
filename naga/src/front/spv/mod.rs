@@ -4833,11 +4833,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ref mut conservative,
                     } = early_depth_test
                     {
-                        *conservative = Some(crate::ConservativeDepth::Unchanged);
+                        *conservative = crate::ConservativeDepth::Unchanged;
                     }
                 } else {
                     ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
-                        conservative: Some(crate::ConservativeDepth::Unchanged),
+                        conservative: crate::ConservativeDepth::Unchanged,
                     });
                 }
             }
@@ -4847,11 +4847,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ref mut conservative,
                     } = early_depth_test
                     {
-                        *conservative = Some(crate::ConservativeDepth::GreaterEqual);
+                        *conservative = crate::ConservativeDepth::GreaterEqual;
                     }
                 } else {
                     ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
-                        conservative: Some(crate::ConservativeDepth::GreaterEqual),
+                        conservative: crate::ConservativeDepth::GreaterEqual,
                     });
                 }
             }
@@ -4861,11 +4861,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ref mut conservative,
                     } = early_depth_test
                     {
-                        *conservative = Some(crate::ConservativeDepth::LessEqual);
+                        *conservative = crate::ConservativeDepth::LessEqual;
                     }
                 } else {
                     ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
-                        conservative: Some(crate::ConservativeDepth::LessEqual),
+                        conservative: crate::ConservativeDepth::LessEqual,
                     });
                 }
             }

@@ -758,15 +758,13 @@ impl<'a, W: Write> Writer<'a, W> {
                         writeln!(self.out, "layout(early_fragment_tests) in;")?;
                     }
                     crate::EarlyDepthTest::Allow { conservative, .. } => {
-                        if let Some(conservative) = conservative {
-                            use crate::ConservativeDepth as Cd;
-                            let depth = match conservative {
-                                Cd::GreaterEqual => "greater",
-                                Cd::LessEqual => "less",
-                                Cd::Unchanged => "unchanged",
-                            };
-                            writeln!(self.out, "layout (depth_{depth}) out float gl_FragDepth;")?;
-                        }
+                        use crate::ConservativeDepth as Cd;
+                        let depth = match conservative {
+                            Cd::GreaterEqual => "greater",
+                            Cd::LessEqual => "less",
+                            Cd::Unchanged => "unchanged",
+                        };
+                        writeln!(self.out, "layout (depth_{depth}) out float gl_FragDepth;")?;
                     }
                 }
             } else {

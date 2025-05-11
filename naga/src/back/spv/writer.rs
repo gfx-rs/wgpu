@@ -1146,22 +1146,18 @@ impl Writer {
                         // This permits early depth tests even if the shader writes to a storage
                         // binding
                         match conservative {
-                            Some(crate::ConservativeDepth::GreaterEqual) => self
-                                .write_execution_mode(
-                                    function_id,
-                                    spirv::ExecutionMode::DepthGreater,
-                                )?,
-                            Some(crate::ConservativeDepth::LessEqual) => self
-                                .write_execution_mode(
-                                    function_id,
-                                    spirv::ExecutionMode::DepthLess,
-                                )?,
-                            Some(crate::ConservativeDepth::Unchanged) => self
-                                .write_execution_mode(
-                                    function_id,
-                                    spirv::ExecutionMode::DepthUnchanged,
-                                )?,
-                            _ => {}
+                            crate::ConservativeDepth::GreaterEqual => self.write_execution_mode(
+                                function_id,
+                                spirv::ExecutionMode::DepthGreater,
+                            )?,
+                            crate::ConservativeDepth::LessEqual => self.write_execution_mode(
+                                function_id,
+                                spirv::ExecutionMode::DepthLess,
+                            )?,
+                            crate::ConservativeDepth::Unchanged => self.write_execution_mode(
+                                function_id,
+                                spirv::ExecutionMode::DepthUnchanged,
+                            )?,
                         }
                     }
                     None => {}

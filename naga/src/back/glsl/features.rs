@@ -307,10 +307,8 @@ impl<W> Writer<'_, W> {
                         self.features.request(Features::IMAGE_LOAD_STORE);
                     }
                 }
-                crate::EarlyDepthTest::Allow { conservative } => {
-                    if conservative.is_some() {
-                        self.features.request(Features::CONSERVATIVE_DEPTH);
-                    }
+                crate::EarlyDepthTest::Allow { .. } => {
+                    self.features.request(Features::CONSERVATIVE_DEPTH);
                 }
             }
         }

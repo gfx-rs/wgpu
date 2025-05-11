@@ -256,6 +256,8 @@ pub use block::Block;
 ///   - SPIR-V: `ExecutionMode EarlyFragmentTests`
 ///   - WGSL: `@early_depth_test(force)`
 ///
+/// This may also be enabled in a shader by specifying a [`ConservativeDepth`].
+///
 /// For more, see:
 ///   - <https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification>
 ///   - <https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/sm5-attributes-earlydepthstencil>
@@ -271,14 +273,16 @@ pub enum EarlyDepthTest {
     /// or overwriting the fragment depth will have no effect.
     Force,
 
-    /// Allows an additional depth/stencil test to be performed before fragment shading, even
-    /// if this would have observable consequences.
+    /// Allows an additional depth/stencil test to be performed before fragment shading.
     ///
-    /// Unlike `Force`, this does not disable depth/stencil tests after fragment shading.
+    /// It is up to the driver to decide whether early tests are performed. Unlike `Force`, this
+    /// does not disable depth/stencil tests after fragment shading.
     Allow {
         /// Specifies restrictions on how the depth value can be modified within the fragment
         /// shader.
-        conservative: Option<ConservativeDepth>,
+        ///
+        /// This may be taken into account when deciding whether to perform early tests.
+        conservative: ConservativeDepth,
     },
 }
 
