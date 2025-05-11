@@ -241,7 +241,8 @@ pub use block::Block;
 ///
 /// Normally, depth/stencil tests are performed after fragment shading. However, as an optimization,
 /// most drivers will move the depth/stencil tests before fragment shading if this does not
-/// have any observable consequences. This optimization is disabled in the following circumstances:
+/// have any observable consequences. This optimization is disabled under the following
+/// circumstances:
 ///   - `discard` is called in the fragment shader.
 ///   - The fragment shader writes to the depth buffer.
 ///   - The fragment shader writes to any storage bindings.
