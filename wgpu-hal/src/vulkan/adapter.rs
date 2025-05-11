@@ -1951,6 +1951,7 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::GroupNonUniformBallot);
                 capabilities.push(spv::Capability::GroupNonUniformShuffle);
                 capabilities.push(spv::Capability::GroupNonUniformShuffleRelative);
+                capabilities.push(spv::Capability::GroupNonUniformQuad);
             }
 
             if features.intersects(
