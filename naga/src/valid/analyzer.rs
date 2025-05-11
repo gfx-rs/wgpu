@@ -1146,15 +1146,8 @@ impl FunctionInfo {
                         | crate::GatherMode::QuadBroadcast(index) => {
                             let _ = self.add_ref(index);
                         }
+                        crate::GatherMode::QuadSwap(_) => {}
                     }
-                    FunctionUniformity::new()
-                }
-                S::SubgroupQuadSwap {
-                    direction: _,
-                    argument,
-                    result: _,
-                } => {
-                    let _ = self.add_ref(argument);
                     FunctionUniformity::new()
                 }
             };

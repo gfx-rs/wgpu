@@ -2621,6 +2621,20 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         write!(self.out, ", ")?;
                         self.write_expr(module, index, func_ctx)?;
                     }
+                    crate::GatherMode::QuadSwap(direction) => {
+                        match direction {
+                            crate::Direction::X => {
+                                write!(self.out, "QuadReadAcrossX(")?;
+                            }
+                            crate::Direction::Y => {
+                                write!(self.out, "QuadReadAcrossY(")?;
+                            }
+                            crate::Direction::Diagonal => {
+                                write!(self.out, "QuadReadAcrossDiagonal(")?;
+                            }
+                        }
+                        self.write_expr(module, argument, func_ctx)?;
+                    }
                     _ => {
                         write!(self.out, "WaveReadLaneAt(")?;
                         self.write_expr(module, argument, func_ctx)?;
@@ -2644,40 +2658,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 self.write_expr(module, index, func_ctx)?;
                             }
                             crate::GatherMode::QuadBroadcast(_) => unreachable!(),
+                            crate::GatherMode::QuadSwap(_) => unreachable!(),
                         }
                     }
                 }
-                writeln!(self.out, ");")?;
-            }
-            Statement::SubgroupQuadSwap {
-                direction,
-                argument,
-                result,
-            } => {
-                write!(self.out, "{level}")?;
-                write!(self.out, "const ")?;
-                let name = Baked(result).to_string();
-                match func_ctx.info[result].ty {
-                    proc::TypeResolution::Handle(handle) => self.write_type(module, handle)?,
-                    proc::TypeResolution::Value(ref value) => {
-                        self.write_value_type(module, value)?
-                    }
-                };
-                write!(self.out, " {name} = ")?;
-                self.named_expressions.insert(result, name);
-
-                match direction {
-                    crate::Direction::X => {
-                        write!(self.out, "QuadReadAcrossX(")?;
-                    }
-                    crate::Direction::Y => {
-                        write!(self.out, "QuadReadAcrossY(")?;
-                    }
-                    crate::Direction::Diagonal => {
-                        write!(self.out, "QuadReadAcrossDiagonal(")?;
-                    }
-                }
-                self.write_expr(module, argument, func_ctx)?;
                 writeln!(self.out, ");")?;
             }
         }

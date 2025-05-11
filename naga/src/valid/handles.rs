@@ -742,16 +742,8 @@ impl super::Validator {
                     | crate::GatherMode::ShuffleUp(index)
                     | crate::GatherMode::ShuffleXor(index)
                     | crate::GatherMode::QuadBroadcast(index) => validate_expr(index)?,
+                    crate::GatherMode::QuadSwap(_) => {}
                 }
-                validate_expr(result)?;
-                Ok(())
-            }
-            crate::Statement::SubgroupQuadSwap {
-                direction: _,
-                argument,
-                result,
-            } => {
-                validate_expr(argument)?;
                 validate_expr(result)?;
                 Ok(())
             }

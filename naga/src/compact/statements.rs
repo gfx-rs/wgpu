@@ -145,15 +145,8 @@ impl FunctionTracer<'_> {
                             | crate::GatherMode::QuadBroadcast(index) => {
                                 self.expressions_used.insert(index);
                             }
+                            crate::GatherMode::QuadSwap(_) => {}
                         }
-                        self.expressions_used.insert(argument);
-                        self.expressions_used.insert(result);
-                    }
-                    St::SubgroupQuadSwap {
-                        direction: _,
-                        argument,
-                        result,
-                    } => {
                         self.expressions_used.insert(argument);
                         self.expressions_used.insert(result);
                     }
@@ -361,15 +354,8 @@ impl FunctionMap {
                             | crate::GatherMode::ShuffleUp(ref mut index)
                             | crate::GatherMode::ShuffleXor(ref mut index)
                             | crate::GatherMode::QuadBroadcast(ref mut index) => adjust(index),
+                            crate::GatherMode::QuadSwap(_) => {}
                         }
-                        adjust(argument);
-                        adjust(result);
-                    }
-                    St::SubgroupQuadSwap {
-                        direction: _,
-                        ref mut argument,
-                        ref mut result,
-                    } => {
                         adjust(argument);
                         adjust(result);
                     }

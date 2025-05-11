@@ -2956,8 +2956,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             )?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
-                                crate::Statement::SubgroupQuadSwap {
-                                    direction: crate::Direction::X,
+                                crate::Statement::SubgroupGather {
+                                    mode: crate::GatherMode::QuadSwap(crate::Direction::X),
                                     argument,
                                     result,
                                 },
@@ -2980,8 +2980,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             )?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
-                                crate::Statement::SubgroupQuadSwap {
-                                    direction: crate::Direction::Y,
+                                crate::Statement::SubgroupGather {
+                                    mode: crate::GatherMode::QuadSwap(crate::Direction::Y),
                                     argument,
                                     result,
                                 },
@@ -3004,8 +3004,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             )?;
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
-                                crate::Statement::SubgroupQuadSwap {
-                                    direction: crate::Direction::Diagonal,
+                                crate::Statement::SubgroupGather {
+                                    mode: crate::GatherMode::QuadSwap(crate::Direction::Diagonal),
                                     argument,
                                     result,
                                 },

@@ -763,17 +763,10 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 | crate::GatherMode::QuadBroadcast(ref mut index) => {
                     adjust(index);
                 }
+                crate::GatherMode::QuadSwap(_) => {}
             }
             adjust(argument);
             adjust(result)
-        }
-        Statement::SubgroupQuadSwap {
-            ref mut argument,
-            ref mut result,
-            ..
-        } => {
-            adjust(argument);
-            adjust(result);
         }
         Statement::Call {
             ref mut arguments,

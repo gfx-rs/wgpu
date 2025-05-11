@@ -383,6 +383,7 @@ impl StatementGraph {
                         | crate::GatherMode::QuadBroadcast(index) => {
                             self.dependencies.push((id, index, "index"))
                         }
+                        crate::GatherMode::QuadSwap(_) => {}
                     }
                     self.dependencies.push((id, argument, "arg"));
                     self.emits.push((id, result));
@@ -394,19 +395,11 @@ impl StatementGraph {
                         crate::GatherMode::ShuffleUp(_) => "SubgroupShuffleUp",
                         crate::GatherMode::ShuffleXor(_) => "SubgroupShuffleXor",
                         crate::GatherMode::QuadBroadcast(_) => "SubgroupQuadBroadcast",
-                    }
-                }
-                S::SubgroupQuadSwap {
-                    direction,
-                    argument,
-                    result,
-                } => {
-                    self.dependencies.push((id, argument, "arg"));
-                    self.emits.push((id, result));
-                    match direction {
-                        crate::Direction::X => "SubgroupQuadSwapX",
-                        crate::Direction::Y => "SubgroupQuadSwapY",
-                        crate::Direction::Diagonal => "SubgroupQuadSwapDiagonal",
+                        crate::GatherMode::QuadSwap(direction) => match direction {
+                            crate::Direction::X => "SubgroupQuadSwapX",
+                            crate::Direction::Y => "SubgroupQuadSwapY",
+                            crate::Direction::Diagonal => "SubgroupQuadSwapDiagonal",
+                        },
                     }
                 }
             };

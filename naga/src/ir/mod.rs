@@ -1279,8 +1279,20 @@ pub enum GatherMode {
     ShuffleUp(Handle<Expression>),
     /// Each gathers from their lane xored with the given by the expression
     ShuffleXor(Handle<Expression>),
-    /// All gather from the same lane at the index given by the expression
+    /// All gather from the same quad lane at the index given by the expression
     QuadBroadcast(Handle<Expression>),
+    /// Each gathers from the opposite quad lane along the given direction
+    QuadSwap(Direction),
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum Direction {
+    X = 0,
+    Y = 1,
+    Diagonal = 2,
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -2101,26 +2113,6 @@ pub enum Statement {
         /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
         result: Handle<Expression>,
     },
-    SubgroupQuadSwap {
-        /// In which direction to swap
-        direction: Direction,
-        /// The value to swap over
-        argument: Handle<Expression>,
-        /// The [`SubgroupOperationResult`] expression representing this load's result.
-        ///
-        /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
-        result: Handle<Expression>,
-    }
-}
-
-#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum Direction {
-    X = 0,
-    Y = 1,
-    Diagonal = 2,
 }
 
 /// A function argument.

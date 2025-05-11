@@ -4184,8 +4184,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
 
                     block.push(
-                        crate::Statement::SubgroupQuadSwap {
-                            direction,
+                        crate::Statement::SubgroupGather {
+                            mode: crate::GatherMode::QuadSwap(direction),
                             result: result_handle,
                             argument: argument_handle,
                         },
@@ -4574,8 +4574,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::RayQuery { .. }
                 | S::SubgroupBallot { .. }
                 | S::SubgroupCollectiveOperation { .. }
-                | S::SubgroupGather { .. }
-                | S::SubgroupQuadSwap { .. } => {}
+                | S::SubgroupGather { .. } => {}
                 S::Call {
                     function: ref mut callee,
                     ref arguments,

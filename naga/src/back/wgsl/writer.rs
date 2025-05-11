@@ -948,6 +948,17 @@ impl<W: Write> Writer<W> {
                     crate::GatherMode::QuadBroadcast(_) => {
                         write!(self.out, "quadBroadcast(")?;
                     }
+                    crate::GatherMode::QuadSwap(direction) => match direction {
+                        crate::Direction::X => {
+                            write!(self.out, "quadSwapX(")?;
+                        }
+                        crate::Direction::Y => {
+                            write!(self.out, "quadSwapY(")?;
+                        }
+                        crate::Direction::Diagonal => {
+                            write!(self.out, "quadSwapDiagonal(")?;
+                        }
+                    },
                 }
                 self.write_expr(module, argument, func_ctx)?;
                 match mode {
@@ -961,31 +972,8 @@ impl<W: Write> Writer<W> {
                         write!(self.out, ", ")?;
                         self.write_expr(module, index, func_ctx)?;
                     }
+                    crate::GatherMode::QuadSwap(_) => {}
                 }
-                writeln!(self.out, ");")?;
-            }
-            Statement::SubgroupQuadSwap {
-                direction,
-                argument,
-                result,
-            } => {
-                write!(self.out, "{level}")?;
-                let res_name = Baked(result).to_string();
-                self.start_named_expr(module, result, func_ctx, &res_name)?;
-                self.named_expressions.insert(result, res_name);
-
-                match direction {
-                    crate::Direction::X => {
-                        write!(self.out, "quadSwapX(")?;
-                    }
-                    crate::Direction::Y => {
-                        write!(self.out, "quadSwapY(")?;
-                    }
-                    crate::Direction::Diagonal => {
-                        write!(self.out, "quadSwapDiagonal(")?;
-                    }
-                }
-                self.write_expr(module, argument, func_ctx)?;
                 writeln!(self.out, ");")?;
             }
         }

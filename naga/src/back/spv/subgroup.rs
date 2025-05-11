@@ -146,7 +146,7 @@ impl BlockContext<'_> {
                     &[spirv::Capability::GroupNonUniformShuffleRelative],
                 )?;
             }
-            crate::GatherMode::QuadBroadcast(_) => {
+            crate::GatherMode::QuadBroadcast(_) | crate::GatherMode::QuadSwap(_) => {
                 self.writer.require_any(
                     "GroupNonUniformQuad",
                     &[spirv::Capability::GroupNonUniformQuad],
@@ -191,6 +191,7 @@ impl BlockContext<'_> {
                     crate::GatherMode::ShuffleUp(_) => spirv::Op::GroupNonUniformShuffleUp,
                     crate::GatherMode::ShuffleXor(_) => spirv::Op::GroupNonUniformShuffleXor,
                     crate::GatherMode::QuadBroadcast(_) => spirv::Op::GroupNonUniformQuadBroadcast,
+                    crate::GatherMode::QuadSwap(_) => unreachable!(),
                 };
                 block.body.push(Instruction::group_non_uniform_gather(
                     op,
@@ -199,6 +200,20 @@ impl BlockContext<'_> {
                     exec_scope_id,
                     arg_id,
                     index_id,
+                ));
+            }
+            crate::GatherMode::QuadSwap(direction) => {
+                let direction = self.get_index_constant(match direction {
+                    crate::Direction::X => 0,
+                    crate::Direction::Y => 1,
+                    crate::Direction::Diagonal => 2,
+                });
+                block.body.push(Instruction::group_non_uniform_quad_swap(
+                    result_type_id,
+                    id,
+                    exec_scope_id,
+                    arg_id,
+                    direction,
                 ));
             }
         }

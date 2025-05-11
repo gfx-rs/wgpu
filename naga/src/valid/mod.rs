@@ -221,7 +221,7 @@ impl super::GatherMode {
             Self::BroadcastFirst | Self::Broadcast(_) => S::BALLOT,
             Self::Shuffle(_) | Self::ShuffleXor(_) => S::SHUFFLE,
             Self::ShuffleUp(_) | Self::ShuffleDown(_) => S::SHUFFLE_RELATIVE,
-            Self::QuadBroadcast(_) => S::QUAD_FRAGMENT_COMPUTE,
+            Self::QuadBroadcast(_) | Self::QuadSwap(_) => S::QUAD_FRAGMENT_COMPUTE,
         }
     }
 }
