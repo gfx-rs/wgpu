@@ -773,7 +773,9 @@ pub struct AccelerationStructure {
     compacted_size_query: Option<vk::QueryPool>,
 }
 
-impl crate::DynAccelerationStructure for AccelerationStructure {}
+impl crate::DynAccelerationStructure for AccelerationStructure {
+    fn set_dependencies(&self, _dependencies: &[&dyn crate::DynAccelerationStructure]) {}
+}
 
 #[derive(Debug)]
 pub struct Texture {

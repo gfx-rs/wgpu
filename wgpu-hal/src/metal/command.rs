@@ -740,11 +740,19 @@ impl crate::CommandEncoder for super::CommandEncoder {
                             changes_sizes_buffer = true;
                         }
                     }
-                    super::BufferResource::AccelerationStructure(ptr) => {
+                    super::BufferResource::AccelerationStructure(acceleration_structure) => {
                         encoder.set_vertex_acceleration_structure(
                             (bg_info.base_resource_indices.vs.buffers + index) as u64,
-                            Some(ptr.as_native()),
+                            Some(acceleration_structure.as_raw().as_native()),
                         );
+                        let dependencies = acceleration_structure.dependencies.read();
+                        for blas in dependencies.iter() {
+                            encoder.use_resource_at(
+                                blas,
+                                metal::MTLResourceUsage::Read,
+                                metal::MTLRenderStages::Vertex,
+                            );
+                        }
                     }
                 }
             }
@@ -783,11 +791,19 @@ impl crate::CommandEncoder for super::CommandEncoder {
                             changes_sizes_buffer = true;
                         }
                     }
-                    super::BufferResource::AccelerationStructure(ptr) => {
+                    super::BufferResource::AccelerationStructure(acceleration_structure) => {
                         encoder.set_fragment_acceleration_structure(
                             (bg_info.base_resource_indices.fs.buffers + index) as u64,
-                            Some(ptr.as_native()),
+                            Some(acceleration_structure.as_raw().as_native()),
                         );
+                        let dependencies = acceleration_structure.dependencies.read();
+                        for blas in dependencies.iter() {
+                            encoder.use_resource_at(
+                                blas,
+                                metal::MTLResourceUsage::Read,
+                                metal::MTLRenderStages::Fragment,
+                            );
+                        }
                     }
                 }
             }
@@ -870,11 +886,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
                             changes_sizes_buffer = true;
                         }
                     }
-                    super::BufferResource::AccelerationStructure(ptr) => {
+                    super::BufferResource::AccelerationStructure(acceleration_structure) => {
                         encoder.set_acceleration_structure(
                             (bg_info.base_resource_indices.cs.buffers + index) as u64,
-                            Some(ptr.as_native()),
+                            Some(acceleration_structure.as_raw().as_native()),
                         );
+                        let dependencies = acceleration_structure.dependencies.read();
+                        for blas in dependencies.iter() {
+                            encoder.use_resource(blas, metal::MTLResourceUsage::Read);
+                        }
                     }
                 }
             }

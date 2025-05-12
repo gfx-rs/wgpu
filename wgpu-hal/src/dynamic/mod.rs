@@ -51,7 +51,7 @@ macro_rules! impl_dyn_resource {
 pub(crate) use impl_dyn_resource;
 
 /// Extension trait for `DynResource` used by implementations of various dynamic resource traits.
-trait DynResourceExt {
+pub(crate) trait DynResourceExt {
     /// # Panics
     ///
     /// - Panics if `self` is not downcastable to `T`.
@@ -104,7 +104,9 @@ impl<R: DynResource + ?Sized> DynResourceExt for R {
     }
 }
 
-pub trait DynAccelerationStructure: DynResource + fmt::Debug {}
+pub trait DynAccelerationStructure: DynResource + fmt::Debug {
+    fn set_dependencies(&self, dependencies: &[&dyn DynAccelerationStructure]);
+}
 pub trait DynBindGroup: DynResource + fmt::Debug {}
 pub trait DynBindGroupLayout: DynResource + fmt::Debug {}
 pub trait DynBuffer: DynResource + fmt::Debug {}

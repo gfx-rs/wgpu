@@ -1013,7 +1013,7 @@ impl crate::Device for super::Device {
                                     desc.acceleration_structures[start..end].iter().map(
                                         |acceleration_structure| {
                                             super::BufferResource::AccelerationStructure(
-                                                acceleration_structure.as_raw(),
+                                                (*acceleration_structure).clone(),
                                             )
                                         },
                                     ),
@@ -1656,6 +1656,7 @@ impl crate::Device for super::Device {
         objc::rc::autoreleasepool(|| {
             Ok(super::AccelerationStructure {
                 raw: device.new_acceleration_structure_with_size(descriptor.size),
+                dependencies: Arc::new(parking_lot::RwLock::new(Vec::new())),
             })
         })
     }

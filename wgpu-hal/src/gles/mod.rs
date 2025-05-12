@@ -741,7 +741,9 @@ impl crate::DynQuerySet for QuerySet {}
 #[derive(Debug)]
 pub struct AccelerationStructure;
 
-impl crate::DynAccelerationStructure for AccelerationStructure {}
+impl crate::DynAccelerationStructure for AccelerationStructure {
+    fn set_dependencies(&self, _dependencies: &[&dyn crate::DynAccelerationStructure]) {}
+}
 
 #[derive(Debug)]
 pub struct PipelineCache;

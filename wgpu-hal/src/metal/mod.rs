@@ -670,7 +670,7 @@ pub struct PipelineLayout {
 
 impl crate::DynPipelineLayout for PipelineLayout {}
 
-trait AsNative {
+pub(crate) trait AsNative {
     type Native;
     fn from(native: &Self::Native) -> Self;
     fn as_native(&self) -> &Self::Native;
@@ -764,7 +764,7 @@ struct BufferResourceBinding {
 #[derive(Debug)]
 enum BufferResource {
     Buffer(BufferResourceBinding),
-    AccelerationStructure(AccelerationStructurePtr),
+    AccelerationStructure(AccelerationStructure),
 }
 
 #[derive(Debug)]
@@ -1032,9 +1032,10 @@ pub struct PipelineCache;
 
 impl crate::DynPipelineCache for PipelineCache {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AccelerationStructure {
     raw: metal::AccelerationStructure,
+    dependencies: Arc<RwLock<Vec<metal::AccelerationStructure>>>,
 }
 
 impl AccelerationStructure {
@@ -1043,4 +1044,16 @@ impl AccelerationStructure {
     }
 }
 
-impl crate::DynAccelerationStructure for AccelerationStructure {}
+impl crate::DynAccelerationStructure for AccelerationStructure {
+    fn set_dependencies(&self, dependencies: &[&dyn crate::DynAccelerationStructure]) {
+        use crate::dynamic::DynResourceExt;
+        *self.dependencies.write() = dependencies
+            .iter()
+            .map(|blas| {
+                blas.expect_downcast_ref::<AccelerationStructure>()
+                    .raw
+                    .clone()
+            })
+            .collect::<Vec<_>>();
+    }
+}

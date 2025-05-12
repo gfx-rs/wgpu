@@ -584,6 +584,13 @@ impl Global {
                 dependencies.push(blas.clone());
             }
 
+            let dependencies_raw = dependencies
+                .iter()
+                .map(|blas| blas.try_raw(&snatch_guard).unwrap())
+                .collect::<Vec<_>>();
+            let tlas_raw = tlas.try_raw(&snatch_guard)?;
+            tlas_raw.set_dependencies(&dependencies_raw);
+
             build_command.tlas_s_built.push(TlasBuild {
                 tlas: tlas.clone(),
                 dependencies,

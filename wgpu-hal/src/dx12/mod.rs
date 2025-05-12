@@ -1134,7 +1134,9 @@ pub struct AccelerationStructure {
     allocation: suballocation::Allocation,
 }
 
-impl crate::DynAccelerationStructure for AccelerationStructure {}
+impl crate::DynAccelerationStructure for AccelerationStructure {
+    fn set_dependencies(&self, _dependencies: &[&dyn crate::DynAccelerationStructure]) {}
+}
 
 impl SwapChain {
     unsafe fn release_resources(mut self) -> Dxgi::IDXGISwapChain3 {

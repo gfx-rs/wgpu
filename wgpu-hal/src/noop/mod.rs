@@ -60,7 +60,9 @@ impl crate::Api for Api {
 
 crate::impl_dyn_resource!(Buffer, CommandBuffer, Context, Fence, Resource);
 
-impl crate::DynAccelerationStructure for Resource {}
+impl crate::DynAccelerationStructure for Resource {
+    fn set_dependencies(&self, _dependencies: &[&dyn crate::DynAccelerationStructure]) {}
+}
 impl crate::DynBindGroup for Resource {}
 impl crate::DynBindGroupLayout for Resource {}
 impl crate::DynBuffer for Buffer {}
