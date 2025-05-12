@@ -2513,6 +2513,7 @@ dependencies = [
  "hlsl-snapshots",
  "indexmap",
  "itertools 0.14.0",
+ "libm",
  "log",
  "num-traits",
  "once_cell",

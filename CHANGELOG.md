@@ -42,6 +42,10 @@ Bottom level categories:
 
 ### New Features
 
+#### Naga
+
+- Added `no_std` support with default features disabled. By @Bushrat011899 in [#7585](https://github.com/gfx-rs/wgpu/pull/7585).
+
 #### General
 
 - Add support for astc-sliced-3d feature. By @mehmetoguzderin in [#7577](https://github.com/gfx-rs/wgpu/issues/7577)
