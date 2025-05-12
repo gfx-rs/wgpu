@@ -1,8 +1,9 @@
+use crate::utils;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
 use std::f32::consts::PI;
 use std::ops::IndexMut;
-use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task, time::Instant};
+use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task};
 use wgpu::util::DeviceExt;
 
 // from cube
@@ -310,8 +311,8 @@ struct Example {
     tlas_package: wgpu::TlasPackage,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
-    start_inst: Instant,
     scene_components: SceneComponents,
+    animation_timer: utils::AnimationTimer,
 }
 
 impl crate::framework::Example for Example {
@@ -434,16 +435,14 @@ impl crate::framework::Example for Example {
             ],
         });
 
-        let start_inst = Instant::now();
-
         Example {
             uniforms,
             uniform_buf,
             tlas_package,
             pipeline,
             bind_group,
-            start_inst,
             scene_components,
+            animation_timer: utils::AnimationTimer::default(),
         }
     }
 
@@ -476,7 +475,7 @@ impl crate::framework::Example for Example {
 
             let side_count = 2;
 
-            let anim_time = self.start_inst.elapsed().as_secs_f64() as f32;
+            let anim_time = self.animation_timer.time();
 
             for x in 0..side_count {
                 for y in 0..side_count {
