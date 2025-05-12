@@ -713,7 +713,8 @@ impl Buffer {
             let raw = match self.raw.snatch(&mut snatch_guard) {
                 Some(raw) => raw,
                 None => {
-                    return Err(DestroyError::AlreadyDestroyed);
+                    // Per spec, it is valid to call `destroy` multiple times.
+                    return Ok(());
                 }
             };
 
@@ -1189,7 +1190,8 @@ impl Texture {
                     return Ok(());
                 }
                 None => {
-                    return Err(DestroyError::AlreadyDestroyed);
+                    // Per spec, it is valid to call `destroy` multiple times.
+                    return Ok(());
                 }
             };
 
@@ -1953,8 +1955,6 @@ impl QuerySet {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum DestroyError {
-    #[error("Resource is already destroyed")]
-    AlreadyDestroyed,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
