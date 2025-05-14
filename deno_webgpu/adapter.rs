@@ -3,15 +3,14 @@
 #[allow(clippy::disallowed_types)]
 use std::collections::HashSet;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use deno_core::cppgc::SameObject;
 use deno_core::op2;
 use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::OpState;
+use deno_core::V8TaskSpawner;
 use deno_core::WebIDL;
-use tokio::sync::Mutex;
 
 use super::device::GPUDevice;
 use crate::webidl::features_to_feature_names;
@@ -108,7 +107,6 @@ impl GPUAdapter {
     fn request_device(
         &self,
         state: &mut OpState,
-        isolate_ptr: *mut v8::Isolate,
         scope: &mut v8::HandleScope,
         #[webidl] descriptor: GPUDeviceDescriptor,
     ) -> Result<v8::Global<v8::Value>, CreateDeviceError> {
@@ -144,11 +142,9 @@ impl GPUAdapter {
             self.instance
                 .adapter_request_device(self.id, &wgpu_descriptor, None, None)?;
 
-        let (lost_sender, lost_receiver) = tokio::sync::oneshot::channel();
-        let (uncaptured_sender, mut uncaptured_receiver) = tokio::sync::mpsc::unbounded_channel();
-        let (uncaptured_sender_is_closed_sender, mut uncaptured_sender_is_closed_receiver) =
-            tokio::sync::oneshot::channel::<()>();
-
+        let spawner = state.borrow::<V8TaskSpawner>().clone();
+        let lost_resolver = v8::PromiseResolver::new(scope).unwrap();
+        let lost_promise = lost_resolver.get_promise(scope);
         let device = GPUDevice {
             instance: self.instance.clone(),
             id: device,
@@ -156,17 +152,17 @@ impl GPUAdapter {
             label: descriptor.label,
             queue_obj: SameObject::new(),
             adapter_info: self.info.clone(),
-            error_handler: Arc::new(super::error::DeviceErrorHandler::new(
-                lost_sender,
-                uncaptured_sender,
-                uncaptured_sender_is_closed_sender,
+            error_handler: Rc::new(super::error::DeviceErrorHandler::new(
+                v8::Global::new(scope, lost_resolver),
+                spawner,
             )),
             adapter: self.id,
-            lost_receiver: Mutex::new(Some(lost_receiver)),
+            lost_promise: v8::Global::new(scope, lost_promise),
             limits: SameObject::new(),
             features: SameObject::new(),
         };
         let device = deno_core::cppgc::make_cppgc_object(scope, device);
+        let weak_device = v8::Weak::new(scope, device);
         let event_target_setup = state.borrow::<crate::EventTargetSetup>();
         let webidl_brand = v8::Local::new(scope, event_target_setup.brand.clone());
         device.set(scope, webidl_brand, webidl_brand);
@@ -176,52 +172,15 @@ impl GPUAdapter {
         let null = v8::null(scope);
         set_event_target_data.call(scope, null.into(), &[device.into()]);
 
-        let key = v8::String::new(scope, "dispatchEvent").unwrap();
-        let val = device.get(scope, key.into()).unwrap();
-        let func = v8::Global::new(scope, val.try_cast::<v8::Function>().unwrap());
-        let device = v8::Global::new(scope, device.cast::<v8::Value>());
-        let error_event_class = state.borrow::<crate::ErrorEventClass>().0.clone();
+        // Now that the device is fully constructed, give the error handler a
+        // weak reference to it.
+        let device = device.cast::<v8::Value>();
+        deno_core::cppgc::try_unwrap_cppgc_object::<GPUDevice>(scope, device)
+            .unwrap()
+            .error_handler
+            .set_device(weak_device);
 
-        let context = scope.get_current_context();
-        let context = v8::Global::new(scope, context);
-
-        let task_device = device.clone();
-        deno_unsync::spawn(async move {
-            loop {
-                // TODO(@crowlKats): check for uncaptured_receiver.is_closed instead once tokio is upgraded
-                if !matches!(
-                    uncaptured_sender_is_closed_receiver.try_recv(),
-                    Err(tokio::sync::oneshot::error::TryRecvError::Empty)
-                ) {
-                    break;
-                }
-                let Some(error) = uncaptured_receiver.recv().await else {
-                    break;
-                };
-
-                // SAFETY: eh, it's safe
-                let isolate: &mut v8::Isolate = unsafe { &mut *isolate_ptr };
-                let scope = &mut v8::HandleScope::with_context(isolate, &context);
-                let error = deno_core::error::to_v8_error(scope, &error);
-
-                let error_event_class = v8::Local::new(scope, error_event_class.clone());
-                let constructor = v8::Local::<v8::Function>::try_from(error_event_class).unwrap();
-                let kind = v8::String::new(scope, "uncapturederror").unwrap();
-
-                let obj = v8::Object::new(scope);
-                let key = v8::String::new(scope, "error").unwrap();
-                obj.set(scope, key.into(), error);
-
-                let event = constructor
-                    .new_instance(scope, &[kind.into(), obj.into()])
-                    .unwrap();
-
-                let recv = v8::Local::new(scope, task_device.clone());
-                func.open(scope).call(scope, recv, &[event.into()]);
-            }
-        });
-
-        Ok(device)
+        Ok(v8::Global::new(scope, device))
     }
 }
 

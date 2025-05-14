@@ -29,6 +29,7 @@ use crate::adapter::GPUAdapterInfo;
 use crate::adapter::GPUSupportedFeatures;
 use crate::adapter::GPUSupportedLimits;
 use crate::command_encoder::GPUCommandEncoder;
+use crate::error::GPUError;
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
@@ -50,7 +51,7 @@ pub struct GPUDevice {
     pub queue_obj: SameObject<GPUQueue>,
 
     pub error_handler: super::error::ErrorHandler,
-    pub lost_receiver: tokio::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+    pub lost_promise: v8::Global<v8::Promise>,
 }
 
 impl Drop for GPUDevice {
@@ -127,6 +128,8 @@ impl GPUDevice {
     #[fast]
     fn destroy(&self) {
         self.instance.device_destroy(self.id);
+        self.error_handler
+            .push_error(Some(GPUError::Lost(GPUDeviceLostReason::Destroyed)));
     }
 
     #[required(1)]
@@ -560,16 +563,10 @@ impl GPUDevice {
         }
     }
 
-    // TODO(@crowlKats): support returning same promise
-    #[async_method]
     #[getter]
-    #[cppgc]
-    async fn lost(&self) -> GPUDeviceLostInfo {
-        if let Some(lost_receiver) = self.lost_receiver.lock().await.take() {
-            let _ = lost_receiver.await;
-        }
-
-        GPUDeviceLostInfo
+    #[global]
+    fn lost(&self) -> v8::Global<v8::Promise> {
+        self.lost_promise.clone()
     }
 
     #[required(1)]
@@ -826,7 +823,17 @@ impl GPUDevice {
     }
 }
 
-pub struct GPUDeviceLostInfo;
+#[derive(Clone, Debug, Default, Hash, Eq, PartialEq)]
+pub enum GPUDeviceLostReason {
+    #[default]
+    Unknown,
+    Destroyed,
+}
+
+#[derive(Default)]
+pub struct GPUDeviceLostInfo {
+    pub reason: GPUDeviceLostReason,
+}
 
 impl GarbageCollected for GPUDeviceLostInfo {}
 
@@ -835,7 +842,11 @@ impl GPUDeviceLostInfo {
     #[getter]
     #[string]
     fn reason(&self) -> &'static str {
-        "unknown"
+        use GPUDeviceLostReason::*;
+        match self.reason {
+            Unknown => "unknown",
+            Destroyed => "destroyed",
+        }
     }
 
     #[getter]
