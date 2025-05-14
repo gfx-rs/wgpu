@@ -7,7 +7,6 @@ use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::sync::Arc;
-use std::thread;
 
 use super::TimestampQuerySupport;
 
@@ -342,13 +341,6 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
-        let current_extent = if surface.main_thread_id == thread::current().id() {
-            Some(surface.dimensions())
-        } else {
-            log::warn!("Unable to get the current view dimensions on a non-main thread");
-            None
-        };
-
         let mut formats = vec![
             wgt::TextureFormat::Bgra8Unorm,
             wgt::TextureFormat::Bgra8UnormSrgb,
@@ -380,7 +372,7 @@ impl crate::Adapter for super::Adapter {
                 wgt::CompositeAlphaMode::PostMultiplied,
             ],
 
-            current_extent,
+            current_extent: Some(surface.dimensions()),
             usage: wgt::TextureUses::COLOR_TARGET
                 | wgt::TextureUses::COPY_SRC
                 | wgt::TextureUses::COPY_DST

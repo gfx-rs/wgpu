@@ -3,7 +3,6 @@
 use alloc::borrow::ToOwned as _;
 use core::mem::ManuallyDrop;
 use core::ptr::NonNull;
-use std::thread;
 
 use core_graphics_types::{
     base::CGFloat,
@@ -29,7 +28,6 @@ impl super::Surface {
             render_layer: Mutex::new(layer),
             swapchain_format: RwLock::new(None),
             extent: RwLock::new(wgt::Extent3d::default()),
-            main_thread_id: thread::current().id(),
             present_with_transaction: false,
         }
     }
