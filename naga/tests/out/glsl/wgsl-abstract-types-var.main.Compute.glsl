@@ -5,6 +5,169 @@ precision highp int;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
+ivec2 xvipaiai_1 = ivec2(42, 43);
+
+uvec2 xvupaiai_1 = uvec2(44u, 45u);
+
+vec2 xvfpaiai_1 = vec2(46.0, 47.0);
+
+vec2 xvfpafaf_1 = vec2(48.0, 49.0);
+
+vec2 xvfpaiaf_1 = vec2(48.0, 49.0);
+
+uvec2 xvupuai_2 = uvec2(42u, 43u);
+
+uvec2 xvupaiu_2 = uvec2(42u, 43u);
+
+uvec2 xvuuai_2 = uvec2(42u, 43u);
+
+uvec2 xvuaiu_2 = uvec2(42u, 43u);
+
+ivec2 xvip_1 = ivec2(0, 0);
+
+uvec2 xvup_1 = uvec2(0u, 0u);
+
+vec2 xvfp_1 = vec2(0.0, 0.0);
+
+mat2x2 xmfp_1 = mat2x2(vec2(0.0, 0.0), vec2(0.0, 0.0));
+
+mat2x2 xmfpaiaiaiai_1 = mat2x2(vec2(1.0, 2.0), vec2(3.0, 4.0));
+
+mat2x2 xmfpafaiaiai_1 = mat2x2(vec2(1.0, 2.0), vec2(3.0, 4.0));
+
+mat2x2 xmfpaiafaiai_1 = mat2x2(vec2(1.0, 2.0), vec2(3.0, 4.0));
+
+mat2x2 xmfpaiaiafai_1 = mat2x2(vec2(1.0, 2.0), vec2(3.0, 4.0));
+
+mat2x2 xmfpaiaiaiaf_1 = mat2x2(vec2(1.0, 2.0), vec2(3.0, 4.0));
+
+ivec2 xvispai_1 = ivec2(1);
+
+vec2 xvfspaf_1 = vec2(1.0);
+
+ivec2 xvis_ai_1 = ivec2(1);
+
+uvec2 xvus_ai_1 = uvec2(1u);
+
+vec2 xvfs_ai_1 = vec2(1.0);
+
+vec2 xvfs_af_1 = vec2(1.0);
+
+float xafafaf_1[2] = float[2](1.0, 2.0);
+
+float xafaiai_1[2] = float[2](1.0, 2.0);
+
+int xaipaiai_1[2] = int[2](1, 2);
+
+uint xaupaiai[2] = uint[2](1u, 2u);
+
+float xafpaiaf_1[2] = float[2](1.0, 2.0);
+
+float xafpafai_1[2] = float[2](1.0, 2.0);
+
+float xafpafaf_1[2] = float[2](1.0, 2.0);
+
+ivec3 xavipai_1[1] = ivec3[1](ivec3(1));
+
+vec3 xavfpai_1[1] = vec3[1](vec3(1.0));
+
+vec3 xavfpaf_1[1] = vec3[1](vec3(1.0));
+
+ivec2 xvisai_1 = ivec2(1);
+
+uvec2 xvusai_1 = uvec2(1u);
+
+vec2 xvfsai_1 = vec2(1.0);
+
+vec2 xvfsaf_1 = vec2(1.0);
+
+ivec2 ivispai = ivec2(1);
+
+vec2 ivfspaf = vec2(1.0);
+
+ivec2 ivis_ai = ivec2(1);
+
+uvec2 ivus_ai = uvec2(1u);
+
+vec2 ivfs_ai = vec2(1.0);
+
+vec2 ivfs_af = vec2(1.0);
+
+float iafafaf[2] = float[2](1.0, 2.0);
+
+float iafaiai[2] = float[2](1.0, 2.0);
+
+int iaipaiai_1[2] = int[2](1, 2);
+
+float iafpafaf_1[2] = float[2](1.0, 2.0);
+
+float iafpaiaf_1[2] = float[2](1.0, 2.0);
+
+float iafpafai_1[2] = float[2](1.0, 2.0);
+
+ivec3 iavipai[1] = ivec3[1](ivec3(1));
+
+ivec3 iavfpai[1] = ivec3[1](ivec3(1));
+
+vec3 iavfpaf[1] = vec3[1](vec3(1.0));
+
+
+void globals() {
+    ivec2 phony = xvipaiai_1;
+    uvec2 phony_1 = xvupaiai_1;
+    vec2 phony_2 = xvfpaiai_1;
+    vec2 phony_3 = xvfpafaf_1;
+    vec2 phony_4 = xvfpaiaf_1;
+    uvec2 phony_5 = xvupuai_2;
+    uvec2 phony_6 = xvupaiu_2;
+    uvec2 phony_7 = xvuuai_2;
+    uvec2 phony_8 = xvuaiu_2;
+    ivec2 phony_9 = xvip_1;
+    uvec2 phony_10 = xvup_1;
+    vec2 phony_11 = xvfp_1;
+    mat2x2 phony_12 = xmfp_1;
+    mat2x2 phony_13 = xmfpaiaiaiai_1;
+    mat2x2 phony_14 = xmfpafaiaiai_1;
+    mat2x2 phony_15 = xmfpaiafaiai_1;
+    mat2x2 phony_16 = xmfpaiaiafai_1;
+    mat2x2 phony_17 = xmfpaiaiaiaf_1;
+    ivec2 phony_18 = xvispai_1;
+    vec2 phony_19 = xvfspaf_1;
+    ivec2 phony_20 = xvis_ai_1;
+    uvec2 phony_21 = xvus_ai_1;
+    vec2 phony_22 = xvfs_ai_1;
+    vec2 phony_23 = xvfs_af_1;
+    float phony_24[2] = xafafaf_1;
+    float phony_25[2] = xafaiai_1;
+    int phony_26[2] = xaipaiai_1;
+    uint phony_27[2] = xaupaiai;
+    float phony_28[2] = xafpaiaf_1;
+    float phony_29[2] = xafpafai_1;
+    float phony_30[2] = xafpafaf_1;
+    ivec3 phony_31[1] = xavipai_1;
+    vec3 phony_32[1] = xavfpai_1;
+    vec3 phony_33[1] = xavfpaf_1;
+    ivec2 phony_34 = xvisai_1;
+    uvec2 phony_35 = xvusai_1;
+    vec2 phony_36 = xvfsai_1;
+    vec2 phony_37 = xvfsaf_1;
+    ivec2 phony_38 = ivispai;
+    vec2 phony_39 = ivfspaf;
+    ivec2 phony_40 = ivis_ai;
+    uvec2 phony_41 = ivus_ai;
+    vec2 phony_42 = ivfs_ai;
+    vec2 phony_43 = ivfs_af;
+    float phony_44[2] = iafafaf;
+    float phony_45[2] = iafaiai;
+    int phony_46[2] = iaipaiai_1;
+    float phony_47[2] = iafpafaf_1;
+    float phony_48[2] = iafpaiaf_1;
+    float phony_49[2] = iafpafai_1;
+    ivec3 phony_50[1] = iavipai;
+    ivec3 phony_51[1] = iavfpai;
+    vec3 phony_52[1] = iavfpaf;
+    return;
+}
 
 void all_constant_arguments() {
     ivec2 xvipaiai = ivec2(42, 43);
@@ -239,6 +402,7 @@ void mixed_constant_and_runtime_arguments() {
 }
 
 void main() {
+    globals();
     all_constant_arguments();
     mixed_constant_and_runtime_arguments();
     return;

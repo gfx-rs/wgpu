@@ -427,7 +427,7 @@
     overrides: [],
     global_variables: [
         (
-            name: Some("global_const"),
+            name: Some("msl_padding_global_const"),
             space: Private,
             binding: None,
             ty: 3,
@@ -2383,87 +2383,91 @@
                         pointer: 2,
                     ),
                     Literal(F32(1.0)),
+                    GlobalVariable(0),
+                    Load(
+                        pointer: 5,
+                    ),
                     GlobalVariable(1),
                     AccessIndex(
-                        base: 5,
+                        base: 7,
                         index: 0,
                     ),
                     Load(
-                        pointer: 6,
+                        pointer: 8,
                     ),
                     GlobalVariable(1),
                     AccessIndex(
-                        base: 8,
+                        base: 10,
                         index: 4,
                     ),
                     Load(
-                        pointer: 9,
+                        pointer: 11,
                     ),
                     Literal(U32(3)),
                     GlobalVariable(1),
                     AccessIndex(
-                        base: 12,
-                        index: 0,
-                    ),
-                    Access(
-                        base: 13,
-                        index: 11,
-                    ),
-                    AccessIndex(
                         base: 14,
                         index: 0,
                     ),
-                    Load(
-                        pointer: 15,
+                    Access(
+                        base: 15,
+                        index: 13,
                     ),
-                    GlobalVariable(1),
                     AccessIndex(
-                        base: 17,
-                        index: 5,
+                        base: 16,
+                        index: 0,
+                    ),
+                    Load(
+                        pointer: 17,
                     ),
                     GlobalVariable(1),
                     AccessIndex(
                         base: 19,
                         index: 5,
                     ),
-                    ArrayLength(20),
+                    GlobalVariable(1),
+                    AccessIndex(
+                        base: 21,
+                        index: 5,
+                    ),
+                    ArrayLength(22),
                     Literal(U32(2)),
                     Binary(
                         op: Subtract,
-                        left: 21,
-                        right: 22,
+                        left: 23,
+                        right: 24,
                     ),
                     Access(
-                        base: 18,
-                        index: 23,
+                        base: 20,
+                        index: 25,
                     ),
                     AccessIndex(
-                        base: 24,
+                        base: 26,
                         index: 0,
                     ),
-                    Load(
-                        pointer: 25,
-                    ),
-                    GlobalVariable(3),
                     Load(
                         pointer: 27,
                     ),
+                    GlobalVariable(3),
+                    Load(
+                        pointer: 29,
+                    ),
                     GlobalVariable(1),
                     AccessIndex(
-                        base: 29,
+                        base: 31,
                         index: 5,
                     ),
                     AccessIndex(
-                        base: 30,
+                        base: 32,
                         index: 0,
                     ),
                     AccessIndex(
-                        base: 31,
+                        base: 33,
                         index: 0,
                     ),
                     CallResult(2),
                     As(
-                        expr: 16,
+                        expr: 18,
                         kind: Sint,
                         convert: Some(4),
                     ),
@@ -2473,11 +2477,11 @@
                     Compose(
                         ty: 25,
                         components: [
-                            26,
-                            34,
-                            35,
+                            28,
                             36,
                             37,
+                            38,
+                            39,
                         ],
                     ),
                     LocalVariable(1),
@@ -2485,57 +2489,58 @@
                     Binary(
                         op: Add,
                         left: 0,
-                        right: 40,
+                        right: 42,
                     ),
                     Access(
-                        base: 39,
-                        index: 41,
+                        base: 41,
+                        index: 43,
                     ),
                     Literal(I32(42)),
                     Access(
-                        base: 39,
+                        base: 41,
                         index: 0,
                     ),
                     Load(
-                        pointer: 44,
+                        pointer: 46,
                     ),
                     ZeroValue(23),
                     CallResult(3),
                     Splat(
                         size: Quad,
-                        value: 45,
+                        value: 47,
                     ),
                     As(
-                        expr: 48,
+                        expr: 50,
                         kind: Float,
                         convert: Some(4),
                     ),
                     Binary(
                         op: Multiply,
-                        left: 7,
-                        right: 49,
+                        left: 9,
+                        right: 51,
                     ),
                     Literal(F32(2.0)),
                     Compose(
                         ty: 24,
                         components: [
-                            50,
-                            51,
+                            52,
+                            53,
                         ],
                     ),
                 ],
                 named_expressions: {
                     0: "vi",
                     3: "baz",
-                    7: "_matrix",
-                    10: "arr",
-                    11: "index",
-                    16: "b",
-                    26: "a",
-                    28: "c",
-                    32: "data_pointer",
-                    33: "foo_value",
-                    45: "value",
+                    6: "phony",
+                    9: "_matrix",
+                    12: "arr",
+                    13: "index",
+                    18: "b",
+                    28: "a",
+                    30: "c",
+                    34: "data_pointer",
+                    35: "foo_value",
+                    47: "value",
                 },
                 body: [
                     Emit((
@@ -2546,6 +2551,10 @@
                         pointer: 2,
                         value: 4,
                     ),
+                    Emit((
+                        start: 6,
+                        end: 7,
+                    )),
                     Call(
                         function: 0,
                         arguments: [],
@@ -2557,31 +2566,27 @@
                         result: None,
                     ),
                     Emit((
-                        start: 6,
-                        end: 8,
+                        start: 8,
+                        end: 10,
                     )),
                     Emit((
-                        start: 9,
-                        end: 11,
+                        start: 11,
+                        end: 13,
                     )),
                     Emit((
-                        start: 13,
-                        end: 17,
-                    )),
-                    Emit((
-                        start: 18,
+                        start: 15,
                         end: 19,
                     )),
                     Emit((
                         start: 20,
-                        end: 22,
+                        end: 21,
                     )),
                     Emit((
-                        start: 23,
-                        end: 27,
+                        start: 22,
+                        end: 24,
                     )),
                     Emit((
-                        start: 28,
+                        start: 25,
                         end: 29,
                     )),
                     Emit((
@@ -2589,57 +2594,61 @@
                         end: 31,
                     )),
                     Emit((
-                        start: 31,
+                        start: 32,
                         end: 33,
+                    )),
+                    Emit((
+                        start: 33,
+                        end: 35,
                     )),
                     Call(
                         function: 2,
                         arguments: [
                             2,
                         ],
-                        result: Some(33),
+                        result: Some(35),
                     ),
                     Emit((
-                        start: 34,
-                        end: 35,
+                        start: 36,
+                        end: 37,
                     )),
                     Emit((
-                        start: 38,
-                        end: 39,
-                    )),
-                    Store(
-                        pointer: 39,
-                        value: 38,
-                    ),
-                    Emit((
-                        start: 41,
-                        end: 43,
+                        start: 40,
+                        end: 41,
                     )),
                     Store(
-                        pointer: 42,
-                        value: 43,
+                        pointer: 41,
+                        value: 40,
                     ),
                     Emit((
-                        start: 44,
-                        end: 46,
+                        start: 43,
+                        end: 45,
+                    )),
+                    Store(
+                        pointer: 44,
+                        value: 45,
+                    ),
+                    Emit((
+                        start: 46,
+                        end: 48,
                     )),
                     Call(
                         function: 3,
                         arguments: [
-                            46,
+                            48,
                         ],
-                        result: Some(47),
+                        result: Some(49),
                     ),
                     Emit((
-                        start: 48,
-                        end: 51,
-                    )),
-                    Emit((
-                        start: 52,
+                        start: 50,
                         end: 53,
                     )),
+                    Emit((
+                        start: 54,
+                        end: 55,
+                    )),
                     Return(
-                        value: Some(52),
+                        value: Some(54),
                     ),
                 ],
                 diagnostic_filter_leaf: None,

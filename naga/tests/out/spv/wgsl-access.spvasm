@@ -1,16 +1,16 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 415
+; Bound: 416
 OpCapability Shader
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %333 "foo_vert" %328 %331
-OpEntryPoint Fragment %388 "foo_frag" %387
-OpEntryPoint GLCompute %406 "foo_compute"
-OpExecutionMode %388 OriginUpperLeft
-OpExecutionMode %406 LocalSize 1 1 1
+OpEntryPoint Fragment %389 "foo_frag" %388
+OpEntryPoint GLCompute %407 "foo_compute"
+OpExecutionMode %389 OriginUpperLeft
+OpExecutionMode %407 LocalSize 1 1 1
 %3 = OpString "access.wgsl"
 OpSource Unknown 0 %3 "// This snapshot tests accessing various containers, dereferencing pointers.
 
@@ -20,26 +20,26 @@ struct GlobalConst {
     c: i32,
 }
 // tests msl padding insertion for global constants
-var<private> global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0);
+var<private> msl_padding_global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0);
 
 struct AlignedWrapper {
-\t@align(8) value: i32
+    @align(8) value: i32
 }
 
 struct Bar {
-\t_matrix: mat4x3<f32>,
-\tmatrix_array: array<mat2x2<f32>, 2>,
-\tatom: atomic<i32>,
-\tatom_arr: array<atomic<i32>, 10>,
-\tarr: array<vec2<u32>, 2>,
-\tdata: array<AlignedWrapper>,
+    _matrix: mat4x3<f32>,
+    matrix_array: array<mat2x2<f32>, 2>,
+    atom: atomic<i32>,
+    atom_arr: array<atomic<i32>, 10>,
+    arr: array<vec2<u32>, 2>,
+    data: array<AlignedWrapper>,
 }
 
 @group(0) @binding(0)
 var<storage,read_write> bar: Bar;
 
 struct Baz {
-\tm: mat3x2<f32>,
+    m: mat3x2<f32>,
 }
 
 @group(0) @binding(1)
@@ -49,11 +49,11 @@ var<uniform> baz: Baz;
 var<storage,read_write> qux: vec2<i32>;
 
 fn test_matrix_within_struct_accesses() {
-\tvar idx = 1;
+    var idx = 1;
 
     idx--;
 
-\t// loads
+    // loads
     let l0 = baz.m;
     let l1 = baz.m[0];
     let l2 = baz.m[idx];
@@ -66,7 +66,7 @@ fn test_matrix_within_struct_accesses() {
 
     idx++;
 
-\t// stores
+    // stores
     t.m = mat3x2<f32>(vec2<f32>(6.0), vec2<f32>(5.0), vec2<f32>(4.0));
     t.m[0] = vec2<f32>(9.0);
     t.m[idx] = vec2<f32>(90.0);
@@ -77,18 +77,18 @@ fn test_matrix_within_struct_accesses() {
 }
 
 struct MatCx2InArray {
-\tam: array<mat4x2<f32>, 2>,
+    am: array<mat4x2<f32>, 2>,
 }
 
 @group(0) @binding(3)
 var<uniform> nested_mat_cx2: MatCx2InArray;
 
 fn test_matrix_within_array_within_struct_accesses() {
-\tvar idx = 1;
+    var idx = 1;
 
     idx--;
 
-\t// loads
+    // loads
     let l0 = nested_mat_cx2.am;
     let l1 = nested_mat_cx2.am[0];
     let l2 = nested_mat_cx2.am[0][0];
@@ -102,7 +102,7 @@ fn test_matrix_within_array_within_struct_accesses() {
 
     idx++;
 
-\t// stores
+    // stores
     t.am = array<mat4x2<f32>, 2>();
     t.am[0] = mat4x2<f32>(vec2<f32>(8.0), vec2<f32>(7.0), vec2<f32>(6.0), vec2<f32>(5.0));
     t.am[0][0] = vec2<f32>(9.0);
@@ -128,41 +128,42 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     let baz: f32 = foo;
     foo = 1.0;
 
-\ttest_matrix_within_struct_accesses();
-\ttest_matrix_within_array_within_struct_accesses();
+    _ = msl_padding_global_const;
+    test_matrix_within_struct_accesses();
+    test_matrix_within_array_within_struct_accesses();
 
     // test storage loads
-\tlet _matrix = bar._matrix;
-\tlet arr = bar.arr;
-\tlet index = 3u;
-\tlet b = bar._matrix[index].x;
-\tlet a = bar.data[arrayLength(&bar.data) - 2u].value;
-\tlet c = qux;
+    let _matrix = bar._matrix;
+    let arr = bar.arr;
+    let index = 3u;
+    let b = bar._matrix[index].x;
+    let a = bar.data[arrayLength(&bar.data) - 2u].value;
+    let c = qux;
 
-\t// test pointer types
-\tlet data_pointer: ptr<storage, i32, read_write> = &bar.data[0].value;
-\tlet foo_value = read_from_private(&foo);
+    // test pointer types
+    let data_pointer: ptr<storage, i32, read_write> = &bar.data[0].value;
+    let foo_value = read_from_private(&foo);
 
-\t// test array indexing
-\tvar c2 = array<i32, 5>(a, i32(b), 3, 4, 5);
-\tc2[vi + 1u] = 42;
-\tlet value = c2[vi];
+    // test array indexing
+    var c2 = array<i32, 5>(a, i32(b), 3, 4, 5);
+    c2[vi + 1u] = 42;
+    let value = c2[vi];
 
-\ttest_arr_as_arg(array<array<f32, 10>, 5>());
+    test_arr_as_arg(array<array<f32, 10>, 5>());
 
-\treturn vec4<f32>(_matrix * vec4<f32>(vec4<i32>(value)), 2.0);
+    return vec4<f32>(_matrix * vec4<f32>(vec4<i32>(value)), 2.0);
 }
 
 @fragment
 fn foo_frag() -> @location(0) vec4<f32> {
-\t// test storage stores
-\tbar._matrix[1].z = 1.0;
-\tbar._matrix = mat4x3<f32>(vec3<f32>(0.0), vec3<f32>(1.0), vec3<f32>(2.0), vec3<f32>(3.0));
-\tbar.arr = array<vec2<u32>, 2>(vec2<u32>(0u), vec2<u32>(1u));
-\tbar.data[1].value = 1;
-\tqux = vec2<i32>();
+    // test storage stores
+    bar._matrix[1].z = 1.0;
+    bar._matrix = mat4x3<f32>(vec3<f32>(0.0), vec3<f32>(1.0), vec3<f32>(2.0), vec3<f32>(3.0));
+    bar.arr = array<vec2<u32>, 2>(vec2<u32>(0u), vec2<u32>(1u));
+    bar.data[1].value = 1;
+    qux = vec2<i32>();
 
-\treturn vec4<f32>(0.0);
+    return vec4<f32>(0.0);
 }
 
 fn assign_through_ptr_fn(p: ptr<function, u32>) {
@@ -177,7 +178,7 @@ fn assign_through_ptr() {
     var val = 33u;
     assign_through_ptr_fn(&val);
 
-\tvar arr = array<vec4<f32>, 2>(vec4(6.0), vec4(7.0));
+    var arr = array<vec4<f32>, 2>(vec4(6.0), vec4(7.0));
     assign_array_through_ptr_fn(&arr);
 }
 
@@ -291,7 +292,7 @@ OpName %46 "Inner"
 OpMemberName %47 0 "om_nom_nom"
 OpMemberName %47 1 "thing"
 OpName %47 "Outer"
-OpName %52 "global_const"
+OpName %52 "msl_padding_global_const"
 OpName %54 "bar"
 OpName %56 "baz"
 OpName %59 "qux"
@@ -338,8 +339,8 @@ OpName %328 "vi"
 OpName %333 "foo_vert"
 OpName %344 "foo"
 OpName %345 "c2"
-OpName %388 "foo_frag"
-OpName %406 "foo_compute"
+OpName %389 "foo_frag"
+OpName %407 "foo_compute"
 OpMemberDecorate %7 0 Offset 0
 OpMemberDecorate %7 1 Offset 16
 OpMemberDecorate %7 2 Offset 28
@@ -393,7 +394,7 @@ OpDecorate %63 Block
 OpMemberDecorate %63 0 Offset 0
 OpDecorate %328 BuiltIn VertexIndex
 OpDecorate %331 BuiltIn Position
-OpDecorate %387 Location 0
+OpDecorate %388 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeInt 32 0
 %5 = OpTypeVector %4 3
@@ -546,28 +547,28 @@ OpDecorate %387 Location 0
 %343 = OpConstantNull  %30
 %346 = OpTypePointer Function %33
 %347 = OpConstantNull  %33
-%352 = OpTypePointer StorageBuffer %10
-%355 = OpTypePointer StorageBuffer %19
-%358 = OpTypePointer StorageBuffer %11
-%359 = OpTypePointer StorageBuffer %9
-%362 = OpTypePointer StorageBuffer %20
-%365 = OpTypePointer StorageBuffer %8
-%366 = OpTypePointer StorageBuffer %6
-%371 = OpConstant  %9  -2147483600.0
-%372 = OpConstant  %9  2147483500.0
-%381 = OpTypeVector %6 4
-%387 = OpVariable  %332  Output
-%390 = OpConstantComposite  %11  %338 %338 %338
-%391 = OpConstantComposite  %11  %71 %71 %71
-%392 = OpConstantComposite  %11  %73 %73 %73
-%393 = OpConstantComposite  %11  %75 %75 %75
-%394 = OpConstantComposite  %10  %390 %391 %392 %393
-%395 = OpConstantComposite  %18  %48 %48
-%396 = OpConstantComposite  %18  %44 %44
-%397 = OpConstantComposite  %19  %395 %396
-%398 = OpConstantNull  %24
-%399 = OpConstantComposite  %32  %338 %338 %338 %338
-%407 = OpConstantTrue  %42
+%353 = OpTypePointer StorageBuffer %10
+%356 = OpTypePointer StorageBuffer %19
+%359 = OpTypePointer StorageBuffer %11
+%360 = OpTypePointer StorageBuffer %9
+%363 = OpTypePointer StorageBuffer %20
+%366 = OpTypePointer StorageBuffer %8
+%367 = OpTypePointer StorageBuffer %6
+%372 = OpConstant  %9  -2147483600.0
+%373 = OpConstant  %9  2147483500.0
+%382 = OpTypeVector %6 4
+%388 = OpVariable  %332  Output
+%391 = OpConstantComposite  %11  %338 %338 %338
+%392 = OpConstantComposite  %11  %71 %71 %71
+%393 = OpConstantComposite  %11  %73 %73 %73
+%394 = OpConstantComposite  %11  %75 %75 %75
+%395 = OpConstantComposite  %10  %391 %392 %393 %394
+%396 = OpConstantComposite  %18  %48 %48
+%397 = OpConstantComposite  %18  %44 %44
+%398 = OpConstantComposite  %19  %396 %397
+%399 = OpConstantNull  %24
+%400 = OpConstantComposite  %32  %338 %338 %338 %338
+%408 = OpConstantTrue  %42
 %66 = OpFunction  %2  None %67
 %65 = OpLabel
 %94 = OpVariable  %95  Function %70
@@ -805,7 +806,7 @@ OpFunctionEnd
 %209 = OpLabel
 OpBranch %214
 %214 = OpLabel
-OpLine %3 155 5
+OpLine %3 156 5
 OpStore %210 %213
 OpReturn
 OpFunctionEnd
@@ -814,11 +815,11 @@ OpFunctionEnd
 %215 = OpLabel
 OpBranch %222
 %222 = OpLabel
-OpLine %3 159 32
-OpLine %3 159 43
-OpLine %3 159 32
-OpLine %3 159 12
-OpLine %3 159 5
+OpLine %3 160 32
+OpLine %3 160 43
+OpLine %3 160 32
+OpLine %3 160 12
+OpLine %3 160 5
 OpStore %216 %221
 OpReturn
 OpFunctionEnd
@@ -828,13 +829,13 @@ OpFunctionEnd
 %230 = OpVariable  %36  Function %228
 OpBranch %231
 %231 = OpLabel
-OpLine %3 164 5
+OpLine %3 165 5
 %232 = OpFunctionCall  %2  %211 %229
-OpLine %3 166 32
-OpLine %3 166 43
-OpLine %3 166 32
-OpLine %3 166 12
-OpLine %3 167 5
+OpLine %3 167 35
+OpLine %3 167 46
+OpLine %3 167 35
+OpLine %3 167 15
+OpLine %3 168 5
 %233 = OpFunctionCall  %2  %217 %230
 OpReturn
 OpFunctionEnd
@@ -843,7 +844,7 @@ OpFunctionEnd
 %234 = OpLabel
 OpBranch %238
 %238 = OpLabel
-OpLine %3 175 10
+OpLine %3 176 10
 %239 = OpAccessChain  %34  %235 %48
 %240 = OpLoad  %4  %239
 OpReturnValue %240
@@ -853,8 +854,8 @@ OpFunctionEnd
 %241 = OpLabel
 OpBranch %245
 %245 = OpLabel
-OpLine %3 179 3
-OpLine %3 179 3
+OpLine %3 180 3
+OpLine %3 180 3
 %246 = OpAccessChain  %34  %242 %48
 OpStore %246 %17
 OpReturn
@@ -864,7 +865,7 @@ OpFunctionEnd
 %247 = OpLabel
 OpBranch %251
 %251 = OpLabel
-OpLine %3 183 10
+OpLine %3 184 10
 %252 = OpAccessChain  %34  %248 %44
 %253 = OpLoad  %4  %252
 OpReturnValue %253
@@ -874,8 +875,8 @@ OpFunctionEnd
 %254 = OpLabel
 OpBranch %258
 %258 = OpLabel
-OpLine %3 187 3
-OpLine %3 187 3
+OpLine %3 188 3
+OpLine %3 188 3
 %259 = OpAccessChain  %34  %255 %44
 OpStore %259 %17
 OpReturn
@@ -886,13 +887,13 @@ OpFunctionEnd
 %264 = OpVariable  %41  Function %265
 OpBranch %266
 %266 = OpLabel
-OpLine %3 192 4
-%267 = OpFunctionCall  %2  %243 %262
 OpLine %3 193 4
+%267 = OpFunctionCall  %2  %243 %262
+OpLine %3 194 4
 %268 = OpFunctionCall  %4  %236 %262
-OpLine %3 196 4
-%269 = OpFunctionCall  %2  %256 %264
 OpLine %3 197 4
+%269 = OpFunctionCall  %2  %256 %264
+OpLine %3 198 4
 %270 = OpFunctionCall  %4  %249 %264
 OpReturn
 OpFunctionEnd
@@ -902,11 +903,11 @@ OpFunctionEnd
 %275 = OpVariable  %276  Function %277
 OpBranch %278
 %278 = OpLabel
-OpLine %3 201 13
+OpLine %3 202 13
 %279 = OpCompositeConstruct  %43  %272
-OpLine %3 201 5
+OpLine %3 202 5
 OpStore %275 %279
-OpLine %3 203 12
+OpLine %3 204 12
 %281 = OpAccessChain  %280  %275 %48
 %282 = OpLoad  %42  %281
 OpReturnValue %282
@@ -916,8 +917,8 @@ OpFunctionEnd
 %288 = OpVariable  %289  Function %287
 OpBranch %290
 %290 = OpLabel
-OpLine %3 209 16
-OpLine %3 211 12
+OpLine %3 210 16
+OpLine %3 212 12
 %291 = OpAccessChain  %95  %288 %48
 %292 = OpLoad  %6  %291
 OpReturnValue %292
@@ -926,19 +927,19 @@ OpFunctionEnd
 %293 = OpLabel
 OpBranch %296
 %296 = OpLabel
-OpLine %3 221 17
+OpLine %3 222 17
 %297 = OpCompositeExtract  %46  %295 0
-OpLine %3 222 20
+OpLine %3 223 20
 %298 = OpCompositeExtract  %6  %297 0
-OpLine %3 224 9
+OpLine %3 225 9
 %299 = OpCompositeExtract  %4  %295 1
 %300 = OpBitcast  %4  %298
 %301 = OpINotEqual  %42  %299 %300
-OpLine %3 224 5
+OpLine %3 225 5
 OpSelectionMerge %302 None
 OpBranchConditional %301 %302 %302
 %302 = OpLabel
-OpLine %3 228 12
+OpLine %3 229 12
 %303 = OpCompositeExtract  %46  %295 0
 %304 = OpCompositeExtract  %6  %303 0
 OpReturnValue %304
@@ -950,27 +951,27 @@ OpFunctionEnd
 %312 = OpVariable  %95  Function %313
 OpBranch %314
 %314 = OpLabel
-OpLine %3 234 17
+OpLine %3 235 17
 %315 = OpAccessChain  %310  %307 %48
 %316 = OpLoad  %46  %315
-OpLine %3 234 5
+OpLine %3 235 5
 OpStore %309 %316
-OpLine %3 235 20
+OpLine %3 236 20
 %317 = OpAccessChain  %95  %309 %48
 %318 = OpLoad  %6  %317
-OpLine %3 235 5
+OpLine %3 236 5
 OpStore %312 %318
-OpLine %3 237 9
+OpLine %3 238 9
 %319 = OpAccessChain  %34  %307 %44
 %320 = OpLoad  %4  %319
 %321 = OpLoad  %6  %312
 %322 = OpBitcast  %4  %321
 %323 = OpINotEqual  %42  %320 %322
-OpLine %3 237 5
+OpLine %3 238 5
 OpSelectionMerge %324 None
 OpBranchConditional %323 %324 %324
 %324 = OpLabel
-OpLine %3 241 12
+OpLine %3 242 12
 %325 = OpAccessChain  %95  %307 %48 %48
 %326 = OpLoad  %6  %325
 OpReturnValue %326
@@ -989,108 +990,110 @@ OpLine %3 1 1
 %349 = OpLoad  %9  %344
 OpLine %3 115 5
 OpStore %344 %71
-OpLine %3 117 2
-%350 = OpFunctionCall  %2  %66
-OpLine %3 118 2
-%351 = OpFunctionCall  %2  %140
-OpLine %3 121 16
-%353 = OpAccessChain  %352  %54 %48
-%354 = OpLoad  %10  %353
-OpLine %3 122 12
-%356 = OpAccessChain  %355  %54 %40
-%357 = OpLoad  %19  %356
-OpLine %3 124 10
-%360 = OpAccessChain  %359  %54 %48 %339 %48
-%361 = OpLoad  %9  %360
-OpLine %3 125 10
-OpLine %3 125 19
-%363 = OpArrayLength  %4  %54 5
-OpLine %3 125 10
-%364 = OpISub  %4  %363 %15
-%367 = OpAccessChain  %366  %54 %31 %364 %48
-%368 = OpLoad  %6  %367
-OpLine %3 126 10
-%369 = OpLoad  %24  %336
-OpLine %3 129 53
-OpLine %3 129 53
-OpLine %3 130 18
-%370 = OpFunctionCall  %9  %198 %344
-OpLine %3 133 28
-%373 = OpExtInst  %9  %1 FClamp %361 %371 %372
-%374 = OpConvertFToS  %6  %373
-OpLine %3 133 11
-%375 = OpCompositeConstruct  %33  %368 %374 %340 %341 %342
-OpLine %3 133 2
-OpStore %345 %375
-OpLine %3 134 2
-%376 = OpIAdd  %4  %330 %44
-OpLine %3 134 2
-%377 = OpAccessChain  %95  %345 %376
-OpStore %377 %286
-OpLine %3 135 14
-%378 = OpAccessChain  %95  %345 %330
-%379 = OpLoad  %6  %378
-OpLine %3 137 2
-%380 = OpFunctionCall  %9  %204 %343
-OpLine %3 139 19
-%382 = OpCompositeConstruct  %381  %379 %379 %379 %379
-%383 = OpConvertSToF  %32  %382
-%384 = OpMatrixTimesVector  %11  %354 %383
-OpLine %3 139 9
-%385 = OpCompositeConstruct  %32  %384 %73
-OpStore %331 %385
+OpLine %3 117 9
+%350 = OpLoad  %7  %52
+OpLine %3 118 5
+%351 = OpFunctionCall  %2  %66
+OpLine %3 119 5
+%352 = OpFunctionCall  %2  %140
+OpLine %3 122 19
+%354 = OpAccessChain  %353  %54 %48
+%355 = OpLoad  %10  %354
+OpLine %3 123 15
+%357 = OpAccessChain  %356  %54 %40
+%358 = OpLoad  %19  %357
+OpLine %3 125 13
+%361 = OpAccessChain  %360  %54 %48 %339 %48
+%362 = OpLoad  %9  %361
+OpLine %3 126 13
+OpLine %3 126 22
+%364 = OpArrayLength  %4  %54 5
+OpLine %3 126 13
+%365 = OpISub  %4  %364 %15
+%368 = OpAccessChain  %367  %54 %31 %365 %48
+%369 = OpLoad  %6  %368
+OpLine %3 127 13
+%370 = OpLoad  %24  %336
+OpLine %3 130 56
+OpLine %3 130 56
+OpLine %3 131 21
+%371 = OpFunctionCall  %9  %198 %344
+OpLine %3 134 31
+%374 = OpExtInst  %9  %1 FClamp %362 %372 %373
+%375 = OpConvertFToS  %6  %374
+OpLine %3 134 14
+%376 = OpCompositeConstruct  %33  %369 %375 %340 %341 %342
+OpLine %3 134 5
+OpStore %345 %376
+OpLine %3 135 5
+%377 = OpIAdd  %4  %330 %44
+OpLine %3 135 5
+%378 = OpAccessChain  %95  %345 %377
+OpStore %378 %286
+OpLine %3 136 17
+%379 = OpAccessChain  %95  %345 %330
+%380 = OpLoad  %6  %379
+OpLine %3 138 5
+%381 = OpFunctionCall  %9  %204 %343
+OpLine %3 140 22
+%383 = OpCompositeConstruct  %382  %380 %380 %380 %380
+%384 = OpConvertSToF  %32  %383
+%385 = OpMatrixTimesVector  %11  %355 %384
+OpLine %3 140 12
+%386 = OpCompositeConstruct  %32  %385 %73
+OpStore %331 %386
 OpReturn
 OpFunctionEnd
-%388 = OpFunction  %2  None %67
-%386 = OpLabel
-%389 = OpAccessChain  %335  %59 %48
-OpBranch %400
-%400 = OpLabel
-OpLine %3 145 2
-OpLine %3 145 2
-OpLine %3 145 2
-%401 = OpAccessChain  %359  %54 %48 %44 %15
-OpStore %401 %71
-OpLine %3 146 2
-OpLine %3 146 28
-OpLine %3 146 44
-OpLine %3 146 60
-OpLine %3 146 16
-OpLine %3 146 2
-%402 = OpAccessChain  %352  %54 %48
-OpStore %402 %394
-OpLine %3 147 2
-OpLine %3 147 32
-OpLine %3 147 12
-OpLine %3 147 2
-%403 = OpAccessChain  %355  %54 %40
-OpStore %403 %397
-OpLine %3 148 2
-OpLine %3 148 2
-OpLine %3 148 2
-%404 = OpAccessChain  %366  %54 %31 %44 %48
-OpStore %404 %70
-OpLine %3 149 2
-OpStore %389 %398
-OpLine %3 151 9
-OpStore %387 %399
+%389 = OpFunction  %2  None %67
+%387 = OpLabel
+%390 = OpAccessChain  %335  %59 %48
+OpBranch %401
+%401 = OpLabel
+OpLine %3 146 5
+OpLine %3 146 5
+OpLine %3 146 5
+%402 = OpAccessChain  %360  %54 %48 %44 %15
+OpStore %402 %71
+OpLine %3 147 5
+OpLine %3 147 31
+OpLine %3 147 47
+OpLine %3 147 63
+OpLine %3 147 19
+OpLine %3 147 5
+%403 = OpAccessChain  %353  %54 %48
+OpStore %403 %395
+OpLine %3 148 5
+OpLine %3 148 35
+OpLine %3 148 15
+OpLine %3 148 5
+%404 = OpAccessChain  %356  %54 %40
+OpStore %404 %398
+OpLine %3 149 5
+OpLine %3 149 5
+OpLine %3 149 5
+%405 = OpAccessChain  %367  %54 %31 %44 %48
+OpStore %405 %70
+OpLine %3 150 5
+OpStore %390 %399
+OpLine %3 152 12
+OpStore %388 %400
 OpReturn
 OpFunctionEnd
-%406 = OpFunction  %2  None %67
-%405 = OpLabel
-OpBranch %408
-%408 = OpLabel
-OpLine %3 246 5
-%409 = OpFunctionCall  %2  %224
+%407 = OpFunction  %2  None %67
+%406 = OpLabel
+OpBranch %409
+%409 = OpLabel
 OpLine %3 247 5
-%410 = OpFunctionCall  %2  %261
+%410 = OpFunctionCall  %2  %224
 OpLine %3 248 5
-%411 = OpFunctionCall  %42  %273 %407
+%411 = OpFunctionCall  %2  %261
 OpLine %3 249 5
-%412 = OpFunctionCall  %6  %284
+%412 = OpFunctionCall  %42  %273 %408
 OpLine %3 250 5
-%413 = OpFunctionCall  %6  %294
+%413 = OpFunctionCall  %6  %284
 OpLine %3 251 5
-%414 = OpFunctionCall  %6  %306
+%414 = OpFunctionCall  %6  %294
+OpLine %3 252 5
+%415 = OpFunctionCall  %6  %306
 OpReturn
 OpFunctionEnd

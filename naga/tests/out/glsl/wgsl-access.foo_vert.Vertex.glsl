@@ -30,6 +30,8 @@ struct Outer {
     Inner om_nom_nom;
     uint thing;
 };
+GlobalConst msl_padding_global_const = GlobalConst(0u, uvec3(0u, 0u, 0u), 0);
+
 layout(std430) buffer Bar_block_0Vertex {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
@@ -216,6 +218,7 @@ void main() {
     int c2_[5] = int[5](0, 0, 0, 0, 0);
     float baz_1 = foo;
     foo = 1.0;
+    GlobalConst phony = msl_padding_global_const;
     test_matrix_within_struct_accesses();
     test_matrix_within_array_within_struct_accesses();
     mat4x3 _matrix = _group_0_binding_0_vs._matrix;
@@ -223,11 +226,11 @@ void main() {
     float b = _group_0_binding_0_vs._matrix[3u][0];
     int a_2 = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
     ivec2 c = _group_0_binding_2_vs;
-    float _e33 = read_from_private(foo);
+    float _e35 = read_from_private(foo);
     c2_ = int[5](a_2, int(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     int value_1 = c2_[vi];
-    float _e47 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    float _e49 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     gl_Position = vec4((_matrix * vec4(ivec4(value_1))), 2.0);
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;

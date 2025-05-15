@@ -20,6 +20,117 @@ struct type_13 {
     metal::float3 inner[1];
 };
 
+void globals(
+    thread metal::int2& xvipaiai_1,
+    thread metal::uint2& xvupaiai_1,
+    thread metal::float2& xvfpaiai_1,
+    thread metal::float2& xvfpafaf_1,
+    thread metal::float2& xvfpaiaf_1,
+    thread metal::uint2& xvupuai_2,
+    thread metal::uint2& xvupaiu_2,
+    thread metal::uint2& xvuuai_2,
+    thread metal::uint2& xvuaiu_2,
+    thread metal::int2& xvip_1,
+    thread metal::uint2& xvup_1,
+    thread metal::float2& xvfp_1,
+    thread metal::float2x2& xmfp_1,
+    thread metal::float2x2& xmfpaiaiaiai_1,
+    thread metal::float2x2& xmfpafaiaiai_1,
+    thread metal::float2x2& xmfpaiafaiai_1,
+    thread metal::float2x2& xmfpaiaiafai_1,
+    thread metal::float2x2& xmfpaiaiaiaf_1,
+    thread metal::int2& xvispai_1,
+    thread metal::float2& xvfspaf_1,
+    thread metal::int2& xvis_ai_1,
+    thread metal::uint2& xvus_ai_1,
+    thread metal::float2& xvfs_ai_1,
+    thread metal::float2& xvfs_af_1,
+    thread type_7& xafafaf_1,
+    thread type_7& xafaiai_1,
+    thread type_8& xaipaiai_1,
+    thread type_9& xaupaiai,
+    thread type_7& xafpaiaf_1,
+    thread type_7& xafpafai_1,
+    thread type_7& xafpafaf_1,
+    thread type_11& xavipai_1,
+    thread type_13& xavfpai_1,
+    thread type_13& xavfpaf_1,
+    thread metal::int2& xvisai_1,
+    thread metal::uint2& xvusai_1,
+    thread metal::float2& xvfsai_1,
+    thread metal::float2& xvfsaf_1,
+    thread metal::int2& ivispai,
+    thread metal::float2& ivfspaf,
+    thread metal::int2& ivis_ai,
+    thread metal::uint2& ivus_ai,
+    thread metal::float2& ivfs_ai,
+    thread metal::float2& ivfs_af,
+    thread type_7& iafafaf,
+    thread type_7& iafaiai,
+    thread type_8& iaipaiai_1,
+    thread type_7& iafpafaf_1,
+    thread type_7& iafpaiaf_1,
+    thread type_7& iafpafai_1,
+    thread type_11& iavipai,
+    thread type_11& iavfpai,
+    thread type_13& iavfpaf
+) {
+    metal::int2 phony = xvipaiai_1;
+    metal::uint2 phony_1 = xvupaiai_1;
+    metal::float2 phony_2 = xvfpaiai_1;
+    metal::float2 phony_3 = xvfpafaf_1;
+    metal::float2 phony_4 = xvfpaiaf_1;
+    metal::uint2 phony_5 = xvupuai_2;
+    metal::uint2 phony_6 = xvupaiu_2;
+    metal::uint2 phony_7 = xvuuai_2;
+    metal::uint2 phony_8 = xvuaiu_2;
+    metal::int2 phony_9 = xvip_1;
+    metal::uint2 phony_10 = xvup_1;
+    metal::float2 phony_11 = xvfp_1;
+    metal::float2x2 phony_12 = xmfp_1;
+    metal::float2x2 phony_13 = xmfpaiaiaiai_1;
+    metal::float2x2 phony_14 = xmfpafaiaiai_1;
+    metal::float2x2 phony_15 = xmfpaiafaiai_1;
+    metal::float2x2 phony_16 = xmfpaiaiafai_1;
+    metal::float2x2 phony_17 = xmfpaiaiaiaf_1;
+    metal::int2 phony_18 = xvispai_1;
+    metal::float2 phony_19 = xvfspaf_1;
+    metal::int2 phony_20 = xvis_ai_1;
+    metal::uint2 phony_21 = xvus_ai_1;
+    metal::float2 phony_22 = xvfs_ai_1;
+    metal::float2 phony_23 = xvfs_af_1;
+    type_7 phony_24 = xafafaf_1;
+    type_7 phony_25 = xafaiai_1;
+    type_8 phony_26 = xaipaiai_1;
+    type_9 phony_27 = xaupaiai;
+    type_7 phony_28 = xafpaiaf_1;
+    type_7 phony_29 = xafpafai_1;
+    type_7 phony_30 = xafpafaf_1;
+    type_11 phony_31 = xavipai_1;
+    type_13 phony_32 = xavfpai_1;
+    type_13 phony_33 = xavfpaf_1;
+    metal::int2 phony_34 = xvisai_1;
+    metal::uint2 phony_35 = xvusai_1;
+    metal::float2 phony_36 = xvfsai_1;
+    metal::float2 phony_37 = xvfsaf_1;
+    metal::int2 phony_38 = ivispai;
+    metal::float2 phony_39 = ivfspaf;
+    metal::int2 phony_40 = ivis_ai;
+    metal::uint2 phony_41 = ivus_ai;
+    metal::float2 phony_42 = ivfs_ai;
+    metal::float2 phony_43 = ivfs_af;
+    type_7 phony_44 = iafafaf;
+    type_7 phony_45 = iafaiai;
+    type_8 phony_46 = iaipaiai_1;
+    type_7 phony_47 = iafpafaf_1;
+    type_7 phony_48 = iafpaiaf_1;
+    type_7 phony_49 = iafpafai_1;
+    type_11 phony_50 = iavipai;
+    type_11 phony_51 = iavfpai;
+    type_13 phony_52 = iavfpaf;
+    return;
+}
+
 void all_constant_arguments(
 ) {
     metal::int2 xvipaiai = metal::int2(42, 43);
@@ -256,6 +367,60 @@ void mixed_constant_and_runtime_arguments(
 
 kernel void main_(
 ) {
+    metal::int2 xvipaiai_1 = metal::int2(42, 43);
+    metal::uint2 xvupaiai_1 = metal::uint2(44u, 45u);
+    metal::float2 xvfpaiai_1 = metal::float2(46.0, 47.0);
+    metal::float2 xvfpafaf_1 = metal::float2(48.0, 49.0);
+    metal::float2 xvfpaiaf_1 = metal::float2(48.0, 49.0);
+    metal::uint2 xvupuai_2 = metal::uint2(42u, 43u);
+    metal::uint2 xvupaiu_2 = metal::uint2(42u, 43u);
+    metal::uint2 xvuuai_2 = metal::uint2(42u, 43u);
+    metal::uint2 xvuaiu_2 = metal::uint2(42u, 43u);
+    metal::int2 xvip_1 = metal::int2(0, 0);
+    metal::uint2 xvup_1 = metal::uint2(0u, 0u);
+    metal::float2 xvfp_1 = metal::float2(0.0, 0.0);
+    metal::float2x2 xmfp_1 = metal::float2x2(metal::float2(0.0, 0.0), metal::float2(0.0, 0.0));
+    metal::float2x2 xmfpaiaiaiai_1 = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0));
+    metal::float2x2 xmfpafaiaiai_1 = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0));
+    metal::float2x2 xmfpaiafaiai_1 = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0));
+    metal::float2x2 xmfpaiaiafai_1 = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0));
+    metal::float2x2 xmfpaiaiaiaf_1 = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0));
+    metal::int2 xvispai_1 = metal::int2(1);
+    metal::float2 xvfspaf_1 = metal::float2(1.0);
+    metal::int2 xvis_ai_1 = metal::int2(1);
+    metal::uint2 xvus_ai_1 = metal::uint2(1u);
+    metal::float2 xvfs_ai_1 = metal::float2(1.0);
+    metal::float2 xvfs_af_1 = metal::float2(1.0);
+    type_7 xafafaf_1 = type_7 {1.0, 2.0};
+    type_7 xafaiai_1 = type_7 {1.0, 2.0};
+    type_8 xaipaiai_1 = type_8 {1, 2};
+    type_9 xaupaiai = type_9 {1u, 2u};
+    type_7 xafpaiaf_1 = type_7 {1.0, 2.0};
+    type_7 xafpafai_1 = type_7 {1.0, 2.0};
+    type_7 xafpafaf_1 = type_7 {1.0, 2.0};
+    type_11 xavipai_1 = type_11 {metal::int3(1)};
+    type_13 xavfpai_1 = type_13 {metal::float3(1.0)};
+    type_13 xavfpaf_1 = type_13 {metal::float3(1.0)};
+    metal::int2 xvisai_1 = metal::int2(1);
+    metal::uint2 xvusai_1 = metal::uint2(1u);
+    metal::float2 xvfsai_1 = metal::float2(1.0);
+    metal::float2 xvfsaf_1 = metal::float2(1.0);
+    metal::int2 ivispai = metal::int2(1);
+    metal::float2 ivfspaf = metal::float2(1.0);
+    metal::int2 ivis_ai = metal::int2(1);
+    metal::uint2 ivus_ai = metal::uint2(1u);
+    metal::float2 ivfs_ai = metal::float2(1.0);
+    metal::float2 ivfs_af = metal::float2(1.0);
+    type_7 iafafaf = type_7 {1.0, 2.0};
+    type_7 iafaiai = type_7 {1.0, 2.0};
+    type_8 iaipaiai_1 = type_8 {1, 2};
+    type_7 iafpafaf_1 = type_7 {1.0, 2.0};
+    type_7 iafpaiaf_1 = type_7 {1.0, 2.0};
+    type_7 iafpafai_1 = type_7 {1.0, 2.0};
+    type_11 iavipai = type_11 {metal::int3(1)};
+    type_11 iavfpai = type_11 {metal::int3(1)};
+    type_13 iavfpaf = type_13 {metal::float3(1.0)};
+    globals(xvipaiai_1, xvupaiai_1, xvfpaiai_1, xvfpafaf_1, xvfpaiaf_1, xvupuai_2, xvupaiu_2, xvuuai_2, xvuaiu_2, xvip_1, xvup_1, xvfp_1, xmfp_1, xmfpaiaiaiai_1, xmfpafaiaiai_1, xmfpaiafaiai_1, xmfpaiaiafai_1, xmfpaiaiaiaf_1, xvispai_1, xvfspaf_1, xvis_ai_1, xvus_ai_1, xvfs_ai_1, xvfs_af_1, xafafaf_1, xafaiai_1, xaipaiai_1, xaupaiai, xafpaiaf_1, xafpafai_1, xafpafaf_1, xavipai_1, xavfpai_1, xavfpaf_1, xvisai_1, xvusai_1, xvfsai_1, xvfsaf_1, ivispai, ivfspaf, ivis_ai, ivus_ai, ivfs_ai, ivfs_af, iafafaf, iafaiai, iaipaiai_1, iafpafaf_1, iafpaiaf_1, iafpafai_1, iavipai, iavfpai, iavfpaf);
     all_constant_arguments();
     mixed_constant_and_runtime_arguments();
     return;

@@ -29,6 +29,7 @@ int2 naga_mod(int2 lhs, int2 rhs) {
     return lhs - (lhs / divisor) * divisor;
 }
 
+uint4 LoadedStorageValueFromuint(uint arg) {uint4 ret = uint4(arg, 0u, 0u, 1u);return ret;}
 uint2 NagaRWDimensions2D(RWTexture2D<uint4> tex)
 {
     uint4 ret;
@@ -49,6 +50,7 @@ void main(uint3 local_id : SV_GroupThreadID)
     uint4 value5_ = image_array_src.Load(int4(itc, local_id.z, asint(asuint(int(local_id.z)) + asuint(int(1)))));
     uint4 value6_ = image_array_src.Load(int4(itc, int(local_id.z), asint(asuint(int(local_id.z)) + asuint(int(1)))));
     uint4 value7_ = image_1d_src.Load(int2(int(local_id.x), int(local_id.z)));
+    uint4 value8_ = LoadedStorageValueFromuint(image_dup_src.Load(int(local_id.x)));
     uint4 value1u = image_mipmapped_src.Load(int3(uint2(itc), int(local_id.z)));
     uint4 value2u = image_multisampled_src.Load(uint2(itc), int(local_id.z));
     uint4 value3u = image_multisampled_src.Load(uint2(itc), uint(local_id.z));
