@@ -40,6 +40,11 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+#### General
+- Fix a possible deadlock within `Queue::write_buffer`. By @RedMindZ in [#7582](https://github.com/gfx-rs/wgpu/pull/7582)
+
 ### v24.0.4 (2025-04-03)
 
 #### Metal

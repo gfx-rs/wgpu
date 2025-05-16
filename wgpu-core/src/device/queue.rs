@@ -472,6 +472,8 @@ impl Queue {
             return Ok(());
         };
 
+        let snatch_guard = self.device.snatchable_lock.read();
+
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
@@ -485,6 +487,7 @@ impl Queue {
         };
 
         let result = self.write_staging_buffer_impl(
+            &snatch_guard,
             &mut pending_writes,
             &staging_buffer,
             buffer,
@@ -518,6 +521,7 @@ impl Queue {
 
         let buffer = buffer.get()?;
 
+        let snatch_guard = self.device.snatchable_lock.read();
         let mut pending_writes = self.pending_writes.lock();
 
         // At this point, we have taken ownership of the staging_buffer from the
@@ -527,6 +531,7 @@ impl Queue {
         let staging_buffer = staging_buffer.flush();
 
         let result = self.write_staging_buffer_impl(
+            &snatch_guard,
             &mut pending_writes,
             &staging_buffer,
             buffer,
@@ -579,6 +584,7 @@ impl Queue {
 
     fn write_staging_buffer_impl(
         &self,
+        snatch_guard: &SnatchGuard,
         pending_writes: &mut PendingWrites,
         staging_buffer: &FlushedStagingBuffer,
         buffer: Arc<Buffer>,
@@ -591,8 +597,7 @@ impl Queue {
                 .set_single(&buffer, hal::BufferUses::COPY_DST)
         };
 
-        let snatch_guard = self.device.snatchable_lock.read();
-        let dst_raw = buffer.try_raw(&snatch_guard)?;
+        let dst_raw = buffer.try_raw(snatch_guard)?;
 
         self.same_device_as(buffer.as_ref())?;
 
@@ -610,7 +615,7 @@ impl Queue {
                 to: hal::BufferUses::COPY_SRC,
             },
         })
-        .chain(transition.map(|pending| pending.into_hal(&buffer, &snatch_guard)))
+        .chain(transition.map(|pending| pending.into_hal(&buffer, snatch_guard)))
         .collect::<Vec<_>>();
         let encoder = pending_writes.activate();
         unsafe {
