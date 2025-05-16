@@ -1493,6 +1493,7 @@ impl crate::Device for super::Device {
                 wgt::BindingType::AccelerationStructure { .. } => {
                     desc_count.acceleration_structure += count;
                 }
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             }
         }
 

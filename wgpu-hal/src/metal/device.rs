@@ -747,6 +747,7 @@ impl crate::Device for super::Device {
                                 };
                             }
                             wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                            wgt::BindingType::ExternalTexture => unimplemented!(),
                         }
                     }
 
@@ -979,6 +980,7 @@ impl crate::Device for super::Device {
                                 counter.textures += 1;
                             }
                             wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                            wgt::BindingType::ExternalTexture => unimplemented!(),
                         }
                     }
                 }

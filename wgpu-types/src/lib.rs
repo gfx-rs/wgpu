@@ -6799,6 +6799,20 @@ pub enum BindingType {
         /// If enabled requires [`Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`]
         vertex_return: bool,
     },
+
+    /// An external texture binding.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_external;
+    /// ```
+    ///
+    /// Corresponds to [WebGPU `GPUExternalTextureBindingLayout`](
+    /// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturebindinglayout).
+    ///
+    /// Requires [`Features::EXTERNAL_TEXTURE`]
+    ExternalTexture,
 }
 
 impl BindingType {

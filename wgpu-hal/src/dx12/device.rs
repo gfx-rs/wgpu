@@ -785,6 +785,7 @@ impl crate::Device for super::Device {
                 | wgt::BindingType::StorageTexture { .. }
                 | wgt::BindingType::AccelerationStructure { .. } => num_views += count,
                 wgt::BindingType::Sampler { .. } => has_sampler_in_group = true,
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             }
         }
 
@@ -1550,6 +1551,7 @@ impl crate::Device for super::Device {
                         inner.stage.push(handle);
                     }
                 }
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             }
         }
 

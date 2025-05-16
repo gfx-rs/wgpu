@@ -1942,6 +1942,11 @@ impl dispatch::DeviceInterface for WebDevice {
                         mapped_entry.set_storage_texture(&storage_texture);
                     }
                     wgt::BindingType::AccelerationStructure { .. } => todo!(),
+                    wgt::BindingType::ExternalTexture => {
+                        mapped_entry.set_external_texture(
+                            &webgpu_sys::GpuExternalTextureBindingLayout::new(),
+                        );
+                    }
                 }
 
                 mapped_entry

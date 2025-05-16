@@ -1203,6 +1203,7 @@ impl crate::Device for super::Device {
                         ..
                     } => &mut num_storage_buffers,
                     wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                    wgt::BindingType::ExternalTexture => unimplemented!(),
                 };
 
                 binding_to_slot[entry.binding as usize] = *counter;
@@ -1313,6 +1314,7 @@ impl crate::Device for super::Device {
                     })
                 }
                 wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             };
             contents.push(binding);
         }
