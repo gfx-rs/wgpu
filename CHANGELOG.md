@@ -57,6 +57,10 @@ Bottom level categories:
 
 ### Bug Fixes
 
+#### General
+
+- Fix error message for sampler array limit. By @LPGhatguy in [#7704](https://github.com/gfx-rs/wgpu/pull/7704).
+
 #### Naga
 
 Naga now infers the correct binding layout when a resource appears only in an assignment to `_`. By @andyleiserson in [#7540](https://github.com/gfx-rs/wgpu/pull/7540).
