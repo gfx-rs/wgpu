@@ -77,6 +77,11 @@ impl<T> HandleSet<T> {
         }
     }
 
+    /// Add all of the handles that can be included in this set.
+    pub fn add_all(&mut self) {
+        self.members.get_mut().set_all();
+    }
+
     pub fn contains(&self, handle: Handle<T>) -> bool {
         self.members.contains(handle.index())
     }
@@ -84,6 +89,23 @@ impl<T> HandleSet<T> {
     /// Return an iterator over all handles in `self`.
     pub fn iter(&self) -> impl '_ + Iterator<Item = Handle<T>> {
         self.members.iter().map(Handle::from_usize)
+    }
+
+    /// Removes and returns the numerically largest handle in the set, or `None`
+    /// if the set is empty.
+    pub fn pop(&mut self) -> Option<Handle<T>> {
+        let members = core::mem::take(&mut self.members);
+        let mut vec = members.into_bit_vec();
+        let result = vec.iter_mut().enumerate().rev().find_map(|(i, mut bit)| {
+            if *bit {
+                *bit = false;
+                Some(i)
+            } else {
+                None
+            }
+        });
+        self.members = bit_set::BitSet::from_bit_vec(vec);
+        result.map(Handle::from_usize)
     }
 }
 

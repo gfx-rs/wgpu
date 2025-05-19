@@ -7,7 +7,9 @@ webgpu:api,operation,command_buffer,copyBufferToBuffer:state_transitions:*
 webgpu:api,operation,command_buffer,copyBufferToBuffer:copy_order:*
 webgpu:api,operation,compute,basic:memcpy:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
+webgpu:api,operation,compute_pipeline,overrides:*
 webgpu:api,operation,device,lost:*
+webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
 //FAIL: webgpu:api,operation,rendering,basic:large_draw:*

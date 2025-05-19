@@ -7,7 +7,6 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
-use crate::common::wgsl::{TryToWgsl, TypeContext};
 use crate::common::ForDebugWithTypes;
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
@@ -15,6 +14,10 @@ use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::wgsl::Result;
 use crate::front::Typifier;
+use crate::{
+    common::wgsl::{TryToWgsl, TypeContext},
+    compact::KeepUnused,
+};
 use crate::{ir, proc};
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
@@ -1335,7 +1338,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         // Constant evaluation may leave abstract-typed literals and
         // compositions in expression arenas, so we need to compact the module
         // to remove unused expressions and types.
-        crate::compact::compact(&mut module);
+        crate::compact::compact(&mut module, KeepUnused::Yes);
 
         Ok(module)
     }

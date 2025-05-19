@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use naga::compact::KeepUnused;
 use ron::de;
 
 const CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
@@ -243,6 +244,12 @@ impl Input {
                 return None;
             }
 
+            if let Ok(pat) = std::env::var("NAGA_SNAPSHOT") {
+                if !file_name.to_string_lossy().contains(&pat) {
+                    return None;
+                }
+            }
+
             let input = Input::new(
                 subdirectory,
                 file_name.file_stem().unwrap().to_str().unwrap(),
@@ -423,7 +430,13 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
         });
 
     let info = {
-        naga::compact::compact(module);
+        // Our backends often generate temporary names based on handle indices,
+        // which means that adding or removing unused arena entries can affect
+        // the output even though they have no semantic effect. Such
+        // meaningless changes add noise to snapshot diffs, making accurate
+        // patch review difficult. Compacting the modules before generating
+        // snapshots makes the output independent of unused arena entries.
+        naga::compact::compact(module, KeepUnused::No);
 
         #[cfg(feature = "serialize")]
         {
@@ -608,7 +621,7 @@ fn write_output_spv(
     };
 
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
     if params.separate_entry_points {
@@ -672,7 +685,7 @@ fn write_output_msl(
     println!("generating MSL");
 
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
     let mut options = options.clone();
@@ -714,7 +727,7 @@ fn write_output_glsl(
 
     let mut buffer = String::new();
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
     let mut writer = glsl::Writer::new(
         &mut buffer,
@@ -746,7 +759,7 @@ fn write_output_hlsl(
     println!("generating HLSL");
 
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
     let mut buffer = String::new();

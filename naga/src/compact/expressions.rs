@@ -11,6 +11,9 @@ pub struct ExpressionTracer<'tracer> {
     /// The used map for `types`.
     pub types_used: &'tracer mut HandleSet<crate::Type>,
 
+    /// The used map for global variables.
+    pub global_variables_used: &'tracer mut HandleSet<crate::GlobalVariable>,
+
     /// The used map for `constants`.
     pub constants_used: &'tracer mut HandleSet<crate::Constant>,
 
@@ -76,9 +79,7 @@ impl ExpressionTracer<'_> {
             // Expressions that do not contain handles that need to be traced.
             Ex::Literal(_)
             | Ex::FunctionArgument(_)
-            | Ex::GlobalVariable(_)
             | Ex::LocalVariable(_)
-            | Ex::CallResult(_)
             | Ex::SubgroupBallotResult
             | Ex::RayQueryProceedResult => {}
 
@@ -133,6 +134,9 @@ impl ExpressionTracer<'_> {
                 pattern: _,
             } => {
                 self.expressions_used.insert(vector);
+            }
+            Ex::GlobalVariable(handle) => {
+                self.global_variables_used.insert(handle);
             }
             Ex::Load { pointer } => {
                 self.expressions_used.insert(pointer);
@@ -233,6 +237,10 @@ impl ExpressionTracer<'_> {
             Ex::ArrayLength(expr) => {
                 self.expressions_used.insert(expr);
             }
+            // `CallResult` expressions do contain a function handle, but any used
+            // `CallResult` expression should have an associated `ir::Statement::Call`
+            // that we will trace.
+            Ex::CallResult(_) => {}
             Ex::AtomicResult { ty, comparison: _ }
             | Ex::WorkGroupUniformLoadResult { ty }
             | Ex::SubgroupOperationResult { ty } => {
@@ -267,9 +275,7 @@ impl ModuleMap {
             // Expressions that do not contain handles that need to be adjusted.
             Ex::Literal(_)
             | Ex::FunctionArgument(_)
-            | Ex::GlobalVariable(_)
             | Ex::LocalVariable(_)
-            | Ex::CallResult(_)
             | Ex::SubgroupBallotResult
             | Ex::RayQueryProceedResult => {}
 
@@ -306,6 +312,7 @@ impl ModuleMap {
                 ref mut vector,
                 pattern: _,
             } => adjust(vector),
+            Ex::GlobalVariable(ref mut handle) => self.globals.adjust(handle),
             Ex::Load { ref mut pointer } => adjust(pointer),
             Ex::ImageSample {
                 ref mut image,
@@ -392,6 +399,9 @@ impl ModuleMap {
                 kind: _,
                 convert: _,
             } => adjust(expr),
+            Ex::CallResult(ref mut function) => {
+                self.functions.adjust(function);
+            }
             Ex::AtomicResult {
                 ref mut ty,
                 comparison: _,

@@ -269,6 +269,8 @@ fn validation(c: &mut Criterion) {
 }
 
 fn compact(c: &mut Criterion) {
+    use naga::compact::{compact, KeepUnused};
+
     let mut inputs = get_wgsl_inputs();
 
     inputs.validate();
@@ -279,7 +281,7 @@ fn compact(c: &mut Criterion) {
     group.bench_function("shader: compact", |b| {
         b.iter(|| {
             for input in &mut inputs.inner {
-                naga::compact::compact(input.module.as_mut().unwrap());
+                compact(input.module.as_mut().unwrap(), KeepUnused::No);
             }
         });
     });

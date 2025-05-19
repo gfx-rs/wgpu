@@ -67,8 +67,7 @@ Bottom level categories:
 
 #### Naga
 
-Naga now infers the correct binding layout when a resource appears only in an assignment to `_`. By @andyleiserson in [#7540](https://github.com/gfx-rs/wgpu/pull/7540).
-
+- Naga now infers the correct binding layout when a resource appears only in an assignment to `_`. By @andyleiserson in [#7540](https://github.com/gfx-rs/wgpu/pull/7540).
 - Implement `dot4U8Packed` and `dot4I8Packed` for all backends, using specialized intrinsics on SPIR-V, HSLS, and Metal if available, and polyfills everywhere else. By @robamler in [#7494](https://github.com/gfx-rs/wgpu/pull/7494), [#7574](https://github.com/gfx-rs/wgpu/pull/7574), and [#7653](https://github.com/gfx-rs/wgpu/pull/7653).
 - Add polyfilled `pack4x{I,U}8Clamped` built-ins to all backends and WGSL frontend. By @ErichDonGubler in [#7546](https://github.com/gfx-rs/wgpu/pull/7546).
 - Allow textureLoad's sample index arg to be unsigned. By @jimblandy in [#7625](https://github.com/gfx-rs/wgpu/pull/7625).
@@ -78,6 +77,7 @@ Naga now infers the correct binding layout when a resource appears only in an as
 - Properly evaluate `abs(most negative abstract int)`. By @jimblandy in [#7507](https://github.com/gfx-rs/wgpu/pull/7507).
 - Generate vectorized code for `[un]pack4x{I,U}8[Clamp]` on SPIR-V and MSL 2.1+. By @robamler in [#7664](https://github.com/gfx-rs/wgpu/pull/7664).
 - Fix typing for `select`, which had issues particularly with a lack of automatic type conversion. By @ErichDonGubler in [#7572](https://github.com/gfx-rs/wgpu/pull/7572).
+- Allow scalars as the first argument of the `distance` built-in function. By @bernhl in [#7530](https://github.com/gfx-rs/wgpu/pull/7530).
 
 #### DX12
 
@@ -102,6 +102,10 @@ Naga now infers the correct binding layout when a resource appears only in an as
 - `naga::back::hlsl::Writer::new` has a new `pipeline_options` argument. `hlsl::PipelineOptions::default()` can be passed as a default. The `shader_stage` and `entry_point` members of `pipeline_options` can be used to write only a single entry point when using the HLSL and MSL backends (GLSL and SPIR-V already had this functionality). The Metal and DX12 HALs now write only a single entry point when loading shaders. By @andyleiserson in [#7626](https://github.com/gfx-rs/wgpu/pull/7626).
 - Implemented `early_depth_test` for SPIR-V backend, enabling `SHADER_EARLY_DEPTH_TEST` for Vulkan. Additionally, fixed conservative depth optimizations when using `early_depth_test`. The syntax for forcing early depth tests is now `@early_depth_test(force)` instead of `@early_depth_test`. By @dzamkov in [#7676](https://github.com/gfx-rs/wgpu/pull/7676).
 - `ImplementedLanguageExtension::VARIANTS` is now implemented manually rather than derived using `strum` (allowing `strum` to become a dev-only dependency) so it is no longer a member of the `strum::VARIANTS` trait. Unless you are using this trait as a bound this should have no effect.
+- Compaction changes, by @andyleiserson in [#7703](https://github.com/gfx-rs/wgpu/pull/7703):
+  - [`process_overrides`](https://docs.rs/naga/latest/naga/back/pipeline_constants/fn.process_overrides.html) now compacts the module to remove unused items. It is no longer necessary to supply values for overrides that are not used by the active entry point.
+  - The `compact` Cargo feature has been removed. It is no longer possible to exclude compaction support from the build.
+  - [`compact`](https://docs.rs/naga/latest/naga/compact/fn.compact.html) now has an additional argument that specifies whether to remove unused functions, globals, and named types and overrides. For the previous behavior, pass `KeepUnused::Yes`.
 
 #### D3D12
 
@@ -119,11 +123,6 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Added initial `no_std` support to `wgpu-hal`. By @bushrat011899 in [#7599](https://github.com/gfx-rs/wgpu/pull/7599)
 
-### Bug Fixes
-
-#### Naga
-
-- Allow scalars as the first argument of the `distance` built-in function. By @bernhl in [#7530](https://github.com/gfx-rs/wgpu/pull/7530).
 
 ### Documentation
 

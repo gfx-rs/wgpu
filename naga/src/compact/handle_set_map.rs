@@ -4,17 +4,41 @@ use crate::arena::{Arena, Handle, HandleSet, Range};
 
 type Index = crate::non_max_u32::NonMaxU32;
 
-/// A map from old handle indices to new, compressed handle indices.
-pub struct HandleMap<T> {
+/// A map keyed by handles.
+///
+/// In most cases, this is used to map from old handle indices to new,
+/// compressed handle indices.
+#[derive(Debug)]
+pub struct HandleMap<T, U = Index> {
     /// The indices assigned to handles in the compacted module.
     ///
     /// If `new_index[i]` is `Some(n)`, then `n` is the `Index` of the
     /// compacted `Handle` corresponding to the pre-compacted `Handle`
     /// whose index is `i`.
-    new_index: Vec<Option<Index>>,
+    new_index: Vec<Option<U>>,
 
     /// This type is indexed by values of type `T`.
     as_keys: core::marker::PhantomData<T>,
+}
+
+impl<T, U> HandleMap<T, U> {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            new_index: Vec::with_capacity(capacity),
+            as_keys: core::marker::PhantomData,
+        }
+    }
+
+    pub fn get(&self, handle: Handle<T>) -> Option<&U> {
+        self.new_index.get(handle.index()).unwrap_or(&None).as_ref()
+    }
+
+    pub fn insert(&mut self, handle: Handle<T>, value: U) -> Option<U> {
+        if self.new_index.len() <= handle.index() {
+            self.new_index.resize_with(handle.index() + 1, || None);
+        }
+        core::mem::replace(&mut self.new_index[handle.index()], Some(value))
+    }
 }
 
 impl<T: 'static> HandleMap<T> {

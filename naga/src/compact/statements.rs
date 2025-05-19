@@ -3,6 +3,7 @@ use alloc::{vec, vec::Vec};
 use super::functions::FunctionTracer;
 use super::FunctionMap;
 use crate::arena::Handle;
+use crate::compact::handle_set_map::HandleMap;
 
 impl FunctionTracer<'_> {
     pub fn trace_block(&mut self, block: &[crate::Statement]) {
@@ -100,10 +101,11 @@ impl FunctionTracer<'_> {
                         self.expressions_used.insert(result);
                     }
                     St::Call {
-                        function: _,
+                        function,
                         ref arguments,
                         result,
                     } => {
+                        self.trace_call(function);
                         for expr in arguments {
                             self.expressions_used.insert(*expr);
                         }
@@ -204,7 +206,15 @@ impl FunctionTracer<'_> {
 }
 
 impl FunctionMap {
-    pub fn adjust_body(&self, function: &mut crate::Function) {
+    /// Adjust statements in the body of `function`.
+    ///
+    /// Adjusts expressions using `self.expressions`, and adjusts calls to other
+    /// functions using `function_map`.
+    pub fn adjust_body(
+        &self,
+        function: &mut crate::Function,
+        function_map: &HandleMap<crate::Function>,
+    ) {
         let block = &mut function.body;
         let mut worklist: Vec<&mut [crate::Statement]> = vec![block];
         let adjust = |handle: &mut Handle<crate::Expression>| {
@@ -305,10 +315,11 @@ impl FunctionMap {
                         adjust(result);
                     }
                     St::Call {
-                        function: _,
+                        ref mut function,
                         ref mut arguments,
                         ref mut result,
                     } => {
+                        function_map.adjust(function);
                         for expr in arguments {
                             adjust(expr);
                         }

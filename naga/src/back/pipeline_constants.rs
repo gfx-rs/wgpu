@@ -10,6 +10,8 @@ use thiserror::Error;
 use super::PipelineConstants;
 use crate::{
     arena::HandleVec,
+    compact::{compact, KeepUnused},
+    ir,
     proc::{ConstantEvaluator, ConstantEvaluatorError, Emitter},
     valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator},
     Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
@@ -55,6 +57,7 @@ pub enum PipelineConstantError {
 pub fn process_overrides<'a>(
     module: &'a Module,
     module_info: &'a ModuleInfo,
+    entry_point: Option<(ir::ShaderStage, &str)>,
     pipeline_constants: &PipelineConstants,
 ) -> Result<(Cow<'a, Module>, Cow<'a, ModuleInfo>), PipelineConstantError> {
     if module.overrides.is_empty() {
@@ -62,6 +65,16 @@ pub fn process_overrides<'a>(
     }
 
     let mut module = module.clone();
+
+    // If an entry point was specified, compact the module to remove anything
+    // not reachable from that entry point. This is necessary because we may not
+    // have values for overrides that are not reachable from the entry point.
+    if let Some((ep_stage, ep_name)) = entry_point {
+        module
+            .entry_points
+            .retain(|ep| ep.stage == ep_stage && ep.name == ep_name);
+    }
+    compact(&mut module, KeepUnused::No);
 
     // A map from override handles to the handles of the constants
     // we've replaced them with.

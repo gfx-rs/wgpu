@@ -3,17 +3,6 @@
         (
             name: None,
             inner: Matrix(
-                columns: Quad,
-                rows: Quad,
-                scalar: (
-                    kind: Float,
-                    width: 4,
-                ),
-            ),
-        ),
-        (
-            name: None,
-            inner: Matrix(
                 columns: Bi,
                 rows: Bi,
                 scalar: (
@@ -35,7 +24,7 @@
                 members: [
                     (
                         name: Some("test_m"),
-                        ty: 2,
+                        ty: 1,
                         binding: None,
                         offset: 0,
                     ),
@@ -53,27 +42,17 @@
     constants: [
         (
             name: Some("test_c"),
-            ty: 2,
+            ty: 1,
             init: 0,
         ),
     ],
     overrides: [],
     global_variables: [
         (
-            name: Some("mvp_matrix"),
-            space: Uniform,
-            binding: Some((
-                group: 0,
-                binding: 0,
-            )),
-            ty: 0,
-            init: None,
-        ),
-        (
-            name: Some("w_mem"),
+            name: Some("w_mem2"),
             space: WorkGroup,
             binding: None,
-            ty: 1,
+            ty: 0,
             init: None,
         ),
     ],
@@ -82,7 +61,7 @@
     ],
     functions: [
         (
-            name: Some("test_f"),
+            name: Some("test_g"),
             arguments: [],
             result: None,
             local_variables: [],
@@ -108,9 +87,27 @@
                 arguments: [],
                 result: None,
                 local_variables: [],
-                expressions: [],
-                named_expressions: {},
+                expressions: [
+                    GlobalVariable(0),
+                    Load(
+                        pointer: 0,
+                    ),
+                    ZeroValue(2),
+                ],
+                named_expressions: {
+                    1: "phony",
+                    2: "phony",
+                },
                 body: [
+                    Emit((
+                        start: 1,
+                        end: 2,
+                    )),
+                    Call(
+                        function: 0,
+                        arguments: [],
+                        result: None,
+                    ),
                     Return(
                         value: None,
                     ),
@@ -123,12 +120,12 @@
     diagnostic_filter_leaf: None,
     doc_comments: Some((
         types: {
-            3: [
-                "/// struct doc comment",
+            2: [
+                "/// struct S doc comment",
             ],
         },
         struct_members: {
-            (3, 0): [
+            (2, 0): [
                 "/// member doc comment",
             ],
         },
@@ -139,7 +136,7 @@
         },
         functions: {
             0: [
-                "/// function doc comment",
+                "/// function g doc comment",
             ],
         },
         constants: {
@@ -149,11 +146,7 @@
         },
         global_variables: {
             0: [
-                "/**\n 🍽\u{fe0f} /* nested comment */\n */",
-            ],
-            1: [
-                "/// workgroup var doc comment",
-                "/// 2nd line of workgroup var doc comment",
+                "/// workgroup var 2 doc comment",
             ],
         },
         module: [

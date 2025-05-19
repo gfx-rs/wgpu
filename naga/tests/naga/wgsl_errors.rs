@@ -3,7 +3,7 @@ Tests for the WGSL front end.
 */
 #![cfg(feature = "wgsl-in")]
 
-use naga::valid::Capabilities;
+use naga::{compact::KeepUnused, valid::Capabilities};
 
 #[track_caller]
 fn check(input: &str, snapshot: &str) {
@@ -2902,7 +2902,7 @@ fn compaction_preserves_spans() {
     "#;
     // The error span should be on `x[1.0]`, which is at characters 108..114.
     let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
-    naga::compact::compact(&mut module);
+    naga::compact::compact(&mut module, KeepUnused::No);
     let err = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::default(),
