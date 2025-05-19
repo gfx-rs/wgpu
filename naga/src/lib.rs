@@ -108,7 +108,6 @@ extern crate alloc;
 mod arena;
 pub mod back;
 pub mod common;
-#[cfg(feature = "compact")]
 pub mod compact;
 pub mod diagnostic_filter;
 pub mod error;
