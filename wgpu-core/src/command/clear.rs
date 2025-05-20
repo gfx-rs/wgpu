@@ -272,7 +272,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
     let dst_raw = dst_texture.try_raw(snatch_guard)?;
 
     // Issue the right barrier.
-    let clear_usage = match *dst_texture.clear_mode.lock() {
+    let clear_usage = match *dst_texture.clear_mode.read() {
         TextureClearMode::BufferCopy => wgt::TextureUses::COPY_DST,
         TextureClearMode::RenderPass {
             is_color: false, ..
@@ -314,7 +314,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
     }
 
     // Record actual clearing
-    let clear_mode = dst_texture.clear_mode.lock();
+    let clear_mode = dst_texture.clear_mode.read();
     match *clear_mode {
         TextureClearMode::BufferCopy => clear_texture_via_buffer_copies(
             &dst_texture.desc,
@@ -449,7 +449,7 @@ fn clear_texture_via_render_passes(
         depth_or_array_layers: 1, // Only one layer is cleared at a time.
     };
 
-    let clear_mode = dst_texture.clear_mode.lock();
+    let clear_mode = dst_texture.clear_mode.read();
 
     for mip_level in range.mip_range {
         let extent = extent_base.mip_level_size(mip_level, dst_texture.desc.dimension);
