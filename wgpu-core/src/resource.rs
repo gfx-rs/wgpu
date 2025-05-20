@@ -1029,7 +1029,7 @@ pub struct Texture {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
-    pub(crate) clear_mode: TextureClearMode,
+    pub(crate) clear_mode: Mutex<TextureClearMode>,
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
 }
@@ -1064,7 +1064,7 @@ impl Texture {
             },
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
-            clear_mode,
+            clear_mode: Mutex::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
         }
@@ -1090,7 +1090,7 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        match self.clear_mode {
+        match *self.clear_mode.lock() {
             TextureClearMode::Surface {
                 ref mut clear_view, ..
             } => {
@@ -1208,6 +1208,7 @@ impl Texture {
             queue::TempResource::DestroyedTexture(DestroyedTexture {
                 raw: ManuallyDrop::new(raw),
                 views,
+                clear_mode: mem::replace(&mut *self.clear_mode.lock(), TextureClearMode::None),
                 bind_groups,
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
@@ -1471,6 +1472,7 @@ impl Global {
 pub struct DestroyedTexture {
     raw: ManuallyDrop<Box<dyn hal::DynTexture>>,
     views: WeakVec<TextureView>,
+    clear_mode: TextureClearMode,
     bind_groups: WeakVec<BindGroup>,
     device: Arc<Device>,
     label: String,
@@ -1492,6 +1494,20 @@ impl Drop for DestroyedTexture {
             &mut self.bind_groups,
         )));
         drop(deferred);
+
+        match mem::replace(&mut self.clear_mode, TextureClearMode::None) {
+            TextureClearMode::RenderPass { clear_views, .. } => {
+                for clear_view in clear_views {
+                    let raw = ManuallyDrop::into_inner(clear_view);
+                    unsafe { self.device.raw().destroy_texture_view(raw) };
+                }
+            }
+            TextureClearMode::Surface { clear_view } => {
+                let raw = ManuallyDrop::into_inner(clear_view);
+                unsafe { self.device.raw().destroy_texture_view(raw) };
+            }
+            _ => (),
+        }
 
         resource_log!("Destroy raw Texture (destroyed) {:?}", self.label());
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
