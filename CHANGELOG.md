@@ -99,6 +99,10 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Use highest SPIR-V version supported by Vulkan API version. By @robamler in [#7595](https://github.com/gfx-rs/wgpu/pull/7595)
 
+#### WebGPU
+
+- The type of the `size` parameter to `copy_buffer_to_buffer` has changed from `BufferAddress` to `impl Into<Option<BufferAddress>>`. This achieves the spec-defined behavior of the value being optional, while still accepting existing calls without changes. By @andyleiserson in [#7659](https://github.com/gfx-rs/wgpu/pull/7659).
+
 ### Bug Fixes
 
 #### Naga
