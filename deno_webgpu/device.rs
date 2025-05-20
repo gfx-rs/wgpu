@@ -136,11 +136,16 @@ impl GPUDevice {
     #[required(1)]
     #[cppgc]
     fn create_buffer(&self, #[webidl] descriptor: super::buffer::GPUBufferDescriptor) -> GPUBuffer {
+        // Validation of the usage needs to happen on the device timeline, so
+        // don't raise an error immediately if it isn't valid. wgpu will
+        // reject `BufferUsages::empty()`.
+        let usage = wgpu_types::BufferUsages::from_bits(descriptor.usage)
+            .unwrap_or(wgpu_types::BufferUsages::empty());
+
         let wgpu_descriptor = wgpu_core::resource::BufferDescriptor {
             label: crate::transform_label(descriptor.label.clone()),
             size: descriptor.size,
-            usage: wgpu_types::BufferUsages::from_bits(descriptor.usage)
-                .unwrap_or(wgpu_types::BufferUsages::empty()),
+            usage,
             mapped_at_creation: descriptor.mapped_at_creation,
         };
 
