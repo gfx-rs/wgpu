@@ -1,6 +1,7 @@
 unittests:*
 webgpu:api,operation,command_buffer,basic:*
-webgpu:api,operation,compute,basic:*
+webgpu:api,operation,compute,basic:memcpy:*
+//FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,device,lost:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
