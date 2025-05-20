@@ -3,6 +3,8 @@ name: CTS
 on:
   pull_request:
     types: [labeled, opened, synchronize]
+  schedule:
+    - cron: '33 2 * * *'
   workflow_dispatch:
 
 env:
@@ -13,8 +15,7 @@ env:
 
 jobs:
   cts:
-    # For pull requests, run only run if we add the "PR: run CTS" label
-    #
+    # For pull requests, only run if we add the "PR: run CTS" label
     if: "github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'PR: run CTS'))"
 
     strategy:

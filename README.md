@@ -214,9 +214,12 @@ If you are a user and want a way to help contribute to wgpu, we always need more
 
 WebGPU includes a Conformance Test Suite to validate that implementations are working correctly. We can run this CTS against wgpu.
 
-To run the CTS, first, you need to check it out:
+To have GitHub run the CTS against a pull request, you can add the `PR: run CTS` label to the PR.
+
+To run the CTS locally, first, you need to check it out:
 
 ```
+# In the root of your wgpu tree:
 git clone https://github.com/gpuweb/cts.git
 cd cts
 # works in bash and powershell
