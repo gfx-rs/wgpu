@@ -1,5 +1,10 @@
 unittests:*
 webgpu:api,operation,command_buffer,basic:*
+webgpu:api,operation,command_buffer,copyBufferToBuffer:single:newSig=false;*
+// https://github.com/gfx-rs/wgpu/issues/7391
+//FAIL: webgpu:api,operation,command_buffer,copyBufferToBuffer:single:newSig=true;*
+webgpu:api,operation,command_buffer,copyBufferToBuffer:state_transitions:*
+webgpu:api,operation,command_buffer,copyBufferToBuffer:copy_order:*
 webgpu:api,operation,compute,basic:memcpy:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,device,lost:*
