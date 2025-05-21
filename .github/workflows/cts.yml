@@ -16,7 +16,7 @@ env:
 jobs:
   cts:
     # For pull requests, only run if we add the "PR: run CTS" label
-    if: "github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'PR: run CTS'))"
+    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'PR: run CTS')"
 
     strategy:
       fail-fast: false
