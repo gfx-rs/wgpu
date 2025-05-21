@@ -17,18 +17,11 @@ use alloc::string::String;
 /// This type is used as the type bounds for various diagnostic rendering methods, i.e.,
 /// [`WithSpan::emit_to_string_with_path`](crate::span::WithSpan::emit_to_string_with_path).
 pub trait AsPath {
-    #[cfg(feature = "std")]
-    fn as_ref(&self) -> &Path;
-
     fn to_string_lossy(&self) -> Cow<'_, str>;
 }
 
 #[cfg(feature = "std")]
 impl<T: AsRef<Path> + ?Sized> AsPath for T {
-    fn as_ref(&self) -> &Path {
-        self.as_ref()
-    }
-
     fn to_string_lossy(&self) -> Cow<'_, str> {
         self.as_ref().to_string_lossy()
     }
