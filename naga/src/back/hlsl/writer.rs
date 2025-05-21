@@ -2367,6 +2367,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         }
                     };
                     write!(self.out, " {name}; ")?;
+                    self.named_expressions.insert(res_handle, name.clone());
                     Some((res_handle, name))
                 } else {
                     None
@@ -2380,6 +2381,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     crate::AtomicFunction::Exchange { compare: Some(cmp) } => Some(cmp),
                     _ => None,
                 };
+                if let Some(cmp) = compare_expr {
+                    self.need_bake_expressions.insert(cmp);
+                }
                 match pointer_space {
                     crate::AddressSpace::WorkGroup => {
                         write!(self.out, "Interlocked{fun_str}(")?;
@@ -2420,14 +2424,13 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     }
                 }
                 if let Some(cmp) = compare_expr {
-                    if let Some(&(res_handle, ref res_name)) = res_var_info.as_ref() {
+                    if let Some(&(_res_handle, ref res_name)) = res_var_info.as_ref() {
                         write!(
                             self.out,
                             "{level}{res_name}.exchanged = ({res_name}.old_value == "
                         )?;
                         self.write_expr(module, cmp, func_ctx)?;
                         writeln!(self.out, ");")?;
-                        self.named_expressions.insert(res_handle, res_name.clone());
                     }
                 }
             }
@@ -4303,17 +4306,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
         write!(self.out, ", ")?;
         if let crate::AtomicFunction::Subtract = *fun {
+            // we just wrote `InterlockedAdd`, so negate the argument
             write!(self.out, "-")?;
         }
         self.write_expr(module, value, func_ctx)?;
-        if let Some(&(res_handle, ref res_name)) = res_var_info.as_ref() {
+        if let Some(&(_res_handle, ref res_name)) = res_var_info.as_ref() {
             write!(self.out, ", ")?;
             if compare_expr.is_some() {
                 write!(self.out, "{res_name}.old_value")?;
             } else {
                 write!(self.out, "{res_name}")?;
             }
-            self.named_expressions.insert(res_handle, res_name.clone());
         }
         writeln!(self.out, ");")?;
         Ok(())

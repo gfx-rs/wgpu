@@ -791,11 +791,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // you can't make a struct without adding all of its members first.
         for (handle, ty) in self.module.types.iter() {
             if let TypeInner::Struct { ref members, .. } = ty.inner {
-                // Skip special atomic compare exchange result structs (generated in next loop)
                 let struct_name = &self.names[&NameKey::Type(handle)];
-                if struct_name.starts_with("_atomic_compare_exchange_result") {
-                    continue;
-                }
 
                 // Structures ending with runtime-sized arrays can only be
                 // rendered as shader storage blocks in GLSL, not stand-alone
@@ -875,13 +871,8 @@ impl<'a, W: Write> Writer<'a, W> {
                         )?;
                     }
                 }
-                &crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar) => {
-                    let scalar_str = glsl_scalar(scalar)?.full;
-                    writeln!(
-                        self.out,
-                        "struct {} {{\n    {} old_value;\n    bool exchanged;\n}};",
-                        struct_name, scalar_str
-                    )?;
+                &crate::PredeclaredType::AtomicCompareExchangeWeakResult(_) => {
+                    // Handled by the general struct writing loop earlier.
                 }
             }
         }
@@ -1140,17 +1131,6 @@ impl<'a, W: Write> Writer<'a, W> {
     /// # Notes
     /// Adds no trailing or leading whitespace
     fn write_type(&mut self, ty: Handle<crate::Type>) -> BackendResult {
-        for (key, &handle) in self.module.special_types.predeclared_types.iter() {
-            if handle == ty {
-                if let crate::PredeclaredType::AtomicCompareExchangeWeakResult(_) = *key {
-                    let name = &self.names[&NameKey::Type(ty)];
-                    write!(self.out, "{name}")?;
-                    return Ok(());
-                }
-                break;
-            }
-        }
-
         match self.module.types[ty].inner {
             // glsl has no pointer types so just write types as normal and loads are skipped
             TypeInner::Pointer { base, .. } => self.write_type(base),
@@ -2610,6 +2590,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::AtomicFunction::Exchange {
                         compare: Some(compare_expr),
                     } => {
+                        self.need_bake_expressions.insert(compare_expr);
+
                         let result_handle = result.expect("CompareExchange must have a result");
                         let res_name = Baked(result_handle).to_string();
                         self.write_type(ctx.info[result_handle].ty.handle().unwrap())?;
@@ -2642,6 +2624,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         self.write_expr(pointer, ctx)?;
                         write!(self.out, ", ")?;
                         if let crate::AtomicFunction::Subtract = *fun {
+                            // Emulate `atomicSub` with `atomicAdd` by negating the value.
                             write!(self.out, "-")?;
                         }
                         self.write_expr(value, ctx)?;
