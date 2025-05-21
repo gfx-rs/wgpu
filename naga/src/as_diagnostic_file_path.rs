@@ -8,6 +8,10 @@ use std::path::Path;
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 
+mod sealed {
+    pub trait Sealed {}
+}
+
 /// A trait that abstracts over types accepted for conversion to the most
 /// featureful path representation possible; that is:
 ///
@@ -16,7 +20,7 @@ use alloc::string::String;
 ///
 /// This type is used as the type bounds for various diagnostic rendering methods, i.e.,
 /// [`WithSpan::emit_to_string_with_path`](crate::span::WithSpan::emit_to_string_with_path).
-pub trait AsDiagnosticFilePath {
+pub trait AsDiagnosticFilePath: sealed::Sealed {
     fn to_string_lossy(&self) -> Cow<'_, str>;
 }
 
@@ -27,6 +31,9 @@ impl<T: AsRef<Path> + ?Sized> AsDiagnosticFilePath for T {
     }
 }
 
+#[cfg(feature = "std")]
+impl<T: AsRef<Path> + ?Sized> sealed::Sealed for T {}
+
 #[cfg(not(feature = "std"))]
 impl AsDiagnosticFilePath for String {
     fn to_string_lossy(&self) -> Cow<'_, str> {
@@ -35,11 +42,17 @@ impl AsDiagnosticFilePath for String {
 }
 
 #[cfg(not(feature = "std"))]
+impl sealed::Sealed for String {}
+
+#[cfg(not(feature = "std"))]
 impl AsDiagnosticFilePath for str {
     fn to_string_lossy(&self) -> Cow<'_, str> {
         Cow::Borrowed(self)
     }
 }
+
+#[cfg(not(feature = "std"))]
+impl sealed::Sealed for str {}
 
 #[cfg(not(feature = "std"))]
 impl AsDiagnosticFilePath for Cow<'_, str> {
@@ -50,8 +63,14 @@ impl AsDiagnosticFilePath for Cow<'_, str> {
 }
 
 #[cfg(not(feature = "std"))]
+impl sealed::Sealed for Cow<'_, str> {}
+
+#[cfg(not(feature = "std"))]
 impl<T: AsDiagnosticFilePath + ?Sized> AsDiagnosticFilePath for &T {
     fn to_string_lossy(&self) -> Cow<'_, str> {
         (*self).to_string_lossy()
     }
 }
+
+#[cfg(not(feature = "std"))]
+impl<T: AsDiagnosticFilePath + ?Sized> sealed::Sealed for &T {}
