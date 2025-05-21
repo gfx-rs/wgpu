@@ -42,6 +42,14 @@ impl AsPath for str {
 }
 
 #[cfg(not(feature = "std"))]
+impl AsPath for Cow<'_, str> {
+    fn to_string_lossy(&self) -> Cow<'_, str> {
+        use core::borrow::Borrow;
+        Cow::Borrowed(self.borrow())
+    }
+}
+
+#[cfg(not(feature = "std"))]
 impl<T: AsPath + ?Sized> AsPath for &T {
     fn to_string_lossy(&self) -> Cow<'_, str> {
         (*self).to_string_lossy()
