@@ -1,4 +1,4 @@
-//! [`AsPath`] and its supporting items.
+//! [`AsDiagnosticFilePath`] and its supporting items.
 
 use alloc::borrow::Cow;
 
@@ -16,33 +16,33 @@ use alloc::string::String;
 ///
 /// This type is used as the type bounds for various diagnostic rendering methods, i.e.,
 /// [`WithSpan::emit_to_string_with_path`](crate::span::WithSpan::emit_to_string_with_path).
-pub trait AsPath {
+pub trait AsDiagnosticFilePath {
     fn to_string_lossy(&self) -> Cow<'_, str>;
 }
 
 #[cfg(feature = "std")]
-impl<T: AsRef<Path> + ?Sized> AsPath for T {
+impl<T: AsRef<Path> + ?Sized> AsDiagnosticFilePath for T {
     fn to_string_lossy(&self) -> Cow<'_, str> {
         self.as_ref().to_string_lossy()
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl AsPath for String {
+impl AsDiagnosticFilePath for String {
     fn to_string_lossy(&self) -> Cow<'_, str> {
         Cow::Borrowed(self.as_str())
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl AsPath for str {
+impl AsDiagnosticFilePath for str {
     fn to_string_lossy(&self) -> Cow<'_, str> {
         Cow::Borrowed(self)
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl AsPath for Cow<'_, str> {
+impl AsDiagnosticFilePath for Cow<'_, str> {
     fn to_string_lossy(&self) -> Cow<'_, str> {
         use core::borrow::Borrow;
         Cow::Borrowed(self.borrow())
@@ -50,7 +50,7 @@ impl AsPath for Cow<'_, str> {
 }
 
 #[cfg(not(feature = "std"))]
-impl<T: AsPath + ?Sized> AsPath for &T {
+impl<T: AsDiagnosticFilePath + ?Sized> AsDiagnosticFilePath for &T {
     fn to_string_lossy(&self) -> Cow<'_, str> {
         (*self).to_string_lossy()
     }
