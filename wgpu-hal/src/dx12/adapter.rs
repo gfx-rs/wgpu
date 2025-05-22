@@ -200,6 +200,21 @@ impl super::Adapter {
             .is_ok()
         };
 
+        let unrestricted_buffer_texture_copy_pitch_supported = {
+            let mut features13 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS13::default();
+            unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS13,
+                    <*mut _>::cast(&mut features13),
+                    size_of_val(&features13) as u32,
+                )
+            }
+            .is_ok()
+                && features13
+                    .UnrestrictedBufferTextureCopyPitchSupported
+                    .as_bool()
+        };
+
         let mut max_sampler_descriptor_heap_size =
             Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE;
         {
@@ -304,6 +319,8 @@ impl super::Adapter {
             suballocation_supported: !info.name.contains("Iris(R) Xe"),
             shader_model,
             max_sampler_descriptor_heap_size,
+            _unrestricted_buffer_texture_copy_pitch_supported:
+                unrestricted_buffer_texture_copy_pitch_supported,
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit
