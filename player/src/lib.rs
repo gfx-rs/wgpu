@@ -247,7 +247,7 @@ impl GlobalPlay for wgc::global::Global {
                 }
             }
             Action::FreeBuffer(id) => {
-                self.buffer_destroy(id).unwrap();
+                self.buffer_destroy(id);
             }
             Action::DestroyBuffer(id) => {
                 self.buffer_drop(id);
@@ -259,7 +259,7 @@ impl GlobalPlay for wgc::global::Global {
                 }
             }
             Action::FreeTexture(id) => {
-                self.texture_destroy(id).unwrap();
+                self.texture_destroy(id);
             }
             Action::DestroyTexture(id) => {
                 self.texture_drop(id);

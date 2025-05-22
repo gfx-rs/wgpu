@@ -252,13 +252,16 @@ impl Global {
         Ok(())
     }
 
-    pub fn buffer_destroy(&self, buffer_id: id::BufferId) -> Result<(), resource::DestroyError> {
+    pub fn buffer_destroy(&self, buffer_id: id::BufferId) {
         profiling::scope!("Buffer::destroy");
         api_log!("Buffer::destroy {buffer_id:?}");
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.get(buffer_id).get()?;
+        let Ok(buffer) = hub.buffers.get(buffer_id).get() else {
+            // If the buffer is already invalid, there's nothing to do.
+            return;
+        };
 
         #[cfg(feature = "trace")]
         if let Some(trace) = buffer.device.trace.lock().as_mut() {
@@ -270,7 +273,7 @@ impl Global {
             buffer_id,
         );
 
-        buffer.destroy()
+        buffer.destroy();
     }
 
     pub fn buffer_drop(&self, buffer_id: id::BufferId) {
@@ -409,20 +412,23 @@ impl Global {
         (id, err)
     }
 
-    pub fn texture_destroy(&self, texture_id: id::TextureId) -> Result<(), resource::DestroyError> {
+    pub fn texture_destroy(&self, texture_id: id::TextureId) {
         profiling::scope!("Texture::destroy");
         api_log!("Texture::destroy {texture_id:?}");
 
         let hub = &self.hub;
 
-        let texture = hub.textures.get(texture_id).get()?;
+        let Ok(texture) = hub.textures.get(texture_id).get() else {
+            // If the texture is already invalid, there's nothing to do.
+            return;
+        };
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
             trace.add(trace::Action::FreeTexture(texture_id));
         }
 
-        texture.destroy()
+        texture.destroy();
     }
 
     pub fn texture_drop(&self, texture_id: id::TextureId) {
