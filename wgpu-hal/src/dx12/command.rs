@@ -612,8 +612,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let list = self.list.as_ref().unwrap();
         for r in regions {
+            let list = self.list.as_ref().unwrap();
+
             let src_location = Direct3D12::D3D12_TEXTURE_COPY_LOCATION {
                 pResource: unsafe { borrow_interface_temporarily(&src.resource) },
                 Type: Direct3D12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
@@ -652,8 +653,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let list = self.list.as_ref().unwrap();
         for r in regions {
+            let list = self.list.as_ref().unwrap();
+
             let src_location = Direct3D12::D3D12_TEXTURE_COPY_LOCATION {
                 pResource: unsafe { borrow_interface_temporarily(&src.resource) },
                 Type: Direct3D12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
