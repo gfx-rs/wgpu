@@ -796,6 +796,7 @@ impl crate::Device for super::Device {
             mem_allocator: self.mem_allocator.clone(),
             rtv_pool: Arc::clone(&self.rtv_pool),
             temp_rtv_handles: Vec::new(),
+            intermediate_copy_bufs: Vec::new(),
             null_rtv_handle: self.null_rtv_handle,
             list: None,
             free_lists: Vec::new(),

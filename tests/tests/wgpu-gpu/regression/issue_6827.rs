@@ -25,17 +25,7 @@ static TEST_SCATTER: GpuTestConfiguration = GpuTestConfiguration::new()
             .expect_fail(FailureCase::backend_adapter(
                 wgpu::Backends::METAL,
                 "Apple Paravirtual device", // CI on M1
-            ))
-            .expect_fail(
-                // Unfortunately this depends on if `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported`
-                // is true, which we have no way to encode. This reproduces in CI though, so not too worried about it.
-                FailureCase::backend(wgpu::Backends::DX12)
-                    .flaky()
-                    .validation_error(
-                        "D3D12_PLACED_SUBRESOURCE_FOOTPRINT::Offset must be a multiple of 512",
-                    )
-                    .panic("GraphicsCommandList::close failed: The parameter is incorrect"),
-            ),
+            )),
     )
     .run_async(|ctx| async move { run_test(ctx, true).await });
 
