@@ -86,6 +86,10 @@ SamplerDescriptor {
 - WebGPU device requests now support the required limits `maxColorAttachments` and `maxColorAttachmentBytesPerSample`. By @evilpie in [#8328](https://github.com/gfx-rs/wgpu/pull/8328)
 - Reject binding indices that exceed `wgpu_types::Limits::max_bindings_per_bind_group` when deriving a bind group layout for a pipeline. By @jimblandy in [#8325](https://github.com/gfx-rs/wgpu/pull/8325).
 
+#### DX12
+
+- Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721).
+
 ## v27.0.2 (2025-10-03)
 
 ### Bug Fixes

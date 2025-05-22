@@ -319,8 +319,7 @@ impl super::Adapter {
             suballocation_supported: !info.name.contains("Iris(R) Xe"),
             shader_model,
             max_sampler_descriptor_heap_size,
-            _unrestricted_buffer_texture_copy_pitch_supported:
-                unrestricted_buffer_texture_copy_pitch_supported,
+            unrestricted_buffer_texture_copy_pitch_supported,
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit
