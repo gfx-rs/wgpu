@@ -4,7 +4,7 @@ use core::{iter, mem};
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
-    command::{CommandBuffer, CommandEncoderError},
+    command::{CommandBuffer, EncoderStateError},
     device::{DeviceError, MissingFeatures},
     global::Global,
     id,
@@ -96,7 +96,7 @@ pub enum QueryError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    Encoder(#[from] CommandEncoderError),
+    EncoderState(#[from] EncoderStateError),
     #[error(transparent)]
     MissingFeature(#[from] MissingFeatures),
     #[error("Error encountered while trying to use queries")]

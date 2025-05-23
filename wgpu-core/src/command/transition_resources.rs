@@ -1,15 +1,13 @@
 use thiserror::Error;
 
 use crate::{
-    command::CommandBuffer,
+    command::{CommandBuffer, EncoderStateError},
     device::DeviceError,
     global::Global,
     id::{BufferId, CommandEncoderId, TextureId},
     resource::{InvalidResourceError, ParentDevice},
     track::ResourceUsageCompatibilityError,
 };
-
-use super::CommandEncoderError;
 
 impl Global {
     pub fn command_encoder_transition_resources(
@@ -85,7 +83,7 @@ pub enum TransitionResourcesError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    Encoder(#[from] CommandEncoderError),
+    EncoderState(#[from] EncoderStateError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]

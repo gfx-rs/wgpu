@@ -95,15 +95,15 @@ pub(crate) enum CommandEncoderStatus {
 
 impl CommandEncoderStatus {
     /// Checks that the encoder is in the [`Self::Recording`] state.
-    pub(crate) fn record(&mut self) -> Result<RecordingGuard<'_>, CommandEncoderError> {
+    pub(crate) fn record(&mut self) -> Result<RecordingGuard<'_>, EncoderStateError> {
         match self {
             Self::Recording(_) => Ok(RecordingGuard { inner: self }),
             Self::Locked(_) => {
                 *self = Self::Error;
-                Err(CommandEncoderError::Locked)
+                Err(EncoderStateError::Locked)
             }
-            Self::Finished(_) => Err(CommandEncoderError::NotRecording),
-            Self::Error => Err(CommandEncoderError::Invalid),
+            Self::Finished(_) => Err(EncoderStateError::Ended),
+            Self::Error => Err(EncoderStateError::Invalid),
         }
     }
 
@@ -122,7 +122,7 @@ impl CommandEncoderStatus {
     /// Locks the encoder by putting it in the [`Self::Locked`] state.
     ///
     /// Call [`Self::unlock_encoder`] to put the [`CommandBuffer`] back into the [`Self::Recording`] state.
-    fn lock_encoder(&mut self) -> Result<(), CommandEncoderError> {
+    fn lock_encoder(&mut self) -> Result<(), EncoderStateError> {
         match mem::replace(self, Self::Error) {
             Self::Recording(inner) => {
                 *self = Self::Locked(inner);
@@ -130,10 +130,10 @@ impl CommandEncoderStatus {
             }
             Self::Finished(inner) => {
                 *self = Self::Finished(inner);
-                Err(CommandEncoderError::NotRecording)
+                Err(EncoderStateError::Ended)
             }
-            Self::Locked(_) => Err(CommandEncoderError::Locked),
-            Self::Error => Err(CommandEncoderError::Invalid),
+            Self::Locked(_) => Err(EncoderStateError::Locked),
+            Self::Error => Err(EncoderStateError::Invalid),
         }
     }
 
@@ -142,7 +142,7 @@ impl CommandEncoderStatus {
     /// This function is the unlocking counterpart to [`Self::lock_encoder`].
     ///
     /// It is only valid to call this function if the encoder is in the [`Self::Locked`] state.
-    fn unlock_encoder(&mut self) -> Result<RecordingGuard<'_>, CommandEncoderError> {
+    fn unlock_encoder(&mut self) -> Result<RecordingGuard<'_>, EncoderStateError> {
         match mem::replace(self, Self::Error) {
             Self::Locked(inner) => {
                 *self = Self::Recording(inner);
@@ -150,10 +150,10 @@ impl CommandEncoderStatus {
             }
             Self::Finished(inner) => {
                 *self = Self::Finished(inner);
-                Err(CommandEncoderError::NotRecording)
+                Err(EncoderStateError::Ended)
             }
-            Self::Recording(_) => Err(CommandEncoderError::Invalid),
-            Self::Error => Err(CommandEncoderError::Invalid),
+            Self::Recording(_) => Err(EncoderStateError::Invalid),
+            Self::Error => Err(EncoderStateError::Invalid),
         }
     }
 
@@ -171,10 +171,10 @@ impl CommandEncoderStatus {
             }
             Self::Finished(inner) => {
                 *self = Self::Finished(inner);
-                Err(CommandEncoderError::NotRecording)
+                Err(EncoderStateError::Ended.into())
             }
-            Self::Locked(_) => Err(CommandEncoderError::Locked),
-            Self::Error => Err(CommandEncoderError::Invalid),
+            Self::Locked(_) => Err(EncoderStateError::Locked.into()),
+            Self::Error => Err(EncoderStateError::Invalid.into()),
         }
     }
 }
@@ -725,18 +725,27 @@ impl<C: Clone> BasePass<C> {
     }
 }
 
+/// Errors related to the state of a command or pass encoder.
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum EncoderStateError {
+    #[error("Encoder is invalid")]
+    Invalid,
+    #[error("Encoding must not have ended")]
+    Ended,
+
+    /// Note: only command encoders can be locked (not pass encoders).
+    #[error("Encoder is locked by a previously created render/compute pass. Before recording any new commands, the pass must be ended.")]
+    Locked,
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CommandEncoderError {
-    #[error("Command encoder is invalid")]
-    Invalid,
-    #[error("Command encoder must be active")]
-    NotRecording,
+    #[error(transparent)]
+    State(#[from] EncoderStateError),
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Command encoder is locked by a previously created render/compute pass. Before recording any new commands, the pass must be ended.")]
-    Locked,
-
     #[error(transparent)]
     InvalidColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]

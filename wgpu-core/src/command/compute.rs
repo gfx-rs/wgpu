@@ -4,6 +4,7 @@ use wgt::{BufferAddress, DynamicOffset};
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, str};
 
+use crate::command::EncoderStateError;
 use crate::ray_tracing::AsAction;
 use crate::{
     binding_model::{
@@ -127,7 +128,7 @@ pub enum ComputePassErrorInner {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    Encoder(#[from] CommandEncoderError),
+    EncoderState(#[from] EncoderStateError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
     #[error("Bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
@@ -301,7 +302,7 @@ impl Global {
 
         match cmd_buf.data.lock().lock_encoder() {
             Ok(_) => {}
-            Err(e) => return make_err(e, arc_desc),
+            Err(e) => return make_err(e.into(), arc_desc),
         };
 
         arc_desc.timestamp_writes = match desc

@@ -11,6 +11,7 @@ use wgt::{
 use crate::binding_model::BindGroup;
 use crate::command::{
     validate_and_begin_occlusion_query, validate_and_begin_pipeline_statistics_query,
+    EncoderStateError,
 };
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::{RenderPipeline, VertexStep};
@@ -662,7 +663,7 @@ pub enum RenderPassErrorInner {
     #[error(transparent)]
     ColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
-    Encoder(#[from] CommandEncoderError),
+    EncoderState(#[from] EncoderStateError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
     #[error("The format of the {location} ({format:?}) is not resolvable")]
@@ -1610,7 +1611,7 @@ impl Global {
 
         match cmd_buf.data.lock().lock_encoder() {
             Ok(_) => {}
-            Err(e) => return make_err(e, arc_desc),
+            Err(e) => return make_err(e.into(), arc_desc),
         };
 
         let err = fill_arc_desc(hub, desc, &mut arc_desc, &cmd_buf.device).err();

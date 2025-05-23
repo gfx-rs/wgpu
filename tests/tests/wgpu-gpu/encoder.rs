@@ -308,23 +308,15 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
             log::info!("Testing operation {op_name:?} on a locked command encoder while a {pass_type:?} pass is active");
-            fail(
-                &ctx.device,
-                || op(&mut encoder),
-                Some("Command encoder is locked"),
-            );
+            fail(&ctx.device, || op(&mut encoder), Some("encoder is locked"));
 
             // Drop the pass - this also fails now since the encoder is invalid:
-            fail(
-                &ctx.device,
-                || drop(pass),
-                Some("Command encoder is invalid"),
-            );
+            fail(&ctx.device, || drop(pass), Some("encoder is invalid"));
             // Also, it's not possible to create a new pass on the encoder:
             fail(
                 &ctx.device,
                 || encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()),
-                Some("Command encoder is invalid"),
+                Some("encoder is invalid"),
             );
         }
 
@@ -334,16 +326,8 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
             let pass = create_pass(&mut encoder, pass_type);
-            fail(
-                &ctx.device,
-                || encoder.finish(),
-                Some("Command encoder is locked"),
-            );
-            fail(
-                &ctx.device,
-                || drop(pass),
-                Some("Command encoder is invalid"),
-            );
+            fail(&ctx.device, || encoder.finish(), Some("encoder is locked"));
+            fail(&ctx.device, || drop(pass), Some("encoder is invalid"));
         }
     }
 }
