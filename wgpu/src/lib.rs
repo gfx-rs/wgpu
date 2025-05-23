@@ -3,7 +3,7 @@
 //! To start using the API, create an [`Instance`].
 //!
 //! ## Feature flags
-#![doc = document_features::document_features!()]
+#![cfg_attr(feature = "_docs", doc = document_features::document_features!())]
 //!
 //! ### Feature Aliases
 //!

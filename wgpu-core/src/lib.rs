@@ -3,7 +3,7 @@
 //! into other language-specific user-friendly libraries.
 //!
 //! ## Feature flags
-#![doc = document_features::document_features!()]
+#![cfg_attr(feature = "_docs", doc = document_features::document_features!())]
 //!
 
 #![no_std]

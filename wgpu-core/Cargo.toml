@@ -159,6 +159,9 @@ renderdoc = ["wgpu-core-deps-windows-linux-android/renderdoc"]
 # TODO(https://github.com/gfx-rs/wgpu/issues/7120): there should be a hal feature
 noop = []
 
+# Add features documentation to docs
+_docs = ["dep:document-features"]
+
 # The target limitation here isn't needed, but prevents more than one of these
 # platform crates from being included in the build at a time, preventing users
 # from getting confused by seeing them in the list of crates.
@@ -181,7 +184,7 @@ bit-vec.workspace = true
 bit-set.workspace = true
 bitflags.workspace = true
 bytemuck = { workspace = true, optional = true }
-document-features.workspace = true
+document-features = { workspace = true, optional = true }
 hashbrown.workspace = true
 indexmap.workspace = true
 log.workspace = true

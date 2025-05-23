@@ -148,6 +148,9 @@ fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
 
+# Add features documentation to docs
+_docs = ["dep:document-features"]
+
 #########################
 # Standard Dependencies #
 #########################
@@ -160,7 +163,7 @@ wgpu-types.workspace = true
 # Needed for both wgpu-core and webgpu
 arrayvec.workspace = true
 bitflags.workspace = true
-document-features.workspace = true
+document-features = { workspace = true, optional = true }
 hashbrown.workspace = true
 log.workspace = true
 parking_lot.workspace = true
