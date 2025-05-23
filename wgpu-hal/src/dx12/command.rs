@@ -653,8 +653,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        for r in regions {
-            let list = self.list.as_ref().unwrap();
+        let copy_aligned = |this: &mut Self,
+                            src: &super::Texture,
+                            dst: &super::Buffer,
+                            r: crate::BufferTextureCopy| {
+            let list = this.list.as_ref().unwrap();
 
             let src_location = Direct3D12::D3D12_TEXTURE_COPY_LOCATION {
                 pResource: unsafe { borrow_interface_temporarily(&src.resource) },
@@ -675,6 +678,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
             unsafe {
                 list.CopyTextureRegion(&dst_location, 0, 0, 0, &src_location, Some(&src_box))
             };
+        };
+
+        for r in regions {
+            copy_aligned(this, src, dst, r);
         }
     }
 
