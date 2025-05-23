@@ -1980,37 +1980,6 @@ fn invalid_local_vars() {
 }
 
 #[test]
-fn dead_code() {
-    check_validation! {
-        "
-        fn dead_code_after_if(condition: bool) -> i32 {
-            if (condition) {
-                return 1;
-            } else {
-                return 2;
-            }
-            return 3;
-        }
-        ":
-        Ok(_)
-    }
-    check_validation! {
-        "
-        fn dead_code_after_block() -> i32 {
-            {
-                return 1;
-            }
-            return 2;
-        }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InstructionsAfterReturn,
-            ..
-        })
-    }
-}
-
-#[test]
 fn invalid_runtime_sized_arrays() {
     // You can't have structs whose last member is an unsized struct. An unsized
     // array may only appear as the last member of a struct used directly as a

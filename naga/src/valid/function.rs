@@ -112,8 +112,6 @@ pub enum FunctionError {
         name: String,
         space: crate::AddressSpace,
     },
-    #[error("There are instructions after `return`/`break`/`continue`")]
-    InstructionsAfterReturn,
     #[error("The `break` is used outside of a `loop` or `switch` context")]
     BreakOutsideOfLoopOrSwitch,
     #[error("The `continue` is used outside of a `loop` context")]
@@ -234,7 +232,6 @@ bitflags::bitflags! {
 
 struct BlockInfo {
     stages: super::ShaderStages,
-    finished: bool,
 }
 
 struct BlockContext<'a> {
@@ -751,13 +748,8 @@ impl super::Validator {
         context: &BlockContext,
     ) -> Result<BlockInfo, WithSpan<FunctionError>> {
         use crate::{AddressSpace, Statement as S, TypeInner as Ti};
-        let mut finished = false;
         let mut stages = super::ShaderStages::all();
         for (statement, &span) in statements.span_iter() {
-            if finished {
-                return Err(FunctionError::InstructionsAfterReturn
-                    .with_span_static(span, "instructions after return"));
-            }
             match *statement {
                 S::Emit(ref range) => {
                     for handle in range.clone() {
@@ -806,7 +798,6 @@ impl super::Validator {
                 S::Block(ref block) => {
                     let info = self.validate_block(block, context)?;
                     stages &= info.stages;
-                    finished = info.finished;
                 }
                 S::If {
                     condition,
@@ -949,14 +940,12 @@ impl super::Validator {
                         return Err(FunctionError::BreakOutsideOfLoopOrSwitch
                             .with_span_static(span, "invalid break"));
                     }
-                    finished = true;
                 }
                 S::Continue => {
                     if !context.abilities.contains(ControlFlowAbility::CONTINUE) {
                         return Err(FunctionError::ContinueOutsideOfLoop
                             .with_span_static(span, "invalid continue"));
                     }
-                    finished = true;
                 }
                 S::Return { value } => {
                     if !context.abilities.contains(ControlFlowAbility::RETURN) {
@@ -996,11 +985,9 @@ impl super::Validator {
                             .with_span_static(span, "invalid return"));
                         }
                     }
-                    finished = true;
                 }
                 S::Kill => {
                     stages &= super::ShaderStages::FRAGMENT;
-                    finished = true;
                 }
                 S::Barrier(barrier) => {
                     stages &= super::ShaderStages::COMPUTE;
@@ -1618,7 +1605,7 @@ impl super::Validator {
                 }
             }
         }
-        Ok(BlockInfo { stages, finished })
+        Ok(BlockInfo { stages })
     }
 
     fn validate_block(

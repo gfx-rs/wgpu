@@ -13,3 +13,4 @@ webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
 // https://github.com/gfx-rs/wgpu/issues/7391
 //FAIL: webgpu:api,operation,uncapturederror:*
+webgpu:shader,execution,flow_control,return:*
