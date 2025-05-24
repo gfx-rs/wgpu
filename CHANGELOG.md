@@ -47,6 +47,7 @@ Bottom level categories:
 #### General
 
 - Fix a possible deadlock within `Queue::write_buffer`. By @RedMindZ in [#7582](https://github.com/gfx-rs/wgpu/pull/7582)
+- Fix `raw-window-handle` dependency being too lenient. By @kpreid in [#7526](https://github.com/gfx-rs/wgpu/pull/7526)
 
 #### WebGPU
 
