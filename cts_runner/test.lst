@@ -1,10 +1,15 @@
 unittests:*
 webgpu:api,operation,command_buffer,basic:*
-webgpu:api,operation,compute,basic:*
+webgpu:api,operation,compute,basic:memcpy:*
+//FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
+webgpu:api,operation,device,lost:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
 //FAIL: webgpu:api,operation,rendering,basic:large_draw:*
-webgpu:api,operation,rendering,blending:*
-webgpu:api,operation,rendering,blending:GPUBlendComponent:*
+webgpu:api,operation,rendering,color_target_state:blending,GPUBlendComponent:*
+webgpu:api,operation,rendering,color_target_state:blending,formats:*
+webgpu:api,operation,rendering,color_target_state:blend_constant,setting:*
 webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
+// https://github.com/gfx-rs/wgpu/issues/7391
+//FAIL: webgpu:api,operation,uncapturederror:*

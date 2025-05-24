@@ -84,3 +84,10 @@ fn wgpu_4435() {
     let x = 1;
     let y = a[x-1];
 }
+
+@compute @workgroup_size(1)
+fn main() {
+    runtime_values();
+    wgpu_4445();
+    wgpu_4435();
+}

@@ -93,5 +93,9 @@ void breakIfSeparateVariable(
 
 kernel void main_(
 ) {
+    breakIfEmpty();
+    breakIfEmptyBody(false);
+    breakIf(false);
+    breakIfSeparateVariable();
     return;
 }

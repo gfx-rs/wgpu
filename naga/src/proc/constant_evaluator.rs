@@ -1172,8 +1172,8 @@ impl<'a> ConstantEvaluator<'a> {
             }
             crate::MathFunction::Round => {
                 component_wise_float(self, span, [arg], |e| match e {
-                    Float::Abstract([e]) => Ok(Float::Abstract([e.round_ties_even()])),
-                    Float::F32([e]) => Ok(Float::F32([e.round_ties_even()])),
+                    Float::Abstract([e]) => Ok(Float::Abstract([libm::rint(e)])),
+                    Float::F32([e]) => Ok(Float::F32([libm::rintf(e)])),
                     Float::F16([e]) => {
                         // TODO: `round_ties_even` is not available on `half::f16` yet.
                         //

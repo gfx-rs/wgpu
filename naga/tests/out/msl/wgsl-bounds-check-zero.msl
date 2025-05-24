@@ -206,3 +206,27 @@ void set_dynamic_array_constant_index(
     }
     return;
 }
+
+kernel void main_(
+  device Globals& globals [[user(fake0)]]
+, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
+) {
+    float _e1 = index_array(1, globals, _buffer_sizes);
+    float _e3 = index_dynamic_array(1, globals, _buffer_sizes);
+    float _e5 = index_vector(1, globals, _buffer_sizes);
+    float _e12 = index_vector_by_value(metal::float4(2.0, 3.0, 4.0, 5.0), 6);
+    metal::float4 _e14 = index_matrix(1, globals, _buffer_sizes);
+    float _e17 = index_twice(1, 2, globals, _buffer_sizes);
+    float _e19 = index_expensive(1, globals, _buffer_sizes);
+    float _e20 = index_in_bounds(globals, _buffer_sizes);
+    set_array(1, 2.0, globals, _buffer_sizes);
+    set_dynamic_array(1, 2.0, globals, _buffer_sizes);
+    set_vector(1, 2.0, globals, _buffer_sizes);
+    set_matrix(1, metal::float4(2.0, 3.0, 4.0, 5.0), globals, _buffer_sizes);
+    set_index_twice(1, 2, 1.0, globals, _buffer_sizes);
+    set_expensive(1, 1.0, globals, _buffer_sizes);
+    set_in_bounds(1.0, globals, _buffer_sizes);
+    float _e39 = index_dynamic_array_constant_index(globals, _buffer_sizes);
+    set_dynamic_array_constant_index(1.0, globals, _buffer_sizes);
+    return;
+}

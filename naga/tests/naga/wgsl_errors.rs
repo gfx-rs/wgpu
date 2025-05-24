@@ -2861,7 +2861,12 @@ fn compaction_preserves_spans() {
            var x: array<i32,1>;
            var y = x[1.0];
         }
-    "#; //         ^^^   correct error span: 108..114
+        @compute @workgroup_size(1)
+        fn main() {
+            f();
+        }
+    "#;
+    // The error span should be on `x[1.0]`, which is at characters 108..114.
     let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
     naga::compact::compact(&mut module);
     let err = naga::valid::Validator::new(
@@ -2878,7 +2883,7 @@ fn compaction_preserves_spans() {
     // The first span is the whole function.
     let _ = spans.next().expect("error should have at least one span");
 
-    // The second span is the assignment destination.
+    // The second span is the invalid indexing expression.
     let dest_span = spans
         .next()
         .expect("error should have at least two spans")

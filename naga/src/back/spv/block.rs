@@ -1552,105 +1552,29 @@ impl BlockContext<'_> {
                     Mf::Pack2x16unorm => MathOp::Ext(spirv::GLOp::PackUnorm2x16),
                     Mf::Pack2x16snorm => MathOp::Ext(spirv::GLOp::PackSnorm2x16),
                     fun @ (Mf::Pack4xI8 | Mf::Pack4xU8 | Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp) => {
-                        let (int_type, is_signed) = match fun {
-                            Mf::Pack4xI8 | Mf::Pack4xI8Clamp => (crate::ScalarKind::Sint, true),
-                            Mf::Pack4xU8 | Mf::Pack4xU8Clamp => (crate::ScalarKind::Uint, false),
-                            _ => unreachable!(),
-                        };
+                        let is_signed = matches!(fun, Mf::Pack4xI8 | Mf::Pack4xI8Clamp);
                         let should_clamp = matches!(fun, Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp);
-                        let uint_type_id =
-                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
 
-                        let int_type_id =
-                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar {
-                                kind: int_type,
-                                width: 4,
-                            }));
-
-                        let mut last_instruction = Instruction::new(spirv::Op::Nop);
-
-                        let zero = self.writer.get_constant_scalar(crate::Literal::U32(0));
-                        let mut preresult = zero;
-                        block
-                            .body
-                            .reserve(usize::from(VEC_LENGTH) * (2 + usize::from(is_signed)));
-
-                        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
-                        const VEC_LENGTH: u8 = 4;
-                        for i in 0..u32::from(VEC_LENGTH) {
-                            let offset =
-                                self.writer.get_constant_scalar(crate::Literal::U32(i * 8));
-                            let mut extracted = self.gen_id();
-                            block.body.push(Instruction::binary(
-                                spirv::Op::CompositeExtract,
-                                int_type_id,
-                                extracted,
-                                arg0_id,
-                                i,
-                            ));
-                            if is_signed {
-                                let casted = self.gen_id();
-                                block.body.push(Instruction::unary(
-                                    spirv::Op::Bitcast,
-                                    uint_type_id,
-                                    casted,
-                                    extracted,
-                                ));
-                                extracted = casted;
-                            }
-                            if should_clamp {
-                                let (min, max, clamp_op) = if is_signed {
-                                    (
-                                        crate::Literal::I32(-128),
-                                        crate::Literal::I32(127),
-                                        spirv::GLOp::SClamp,
-                                    )
-                                } else {
-                                    (
-                                        crate::Literal::U32(0),
-                                        crate::Literal::U32(255),
-                                        spirv::GLOp::UClamp,
-                                    )
-                                };
-                                let [min, max] =
-                                    [min, max].map(|lit| self.writer.get_constant_scalar(lit));
-
-                                let clamp_id = self.gen_id();
-                                block.body.push(Instruction::ext_inst(
-                                    self.writer.gl450_ext_inst_id,
-                                    clamp_op,
+                        let last_instruction =
+                            if self.writer.require_all(&[spirv::Capability::Int8]).is_ok() {
+                                self.write_pack4x8_optimized(
+                                    block,
                                     result_type_id,
-                                    clamp_id,
-                                    &[extracted, min, max],
-                                ));
-
-                                extracted = clamp_id;
-                            }
-                            let is_last = i == u32::from(VEC_LENGTH - 1);
-                            if is_last {
-                                last_instruction = Instruction::quaternary(
-                                    spirv::Op::BitFieldInsert,
-                                    result_type_id,
+                                    arg0_id,
                                     id,
-                                    preresult,
-                                    extracted,
-                                    offset,
-                                    eight,
+                                    is_signed,
+                                    should_clamp,
                                 )
                             } else {
-                                let new_preresult = self.gen_id();
-                                block.body.push(Instruction::quaternary(
-                                    spirv::Op::BitFieldInsert,
+                                self.write_pack4x8_polyfill(
+                                    block,
                                     result_type_id,
-                                    new_preresult,
-                                    preresult,
-                                    extracted,
-                                    offset,
-                                    eight,
-                                ));
-                                preresult = new_preresult;
-                            }
-                        }
+                                    arg0_id,
+                                    id,
+                                    is_signed,
+                                    should_clamp,
+                                )
+                            };
 
                         MathOp::Custom(last_instruction)
                     }
@@ -1660,59 +1584,28 @@ impl BlockContext<'_> {
                     Mf::Unpack2x16unorm => MathOp::Ext(spirv::GLOp::UnpackUnorm2x16),
                     Mf::Unpack2x16snorm => MathOp::Ext(spirv::GLOp::UnpackSnorm2x16),
                     fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
-                        let (int_type, extract_op, is_signed) = match fun {
-                            Mf::Unpack4xI8 => {
-                                (crate::ScalarKind::Sint, spirv::Op::BitFieldSExtract, true)
-                            }
-                            Mf::Unpack4xU8 => {
-                                (crate::ScalarKind::Uint, spirv::Op::BitFieldUExtract, false)
-                            }
-                            _ => unreachable!(),
-                        };
+                        let is_signed = matches!(fun, Mf::Unpack4xI8);
 
-                        let sint_type_id =
-                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32));
+                        let last_instruction =
+                            if self.writer.require_all(&[spirv::Capability::Int8]).is_ok() {
+                                self.write_unpack4x8_optimized(
+                                    block,
+                                    result_type_id,
+                                    arg0_id,
+                                    id,
+                                    is_signed,
+                                )
+                            } else {
+                                self.write_unpack4x8_polyfill(
+                                    block,
+                                    result_type_id,
+                                    arg0_id,
+                                    id,
+                                    is_signed,
+                                )
+                            };
 
-                        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
-                        let int_type_id =
-                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar {
-                                kind: int_type,
-                                width: 4,
-                            }));
-                        block
-                            .body
-                            .reserve(usize::from(VEC_LENGTH) * 2 + usize::from(is_signed));
-                        let arg_id = if is_signed {
-                            let new_arg_id = self.gen_id();
-                            block.body.push(Instruction::unary(
-                                spirv::Op::Bitcast,
-                                sint_type_id,
-                                new_arg_id,
-                                arg0_id,
-                            ));
-                            new_arg_id
-                        } else {
-                            arg0_id
-                        };
-
-                        const VEC_LENGTH: u8 = 4;
-                        let parts: [_; VEC_LENGTH as usize] =
-                            core::array::from_fn(|_| self.gen_id());
-                        for (i, part_id) in parts.into_iter().enumerate() {
-                            let index = self
-                                .writer
-                                .get_constant_scalar(crate::Literal::U32(i as u32 * 8));
-                            block.body.push(Instruction::ternary(
-                                extract_op,
-                                int_type_id,
-                                part_id,
-                                arg_id,
-                                index,
-                                eight,
-                            ));
-                        }
-
-                        MathOp::Custom(Instruction::composite_construct(result_type_id, id, &parts))
+                        MathOp::Custom(last_instruction)
                     }
                 };
 
@@ -2719,6 +2612,288 @@ impl BlockContext<'_> {
             // set the id of the result as the previous partial sum
             partial_sum = id;
         }
+    }
+
+    /// Emit code for `pack4x{I,U}8[Clamp]` if capability "Int8" is available.
+    fn write_pack4x8_optimized(
+        &mut self,
+        block: &mut Block,
+        result_type_id: u32,
+        arg0_id: u32,
+        id: u32,
+        is_signed: bool,
+        should_clamp: bool,
+    ) -> Instruction {
+        let int_type = if is_signed {
+            crate::ScalarKind::Sint
+        } else {
+            crate::ScalarKind::Uint
+        };
+        let wide_vector_type = NumericType::Vector {
+            size: crate::VectorSize::Quad,
+            scalar: crate::Scalar {
+                kind: int_type,
+                width: 4,
+            },
+        };
+        let wide_vector_type_id = self.get_numeric_type_id(wide_vector_type);
+        let packed_vector_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Quad,
+            scalar: crate::Scalar {
+                kind: crate::ScalarKind::Uint,
+                width: 1,
+            },
+        });
+
+        let mut wide_vector = arg0_id;
+        if should_clamp {
+            let (min, max, clamp_op) = if is_signed {
+                (
+                    crate::Literal::I32(-128),
+                    crate::Literal::I32(127),
+                    spirv::GLOp::SClamp,
+                )
+            } else {
+                (
+                    crate::Literal::U32(0),
+                    crate::Literal::U32(255),
+                    spirv::GLOp::UClamp,
+                )
+            };
+            let [min, max] = [min, max].map(|lit| {
+                let scalar = self.writer.get_constant_scalar(lit);
+                self.writer.get_constant_composite(
+                    LookupType::Local(LocalType::Numeric(wide_vector_type)),
+                    &[scalar; 4],
+                )
+            });
+
+            let clamp_id = self.gen_id();
+            block.body.push(Instruction::ext_inst(
+                self.writer.gl450_ext_inst_id,
+                clamp_op,
+                wide_vector_type_id,
+                clamp_id,
+                &[wide_vector, min, max],
+            ));
+
+            wide_vector = clamp_id;
+        }
+
+        let packed_vector = self.gen_id();
+        block.body.push(Instruction::unary(
+            spirv::Op::UConvert, // We truncate, so `UConvert` and `SConvert` behave identically.
+            packed_vector_type_id,
+            packed_vector,
+            wide_vector,
+        ));
+
+        // The SPIR-V spec [1] defines the bit order for bit casting between a vector
+        // and a scalar precisely as required by the WGSL spec [2].
+        // [1]: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpBitcast
+        // [2]: https://www.w3.org/TR/WGSL/#pack4xI8-builtin
+        Instruction::unary(spirv::Op::Bitcast, result_type_id, id, packed_vector)
+    }
+
+    /// Emit code for `pack4x{I,U}8[Clamp]` if capability "Int8" is not available.
+    fn write_pack4x8_polyfill(
+        &mut self,
+        block: &mut Block,
+        result_type_id: u32,
+        arg0_id: u32,
+        id: u32,
+        is_signed: bool,
+        should_clamp: bool,
+    ) -> Instruction {
+        let int_type = if is_signed {
+            crate::ScalarKind::Sint
+        } else {
+            crate::ScalarKind::Uint
+        };
+        let uint_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
+        let int_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar {
+            kind: int_type,
+            width: 4,
+        }));
+
+        let mut last_instruction = Instruction::new(spirv::Op::Nop);
+
+        let zero = self.writer.get_constant_scalar(crate::Literal::U32(0));
+        let mut preresult = zero;
+        block
+            .body
+            .reserve(usize::from(VEC_LENGTH) * (2 + usize::from(is_signed)));
+
+        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+        const VEC_LENGTH: u8 = 4;
+        for i in 0..u32::from(VEC_LENGTH) {
+            let offset = self.writer.get_constant_scalar(crate::Literal::U32(i * 8));
+            let mut extracted = self.gen_id();
+            block.body.push(Instruction::binary(
+                spirv::Op::CompositeExtract,
+                int_type_id,
+                extracted,
+                arg0_id,
+                i,
+            ));
+            if is_signed {
+                let casted = self.gen_id();
+                block.body.push(Instruction::unary(
+                    spirv::Op::Bitcast,
+                    uint_type_id,
+                    casted,
+                    extracted,
+                ));
+                extracted = casted;
+            }
+            if should_clamp {
+                let (min, max, clamp_op) = if is_signed {
+                    (
+                        crate::Literal::I32(-128),
+                        crate::Literal::I32(127),
+                        spirv::GLOp::SClamp,
+                    )
+                } else {
+                    (
+                        crate::Literal::U32(0),
+                        crate::Literal::U32(255),
+                        spirv::GLOp::UClamp,
+                    )
+                };
+                let [min, max] = [min, max].map(|lit| self.writer.get_constant_scalar(lit));
+
+                let clamp_id = self.gen_id();
+                block.body.push(Instruction::ext_inst(
+                    self.writer.gl450_ext_inst_id,
+                    clamp_op,
+                    result_type_id,
+                    clamp_id,
+                    &[extracted, min, max],
+                ));
+
+                extracted = clamp_id;
+            }
+            let is_last = i == u32::from(VEC_LENGTH - 1);
+            if is_last {
+                last_instruction = Instruction::quaternary(
+                    spirv::Op::BitFieldInsert,
+                    result_type_id,
+                    id,
+                    preresult,
+                    extracted,
+                    offset,
+                    eight,
+                )
+            } else {
+                let new_preresult = self.gen_id();
+                block.body.push(Instruction::quaternary(
+                    spirv::Op::BitFieldInsert,
+                    result_type_id,
+                    new_preresult,
+                    preresult,
+                    extracted,
+                    offset,
+                    eight,
+                ));
+                preresult = new_preresult;
+            }
+        }
+        last_instruction
+    }
+
+    /// Emit code for `unpack4x{I,U}8` if capability "Int8" is available.
+    fn write_unpack4x8_optimized(
+        &mut self,
+        block: &mut Block,
+        result_type_id: u32,
+        arg0_id: u32,
+        id: u32,
+        is_signed: bool,
+    ) -> Instruction {
+        let (int_type, convert_op) = if is_signed {
+            (crate::ScalarKind::Sint, spirv::Op::SConvert)
+        } else {
+            (crate::ScalarKind::Uint, spirv::Op::UConvert)
+        };
+
+        let packed_vector_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Quad,
+            scalar: crate::Scalar {
+                kind: int_type,
+                width: 1,
+            },
+        });
+
+        // The SPIR-V spec [1] defines the bit order for bit casting between a vector
+        // and a scalar precisely as required by the WGSL spec [2].
+        // [1]: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpBitcast
+        // [2]: https://www.w3.org/TR/WGSL/#pack4xI8-builtin
+        let packed_vector = self.gen_id();
+        block.body.push(Instruction::unary(
+            spirv::Op::Bitcast,
+            packed_vector_type_id,
+            packed_vector,
+            arg0_id,
+        ));
+
+        Instruction::unary(convert_op, result_type_id, id, packed_vector)
+    }
+
+    /// Emit code for `unpack4x{I,U}8` if capability "Int8" is not available.
+    fn write_unpack4x8_polyfill(
+        &mut self,
+        block: &mut Block,
+        result_type_id: u32,
+        arg0_id: u32,
+        id: u32,
+        is_signed: bool,
+    ) -> Instruction {
+        let (int_type, extract_op) = if is_signed {
+            (crate::ScalarKind::Sint, spirv::Op::BitFieldSExtract)
+        } else {
+            (crate::ScalarKind::Uint, spirv::Op::BitFieldUExtract)
+        };
+
+        let sint_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32));
+
+        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+        let int_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar {
+            kind: int_type,
+            width: 4,
+        }));
+        block
+            .body
+            .reserve(usize::from(VEC_LENGTH) * 2 + usize::from(is_signed));
+        let arg_id = if is_signed {
+            let new_arg_id = self.gen_id();
+            block.body.push(Instruction::unary(
+                spirv::Op::Bitcast,
+                sint_type_id,
+                new_arg_id,
+                arg0_id,
+            ));
+            new_arg_id
+        } else {
+            arg0_id
+        };
+
+        const VEC_LENGTH: u8 = 4;
+        let parts: [_; VEC_LENGTH as usize] = core::array::from_fn(|_| self.gen_id());
+        for (i, part_id) in parts.into_iter().enumerate() {
+            let index = self
+                .writer
+                .get_constant_scalar(crate::Literal::U32(i as u32 * 8));
+            block.body.push(Instruction::ternary(
+                extract_op,
+                int_type_id,
+                part_id,
+                arg_id,
+                index,
+                eight,
+            ));
+        }
+
+        Instruction::composite_construct(result_type_id, id, &parts)
     }
 
     /// Generate one or more SPIR-V blocks for `naga_block`.

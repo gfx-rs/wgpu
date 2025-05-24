@@ -32,3 +32,9 @@ fn test_atomic_u32() {
   _ = atomicMax(&atomic_u32, 1);
   _ = atomicExchange(&atomic_u32, 1);
 }
+
+@compute @workgroup_size(1)
+fn main() {
+    test_atomic_i32();
+    test_atomic_u32();
+}

@@ -48,5 +48,13 @@ float2 return_vec2f32_const_ai()
 [numthreads(1, 1, 1)]
 void main()
 {
+    const int _e0 = return_i32_ai();
+    const uint _e1 = return_u32_ai();
+    const float _e2 = return_f32_ai();
+    const float _e3 = return_f32_af();
+    const float2 _e4 = return_vec2f32_ai();
+    const float _e5[4] = return_arrf32_ai();
+    const float _e6 = return_const_f32_const_ai();
+    const float2 _e7 = return_vec2f32_const_ai();
     return;
 }

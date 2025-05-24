@@ -10,13 +10,13 @@ uniform sampler3D _group_0_binding_3_fs;
 
 uniform sampler2DMS _group_0_binding_4_fs;
 
-layout(rgba8) writeonly uniform image1D _group_0_binding_8_fs;
+layout(rgba8) writeonly uniform image1D _group_0_binding_5_fs;
 
-layout(rgba8) writeonly uniform image2D _group_0_binding_9_fs;
+layout(rgba8) writeonly uniform image2D _group_0_binding_6_fs;
 
-layout(rgba8) writeonly uniform image2DArray _group_0_binding_10_fs;
+layout(rgba8) writeonly uniform image2DArray _group_0_binding_7_fs;
 
-layout(rgba8) writeonly uniform image3D _group_0_binding_11_fs;
+layout(rgba8) writeonly uniform image3D _group_0_binding_8_fs;
 
 layout(location = 0) out vec4 _fs2p_location0;
 
@@ -50,28 +50,28 @@ vec4 test_textureLoad_multisampled_2d(ivec2 coords_5, int _sample) {
     return _e3;
 }
 
-void test_textureStore_1d(int coords_10, vec4 value) {
-    imageStore(_group_0_binding_8_fs, coords_10, value);
+void test_textureStore_1d(int coords_6, vec4 value) {
+    imageStore(_group_0_binding_5_fs, coords_6, value);
     return;
 }
 
-void test_textureStore_2d(ivec2 coords_11, vec4 value_1) {
-    imageStore(_group_0_binding_9_fs, coords_11, value_1);
+void test_textureStore_2d(ivec2 coords_7, vec4 value_1) {
+    imageStore(_group_0_binding_6_fs, coords_7, value_1);
     return;
 }
 
-void test_textureStore_2d_array_u(ivec2 coords_12, uint array_index, vec4 value_2) {
-    imageStore(_group_0_binding_10_fs, ivec3(coords_12, array_index), value_2);
+void test_textureStore_2d_array_u(ivec2 coords_8, uint array_index, vec4 value_2) {
+    imageStore(_group_0_binding_7_fs, ivec3(coords_8, array_index), value_2);
     return;
 }
 
-void test_textureStore_2d_array_s(ivec2 coords_13, int array_index_1, vec4 value_3) {
-    imageStore(_group_0_binding_10_fs, ivec3(coords_13, array_index_1), value_3);
+void test_textureStore_2d_array_s(ivec2 coords_9, int array_index_1, vec4 value_3) {
+    imageStore(_group_0_binding_7_fs, ivec3(coords_9, array_index_1), value_3);
     return;
 }
 
-void test_textureStore_3d(ivec3 coords_14, vec4 value_4) {
-    imageStore(_group_0_binding_11_fs, coords_14, value_4);
+void test_textureStore_3d(ivec3 coords_10, vec4 value_4) {
+    imageStore(_group_0_binding_8_fs, coords_10, value_4);
     return;
 }
 

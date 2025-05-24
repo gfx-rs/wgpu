@@ -1,11 +1,12 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 46
+; Bound: 50
 OpCapability Shader
-OpCapability Linkage
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %47 "main"
+OpExecutionMode %47 LocalSize 1 1 1
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 1
 %6 = OpTypeFunction %2
@@ -64,5 +65,12 @@ OpBranch %14
 OpStore %10 %45
 OpBranch %13
 %14 = OpLabel
+OpReturn
+OpFunctionEnd
+%47 = OpFunction  %2  None %6
+%46 = OpLabel
+OpBranch %48
+%48 = OpLabel
+%49 = OpFunctionCall  %2  %5
 OpReturn
 OpFunctionEnd
