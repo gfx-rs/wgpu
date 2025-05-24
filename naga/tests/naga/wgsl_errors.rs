@@ -3596,3 +3596,35 @@ fn const_eval_value_errors() {
     assert!(variant("f32(abs(-9223372036854775807))").is_ok());
     assert!(variant("f32(abs(-9223372036854775807 - 1))").is_ok());
 }
+
+#[test]
+fn subgroup_invalid_broadcast() {
+    check_validation! {
+        r#"
+            fn main(id: u32) {
+                subgroupBroadcast(123, id);
+            }
+        "#:
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidSubgroup(
+                naga::valid::SubgroupError::InvalidInvocationIdExprType(_),
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SUBGROUP
+    }
+    check_validation! {
+        r#"
+            fn main(id: u32) {
+                quadBroadcast(123, id);
+            }
+        "#:
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidSubgroup(
+                naga::valid::SubgroupError::InvalidInvocationIdExprType(_),
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SUBGROUP
+    }
+}
