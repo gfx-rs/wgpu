@@ -202,7 +202,7 @@ objc = "0.2.5"
 android_system_properties = "0.1.1"
 ash = "0.38"
 gpu-alloc = "0.6"
-gpu-descriptor = "0.3"
+gpu-descriptor = "0.3.2"
 
 # DX12 dependencies
 gpu-allocator = { version = "0.27", default-features = false }
