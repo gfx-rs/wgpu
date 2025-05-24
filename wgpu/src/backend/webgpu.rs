@@ -2130,7 +2130,7 @@ impl dispatch::DeviceInterface for WebDevice {
                 .collect::<js_sys::Array>();
             let module = frag.module.inner.as_webgpu();
             let mapped_fragment_desc = webgpu_sys::GpuFragmentState::new(&module.module, &targets);
-            insert_constants_map(&mapped_vertex_state, frag.compilation_options.constants);
+            insert_constants_map(&mapped_fragment_desc, frag.compilation_options.constants);
             if let Some(ep) = frag.entry_point {
                 mapped_fragment_desc.set_entry_point(ep);
             }
