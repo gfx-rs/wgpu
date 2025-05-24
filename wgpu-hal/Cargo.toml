@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-hal"
-version = "25.0.1"
+version = "25.0.2"
 authors = ["gfx-rs developers"]
 edition = "2021"
 description = "Hardware abstraction layer for wgpu, the cross-platform, safe, pure-rust graphics API"

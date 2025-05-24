@@ -40,6 +40,19 @@ Bottom level categories:
 
 ## Unreleased
 
+## v25.0.2 (2025-05-24)
+
+### Bug Fixes
+
+#### General
+
+- Fix a possible deadlock within `Queue::write_buffer`. By @RedMindZ in [#7582](https://github.com/gfx-rs/wgpu/pull/7582)
+- Fix `raw-window-handle` dependency being too lenient. By @kpreid in [#7526](https://github.com/gfx-rs/wgpu/pull/7526)
+
+#### WebGPU
+
+- Insert fragment pipeline constants into fragment descriptor instead of vertex descriptor. By @DerSchmale in [#7621](https://github.com/gfx-rs/wgpu/pull/7621)
+
 ## v25.0.1 (2025-04-11)
 
 ### Bug Fixes
@@ -375,6 +388,16 @@ By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](h
 ### Examples
 
 - Call `pre_present_notify()` before presenting. By @kjarosh in [#7074](https://github.com/gfx-rs/wgpu/pull/7074).
+
+## v24.0.5 (2025-05-24)
+
+### Bug Fixes
+
+#### General
+- Fix a possible deadlock within `Queue::write_buffer`. By @RedMindZ in [#7582](https://github.com/gfx-rs/wgpu/pull/7582)
+
+#### WebGPU
+- Insert fragment pipeline constants into fragment descriptor instead of vertex descriptor. By @DerSchmale in [#7621](https://github.com/gfx-rs/wgpu/pull/7621)
 
 ## v24.0.4 (2025-04-03)
 

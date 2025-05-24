@@ -138,7 +138,7 @@ png = "0.17.16"
 pollster = "0.4"
 portable-atomic = "1"
 profiling = { version = "1", default-features = false }
-raw-window-handle = { version = "0.6", default-features = false }
+raw-window-handle = { version = "0.6.2", default-features = false }
 rayon = "1"
 renderdoc-sys = "1.1.0"
 ron = "0.9"
