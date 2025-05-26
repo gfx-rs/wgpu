@@ -377,6 +377,8 @@ pub struct ReflectionInfo {
     pub varying: crate::FastHashMap<String, VaryingLocation>,
     /// List of push constant items in the shader.
     pub push_constant_items: Vec<PushConstantItem>,
+    /// Number of user-defined clip planes. Only applicable to vertex shaders.
+    pub clip_distance_count: u32,
 }
 
 /// Mapping between a texture and its sampler, if it exists.
@@ -475,7 +477,7 @@ impl VaryingOptions {
 /// Helper wrapper used to get a name for a varying
 ///
 /// Varying have different naming schemes depending on their binding:
-/// - Varyings with builtin bindings get the from [`glsl_built_in`].
+/// - Varyings with builtin bindings get their name from [`glsl_built_in`].
 /// - Varyings with location bindings are named `_S_location_X` where `S` is a
 ///   prefix identifying which pipeline stage the varying connects, and `X` is
 ///   the location.
@@ -621,6 +623,8 @@ pub struct Writer<'a, W> {
     multiview: Option<core::num::NonZeroU32>,
     /// Mapping of varying variables to their location. Needed for reflections.
     varying: crate::FastHashMap<String, VaryingLocation>,
+    /// Number of user-defined clip planes. Only non-zero for vertex shaders.
+    clip_distance_count: u32,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -688,6 +692,7 @@ impl<'a, W: Write> Writer<'a, W> {
             need_bake_expressions: Default::default(),
             continue_ctx: back::continue_forward::ContinueCtx::default(),
             varying: Default::default(),
+            clip_distance_count: 0,
         };
 
         // Find all features required to print this module
@@ -1610,31 +1615,47 @@ impl<'a, W: Write> Writer<'a, W> {
                 blend_src,
             } => (location, interpolation, sampling, blend_src),
             crate::Binding::BuiltIn(built_in) => {
-                if let crate::BuiltIn::Position { invariant: true } = built_in {
-                    match (self.options.version, self.entry_point.stage) {
-                        (
-                            Version::Embedded {
-                                version: 300,
-                                is_webgl: true,
-                            },
-                            ShaderStage::Fragment,
-                        ) => {
-                            // `invariant gl_FragCoord` is not allowed in WebGL2 and possibly
-                            // OpenGL ES in general (waiting on confirmation).
-                            //
-                            // See https://github.com/KhronosGroup/WebGL/issues/3518
-                        }
-                        _ => {
-                            writeln!(
-                                self.out,
-                                "invariant {};",
-                                glsl_built_in(
-                                    built_in,
-                                    VaryingOptions::from_writer_options(self.options, output)
-                                )
-                            )?;
+                match built_in {
+                    crate::BuiltIn::Position { invariant: true } => {
+                        match (self.options.version, self.entry_point.stage) {
+                            (
+                                Version::Embedded {
+                                    version: 300,
+                                    is_webgl: true,
+                                },
+                                ShaderStage::Fragment,
+                            ) => {
+                                // `invariant gl_FragCoord` is not allowed in WebGL2 and possibly
+                                // OpenGL ES in general (waiting on confirmation).
+                                //
+                                // See https://github.com/KhronosGroup/WebGL/issues/3518
+                            }
+                            _ => {
+                                writeln!(
+                                    self.out,
+                                    "invariant {};",
+                                    glsl_built_in(
+                                        built_in,
+                                        VaryingOptions::from_writer_options(self.options, output)
+                                    )
+                                )?;
+                            }
                         }
                     }
+                    crate::BuiltIn::ClipDistance => {
+                        // Re-declare `gl_ClipDistance` with number of clip planes.
+                        let TypeInner::Array { size, .. } = self.module.types[ty].inner else {
+                            unreachable!();
+                        };
+                        let proc::IndexableLength::Known(size) =
+                            size.resolve(self.module.to_ctx())?
+                        else {
+                            unreachable!();
+                        };
+                        self.clip_distance_count = size;
+                        writeln!(self.out, "out float gl_ClipDistance[{size}];")?;
+                    }
+                    _ => {}
                 }
                 return Ok(());
             }
@@ -5037,6 +5058,7 @@ impl<'a, W: Write> Writer<'a, W> {
             uniforms,
             varying: mem::take(&mut self.varying),
             push_constant_items,
+            clip_distance_count: self.clip_distance_count,
         })
     }
 

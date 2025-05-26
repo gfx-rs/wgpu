@@ -59,6 +59,9 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 13;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 14;
 }
 
 macro_rules! bitflags_array_impl {
@@ -1463,7 +1466,18 @@ bitflags_array! {
         /// - Metal (with MSL 1.2+)
         /// - Vulkan (with dualSrcBlend)
         /// - DX12
+        ///
+        /// This is a web and native feature.
         const DUAL_SOURCE_BLENDING = WEBGPU_FEATURE_DUAL_SOURCE_BLENDING;
+
+        /// Allows the use of `@builtin(clip_distances)` in WGSL.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (mainly on Desktop GPUs)
+        /// - GL (Desktop or `GL_EXT_clip_cull_distance`)
+        ///
+        /// This is a web and native feature.
+        const CLIP_DISTANCES = WEBGPU_FEATURE_CLIP_DISTANCES;
     }
 }
 

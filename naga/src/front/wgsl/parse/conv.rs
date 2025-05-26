@@ -27,6 +27,7 @@ pub fn map_built_in(word: &str, span: Span) -> Result<'_, crate::BuiltIn> {
         "vertex_index" => crate::BuiltIn::VertexIndex,
         "instance_index" => crate::BuiltIn::InstanceIndex,
         "view_index" => crate::BuiltIn::ViewIndex,
+        "clip_distances" => crate::BuiltIn::ClipDistance,
         // fragment
         "front_facing" => crate::BuiltIn::FrontFacing,
         "frag_depth" => crate::BuiltIn::FragDepth,

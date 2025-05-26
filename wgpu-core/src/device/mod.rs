@@ -462,6 +462,10 @@ pub fn create_validator(
         features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
     );
     caps.set(
+        Caps::CLIP_DISTANCE,
+        features.contains(wgt::Features::CLIP_DISTANCES),
+    );
+    caps.set(
         Caps::CUBE_ARRAY_TEXTURES,
         downlevel.contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
     );

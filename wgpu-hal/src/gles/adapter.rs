@@ -466,6 +466,10 @@ impl super::Adapter {
                 || extensions.contains("GL_ARB_blend_func_extended"),
         );
         features.set(
+            wgt::Features::CLIP_DISTANCES,
+            full_ver.is_some() || extensions.contains("GL_EXT_clip_cull_distance"),
+        );
+        features.set(
             wgt::Features::SHADER_PRIMITIVE_INDEX,
             supported((3, 2), (3, 2))
                 || extensions.contains("OES_geometry_shader")
