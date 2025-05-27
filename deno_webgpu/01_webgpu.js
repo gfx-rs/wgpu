@@ -35,6 +35,7 @@ import {
   GPUSupportedLimits,
   GPUTexture,
   GPUTextureView,
+  GPUExternalTexture,
   op_create_gpu,
 } from "ext:core/ops";
 const {
@@ -866,6 +867,7 @@ export {
   GPUTexture,
   GPUTextureUsage,
   GPUTextureView,
+  GPUExternalTexture,
   GPUUncapturedErrorEvent,
   GPUValidationError,
   initGPU,

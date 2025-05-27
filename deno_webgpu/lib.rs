@@ -93,6 +93,7 @@ deno_core::extension!(
         adapter::GPUSupportedLimits,
         texture::GPUTexture,
         texture::GPUTextureView,
+        texture::GPUExternalTexture,
         byow::UnsafeWindowSurface,
         surface::GPUCanvasContext,
     ],

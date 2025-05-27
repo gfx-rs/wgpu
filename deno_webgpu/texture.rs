@@ -660,3 +660,14 @@ impl From<GPUTextureFormat> for TextureFormat {
         }
     }
 }
+
+pub struct GPUExternalTexture {}
+
+impl WebIdlInterfaceConverter for GPUExternalTexture {
+    const NAME: &'static str = "GPUExternalTexture";
+}
+
+impl GarbageCollected for GPUExternalTexture {}
+
+#[op2]
+impl GPUExternalTexture {}

@@ -200,6 +200,7 @@ const windowOrWorkerGlobalScope = {
   GPUTextureUsage: util.nonEnumerable(webgpu.GPUTextureUsage),
   GPUTexture: util.nonEnumerable(webgpu.GPUTexture),
   GPUTextureView: util.nonEnumerable(webgpu.GPUTextureView),
+  GPUExternalTexture: util.nonEnumerable(webgpu.GPUExternalTexture),
   GPUSampler: util.nonEnumerable(webgpu.GPUSampler),
   GPUBindGroupLayout: util.nonEnumerable(webgpu.GPUBindGroupLayout),
   GPUPipelineLayout: util.nonEnumerable(webgpu.GPUPipelineLayout),
