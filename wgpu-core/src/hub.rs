@@ -111,7 +111,8 @@ use crate::{
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
     resource::{
-        Blas, Buffer, Fallible, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas,
+        Blas, Buffer, ExternalTexture, Fallible, QuerySet, Sampler, StagingBuffer, Texture,
+        TextureView, Tlas,
     },
 };
 
@@ -134,6 +135,7 @@ pub struct HubReport {
     pub buffers: RegistryReport,
     pub textures: RegistryReport,
     pub texture_views: RegistryReport,
+    pub external_textures: RegistryReport,
     pub samplers: RegistryReport,
 }
 
@@ -183,6 +185,7 @@ pub struct Hub {
     pub(crate) staging_buffers: Registry<StagingBuffer>,
     pub(crate) textures: Registry<Fallible<Texture>>,
     pub(crate) texture_views: Registry<Fallible<TextureView>>,
+    pub(crate) external_textures: Registry<Fallible<ExternalTexture>>,
     pub(crate) samplers: Registry<Fallible<Sampler>>,
     pub(crate) blas_s: Registry<Fallible<Blas>>,
     pub(crate) tlas_s: Registry<Fallible<Tlas>>,
@@ -209,6 +212,7 @@ impl Hub {
             staging_buffers: Registry::new(),
             textures: Registry::new(),
             texture_views: Registry::new(),
+            external_textures: Registry::new(),
             samplers: Registry::new(),
             blas_s: Registry::new(),
             tlas_s: Registry::new(),
@@ -234,6 +238,7 @@ impl Hub {
             buffers: self.buffers.generate_report(),
             textures: self.textures.generate_report(),
             texture_views: self.texture_views.generate_report(),
+            external_textures: self.external_textures.generate_report(),
             samplers: self.samplers.generate_report(),
         }
     }

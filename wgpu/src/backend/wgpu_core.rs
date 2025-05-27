@@ -497,6 +497,12 @@ pub struct CoreTextureView {
 }
 
 #[derive(Debug)]
+pub struct CoreExternalTexture {
+    pub(crate) context: ContextWgpuCore,
+    id: wgc::id::ExternalTextureId,
+}
+
+#[derive(Debug)]
 pub struct CoreSampler {
     pub(crate) context: ContextWgpuCore,
     id: wgc::id::SamplerId,
@@ -728,6 +734,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(CoreTextureView => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreSampler => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreBuffer => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreTexture => .id);
+crate::cmp::impl_eq_ord_hash_proxy!(CoreExternalTexture => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreBlas => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreTlas => .id);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreQuerySet => .id);
@@ -1472,6 +1479,36 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into()
     }
 
+    fn create_external_texture(
+        &self,
+        desc: &crate::ExternalTextureDescriptor<'_>,
+        planes: &[&crate::TextureView],
+    ) -> dispatch::DispatchExternalTexture {
+        let wgt_desc = desc.map_label(|l| l.map(Borrowed));
+        let planes = planes
+            .iter()
+            .map(|plane| plane.inner.as_core().id)
+            .collect::<Vec<_>>();
+        let (id, error) = self
+            .context
+            .0
+            .device_create_external_texture(self.id, &wgt_desc, &planes, None);
+        if let Some(cause) = error {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                desc.label,
+                "Device::create_external_texture",
+            );
+        }
+
+        CoreExternalTexture {
+            context: self.context.clone(),
+            id,
+        }
+        .into()
+    }
+
     fn create_blas(
         &self,
         desc: &crate::CreateBlasDescriptor<'_>,
@@ -1935,6 +1972,18 @@ impl Drop for CoreTextureView {
     fn drop(&mut self) {
         // TODO: We don't use this error at all?
         let _ = self.context.0.texture_view_drop(self.id);
+    }
+}
+
+impl dispatch::ExternalTextureInterface for CoreExternalTexture {
+    fn destroy(&self) {
+        self.context.0.external_texture_destroy(self.id);
+    }
+}
+
+impl Drop for CoreExternalTexture {
+    fn drop(&mut self) {
+        self.context.0.external_texture_drop(self.id);
     }
 }
 

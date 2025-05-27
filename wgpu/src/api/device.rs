@@ -326,6 +326,20 @@ impl Device {
         }
     }
 
+    /// Creates a new [`ExternalTexture`].
+    #[must_use]
+    pub fn create_external_texture(
+        &self,
+        desc: &ExternalTextureDescriptor<'_>,
+        planes: &[&TextureView],
+    ) -> ExternalTexture {
+        let external_texture = self.inner.create_external_texture(desc, planes);
+
+        ExternalTexture {
+            inner: external_texture,
+        }
+    }
+
     /// Creates a [`Buffer`] from a wgpu-hal Buffer.
     ///
     /// # Types

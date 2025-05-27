@@ -178,6 +178,9 @@ impl Global {
         fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
+    /// Assign `id_in` an error with the given `label`.
+    ///
+    /// See [`Self::create_buffer_error`] for more context and explanation.
     pub fn create_render_bundle_error(
         &self,
         id_in: Option<id::RenderBundleId>,
@@ -189,13 +192,25 @@ impl Global {
 
     /// Assign `id_in` an error with the given `label`.
     ///
-    /// See `create_buffer_error` for more context and explanation.
+    /// See [`Self::create_buffer_error`] for more context and explanation.
     pub fn create_texture_error(
         &self,
         id_in: Option<id::TextureId>,
         desc: &resource::TextureDescriptor,
     ) {
         let fid = self.hub.textures.prepare(id_in);
+        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+    }
+
+    /// Assign `id_in` an error with the given `label`.
+    ///
+    /// See [`Self::create_buffer_error`] for more context and explanation.
+    pub fn create_external_texture_error(
+        &self,
+        id_in: Option<id::ExternalTextureId>,
+        desc: &resource::ExternalTextureDescriptor,
+    ) {
+        let fid = self.hub.external_textures.prepare(id_in);
         fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
@@ -510,6 +525,94 @@ impl Global {
             }
         }
         Ok(())
+    }
+
+    pub fn device_create_external_texture(
+        &self,
+        device_id: DeviceId,
+        desc: &resource::ExternalTextureDescriptor,
+        planes: &[id::TextureViewId],
+        id_in: Option<id::ExternalTextureId>,
+    ) -> (
+        id::ExternalTextureId,
+        Option<resource::CreateExternalTextureError>,
+    ) {
+        profiling::scope!("Device::create_external_texture");
+
+        let hub = &self.hub;
+
+        let fid = hub.external_textures.prepare(id_in);
+
+        let error = 'error: {
+            let device = self.hub.devices.get(device_id);
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                let planes = Box::from(planes);
+                trace.add(trace::Action::CreateExternalTexture {
+                    id: fid.id(),
+                    desc: desc.clone(),
+                    planes,
+                });
+            }
+
+            let planes = planes
+                .iter()
+                .map(|plane_id| self.hub.texture_views.get(*plane_id).get())
+                .collect::<Result<Vec<_>, _>>();
+            let planes = match planes {
+                Ok(planes) => planes,
+                Err(error) => break 'error error.into(),
+            };
+
+            let external_texture = match device.create_external_texture(desc, &planes) {
+                Ok(external_texture) => external_texture,
+                Err(error) => break 'error error,
+            };
+
+            let id = fid.assign(Fallible::Valid(external_texture));
+            api_log!("Device::create_external_texture({desc:?}) -> {id:?}");
+
+            return (id, None);
+        };
+
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        (id, Some(error))
+    }
+
+    pub fn external_texture_destroy(&self, external_texture_id: id::ExternalTextureId) {
+        profiling::scope!("ExternalTexture::destroy");
+        api_log!("ExternalTexture::destroy {external_texture_id:?}");
+
+        let hub = &self.hub;
+
+        let Ok(external_texture) = hub.external_textures.get(external_texture_id).get() else {
+            // If the external texture is already invalid, there's nothing to do.
+            return;
+        };
+
+        #[cfg(feature = "trace")]
+        if let Some(trace) = external_texture.device.trace.lock().as_mut() {
+            trace.add(trace::Action::FreeExternalTexture(external_texture_id));
+        }
+
+        external_texture.destroy();
+    }
+
+    pub fn external_texture_drop(&self, external_texture_id: id::ExternalTextureId) {
+        profiling::scope!("ExternalTexture::drop");
+        api_log!("ExternalTexture::drop {external_texture_id:?}");
+
+        let hub = &self.hub;
+
+        let _external_texture = hub.external_textures.remove(external_texture_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(external_texture) = _external_texture.get() {
+            if let Some(t) = external_texture.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyExternalTexture(external_texture_id));
+            }
+        }
     }
 
     pub fn device_create_sampler(

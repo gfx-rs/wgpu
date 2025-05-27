@@ -157,6 +157,11 @@ pub trait DeviceInterface: CommonTraits {
     ) -> DispatchPipelineCache;
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> DispatchBuffer;
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> DispatchTexture;
+    fn create_external_texture(
+        &self,
+        desc: &crate::ExternalTextureDescriptor<'_>,
+        planes: &[&crate::TextureView],
+    ) -> DispatchExternalTexture;
     fn create_blas(
         &self,
         desc: &crate::CreateBlasDescriptor<'_>,
@@ -255,6 +260,9 @@ pub trait BufferInterface: CommonTraits {
 pub trait TextureInterface: CommonTraits {
     fn create_view(&self, desc: &crate::TextureViewDescriptor<'_>) -> DispatchTextureView;
 
+    fn destroy(&self);
+}
+pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);
 }
 pub trait BlasInterface: CommonTraits {
@@ -840,6 +848,7 @@ dispatch_types! {ref type DispatchTextureView: TextureViewInterface = CoreTextur
 dispatch_types! {ref type DispatchSampler: SamplerInterface = CoreSampler, WebSampler, DynSampler}
 dispatch_types! {ref type DispatchBuffer: BufferInterface = CoreBuffer, WebBuffer, DynBuffer}
 dispatch_types! {ref type DispatchTexture: TextureInterface = CoreTexture, WebTexture, DynTexture}
+dispatch_types! {ref type DispatchExternalTexture: ExternalTextureInterface = CoreExternalTexture, WebExternalTexture, DynExternalTexture}
 dispatch_types! {ref type DispatchBlas: BlasInterface = CoreBlas, WebBlas, DynBlas}
 dispatch_types! {ref type DispatchTlas: TlasInterface = CoreTlas, WebTlas, DynTlas}
 dispatch_types! {ref type DispatchQuerySet: QuerySetInterface = CoreQuerySet, WebQuerySet, DynQuerySet}

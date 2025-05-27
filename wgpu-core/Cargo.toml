@@ -72,14 +72,7 @@ observe_locks = ["std", "dep:ron", "serde/serde_derive"]
 serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde"]
 
 ## Enable API tracing.
-trace = [
-    "serde",
-    "std",
-    "dep:ron",
-    "naga/serialize",
-    "wgpu-types/trace",
-    "dep:bytemuck",
-]
+trace = ["serde", "std", "dep:ron", "naga/serialize", "wgpu-types/trace"]
 
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
@@ -100,7 +93,7 @@ wgsl = ["naga/wgsl-in"]
 glsl = ["naga/glsl-in"]
 
 ## Enable `ShaderModuleSource::SpirV`
-spirv = ["naga/spv-in", "dep:bytemuck"]
+spirv = ["naga/spv-in"]
 
 #! ### Other
 # --------------------------------------------------------------------
@@ -180,7 +173,7 @@ arrayvec.workspace = true
 bit-vec.workspace = true
 bit-set.workspace = true
 bitflags.workspace = true
-bytemuck = { workspace = true, optional = true }
+bytemuck.workspace = true
 document-features.workspace = true
 hashbrown.workspace = true
 indexmap.workspace = true

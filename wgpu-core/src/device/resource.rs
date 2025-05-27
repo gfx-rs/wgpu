@@ -41,8 +41,9 @@ use crate::{
     pipeline,
     pool::ResourcePool,
     resource::{
-        self, Buffer, Fallible, Labeled, ParentDevice, QuerySet, RawResourceAccess, Sampler,
-        StagingBuffer, Texture, TextureView, TextureViewNotRenderableReason, Tlas, TrackingData,
+        self, Buffer, ExternalTexture, Fallible, Labeled, ParentDevice, QuerySet,
+        RawResourceAccess, Sampler, StagingBuffer, Texture, TextureView,
+        TextureViewNotRenderableReason, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
@@ -73,6 +74,42 @@ pub(crate) struct CommandIndices {
     /// [`last_successful_submission_index`]: Device::last_successful_submission_index
     pub(crate) active_submission_index: hal::FenceValue,
     pub(crate) next_acceleration_structure_build_command_index: u64,
+}
+
+/// Parameters provided to shaders via a uniform buffer, describing an
+/// ExternalTexture resource binding.
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct ExternalTextureParams {
+    /// 4x4 column-major matrix with which to convert sampled YCbCr values
+    /// to RGBA.
+    /// This is ignored when `num_planes` is 1.
+    pub yuv_conversion_matrix: [f32; 16],
+    /// 3x2 column-major matrix with which to multiply texture coordinates
+    /// prior to sampling from the external texture.
+    pub sample_transform: [f32; 6],
+    pub load_transform: [f32; 6],
+    /// Size of the external texture. This value should be returned by size
+    /// queries in shader code. Note that this may not match the dimensions of
+    /// the underlying texture(s). A value of [0, 0] indicates that the actual
+    /// size of plane 0 should be used.
+    pub size: [u32; 2],
+    /// Number of planes. 1 indicates a single RGBA plane. 2 indicates a Y
+    /// plane and an interleaved CbCr plane. 3 indicates separate Y, Cb, and Cr
+    /// planes.
+    pub num_planes: u32,
+}
+
+impl ExternalTextureParams {
+    pub fn from_desc<L>(desc: &wgt::ExternalTextureDescriptor<L>) -> Self {
+        Self {
+            yuv_conversion_matrix: desc.yuv_conversion_matrix,
+            size: [desc.width, desc.height],
+            sample_transform: desc.sample_transform,
+            load_transform: desc.load_transform,
+            num_planes: desc.num_planes() as u32,
+        }
+    }
 }
 
 /// Structure describing a logical device. Some members are internally mutable,
@@ -1548,6 +1585,101 @@ impl Device {
         }
 
         Ok(view)
+    }
+
+    pub(crate) fn create_external_texture(
+        self: &Arc<Self>,
+        desc: &resource::ExternalTextureDescriptor,
+        planes: &[Arc<TextureView>],
+    ) -> Result<Arc<ExternalTexture>, resource::CreateExternalTextureError> {
+        use resource::CreateExternalTextureError;
+        self.require_features(wgt::Features::EXTERNAL_TEXTURE)?;
+        self.check_is_valid()?;
+
+        if desc.num_planes() != planes.len() {
+            return Err(CreateExternalTextureError::IncorrectPlaneCount {
+                format: desc.format,
+                expected: desc.num_planes(),
+                provided: planes.len(),
+            });
+        }
+
+        let planes = planes
+            .iter()
+            .enumerate()
+            .map(|(i, plane)| {
+                if plane.samples != 1 {
+                    return Err(CreateExternalTextureError::InvalidPlaneMultisample(
+                        plane.samples,
+                    ));
+                }
+
+                let sample_type = plane
+                    .desc
+                    .format
+                    .sample_type(Some(plane.desc.range.aspect), Some(self.features))
+                    .unwrap();
+                if !matches!(sample_type, TextureSampleType::Float { filterable: true }) {
+                    return Err(CreateExternalTextureError::InvalidPlaneSampleType {
+                        format: plane.desc.format,
+                        sample_type,
+                    });
+                }
+
+                if plane.desc.dimension != TextureViewDimension::D2 {
+                    return Err(CreateExternalTextureError::InvalidPlaneDimension(
+                        plane.desc.dimension,
+                    ));
+                }
+
+                let expected_components = match desc.format {
+                    wgt::ExternalTextureFormat::Rgba => 4,
+                    wgt::ExternalTextureFormat::Nv12 => match i {
+                        0 => 1,
+                        1 => 2,
+                        _ => unreachable!(),
+                    },
+                    wgt::ExternalTextureFormat::Yu12 => 1,
+                };
+                if plane.desc.format.components() != expected_components {
+                    return Err(CreateExternalTextureError::InvalidPlaneFormat {
+                        format: desc.format,
+                        plane: i,
+                        expected: expected_components,
+                        provided: plane.desc.format,
+                    });
+                }
+
+                plane.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
+                Ok(plane.clone())
+            })
+            .collect::<Result<_, _>>()?;
+
+        let params_data = ExternalTextureParams::from_desc(desc);
+        let label = desc.label.as_ref().map(|l| alloc::format!("{l} params"));
+        let params_desc = resource::BufferDescriptor {
+            label: label.map(Cow::Owned),
+            size: size_of_val(&params_data) as wgt::BufferAddress,
+            usage: wgt::BufferUsages::UNIFORM | wgt::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        };
+        let params = self.create_buffer(&params_desc)?;
+        self.get_queue().unwrap().write_buffer(
+            Fallible::Valid(params.clone()),
+            0,
+            bytemuck::bytes_of(&params_data),
+        )?;
+
+        let external_texture = ExternalTexture {
+            device: self.clone(),
+            planes,
+            params,
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(self.tracker_indices.external_textures.clone()),
+        };
+        let external_texture = Arc::new(external_texture);
+
+        Ok(external_texture)
     }
 
     pub(crate) fn create_sampler(

@@ -261,6 +261,7 @@ ids! {
     pub type StagingBufferId StagingBuffer;
     pub type TextureViewId TextureView;
     pub type TextureId Texture;
+    pub type ExternalTextureId ExternalTexture;
     pub type SamplerId Sampler;
     pub type BindGroupLayoutId BindGroupLayout;
     pub type PipelineLayoutId PipelineLayout;

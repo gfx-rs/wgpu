@@ -58,6 +58,13 @@ pub enum Action<'a> {
         desc: crate::resource::TextureViewDescriptor<'a>,
     },
     DestroyTextureView(id::TextureViewId),
+    CreateExternalTexture {
+        id: id::ExternalTextureId,
+        desc: crate::resource::ExternalTextureDescriptor<'a>,
+        planes: alloc::boxed::Box<[id::TextureViewId]>,
+    },
+    FreeExternalTexture(id::ExternalTextureId),
+    DestroyExternalTexture(id::ExternalTextureId),
     CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
     DestroySampler(id::SamplerId),
     GetSurfaceTexture {

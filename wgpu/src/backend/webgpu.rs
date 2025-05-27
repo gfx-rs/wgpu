@@ -1260,6 +1260,12 @@ pub struct WebTexture {
 }
 
 #[derive(Debug)]
+pub struct WebExternalTexture {
+    /// Unique identifier for this ExternalTexture.
+    ident: crate::cmp::Identifier,
+}
+
+#[derive(Debug)]
 pub struct WebBlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
@@ -1392,6 +1398,7 @@ impl_send_sync!(WebTextureView);
 impl_send_sync!(WebSampler);
 impl_send_sync!(WebBuffer);
 impl_send_sync!(WebTexture);
+impl_send_sync!(WebExternalTexture);
 impl_send_sync!(WebBlas);
 impl_send_sync!(WebTlas);
 impl_send_sync!(WebQuerySet);
@@ -1421,6 +1428,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebTextureView => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebSampler => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBuffer => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebTexture => .ident);
+crate::cmp::impl_eq_ord_hash_proxy!(WebExternalTexture => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBlas => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebTlas => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebQuerySet => .ident);
@@ -2243,6 +2251,14 @@ impl dispatch::DeviceInterface for WebDevice {
         .into()
     }
 
+    fn create_external_texture(
+        &self,
+        _desc: &crate::ExternalTextureDescriptor<'_>,
+        _planes: &[&crate::TextureView],
+    ) -> dispatch::DispatchExternalTexture {
+        unimplemented!("ExternalTexture not implemented for web");
+    }
+
     fn create_blas(
         &self,
         _desc: &crate::CreateBlasDescriptor<'_>,
@@ -2748,6 +2764,17 @@ impl dispatch::TextureInterface for WebTexture {
 impl Drop for WebTexture {
     fn drop(&mut self) {
         // no-op
+    }
+}
+
+impl dispatch::ExternalTextureInterface for WebExternalTexture {
+    fn destroy(&self) {
+        unimplemented!("ExternalTexture not implemented for web");
+    }
+}
+impl Drop for WebExternalTexture {
+    fn drop(&mut self) {
+        unimplemented!("ExternalTexture not implemented for web");
     }
 }
 

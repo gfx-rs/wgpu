@@ -244,6 +244,19 @@ impl GlobalPlay for wgc::global::Global {
             Action::DestroyTextureView(id) => {
                 self.texture_view_drop(id).unwrap();
             }
+            Action::CreateExternalTexture { id, desc, planes } => {
+                let (_, error) =
+                    self.device_create_external_texture(device, &desc, &planes, Some(id));
+                if let Some(e) = error {
+                    panic!("{e}");
+                }
+            }
+            Action::FreeExternalTexture(id) => {
+                self.external_texture_destroy(id);
+            }
+            Action::DestroyExternalTexture(id) => {
+                self.external_texture_drop(id);
+            }
             Action::CreateSampler(id, desc) => {
                 let (_, error) = self.device_create_sampler(device, &desc, Some(id));
                 if let Some(e) = error {
