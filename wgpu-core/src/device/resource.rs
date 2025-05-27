@@ -176,6 +176,11 @@ pub struct Device {
     // Optional so that we can late-initialize this after the queue is created.
     pub(crate) timestamp_normalizer:
         OnceCellOrLock<crate::timestamp_normalization::TimestampNormalizer>,
+    /// Uniform buffer containing [`ExternalTextureParams`] with values such
+    /// that a [`TextureView`] bound to a [`wgt::BindingType::ExternalTexture`]
+    /// binding point will be rendered correctly. Intended to be used as the
+    /// [`hal::ExternalTextureBinding::params`] field.
+    pub(crate) default_external_texture_params_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     // needs to be dropped last
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
@@ -203,6 +208,10 @@ impl Drop for Device {
 
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
+        // SAFETY: We are in the Drop impl and we don't use
+        // self.default_external_texture_params_buffer anymore after this point.
+        let default_external_texture_params_buffer =
+            unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
         if let Some(indirect_validation) = self.indirect_validation.take() {
@@ -213,6 +222,8 @@ impl Drop for Device {
         }
         unsafe {
             self.raw.destroy_buffer(zero_buffer);
+            self.raw
+                .destroy_buffer(default_external_texture_params_buffer);
             self.raw.destroy_fence(fence);
         }
     }
@@ -292,6 +303,19 @@ impl Device {
         }
         .map_err(DeviceError::from_hal)?;
 
+        let default_external_texture_params_buffer = unsafe {
+            raw_device.create_buffer(&hal::BufferDescriptor {
+                label: hal_label(
+                    Some("(wgpu internal) default external texture params buffer"),
+                    instance_flags,
+                ),
+                size: size_of::<ExternalTextureParams>() as _,
+                usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
+                memory_flags: hal::MemoryFlags::empty(),
+            })
+        }
+        .map_err(DeviceError::from_hal)?;
+
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
 
@@ -317,6 +341,9 @@ impl Device {
             adapter: adapter.clone(),
             queue: OnceCellOrLock::new(),
             zero_buffer: ManuallyDrop::new(zero_buffer),
+            default_external_texture_params_buffer: ManuallyDrop::new(
+                default_external_texture_params_buffer,
+            ),
             label: desc.label.to_string(),
             command_allocator,
             command_indices: RwLock::new(
@@ -367,7 +394,78 @@ impl Device {
         })
     }
 
-    pub fn late_init_resources_with_queue(&self) -> Result<(), RequestDeviceError> {
+    /// Initializes [`Device::default_external_texture_params_buffer`] with
+    /// required values such that a [`TextureView`] bound to a
+    /// [`wgt::BindingType::ExternalTexture`] binding point will be rendered
+    /// correctly.
+    fn init_default_external_texture_params_buffer(self: &Arc<Self>) -> Result<(), DeviceError> {
+        let data = ExternalTextureParams {
+            #[rustfmt::skip]
+            yuv_conversion_matrix: [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0,
+            ],
+            size: [0, 0],
+            #[rustfmt::skip]
+            sample_transform: [
+                1.0, 0.0,
+                0.0, 1.0,
+                0.0, 0.0
+            ],
+            #[rustfmt::skip]
+            load_transform: [
+                1.0, 0.0,
+                0.0, 1.0,
+                0.0, 0.0
+            ],
+            num_planes: 1,
+        };
+        let mut staging_buffer =
+            StagingBuffer::new(self, wgt::BufferSize::new(size_of_val(&data) as _).unwrap())?;
+        staging_buffer.write(bytemuck::bytes_of(&data));
+        let staging_buffer = staging_buffer.flush();
+
+        let params_buffer = self.default_external_texture_params_buffer.as_ref();
+        let queue = self.get_queue().unwrap();
+        let mut pending_writes = queue.pending_writes.lock();
+
+        unsafe {
+            pending_writes
+                .command_encoder
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: params_buffer,
+                    usage: hal::StateTransition {
+                        from: wgt::BufferUses::MAP_WRITE,
+                        to: wgt::BufferUses::COPY_SRC,
+                    },
+                }]);
+            pending_writes.command_encoder.copy_buffer_to_buffer(
+                staging_buffer.raw(),
+                params_buffer,
+                &[hal::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: staging_buffer.size,
+                }],
+            );
+            pending_writes.consume(staging_buffer);
+            pending_writes
+                .command_encoder
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: params_buffer,
+                    usage: hal::StateTransition {
+                        from: wgt::BufferUses::COPY_DST,
+                        to: wgt::BufferUses::UNIFORM,
+                    },
+                }]);
+        }
+
+        Ok(())
+    }
+
+    pub fn late_init_resources_with_queue(self: &Arc<Self>) -> Result<(), RequestDeviceError> {
         let queue = self.get_queue().unwrap();
 
         let timestamp_normalizer = crate::timestamp_normalization::TimestampNormalizer::new(
@@ -378,6 +476,8 @@ impl Device {
         self.timestamp_normalizer
             .set(timestamp_normalizer)
             .unwrap_or_else(|_| panic!("Called late_init_resources_with_queue twice"));
+
+        self.init_default_external_texture_params_buffer()?;
 
         Ok(())
     }
