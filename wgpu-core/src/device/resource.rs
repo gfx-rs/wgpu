@@ -76,8 +76,8 @@ pub(crate) struct CommandIndices {
     pub(crate) next_acceleration_structure_build_command_index: u64,
 }
 
-/// Parameters provided to shaders via a uniform buffer, describing an
-/// ExternalTexture resource binding.
+/// Parameters provided to shaders via a uniform buffer, describing a
+/// [`binding_model::BindingResource::ExternalTexture`] resource binding.
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct ExternalTextureParams {
@@ -2612,6 +2612,121 @@ impl Device {
         Ok(tlas.try_raw(snatch_guard)?)
     }
 
+    fn create_external_texture_binding<'a>(
+        &'a self,
+        binding: u32,
+        decl: &wgt::BindGroupLayoutEntry,
+        external_texture: &'a Arc<ExternalTexture>,
+        used: &mut BindGroupStates,
+        snatch_guard: &'a SnatchGuard,
+    ) -> Result<
+        hal::ExternalTextureBinding<'a, dyn hal::DynBuffer, dyn hal::DynTextureView>,
+        binding_model::CreateBindGroupError,
+    > {
+        use crate::binding_model::CreateBindGroupError as Error;
+
+        external_texture.same_device(self)?;
+
+        used.external_textures
+            .insert_single(external_texture.clone());
+
+        match decl.ty {
+            wgt::BindingType::ExternalTexture => {}
+            _ => {
+                return Err(Error::WrongBindingType {
+                    binding,
+                    actual: decl.ty,
+                    expected: "ExternalTexture",
+                });
+            }
+        }
+
+        let planes = (0..3)
+            .map(|i| {
+                // We always need 3 bindings. If we have fewer than 3 planes
+                // just bind plane 0 multiple times. The shader will only
+                // sample from valid planes anyway.
+                let plane = external_texture
+                    .planes
+                    .get(i)
+                    .unwrap_or(&external_texture.planes[0]);
+                let internal_use = wgt::TextureUses::RESOURCE;
+                used.views.insert_single(plane.clone(), internal_use);
+                let view = plane.try_raw(snatch_guard)?;
+                Ok(hal::TextureBinding {
+                    view,
+                    usage: internal_use,
+                })
+            })
+            // We can remove this intermediate Vec by using
+            // array::try_from_fn() above, once it stabilizes.
+            .collect::<Result<Vec<_>, Error>>()?;
+        let planes = planes.try_into().unwrap();
+
+        used.buffers
+            .insert_single(external_texture.params.clone(), wgt::BufferUses::UNIFORM);
+        let params = hal::BufferBinding {
+            buffer: external_texture.params.try_raw(snatch_guard)?,
+            offset: 0,
+            size: wgt::BufferSize::new(external_texture.params.size),
+        };
+
+        Ok(hal::ExternalTextureBinding { planes, params })
+    }
+
+    fn create_external_texture_binding_from_view<'a>(
+        &'a self,
+        binding: u32,
+        decl: &wgt::BindGroupLayoutEntry,
+        view: &'a Arc<TextureView>,
+        used: &mut BindGroupStates,
+        snatch_guard: &'a SnatchGuard,
+    ) -> Result<
+        hal::ExternalTextureBinding<'a, dyn hal::DynBuffer, dyn hal::DynTextureView>,
+        binding_model::CreateBindGroupError,
+    > {
+        use crate::binding_model::CreateBindGroupError as Error;
+
+        view.same_device(self)?;
+
+        let internal_use = self.texture_use_parameters(binding, decl, view, "SampledTexture")?;
+        used.views.insert_single(view.clone(), internal_use);
+
+        match decl.ty {
+            wgt::BindingType::ExternalTexture => {}
+            _ => {
+                return Err(Error::WrongBindingType {
+                    binding,
+                    actual: decl.ty,
+                    expected: "ExternalTexture",
+                });
+            }
+        }
+
+        // We need 3 bindings, so just repeat the same texture view 3 times.
+        let planes = [
+            hal::TextureBinding {
+                view: view.try_raw(snatch_guard)?,
+                usage: internal_use,
+            },
+            hal::TextureBinding {
+                view: view.try_raw(snatch_guard)?,
+                usage: internal_use,
+            },
+            hal::TextureBinding {
+                view: view.try_raw(snatch_guard)?,
+                usage: internal_use,
+            },
+        ];
+        let params = hal::BufferBinding {
+            buffer: self.default_external_texture_params_buffer.as_ref(),
+            offset: 0,
+            size: None,
+        };
+
+        Ok(hal::ExternalTextureBinding { planes, params })
+    }
+
     // This function expects the provided bind group layout to be resolved
     // (not passing a duplicate) beforehand.
     pub(crate) fn create_bind_group(
@@ -2652,6 +2767,7 @@ impl Device {
         let mut hal_samplers = Vec::new();
         let mut hal_textures = Vec::new();
         let mut hal_tlas_s = Vec::new();
+        let mut hal_external_textures = Vec::new();
         let snatch_guard = self.snatchable_lock.read();
         for entry in desc.entries.iter() {
             let binding = entry.binding;
@@ -2718,19 +2834,33 @@ impl Device {
 
                     (res_index, num_bindings)
                 }
-                Br::TextureView(ref view) => {
-                    let tb = self.create_texture_binding(
-                        binding,
-                        decl,
-                        view,
-                        &mut used,
-                        &mut used_texture_ranges,
-                        &snatch_guard,
-                    )?;
-                    let res_index = hal_textures.len();
-                    hal_textures.push(tb);
-                    (res_index, 1)
-                }
+                Br::TextureView(ref view) => match decl.ty {
+                    wgt::BindingType::ExternalTexture => {
+                        let et = self.create_external_texture_binding_from_view(
+                            binding,
+                            decl,
+                            view,
+                            &mut used,
+                            &snatch_guard,
+                        )?;
+                        let res_index = hal_external_textures.len();
+                        hal_external_textures.push(et);
+                        (res_index, 1)
+                    }
+                    _ => {
+                        let tb = self.create_texture_binding(
+                            binding,
+                            decl,
+                            view,
+                            &mut used,
+                            &mut used_texture_ranges,
+                            &snatch_guard,
+                        )?;
+                        let res_index = hal_textures.len();
+                        hal_textures.push(tb);
+                        (res_index, 1)
+                    }
+                },
                 Br::TextureViewArray(ref views) => {
                     let num_bindings = views.len();
                     Self::check_array_binding(self.features, decl.count, num_bindings)?;
@@ -2758,6 +2888,18 @@ impl Device {
                     hal_tlas_s.push(tlas);
                     (res_index, 1)
                 }
+                Br::ExternalTexture(ref et) => {
+                    let et = self.create_external_texture_binding(
+                        binding,
+                        decl,
+                        et,
+                        &mut used,
+                        &snatch_guard,
+                    )?;
+                    let res_index = hal_external_textures.len();
+                    hal_external_textures.push(et);
+                    (res_index, 1)
+                }
             };
 
             hal_entries.push(hal::BindGroupEntry {
@@ -2783,6 +2925,7 @@ impl Device {
             samplers: &hal_samplers,
             textures: &hal_textures,
             acceleration_structures: &hal_tlas_s,
+            external_textures: &hal_external_textures,
         };
         let raw = unsafe { self.raw().create_bind_group(&hal_desc) }
             .map_err(|e| self.handle_hal_error(e))?;

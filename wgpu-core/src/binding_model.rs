@@ -21,13 +21,13 @@ use crate::{
     device::{
         bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
     },
-    id::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId, TlasId},
+    id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
-        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        MissingTextureUsageError, RawResourceAccess, ResourceErrorIdent, Sampler, TextureView,
-        Tlas, TrackingData,
+        Buffer, DestroyedResourceError, ExternalTexture, InvalidResourceError, Labeled,
+        MissingBufferUsageError, MissingTextureUsageError, RawResourceAccess, ResourceErrorIdent,
+        Sampler, TextureView, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -594,8 +594,14 @@ impl BindingTypeMaxCountValidator {
 /// cbindgen:ignore
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BindGroupEntry<'a, B = BufferId, S = SamplerId, TV = TextureViewId, TLAS = TlasId>
-where
+pub struct BindGroupEntry<
+    'a,
+    B = BufferId,
+    S = SamplerId,
+    TV = TextureViewId,
+    TLAS = TlasId,
+    ET = ExternalTextureId,
+> where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
@@ -608,15 +614,21 @@ where
     pub binding: u32,
     #[cfg_attr(
         feature = "serde",
-        serde(bound(deserialize = "BindingResource<'a, B, S, TV, TLAS>: Deserialize<'de>"))
+        serde(bound(deserialize = "BindingResource<'a, B, S, TV, TLAS, ET>: Deserialize<'de>"))
     )]
     /// Resource to attach to the binding
-    pub resource: BindingResource<'a, B, S, TV, TLAS>,
+    pub resource: BindingResource<'a, B, S, TV, TLAS, ET>,
 }
 
 /// cbindgen:ignore
-pub type ResolvedBindGroupEntry<'a> =
-    BindGroupEntry<'a, Arc<Buffer>, Arc<Sampler>, Arc<TextureView>, Arc<Tlas>>;
+pub type ResolvedBindGroupEntry<'a> = BindGroupEntry<
+    'a,
+    Arc<Buffer>,
+    Arc<Sampler>,
+    Arc<TextureView>,
+    Arc<Tlas>,
+    Arc<ExternalTexture>,
+>;
 
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug)]
@@ -628,6 +640,7 @@ pub struct BindGroupDescriptor<
     S = SamplerId,
     TV = TextureViewId,
     TLAS = TlasId,
+    ET = ExternalTextureId,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -635,8 +648,8 @@ pub struct BindGroupDescriptor<
     <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
     <[S] as ToOwned>::Owned: fmt::Debug,
     <[TV] as ToOwned>::Owned: fmt::Debug,
-    [BindGroupEntry<'a, B, S, TV, TLAS>]: ToOwned,
-    <[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: fmt::Debug,
+    [BindGroupEntry<'a, B, S, TV, TLAS, ET>]: ToOwned,
+    <[BindGroupEntry<'a, B, S, TV, TLAS, ET>] as ToOwned>::Owned: fmt::Debug,
 {
     /// Debug label of the bind group.
     ///
@@ -647,11 +660,12 @@ pub struct BindGroupDescriptor<
     #[cfg_attr(
         feature = "serde",
         serde(bound(
-            deserialize = "<[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: Deserialize<'de>"
+            deserialize = "<[BindGroupEntry<'a, B, S, TV, TLAS, ET>] as ToOwned>::Owned: Deserialize<'de>"
         ))
     )]
     /// The resources to bind to this bind group.
-    pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS>]>,
+    #[allow(clippy::type_complexity)]
+    pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS, ET>]>,
 }
 
 /// cbindgen:ignore
@@ -662,6 +676,7 @@ pub type ResolvedBindGroupDescriptor<'a> = BindGroupDescriptor<
     Arc<Sampler>,
     Arc<TextureView>,
     Arc<Tlas>,
+    Arc<ExternalTexture>,
 >;
 
 /// Describes a [`BindGroupLayout`].
@@ -1005,8 +1020,14 @@ pub type ResolvedBufferBinding = BufferBinding<Arc<Buffer>>;
 // They're different enough that it doesn't make sense to share a common type
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum BindingResource<'a, B = BufferId, S = SamplerId, TV = TextureViewId, TLAS = TlasId>
-where
+pub enum BindingResource<
+    'a,
+    B = BufferId,
+    S = SamplerId,
+    TV = TextureViewId,
+    TLAS = TlasId,
+    ET = ExternalTextureId,
+> where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
@@ -1033,10 +1054,17 @@ where
     )]
     TextureViewArray(Cow<'a, [TV]>),
     AccelerationStructure(TLAS),
+    ExternalTexture(ET),
 }
 
-pub type ResolvedBindingResource<'a> =
-    BindingResource<'a, Arc<Buffer>, Arc<Sampler>, Arc<TextureView>, Arc<Tlas>>;
+pub type ResolvedBindingResource<'a> = BindingResource<
+    'a,
+    Arc<Buffer>,
+    Arc<Sampler>,
+    Arc<TextureView>,
+    Arc<Tlas>,
+    Arc<ExternalTexture>,
+>;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]

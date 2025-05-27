@@ -2017,6 +2017,9 @@ impl dispatch::DeviceInterface for WebDevice {
                     crate::BindingResource::AccelerationStructure(_) => {
                         unimplemented!("Raytracing not implemented for web")
                     }
+                    crate::BindingResource::ExternalTexture(_) => {
+                        unimplemented!("ExternalTexture not implemented for web")
+                    }
                 };
 
                 webgpu_sys::GpuBindGroupEntry::new(binding.binding, &mapped_resource)

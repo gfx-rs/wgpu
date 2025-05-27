@@ -1801,11 +1801,9 @@ pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a
 pub struct ExternalTexture {
     pub(crate) device: Arc<Device>,
     /// Between 1 and 3 (inclusive) planes of texture data.
-    #[allow(dead_code)]
     pub(crate) planes: arrayvec::ArrayVec<Arc<TextureView>, 3>,
     /// Buffer containing a [`crate::device::resource::ExternalTextureParams`]
     /// describing the external texture.
-    #[allow(dead_code)]
     pub(crate) params: Arc<Buffer>,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,

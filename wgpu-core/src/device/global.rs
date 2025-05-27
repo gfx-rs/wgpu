@@ -846,6 +846,7 @@ impl Global {
                 sampler_storage: &Storage<Fallible<resource::Sampler>>,
                 texture_view_storage: &Storage<Fallible<resource::TextureView>>,
                 tlas_storage: &Storage<Fallible<resource::Tlas>>,
+                external_texture_storage: &Storage<Fallible<resource::ExternalTexture>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
                 let resolve_buffer = |bb: &BufferBinding| {
@@ -873,6 +874,12 @@ impl Global {
                 };
                 let resolve_tlas = |id: &id::TlasId| {
                     tlas_storage
+                        .get(*id)
+                        .get()
+                        .map_err(binding_model::CreateBindGroupError::from)
+                };
+                let resolve_external_texture = |id: &id::ExternalTextureId| {
+                    external_texture_storage
                         .get(*id)
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
@@ -911,6 +918,9 @@ impl Global {
                     BindingResource::AccelerationStructure(ref tlas) => {
                         ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas)?)
                     }
+                    BindingResource::ExternalTexture(ref et) => {
+                        ResolvedBindingResource::ExternalTexture(resolve_external_texture(et)?)
+                    }
                 };
                 Ok(ResolvedBindGroupEntry {
                     binding: e.binding,
@@ -923,6 +933,7 @@ impl Global {
                 let texture_view_guard = hub.texture_views.read();
                 let sampler_guard = hub.samplers.read();
                 let tlas_guard = hub.tlas_s.read();
+                let external_texture_guard = hub.external_textures.read();
                 desc.entries
                     .iter()
                     .map(|e| {
@@ -932,6 +943,7 @@ impl Global {
                             &sampler_guard,
                             &texture_view_guard,
                             &tlas_guard,
+                            &external_texture_guard,
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()

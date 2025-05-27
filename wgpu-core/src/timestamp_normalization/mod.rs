@@ -289,6 +289,7 @@ impl TimestampNormalizer {
                     samplers: &[],
                     textures: &[],
                     acceleration_structures: &[],
+                    external_textures: &[],
                     entries: &[hal::BindGroupEntry {
                         binding: 0,
                         resource_index: 0,

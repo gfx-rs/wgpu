@@ -2145,6 +2145,23 @@ impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
     }
 }
 
+#[derive(Debug)]
+pub struct ExternalTextureBinding<'a, B: DynBuffer + ?Sized, T: DynTextureView + ?Sized> {
+    pub planes: [TextureBinding<'a, T>; 3],
+    pub params: BufferBinding<'a, B>,
+}
+
+impl<'a, B: DynBuffer + ?Sized, T: DynTextureView + ?Sized> Clone
+    for ExternalTextureBinding<'a, B, T>
+{
+    fn clone(&self) -> Self {
+        ExternalTextureBinding {
+            planes: self.planes.clone(),
+            params: self.params.clone(),
+        }
+    }
+}
+
 /// cbindgen:ignore
 #[derive(Clone, Debug)]
 pub struct BindGroupEntry {
@@ -2178,6 +2195,7 @@ pub struct BindGroupDescriptor<
     pub textures: &'a [TextureBinding<'a, T>],
     pub entries: &'a [BindGroupEntry],
     pub acceleration_structures: &'a [&'a A],
+    pub external_textures: &'a [ExternalTextureBinding<'a, B, T>],
 }
 
 #[derive(Clone, Debug)]

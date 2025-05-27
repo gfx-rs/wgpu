@@ -241,6 +241,7 @@ impl Dispatch {
             samplers: &[],
             textures: &[],
             acceleration_structures: &[],
+            external_textures: &[],
         };
         let dst_bind_group = unsafe {
             device
@@ -284,6 +285,7 @@ impl Dispatch {
             samplers: &[],
             textures: &[],
             acceleration_structures: &[],
+            external_textures: &[],
         };
         unsafe {
             device

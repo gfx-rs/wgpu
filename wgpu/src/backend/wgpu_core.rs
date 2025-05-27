@@ -1190,6 +1190,9 @@ impl dispatch::DeviceInterface for CoreDevice {
                             acceleration_structure.inner.as_core().id,
                         )
                     }
+                    BindingResource::ExternalTexture(external_texture) => {
+                        bm::BindingResource::ExternalTexture(external_texture.inner.as_core().id)
+                    }
                 },
             })
             .collect::<Vec<_>>();

@@ -140,6 +140,7 @@ impl Draw {
             samplers: &[],
             textures: &[],
             acceleration_structures: &[],
+            external_textures: &[],
         };
         unsafe {
             device
@@ -690,6 +691,7 @@ fn create_buffer_and_bind_group(
         samplers: &[],
         textures: &[],
         acceleration_structures: &[],
+        external_textures: &[],
     };
     let bind_group = unsafe { device.create_bind_group(&bind_group_desc) }?;
     Ok(BufferPoolEntry { buffer, bind_group })
