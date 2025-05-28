@@ -26,7 +26,7 @@ use crate::{
     },
     dx12::{
         borrow_optional_interface_temporarily, shader_compilation, suballocation,
-        DynamicStorageBufferOffsets, Event,
+        DynamicStorageBufferOffsets, Event, ShaderCacheKey, ShaderCacheValue,
     },
     AccelerationStructureEntries, TlasInstance,
 };
@@ -203,6 +203,7 @@ impl super::Device {
             null_rtv_handle,
             mem_allocator,
             compiler_container,
+            shader_cache: Default::default(),
             counters: Default::default(),
         })
     }
@@ -304,14 +305,50 @@ impl super::Device {
         };
 
         //TODO: reuse the writer
-        let mut source = String::new();
-        let mut writer = hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
-        let reflection_info = {
+        let (source, entry_point) = {
+            let mut source = String::new();
+            let mut writer = hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
+
             profiling::scope!("naga::back::hlsl::write");
-            writer
+            let mut reflection_info = writer
                 .write(&module, &info, frag_ep.as_ref())
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?
+                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
+
+            assert_eq!(reflection_info.entry_point_names.len(), 1);
+
+            let entry_point = reflection_info
+                .entry_point_names
+                .pop()
+                .unwrap()
+                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
+
+            (source, entry_point)
         };
+
+        log::info!(
+            "Naga generated shader for {:?} at {:?}:\n{}",
+            entry_point,
+            naga_stage,
+            source
+        );
+
+        let key = ShaderCacheKey {
+            source,
+            entry_point,
+            stage: naga_stage,
+            shader_model: naga_options.shader_model,
+        };
+
+        {
+            let mut shader_cache = self.shader_cache.lock();
+            let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
+            if let Some(value) = shader_cache.entries.get_mut(&key) {
+                value.last_used = nr_of_shaders_compiled;
+                return Ok(value.shader.clone());
+            }
+        }
+
+        let source_name = stage.module.raw_name.as_deref();
 
         let full_stage = format!(
             "{}_{}",
@@ -319,35 +356,34 @@ impl super::Device {
             naga_options.shader_model.to_str()
         );
 
-        let raw_ep = reflection_info.entry_point_names[0]
-            .as_ref()
-            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
-
-        let source_name = stage.module.raw_name.as_deref();
-
-        let result = self.compiler_container.compile(
+        let compiled_shader = self.compiler_container.compile(
             self,
-            &source,
+            &key.source,
             source_name,
-            raw_ep,
+            &key.entry_point,
             stage_bit,
             &full_stage,
-        );
+        )?;
 
-        let log_level = if result.is_ok() {
-            log::Level::Info
-        } else {
-            log::Level::Error
-        };
+        {
+            let mut shader_cache = self.shader_cache.lock();
+            shader_cache.nr_of_shaders_compiled += 1;
+            let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
+            let value = ShaderCacheValue {
+                last_used: nr_of_shaders_compiled,
+                shader: compiled_shader.clone(),
+            };
+            shader_cache.entries.insert(key, value);
 
-        log::log!(
-            log_level,
-            "Naga generated shader for {:?} at {:?}:\n{}",
-            raw_ep,
-            naga_stage,
-            source
-        );
-        result
+            // Retain all entries that have been used since we compiled the last 100 shaders.
+            if shader_cache.entries.len() > 200 {
+                shader_cache
+                    .entries
+                    .retain(|_, v| v.last_used >= nr_of_shaders_compiled - 100);
+            }
+        }
+
+        Ok(compiled_shader)
     }
 
     pub fn raw_device(&self) -> &Direct3D12::ID3D12Device {
@@ -1818,11 +1854,6 @@ impl crate::Device for super::Device {
         }
         .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.to_string()))?;
 
-        unsafe { blob_vs.destroy() };
-        if let Some(blob_fs) = blob_fs {
-            unsafe { blob_fs.destroy() };
-        };
-
         if let Some(label) = desc.label {
             raw.set_name(label)?;
         }
@@ -1879,8 +1910,6 @@ impl crate::Device for super::Device {
                 )
             }
         };
-
-        unsafe { blob_cs.destroy() };
 
         let raw: Direct3D12::ID3D12PipelineState = pair.map_err(|err| {
             crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.to_string())
