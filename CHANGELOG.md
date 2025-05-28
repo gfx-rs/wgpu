@@ -79,6 +79,10 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Get `vertex_index` & `instance_index` builtins working for indirect draws. By @teoxoy in [#7535](https://github.com/gfx-rs/wgpu/pull/7535)
 
+#### Metal
+
+- Remove extraneous main thread warning in `fn surface_capabilities()`. By @jamesordner in [#7692](https://github.com/gfx-rs/wgpu/pull/7692)
+
 ### Changes
 
 - Loosen Viewport validation requirements to match the [new specs](https://github.com/gpuweb/gpuweb/pull/5025). By @ebbdrop in [#7564](https://github.com/gfx-rs/wgpu/pull/7564)
