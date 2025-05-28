@@ -65,7 +65,7 @@ impl<'a> WebIdlConverter<'a> for GPUExtent3D {
                             enforce_range: true,
                         },
                     )?;
-                    if !(conv.len() > 1 && conv.len() <= 3) {
+                    if conv.is_empty() || conv.len() > 3 {
                         return Err(WebIdlError::other(prefix, context, JsErrorBox::type_error(format!("A sequence of number used as a GPUExtent3D must have between 1 and 3 elements, received {} elements", conv.len()))));
                     }
 

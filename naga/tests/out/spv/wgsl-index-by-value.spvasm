@@ -1,16 +1,16 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 77
+; Bound: 87
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %66 "index_let_array_1d" %61 %64
+OpEntryPoint Vertex %79 "main" %74 %77
 OpDecorate %4 ArrayStride 4
 OpDecorate %7 ArrayStride 4
 OpDecorate %9 ArrayStride 8
-OpDecorate %61 BuiltIn VertexIndex
-OpDecorate %64 BuiltIn Position
+OpDecorate %74 BuiltIn VertexIndex
+OpDecorate %77 BuiltIn Position
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 1
 %6 = OpTypeInt 32 0
@@ -45,14 +45,16 @@ OpDecorate %64 BuiltIn Position
 %53 = OpConstantComposite  %11  %51 %52
 %55 = OpTypePointer Function %11
 %57 = OpTypePointer Function %10
-%62 = OpTypePointer Input %6
-%61 = OpVariable  %62  Input
-%65 = OpTypePointer Output %13
-%64 = OpVariable  %65  Output
-%67 = OpTypeFunction %2
-%68 = OpConstant  %3  5
-%69 = OpConstantComposite  %4  %30 %31 %33 %34 %68
-%74 = OpTypeVector %3 4
+%63 = OpTypeFunction %13 %6
+%64 = OpConstant  %3  5
+%65 = OpConstantComposite  %4  %30 %31 %33 %34 %64
+%70 = OpTypeVector %3 4
+%75 = OpTypePointer Input %6
+%74 = OpVariable  %75  Input
+%78 = OpTypePointer Output %13
+%77 = OpVariable  %78  Output
+%80 = OpTypeFunction %2
+%81 = OpConstant  %3  6
 %17 = OpFunction  %3  None %18
 %15 = OpFunctionParameter  %4
 %16 = OpFunctionParameter  %3
@@ -89,17 +91,28 @@ OpStore %56 %53
 %59 = OpLoad  %10  %58
 OpReturnValue %59
 OpFunctionEnd
-%66 = OpFunction  %2  None %67
+%62 = OpFunction  %13  None %63
+%61 = OpFunctionParameter  %6
 %60 = OpLabel
-%71 = OpVariable  %20  Function
-%63 = OpLoad  %6  %61
-OpBranch %70
-%70 = OpLabel
-OpStore %71 %69
-%72 = OpAccessChain  %22  %71 %63
-%73 = OpLoad  %3  %72
-%75 = OpCompositeConstruct  %74  %73 %73 %73 %73
-%76 = OpConvertSToF  %13  %75
-OpStore %64 %76
+%67 = OpVariable  %20  Function
+OpBranch %66
+%66 = OpLabel
+OpStore %67 %65
+%68 = OpAccessChain  %22  %67 %61
+%69 = OpLoad  %3  %68
+%71 = OpCompositeConstruct  %70  %69 %69 %69 %69
+%72 = OpConvertSToF  %13  %71
+OpReturnValue %72
+OpFunctionEnd
+%79 = OpFunction  %2  None %80
+%73 = OpLabel
+%76 = OpLoad  %6  %74
+OpBranch %82
+%82 = OpLabel
+%83 = OpFunctionCall  %3  %17 %65 %81
+%84 = OpFunctionCall  %3  %28 %30 %31
+%85 = OpFunctionCall  %10  %45 %30 %31
+%86 = OpFunctionCall  %13  %62 %76
+OpStore %77 %86
 OpReturn
 OpFunctionEnd

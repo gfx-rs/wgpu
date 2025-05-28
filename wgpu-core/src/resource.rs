@@ -704,7 +704,7 @@ impl Buffer {
         Ok(None)
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+    pub(crate) fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
@@ -714,7 +714,7 @@ impl Buffer {
                 Some(raw) => raw,
                 None => {
                     // Per spec, it is valid to call `destroy` multiple times.
-                    return Ok(());
+                    return;
                 }
             };
 
@@ -755,8 +755,6 @@ impl Buffer {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -1029,7 +1027,7 @@ pub struct Texture {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
-    pub(crate) clear_mode: TextureClearMode,
+    pub(crate) clear_mode: RwLock<TextureClearMode>,
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
 }
@@ -1064,7 +1062,7 @@ impl Texture {
             },
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
-            clear_mode,
+            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
         }
@@ -1090,7 +1088,7 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        match self.clear_mode {
+        match *self.clear_mode.write() {
             TextureClearMode::Surface {
                 ref mut clear_view, ..
             } => {
@@ -1180,18 +1178,18 @@ impl Texture {
         }
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+    pub(crate) fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
             let raw = match self.inner.snatch(&mut device.snatchable_lock.write()) {
                 Some(TextureInner::Native { raw }) => raw,
                 Some(TextureInner::Surface { .. }) => {
-                    return Ok(());
+                    return;
                 }
                 None => {
                     // Per spec, it is valid to call `destroy` multiple times.
-                    return Ok(());
+                    return;
                 }
             };
 
@@ -1208,6 +1206,7 @@ impl Texture {
             queue::TempResource::DestroyedTexture(DestroyedTexture {
                 raw: ManuallyDrop::new(raw),
                 views,
+                clear_mode: mem::replace(&mut *self.clear_mode.write(), TextureClearMode::None),
                 bind_groups,
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
@@ -1226,8 +1225,6 @@ impl Texture {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -1471,6 +1468,7 @@ impl Global {
 pub struct DestroyedTexture {
     raw: ManuallyDrop<Box<dyn hal::DynTexture>>,
     views: WeakVec<TextureView>,
+    clear_mode: TextureClearMode,
     bind_groups: WeakVec<BindGroup>,
     device: Arc<Device>,
     label: String,
@@ -1492,6 +1490,20 @@ impl Drop for DestroyedTexture {
             &mut self.bind_groups,
         )));
         drop(deferred);
+
+        match mem::replace(&mut self.clear_mode, TextureClearMode::None) {
+            TextureClearMode::RenderPass { clear_views, .. } => {
+                for clear_view in clear_views {
+                    let raw = ManuallyDrop::into_inner(clear_view);
+                    unsafe { self.device.raw().destroy_texture_view(raw) };
+                }
+            }
+            TextureClearMode::Surface { clear_view } => {
+                let raw = ManuallyDrop::into_inner(clear_view);
+                unsafe { self.device.raw().destroy_texture_view(raw) };
+            }
+            _ => (),
+        }
 
         resource_log!("Destroy raw Texture (destroyed) {:?}", self.label());
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
@@ -1950,13 +1962,6 @@ impl QuerySet {
     pub(crate) fn raw(&self) -> &dyn hal::DynQuerySet {
         self.raw.as_ref()
     }
-}
-
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
-pub enum DestroyError {
-    #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
 }
 
 pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;

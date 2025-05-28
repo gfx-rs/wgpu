@@ -24,3 +24,10 @@ fn call() {
     return;
 }
 
+@fragment 
+fn main() {
+    call();
+    statement();
+    let _e0 = returns();
+    return;
+}

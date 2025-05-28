@@ -3,7 +3,7 @@ use std::num::NonZeroU64;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 const THREAD_COUNT: u64 = 128;
-const TEST_COUNT: u32 = 32;
+const TEST_COUNT: u32 = 37;
 
 #[gpu_test]
 static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -35,7 +35,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: THREAD_COUNT * size_of::<u32>() as u64,
+            size: THREAD_COUNT * size_of::<u64>() as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
@@ -50,7 +50,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
                     has_dynamic_offset: false,
-                    min_binding_size: NonZeroU64::new(THREAD_COUNT * size_of::<u32>() as u64),
+                    min_binding_size: NonZeroU64::new(THREAD_COUNT * size_of::<u64>() as u64),
                 },
                 count: None,
             }],
@@ -101,10 +101,10 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             &storage_buffer.slice(..),
             |mapping_buffer_view| {
                 let mapping_buffer_view = mapping_buffer_view.unwrap();
-                let result: &[u32; THREAD_COUNT as usize] =
+                let result: &[u64; THREAD_COUNT as usize] =
                     bytemuck::from_bytes(&mapping_buffer_view);
                 let expected_mask = (1u64 << (TEST_COUNT)) - 1; // generate full mask
-                let expected_array = [expected_mask as u32; THREAD_COUNT as usize];
+                let expected_array = [expected_mask; THREAD_COUNT as usize];
                 if result != &expected_array {
                     use std::fmt::Write;
                     let mut msg = String::new();
@@ -122,7 +122,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
                     {
                         write!(&mut msg, "thread {thread} failed tests:").unwrap();
                         let difference = result ^ expected;
-                        for i in (0..u32::BITS).filter(|i| (difference & (1 << i)) != 0) {
+                        for i in (0..u64::BITS).filter(|i| (difference & (1 << i)) != 0) {
                             write!(&mut msg, " {i},").unwrap();
                         }
                         writeln!(&mut msg).unwrap();

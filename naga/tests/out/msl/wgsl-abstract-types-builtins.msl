@@ -5,7 +5,7 @@
 using metal::uint;
 
 
-void f(
+kernel void f(
 ) {
     int clamp_aiaiai = 1;
     float clamp_aiaiaf = 1.0;

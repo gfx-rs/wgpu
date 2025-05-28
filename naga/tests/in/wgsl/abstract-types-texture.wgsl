@@ -24,3 +24,10 @@ fn depth() {
 fn storage() {
   textureStore(st, vec2(0,1), vec4(2,3,4,5));
 }
+
+@fragment
+fn main() {
+    color();
+    depth();
+    storage();
+}

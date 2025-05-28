@@ -31,3 +31,8 @@ fn mock_function(c: vec2<i32>, i: i32, l: i32) -> vec4<f32> {
           in_private[i] +
           in_function[i]);
 }
+
+@compute @workgroup_size(1)
+fn main() {
+    mock_function(vec2(1, 2), 3, 4);
+}

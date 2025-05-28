@@ -89,5 +89,19 @@ void let_binding(inout int a_1[4], uint i_7)
 [numthreads(1, 1, 1)]
 void main()
 {
+    int2 vec[4] = (int2[4])0;
+    float2x2 mat[4] = (float2x2[4])0;
+    int arr1d[4] = (int[4])0;
+    int arr2d[4][4] = (int[4][4])0;
+    int arr3d[4][4][4] = (int[4][4][4])0;
+
+    local_var(1u);
+    mat_vec_ptrs(vec, mat, 1u);
+    argument(arr1d, 1u);
+    argument_nested_x2_(arr2d, 1u, 2u);
+    argument_nested_x3_(arr3d, 1u, 2u);
+    index_from_self(arr1d, 1u);
+    local_var_from_arg(Constructarray4_int_(int(1), int(2), int(3), int(4)), 5u);
+    let_binding(arr1d, 1u);
     return;
 }

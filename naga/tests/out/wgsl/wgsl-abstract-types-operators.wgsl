@@ -96,3 +96,10 @@ fn wgpu_4435_() {
     return;
 }
 
+@compute @workgroup_size(1, 1, 1) 
+fn main() {
+    runtime_values();
+    wgpu_4445_();
+    wgpu_4435_();
+    return;
+}

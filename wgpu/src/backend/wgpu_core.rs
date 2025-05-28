@@ -2056,8 +2056,7 @@ impl dispatch::BufferInterface for CoreBuffer {
     }
 
     fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.buffer_destroy(self.id);
+        self.context.0.buffer_destroy(self.id);
     }
 }
 
@@ -2101,8 +2100,7 @@ impl dispatch::TextureInterface for CoreTexture {
     }
 
     fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.texture_destroy(self.id);
+        self.context.0.texture_destroy(self.id);
     }
 }
 
@@ -2217,7 +2215,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         source_offset: crate::BufferAddress,
         destination: &dispatch::DispatchBuffer,
         destination_offset: crate::BufferAddress,
-        copy_size: crate::BufferAddress,
+        copy_size: Option<crate::BufferAddress>,
     ) {
         let source = source.as_core();
         let destination = destination.as_core();

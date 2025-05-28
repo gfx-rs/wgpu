@@ -344,11 +344,13 @@ void main(uint3 id : SV_GroupID)
 {
     const float4 _e1 = builtins();
     const float4 _e6 = splat(float(id.x), int(id.y));
-    const float3 _e11 = bool_cast(float3(1.0, 1.0, 1.0));
+    const float2 _e7 = splat_assignment();
+    const float3 _e12 = bool_cast(float3(1.0, 1.0, 1.0));
     logical();
     arithmetic();
     bit();
     comparison();
     assignment();
+    negation_avoids_prefix_decrement();
     return;
 }

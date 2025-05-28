@@ -10,23 +10,30 @@
     overrides: [],
     global_variables: [],
     global_expressions: [],
-    functions: [
+    functions: [],
+    entry_points: [
         (
-            name: Some("foo"),
-            arguments: [],
-            result: None,
-            local_variables: [],
-            expressions: [],
-            named_expressions: {},
-            body: [
-                Return(
-                    value: None,
-                ),
-            ],
-            diagnostic_filter_leaf: None,
+            name: "foo",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("foo"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
         ),
     ],
-    entry_points: [],
     diagnostic_filters: [],
     diagnostic_filter_leaf: None,
 )

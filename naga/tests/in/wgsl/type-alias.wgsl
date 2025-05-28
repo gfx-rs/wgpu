@@ -5,6 +5,7 @@ alias Mat3 = mat3x3f;
 alias I32 = i32;
 alias F32 = f32;
 
+@compute @workgroup_size(1)
 fn main() {
     let a = FVec3(0.0, 0.0, 0.0);
     let c = FVec3(0.0);

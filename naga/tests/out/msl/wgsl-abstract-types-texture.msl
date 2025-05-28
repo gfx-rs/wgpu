@@ -35,3 +35,16 @@ void storage(
     st.write(metal::float4(2.0, 3.0, 4.0, 5.0), metal::uint2(metal::int2(0, 1)));
     return;
 }
+
+fragment void main_(
+  metal::texture2d<float, metal::access::sample> t [[user(fake0)]]
+, metal::sampler s [[user(fake0)]]
+, metal::depth2d<float, metal::access::sample> d [[user(fake0)]]
+, metal::sampler c [[user(fake0)]]
+, metal::texture2d<float, metal::access::read_write> st [[user(fake0)]]
+) {
+    color(t, s);
+    depth(s, d, c);
+    storage(st);
+    return;
+}

@@ -1205,6 +1205,22 @@ impl super::Instruction {
 
         instruction
     }
+    pub(super) fn group_non_uniform_quad_swap(
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        value: Word,
+        direction: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::GroupNonUniformQuadSwap);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        instruction.add_operand(value);
+        instruction.add_operand(direction);
+
+        instruction
+    }
 }
 
 impl From<crate::StorageFormat> for spirv::ImageFormat {

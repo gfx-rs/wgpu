@@ -24,3 +24,10 @@ var Texture: texture_2d<f32>;
 var Sampler: sampler;
 
 alias Vec2 = vec2<f32>;
+
+@fragment
+fn main() {
+    call();
+    statement();
+    returns();
+}

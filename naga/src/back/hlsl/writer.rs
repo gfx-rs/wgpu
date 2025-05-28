@@ -2610,30 +2610,55 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 };
                 write!(self.out, " {name} = ")?;
                 self.named_expressions.insert(result, name);
-
-                if matches!(mode, crate::GatherMode::BroadcastFirst) {
-                    write!(self.out, "WaveReadLaneFirst(")?;
-                    self.write_expr(module, argument, func_ctx)?;
-                } else {
-                    write!(self.out, "WaveReadLaneAt(")?;
-                    self.write_expr(module, argument, func_ctx)?;
-                    write!(self.out, ", ")?;
-                    match mode {
-                        crate::GatherMode::BroadcastFirst => unreachable!(),
-                        crate::GatherMode::Broadcast(index) | crate::GatherMode::Shuffle(index) => {
-                            self.write_expr(module, index, func_ctx)?;
+                match mode {
+                    crate::GatherMode::BroadcastFirst => {
+                        write!(self.out, "WaveReadLaneFirst(")?;
+                        self.write_expr(module, argument, func_ctx)?;
+                    }
+                    crate::GatherMode::QuadBroadcast(index) => {
+                        write!(self.out, "QuadReadLaneAt(")?;
+                        self.write_expr(module, argument, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(module, index, func_ctx)?;
+                    }
+                    crate::GatherMode::QuadSwap(direction) => {
+                        match direction {
+                            crate::Direction::X => {
+                                write!(self.out, "QuadReadAcrossX(")?;
+                            }
+                            crate::Direction::Y => {
+                                write!(self.out, "QuadReadAcrossY(")?;
+                            }
+                            crate::Direction::Diagonal => {
+                                write!(self.out, "QuadReadAcrossDiagonal(")?;
+                            }
                         }
-                        crate::GatherMode::ShuffleDown(index) => {
-                            write!(self.out, "WaveGetLaneIndex() + ")?;
-                            self.write_expr(module, index, func_ctx)?;
-                        }
-                        crate::GatherMode::ShuffleUp(index) => {
-                            write!(self.out, "WaveGetLaneIndex() - ")?;
-                            self.write_expr(module, index, func_ctx)?;
-                        }
-                        crate::GatherMode::ShuffleXor(index) => {
-                            write!(self.out, "WaveGetLaneIndex() ^ ")?;
-                            self.write_expr(module, index, func_ctx)?;
+                        self.write_expr(module, argument, func_ctx)?;
+                    }
+                    _ => {
+                        write!(self.out, "WaveReadLaneAt(")?;
+                        self.write_expr(module, argument, func_ctx)?;
+                        write!(self.out, ", ")?;
+                        match mode {
+                            crate::GatherMode::BroadcastFirst => unreachable!(),
+                            crate::GatherMode::Broadcast(index)
+                            | crate::GatherMode::Shuffle(index) => {
+                                self.write_expr(module, index, func_ctx)?;
+                            }
+                            crate::GatherMode::ShuffleDown(index) => {
+                                write!(self.out, "WaveGetLaneIndex() + ")?;
+                                self.write_expr(module, index, func_ctx)?;
+                            }
+                            crate::GatherMode::ShuffleUp(index) => {
+                                write!(self.out, "WaveGetLaneIndex() - ")?;
+                                self.write_expr(module, index, func_ctx)?;
+                            }
+                            crate::GatherMode::ShuffleXor(index) => {
+                                write!(self.out, "WaveGetLaneIndex() ^ ")?;
+                                self.write_expr(module, index, func_ctx)?;
+                            }
+                            crate::GatherMode::QuadBroadcast(_) => unreachable!(),
+                            crate::GatherMode::QuadSwap(_) => unreachable!(),
                         }
                     }
                 }

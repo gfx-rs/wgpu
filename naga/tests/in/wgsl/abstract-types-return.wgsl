@@ -1,6 +1,3 @@
-@compute @workgroup_size(1)
-fn main() {}
-
 fn return_i32_ai() -> i32 {
     return 1;
 }
@@ -33,4 +30,16 @@ fn return_const_f32_const_ai() -> f32 {
 fn return_vec2f32_const_ai() -> vec2<f32> {
     const vec_one = vec2(1);
     return vec_one;
+}
+
+@compute @workgroup_size(1)
+fn main() {
+    return_i32_ai();
+    return_u32_ai();
+    return_f32_ai();
+    return_f32_af();
+    return_vec2f32_ai();
+    return_arrf32_ai();
+    return_const_f32_const_ai();
+    return_vec2f32_const_ai();
 }
