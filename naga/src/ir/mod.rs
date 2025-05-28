@@ -237,19 +237,27 @@ use crate::{FastIndexMap, NamedExpressions};
 
 pub use block::Block;
 
-/// Early fragment tests.
+/// Explicitly allows early depth/stencil tests.
 ///
-/// In a standard situation, if a driver determines that it is possible to switch on early depth test, it will.
+/// Normally, depth/stencil tests are performed after fragment shading. However, as an optimization,
+/// most drivers will move the depth/stencil tests before fragment shading if this does not
+/// have any observable consequences. This optimization is disabled under the following
+/// circumstances:
+///   - `discard` is called in the fragment shader.
+///   - The fragment shader writes to the depth buffer.
+///   - The fragment shader writes to any storage bindings.
 ///
-/// Typical situations when early depth test is switched off:
-///   - Calling `discard` in a shader.
-///   - Writing to the depth buffer, unless ConservativeDepth is enabled.
+/// When `EarlyDepthTest` is set, it is allowed to perform an early depth/stencil test even if the
+/// above conditions are not met. When [`EarlyDepthTest::Force`] is used, depth/stencil tests
+/// **must** be performed before fragment shading.
 ///
-/// To use in a shader:
+/// To force early depth/stencil tests in a shader:
 ///   - GLSL: `layout(early_fragment_tests) in;`
 ///   - HLSL: `Attribute earlydepthstencil`
 ///   - SPIR-V: `ExecutionMode EarlyFragmentTests`
-///   - WGSL: `@early_depth_test`
+///   - WGSL: `@early_depth_test(force)`
+///
+/// This may also be enabled in a shader by specifying a [`ConservativeDepth`].
 ///
 /// For more, see:
 ///   - <https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification>
@@ -259,8 +267,24 @@ pub use block::Block;
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub struct EarlyDepthTest {
-    pub conservative: Option<ConservativeDepth>,
+pub enum EarlyDepthTest {
+    /// Requires depth/stencil tests to be performed before fragment shading.
+    ///
+    /// This will disable depth/stencil tests after fragment shading, so discarding the fragment
+    /// or overwriting the fragment depth will have no effect.
+    Force,
+
+    /// Allows an additional depth/stencil test to be performed before fragment shading.
+    ///
+    /// It is up to the driver to decide whether early tests are performed. Unlike `Force`, this
+    /// does not disable depth/stencil tests after fragment shading.
+    Allow {
+        /// Specifies restrictions on how the depth value can be modified within the fragment
+        /// shader.
+        ///
+        /// This may be taken into account when deciding whether to perform early tests.
+        conservative: ConservativeDepth,
+    },
 }
 
 /// Enables adjusting depth without disabling early Z.
@@ -1279,6 +1303,20 @@ pub enum GatherMode {
     ShuffleUp(Handle<Expression>),
     /// Each gathers from their lane xored with the given by the expression
     ShuffleXor(Handle<Expression>),
+    /// All gather from the same quad lane at the index given by the expression
+    QuadBroadcast(Handle<Expression>),
+    /// Each gathers from the opposite quad lane along the given direction
+    QuadSwap(Direction),
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum Direction {
+    X = 0,
+    Y = 1,
+    Diagonal = 2,
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]

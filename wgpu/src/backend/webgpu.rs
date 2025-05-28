@@ -2813,20 +2813,31 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         source_offset: crate::BufferAddress,
         destination: &dispatch::DispatchBuffer,
         destination_offset: crate::BufferAddress,
-        copy_size: crate::BufferAddress,
+        copy_size: Option<crate::BufferAddress>,
     ) {
         let source = source.as_webgpu();
         let destination = destination.as_webgpu();
 
-        self.inner
-            .copy_buffer_to_buffer_with_f64_and_f64_and_f64(
-                &source.inner,
-                source_offset as f64,
-                &destination.inner,
-                destination_offset as f64,
-                copy_size as f64,
-            )
-            .unwrap();
+        if let Some(size) = copy_size {
+            self.inner
+                .copy_buffer_to_buffer_with_f64_and_f64_and_f64(
+                    &source.inner,
+                    source_offset as f64,
+                    &destination.inner,
+                    destination_offset as f64,
+                    size as f64,
+                )
+                .unwrap();
+        } else {
+            self.inner
+                .copy_buffer_to_buffer_with_f64_and_f64(
+                    &source.inner,
+                    source_offset as f64,
+                    &destination.inner,
+                    destination_offset as f64,
+                )
+                .unwrap();
+        }
     }
 
     fn copy_buffer_to_texture(

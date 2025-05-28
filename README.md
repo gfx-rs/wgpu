@@ -216,26 +216,30 @@ WebGPU includes a Conformance Test Suite to validate that implementations are wo
 
 To have GitHub run the CTS against a pull request, you can add the `PR: run CTS` label to the PR.
 
-To run the CTS locally, first, you need to check it out:
+To run the CTS locally, run:
 
 ```
-# In the root of your wgpu tree:
-git clone https://github.com/gpuweb/cts.git
-cd cts
-# works in bash and powershell
-git checkout $(cat ../cts_runner/revision.txt)
+cargo xtask cts
 ```
 
-To run a given set of tests:
+This will clone the CTS into the `cts` directory, check out the
+[pinned version](./cts_runner/revision.txt), and run the
+[default list of enabled tests](./cts_runner/test.lst).
+
+You can also specify a test selector on the command line:
 
 ```
-# Must be inside the `cts` folder we just checked out, else this will fail
-cargo run --manifest-path ../Cargo.toml -p cts_runner --bin cts_runner -- ./tools/run_deno --verbose "<test string>"
+cargo xtask cts 'webgpu:api,operation,command_buffer,basic:*'
 ```
 
-To find the full list of tests, go to the [online cts viewer](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
+Or supply your own test list in a file:
 
-The list of currently enabled CTS tests can be found [here](./cts_runner/test.lst).
+```
+cargo xtask cts -f your_tests.lst
+```
+
+To find the full list of tests, go to the
+[web version of the CTS](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
 
 ## Tracking the WebGPU and WGSL draft specifications
 

@@ -704,7 +704,7 @@ impl Buffer {
         Ok(None)
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+    pub(crate) fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
@@ -714,7 +714,7 @@ impl Buffer {
                 Some(raw) => raw,
                 None => {
                     // Per spec, it is valid to call `destroy` multiple times.
-                    return Ok(());
+                    return;
                 }
             };
 
@@ -755,8 +755,6 @@ impl Buffer {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -1180,18 +1178,18 @@ impl Texture {
         }
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+    pub(crate) fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
             let raw = match self.inner.snatch(&mut device.snatchable_lock.write()) {
                 Some(TextureInner::Native { raw }) => raw,
                 Some(TextureInner::Surface { .. }) => {
-                    return Ok(());
+                    return;
                 }
                 None => {
                     // Per spec, it is valid to call `destroy` multiple times.
-                    return Ok(());
+                    return;
                 }
             };
 
@@ -1227,8 +1225,6 @@ impl Texture {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -1966,13 +1962,6 @@ impl QuerySet {
     pub(crate) fn raw(&self) -> &dyn hal::DynQuerySet {
         self.raw.as_ref()
     }
-}
-
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
-pub enum DestroyError {
-    #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
 }
 
 pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;

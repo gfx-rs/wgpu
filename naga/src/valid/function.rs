@@ -73,6 +73,8 @@ pub enum SubgroupError {
     UnsupportedOperation(super::SubgroupOperationSet),
     #[error("Unknown operation")]
     UnknownOperation,
+    #[error("Invocation ID must be a const-expression")]
+    InvalidInvocationIdExprType(Handle<crate::Expression>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -245,6 +247,7 @@ struct BlockContext<'a> {
     special_types: &'a crate::SpecialTypes,
     prev_infos: &'a [FunctionInfo],
     return_type: Option<Handle<crate::Type>>,
+    local_expr_kind: &'a crate::proc::ExpressionKindTracker,
 }
 
 impl<'a> BlockContext<'a> {
@@ -253,6 +256,7 @@ impl<'a> BlockContext<'a> {
         module: &'a crate::Module,
         info: &'a FunctionInfo,
         prev_infos: &'a [FunctionInfo],
+        local_expr_kind: &'a crate::proc::ExpressionKindTracker,
     ) -> Self {
         Self {
             abilities: ControlFlowAbility::RETURN,
@@ -265,6 +269,7 @@ impl<'a> BlockContext<'a> {
             special_types: &module.special_types,
             prev_infos,
             return_type: fun.result.as_ref().map(|fr| fr.ty),
+            local_expr_kind,
         }
     }
 
@@ -702,7 +707,8 @@ impl super::Validator {
             | crate::GatherMode::Shuffle(index)
             | crate::GatherMode::ShuffleDown(index)
             | crate::GatherMode::ShuffleUp(index)
-            | crate::GatherMode::ShuffleXor(index) => {
+            | crate::GatherMode::ShuffleXor(index)
+            | crate::GatherMode::QuadBroadcast(index) => {
                 let index_ty = context.resolve_type_inner(index, &self.valid_expression_set)?;
                 match *index_ty {
                     crate::TypeInner::Scalar(crate::Scalar::U32) => {}
@@ -717,6 +723,17 @@ impl super::Validator {
                     }
                 }
             }
+            crate::GatherMode::QuadSwap(_) => {}
+        }
+        match *mode {
+            crate::GatherMode::Broadcast(index) | crate::GatherMode::QuadBroadcast(index) => {
+                if !context.local_expr_kind.is_const(index) {
+                    return Err(SubgroupError::InvalidInvocationIdExprType(index)
+                        .with_span_handle(index, context.expressions)
+                        .into_other());
+                }
+            }
+            _ => {}
         }
         let argument_inner = context.resolve_type_inner(argument, &self.valid_expression_set)?;
         if !matches!(*argument_inner,
@@ -1759,7 +1776,7 @@ impl super::Validator {
             let stages = self
                 .validate_block(
                     &fun.body,
-                    &BlockContext::new(fun, module, &info, &mod_info.functions),
+                    &BlockContext::new(fun, module, &info, &mod_info.functions, &local_expr_kind),
                 )?
                 .stages;
             info.available_stages &= stages;

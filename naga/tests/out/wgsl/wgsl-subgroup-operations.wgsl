@@ -27,5 +27,9 @@ fn main(sizes: Structure, @builtin(subgroup_id) subgroup_id: u32, @builtin(subgr
     let _e35 = subgroupShuffleDown(subgroup_invocation_id, 1u);
     let _e37 = subgroupShuffleUp(subgroup_invocation_id, 1u);
     let _e41 = subgroupShuffleXor(subgroup_invocation_id, (sizes.subgroup_size - 1u));
+    let _e43 = quadBroadcast(subgroup_invocation_id, 4u);
+    let _e44 = quadSwapX(subgroup_invocation_id);
+    let _e45 = quadSwapY(subgroup_invocation_id);
+    let _e46 = quadSwapDiagonal(subgroup_invocation_id);
     return;
 }

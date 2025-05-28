@@ -1,11 +1,11 @@
 @group(0)
 @binding(0)
-var<storage, read_write> storage_buffer: array<u32>;
+var<storage, read_write> storage_buffer: array<vec2<u32>>;
 
 var<workgroup> workgroup_buffer: u32;
 
-fn add_result_to_mask(mask: ptr<function, u32>, index: u32, value: bool) {
-   (*mask) |= u32(value) << index;
+fn add_result_to_mask(mask: ptr<function, vec2<u32>>, index: u32, value: bool) {
+   (*mask)[index / 32u] |= u32(value) << (index % 32u);
 }
 
 @compute
@@ -17,7 +17,7 @@ fn main(
     @builtin(subgroup_size) subgroup_size: u32,
     @builtin(subgroup_invocation_id) subgroup_invocation_id: u32,
 ) {
-    var passed = 0u;
+    var passed = vec2<u32>(0u);
     var expected: u32;
 
     add_result_to_mask(&passed, 0u, num_subgroups == 128u / subgroup_size);
@@ -152,8 +152,14 @@ fn main(
     workgroupBarrier();
     add_result_to_mask(&passed, 30u, workgroup_buffer == subgroup_size);
 
+    add_result_to_mask(&passed, 31u, quadBroadcast(quadBroadcast(subgroup_invocation_id, 0u) ^ subgroup_invocation_id, 0u) == 0u);
+    add_result_to_mask(&passed, 32u, quadBroadcast(quadBroadcast(subgroup_invocation_id, 1u) ^ quadSwapX(subgroup_invocation_id), 0u) == 0u);
+    add_result_to_mask(&passed, 33u, quadBroadcast(quadBroadcast(subgroup_invocation_id, 2u) ^ quadSwapY(subgroup_invocation_id), 0u) == 0u);
+    add_result_to_mask(&passed, 34u, quadBroadcast(quadBroadcast(subgroup_invocation_id, 3u) ^ quadSwapDiagonal(subgroup_invocation_id), 0u) == 0u);
+    add_result_to_mask(&passed, 35u, quadSwapX(quadSwapY(subgroup_invocation_id)) == quadSwapDiagonal(subgroup_invocation_id));
+
     // Keep this test last, verify we are still convergent after running other tests
-    add_result_to_mask(&passed, 31u, subgroupAdd(1u) == subgroup_size);
+    add_result_to_mask(&passed, 36u, subgroupAdd(1u) == subgroup_size);
 
     // Increment TEST_COUNT in subgroup_operations/mod.rs if adding more tests
 

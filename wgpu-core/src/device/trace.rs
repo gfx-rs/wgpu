@@ -151,7 +151,7 @@ pub enum Command {
         src_offset: wgt::BufferAddress,
         dst: id::BufferId,
         dst_offset: wgt::BufferAddress,
-        size: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
     },
     CopyBufferToTexture {
         src: crate::command::TexelCopyBufferInfo,

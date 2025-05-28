@@ -532,7 +532,7 @@ impl Global {
         source_offset: BufferAddress,
         destination: BufferId,
         destination_offset: BufferAddress,
-        size: BufferAddress,
+        size: Option<BufferAddress>,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_buffer_to_buffer");
         api_log!(
@@ -598,6 +598,11 @@ impl Global {
             .map_err(TransferError::MissingBufferUsage)?;
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
+        let (size, source_end_offset) = match size {
+            Some(size) => (size, source_offset + size),
+            None => (src_buffer.size - source_offset, src_buffer.size),
+        };
+
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(size).into());
         }
@@ -628,7 +633,6 @@ impl Global {
             }
         }
 
-        let source_end_offset = source_offset + size;
         let destination_end_offset = destination_offset + size;
         if source_end_offset > src_buffer.size {
             return Err(TransferError::BufferOverrun {
