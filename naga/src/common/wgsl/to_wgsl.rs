@@ -14,7 +14,7 @@ use alloc::string::{String, ToString};
 ///
 /// - If a type's WGSL form requires dynamic formatting, so that
 ///   returning a `&'static str` isn't feasible, consider implementing
-///   [`std::fmt::Display`] on some wrapper type instead.
+///   [`core::fmt::Display`] on some wrapper type instead.
 pub trait ToWgsl: Sized {
     /// Return WGSL source code representation of `self`.
     fn to_wgsl(self) -> &'static str;
@@ -32,7 +32,7 @@ pub trait ToWgsl: Sized {
 ///
 /// - If a type's WGSL form requires dynamic formatting, so that
 ///   returning a `&'static str` isn't feasible, consider implementing
-///   [`std::fmt::Display`] on some wrapper type instead.
+///   [`core::fmt::Display`] on some wrapper type instead.
 pub trait TryToWgsl: Sized {
     /// Return the WGSL form of `self` as a `'static` string.
     ///

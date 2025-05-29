@@ -6,6 +6,7 @@
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_shuffle : require
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
+#extension GL_KHR_shader_subgroup_quad : require
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 struct Structure {
@@ -40,6 +41,10 @@ void main() {
     uint _e35 = subgroupShuffleDown(subgroup_invocation_id, 1u);
     uint _e37 = subgroupShuffleUp(subgroup_invocation_id, 1u);
     uint _e41 = subgroupShuffleXor(subgroup_invocation_id, (sizes.subgroup_size - 1u));
+    uint _e43 = subgroupQuadBroadcast(subgroup_invocation_id, 4u);
+    uint _e44 = subgroupQuadSwapHorizontal(subgroup_invocation_id);
+    uint _e45 = subgroupQuadSwapVertical(subgroup_invocation_id);
+    uint _e46 = subgroupQuadSwapDiagonal(subgroup_invocation_id);
     return;
 }
 

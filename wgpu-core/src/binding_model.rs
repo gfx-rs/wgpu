@@ -37,8 +37,6 @@ use crate::{
 pub enum BindGroupLayoutEntryError {
     #[error("Cube dimension is not expected for texture storage")]
     StorageTextureCube,
-    #[error("Read-write and read-only storage textures are not allowed by baseline webgpu, they require the native only feature TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES")]
-    StorageTextureReadWrite,
     #[error("Atomic storage textures are not allowed by baseline webgpu, they require the native only feature TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES")]
     StorageTextureAtomic,
     #[error("Arrays of bindings unsupported for this type of binding")]
@@ -257,7 +255,7 @@ impl BindingTypeMaxCountErrorKind {
                 "max_binding_array_elements_per_shader_stage"
             }
             BindingTypeMaxCountErrorKind::BindingArraySamplerElements => {
-                "max_binding_array_elements_per_shader_stage"
+                "max_binding_array_sampler_elements_per_shader_stage"
             }
         }
     }

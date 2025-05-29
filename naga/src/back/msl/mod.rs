@@ -52,7 +52,7 @@ use alloc::{
 };
 use core::fmt::{Error as FmtError, Write};
 
-use crate::{arena::Handle, proc::index, valid::ModuleInfo};
+use crate::{arena::Handle, ir, proc::index, valid::ModuleInfo};
 
 mod keywords;
 pub mod sampler;
@@ -184,7 +184,7 @@ pub enum Error {
     #[error("can not use writeable storage buffers in fragment stage prior to MSL 1.2")]
     UnsupportedWriteableStorageBuffer,
     #[error("can not use writeable storage textures in {0:?} stage prior to MSL 1.2")]
-    UnsupportedWriteableStorageTexture(crate::ShaderStage),
+    UnsupportedWriteableStorageTexture(ir::ShaderStage),
     #[error("can not use read-write storage textures prior to MSL 1.2")]
     UnsupportedRWStorageTexture,
     #[error("array of '{0}' is not supported for target MSL version")]
@@ -199,6 +199,8 @@ pub enum Error {
     UnsupportedBitCast(crate::TypeInner),
     #[error(transparent)]
     ResolveArraySizeError(#[from] crate::proc::ResolveArraySizeError),
+    #[error("entry point with stage {0:?} and name '{1}' not found")]
+    EntryPointNotFound(ir::ShaderStage, String),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -420,6 +422,15 @@ pub struct VertexBufferMapping {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
 pub struct PipelineOptions {
+    /// The entry point to write.
+    ///
+    /// Entry points are identified by a shader stage specification,
+    /// and a name.
+    ///
+    /// If `None`, all entry points will be written. If `Some` and the entry
+    /// point is not found, an error will be thrown while writing.
+    pub entry_point: Option<(ir::ShaderStage, String)>,
+
     /// Allow `BuiltIn::PointSize` and inject it if doesn't exist.
     ///
     /// Metal doesn't like this for non-point primitive topologies and requires it for
@@ -737,5 +748,5 @@ pub fn write_string(
 
 #[test]
 fn test_error_size() {
-    assert_eq!(size_of::<Error>(), 32);
+    assert_eq!(size_of::<Error>(), 40);
 }

@@ -9,6 +9,7 @@ const_assert x == 1i;
 const_assert x > 0u;
 const_assert x < 2.0f;
 
+@compute @workgroup_size(1)
 fn foo() {
   const z = x + y - 2;
   const_assert z > 0; // valid in functions.

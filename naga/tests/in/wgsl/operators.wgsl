@@ -287,19 +287,6 @@ fn assignment() {
     vec0[one_i]--;
 }
 
-@compute @workgroup_size(1)
-fn main(@builtin(workgroup_id) id: vec3<u32>) {
-    builtins();
-    splat(f32(id.x), i32(id.y));
-    bool_cast(v_f32_one.xyz);
-
-    logical();
-    arithmetic();
-    bit();
-    comparison();
-    assignment();
-}
-
 fn negation_avoids_prefix_decrement() {
     let i = 1;
     let i0 = -i;
@@ -321,3 +308,20 @@ fn negation_avoids_prefix_decrement() {
     let f6 = - - -(- -f);
     let f7 = (- - - - -f);
 }
+
+@compute @workgroup_size(1)
+fn main(@builtin(workgroup_id) id: vec3<u32>) {
+    builtins();
+    splat(f32(id.x), i32(id.y));
+    splat_assignment();
+    bool_cast(v_f32_one.xyz);
+
+    logical();
+    arithmetic();
+    bit();
+    comparison();
+    assignment();
+
+    negation_avoids_prefix_decrement();
+}
+

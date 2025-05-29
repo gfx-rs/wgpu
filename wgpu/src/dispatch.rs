@@ -275,7 +275,7 @@ pub trait CommandEncoderInterface: CommonTraits {
         source_offset: crate::BufferAddress,
         destination: &DispatchBuffer,
         destination_offset: crate::BufferAddress,
-        copy_size: crate::BufferAddress,
+        copy_size: Option<crate::BufferAddress>,
     );
     fn copy_buffer_to_texture(
         &self,

@@ -321,6 +321,35 @@ impl ContextWgpuCore {
                         source: source_error,
                     };
                 }
+                let device_error =
+                    if let Some(wgc::resource::CreateTextureError::Device(device_error)) =
+                        source.downcast_ref::<wgc::resource::CreateTextureError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::resource::CreateBufferError::Device(device_error)) =
+                        source.downcast_ref::<wgc::resource::CreateBufferError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::resource::CreateQuerySetError::Device(device_error)) =
+                        source.downcast_ref::<wgc::resource::CreateQuerySetError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::ray_tracing::CreateBlasError::Device(device_error)) =
+                        source.downcast_ref::<wgc::ray_tracing::CreateBlasError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::ray_tracing::CreateTlasError::Device(device_error)) =
+                        source.downcast_ref::<wgc::ray_tracing::CreateTlasError>()
+                    {
+                        Some(device_error)
+                    } else {
+                        None
+                    };
+                if let Some(wgc::device::DeviceError::OutOfMemory) = device_error {
+                    break crate::Error::OutOfMemory {
+                        source: source_error,
+                    };
+                }
                 source_opt = source.source();
             } else {
                 // Otherwise, it is a validation error
@@ -2027,8 +2056,7 @@ impl dispatch::BufferInterface for CoreBuffer {
     }
 
     fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.buffer_destroy(self.id);
+        self.context.0.buffer_destroy(self.id);
     }
 }
 
@@ -2072,8 +2100,7 @@ impl dispatch::TextureInterface for CoreTexture {
     }
 
     fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.texture_destroy(self.id);
+        self.context.0.texture_destroy(self.id);
     }
 }
 
@@ -2188,7 +2215,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         source_offset: crate::BufferAddress,
         destination: &dispatch::DispatchBuffer,
         destination_offset: crate::BufferAddress,
-        copy_size: crate::BufferAddress,
+        copy_size: Option<crate::BufferAddress>,
     ) {
         let source = source.as_core();
         let destination = destination.as_core();
@@ -2319,6 +2346,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 ca.as_ref()
                     .map(|at| wgc::command::RenderPassColorAttachment {
                         view: at.view.inner.as_core().id,
+                        depth_slice: at.depth_slice,
                         resolve_target: at.resolve_target.map(|view| view.inner.as_core().id),
                         load_op: at.ops.load,
                         store_op: at.ops.store,

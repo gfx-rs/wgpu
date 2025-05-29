@@ -322,7 +322,7 @@ impl crate::framework::Example for Example {
 
         let mut image = Vec::with_capacity(reader.data().len());
         for level in reader.levels() {
-            image.extend_from_slice(level);
+            image.extend_from_slice(level.data);
         }
 
         let texture = device.create_texture_with_data(
@@ -426,6 +426,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {

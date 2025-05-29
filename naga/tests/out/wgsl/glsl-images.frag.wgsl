@@ -134,6 +134,14 @@ fn testImgWriteReadOnly(coord_14: vec2<i32>) {
 }
 
 fn main_1() {
+    testImg1D(1i);
+    testImg1DArray(vec2(0i));
+    testImg2D(vec2(0i));
+    testImg2DArray(vec3(0i));
+    testImg3D(vec3(0i));
+    testImgReadOnly(vec2(0i));
+    testImgWriteOnly(vec2(0i));
+    testImgWriteReadOnly(vec2(0i));
     return;
 }
 

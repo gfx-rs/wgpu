@@ -1020,6 +1020,8 @@ pub trait Device: WasmNotSendSync {
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         None
     }
+
+    fn check_if_oom(&self) -> Result<(), DeviceError>;
 }
 
 pub trait Queue: WasmNotSendSync {
@@ -1409,7 +1411,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<<Self::A as Api>::QuerySet, <Self::A as Api>::TextureView>,
-    );
+    ) -> Result<(), DeviceError>;
 
     /// End the current render pass.
     ///
@@ -1739,6 +1741,7 @@ bitflags!(
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
     pub flags: wgt::InstanceFlags,
+    pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     pub backend_options: wgt::BackendOptions,
 }
 
@@ -2333,6 +2336,7 @@ pub struct Attachment<'a, T: DynTextureView + ?Sized> {
 #[derive(Clone, Debug)]
 pub struct ColorAttachment<'a, T: DynTextureView + ?Sized> {
     pub target: Attachment<'a, T>,
+    pub depth_slice: Option<u32>,
     pub resolve_target: Option<Attachment<'a, T>>,
     pub ops: AttachmentOps,
     pub clear_value: wgt::Color,

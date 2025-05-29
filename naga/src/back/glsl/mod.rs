@@ -211,6 +211,10 @@ impl Version {
         *self >= Version::Desktop(130) || *self >= Version::new_gles(310)
     }
 
+    fn supports_std140_layout(&self) -> bool {
+        *self >= Version::Desktop(140) || *self >= Version::new_gles(300)
+    }
+
     fn supports_std430_layout(&self) -> bool {
         *self >= Version::Desktop(430) || *self >= Version::new_gles(310)
     }
@@ -345,7 +349,8 @@ pub struct PipelineOptions {
     pub shader_stage: ShaderStage,
     /// The name of the entry point.
     ///
-    /// If no entry point that matches is found while creating a [`Writer`], a error will be thrown.
+    /// If no entry point that matches is found while creating a [`Writer`], an
+    /// error will be thrown.
     pub entry_point: String,
     /// How many views to render to, if doing multiview rendering.
     pub multiview: Option<core::num::NonZeroU32>,
@@ -745,22 +750,23 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Enable early depth tests if needed
-        if let Some(depth_test) = self.entry_point.early_depth_test {
+        if let Some(early_depth_test) = self.entry_point.early_depth_test {
             // If early depth test is supported for this version of GLSL
             if self.options.version.supports_early_depth_test() {
-                writeln!(self.out, "layout(early_fragment_tests) in;")?;
-
-                if let Some(conservative) = depth_test.conservative {
-                    use crate::ConservativeDepth as Cd;
-
-                    let depth = match conservative {
-                        Cd::GreaterEqual => "greater",
-                        Cd::LessEqual => "less",
-                        Cd::Unchanged => "unchanged",
-                    };
-                    writeln!(self.out, "layout (depth_{depth}) out float gl_FragDepth;")?;
+                match early_depth_test {
+                    crate::EarlyDepthTest::Force => {
+                        writeln!(self.out, "layout(early_fragment_tests) in;")?;
+                    }
+                    crate::EarlyDepthTest::Allow { conservative, .. } => {
+                        use crate::ConservativeDepth as Cd;
+                        let depth = match conservative {
+                            Cd::GreaterEqual => "greater",
+                            Cd::LessEqual => "less",
+                            Cd::Unchanged => "unchanged",
+                        };
+                        writeln!(self.out, "layout (depth_{depth}) out float gl_FragDepth;")?;
+                    }
                 }
-                writeln!(self.out)?;
             } else {
                 log::warn!(
                     "Early depth testing is not supported for this version of GLSL: {}",
@@ -1186,6 +1192,68 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
+    /// Helper method used by [Self::write_global] to write just the layout part of
+    /// a non image/sampler global variable, if applicable.
+    ///
+    /// # Notes
+    ///
+    /// Adds trailing whitespace if any layout qualifier is written
+    fn write_global_layout(&mut self, global: &crate::GlobalVariable) -> BackendResult {
+        // Determine which (if any) explicit memory layout to use, and whether we support it
+        let layout = match global.space {
+            crate::AddressSpace::Uniform => {
+                if !self.options.version.supports_std140_layout() {
+                    return Err(Error::Custom(
+                        "Uniform address space requires std140 layout support".to_string(),
+                    ));
+                }
+
+                Some("std140")
+            }
+            crate::AddressSpace::Storage { .. } => {
+                if !self.options.version.supports_std430_layout() {
+                    return Err(Error::Custom(
+                        "Storage address space requires std430 layout support".to_string(),
+                    ));
+                }
+
+                Some("std430")
+            }
+            _ => None,
+        };
+
+        // If our version supports explicit layouts, we can also output the explicit binding
+        // if we have it
+        if self.options.version.supports_explicit_locations() {
+            if let Some(ref br) = global.binding {
+                match self.options.binding_map.get(br) {
+                    Some(binding) => {
+                        write!(self.out, "layout(")?;
+
+                        if let Some(layout) = layout {
+                            write!(self.out, "{}, ", layout)?;
+                        }
+
+                        write!(self.out, "binding = {binding}) ")?;
+
+                        return Ok(());
+                    }
+                    None => {
+                        log::debug!("unassigned binding for {:?}", global.name);
+                    }
+                }
+            }
+        }
+
+        // Either no explicit bindings are supported or we didn't have any.
+        // Write just the memory layout.
+        if let Some(layout) = layout {
+            write!(self.out, "layout({}) ", layout)?;
+        }
+
+        Ok(())
+    }
+
     /// Helper method used to write non images/sampler globals
     ///
     /// # Notes
@@ -1198,34 +1266,7 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::GlobalVariable>,
         global: &crate::GlobalVariable,
     ) -> BackendResult {
-        if self.options.version.supports_explicit_locations() {
-            if let Some(ref br) = global.binding {
-                match self.options.binding_map.get(br) {
-                    Some(binding) => {
-                        let layout = match global.space {
-                            crate::AddressSpace::Storage { .. } => {
-                                if self.options.version.supports_std430_layout() {
-                                    "std430, "
-                                } else {
-                                    "std140, "
-                                }
-                            }
-                            crate::AddressSpace::Uniform => "std140, ",
-                            _ => "",
-                        };
-                        write!(self.out, "layout({layout}binding = {binding}) ")?
-                    }
-                    None => {
-                        log::debug!("unassigned binding for {:?}", global.name);
-                        if let crate::AddressSpace::Storage { .. } = global.space {
-                            if self.options.version.supports_std430_layout() {
-                                write!(self.out, "layout(std430) ")?
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        self.write_global_layout(global)?;
 
         if let crate::AddressSpace::Storage { access } = global.space {
             self.write_storage_access(access)?;
@@ -2676,6 +2717,20 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::GatherMode::ShuffleXor(_) => {
                         write!(self.out, "subgroupShuffleXor(")?;
                     }
+                    crate::GatherMode::QuadBroadcast(_) => {
+                        write!(self.out, "subgroupQuadBroadcast(")?;
+                    }
+                    crate::GatherMode::QuadSwap(direction) => match direction {
+                        crate::Direction::X => {
+                            write!(self.out, "subgroupQuadSwapHorizontal(")?;
+                        }
+                        crate::Direction::Y => {
+                            write!(self.out, "subgroupQuadSwapVertical(")?;
+                        }
+                        crate::Direction::Diagonal => {
+                            write!(self.out, "subgroupQuadSwapDiagonal(")?;
+                        }
+                    },
                 }
                 self.write_expr(argument, ctx)?;
                 match mode {
@@ -2684,10 +2739,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     | crate::GatherMode::Shuffle(index)
                     | crate::GatherMode::ShuffleDown(index)
                     | crate::GatherMode::ShuffleUp(index)
-                    | crate::GatherMode::ShuffleXor(index) => {
+                    | crate::GatherMode::ShuffleXor(index)
+                    | crate::GatherMode::QuadBroadcast(index) => {
                         write!(self.out, ", ")?;
                         self.write_expr(index, ctx)?;
                     }
+                    crate::GatherMode::QuadSwap(_) => {}
                 }
                 writeln!(self.out, ");")?;
             }

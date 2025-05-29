@@ -51,6 +51,9 @@ var<storage, read_write> output: UniformCompatible;
 var<storage, read_write> output_arrays: StorageCompatible;
 
 fn f16_function(x: f16) -> f16 {
+   _ = private_variable;
+   var l: LayoutTest;
+
    var val: f16 = f16(constant_variable);
    // A number too big for f16
    val += 1h - 33333h;

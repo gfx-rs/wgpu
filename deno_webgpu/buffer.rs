@@ -251,9 +251,7 @@ impl GPUBuffer {
     }
 
     #[fast]
-    fn destroy(&self) -> Result<(), JsErrorBox> {
-        self.instance
-            .buffer_destroy(self.id)
-            .map_err(|e| JsErrorBox::generic(e.to_string()))
+    fn destroy(&self) {
+        self.instance.buffer_destroy(self.id);
     }
 }

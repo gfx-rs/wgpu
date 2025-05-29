@@ -39,10 +39,12 @@ mod env;
 mod features;
 pub mod instance;
 pub mod math;
+mod transfers;
 
 pub use counters::*;
 pub use features::*;
 pub use instance::*;
+pub use transfers::*;
 
 /// Integral type used for [`Buffer`] offsets and sizes.
 ///
@@ -613,9 +615,56 @@ impl Default for Limits {
 }
 
 impl Limits {
-    // Rust doesn't allow const in trait implementations, so we break this out
-    // to allow reusing these defaults in const contexts like `downlevel_defaults`
-    const fn defaults() -> Self {
+    /// These default limits are guaranteed to to work on all modern
+    /// backends and guaranteed to be supported by WebGPU
+    ///
+    /// Those limits are as follows:
+    /// ```rust
+    /// # use wgpu_types::Limits;
+    /// assert_eq!(Limits::defaults(), Limits {
+    ///     max_texture_dimension_1d: 8192,
+    ///     max_texture_dimension_2d: 8192,
+    ///     max_texture_dimension_3d: 2048,
+    ///     max_texture_array_layers: 256,
+    ///     max_bind_groups: 4,
+    ///     max_bindings_per_bind_group: 1000,
+    ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+    ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
+    ///     max_sampled_textures_per_shader_stage: 16,
+    ///     max_samplers_per_shader_stage: 16,
+    ///     max_storage_buffers_per_shader_stage: 8,
+    ///     max_storage_textures_per_shader_stage: 4,
+    ///     max_uniform_buffers_per_shader_stage: 12,
+    ///     max_binding_array_elements_per_shader_stage: 0,
+    ///     max_binding_array_sampler_elements_per_shader_stage: 0,
+    ///     max_uniform_buffer_binding_size: 64 << 10, // (64 KiB)
+    ///     max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
+    ///     max_vertex_buffers: 8,
+    ///     max_buffer_size: 256 << 20, // (256 MiB)
+    ///     max_vertex_attributes: 16,
+    ///     max_vertex_buffer_array_stride: 2048,
+    ///     min_uniform_buffer_offset_alignment: 256,
+    ///     min_storage_buffer_offset_alignment: 256,
+    ///     max_inter_stage_shader_components: 60,
+    ///     max_color_attachments: 8,
+    ///     max_color_attachment_bytes_per_sample: 32,
+    ///     max_compute_workgroup_storage_size: 16384,
+    ///     max_compute_invocations_per_workgroup: 256,
+    ///     max_compute_workgroup_size_x: 256,
+    ///     max_compute_workgroup_size_y: 256,
+    ///     max_compute_workgroup_size_z: 64,
+    ///     max_compute_workgroups_per_dimension: 65535,
+    ///     min_subgroup_size: 0,
+    ///     max_subgroup_size: 0,
+    ///     max_push_constant_size: 0,
+    ///     max_non_sampler_bindings: 1_000_000,
+    /// });
+    /// ```
+    ///
+    /// Rust doesn't allow const in trait implementations, so we break this out
+    /// to allow reusing these defaults in const contexts
+    #[must_use]
+    pub const fn defaults() -> Self {
         Self {
             max_texture_dimension_1d: 8192,
             max_texture_dimension_2d: 8192,
@@ -2718,6 +2767,13 @@ impl TextureFormat {
     #[must_use]
     pub fn is_bcn(&self) -> bool {
         self.required_features() == Features::TEXTURE_COMPRESSION_BC
+    }
+
+    /// Returns `true` for ASTC compressed formats.
+    #[must_use]
+    pub fn is_astc(&self) -> bool {
+        self.required_features() == Features::TEXTURE_COMPRESSION_ASTC
+            || self.required_features() == Features::TEXTURE_COMPRESSION_ASTC_HDR
     }
 
     /// Returns the required features (if any) in order to use the texture.
