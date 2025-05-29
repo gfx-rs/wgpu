@@ -3,9 +3,6 @@ use alloc::{borrow::Cow, string::String};
 use parking_lot::Mutex;
 use windows::Win32::{Foundation, System::Diagnostics::Debug};
 
-#[cfg(feature = "validation_canary")]
-use alloc::string::ToString as _;
-
 // This is a mutex as opposed to an atomic as we need to completely
 // lock everyone out until we have registered or unregistered the
 // exception handler, otherwise really nasty races could happen.
@@ -88,6 +85,8 @@ unsafe extern "system" fn output_debug_string_handler(
 
     #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && level == log::Level::Error {
+        use alloc::string::ToString as _;
+
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());
     }
