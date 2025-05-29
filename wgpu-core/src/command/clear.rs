@@ -272,7 +272,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
     let dst_raw = dst_texture.try_raw(snatch_guard)?;
 
     // Issue the right barrier.
-    let clear_usage = match dst_texture.clear_mode {
+    let clear_usage = match *dst_texture.clear_mode.read() {
         TextureClearMode::BufferCopy => wgt::TextureUses::COPY_DST,
         TextureClearMode::RenderPass {
             is_color: false, ..
@@ -314,7 +314,8 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
     }
 
     // Record actual clearing
-    match dst_texture.clear_mode {
+    let clear_mode = dst_texture.clear_mode.read();
+    match *clear_mode {
         TextureClearMode::BufferCopy => clear_texture_via_buffer_copies(
             &dst_texture.desc,
             alignments,
@@ -324,9 +325,11 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
             dst_raw,
         ),
         TextureClearMode::Surface { .. } => {
+            drop(clear_mode);
             clear_texture_via_render_passes(dst_texture, range, true, encoder)?
         }
         TextureClearMode::RenderPass { is_color, .. } => {
+            drop(clear_mode);
             clear_texture_via_render_passes(dst_texture, range, is_color, encoder)?
         }
         TextureClearMode::None => {
@@ -446,6 +449,8 @@ fn clear_texture_via_render_passes(
         depth_or_array_layers: 1, // Only one layer is cleared at a time.
     };
 
+    let clear_mode = dst_texture.clear_mode.read();
+
     for mip_level in range.mip_range {
         let extent = extent_base.mip_level_size(mip_level, dst_texture.desc.dimension);
         for depth_or_layer in range.layer_range.clone() {
@@ -454,7 +459,7 @@ fn clear_texture_via_render_passes(
                 color_attachments_tmp = [Some(hal::ColorAttachment {
                     target: hal::Attachment {
                         view: Texture::get_clear_view(
-                            &dst_texture.clear_mode,
+                            &clear_mode,
                             &dst_texture.desc,
                             mip_level,
                             depth_or_layer,
@@ -473,7 +478,7 @@ fn clear_texture_via_render_passes(
                     Some(hal::DepthStencilAttachment {
                         target: hal::Attachment {
                             view: Texture::get_clear_view(
-                                &dst_texture.clear_mode,
+                                &clear_mode,
                                 &dst_texture.desc,
                                 mip_level,
                                 depth_or_layer,

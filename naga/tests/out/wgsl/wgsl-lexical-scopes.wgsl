@@ -64,3 +64,13 @@ fn switchLexicalScope(a_6: i32) {
     return;
 }
 
+@compute @workgroup_size(1, 1, 1) 
+fn main() {
+    blockLexicalScope(false);
+    ifLexicalScope(true);
+    loopLexicalScope(false);
+    forLexicalScope(1f);
+    whileLexicalScope(1i);
+    switchLexicalScope(1i);
+    return;
+}

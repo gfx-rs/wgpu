@@ -26,3 +26,10 @@ fn index_dynamic_array(i_1: i32, v_2: u32) {
     return;
 }
 
+@compute @workgroup_size(1, 1, 1) 
+fn main() {
+    f();
+    index_unsized(1i, 1u);
+    index_dynamic_array(1i, 1u);
+    return;
+}

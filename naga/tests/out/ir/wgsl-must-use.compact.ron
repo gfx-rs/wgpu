@@ -166,9 +166,33 @@
                 arguments: [],
                 result: None,
                 local_variables: [],
-                expressions: [],
+                expressions: [
+                    CallResult(1),
+                    CallResult(2),
+                    CallResult(3),
+                ],
                 named_expressions: {},
                 body: [
+                    Call(
+                        function: 1,
+                        arguments: [],
+                        result: Some(0),
+                    ),
+                    Call(
+                        function: 2,
+                        arguments: [],
+                        result: Some(1),
+                    ),
+                    Call(
+                        function: 3,
+                        arguments: [],
+                        result: Some(2),
+                    ),
+                    Call(
+                        function: 4,
+                        arguments: [],
+                        result: None,
+                    ),
                     Return(
                         value: None,
                     ),

@@ -144,4 +144,30 @@ fn test_f64_to_u64_vec(f: vec2<f64>) -> vec2<u64> {
 }
 
 @compute @workgroup_size(1)
-fn main() {}
+fn main() {
+    test_const_eval();
+    test_f16_to_i32(1.);
+    test_f16_to_u32(1.);
+    test_f16_to_i64(1.);
+    test_f16_to_u64(1.);
+    test_f32_to_i32(1.);
+    test_f32_to_u32(1.);
+    test_f32_to_i64(1.);
+    test_f32_to_u64(1.);
+    test_f64_to_i32(1.);
+    test_f64_to_u32(1.);
+    test_f64_to_i64(1.);
+    test_f64_to_u64(1.);
+    test_f16_to_i32_vec(vec2(1., 2.));
+    test_f16_to_u32_vec(vec2(1., 2.));
+    test_f16_to_i64_vec(vec2(1., 2.));
+    test_f16_to_u64_vec(vec2(1., 2.));
+    test_f32_to_i32_vec(vec2(1., 2.));
+    test_f32_to_u32_vec(vec2(1., 2.));
+    test_f32_to_i64_vec(vec2(1., 2.));
+    test_f32_to_u64_vec(vec2(1., 2.));
+    test_f64_to_i32_vec(vec2(1., 2.));
+    test_f64_to_u32_vec(vec2(1., 2.));
+    test_f64_to_i64_vec(vec2(1., 2.));
+    test_f64_to_u64_vec(vec2(1., 2.));
+}

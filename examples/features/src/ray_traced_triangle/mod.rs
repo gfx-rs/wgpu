@@ -1,6 +1,5 @@
 use glam::{Mat4, Vec3};
 use std::mem;
-use std::time::Instant;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{include_wgsl, BufferUsages, IndexFormat, SamplerDescriptor};
 use wgpu::{
@@ -9,6 +8,8 @@ use wgpu::{
     CreateBlasDescriptor, CreateTlasDescriptor, TlasInstance, TlasPackage,
 };
 
+use crate::utils;
+
 struct Example {
     tlas_package: TlasPackage,
     compute_pipeline: wgpu::ComputePipeline,
@@ -16,7 +17,7 @@ struct Example {
     bind_group: wgpu::BindGroup,
     blit_bind_group: wgpu::BindGroup,
     storage_texture: wgpu::Texture,
-    start: Instant,
+    animation_timer: utils::AnimationTimer,
 }
 
 #[repr(C)]
@@ -360,7 +361,7 @@ impl crate::framework::Example for Example {
             bind_group,
             blit_bind_group,
             storage_texture: storage_tex,
-            start: Instant::now(),
+            animation_timer: utils::AnimationTimer::default(),
         }
     }
 
@@ -376,7 +377,7 @@ impl crate::framework::Example for Example {
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.tlas_package[0].as_mut().unwrap().transform =
-            Mat4::from_rotation_y(self.start.elapsed().as_secs_f32())
+            Mat4::from_rotation_y(self.animation_timer.time())
                 .transpose()
                 .to_cols_array()[..12]
                 .try_into()

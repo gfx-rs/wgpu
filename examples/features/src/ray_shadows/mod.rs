@@ -1,9 +1,11 @@
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
+use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task};
 
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use wgpu::util::DeviceExt;
 use wgpu::{vertex_attr_array, IndexFormat, VertexBufferLayout};
+
+use crate::utils;
 
 // from cube
 #[repr(C)]
@@ -79,7 +81,7 @@ struct Example {
     index_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
-    start_inst: Instant,
+    animation_timer: utils::AnimationTimer,
 }
 
 const CAM_LOOK_AT: Vec3 = Vec3::new(0.0, 1.0, -1.5);
@@ -290,7 +292,7 @@ impl crate::framework::Example for Example {
             ],
         });
 
-        let start_inst = Instant::now();
+        let animation_timer = utils::AnimationTimer::default();
 
         Example {
             uniforms,
@@ -299,7 +301,7 @@ impl crate::framework::Example for Example {
             index_buf,
             pipeline,
             bind_group,
-            start_inst,
+            animation_timer,
         }
     }
 
@@ -322,10 +324,9 @@ impl crate::framework::Example for Example {
         const LIGHT_DISTANCE: f32 = 5.0;
         const TIME_SCALE: f32 = -0.2;
         const INITIAL_TIME: f32 = 1.0;
-        let cos = (self.start_inst.elapsed().as_secs_f32() * TIME_SCALE + INITIAL_TIME).cos()
-            * LIGHT_DISTANCE;
-        let sin = (self.start_inst.elapsed().as_secs_f32() * TIME_SCALE + INITIAL_TIME).sin()
-            * LIGHT_DISTANCE;
+        let time = self.animation_timer.time();
+        let cos = (time * TIME_SCALE + INITIAL_TIME).cos() * LIGHT_DISTANCE;
+        let sin = (time * TIME_SCALE + INITIAL_TIME).sin() * LIGHT_DISTANCE;
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });

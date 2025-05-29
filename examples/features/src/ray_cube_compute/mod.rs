@@ -1,9 +1,11 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Affine3A, Mat4, Quat, Vec3};
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
+use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task};
 use wgpu::util::DeviceExt;
 
 use wgpu::StoreOp;
+
+use crate::utils;
 
 // from cube
 #[repr(C)]
@@ -134,7 +136,7 @@ struct Example {
     compute_bind_group: wgpu::BindGroup,
     blit_pipeline: wgpu::RenderPipeline,
     blit_bind_group: wgpu::BindGroup,
-    start_inst: Instant,
+    animation_timer: utils::AnimationTimer,
 }
 
 impl crate::framework::Example for Example {
@@ -422,8 +424,6 @@ impl crate::framework::Example for Example {
 
         queue.submit(Some(encoder.finish()));
 
-        let start_inst = Instant::now();
-
         Example {
             rt_target,
             rt_view,
@@ -436,7 +436,7 @@ impl crate::framework::Example for Example {
             compute_bind_group,
             blit_pipeline,
             blit_bind_group,
-            start_inst,
+            animation_timer: utils::AnimationTimer::default(),
         }
     }
 
@@ -455,7 +455,7 @@ impl crate::framework::Example for Example {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         device.push_error_scope(wgpu::ErrorFilter::Validation);
 
-        let anim_time = self.start_inst.elapsed().as_secs_f64() as f32;
+        let anim_time = self.animation_timer.time();
 
         self.tlas_package[0].as_mut().unwrap().transform =
             affine_to_rows(&Affine3A::from_rotation_translation(

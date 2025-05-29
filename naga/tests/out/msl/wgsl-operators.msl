@@ -336,11 +336,13 @@ kernel void main_(
 ) {
     metal::float4 _e1 = builtins();
     metal::float4 _e6 = splat(static_cast<float>(id.x), static_cast<int>(id.y));
-    metal::float3 _e11 = bool_cast(metal::float3(1.0, 1.0, 1.0));
+    metal::float2 _e7 = splat_assignment();
+    metal::float3 _e12 = bool_cast(metal::float3(1.0, 1.0, 1.0));
     logical();
     arithmetic();
     bit();
     comparison();
     assignment();
+    negation_avoids_prefix_decrement();
     return;
 }

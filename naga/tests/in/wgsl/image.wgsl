@@ -29,6 +29,7 @@ fn main(@builtin(local_invocation_id) local_id: vec3<u32>) {
     let value5 = textureLoad(image_array_src, itc, local_id.z, i32(local_id.z) + 1);
     let value6 = textureLoad(image_array_src, itc, i32(local_id.z), i32(local_id.z) + 1);
     let value7 = textureLoad(image_1d_src, i32(local_id.x), i32(local_id.z));
+    let value8 = textureLoad(image_dup_src, i32(local_id.x));
     // loads with uvec2 coords.
     let value1u = textureLoad(image_mipmapped_src, vec2<u32>(itc), i32(local_id.z));
     let value2u = textureLoad(image_multisampled_src, vec2<u32>(itc), i32(local_id.z));

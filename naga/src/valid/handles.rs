@@ -740,7 +740,9 @@ impl super::Validator {
                     | crate::GatherMode::Shuffle(index)
                     | crate::GatherMode::ShuffleDown(index)
                     | crate::GatherMode::ShuffleUp(index)
-                    | crate::GatherMode::ShuffleXor(index) => validate_expr(index)?,
+                    | crate::GatherMode::ShuffleXor(index)
+                    | crate::GatherMode::QuadBroadcast(index) => validate_expr(index)?,
+                    crate::GatherMode::QuadSwap(_) => {}
                 }
                 validate_expr(result)?;
                 Ok(())

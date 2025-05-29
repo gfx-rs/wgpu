@@ -10,6 +10,8 @@ layout(rgba8ui) readonly uniform uimage2D _group_0_binding_1_cs;
 
 uniform usampler2DArray _group_0_binding_5_cs;
 
+layout(r32ui) readonly uniform uimage1D _group_0_binding_6_cs;
+
 uniform usampler1D _group_0_binding_7_cs;
 
 layout(r32ui) writeonly uniform uimage1D _group_0_binding_2_cs;
@@ -27,6 +29,7 @@ void main() {
     uvec4 value5_ = texelFetch(_group_0_binding_5_cs, ivec3(itc, local_id.z), (int(local_id.z) + 1));
     uvec4 value6_ = texelFetch(_group_0_binding_5_cs, ivec3(itc, int(local_id.z)), (int(local_id.z) + 1));
     uvec4 value7_ = texelFetch(_group_0_binding_7_cs, int(local_id.x), int(local_id.z));
+    uvec4 value8_ = imageLoad(_group_0_binding_6_cs, int(local_id.x));
     uvec4 value1u = texelFetch(_group_0_binding_0_cs, ivec2(uvec2(itc)), int(local_id.z));
     uvec4 value2u = texelFetch(_group_0_binding_3_cs, ivec2(uvec2(itc)), int(local_id.z));
     uvec4 value3u = texelFetch(_group_0_binding_3_cs, ivec2(uvec2(itc)), int(uint(local_id.z)));

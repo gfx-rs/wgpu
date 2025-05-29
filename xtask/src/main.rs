@@ -6,6 +6,7 @@ use std::process::ExitCode;
 use anyhow::Context;
 use pico_args::Arguments;
 
+mod cts;
 mod run_wasm;
 mod test;
 mod util;
@@ -15,6 +16,9 @@ const HELP: &str = "\
 Usage: xtask <COMMAND>
 
 Commands:
+  cts [<test selector> | -f <test list file>]...
+    Check out, build, and run CTS tests
+
   run-wasm
     Build and run web examples
 
@@ -76,6 +80,7 @@ fn main() -> anyhow::Result<ExitCode> {
     shell.change_dir(String::from(env!("CARGO_MANIFEST_DIR")) + "/..");
 
     match subcommand.as_deref() {
+        Some("cts") => cts::run_cts(shell, args)?,
         Some("run-wasm") => run_wasm::run_wasm(shell, args)?,
         Some("test") => test::run_tests(shell, args)?,
         Some("vendor-web-sys") => vendor_web_sys::run_vendor_web_sys(shell, args)?,

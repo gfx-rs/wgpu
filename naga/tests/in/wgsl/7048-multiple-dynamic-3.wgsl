@@ -14,3 +14,9 @@ fn foobar(normals: array<vec3f, 12>, count: u32) -> QEFResult {
 
         return QEFResult(0.0, vec3(0.0));
 }
+
+@fragment
+fn main() {
+    var arr: array<vec3f, 12>;
+    foobar(arr, 1);
+}
