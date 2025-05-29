@@ -1,3 +1,4 @@
+@compute @workgroup_size(1)
 fn f() {
   // For calls that return abstract types, we can't write the type we
   // actually expect, but we can at least require an automatic

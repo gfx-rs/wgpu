@@ -267,12 +267,14 @@ void main() {
     uvec3 id = gl_WorkGroupID;
     vec4 _e1 = builtins();
     vec4 _e6 = splat(float(id.x), int(id.y));
-    vec3 _e11 = bool_cast(vec3(1.0, 1.0, 1.0));
+    vec2 _e7 = splat_assignment();
+    vec3 _e12 = bool_cast(vec3(1.0, 1.0, 1.0));
     logical();
     arithmetic();
     bit();
     comparison();
     assignment();
+    negation_avoids_prefix_decrement();
     return;
 }
 

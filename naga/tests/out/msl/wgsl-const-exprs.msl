@@ -7,7 +7,7 @@ using metal::uint;
 struct type_6 {
     float inner[2];
 };
-struct type_10 {
+struct type_9 {
     int inner[9];
 };
 constant uint TWO = 2u;
@@ -15,15 +15,15 @@ constant int THREE = 3;
 constant bool TRUE = true;
 constant bool FALSE = false;
 constant int FOUR = 4;
+constant int TEXTURE_KIND_REGULAR = 0;
+constant int TEXTURE_KIND_WARP = 1;
+constant int TEXTURE_KIND_SKY = 2;
 constant int FOUR_ALIAS = 4;
 constant int TEST_CONSTANT_ADDITION = 8;
 constant int TEST_CONSTANT_ALIAS_ADDITION = 8;
 constant float PI = 3.141;
 constant float phi_sun = 6.282;
 constant metal::float4 DIV = metal::float4(0.44444445, 0.0, 0.0, 0.0);
-constant int TEXTURE_KIND_REGULAR = 0;
-constant int TEXTURE_KIND_WARP = 1;
-constant int TEXTURE_KIND_SKY = 2;
 constant metal::float2 add_vec = metal::float2(4.0, 5.0);
 constant metal::bool2 compare_vec = metal::bool2(true, false);
 
@@ -76,18 +76,6 @@ void compose_of_constant(
     return;
 }
 
-void compose_of_splat(
-) {
-    metal::float4 x_1 = metal::float4(2.0, 1.0, 1.0, 1.0);
-    return;
-}
-
-void test_local_const(
-) {
-    type_6 arr = {};
-    return;
-}
-
 uint map_texture_kind(
     int texture_kind
 ) {
@@ -105,6 +93,18 @@ uint map_texture_kind(
             return 0u;
         }
     }
+}
+
+void compose_of_splat(
+) {
+    metal::float4 x_1 = metal::float4(2.0, 1.0, 1.0, 1.0);
+    return;
+}
+
+void test_local_const(
+) {
+    type_6 arr = {};
+    return;
 }
 
 void compose_vector_zero_val_binop(
@@ -147,7 +147,7 @@ void abstract_access(
     uint b_1 = 1u;
     int c_1 = {};
     int d = {};
-    c_1 = type_10 {1, 2, 3, 4, 5, 6, 7, 8, 9}.inner[i];
+    c_1 = type_9 {1, 2, 3, 4, 5, 6, 7, 8, 9}.inner[i];
     d = metal::int4(1, 2, 3, 4)[i];
     return;
 }
@@ -160,7 +160,13 @@ kernel void main_(
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    uint _e1 = map_texture_kind(1);
     compose_of_splat();
     test_local_const();
+    compose_vector_zero_val_binop();
+    relational();
+    packed_dot_product();
+    test_local_const();
+    abstract_access(1u);
     return;
 }

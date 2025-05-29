@@ -1,6 +1,6 @@
 use alloc::{rc::Rc, string::String, sync::Arc, vec::Vec};
 use core::{ffi, mem::ManuallyDrop, ptr, time::Duration};
-use std::{os::raw, sync::LazyLock};
+use std::sync::LazyLock;
 
 use glow::HasContext;
 use hashbrown::HashMap;
@@ -22,14 +22,14 @@ const EGL_GL_COLORSPACE_KHR: u32 = 0x309D;
 const EGL_GL_COLORSPACE_SRGB_KHR: u32 = 0x3089;
 
 type XOpenDisplayFun =
-    unsafe extern "system" fn(display_name: *const raw::c_char) -> *mut raw::c_void;
+    unsafe extern "system" fn(display_name: *const ffi::c_char) -> *mut ffi::c_void;
 
-type XCloseDisplayFun = unsafe extern "system" fn(display: *mut raw::c_void) -> raw::c_int;
+type XCloseDisplayFun = unsafe extern "system" fn(display: *mut ffi::c_void) -> ffi::c_int;
 
 type WlDisplayConnectFun =
-    unsafe extern "system" fn(display_name: *const raw::c_char) -> *mut raw::c_void;
+    unsafe extern "system" fn(display_name: *const ffi::c_char) -> *mut ffi::c_void;
 
-type WlDisplayDisconnectFun = unsafe extern "system" fn(display: *const raw::c_void);
+type WlDisplayDisconnectFun = unsafe extern "system" fn(display: *const ffi::c_void);
 
 #[cfg(not(Emscripten))]
 type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_4>;
@@ -38,32 +38,32 @@ type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_4>;
 type EglInstance = khronos_egl::Instance<khronos_egl::Static>;
 
 type WlEglWindowCreateFun = unsafe extern "system" fn(
-    surface: *const raw::c_void,
-    width: raw::c_int,
-    height: raw::c_int,
-) -> *mut raw::c_void;
+    surface: *const ffi::c_void,
+    width: ffi::c_int,
+    height: ffi::c_int,
+) -> *mut ffi::c_void;
 
 type WlEglWindowResizeFun = unsafe extern "system" fn(
-    window: *const raw::c_void,
-    width: raw::c_int,
-    height: raw::c_int,
-    dx: raw::c_int,
-    dy: raw::c_int,
+    window: *const ffi::c_void,
+    width: ffi::c_int,
+    height: ffi::c_int,
+    dx: ffi::c_int,
+    dy: ffi::c_int,
 );
 
-type WlEglWindowDestroyFun = unsafe extern "system" fn(window: *const raw::c_void);
+type WlEglWindowDestroyFun = unsafe extern "system" fn(window: *const ffi::c_void);
 
-type EglLabel = *const raw::c_void;
+type EglLabel = *const ffi::c_void;
 
 #[allow(clippy::upper_case_acronyms)]
 type EGLDEBUGPROCKHR = Option<
     unsafe extern "system" fn(
         error: khronos_egl::Enum,
-        command: *const raw::c_char,
+        command: *const ffi::c_char,
         message_type: u32,
         thread_label: EglLabel,
         object_label: EglLabel,
-        message: *const raw::c_char,
+        message: *const ffi::c_char,
     ),
 >;
 
@@ -75,15 +75,15 @@ const EGL_DEBUG_MSG_INFO_KHR: u32 = 0x33BC;
 type EglDebugMessageControlFun = unsafe extern "system" fn(
     proc: EGLDEBUGPROCKHR,
     attrib_list: *const khronos_egl::Attrib,
-) -> raw::c_int;
+) -> ffi::c_int;
 
 unsafe extern "system" fn egl_debug_proc(
     error: khronos_egl::Enum,
-    command_raw: *const raw::c_char,
+    command_raw: *const ffi::c_char,
     message_type: u32,
     _thread_label: EglLabel,
     _object_label: EglLabel,
-    message_raw: *const raw::c_char,
+    message_raw: *const ffi::c_char,
 ) {
     let log_severity = match message_type {
         EGL_DEBUG_MSG_CRITICAL_KHR | EGL_DEBUG_MSG_ERROR_KHR => log::Level::Error,
@@ -113,13 +113,13 @@ unsafe extern "system" fn egl_debug_proc(
 /// enum variant is the X11 variant
 #[derive(Debug)]
 enum DisplayRef {
-    X11(ptr::NonNull<raw::c_void>),
+    X11(ptr::NonNull<ffi::c_void>),
     Wayland,
 }
 
 impl DisplayRef {
     /// Convenience for getting the underlying pointer
-    fn as_ptr(&self) -> *mut raw::c_void {
+    fn as_ptr(&self) -> *mut ffi::c_void {
         match *self {
             Self::X11(ptr) => ptr.as_ptr(),
             Self::Wayland => unreachable!(),
@@ -345,7 +345,7 @@ impl AdapterContext {
         self.egl.as_ref().map(|egl| egl.version)
     }
 
-    pub fn raw_context(&self) -> *mut raw::c_void {
+    pub fn raw_context(&self) -> *mut ffi::c_void {
         match self.egl {
             Some(ref egl) => egl.raw.as_ptr(),
             None => ptr::null_mut(),
@@ -460,7 +460,7 @@ struct Inner {
     supports_native_window: bool,
     config: khronos_egl::Config,
     #[cfg_attr(Emscripten, allow(dead_code))]
-    wl_display: Option<*mut raw::c_void>,
+    wl_display: Option<*mut ffi::c_void>,
     #[cfg_attr(Emscripten, allow(dead_code))]
     force_gles_minor_version: wgt::Gles3MinorVersion,
     /// Method by which the framebuffer should support srgb
@@ -1156,7 +1156,7 @@ impl super::Device {
 #[derive(Debug)]
 pub struct Swapchain {
     surface: khronos_egl::Surface,
-    wl_window: Option<*mut raw::c_void>,
+    wl_window: Option<*mut ffi::c_void>,
     framebuffer: glow::Framebuffer,
     renderbuffer: glow::Renderbuffer,
     /// Extent because the window lies
@@ -1262,7 +1262,7 @@ impl Surface {
     unsafe fn unconfigure_impl(
         &self,
         device: &super::Device,
-    ) -> Option<(khronos_egl::Surface, Option<*mut raw::c_void>)> {
+    ) -> Option<(khronos_egl::Surface, Option<*mut ffi::c_void>)> {
         let gl = &device.shared.context.lock();
         match self.swapchain.write().take() {
             Some(sc) => {

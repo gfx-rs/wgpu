@@ -24,3 +24,8 @@ fn const_in_fn() {
     const eg = ge;
     const fg = gf;
 }
+
+@compute @workgroup_size(1)
+fn main() {
+    const_in_fn();
+}

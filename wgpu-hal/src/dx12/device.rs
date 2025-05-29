@@ -46,7 +46,7 @@ impl super::Device {
         private_caps: super::PrivateCapabilities,
         library: &Arc<D3D12Lib>,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+        compiler_container: Arc<shader_compilation::CompilerContainer>,
     ) -> Result<Self, crate::DeviceError> {
         if private_caps
             .instance_flags
@@ -188,7 +188,7 @@ impl super::Device {
             },
             features,
             shared: Arc::new(shared),
-            rtv_pool: Mutex::new(rtv_pool),
+            rtv_pool: Arc::new(Mutex::new(rtv_pool)),
             dsv_pool: Mutex::new(descriptor::CpuPool::new(
                 raw.clone(),
                 Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
@@ -202,7 +202,7 @@ impl super::Device {
             render_doc: Default::default(),
             null_rtv_handle,
             mem_allocator,
-            dxc_container,
+            compiler_container,
             counters: Default::default(),
         })
     }
@@ -299,9 +299,13 @@ impl super::Device {
             &layout.naga_options
         };
 
+        let pipeline_options = hlsl::PipelineOptions {
+            entry_point: Some((naga_stage, stage.entry_point.to_string())),
+        };
+
         //TODO: reuse the writer
         let mut source = String::new();
-        let mut writer = hlsl::Writer::new(&mut source, naga_options);
+        let mut writer = hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
         let reflection_info = {
             profiling::scope!("naga::back::hlsl::write");
             writer
@@ -315,39 +319,20 @@ impl super::Device {
             naga_options.shader_model.to_str()
         );
 
-        let ep_index = module
-            .entry_points
-            .iter()
-            .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
-            .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
-
-        let raw_ep = reflection_info.entry_point_names[ep_index]
+        let raw_ep = reflection_info.entry_point_names[0]
             .as_ref()
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
 
         let source_name = stage.module.raw_name.as_deref();
 
-        // Compile with DXC if available, otherwise fall back to FXC
-        let result = if let Some(ref dxc_container) = self.dxc_container {
-            shader_compilation::compile_dxc(
-                self,
-                &source,
-                source_name,
-                raw_ep,
-                stage_bit,
-                &full_stage,
-                dxc_container,
-            )
-        } else {
-            shader_compilation::compile_fxc(
-                self,
-                &source,
-                source_name,
-                raw_ep,
-                stage_bit,
-                &full_stage,
-            )
-        };
+        let result = self.compiler_container.compile(
+            self,
+            &source,
+            source_name,
+            raw_ep,
+            stage_bit,
+            &full_stage,
+        );
 
         let log_level = if result.is_ok() {
             log::Level::Info
@@ -539,10 +524,14 @@ impl crate::Device for super::Device {
         Ok(super::TextureView {
             raw_format: view_desc.rtv_dsv_format,
             aspects: view_desc.aspects,
-            target_base: (
-                texture.resource.clone(),
-                texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
+            dimension: desc.dimension,
+            texture: texture.resource.clone(),
+            subresource_index: texture.calc_subresource(
+                desc.range.base_mip_level,
+                desc.range.base_array_layer,
+                0,
             ),
+            mip_slice: desc.range.base_mip_level,
             handle_srv: if desc.usage.intersects(wgt::TextureUses::RESOURCE) {
                 match unsafe { view_desc.to_srv() } {
                     Some(raw_desc) => {
@@ -584,7 +573,10 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_rtv: if desc.usage.intersects(wgt::TextureUses::COLOR_TARGET) {
+            handle_rtv: if desc.usage.intersects(wgt::TextureUses::COLOR_TARGET)
+                && desc.dimension != wgt::TextureViewDimension::D3
+            // 3D RTVs must be created in the render pass
+            {
                 let raw_desc = unsafe { view_desc.to_rtv() };
                 let handle = self.rtv_pool.lock().alloc_handle()?;
                 unsafe {
@@ -725,6 +717,8 @@ impl crate::Device for super::Device {
             device: self.raw.clone(),
             shared: Arc::clone(&self.shared),
             mem_allocator: self.mem_allocator.clone(),
+            rtv_pool: Arc::clone(&self.rtv_pool),
+            temp_rtv_handles: Vec::new(),
             null_rtv_handle: self.null_rtv_handle,
             list: None,
             free_lists: Vec::new(),

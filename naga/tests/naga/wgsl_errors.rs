@@ -1980,37 +1980,6 @@ fn invalid_local_vars() {
 }
 
 #[test]
-fn dead_code() {
-    check_validation! {
-        "
-        fn dead_code_after_if(condition: bool) -> i32 {
-            if (condition) {
-                return 1;
-            } else {
-                return 2;
-            }
-            return 3;
-        }
-        ":
-        Ok(_)
-    }
-    check_validation! {
-        "
-        fn dead_code_after_block() -> i32 {
-            {
-                return 1;
-            }
-            return 2;
-        }
-        ":
-        Err(naga::valid::ValidationError::Function {
-            source: naga::valid::FunctionError::InstructionsAfterReturn,
-            ..
-        })
-    }
-}
-
-#[test]
 fn invalid_runtime_sized_arrays() {
     // You can't have structs whose last member is an unsized struct. An unsized
     // array may only appear as the last member of a struct used directly as a
@@ -2861,7 +2830,12 @@ fn compaction_preserves_spans() {
            var x: array<i32,1>;
            var y = x[1.0];
         }
-    "#; //         ^^^   correct error span: 108..114
+        @compute @workgroup_size(1)
+        fn main() {
+            f();
+        }
+    "#;
+    // The error span should be on `x[1.0]`, which is at characters 108..114.
     let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
     naga::compact::compact(&mut module);
     let err = naga::valid::Validator::new(
@@ -2878,7 +2852,7 @@ fn compaction_preserves_spans() {
     // The first span is the whole function.
     let _ = spans.next().expect("error should have at least one span");
 
-    // The second span is the assignment destination.
+    // The second span is the invalid indexing expression.
     let dest_span = spans
         .next()
         .expect("error should have at least two spans")
@@ -3595,4 +3569,36 @@ fn const_eval_value_errors() {
     assert!(variant("f32(abs(1))").is_ok());
     assert!(variant("f32(abs(-9223372036854775807))").is_ok());
     assert!(variant("f32(abs(-9223372036854775807 - 1))").is_ok());
+}
+
+#[test]
+fn subgroup_invalid_broadcast() {
+    check_validation! {
+        r#"
+            fn main(id: u32) {
+                subgroupBroadcast(123, id);
+            }
+        "#:
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidSubgroup(
+                naga::valid::SubgroupError::InvalidInvocationIdExprType(_),
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SUBGROUP
+    }
+    check_validation! {
+        r#"
+            fn main(id: u32) {
+                quadBroadcast(123, id);
+            }
+        "#:
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::InvalidSubgroup(
+                naga::valid::SubgroupError::InvalidInvocationIdExprType(_),
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::SUBGROUP
+    }
 }

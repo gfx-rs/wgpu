@@ -44,6 +44,7 @@ long naga_abs(long val) {
 
 long int64_function(
     long x,
+    thread long& private_variable,
     constant UniformCompatible& input_uniform,
     device UniformCompatible const& input_storage,
     device StorageCompatible const& input_arrays,
@@ -51,81 +52,82 @@ long int64_function(
     device StorageCompatible& output_arrays
 ) {
     long val = 20L;
-    long _e8 = val;
-    val = as_type<long>(as_type<ulong>(_e8) + as_type<ulong>(as_type<long>(as_type<ulong>(as_type<long>(as_type<ulong>(31L) - as_type<ulong>(1002003004005006L))) + as_type<ulong>(-9223372036854775807L))));
+    long phony = private_variable;
     long _e10 = val;
-    long _e13 = val;
-    val = as_type<long>(as_type<ulong>(_e13) + as_type<ulong>(as_type<long>(as_type<ulong>(_e10) + as_type<ulong>(5L))));
-    uint _e17 = input_uniform.val_u32_;
-    long _e18 = val;
-    long _e22 = val;
-    val = as_type<long>(as_type<ulong>(_e22) + as_type<ulong>(static_cast<long>(_e17 + static_cast<uint>(_e18))));
-    int _e26 = input_uniform.val_i32_;
-    long _e27 = val;
-    long _e31 = val;
-    val = as_type<long>(as_type<ulong>(_e31) + as_type<ulong>(static_cast<long>(as_type<int>(as_type<uint>(_e26) + as_type<uint>(static_cast<int>(_e27))))));
-    float _e35 = input_uniform.val_f32_;
-    long _e36 = val;
-    long _e40 = val;
-    val = as_type<long>(as_type<ulong>(_e40) + as_type<ulong>(naga_f2i64(_e35 + static_cast<float>(_e36))));
-    long _e44 = input_uniform.val_i64_;
-    long _e47 = val;
-    val = as_type<long>(as_type<ulong>(_e47) + as_type<ulong>(metal::long3(_e44).z));
-    ulong _e51 = input_uniform.val_u64_;
-    long _e53 = val;
-    val = as_type<long>(as_type<ulong>(_e53) + as_type<ulong>(as_type<long>(_e51)));
-    metal::ulong2 _e57 = input_uniform.val_u64_2_;
-    long _e60 = val;
-    val = as_type<long>(as_type<ulong>(_e60) + as_type<ulong>(as_type<metal::long2>(_e57).y));
-    metal::ulong3 _e64 = input_uniform.val_u64_3_;
-    long _e67 = val;
-    val = as_type<long>(as_type<ulong>(_e67) + as_type<ulong>(as_type<metal::long3>(_e64).z));
-    metal::ulong4 _e71 = input_uniform.val_u64_4_;
-    long _e74 = val;
-    val = as_type<long>(as_type<ulong>(_e74) + as_type<ulong>(as_type<metal::long4>(_e71).w));
-    long _e77 = val;
-    val = as_type<long>(as_type<ulong>(_e77) + as_type<ulong>((-9223372036854775807L - 1L)));
-    long _e83 = input_uniform.val_i64_;
-    long _e86 = input_storage.val_i64_;
-    output.val_i64_ = as_type<long>(as_type<ulong>(_e83) + as_type<ulong>(_e86));
-    metal::long2 _e92 = input_uniform.val_i64_2_;
-    metal::long2 _e95 = input_storage.val_i64_2_;
-    output.val_i64_2_ = as_type<metal::long2>(as_type<metal::ulong2>(_e92) + as_type<metal::ulong2>(_e95));
-    metal::long3 _e101 = input_uniform.val_i64_3_;
-    metal::long3 _e104 = input_storage.val_i64_3_;
-    output.val_i64_3_ = as_type<metal::long3>(as_type<metal::ulong3>(_e101) + as_type<metal::ulong3>(_e104));
-    metal::long4 _e110 = input_uniform.val_i64_4_;
-    metal::long4 _e113 = input_storage.val_i64_4_;
-    output.val_i64_4_ = as_type<metal::long4>(as_type<metal::ulong4>(_e110) + as_type<metal::ulong4>(_e113));
-    type_12 _e119 = input_arrays.val_i64_array_2_;
-    output_arrays.val_i64_array_2_ = _e119;
-    long _e120 = val;
+    val = as_type<long>(as_type<ulong>(_e10) + as_type<ulong>(as_type<long>(as_type<ulong>(as_type<long>(as_type<ulong>(31L) - as_type<ulong>(1002003004005006L))) + as_type<ulong>(-9223372036854775807L))));
+    long _e12 = val;
+    long _e15 = val;
+    val = as_type<long>(as_type<ulong>(_e15) + as_type<ulong>(as_type<long>(as_type<ulong>(_e12) + as_type<ulong>(5L))));
+    uint _e19 = input_uniform.val_u32_;
+    long _e20 = val;
+    long _e24 = val;
+    val = as_type<long>(as_type<ulong>(_e24) + as_type<ulong>(static_cast<long>(_e19 + static_cast<uint>(_e20))));
+    int _e28 = input_uniform.val_i32_;
+    long _e29 = val;
+    long _e33 = val;
+    val = as_type<long>(as_type<ulong>(_e33) + as_type<ulong>(static_cast<long>(as_type<int>(as_type<uint>(_e28) + as_type<uint>(static_cast<int>(_e29))))));
+    float _e37 = input_uniform.val_f32_;
+    long _e38 = val;
+    long _e42 = val;
+    val = as_type<long>(as_type<ulong>(_e42) + as_type<ulong>(naga_f2i64(_e37 + static_cast<float>(_e38))));
+    long _e46 = input_uniform.val_i64_;
+    long _e49 = val;
+    val = as_type<long>(as_type<ulong>(_e49) + as_type<ulong>(metal::long3(_e46).z));
+    ulong _e53 = input_uniform.val_u64_;
+    long _e55 = val;
+    val = as_type<long>(as_type<ulong>(_e55) + as_type<ulong>(as_type<long>(_e53)));
+    metal::ulong2 _e59 = input_uniform.val_u64_2_;
+    long _e62 = val;
+    val = as_type<long>(as_type<ulong>(_e62) + as_type<ulong>(as_type<metal::long2>(_e59).y));
+    metal::ulong3 _e66 = input_uniform.val_u64_3_;
+    long _e69 = val;
+    val = as_type<long>(as_type<ulong>(_e69) + as_type<ulong>(as_type<metal::long3>(_e66).z));
+    metal::ulong4 _e73 = input_uniform.val_u64_4_;
+    long _e76 = val;
+    val = as_type<long>(as_type<ulong>(_e76) + as_type<ulong>(as_type<metal::long4>(_e73).w));
+    long _e79 = val;
+    val = as_type<long>(as_type<ulong>(_e79) + as_type<ulong>((-9223372036854775807L - 1L)));
+    long _e85 = input_uniform.val_i64_;
+    long _e88 = input_storage.val_i64_;
+    output.val_i64_ = as_type<long>(as_type<ulong>(_e85) + as_type<ulong>(_e88));
+    metal::long2 _e94 = input_uniform.val_i64_2_;
+    metal::long2 _e97 = input_storage.val_i64_2_;
+    output.val_i64_2_ = as_type<metal::long2>(as_type<metal::ulong2>(_e94) + as_type<metal::ulong2>(_e97));
+    metal::long3 _e103 = input_uniform.val_i64_3_;
+    metal::long3 _e106 = input_storage.val_i64_3_;
+    output.val_i64_3_ = as_type<metal::long3>(as_type<metal::ulong3>(_e103) + as_type<metal::ulong3>(_e106));
+    metal::long4 _e112 = input_uniform.val_i64_4_;
+    metal::long4 _e115 = input_storage.val_i64_4_;
+    output.val_i64_4_ = as_type<metal::long4>(as_type<metal::ulong4>(_e112) + as_type<metal::ulong4>(_e115));
+    type_12 _e121 = input_arrays.val_i64_array_2_;
+    output_arrays.val_i64_array_2_ = _e121;
     long _e122 = val;
-    val = as_type<long>(as_type<ulong>(_e122) + as_type<ulong>(naga_abs(_e120)));
     long _e124 = val;
-    long _e125 = val;
+    val = as_type<long>(as_type<ulong>(_e124) + as_type<ulong>(naga_abs(_e122)));
     long _e126 = val;
+    long _e127 = val;
     long _e128 = val;
-    val = as_type<long>(as_type<ulong>(_e128) + as_type<ulong>(metal::clamp(_e124, _e125, _e126)));
     long _e130 = val;
-    metal::long2 _e131 = metal::long2(_e130);
+    val = as_type<long>(as_type<ulong>(_e130) + as_type<ulong>(metal::clamp(_e126, _e127, _e128)));
     long _e132 = val;
     metal::long2 _e133 = metal::long2(_e132);
-    long _e135 = val;
-    val = as_type<long>(as_type<ulong>(_e135) + as_type<ulong>(( + _e131.x * _e133.x + _e131.y * _e133.y)));
+    long _e134 = val;
+    metal::long2 _e135 = metal::long2(_e134);
     long _e137 = val;
-    long _e138 = val;
+    val = as_type<long>(as_type<ulong>(_e137) + as_type<ulong>(( + _e133.x * _e135.x + _e133.y * _e135.y)));
+    long _e139 = val;
     long _e140 = val;
-    val = as_type<long>(as_type<ulong>(_e140) + as_type<ulong>(metal::max(_e137, _e138)));
     long _e142 = val;
-    long _e143 = val;
+    val = as_type<long>(as_type<ulong>(_e142) + as_type<ulong>(metal::max(_e139, _e140)));
+    long _e144 = val;
     long _e145 = val;
-    val = as_type<long>(as_type<ulong>(_e145) + as_type<ulong>(metal::min(_e142, _e143)));
     long _e147 = val;
+    val = as_type<long>(as_type<ulong>(_e147) + as_type<ulong>(metal::min(_e144, _e145)));
     long _e149 = val;
-    val = as_type<long>(as_type<ulong>(_e149) + as_type<ulong>(metal::select(metal::select(long(-1), long(1), (_e147 > 0)), long(0), (_e147 == 0))));
     long _e151 = val;
-    return _e151;
+    val = as_type<long>(as_type<ulong>(_e151) + as_type<ulong>(metal::select(metal::select(long(-1), long(1), (_e149 > 0)), long(0), (_e149 == 0))));
+    long _e153 = val;
+    return _e153;
 }
 
 ulong naga_f2u64(float value) {
@@ -220,8 +222,9 @@ kernel void main_(
 , device UniformCompatible& output [[user(fake0)]]
 , device StorageCompatible& output_arrays [[user(fake0)]]
 ) {
+    long private_variable = 1L;
     ulong _e3 = uint64_function(67uL, input_uniform, input_storage, input_arrays, output, output_arrays);
-    long _e5 = int64_function(60L, input_uniform, input_storage, input_arrays, output, output_arrays);
+    long _e5 = int64_function(60L, private_variable, input_uniform, input_storage, input_arrays, output, output_arrays);
     output.final_value = _e3 + as_type<ulong>(_e5);
     return;
 }

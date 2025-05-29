@@ -9,14 +9,19 @@ use crate::auxil::map_naga_stage;
 use crate::metal::ShaderModuleSource;
 use crate::TlasInstance;
 
-use metal::foreign_types::ForeignType;
+use metal::{
+    foreign_types::ForeignType, MTLCommandBufferStatus, MTLDepthClipMode, MTLLanguageVersion,
+    MTLMutability, MTLPixelFormat, MTLPrimitiveTopologyClass, MTLResourceID, MTLResourceOptions,
+    MTLSamplerAddressMode, MTLSamplerMipFilter, MTLSize, MTLStorageMode, MTLTextureType,
+    MTLTriangleFillMode, MTLVertexStepFunction, NSRange,
+};
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
 struct CompiledShader {
     library: metal::Library,
     function: metal::Function,
-    wg_size: metal::MTLSize,
+    wg_size: MTLSize,
     wg_memory_sizes: Vec<u32>,
 
     /// Bindings of WGSL `storage` globals that contain variable-sized arrays.
@@ -120,7 +125,7 @@ impl super::Device {
         stage: &crate::ProgrammableStage<super::ShaderModule>,
         vertex_buffer_mappings: &[naga::back::msl::VertexBufferMapping],
         layout: &super::PipelineLayout,
-        primitive_class: metal::MTLPrimitiveTopologyClass,
+        primitive_class: MTLPrimitiveTopologyClass,
         naga_stage: naga::ShaderStage,
     ) -> Result<CompiledShader, crate::PipelineError> {
         let naga_shader = if let ShaderModuleSource::Naga(naga) = &stage.module.source {
@@ -146,16 +151,16 @@ impl super::Device {
 
         let options = naga::back::msl::Options {
             lang_version: match self.shared.private_caps.msl_version {
-                metal::MTLLanguageVersion::V1_0 => (1, 0),
-                metal::MTLLanguageVersion::V1_1 => (1, 1),
-                metal::MTLLanguageVersion::V1_2 => (1, 2),
-                metal::MTLLanguageVersion::V2_0 => (2, 0),
-                metal::MTLLanguageVersion::V2_1 => (2, 1),
-                metal::MTLLanguageVersion::V2_2 => (2, 2),
-                metal::MTLLanguageVersion::V2_3 => (2, 3),
-                metal::MTLLanguageVersion::V2_4 => (2, 4),
-                metal::MTLLanguageVersion::V3_0 => (3, 0),
-                metal::MTLLanguageVersion::V3_1 => (3, 1),
+                MTLLanguageVersion::V1_0 => (1, 0),
+                MTLLanguageVersion::V1_1 => (1, 1),
+                MTLLanguageVersion::V1_2 => (1, 2),
+                MTLLanguageVersion::V2_0 => (2, 0),
+                MTLLanguageVersion::V2_1 => (2, 1),
+                MTLLanguageVersion::V2_2 => (2, 2),
+                MTLLanguageVersion::V2_3 => (2, 3),
+                MTLLanguageVersion::V2_4 => (2, 4),
+                MTLLanguageVersion::V3_0 => (3, 0),
+                MTLLanguageVersion::V3_1 => (3, 1),
             },
             inline_samplers: Default::default(),
             spirv_cross_compatibility: false,
@@ -176,8 +181,9 @@ impl super::Device {
         };
 
         let pipeline_options = naga::back::msl::PipelineOptions {
+            entry_point: Some((naga_stage, stage.entry_point.to_owned())),
             allow_and_force_point_size: match primitive_class {
-                metal::MTLPrimitiveTopologyClass::Point => true,
+                MTLPrimitiveTopologyClass::Point => true,
                 _ => false,
             },
             vertex_pulling_transform: true,
@@ -218,20 +224,22 @@ impl super::Device {
             .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
             .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
         let ep = &module.entry_points[ep_index];
-        let ep_name = info.entry_point_names[ep_index]
+        let translated_ep_name = info.entry_point_names[0]
             .as_ref()
             .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
 
-        let wg_size = metal::MTLSize {
+        let wg_size = MTLSize {
             width: ep.workgroup_size[0] as _,
             height: ep.workgroup_size[1] as _,
             depth: ep.workgroup_size[2] as _,
         };
 
-        let function = library.get_function(ep_name, None).map_err(|e| {
-            log::error!("get_function: {:?}", e);
-            crate::PipelineError::EntryPoint(naga_stage)
-        })?;
+        let function = library
+            .get_function(translated_ep_name, None)
+            .map_err(|e| {
+                log::error!("get_function: {:?}", e);
+                crate::PipelineError::EntryPoint(naga_stage)
+            })?;
 
         // collect sizes indices, immutable buffers, and work group memory sizes
         let ep_info = &module_info.get_entry_point(ep_index);
@@ -301,14 +309,14 @@ impl super::Device {
             buffers
                 .object_at(slot as u64)
                 .unwrap()
-                .set_mutability(metal::MTLMutability::Immutable);
+                .set_mutability(MTLMutability::Immutable);
         }
     }
 
     pub unsafe fn texture_from_raw(
         raw: metal::Texture,
         format: wgt::TextureFormat,
-        raw_type: metal::MTLTextureType,
+        raw_type: MTLTextureType,
         array_layers: u32,
         mip_levels: u32,
         copy_size: crate::CopyExtent,
@@ -347,17 +355,14 @@ impl crate::Device for super::Device {
         let map_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
         let map_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
 
-        let mut options = metal::MTLResourceOptions::empty();
+        let mut options = MTLResourceOptions::empty();
         options |= if map_read || map_write {
             // `crate::MemoryFlags::PREFER_COHERENT` is ignored here
-            metal::MTLResourceOptions::StorageModeShared
+            MTLResourceOptions::StorageModeShared
         } else {
-            metal::MTLResourceOptions::StorageModePrivate
+            MTLResourceOptions::StorageModePrivate
         };
-        options.set(
-            metal::MTLResourceOptions::CPUCacheModeWriteCombined,
-            map_write,
-        );
+        options.set(MTLResourceOptions::CPUCacheModeWriteCombined, map_write);
 
         //TODO: HazardTrackingModeUntracked
 
@@ -410,21 +415,21 @@ impl crate::Device for super::Device {
             let descriptor = metal::TextureDescriptor::new();
 
             let mtl_type = match desc.dimension {
-                wgt::TextureDimension::D1 => metal::MTLTextureType::D1,
+                wgt::TextureDimension::D1 => MTLTextureType::D1,
                 wgt::TextureDimension::D2 => {
                     if desc.sample_count > 1 {
                         descriptor.set_sample_count(desc.sample_count as u64);
-                        metal::MTLTextureType::D2Multisample
+                        MTLTextureType::D2Multisample
                     } else if desc.size.depth_or_array_layers > 1 {
                         descriptor.set_array_length(desc.size.depth_or_array_layers as u64);
-                        metal::MTLTextureType::D2Array
+                        MTLTextureType::D2Array
                     } else {
-                        metal::MTLTextureType::D2
+                        MTLTextureType::D2
                     }
                 }
                 wgt::TextureDimension::D3 => {
                     descriptor.set_depth(desc.size.depth_or_array_layers as u64);
-                    metal::MTLTextureType::D3
+                    MTLTextureType::D3
                 }
             };
 
@@ -434,7 +439,7 @@ impl crate::Device for super::Device {
             descriptor.set_mipmap_level_count(desc.mip_level_count as u64);
             descriptor.set_pixel_format(mtl_format);
             descriptor.set_usage(conv::map_texture_usage(desc.format, desc.usage));
-            descriptor.set_storage_mode(metal::MTLStorageMode::Private);
+            descriptor.set_storage_mode(MTLStorageMode::Private);
 
             let raw = self.shared.device.lock().new_texture(&descriptor);
             if raw.as_ptr().is_null() {
@@ -470,7 +475,7 @@ impl crate::Device for super::Device {
         texture: &super::Texture,
         desc: &crate::TextureViewDescriptor,
     ) -> DeviceResult<super::TextureView> {
-        let raw_type = if texture.raw_type == metal::MTLTextureType::D2Multisample {
+        let raw_type = if texture.raw_type == MTLTextureType::D2Multisample {
             texture.raw_type
         } else {
             conv::map_texture_view_dimension(desc.dimension)
@@ -507,11 +512,11 @@ impl crate::Device for super::Device {
                 let raw = texture.raw.new_texture_view_from_slice(
                     raw_format,
                     raw_type,
-                    metal::NSRange {
+                    NSRange {
                         location: desc.range.base_mip_level as _,
                         length: mip_level_count as _,
                     },
-                    metal::NSRange {
+                    NSRange {
                         location: desc.range.base_array_layer as _,
                         length: array_layer_count as _,
                     },
@@ -543,10 +548,10 @@ impl crate::Device for super::Device {
             descriptor.set_mag_filter(conv::map_filter_mode(desc.mag_filter));
             descriptor.set_mip_filter(match desc.mipmap_filter {
                 wgt::FilterMode::Nearest if desc.lod_clamp == (0.0..0.0) => {
-                    metal::MTLSamplerMipFilter::NotMipmapped
+                    MTLSamplerMipFilter::NotMipmapped
                 }
-                wgt::FilterMode::Nearest => metal::MTLSamplerMipFilter::Nearest,
-                wgt::FilterMode::Linear => metal::MTLSamplerMipFilter::Linear,
+                wgt::FilterMode::Nearest => MTLSamplerMipFilter::Nearest,
+                wgt::FilterMode::Linear => MTLSamplerMipFilter::Linear,
             });
 
             let [s, t, r] = desc.address_modes;
@@ -567,15 +572,15 @@ impl crate::Device for super::Device {
             if let Some(border_color) = desc.border_color {
                 if let wgt::SamplerBorderColor::Zero = border_color {
                     if s == wgt::AddressMode::ClampToBorder {
-                        descriptor.set_address_mode_s(metal::MTLSamplerAddressMode::ClampToZero);
+                        descriptor.set_address_mode_s(MTLSamplerAddressMode::ClampToZero);
                     }
 
                     if t == wgt::AddressMode::ClampToBorder {
-                        descriptor.set_address_mode_t(metal::MTLSamplerAddressMode::ClampToZero);
+                        descriptor.set_address_mode_t(MTLSamplerAddressMode::ClampToZero);
                     }
 
                     if r == wgt::AddressMode::ClampToBorder {
-                        descriptor.set_address_mode_r(metal::MTLSamplerAddressMode::ClampToZero);
+                        descriptor.set_address_mode_r(MTLSamplerAddressMode::ClampToZero);
                     }
                 } else {
                     descriptor.set_border_color(conv::map_border_color(border_color));
@@ -848,11 +853,11 @@ impl crate::Device for super::Device {
                         // Create argument buffer for this array
                         let buffer = self.shared.device.lock().new_buffer(
                             8 * count as u64,
-                            metal::MTLResourceOptions::HazardTrackingModeUntracked
-                                | metal::MTLResourceOptions::StorageModeShared,
+                            MTLResourceOptions::HazardTrackingModeUntracked
+                                | MTLResourceOptions::StorageModeShared,
                         );
 
-                        let contents: &mut [metal::MTLResourceID] = unsafe {
+                        let contents: &mut [MTLResourceID] = unsafe {
                             core::slice::from_raw_parts_mut(
                                 buffer.contents().cast(),
                                 count as usize,
@@ -1050,8 +1055,8 @@ impl crate::Device for super::Device {
             let descriptor = metal::RenderPipelineDescriptor::new();
 
             let raw_triangle_fill_mode = match desc.primitive.polygon_mode {
-                wgt::PolygonMode::Fill => metal::MTLTriangleFillMode::Fill,
-                wgt::PolygonMode::Line => metal::MTLTriangleFillMode::Lines,
+                wgt::PolygonMode::Fill => MTLTriangleFillMode::Fill,
+                wgt::PolygonMode::Line => MTLTriangleFillMode::Lines,
                 wgt::PolygonMode::Point => panic!(
                     "{:?} is not enabled for this backend",
                     wgt::Features::POLYGON_MODE_POINT
@@ -1150,8 +1155,7 @@ impl crate::Device for super::Device {
                     // TODO: This is a workaround for what appears to be a Metal validation bug
                     // A pixel format is required even though no attachments are provided
                     if desc.color_targets.is_empty() && desc.depth_stencil.is_none() {
-                        descriptor
-                            .set_depth_attachment_pixel_format(metal::MTLPixelFormat::Depth32Float);
+                        descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float);
                     }
                     (None, None)
                 }
@@ -1162,7 +1166,7 @@ impl crate::Device for super::Device {
                 let ct = if let Some(color_target) = ct.as_ref() {
                     color_target
                 } else {
-                    at_descriptor.set_pixel_format(metal::MTLPixelFormat::Invalid);
+                    at_descriptor.set_pixel_format(MTLPixelFormat::Invalid);
                     continue;
                 };
 
@@ -1239,7 +1243,7 @@ impl crate::Device for super::Device {
                             .max()
                             .unwrap_or(0);
                         buffer_desc.set_stride(wgt::math::align_to(stride, 4));
-                        buffer_desc.set_step_function(metal::MTLVertexStepFunction::Constant);
+                        buffer_desc.set_step_function(MTLVertexStepFunction::Constant);
                         buffer_desc.set_step_rate(0);
                     } else {
                         buffer_desc.set_stride(vb.array_stride);
@@ -1297,9 +1301,9 @@ impl crate::Device for super::Device {
                 raw_cull_mode: conv::map_cull_mode(desc.primitive.cull_mode),
                 raw_depth_clip_mode: if self.features.contains(wgt::Features::DEPTH_CLIP_CONTROL) {
                     Some(if desc.primitive.unclipped_depth {
-                        metal::MTLDepthClipMode::Clamp
+                        MTLDepthClipMode::Clamp
                     } else {
-                        metal::MTLDepthClipMode::Clip
+                        MTLDepthClipMode::Clip
                     })
                 } else {
                     None
@@ -1340,7 +1344,7 @@ impl crate::Device for super::Device {
                 CompiledShader {
                     library: desc.library.clone(),
                     function: desc.function.clone(),
-                    wg_size: metal::MTLSize::new(
+                    wg_size: MTLSize::new(
                         desc.num_workgroups.0 as u64,
                         desc.num_workgroups.1 as u64,
                         desc.num_workgroups.2 as u64,
@@ -1354,7 +1358,7 @@ impl crate::Device for super::Device {
                     &desc.stage,
                     &[],
                     desc.layout,
-                    metal::MTLPrimitiveTopologyClass::Unspecified,
+                    MTLPrimitiveTopologyClass::Unspecified,
                     naga::ShaderStage::Compute,
                 )?
             };
@@ -1423,7 +1427,7 @@ impl crate::Device for super::Device {
             match desc.ty {
                 wgt::QueryType::Occlusion => {
                     let size = desc.count as u64 * crate::QUERY_SIZE;
-                    let options = metal::MTLResourceOptions::empty();
+                    let options = MTLResourceOptions::empty();
                     //TODO: HazardTrackingModeUntracked
                     let raw_buffer = self.shared.device.lock().new_buffer(size, options);
                     if let Some(label) = desc.label {
@@ -1438,11 +1442,10 @@ impl crate::Device for super::Device {
                 wgt::QueryType::Timestamp => {
                     let size = desc.count as u64 * crate::QUERY_SIZE;
                     let device = self.shared.device.lock();
-                    let destination_buffer =
-                        device.new_buffer(size, metal::MTLResourceOptions::empty());
+                    let destination_buffer = device.new_buffer(size, MTLResourceOptions::empty());
 
                     let csb_desc = metal::CounterSampleBufferDescriptor::new();
-                    csb_desc.set_storage_mode(metal::MTLStorageMode::Shared);
+                    csb_desc.set_storage_mode(MTLStorageMode::Shared);
                     csb_desc.set_sample_count(desc.count as _);
                     if let Some(label) = desc.label {
                         csb_desc.set_label(label);
@@ -1508,7 +1511,7 @@ impl crate::Device for super::Device {
     unsafe fn get_fence_value(&self, fence: &super::Fence) -> DeviceResult<crate::FenceValue> {
         let mut max_value = fence.completed_value.load(atomic::Ordering::Acquire);
         for &(value, ref cmd_buf) in fence.pending_command_buffers.iter() {
-            if cmd_buf.status() == metal::MTLCommandBufferStatus::Completed {
+            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
                 max_value = value;
             }
         }
@@ -1538,7 +1541,7 @@ impl crate::Device for super::Device {
 
         let start = time::Instant::now();
         loop {
-            if let metal::MTLCommandBufferStatus::Completed = cmd_buf.status() {
+            if let MTLCommandBufferStatus::Completed = cmd_buf.status() {
                 return Ok(true);
             }
             if start.elapsed().as_millis() >= timeout_ms as u128 {

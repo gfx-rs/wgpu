@@ -1,5 +1,6 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
+use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -263,4 +264,24 @@ pub(crate) async fn get_adapter_with_capabilities_or_from_env(
         required_downlevel_capabilities.flags - downlevel_capabilities.flags
     );
     adapter
+}
+
+/// A custom timer that only starts counting after the first call to get its time value.
+/// Useful because some examples have animations that would otherwise get started at initialization
+/// leading to random CI fails.
+#[derive(Default)]
+pub struct AnimationTimer {
+    start_time: Option<Instant>,
+}
+
+impl AnimationTimer {
+    pub fn time(&mut self) -> f32 {
+        match self.start_time {
+            None => {
+                self.start_time = Some(Instant::now());
+                0.0
+            }
+            Some(ref instant) => instant.elapsed().as_secs_f32(),
+        }
+    }
 }

@@ -294,16 +294,85 @@
             ],
             diagnostic_filter_leaf: None,
         ),
+        (
+            name: Some("index_let_array_1d"),
+            arguments: [
+                (
+                    name: Some("vi"),
+                    ty: 7,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 8,
+                binding: None,
+            )),
+            local_variables: [],
+            expressions: [
+                FunctionArgument(0),
+                Literal(I32(1)),
+                Literal(I32(2)),
+                Literal(I32(3)),
+                Literal(I32(4)),
+                Literal(I32(5)),
+                Compose(
+                    ty: 1,
+                    components: [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                    ],
+                ),
+                Access(
+                    base: 6,
+                    index: 0,
+                ),
+                Splat(
+                    size: Quad,
+                    value: 7,
+                ),
+                As(
+                    expr: 8,
+                    kind: Float,
+                    convert: Some(4),
+                ),
+            ],
+            named_expressions: {
+                0: "vi",
+                6: "arr",
+                7: "value",
+            },
+            body: [
+                Emit((
+                    start: 6,
+                    end: 7,
+                )),
+                Emit((
+                    start: 7,
+                    end: 8,
+                )),
+                Emit((
+                    start: 8,
+                    end: 10,
+                )),
+                Return(
+                    value: Some(9),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
     ],
     entry_points: [
         (
-            name: "index_let_array_1d",
+            name: "main",
             stage: Vertex,
             early_depth_test: None,
             workgroup_size: (0, 0, 0),
             workgroup_size_overrides: None,
             function: (
-                name: Some("index_let_array_1d"),
+                name: Some("main"),
                 arguments: [
                     (
                         name: Some("vi"),
@@ -335,40 +404,61 @@
                             5,
                         ],
                     ),
-                    Access(
-                        base: 6,
-                        index: 0,
-                    ),
-                    Splat(
-                        size: Quad,
-                        value: 7,
-                    ),
-                    As(
-                        expr: 8,
-                        kind: Float,
-                        convert: Some(4),
-                    ),
+                    Literal(I32(6)),
+                    CallResult(0),
+                    Literal(I32(1)),
+                    Literal(I32(2)),
+                    CallResult(1),
+                    Literal(I32(1)),
+                    Literal(I32(2)),
+                    CallResult(2),
+                    CallResult(3),
                 ],
                 named_expressions: {
                     0: "vi",
-                    6: "arr",
-                    7: "value",
                 },
                 body: [
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
                     Emit((
                         start: 6,
                         end: 7,
                     )),
-                    Emit((
-                        start: 7,
-                        end: 8,
-                    )),
-                    Emit((
-                        start: 8,
-                        end: 10,
-                    )),
+                    Call(
+                        function: 0,
+                        arguments: [
+                            6,
+                            7,
+                        ],
+                        result: Some(8),
+                    ),
+                    Call(
+                        function: 1,
+                        arguments: [
+                            9,
+                            10,
+                        ],
+                        result: Some(11),
+                    ),
+                    Call(
+                        function: 2,
+                        arguments: [
+                            12,
+                            13,
+                        ],
+                        result: Some(14),
+                    ),
+                    Call(
+                        function: 3,
+                        arguments: [
+                            0,
+                        ],
+                        result: Some(15),
+                    ),
                     Return(
-                        value: Some(9),
+                        value: Some(15),
                     ),
                 ],
                 diagnostic_filter_leaf: None,

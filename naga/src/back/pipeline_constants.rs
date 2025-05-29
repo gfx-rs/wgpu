@@ -16,6 +16,9 @@ use crate::{
     Span, Statement, TypeInner, WithSpan,
 };
 
+#[cfg(no_std)]
+use num_traits::float::FloatCore as _;
+
 #[derive(Error, Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum PipelineConstantError {
@@ -756,9 +759,11 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 | crate::GatherMode::Shuffle(ref mut index)
                 | crate::GatherMode::ShuffleDown(ref mut index)
                 | crate::GatherMode::ShuffleUp(ref mut index)
-                | crate::GatherMode::ShuffleXor(ref mut index) => {
+                | crate::GatherMode::ShuffleXor(ref mut index)
+                | crate::GatherMode::QuadBroadcast(ref mut index) => {
                     adjust(index);
                 }
+                crate::GatherMode::QuadSwap(_) => {}
             }
             adjust(argument);
             adjust(result)

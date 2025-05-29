@@ -29,6 +29,7 @@ use crate::adapter::GPUAdapterInfo;
 use crate::adapter::GPUSupportedFeatures;
 use crate::adapter::GPUSupportedLimits;
 use crate::command_encoder::GPUCommandEncoder;
+use crate::error::GPUError;
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
@@ -50,7 +51,7 @@ pub struct GPUDevice {
     pub queue_obj: SameObject<GPUQueue>,
 
     pub error_handler: super::error::ErrorHandler,
-    pub lost_receiver: tokio::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+    pub lost_promise: v8::Global<v8::Promise>,
 }
 
 impl Drop for GPUDevice {
@@ -118,6 +119,7 @@ impl GPUDevice {
     fn queue(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
         self.queue_obj.get(scope, |_| GPUQueue {
             id: self.queue,
+            device: self.id,
             error_handler: self.error_handler.clone(),
             instance: self.instance.clone(),
             label: self.label.clone(),
@@ -127,19 +129,23 @@ impl GPUDevice {
     #[fast]
     fn destroy(&self) {
         self.instance.device_destroy(self.id);
+        self.error_handler
+            .push_error(Some(GPUError::Lost(GPUDeviceLostReason::Destroyed)));
     }
 
     #[required(1)]
     #[cppgc]
-    fn create_buffer(
-        &self,
-        #[webidl] descriptor: super::buffer::GPUBufferDescriptor,
-    ) -> Result<GPUBuffer, JsErrorBox> {
+    fn create_buffer(&self, #[webidl] descriptor: super::buffer::GPUBufferDescriptor) -> GPUBuffer {
+        // Validation of the usage needs to happen on the device timeline, so
+        // don't raise an error immediately if it isn't valid. wgpu will
+        // reject `BufferUsages::empty()`.
+        let usage = wgpu_types::BufferUsages::from_bits(descriptor.usage)
+            .unwrap_or(wgpu_types::BufferUsages::empty());
+
         let wgpu_descriptor = wgpu_core::resource::BufferDescriptor {
             label: crate::transform_label(descriptor.label.clone()),
             size: descriptor.size,
-            usage: wgpu_types::BufferUsages::from_bits(descriptor.usage)
-                .ok_or_else(|| JsErrorBox::type_error("usage is not valid"))?,
+            usage,
             mapped_at_creation: descriptor.mapped_at_creation,
         };
 
@@ -149,7 +155,7 @@ impl GPUDevice {
 
         self.error_handler.push_error(err);
 
-        Ok(GPUBuffer {
+        GPUBuffer {
             instance: self.instance.clone(),
             error_handler: self.error_handler.clone(),
             id,
@@ -168,7 +174,7 @@ impl GPUDevice {
                 None
             }),
             mapped_js_buffers: RefCell::new(vec![]),
-        })
+        }
     }
 
     #[required(1)]
@@ -560,16 +566,10 @@ impl GPUDevice {
         }
     }
 
-    // TODO(@crowlKats): support returning same promise
-    #[async_method]
     #[getter]
-    #[cppgc]
-    async fn lost(&self) -> GPUDeviceLostInfo {
-        if let Some(lost_receiver) = self.lost_receiver.lock().await.take() {
-            let _ = lost_receiver.await;
-        }
-
-        GPUDeviceLostInfo
+    #[global]
+    fn lost(&self) -> v8::Global<v8::Promise> {
+        self.lost_promise.clone()
     }
 
     #[required(1)]
@@ -826,7 +826,17 @@ impl GPUDevice {
     }
 }
 
-pub struct GPUDeviceLostInfo;
+#[derive(Clone, Debug, Default, Hash, Eq, PartialEq)]
+pub enum GPUDeviceLostReason {
+    #[default]
+    Unknown,
+    Destroyed,
+}
+
+#[derive(Default)]
+pub struct GPUDeviceLostInfo {
+    pub reason: GPUDeviceLostReason,
+}
 
 impl GarbageCollected for GPUDeviceLostInfo {}
 
@@ -835,7 +845,11 @@ impl GPUDeviceLostInfo {
     #[getter]
     #[string]
     fn reason(&self) -> &'static str {
-        "unknown"
+        use GPUDeviceLostReason::*;
+        match self.reason {
+            Unknown => "unknown",
+            Destroyed => "destroyed",
+        }
     }
 
     #[getter]

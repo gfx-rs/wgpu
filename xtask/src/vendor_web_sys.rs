@@ -1,5 +1,6 @@
 use anyhow::Context;
 use pico_args::Arguments;
+use std::fmt::Write;
 use xshell::Shell;
 
 use crate::bad_arguments;
@@ -157,7 +158,7 @@ pub(crate) fn run_vendor_web_sys(shell: Shell, mut args: Arguments) -> anyhow::R
     let path_to_checkout_arg: Option<String> = args.opt_value_from_str("--path-to-checkout")?;
 
     // Plain text of the command that was run.
-    let argument_description;
+    let mut argument_description;
     // Path to the checkout we're using
     let path_to_wasm_bindgen_checkout;
     match (path_to_checkout_arg.as_deref(), version.as_deref()) {
@@ -176,6 +177,11 @@ pub(crate) fn run_vendor_web_sys(shell: Shell, mut args: Arguments) -> anyhow::R
             bad_arguments!("Expected either --path-to-checkout or --version")
         }
     };
+
+    let git_url: Option<String> = args.opt_value_from_str("--git-url")?;
+    if let Some(url) = &git_url {
+        write!(&mut argument_description, " --git-url {}", url)?;
+    }
 
     let unknown_args = args.finish();
     if !unknown_args.is_empty() {
@@ -202,7 +208,9 @@ pub(crate) fn run_vendor_web_sys(shell: Shell, mut args: Arguments) -> anyhow::R
                 version,
                 "--depth",
                 "1",
-                "https://github.com/rustwasm/wasm-bindgen.git",
+                git_url
+                    .as_deref()
+                    .unwrap_or("https://github.com/rustwasm/wasm-bindgen.git"),
                 WASM_BINDGEN_TEMP_CLONE_PATH,
             ])
             .ignore_stderr()

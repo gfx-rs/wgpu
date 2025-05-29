@@ -1,6 +1,3 @@
-@compute @workgroup_size(1)
-fn main() {}
-
 fn breakIfEmpty() {
     loop {
         continuing {
@@ -41,4 +38,12 @@ fn breakIfSeparateVariable() {
             break if counter == 5u;
         }
     }
+}
+
+@compute @workgroup_size(1)
+fn main() {
+    breakIfEmpty();
+    breakIfEmptyBody(false);
+    breakIf(false);
+    breakIfSeparateVariable();
 }

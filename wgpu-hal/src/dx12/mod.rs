@@ -460,7 +460,7 @@ pub struct Instance {
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
 
 impl Instance {
@@ -592,7 +592,7 @@ pub struct Adapter {
     #[allow(unused)]
     workarounds: Workarounds,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
 
 unsafe impl Send for Adapter {}
@@ -646,7 +646,7 @@ pub struct Device {
     features: wgt::Features,
     shared: Arc<DeviceShared>,
     // CPU only pools
-    rtv_pool: Mutex<descriptor::CpuPool>,
+    rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
     dsv_pool: Mutex<descriptor::CpuPool>,
     srv_uav_pool: Mutex<descriptor::CpuPool>,
     // library
@@ -655,7 +655,7 @@ pub struct Device {
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Allocator,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
     counters: Arc<wgt::HalCounters>,
 }
 
@@ -798,6 +798,9 @@ pub struct CommandEncoder {
     shared: Arc<DeviceShared>,
     mem_allocator: Allocator,
 
+    rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
+    temp_rtv_handles: Vec<descriptor::Handle>,
+
     null_rtv_handle: descriptor::Handle,
     list: Option<Direct3D12::ID3D12GraphicsCommandList>,
     free_lists: Vec<Direct3D12::ID3D12GraphicsCommandList>,
@@ -918,8 +921,10 @@ impl Texture {
 pub struct TextureView {
     raw_format: Dxgi::Common::DXGI_FORMAT,
     aspects: crate::FormatAspects,
-    /// only used by resolve
-    target_base: (Direct3D12::ID3D12Resource, u32),
+    dimension: wgt::TextureViewDimension,
+    texture: Direct3D12::ID3D12Resource,
+    subresource_index: u32,
+    mip_slice: u32,
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
     handle_rtv: Option<descriptor::Handle>,

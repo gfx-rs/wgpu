@@ -258,5 +258,30 @@ uint64_t2 test_f64_to_u64_vec(double2 f_23)
 [numthreads(1, 1, 1)]
 void main()
 {
+    test_const_eval();
+    const int _e1 = test_f16_to_i32_(1.0h);
+    const uint _e3 = test_f16_to_u32_(1.0h);
+    const int64_t _e5 = test_f16_to_i64_(1.0h);
+    const uint64_t _e7 = test_f16_to_u64_(1.0h);
+    const int _e9 = test_f32_to_i32_(1.0);
+    const uint _e11 = test_f32_to_u32_(1.0);
+    const int64_t _e13 = test_f32_to_i64_(1.0);
+    const uint64_t _e15 = test_f32_to_u64_(1.0);
+    const int _e17 = test_f64_to_i32_(1.0L);
+    const uint _e19 = test_f64_to_u32_(1.0L);
+    const int64_t _e21 = test_f64_to_i64_(1.0L);
+    const uint64_t _e23 = test_f64_to_u64_(1.0L);
+    const int2 _e27 = test_f16_to_i32_vec(half2(1.0h, 2.0h));
+    const uint2 _e31 = test_f16_to_u32_vec(half2(1.0h, 2.0h));
+    const int64_t2 _e35 = test_f16_to_i64_vec(half2(1.0h, 2.0h));
+    const uint64_t2 _e39 = test_f16_to_u64_vec(half2(1.0h, 2.0h));
+    const int2 _e43 = test_f32_to_i32_vec(float2(1.0, 2.0));
+    const uint2 _e47 = test_f32_to_u32_vec(float2(1.0, 2.0));
+    const int64_t2 _e51 = test_f32_to_i64_vec(float2(1.0, 2.0));
+    const uint64_t2 _e55 = test_f32_to_u64_vec(float2(1.0, 2.0));
+    const int2 _e59 = test_f64_to_i32_vec(double2(1.0L, 2.0L));
+    const uint2 _e63 = test_f64_to_u32_vec(double2(1.0L, 2.0L));
+    const int64_t2 _e67 = test_f64_to_i64_vec(double2(1.0L, 2.0L));
+    const uint64_t2 _e71 = test_f64_to_u64_vec(double2(1.0L, 2.0L));
     return;
 }

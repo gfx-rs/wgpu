@@ -37,25 +37,28 @@ mod webgpu_impl {
     pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC: u64 = 1 << 5;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 6;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D: u64 = 1 << 6;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 7;
+    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 7;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 8;
+    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 8;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 9;
+    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 9;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 10;
+    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 10;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 11;
+    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 11;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 12;
+    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 12;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 13;
 }
 
 macro_rules! bitflags_array_impl {
@@ -1037,10 +1040,31 @@ bitflags_array! {
         const SHADER_PRIMITIVE_INDEX = 1 << 34;
         /// Allows shaders to use the `early_depth_test` attribute.
         ///
+        /// The attribute is applied to the fragment shader entry point. It can be used in two
+        /// ways:
+        ///
+        ///   1. Force early depth/stencil tests:
+        ///
+        ///      - `@early_depth_test(force)` (WGSL)
+        ///
+        ///      - `layout(early_fragment_tests) in;` (GLSL)
+        ///
+        ///   2. Provide a conservative depth specifier that allows an additional early
+        ///      depth test under certain conditions:
+        ///
+        ///      - `@early_depth_test(greater_equal/less_equal/unchanged)` (WGSL)
+        ///
+        ///      - `layout(depth_<greater/less/unchanged>) out float gl_FragDepth;` (GLSL)
+        ///
+        /// See [`EarlyDepthTest`] for more details.
+        ///
         /// Supported platforms:
+        /// - Vulkan
         /// - GLES 3.1+
         ///
         /// This is a native only feature.
+        ///
+        /// [`EarlyDepthTest`]: https://docs.rs/naga/latest/naga/ir/enum.EarlyDepthTest.html
         const SHADER_EARLY_DEPTH_TEST = 1 << 35;
         /// Allows shaders to use i64 and u64.
         ///
@@ -1294,12 +1318,32 @@ bitflags_array! {
         /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with Unorm/UnormSrgb channel type.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
+        /// This feature does not guarantee availability of sliced 3d textures for ASTC formats.
+        /// If available, 3d support can be enabled by TEXTURE_COMPRESSION_ASTC_SLICED_3D feature.
+        ///
         /// Supported Platforms:
         /// - Vulkan on Intel
         /// - Mobile (some)
         ///
         /// This is a web and native feature.
         const TEXTURE_COMPRESSION_ASTC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC;
+
+
+        /// Allows the 3d dimension for textures with ASTC compressed formats.
+        ///
+        /// This feature must be used in combination with TEXTURE_COMPRESSION_ASTC to enable 3D textures with ASTC compression.
+        /// It does not enable the ASTC formats by itself.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan (some)
+        /// - Metal on Apple3+
+        /// - OpenGL/WebGL (some)
+        ///
+        /// Not Supported:
+        /// - DX12
+        ///
+        /// This is a web and native feature.
+        const TEXTURE_COMPRESSION_ASTC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D;
 
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
         /// all work before the query is finished.
