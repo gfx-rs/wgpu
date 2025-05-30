@@ -4984,6 +4984,12 @@ impl VertexFormat {
             Self::Float16x2 | Self::Snorm16x2 => 4,
             Self::Float32x3 => 12,
             Self::Float32x2 => 8,
+            // This is the minimum value from DirectX
+            // > A16 component is ignored, other data can be packed there, such as setting vertex stride to 6 bytes
+            //
+            // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_raytracing_geometry_triangles_desc
+            //
+            // Vulkan does not express a minimum stride.
             Self::Float16x4 | Self::Snorm16x4 => 6,
             _ => unreachable!(),
         }
