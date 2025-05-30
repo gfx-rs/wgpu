@@ -337,7 +337,7 @@ impl QueueInterface for CustomQueue {
         unimplemented!()
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", feature = "web"))]
     fn copy_external_image_to_texture(
         &self,
         _source: &wgpu::CopyExternalImageSourceInfo,

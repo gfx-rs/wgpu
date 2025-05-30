@@ -46,7 +46,7 @@ impl super::Device {
         private_caps: super::PrivateCapabilities,
         library: &Arc<D3D12Lib>,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+        compiler_container: Arc<shader_compilation::CompilerContainer>,
     ) -> Result<Self, crate::DeviceError> {
         if private_caps
             .instance_flags
@@ -202,7 +202,7 @@ impl super::Device {
             render_doc: Default::default(),
             null_rtv_handle,
             mem_allocator,
-            dxc_container,
+            compiler_container,
             counters: Default::default(),
         })
     }
@@ -325,27 +325,14 @@ impl super::Device {
 
         let source_name = stage.module.raw_name.as_deref();
 
-        // Compile with DXC if available, otherwise fall back to FXC
-        let result = if let Some(ref dxc_container) = self.dxc_container {
-            shader_compilation::compile_dxc(
-                self,
-                &source,
-                source_name,
-                raw_ep,
-                stage_bit,
-                &full_stage,
-                dxc_container,
-            )
-        } else {
-            shader_compilation::compile_fxc(
-                self,
-                &source,
-                source_name,
-                raw_ep,
-                stage_bit,
-                &full_stage,
-            )
-        };
+        let result = self.compiler_container.compile(
+            self,
+            &source,
+            source_name,
+            raw_ep,
+            stage_bit,
+            &full_stage,
+        );
 
         let log_level = if result.is_ok() {
             log::Level::Info

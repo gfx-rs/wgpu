@@ -25,7 +25,7 @@ wgpu-core = { workspace = true, features = [
     "wgsl",
     "gles",
 ] }
-wgpu-types = { workspace = true, features = ["serde"] }
+wgpu-types = { workspace = true, features = ["serde", "std"] }
 
 deno_core.workspace = true
 deno_error.workspace = true

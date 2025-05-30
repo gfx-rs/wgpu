@@ -243,7 +243,7 @@ pub enum SurfaceTarget<'window> {
     ///
     /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
     ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     Canvas(web_sys::HtmlCanvasElement),
 
     /// Surface from a `web_sys::OffscreenCanvas`.
@@ -255,7 +255,7 @@ pub enum SurfaceTarget<'window> {
     ///
     /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
     ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     OffscreenCanvas(web_sys::OffscreenCanvas),
 }
 

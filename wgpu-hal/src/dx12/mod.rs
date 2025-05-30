@@ -460,7 +460,7 @@ pub struct Instance {
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
 
 impl Instance {
@@ -592,7 +592,7 @@ pub struct Adapter {
     #[allow(unused)]
     workarounds: Workarounds,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
 
 unsafe impl Send for Adapter {}
@@ -655,7 +655,7 @@ pub struct Device {
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Allocator,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
     counters: Arc<wgt::HalCounters>,
 }
 

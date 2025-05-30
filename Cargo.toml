@@ -78,7 +78,7 @@ wgpu-core = { version = "25.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "25.0.0", path = "./wgpu-hal" }
 wgpu-macros = { version = "25.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "25.0.0", path = "./tests" }
-wgpu-types = { version = "25.0.0", path = "./wgpu-types" }
+wgpu-types = { version = "25.0.0", path = "./wgpu-types", default-features = false }
 
 # These _cannot_ have a version specified. If it does, crates.io will look
 # for a version of the package on crates when we publish naga. Path dependencies

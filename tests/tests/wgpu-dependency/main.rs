@@ -140,6 +140,54 @@ fn wasm32_with_webgl_depends_on_glow() {
 }
 
 #[test]
+fn wasm32_with_only_custom_backend_does_not_depend_on_web_specifics() {
+    check_feature_dependency(Requirement {
+        human_readable_name: "wasm32 with only the `custom` backend does not depend on web-specific bindings [`wasm-bindgen`, `js-sys`, `web-sys`]",
+        target: "wasm32-unknown-unknown",
+        packages: &["wgpu"],
+        features: &["custom"],
+        default_features: false,
+        search_terms: &[Search::Negative("wasm-bindgen"), Search::Negative("js-sys"), Search::Negative("web-sys")],
+    });
+}
+
+#[test]
+fn wasm32_with_webgpu_backend_does_depend_on_web_specifics() {
+    check_feature_dependency(Requirement {
+        human_readable_name: "wasm32 with the `webgpu` backend depends on web-specific bindings [`wasm-bindgen`, `js-sys`, `web-sys`]",
+        target: "wasm32-unknown-unknown",
+        packages: &["wgpu"],
+        features: &["webgpu"],
+        default_features: false,
+        search_terms: &[Search::Positive("wasm-bindgen"), Search::Positive("js-sys"), Search::Positive("web-sys")],
+    });
+}
+
+#[test]
+fn wasm32_with_webgl_backend_does_depend_on_web_specifics() {
+    check_feature_dependency(Requirement {
+        human_readable_name: "wasm32 with the `webgl` backend depends on web-specific bindings [`wasm-bindgen`, `js-sys`, `web-sys`]",
+        target: "wasm32-unknown-unknown",
+        packages: &["wgpu"],
+        features: &["webgl"],
+        default_features: false,
+        search_terms: &[Search::Positive("wasm-bindgen"), Search::Positive("js-sys"), Search::Positive("web-sys")],
+    });
+}
+
+#[test]
+fn windows_with_webgpu_webgl_backend_does_not_depend_on_web_specifics() {
+    check_feature_dependency(Requirement {
+        human_readable_name: "windows with the `webgpu` and `webgl` backends enabled does not depend on web-specific bindings [`wasm-bindgen`, `js-sys`, `web-sys`]",
+        target: "x86_64-pc-windows-msvc",
+        packages: &["wgpu"],
+        features: &["webgpu", "webgl"],
+        default_features: false,
+        search_terms: &[Search::Negative("wasm-bindgen"), Search::Negative("js-sys"), Search::Negative("web-sys")],
+    });
+}
+
+#[test]
 fn windows_with_webgl_does_not_depend_on_glow() {
     check_feature_dependency(Requirement {
         human_readable_name: "windows with `webgl` does not depend on `glow`",

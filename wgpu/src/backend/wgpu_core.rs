@@ -1877,7 +1877,7 @@ impl dispatch::QueueInterface for CoreQueue {
 
     // This method needs to exist if either webgpu or webgl is enabled,
     // but we only actually have an implementation if webgl is enabled.
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     #[cfg_attr(not(webgl), expect(unused_variables))]
     fn copy_external_image_to_texture(
         &self,
