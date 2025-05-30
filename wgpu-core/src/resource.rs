@@ -2138,7 +2138,7 @@ impl Blas {
                         if !mapping.is_coherent {
                             // Clippy complains about this because it might not be intended, but
                             // this is intentional.
-                            #[allow(clippy::single_range_in_vec_init)]
+                            #[expect(clippy::single_range_in_vec_init)]
                             self.device.raw().flush_mapped_ranges(
                                 compaction_buffer,
                                 &[0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress],
