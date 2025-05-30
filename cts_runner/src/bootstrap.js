@@ -204,6 +204,8 @@ const windowOrWorkerGlobalScope = {
   GPUBindGroupLayout: util.nonEnumerable(webgpu.GPUBindGroupLayout),
   GPUPipelineLayout: util.nonEnumerable(webgpu.GPUPipelineLayout),
   GPUBindGroup: util.nonEnumerable(webgpu.GPUBindGroup),
+  GPUCompilationInfo: util.nonEnumerable(webgpu.GPUCompilationInfo),
+  GPUCompilationMessage: util.nonEnumerable(webgpu.GPUCompilationMessage),
   GPUShaderModule: util.nonEnumerable(webgpu.GPUShaderModule),
   GPUShaderStage: util.nonEnumerable(webgpu.GPUShaderStage),
   GPUComputePipeline: util.nonEnumerable(webgpu.GPUComputePipeline),

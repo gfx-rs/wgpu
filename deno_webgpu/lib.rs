@@ -86,6 +86,8 @@ deno_core::extension!(
         render_pass::GPURenderPassEncoder,
         render_pipeline::GPURenderPipeline,
         sampler::GPUSampler,
+        shader::GPUCompilationInfo,
+        shader::GPUCompilationMessage,
         shader::GPUShaderModule,
         adapter::GPUSupportedFeatures,
         adapter::GPUSupportedLimits,
