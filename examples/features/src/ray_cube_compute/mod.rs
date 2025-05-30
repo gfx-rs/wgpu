@@ -1,6 +1,7 @@
+use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task};
+
 use bytemuck::{Pod, Zeroable};
 use glam::{Affine3A, Mat4, Quat, Vec3};
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task};
 use wgpu::util::DeviceExt;
 
 use wgpu::StoreOp;
@@ -250,8 +251,7 @@ impl crate::framework::Example for Example {
         let blas = device.create_blas(
             &wgpu::CreateBlasDescriptor {
                 label: None,
-                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
-                    | wgpu::AccelerationStructureFlags::ALLOW_COMPACTION,
+                flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
                 update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             },
             wgpu::BlasGeometrySizeDescriptors::Triangles {
@@ -352,6 +352,24 @@ impl crate::framework::Example for Example {
 
         let dist = 3.0;
 
+        for x in 0..side_count {
+            for y in 0..side_count {
+                tlas_package[(x + y * side_count) as usize] = Some(wgpu::TlasInstance::new(
+                    &blas,
+                    affine_to_rows(&Affine3A::from_rotation_translation(
+                        Quat::from_rotation_y(45.9_f32.to_radians()),
+                        Vec3 {
+                            x: x as f32 * dist,
+                            y: y as f32 * dist,
+                            z: -30.0,
+                        },
+                    )),
+                    0,
+                    0xff,
+                ));
+            }
+        }
+
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
@@ -371,56 +389,8 @@ impl crate::framework::Example for Example {
                     },
                 ]),
             }),
-            iter::empty(),
+            iter::once(&tlas_package),
         );
-
-        queue.submit(Some(encoder.finish()));
-
-        blas.prepare_compaction_async(|res| res.unwrap());
-
-        /*
-        Compaction is guaranteed to be finished after a device poll with Maintain::Wait on
-        native (ray-tracing is not yet on web).
-
-        If an application is not dependent on compaction e.g. due to low memory then it may be
-        better to write it in the render loop:
-
-        ````rust
-        let blas_s_pending_compaction = // An iterator of whatever BLASes you have called
-        //`prepare_compaction_async` on.
-        for blas in blas_s_pending_compaction {
-            if blas.ready_for_compaction() {
-                let compacted_blas = queue.compact_blas(&blas);
-            }
-        }
-        ````
-         */
-        device.poll(wgpu::PollType::Wait).unwrap();
-
-        let compacted_blas = queue.compact_blas(&blas);
-
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-        for x in 0..side_count {
-            for y in 0..side_count {
-                tlas_package[(x + y * side_count) as usize] = Some(wgpu::TlasInstance::new(
-                    &compacted_blas,
-                    affine_to_rows(&Affine3A::from_rotation_translation(
-                        Quat::from_rotation_y(45.9_f32.to_radians()),
-                        Vec3 {
-                            x: x as f32 * dist,
-                            y: y as f32 * dist,
-                            z: -30.0,
-                        },
-                    )),
-                    0,
-                    0xff,
-                ));
-            }
-        }
-
-        encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
 
         queue.submit(Some(encoder.finish()));
 

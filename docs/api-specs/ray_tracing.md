@@ -34,6 +34,53 @@ Before a [`Tlas`] is used in a shader it must
 - have all [`Blas`]es that it was last built with to have last been built in either the same build as
   this [`Tlas`] or an earlier build call.
 
+### [`Blas`] compaction
+
+Once a [`Blas`] has been built, it can be compacted. Acceleration structures are allocated conservatively, without
+knowing the exact data that is inside them. Once a [`Blas`] has been built, the driver can make data specific
+optimisations to make the [`BLAS`] smaller. To begin compaction call [`Blas::prepare_compaction_async`] on it. This
+method waits until all builds operating on the [`Blas`] are finished, prepares the [`Blas`] to be compacted, and runs
+the given callback. To check whether the [`Blas`] is ready, you can also call [`Blas::ready_for_compaction`] instead of
+waiting for the callback (useful if you are asynchronously compacting a large number of [`Blas`]es). Submitting a
+rebuild of a [`Blas`] terminates any [`Blas::prepare_compaction_async`], preventing the callback from being called, and
+making the [`Blas`] no longer ready to compact. Once a [`Blas`] is ready for compaction, it can be compacted using
+[`Queue::compact_blas`] this returns the new compacted [`Blas`], which is independent of the [`Blas`] passed in. The
+other [`Blas`] can be used for other things, including being rebuilt without affecting the new [`Blas`]. The returned
+[`Blas`] behaves largely like the [`Blas`] it was created from, except that it can be neither rebuilt, nor compacted
+again.
+
+An example of compaction being run when [`Blas`]es are ready, this would be in a situation when memory was not a major
+problem, otherwise (e.g. if you get an out of memory error) you should compact immediately (and switching all
+non-compacted [`Blas`]es to compacted ones).
+```rust
+use std::iter;
+use wgpu::Blas;
+
+struct BlasToBeCompacted {
+    blas: Blas,
+    /// The index into the TlasInstance this BLAS is used in.
+    tlas_index: usize,
+}
+
+fn render(/*whatever args you need to render*/) {
+  /* additional code to prepare the renderer */ 
+  //An iterator of whatever BLASes you have called `prepare_compaction_async` on.
+  let blas_s_pending_compaction: impl Iterator<Item = BlasToBeCompacted> = iter::empty();
+  for blas_to_be_compacted in blas_s_pending_compaction {
+    if blas_to_be_compacted.blas.ready_for_compaction() {
+        let compacted_blas = queue.compact_blas(&blas_to_be_compacted.blas);
+        tlas_instance[blas_to_be_compacted.tlas_index].set_blas(&compacted_blas);
+    }
+  }
+  let mut encoder =
+    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+  /* do other preparations on th TlasInstance.*/
+  encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
+  /* more render code */
+  queue.submit(Some(encoder.finish()));
+}
+```
+
 [`Device::create_blas`]: https://wgpu.rs/doc/wgpu/struct.Device.html#method.create_blas
 [`Device::create_tlas`]: https://wgpu.rs/doc/wgpu/struct.Device.html#method.create_tlas
 [`Tlas`]: https://wgpu.rs/doc/wgpu/struct.Tlas.html
@@ -41,6 +88,9 @@ Before a [`Tlas`] is used in a shader it must
 [`TlasInstance`]: https://wgpu.rs/doc/wgpu/struct.TlasInstance.html
 [`TlasPackage`]: https://wgpu.rs/doc/wgpu/struct.TlasPackage.html
 [`TlasPackage::tlas`]: https://wgpu.rs/doc/wgpu/struct.TlasPackage.html#method.tlas
+[`Blas::prepare_compaction_async`]: https://wgpu.rs/doc/wgpu/struct.Blas.html#method.prepare_compaction_async
+[`Blas::ready_for_compaction`]: https://wgpu.rs/doc/wgpu/struct.Blas.html#method.ready_for_compaction
+[`Queue::compact_blas`]: https://wgpu.rs/doc/wgpu/struct.Queue.html#method.compact_blas
 
 ## `naga`'s raytracing API:
 
