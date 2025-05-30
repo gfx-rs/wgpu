@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{bail, Context};
 use pico_args::Arguments;
 use std::ffi::OsString;
 use xshell::Shell;
@@ -16,8 +16,9 @@ const CTS_GIT_URL: &str = "https://github.com/gpuweb/cts.git";
 const CTS_DEFAULT_TEST_LIST: &str = "cts_runner/test.lst";
 
 pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
-    let mut list_files = Vec::<OsString>::new();
+    let skip_checkout = args.contains("--skip-checkout");
 
+    let mut list_files = Vec::<OsString>::new();
     while let Some(file) = args.opt_value_from_str("-f")? {
         list_files.push(file);
     }
@@ -37,6 +38,8 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         }))
     }
 
+    let wgpu_cargo_toml = shell.current_dir().join("Cargo.toml").canonicalize()?;
+
     let cts_revision = shell
         .read_file(CTS_REVISION_PATH)
         .context(format!(
@@ -46,6 +49,9 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         .to_string();
 
     if !shell.path_exists(CTS_CHECKOUT_PATH) {
+        if skip_checkout {
+            bail!("Skipping CTS checkout doesn't make sense when CTS is not present");
+        }
         log::info!("Cloning CTS");
         shell
             .cmd("git")
@@ -57,20 +63,24 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
 
     shell.change_dir(CTS_CHECKOUT_PATH);
 
-    log::info!("Checking out CTS");
-    shell
-        .cmd("git")
-        .args(["checkout", "--quiet", &cts_revision])
-        .quiet()
-        .run()
-        .context("Failed to check out CTS")?;
+    if !skip_checkout {
+        log::info!("Checking out CTS");
+        shell
+            .cmd("git")
+            .args(["checkout", "--quiet", &cts_revision])
+            .quiet()
+            .run()
+            .context("Failed to check out CTS")?;
+    } else {
+        log::info!("Skipping CTS checkout because --skip-checkout was specified");
+    }
 
     log::info!("Running CTS");
     for test in &tests {
         shell
             .cmd("cargo")
             .args(["run"])
-            .args(["--manifest-path", "../Cargo.toml"])
+            .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
             .args(["-p", "cts_runner"])
             .args(["--bin", "cts_runner"])
             .args(["--", "./tools/run_deno", "--verbose"])
