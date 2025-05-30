@@ -651,7 +651,7 @@ fn test_as_build_format_stride(
 ) {
     let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
-        contents: &vec![0; (format.acceleration_structure_vertex_readable_size() * 3) as usize],
+        contents: &vec![0; (format.min_acceleration_structure_vertex_stride() * 3) as usize],
         usage: BufferUsages::BLAS_INPUT,
     });
 

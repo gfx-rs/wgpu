@@ -900,14 +900,14 @@ fn iter_blas<'a>(
 
                     if size_desc
                         .vertex_format
-                        .acceleration_structure_vertex_readable_size()
+                        .min_acceleration_structure_vertex_stride()
                         > mesh.vertex_stride
                     {
                         return Err(BuildAccelerationStructureError::VertexStrideTooSmall(
                             blas.error_ident(),
                             size_desc
                                 .vertex_format
-                                .acceleration_structure_vertex_readable_size(),
+                                .min_acceleration_structure_vertex_stride(),
                             mesh.vertex_stride,
                         ));
                     }

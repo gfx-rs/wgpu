@@ -4979,7 +4979,7 @@ impl VertexFormat {
     /// slightly different from [`Self::size`] because the alpha component of 4-component formats
     /// are not read in an acceleration structure build, allowing for a smaller stride.
     #[must_use]
-    pub const fn acceleration_structure_vertex_readable_size(&self) -> u64 {
+    pub const fn min_acceleration_structure_vertex_stride(&self) -> u64 {
         match self {
             Self::Float16x2 | Self::Snorm16x2 => 4,
             Self::Float32x3 => 12,
