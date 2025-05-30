@@ -80,6 +80,8 @@ termcolor = ["codespan-reporting/termcolor"]
 ## Enables writing output to stderr.
 stderr = ["codespan-reporting/std"]
 
+portable-atomic = ["once_cell/portable-atomic"]
+
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 arrayvec.workspace = true
