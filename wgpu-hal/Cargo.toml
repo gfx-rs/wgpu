@@ -164,11 +164,7 @@ renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
-portable-atomic = [
-    "dep:portable-atomic",
-    "dep:portable-atomic-util",
-    "naga/portable-atomic",
-]
+portable-atomic = ["dep:portable-atomic", "dep:portable-atomic-util"]
 
 ###################################
 ### Internal Debugging Features ###
