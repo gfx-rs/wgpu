@@ -234,7 +234,7 @@ impl core::error::Error for BlasAsyncError {}
 
 impl Blas {
     /// Asynchronously prepares this BLAS for compaction. The callback is called once all builds
-    /// using this BLAS are finished and the BLAS is compactable. This can be check using
+    /// using this BLAS are finished and the BLAS is compactable. This can be checked using
     /// [`Blas::ready_for_compaction`]. Rebuilding this BLAS will reset its compacted state, and it
     /// will need to be prepared again.
     ///
