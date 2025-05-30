@@ -10,9 +10,6 @@ use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
 use parking_lot::RwLock;
 
-#[cfg(feature = "validation_canary")]
-use alloc::string::ToString as _;
-
 unsafe extern "system" fn debug_utils_messenger_callback(
     message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     message_type: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -143,6 +140,8 @@ unsafe extern "system" fn debug_utils_messenger_callback(
 
     #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && level == log::Level::Error {
+        use alloc::string::ToString as _;
+
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());
     }
