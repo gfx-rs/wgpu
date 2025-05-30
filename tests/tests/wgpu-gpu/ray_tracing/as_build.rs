@@ -679,64 +679,8 @@ static MISALIGNED_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
             // https://github.com/gfx-rs/wgpu/issues/6727
             .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
     )
-    .run_sync(misaligned_build);
-
-fn misaligned_build(ctx: TestingContext) {
-    let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        label: None,
-        contents: &[0; mem::size_of::<[[i16; 3]; 3]>()],
-        usage: BufferUsages::BLAS_INPUT,
-    });
-
-    let blas_size = BlasTriangleGeometrySizeDescriptor {
-        // The fourth component is ignored, and it allows us to have a smaller stride.
-        vertex_format: VertexFormat::Float32x3,
-        vertex_count: 3,
-        index_format: None,
-        index_count: None,
-        flags: wgpu::AccelerationStructureGeometryFlags::empty(),
-    };
-
-    let blas = ctx.device.create_blas(
-        &CreateBlasDescriptor {
-            label: Some("BLAS"),
-            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
-            update_mode: AccelerationStructureUpdateMode::Build,
-        },
-        BlasGeometrySizeDescriptors::Triangles {
-            descriptors: vec![blas_size.clone()],
-        },
-    );
-
-    let mut command_encoder = ctx
-        .device
-        .create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("BLAS_1"),
-        });
-    fail(
-        &ctx.device,
-        || {
-            command_encoder.build_acceleration_structures(
-                &[BlasBuildEntry {
-                    blas: &blas,
-                    geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
-                        size: &blas_size,
-                        vertex_buffer: &vertices,
-                        first_vertex: 0,
-                        // Not aligned to four bytes like it should be
-                        vertex_stride: 13,
-                        index_buffer: None,
-                        first_index: None,
-                        transform_buffer: None,
-                        transform_buffer_offset: None,
-                    }]),
-                }],
-                &[],
-            )
-        },
-        None,
-    );
-}
+    // Larger than the minimum size, but not aligned as required
+    .run_sync(|ctx| test_as_build_invalid_format_stride(ctx, 13));
 
 #[gpu_test]
 static TOO_SMALL_STRIDE_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -747,9 +691,10 @@ static TOO_SMALL_STRIDE_BUILD: GpuTestConfiguration = GpuTestConfiguration::new(
             // https://github.com/gfx-rs/wgpu/issues/6727
             .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
     )
-    .run_sync(too_small_stride_build);
+    // Aligned as required, but smaller than minimum size
+    .run_sync(|ctx| test_as_build_invalid_format_stride(ctx, 8));
 
-fn too_small_stride_build(ctx: TestingContext) {
+fn test_as_build_invalid_format_stride(ctx: TestingContext, stride: BufferAddress) {
     let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
         label: None,
         contents: &[0; mem::size_of::<[[i16; 3]; 3]>()],
@@ -792,7 +737,7 @@ fn too_small_stride_build(ctx: TestingContext) {
                         vertex_buffer: &vertices,
                         first_vertex: 0,
                         // Aligned to four bytes but too small
-                        vertex_stride: 8,
+                        vertex_stride: stride,
                         index_buffer: None,
                         first_index: None,
                         transform_buffer: None,
