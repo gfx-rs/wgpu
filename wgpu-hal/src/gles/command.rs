@@ -524,7 +524,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 #[cfg(webgl)]
                 super::TextureInner::ExternalFramebuffer { .. } => true,
                 #[cfg(native)]
-                super::TextureInner::ExternalGlFrameBuffer { .. } => true,
+                super::TextureInner::ExternalNativeFramebuffer { .. } => true,
                 _ => false,
             });
 
