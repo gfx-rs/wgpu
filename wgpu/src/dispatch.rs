@@ -240,11 +240,6 @@ pub trait BufferInterface: CommonTraits {
     );
     fn get_mapped_range(&self, sub_range: Range<crate::BufferAddress>)
         -> DispatchBufferMappedRange;
-    #[cfg(webgpu)]
-    fn get_mapped_range_as_array_buffer(
-        &self,
-        sub_range: Range<crate::BufferAddress>,
-    ) -> Option<js_sys::ArrayBuffer>;
 
     fn unmap(&self);
 
@@ -539,6 +534,9 @@ pub trait QueueWriteBufferInterface: CommonTraits {
 pub trait BufferMappedRangeInterface: CommonTraits {
     fn slice(&self) -> &[u8];
     fn slice_mut(&mut self) -> &mut [u8];
+
+    #[cfg(webgpu)]
+    fn as_uint8array(&self) -> &js_sys::Uint8Array;
 }
 
 /// Generates Dispatch types for each of the interfaces. Each type is a wrapper around the

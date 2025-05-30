@@ -14,6 +14,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{
+    cell::OnceCell,
     cell::RefCell,
     fmt,
     future::Future,
@@ -1219,16 +1220,6 @@ impl WebBuffer {
         }
     }
 
-    /// Creates a raw Javascript array buffer over the provided range.
-    fn get_mapped_array_buffer(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::ArrayBuffer {
-        self.inner
-            .get_mapped_range_with_f64_and_f64(
-                sub_range.start as f64,
-                (sub_range.end - sub_range.start) as f64,
-            )
-            .unwrap()
-    }
-
     /// Obtains a reference to the re-usable buffer mapping as a Javascript array view.
     fn get_mapped_range(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::Uint8Array {
         let mut mapping = self.mapping.borrow_mut();
@@ -1374,9 +1365,9 @@ pub struct WebQueueWriteBuffer {
 #[derive(Debug)]
 pub struct WebBufferMappedRange {
     actual_mapping: js_sys::Uint8Array,
-    /// Copy of the mapped data that lives in the Rust/Wasm heap instead of JS,
-    /// so Rust code can borrow it.
-    temporary_mapping: Vec<u8>,
+    /// Copy of actual_mapping that lives in the Rust/Wasm heap instead of JS. This
+    /// is done only when accessed for the first time to avoid unnecessary allocations.
+    temporary_mapping: OnceCell<Vec<u8>>,
     /// Whether `temporary_mapping` has possibly been written to and needs to be written back to JS.
     temporary_mapping_modified: bool,
     /// Unique identifier for this BufferMappedRange.
@@ -2667,21 +2658,13 @@ impl dispatch::BufferInterface for WebBuffer {
         sub_range: Range<crate::BufferAddress>,
     ) -> dispatch::DispatchBufferMappedRange {
         let actual_mapping = self.get_mapped_range(sub_range);
-        let temporary_mapping = actual_mapping.to_vec();
         WebBufferMappedRange {
             actual_mapping,
-            temporary_mapping,
+            temporary_mapping: OnceCell::new(),
             temporary_mapping_modified: false,
             ident: crate::cmp::Identifier::create(),
         }
         .into()
-    }
-
-    fn get_mapped_range_as_array_buffer(
-        &self,
-        sub_range: Range<wgt::BufferAddress>,
-    ) -> Option<js_sys::ArrayBuffer> {
-        Some(self.get_mapped_array_buffer(sub_range))
     }
 
     fn unmap(&self) {
@@ -3794,13 +3777,22 @@ impl Drop for WebSurfaceOutputDetail {
 impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
     #[inline]
     fn slice(&self) -> &[u8] {
-        &self.temporary_mapping
+        self.temporary_mapping
+            .get_or_init(|| self.actual_mapping.to_vec())
+            .as_slice()
     }
 
     #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
         self.temporary_mapping_modified = true;
-        &mut self.temporary_mapping
+        self.temporary_mapping
+            .get_or_init(|| self.actual_mapping.to_vec());
+        self.temporary_mapping.get_mut().unwrap()
+    }
+
+    #[inline]
+    fn as_uint8array(&self) -> &js_sys::Uint8Array {
+        &self.actual_mapping
     }
 }
 impl Drop for WebBufferMappedRange {
@@ -3813,7 +3805,7 @@ impl Drop for WebBufferMappedRange {
 
         // Copy from the temporary mapping back into the array buffer that was
         // originally provided by the browser
-        let temporary_mapping_slice = self.temporary_mapping.as_slice();
+        let temporary_mapping_slice = self.temporary_mapping.get().unwrap().as_slice();
         unsafe {
             // Note: no allocations can happen between `view` and `set`, or this
             // will break

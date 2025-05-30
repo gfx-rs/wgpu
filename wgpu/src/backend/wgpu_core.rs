@@ -2037,14 +2037,6 @@ impl dispatch::BufferInterface for CoreBuffer {
         }
     }
 
-    #[cfg(webgpu)]
-    fn get_mapped_range_as_array_buffer(
-        &self,
-        _sub_range: Range<wgt::BufferAddress>,
-    ) -> Option<js_sys::ArrayBuffer> {
-        None
-    }
-
     fn unmap(&self) {
         match self.context.0.buffer_unmap(self.id) {
             Ok(()) => (),
@@ -3704,5 +3696,10 @@ impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.size) }
+    }
+
+    #[cfg(webgpu)]
+    fn as_uint8array(&self) -> &js_sys::Uint8Array {
+        panic!("Only available on WebGPU")
     }
 }

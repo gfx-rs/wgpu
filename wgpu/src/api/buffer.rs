@@ -335,33 +335,6 @@ impl Buffer {
         self.slice(bounds).get_mapped_range()
     }
 
-    /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
-    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will fail.
-    ///
-    /// This is useful when targeting WebGPU and you want to pass mapped data directly to js.
-    /// Unlike `get_mapped_range` which unconditionally copies mapped data into the wasm heap,
-    /// this function directly hands you the ArrayBuffer that we mapped the data into in js.
-    ///
-    /// This is only available on WebGPU, on any other backends this will return `None`.
-    ///
-    /// `bounds` may be less than the bounds passed to [`Self::map_async()`],
-    /// and multiple views may be obtained and used simultaneously as long as they do not overlap.
-    ///
-    /// This can also be performed using [`BufferSlice::get_mapped_range_as_array_buffer()`].
-    ///
-    /// # Panics
-    ///
-    /// - If `bounds` is outside of the bounds of `self`.
-    /// - If `bounds` has a length less than 1.
-    /// - If the start and end of `bounds` are not aligned to [`MAP_ALIGNMENT`].
-    #[cfg(webgpu)]
-    pub fn get_mapped_range_as_array_buffer<S: RangeBounds<BufferAddress>>(
-        &self,
-        bounds: S,
-    ) -> Option<js_sys::ArrayBuffer> {
-        self.slice(bounds).get_mapped_range_as_array_buffer()
-    }
-
     /// Gain write access to the bytes of a [mapped] [`Buffer`].
     ///
     /// Returns a [`BufferViewMut`] referring to the buffer range represented by
@@ -529,32 +502,6 @@ impl<'a> BufferSlice<'a> {
             slice: *self,
             inner: range,
         }
-    }
-
-    /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
-    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will fail.
-    ///
-    /// This is useful when targeting WebGPU and you want to pass mapped data directly to js.
-    /// Unlike `get_mapped_range` which unconditionally copies mapped data into the wasm heap,
-    /// this function directly hands you the ArrayBuffer that we mapped the data into in js.
-    ///
-    /// This is only available on WebGPU, on any other backends this will return `None`.
-    ///
-    /// Multiple views may be obtained and used simultaneously as long as they are from
-    /// non-overlapping slices.
-    ///
-    /// This can also be performed using [`Buffer::get_mapped_range_as_array_buffer()`].
-    ///
-    /// # Panics
-    ///
-    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
-    #[cfg(webgpu)]
-    pub fn get_mapped_range_as_array_buffer(&self) -> Option<js_sys::ArrayBuffer> {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
-
-        self.buffer
-            .inner
-            .get_mapped_range_as_array_buffer(self.offset..end)
     }
 
     /// Gain write access to the bytes of a [mapped] [`Buffer`].
@@ -758,6 +705,16 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 pub struct BufferView<'a> {
     slice: BufferSlice<'a>,
     inner: dispatch::DispatchBufferMappedRange,
+}
+
+#[cfg(webgpu)]
+impl BufferView<'_> {
+    /// Provides the same data as dereferencing the view, but as a `Uint8Array` in js.
+    /// This can be MUCH faster than dereferencing the view which copies the data into
+    /// the Rust / wasm heap.
+    pub fn as_uint8array(&self) -> &js_sys::Uint8Array {
+        self.inner.as_uint8array()
+    }
 }
 
 impl core::ops::Deref for BufferView<'_> {
