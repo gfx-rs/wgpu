@@ -269,6 +269,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 } => {
                     self.need_bake_expressions.insert(argument);
                 }
+                crate::Statement::Atomic {
+                    ref fun,
+                    ..
+                } => {
+                    if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
+                        self.need_bake_expressions.insert(cmp);
+                    }
+                }
                 _ => {}
             }
         }
@@ -2381,9 +2389,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     crate::AtomicFunction::Exchange { compare: Some(cmp) } => Some(cmp),
                     _ => None,
                 };
-                if let Some(cmp) = compare_expr {
-                    self.need_bake_expressions.insert(cmp);
-                }
                 match pointer_space {
                     crate::AddressSpace::WorkGroup => {
                         write!(self.out, "Interlocked{fun_str}(")?;
