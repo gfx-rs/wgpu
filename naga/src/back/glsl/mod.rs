@@ -621,9 +621,6 @@ pub struct Writer<'a, W> {
     multiview: Option<core::num::NonZeroU32>,
     /// Mapping of varying variables to their location. Needed for reflections.
     varying: crate::FastHashMap<String, VaryingLocation>,
-
-    /// Set of special type names whose definitions have already been written. To prevent duplicates.
-    written_special_struct_names: crate::FastHashSet<String>,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -691,7 +688,6 @@ impl<'a, W: Write> Writer<'a, W> {
             need_bake_expressions: Default::default(),
             continue_ctx: back::continue_forward::ContinueCtx::default(),
             varying: Default::default(),
-            written_special_struct_names: Default::default(),
         };
 
         // Find all features required to print this module
@@ -808,19 +804,12 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        // Write functions and struct definitions for special types.
+        // Write functions for special types.
         for (type_key, struct_ty) in self.module.special_types.predeclared_types.iter() {
-            let struct_name = &self.names[&NameKey::Type(*struct_ty)];
-            if !self
-                .written_special_struct_names
-                .insert(struct_name.clone())
-            {
-                continue;
-            }
-
             match type_key {
                 &crate::PredeclaredType::ModfResult { size, scalar }
                 | &crate::PredeclaredType::FrexpResult { size, scalar } => {
+                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
                     let arg_type_name_owner;
                     let arg_type_name = if let Some(size) = size {
                         arg_type_name_owner = format!(
