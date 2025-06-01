@@ -269,7 +269,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 } => {
                     self.need_bake_expressions.insert(argument);
                 }
-                crate::Statement::Atomic { fun: crate::AtomicFunction::Exchange { compare: Some(cmp) }, .. } => {
+                crate::Statement::Atomic {
+                    fun: crate::AtomicFunction::Exchange { compare: Some(cmp) },
+                    ..
+                } => {
                     self.need_bake_expressions.insert(cmp);
                 }
                 _ => {}
