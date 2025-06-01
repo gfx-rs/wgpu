@@ -1498,10 +1498,8 @@ impl<'a, W: Write> Writer<'a, W> {
 
         for statement in func.body.iter() {
             match *statement {
-                crate::Statement::Atomic { ref fun, .. } => {
-                    if let crate::AtomicFunction::Exchange { compare: Some(cmp) } = *fun {
-                        self.need_bake_expressions.insert(cmp);
-                    }
+                crate::Statement::Atomic { fun: crate::AtomicFunction::Exchange { compare: Some(cmp) }, .. } => {
+                    self.need_bake_expressions.insert(cmp);
                 }
                 _ => {}
             }
