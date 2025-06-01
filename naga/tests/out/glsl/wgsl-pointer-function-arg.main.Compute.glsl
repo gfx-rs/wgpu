@@ -75,6 +75,19 @@ void let_binding(inout int a_1[4], uint i_7) {
 }
 
 void main() {
+    ivec2 vec[4] = ivec2[4](ivec2(0), ivec2(0), ivec2(0), ivec2(0));
+    mat2x2 mat[4] = mat2x2[4](mat2x2(0.0), mat2x2(0.0), mat2x2(0.0), mat2x2(0.0));
+    int arr1d[4] = int[4](0, 0, 0, 0);
+    int arr2d[4][4] = int[4][4](int[4](0, 0, 0, 0), int[4](0, 0, 0, 0), int[4](0, 0, 0, 0), int[4](0, 0, 0, 0));
+    int arr3d[4][4][4] = int[4][4][4](int[4][4](int[4](0, 0, 0, 0), int[4](0, 0, 0, 0), int[4](0, 0, 0, 0), int[4](0, 0, 0, 0)), int[4][4](int[4](0, 0, 0, 0), int[4](0, 0, 0, 0), int[4](0, 0, 0, 0), int[4](0, 0, 0, 0)), int[4][4](int[4](0, 0, 0, 0), int[4](0, 0, 0, 0), int[4](0, 0, 0, 0), int[4](0, 0, 0, 0)), int[4][4](int[4](0, 0, 0, 0), int[4](0, 0, 0, 0), int[4](0, 0, 0, 0), int[4](0, 0, 0, 0)));
+    local_var(1u);
+    mat_vec_ptrs(vec, mat, 1u);
+    argument(arr1d, 1u);
+    argument_nested_x2_(arr2d, 1u, 2u);
+    argument_nested_x3_(arr3d, 1u, 2u);
+    index_from_self(arr1d, 1u);
+    local_var_from_arg(int[4](1, 2, 3, 4), 5u);
+    let_binding(arr1d, 1u);
     return;
 }
 

@@ -42,7 +42,7 @@ struct Outer {
     thing: u32,
 }
 
-var<private> global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0i);
+var<private> msl_padding_global_const: GlobalConst = GlobalConst(0u, vec3<u32>(0u, 0u, 0u), 0i);
 @group(0) @binding(0) 
 var<storage, read_write> bar: Bar;
 @group(0) @binding(1) 
@@ -143,6 +143,15 @@ fn assign_array_through_ptr_fn(foo_2: ptr<function, array<vec4<f32>, 2>>) {
     return;
 }
 
+fn assign_through_ptr() {
+    var val: u32 = 33u;
+    var arr: array<vec4<f32>, 2> = array<vec4<f32>, 2>(vec4(6f), vec4(7f));
+
+    assign_through_ptr_fn((&val));
+    assign_array_through_ptr_fn((&arr));
+    return;
+}
+
 fn fetch_arg_ptr_member(p_1: ptr<function, AssignToMember>) -> u32 {
     let _e2 = (*p_1).x;
     return _e2;
@@ -160,6 +169,17 @@ fn fetch_arg_ptr_array_element(p_3: ptr<function, array<u32, 4>>) -> u32 {
 
 fn assign_to_arg_ptr_array_element(p_4: ptr<function, array<u32, 4>>) {
     (*p_4)[1] = 10u;
+    return;
+}
+
+fn assign_to_ptr_components() {
+    var s1_: AssignToMember;
+    var a1_: array<u32, 4>;
+
+    assign_to_arg_ptr_member((&s1_));
+    let _e1 = fetch_arg_ptr_member((&s1_));
+    assign_to_arg_ptr_array_element((&a1_));
+    let _e3 = fetch_arg_ptr_array_element((&a1_));
     return;
 }
 
@@ -210,6 +230,7 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 
     let baz_1 = foo;
     foo = 1f;
+    let phony = msl_padding_global_const;
     test_matrix_within_struct_accesses();
     test_matrix_within_array_within_struct_accesses();
     let _matrix = bar._matrix;
@@ -218,11 +239,11 @@ fn foo_vert(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
     let a_2 = bar.data[(arrayLength((&bar.data)) - 2u)].value;
     let c = qux;
     let data_pointer = (&bar.data[0].value);
-    let _e33 = read_from_private((&foo));
+    let _e35 = read_from_private((&foo));
     c2_ = array<i32, 5>(a_2, i32(b), 3i, 4i, 5i);
     c2_[(vi + 1u)] = 42i;
     let value_1 = c2_[vi];
-    let _e47 = test_arr_as_arg(array<array<f32, 10>, 5>());
+    let _e49 = test_arr_as_arg(array<array<f32, 10>, 5>());
     return vec4<f32>((_matrix * vec4<f32>(vec4(value_1))), 2f);
 }
 
@@ -237,23 +258,12 @@ fn foo_frag() -> @location(0) vec4<f32> {
 }
 
 @compute @workgroup_size(1, 1, 1) 
-fn assign_through_ptr() {
-    var val: u32 = 33u;
-    var arr: array<vec4<f32>, 2> = array<vec4<f32>, 2>(vec4(6f), vec4(7f));
-
-    assign_through_ptr_fn((&val));
-    assign_array_through_ptr_fn((&arr));
-    return;
-}
-
-@compute @workgroup_size(1, 1, 1) 
-fn assign_to_ptr_components() {
-    var s1_: AssignToMember;
-    var a1_: array<u32, 4>;
-
-    assign_to_arg_ptr_member((&s1_));
-    let _e1 = fetch_arg_ptr_member((&s1_));
-    assign_to_arg_ptr_array_element((&a1_));
-    let _e3 = fetch_arg_ptr_array_element((&a1_));
+fn foo_compute() {
+    assign_through_ptr();
+    assign_to_ptr_components();
+    let _e1 = index_ptr(true);
+    let _e2 = member_ptr();
+    let _e3 = let_members_of_members();
+    let _e4 = var_members_of_members();
     return;
 }

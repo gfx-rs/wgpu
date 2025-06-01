@@ -1,0 +1,4 @@
+targets = "METAL"
+
+[msl]
+lang_version = [2, 1]

@@ -138,5 +138,30 @@ fn test_f64_to_u64_vec(f_23: vec2<f64>) -> vec2<u64> {
 
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
+    test_const_eval();
+    let _e1 = test_f16_to_i32_(1h);
+    let _e3 = test_f16_to_u32_(1h);
+    let _e5 = test_f16_to_i64_(1h);
+    let _e7 = test_f16_to_u64_(1h);
+    let _e9 = test_f32_to_i32_(1f);
+    let _e11 = test_f32_to_u32_(1f);
+    let _e13 = test_f32_to_i64_(1f);
+    let _e15 = test_f32_to_u64_(1f);
+    let _e17 = test_f64_to_i32_(1.0lf);
+    let _e19 = test_f64_to_u32_(1.0lf);
+    let _e21 = test_f64_to_i64_(1.0lf);
+    let _e23 = test_f64_to_u64_(1.0lf);
+    let _e27 = test_f16_to_i32_vec(vec2<f16>(1h, 2h));
+    let _e31 = test_f16_to_u32_vec(vec2<f16>(1h, 2h));
+    let _e35 = test_f16_to_i64_vec(vec2<f16>(1h, 2h));
+    let _e39 = test_f16_to_u64_vec(vec2<f16>(1h, 2h));
+    let _e43 = test_f32_to_i32_vec(vec2<f32>(1f, 2f));
+    let _e47 = test_f32_to_u32_vec(vec2<f32>(1f, 2f));
+    let _e51 = test_f32_to_i64_vec(vec2<f32>(1f, 2f));
+    let _e55 = test_f32_to_u64_vec(vec2<f32>(1f, 2f));
+    let _e59 = test_f64_to_i32_vec(vec2<f64>(1.0lf, 2.0lf));
+    let _e63 = test_f64_to_u32_vec(vec2<f64>(1.0lf, 2.0lf));
+    let _e67 = test_f64_to_i64_vec(vec2<f64>(1.0lf, 2.0lf));
+    let _e71 = test_f64_to_u64_vec(vec2<f64>(1.0lf, 2.0lf));
     return;
 }

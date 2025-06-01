@@ -296,4 +296,24 @@ void testTex2DMSArray(in vec3 coord) {
     c = texelFetch(sampler2DMSArray(tex2DMSArray, samp), ivec3(coord), 3);
 }
 
-void main() {}
+void main() {
+    testTex1D(1.0);
+#if HAS_1D_DEPTH_TEXTURES
+    testTex1DShadow(2.0);
+#endif
+    testTex1DArray(vec2(3.0));
+#if HAS_1D_DEPTH_TEXTURES
+    testTex1DArrayShadow(vec2(4.0));
+#endif
+    testTex2D(vec2(1.0));
+    testTex2DShadow(vec2(1.0));
+    testTex2DArray(vec3(1.0));
+    testTex2DArrayShadow(vec3(1.0));
+    testTexCube(vec3(1.0));
+    testTexCubeShadow(vec3(1.0));
+    testTexCubeArray(vec4(1.0));
+    testTexCubeArrayShadow(vec4(1.0));
+    testTex3D(vec3(1.0));
+    testTex2DMS(vec2(1.0));
+    testTex2DMSArray(vec3(1.0));
+}

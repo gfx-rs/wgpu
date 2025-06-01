@@ -157,6 +157,11 @@ fn btest(a_8: vec4<bool>, b_8: vec4<bool>) {
 }
 
 fn main_1() {
+    ftest(vec4(0f), vec4(0f));
+    dtest(vec4(0.0lf), vec4(0.0lf));
+    itest(vec4(0i), vec4(0i));
+    utest(vec4(0u), vec4(0u));
+    btest(vec4(false), vec4(false));
     return;
 }
 

@@ -45,6 +45,7 @@ png.workspace = true
 pollster.workspace = true
 web-time.workspace = true
 wgpu-types = { workspace = true, features = [
+    "std",
     "trace", # TODO(#5974): this should be a dep on wgpu/trace and not wgpu-types at all
 ] }
 winit.workspace = true

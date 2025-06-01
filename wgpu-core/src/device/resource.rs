@@ -979,6 +979,9 @@ impl Device {
                 if desc.format.is_bcn() {
                     self.require_features(wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D)
                         .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+                } else if desc.format.is_astc() {
+                    self.require_features(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
+                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
                 } else {
                     return Err(CreateTextureError::InvalidCompressedDimension(
                         desc.dimension,
@@ -3911,12 +3914,12 @@ impl Device {
         let trackers = self.trackers.lock();
         for buffer in trackers.buffers.used_resources() {
             if let Some(buffer) = Weak::upgrade(buffer) {
-                let _ = buffer.destroy();
+                buffer.destroy();
             }
         }
         for texture in trackers.textures.used_resources() {
             if let Some(texture) = Weak::upgrade(texture) {
-                let _ = texture.destroy();
+                texture.destroy();
             }
         }
     }

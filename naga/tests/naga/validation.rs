@@ -923,3 +923,34 @@ fn main() {
         naga::valid::GlobalUse::QUERY
     );
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn global_use_unreachable() {
+    // We should allow statements after `return`, and such statements should
+    // still contribute to global usage. (Unreachable statements should not
+    // contribute to uniformity analysis, but there are multiple issues with
+    // the current implementation of uniformity analysis, see #4369.)
+
+    let source = "
+@group(0) @binding(0)
+var<storage, read_write> global: u32;
+
+@compute @workgroup_size(64)
+fn main() {
+    var used: u32;
+    return;
+    used = global;
+}
+    ";
+
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let mut validator = valid::Validator::new(Default::default(), valid::Capabilities::all());
+    let info = validator.validate(&module).unwrap();
+
+    let global = module.global_variables.iter().next().unwrap().0;
+    assert_eq!(
+        info.get_entry_point(0)[global],
+        naga::valid::GlobalUse::READ,
+    );
+}

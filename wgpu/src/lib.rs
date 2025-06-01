@@ -95,10 +95,10 @@ pub use wgt::{
 pub use wgt::{ImageCopyBuffer, ImageCopyTexture, ImageCopyTextureTagged, ImageDataLayout};
 // wasm-only types, we try to keep as many types non-platform
 // specific, but these need to depend on web-sys.
-#[cfg(any(webgpu, webgl))]
+#[cfg(web)]
 #[expect(deprecated)]
 pub use wgt::ImageCopyExternalImage;
-#[cfg(any(webgpu, webgl))]
+#[cfg(web)]
 pub use wgt::{CopyExternalImageSourceInfo, ExternalImageSource};
 
 /// Re-export of our `naga` dependency.
@@ -120,7 +120,7 @@ pub use raw_window_handle as rwh;
 
 /// Re-export of our `web-sys` dependency.
 ///
-#[cfg(any(webgl, webgpu))]
+#[cfg(web)]
 pub use web_sys;
 
 #[doc(hidden)]

@@ -708,7 +708,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 13] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 14] = [
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
         webgpu_sys::GpuFeatureName::DepthClipControl,
@@ -732,6 +732,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 13] = [
     (
         wgt::Features::TEXTURE_COMPRESSION_ASTC,
         webgpu_sys::GpuFeatureName::TextureCompressionAstc,
+    ),
+    (
+        wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+        webgpu_sys::GpuFeatureName::TextureCompressionAstcSliced3d,
     ),
     (
         wgt::Features::TIMESTAMP_QUERY,
@@ -2809,20 +2813,31 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         source_offset: crate::BufferAddress,
         destination: &dispatch::DispatchBuffer,
         destination_offset: crate::BufferAddress,
-        copy_size: crate::BufferAddress,
+        copy_size: Option<crate::BufferAddress>,
     ) {
         let source = source.as_webgpu();
         let destination = destination.as_webgpu();
 
-        self.inner
-            .copy_buffer_to_buffer_with_f64_and_f64_and_f64(
-                &source.inner,
-                source_offset as f64,
-                &destination.inner,
-                destination_offset as f64,
-                copy_size as f64,
-            )
-            .unwrap();
+        if let Some(size) = copy_size {
+            self.inner
+                .copy_buffer_to_buffer_with_f64_and_f64_and_f64(
+                    &source.inner,
+                    source_offset as f64,
+                    &destination.inner,
+                    destination_offset as f64,
+                    size as f64,
+                )
+                .unwrap();
+        } else {
+            self.inner
+                .copy_buffer_to_buffer_with_f64_and_f64(
+                    &source.inner,
+                    source_offset as f64,
+                    &destination.inner,
+                    destination_offset as f64,
+                )
+                .unwrap();
+        }
     }
 
     fn copy_buffer_to_texture(

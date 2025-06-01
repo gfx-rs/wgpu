@@ -4,6 +4,10 @@ edition = "2021"
 rust-version = "1.84"
 publish = false
 
+[features]
+default = ["web"]
+web = ["wgpu/web"]
+
 [dependencies]
 wgpu = { version = "25.0.0", features = [
     "custom",

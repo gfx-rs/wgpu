@@ -3,15 +3,15 @@ static const int THREE = int(3);
 static const bool TRUE = true;
 static const bool FALSE = false;
 static const int FOUR = int(4);
+static const int TEXTURE_KIND_REGULAR = int(0);
+static const int TEXTURE_KIND_WARP = int(1);
+static const int TEXTURE_KIND_SKY = int(2);
 static const int FOUR_ALIAS = int(4);
 static const int TEST_CONSTANT_ADDITION = int(8);
 static const int TEST_CONSTANT_ALIAS_ADDITION = int(8);
 static const float PI = 3.141;
 static const float phi_sun = 6.282;
 static const float4 DIV = float4(0.44444445, 0.0, 0.0, 0.0);
-static const int TEXTURE_KIND_REGULAR = int(0);
-static const int TEXTURE_KIND_WARP = int(1);
-static const int TEXTURE_KIND_SKY = int(2);
 static const float2 add_vec = float2(4.0, 5.0);
 static const bool2 compare_vec = bool2(true, false);
 
@@ -70,20 +70,6 @@ void compose_of_constant()
     return;
 }
 
-void compose_of_splat()
-{
-    float4 x_1 = float4(2.0, 1.0, 1.0, 1.0);
-
-    return;
-}
-
-void test_local_const()
-{
-    float arr[2] = (float[2])0;
-
-    return;
-}
-
 uint map_texture_kind(int texture_kind)
 {
     switch(texture_kind) {
@@ -100,6 +86,20 @@ uint map_texture_kind(int texture_kind)
             return 0u;
         }
     }
+}
+
+void compose_of_splat()
+{
+    float4 x_1 = float4(2.0, 1.0, 1.0, 1.0);
+
+    return;
+}
+
+void test_local_const()
+{
+    float arr[2] = (float[2])0;
+
+    return;
 }
 
 void compose_vector_zero_val_binop()
@@ -165,7 +165,13 @@ void main()
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    const uint _e1 = map_texture_kind(int(1));
     compose_of_splat();
     test_local_const();
+    compose_vector_zero_val_binop();
+    relational();
+    packed_dot_product();
+    test_local_const();
+    abstract_access(1u);
     return;
 }

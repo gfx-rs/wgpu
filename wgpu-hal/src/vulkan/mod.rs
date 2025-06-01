@@ -32,6 +32,8 @@ mod drm;
 mod instance;
 mod sampler;
 
+pub use adapter::PhysicalDeviceFeatures;
+
 use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
 use core::{borrow::Borrow, ffi::CStr, fmt, mem, num::NonZeroU32, ops::DerefMut};
 
@@ -455,7 +457,7 @@ pub struct Adapter {
     //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
     phd_capabilities: adapter::PhysicalDeviceProperties,
-    phd_features: adapter::PhysicalDeviceFeatures,
+    phd_features: PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
@@ -536,6 +538,21 @@ struct PrivateCapabilities {
     ///
     /// [`VK_KHR_shader_integer_dot_product`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_shader_integer_dot_product.html
     shader_integer_dot_product: bool,
+
+    /// True if this adapter supports 8-bit integers provided by the
+    /// [`VK_KHR_shader_float16_int8`] extension (promoted to Vulkan 1.2).
+    ///
+    /// Allows shaders to declare the "Int8" capability. Note, however, that this
+    /// feature alone allows the use of 8-bit integers "only in the `Private`,
+    /// `Workgroup` (for non-Block variables), and `Function` storage classes"
+    /// ([see spec]). To use 8-bit integers in the interface storage classes (e.g.,
+    /// `StorageBuffer`), you also need to enable the corresponding feature in
+    /// `VkPhysicalDevice8BitStorageFeatures` and declare the corresponding SPIR-V
+    /// capability (e.g., `StorageBuffer8BitAccess`).
+    ///
+    /// [`VK_KHR_shader_float16_int8`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_shader_float16_int8.html
+    /// [see spec]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceShaderFloat16Int8Features.html#extension-features-shaderInt8
+    shader_int8: bool,
 }
 
 bitflags::bitflags!(

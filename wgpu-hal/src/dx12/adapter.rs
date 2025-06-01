@@ -57,7 +57,7 @@ impl super::Adapter {
         library: &Arc<D3D12Lib>,
         instance_flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+        compiler_container: Arc<shader_compilation::CompilerContainer>,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
@@ -224,8 +224,8 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if let Some(ref dxc_container) = dxc_container {
-            let max_shader_model = match dxc_container.max_shader_model {
+        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
+            let max_shader_model = match max_shader_model {
                 wgt::DxcShaderModel::V6_0 => Direct3D12::D3D_SHADER_MODEL_6_0,
                 wgt::DxcShaderModel::V6_1 => Direct3D12::D3D_SHADER_MODEL_6_1,
                 wgt::DxcShaderModel::V6_2 => Direct3D12::D3D_SHADER_MODEL_6_2,
@@ -519,7 +519,7 @@ impl super::Adapter {
                 presentation_timer,
                 workarounds,
                 memory_budget_thresholds,
-                dxc_container,
+                compiler_container,
             },
             info,
             features,
@@ -658,7 +658,7 @@ impl crate::Adapter for super::Adapter {
             self.private_caps,
             &self.library,
             self.memory_budget_thresholds,
-            self.dxc_container.clone(),
+            self.compiler_container.clone(),
         )?;
         Ok(crate::OpenDevice {
             device,

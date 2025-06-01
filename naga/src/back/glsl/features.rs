@@ -280,6 +280,7 @@ impl FeaturesManager {
                 out,
                 "#extension GL_KHR_shader_subgroup_shuffle_relative : require"
             )?;
+            writeln!(out, "#extension GL_KHR_shader_subgroup_quad : require")?;
         }
 
         if self.0.contains(Features::TEXTURE_ATOMICS) {
@@ -300,14 +301,16 @@ impl<W> Writer<'_, W> {
     pub(super) fn collect_required_features(&mut self) -> BackendResult {
         let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
 
-        if let Some(depth_test) = self.entry_point.early_depth_test {
-            // If IMAGE_LOAD_STORE is supported for this version of GLSL
-            if self.options.version.supports_early_depth_test() {
-                self.features.request(Features::IMAGE_LOAD_STORE);
-            }
-
-            if depth_test.conservative.is_some() {
-                self.features.request(Features::CONSERVATIVE_DEPTH);
+        if let Some(early_depth_test) = self.entry_point.early_depth_test {
+            match early_depth_test {
+                crate::EarlyDepthTest::Force => {
+                    if self.options.version.supports_early_depth_test() {
+                        self.features.request(Features::IMAGE_LOAD_STORE);
+                    }
+                }
+                crate::EarlyDepthTest::Allow { .. } => {
+                    self.features.request(Features::CONSERVATIVE_DEPTH);
+                }
             }
         }
 

@@ -1,3 +1,4 @@
+@compute @workgroup_size(1, 1, 1) 
 fn main() {
     let a = vec3<f32>(0f, 0f, 0f);
     let c = vec3(0f);
@@ -8,4 +9,3 @@ fn main() {
     let g = mat3x3<f32>(a, a, a);
     return;
 }
-

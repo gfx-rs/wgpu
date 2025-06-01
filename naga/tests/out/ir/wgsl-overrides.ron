@@ -172,9 +172,17 @@
                     LocalVariable(2),
                     GlobalVariable(1),
                     Override(2),
+                    Override(1),
+                    Override(3),
+                    Override(6),
+                    Override(7),
                 ],
                 named_expressions: {
                     4: "a",
+                    13: "phony",
+                    14: "phony",
+                    15: "phony",
+                    16: "phony",
                 },
                 body: [
                     Emit((

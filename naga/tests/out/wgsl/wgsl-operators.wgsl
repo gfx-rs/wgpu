@@ -262,11 +262,13 @@ fn negation_avoids_prefix_decrement() {
 fn main(@builtin(workgroup_id) id: vec3<u32>) {
     let _e1 = builtins();
     let _e6 = splat(f32(id.x), i32(id.y));
-    let _e11 = bool_cast(vec3<f32>(1f, 1f, 1f));
+    let _e7 = splat_assignment();
+    let _e12 = bool_cast(vec3<f32>(1f, 1f, 1f));
     logical();
     arithmetic();
     bit();
     comparison();
     assignment();
+    negation_avoids_prefix_decrement();
     return;
 }
