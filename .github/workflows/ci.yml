@@ -303,11 +303,13 @@ jobs:
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-core --no-default-features
 
           # Check with all compatible features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,compact
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features fragile-send-sync-non-atomic-wasm
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-core --no-default-features --features spin,once_cell,once_cell/critical-section,api_log_info,resource_log_info,strict_asserts,serde,replay,raw-window-handle,counters
 
       # Building for native platforms with standard tests.
       - name: Check native

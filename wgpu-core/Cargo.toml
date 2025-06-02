@@ -40,7 +40,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
 # TODO(https://github.com/gfx-rs/wgpu/issues/6826): "std" is a default feature for
 # compatibility with prior behavior only, and should be removed once we know how
 # wgpu-core’s dependents want to handle no_std.
-default = ["std"]
+default = ["std", "parking_lot", "once_cell"]
 
 #! ### Logging Configuration
 # --------------------------------------------------------------------
@@ -117,7 +117,7 @@ fragile-send-sync-non-atomic-wasm = [
 
 ## Enable certain items to be `Send` and `Sync` when they would not otherwise be.
 ## Also enables backtraces in some error cases when also under cfg(debug_assertions).
-std = []
+std = ["once_cell?/std"]
 
 #! ### External libraries
 # --------------------------------------------------------------------
@@ -128,6 +128,15 @@ static-dxc = ["wgpu-hal/static-dxc"]
 
 ## Enable portable atomics on platforms that do not support 64bit atomics.
 portable-atomic = ["dep:portable-atomic", "wgpu-hal/portable-atomic"]
+
+## Enables the `parking_lot` set of locking primitives.
+parking_lot = ["dep:parking_lot"]
+
+## Enables the `spin` set of locking primitives.
+spin = ["dep:spin"]
+
+## Enables `once_cell` initialization primitives.
+once_cell = ["dep:once_cell"]
 
 #! ### Target Conditional Features
 # --------------------------------------------------------------------
@@ -181,18 +190,25 @@ bit-vec.workspace = true
 bit-set.workspace = true
 bitflags.workspace = true
 bytemuck = { workspace = true, optional = true }
+cfg-if.workspace = true
 document-features.workspace = true
 hashbrown.workspace = true
 indexmap.workspace = true
 log.workspace = true
-once_cell = { workspace = true, features = ["std"] }
-parking_lot.workspace = true
+once_cell = { workspace = true, optional = true }
+num-traits = { workspace = true }
+parking_lot = { workspace = true, optional = true }
 profiling = { workspace = true, default-features = false }
 raw-window-handle = { workspace = true, optional = true }
 ron = { workspace = true, optional = true }
 rustc-hash.workspace = true
-serde = { workspace = true, features = ["default", "derive"], optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 smallvec.workspace = true
+spin = { workspace = true, features = [
+    "rwlock",
+    "mutex",
+    "spin_mutex",
+], optional = true }
 thiserror.workspace = true
 
 [target.'cfg(not(target_has_atomic = "64"))'.dependencies]

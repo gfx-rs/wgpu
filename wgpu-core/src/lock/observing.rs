@@ -36,34 +36,35 @@ use std::{
 };
 
 use super::rank::{LockRank, LockRankSet};
+use super::vanilla;
 use crate::FastHashSet;
 
 /// A `Mutex` instrumented for lock acquisition order observation.
 ///
-/// This is just a wrapper around a [`parking_lot::Mutex`], along with
+/// This is just a wrapper around a [`vanilla::Mutex`], along with
 /// its rank in the `wgpu_core` lock ordering.
 ///
 /// For details, see [the module documentation][self].
 pub struct Mutex<T> {
-    inner: parking_lot::Mutex<T>,
+    inner: vanilla::Mutex<T>,
     rank: LockRank,
 }
 
 /// A guard produced by locking [`Mutex`].
 ///
-/// This is just a wrapper around a [`parking_lot::MutexGuard`], along
+/// This is just a wrapper around a [`vanilla::MutexGuard`], along
 /// with the state needed to track lock acquisition.
 ///
 /// For details, see [the module documentation][self].
 pub struct MutexGuard<'a, T> {
-    inner: parking_lot::MutexGuard<'a, T>,
+    inner: vanilla::MutexGuard<'a, T>,
     _state: LockStateGuard,
 }
 
 impl<T> Mutex<T> {
     pub fn new(rank: LockRank, value: T) -> Mutex<T> {
         Mutex {
-            inner: parking_lot::Mutex::new(value),
+            inner: vanilla::Mutex::new(rank, value),
             rank,
         }
     }
@@ -104,41 +105,41 @@ impl<T: core::fmt::Debug> core::fmt::Debug for Mutex<T> {
 
 /// An `RwLock` instrumented for lock acquisition order observation.
 ///
-/// This is just a wrapper around a [`parking_lot::RwLock`], along with
+/// This is just a wrapper around a [`vanilla::RwLock`], along with
 /// its rank in the `wgpu_core` lock ordering.
 ///
 /// For details, see [the module documentation][self].
 pub struct RwLock<T> {
-    inner: parking_lot::RwLock<T>,
+    inner: vanilla::RwLock<T>,
     rank: LockRank,
 }
 
 /// A read guard produced by locking [`RwLock`] for reading.
 ///
-/// This is just a wrapper around a [`parking_lot::RwLockReadGuard`], along with
+/// This is just a wrapper around a [`vanilla::RwLockReadGuard`], along with
 /// the state needed to track lock acquisition.
 ///
 /// For details, see [the module documentation][self].
 pub struct RwLockReadGuard<'a, T> {
-    inner: parking_lot::RwLockReadGuard<'a, T>,
+    inner: vanilla::RwLockReadGuard<'a, T>,
     _state: LockStateGuard,
 }
 
 /// A write guard produced by locking [`RwLock`] for writing.
 ///
-/// This is just a wrapper around a [`parking_lot::RwLockWriteGuard`], along
+/// This is just a wrapper around a [`vanilla::RwLockWriteGuard`], along
 /// with the state needed to track lock acquisition.
 ///
 /// For details, see [the module documentation][self].
 pub struct RwLockWriteGuard<'a, T> {
-    inner: parking_lot::RwLockWriteGuard<'a, T>,
+    inner: vanilla::RwLockWriteGuard<'a, T>,
     _state: LockStateGuard,
 }
 
 impl<T> RwLock<T> {
     pub fn new(rank: LockRank, value: T) -> RwLock<T> {
         RwLock {
-            inner: parking_lot::RwLock::new(value),
+            inner: vanilla::RwLock::new(rank, value),
             rank,
         }
     }
@@ -165,7 +166,7 @@ impl<T> RwLock<T> {
 impl<'a, T> RwLockWriteGuard<'a, T> {
     pub fn downgrade(this: Self) -> RwLockReadGuard<'a, T> {
         RwLockReadGuard {
-            inner: parking_lot::RwLockWriteGuard::downgrade(this.inner),
+            inner: vanilla::RwLockWriteGuard::downgrade(this.inner),
             _state: this._state,
         }
     }

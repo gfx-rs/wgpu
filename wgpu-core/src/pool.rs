@@ -2,10 +2,18 @@ use alloc::sync::{Arc, Weak};
 use core::hash::Hash;
 
 use hashbrown::{hash_map::Entry, HashMap};
-use once_cell::sync::OnceCell;
 
 use crate::lock::{rank, Mutex};
 use crate::FastHashMap;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "once_cell")] {
+        use once_cell::sync::OnceCell;
+    } else {
+        // NOTE: Unlike `once_cell`, the `OnceCell` from `core` is _not_ `Sync`.
+        use core::cell::OnceCell;
+    }
+}
 
 type SlotInner<V> = Weak<V>;
 type ResourcePoolSlot<V> = Arc<OnceCell<SlotInner<V>>>;
@@ -60,12 +68,46 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
             //
             // We pass the strong reference outside of the closure to keep it alive while we're the only one keeping a reference to it.
             let mut strong = None;
-            let weak = entry.get_or_try_init(|| {
-                let strong_inner = constructor.take().unwrap()(key.take().unwrap())?;
+            #[cfg(not(feature = "once_cell"))]
+            let mut removal_key = None;
+            let mut try_constructor = || {
+                let key = key.take().unwrap();
+
+                #[cfg(not(feature = "once_cell"))]
+                {
+                    removal_key = Some(key.clone());
+                }
+
+                let strong_inner = constructor.take().unwrap()(key)?;
                 let weak = Arc::downgrade(&strong_inner);
                 strong = Some(strong_inner);
                 Ok(weak)
-            })?;
+            };
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "once_cell")] {
+                    let weak = entry.get_or_try_init(f)?;
+                } else {
+                    // FIXME(https://github.com/rust-lang/rust/issues/109737): use `get_or_try_init` once stable.
+                    let mut error = None;
+                    let weak = entry.get_or_init(|| {
+                        try_constructor().unwrap_or_else(|err| {
+                            error = err;
+                            Weak::new()
+                        })
+                    });
+                    if let Some(error) = error {
+                        // Since `error` is `Some(...)`, then `try_constructor` was called, meaning
+                        // this entry now contains a dead-end `Weak`.
+                        // To maintain consistency with `get_or_try_init`, we replace the dead-end
+                        // `OnceCell` with a fresh one ready for another call to `get_or_init` to
+                        // initialize.
+                        let key = removal_key.unwrap();
+                        let mut map_guard = self.inner.lock();
+                        map_guard.insert(key, Arc::new(OnceCell::new()));
+                        return Err(error);
+                    }
+                }
+            }
 
             // If strong is Some, that means we just initialized the entry, so we can just return it.
             if let Some(strong) = strong {
