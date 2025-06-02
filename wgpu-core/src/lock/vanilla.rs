@@ -92,7 +92,7 @@ impl<T> Mutex<T> {
     pub fn into_inner(self) -> T {
         let inner = self.0.into_inner();
 
-        #[cfg(feature = "std")]
+        #[cfg(all(feature = "std", not(feature = "parking_lot")))]
         let inner = inner.unwrap_or_else(std::sync::PoisonError::into_inner);
 
         inner
@@ -204,7 +204,7 @@ impl<'a, T> RwLockWriteGuard<'a, T> {
     pub fn downgrade(this: Self) -> RwLockReadGuard<'a, T> {
         cfg_if::cfg_if! {
             if #[cfg(feature = "parking_lot")] {
-                RwLockReadGuard(implementation::RwLockWriteGuard::downgrade(this.guard))
+                RwLockReadGuard { guard: implementation::RwLockWriteGuard::downgrade(this.guard) }
             } else {
                 let RwLockWriteGuard { guard, lock } = this;
 

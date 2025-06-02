@@ -85,7 +85,7 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
             };
             cfg_if::cfg_if! {
                 if #[cfg(feature = "once_cell")] {
-                    let weak = entry.get_or_try_init(f)?;
+                    let weak = entry.get_or_try_init(try_constructor)?;
                 } else {
                     // FIXME(https://github.com/rust-lang/rust/issues/109737): use `get_or_try_init` once stable.
                     let mut error = None;
