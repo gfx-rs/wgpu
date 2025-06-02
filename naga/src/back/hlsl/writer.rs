@@ -17,7 +17,7 @@ use super::{
 use crate::{
     back::{self, get_entry_points, Baked},
     common,
-    proc::{self, index, NameKey},
+    proc::{self, index, ExternalTextureNameKey, NameKey},
     valid, Handle, Module, RayQueryFunction, Scalar, ScalarKind, ShaderStage, TypeInner,
 };
 
@@ -34,6 +34,7 @@ pub(crate) const EXTRACT_BITS_FUNCTION: &str = "naga_extractBits";
 pub(crate) const INSERT_BITS_FUNCTION: &str = "naga_insertBits";
 pub(crate) const SAMPLER_HEAP_VAR: &str = "nagaSamplerHeap";
 pub(crate) const COMPARISON_SAMPLER_HEAP_VAR: &str = "nagaComparisonSamplerHeap";
+pub(crate) const SAMPLE_EXTERNAL_TEXTURE_FUNCTION: &str = "nagaSampleExternalTexture";
 pub(crate) const ABS_FUNCTION: &str = "naga_abs";
 pub(crate) const DIV_FUNCTION: &str = "naga_div";
 pub(crate) const MOD_FUNCTION: &str = "naga_mod";
@@ -44,6 +45,7 @@ pub(crate) const F2I64_FUNCTION: &str = "naga_f2i64";
 pub(crate) const F2U64_FUNCTION: &str = "naga_f2u64";
 pub(crate) const IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION: &str =
     "nagaTextureSampleBaseClampToEdge";
+pub(crate) const IMAGE_LOAD_EXTERNAL_FUNCTION: &str = "nagaTextureLoadExternal";
 
 enum Index {
     Expression(Handle<crate::Expression>),
@@ -431,6 +433,10 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         .find(|&(var_handle, var)| match var.binding {
                             Some(ref binding) if !info[var_handle].is_empty() => {
                                 self.options.resolve_resource_binding(binding).is_err()
+                                    && self
+                                        .options
+                                        .resolve_external_texture_resource_binding(binding)
+                                        .is_err()
                             }
                             _ => false,
                         })
@@ -473,8 +479,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     match var.binding {
                         Some(ref binding) if !info[var_handle].is_empty() => {
                             if let Err(err) = self.options.resolve_resource_binding(binding) {
-                                ep_error = Some(err);
-                                break;
+                                if self
+                                    .options
+                                    .resolve_external_texture_resource_binding(binding)
+                                    .is_err()
+                                {
+                                    ep_error = Some(err);
+                                    break;
+                                }
                             }
                         }
                         _ => {}
@@ -904,6 +916,25 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let global = &module.global_variables[handle];
         let inner = &module.types[global.ty].inner;
 
+        let handle_ty = match *inner {
+            TypeInner::BindingArray { ref base, .. } => &module.types[*base].inner,
+            _ => inner,
+        };
+
+        // External textures are handled entirely differently, so defer entirely to that method.
+        // We do so prior to calling resolve_resource_binding() below, as we even need to resolve
+        // their bindings separately.
+        let is_external_texture = matches!(
+            *handle_ty,
+            TypeInner::Image {
+                class: crate::ImageClass::External,
+                ..
+            }
+        );
+        if is_external_texture {
+            return self.write_global_external_texture(module, handle, global);
+        }
+
         if let Some(ref binding) = global.binding {
             if let Err(err) = self.options.resolve_resource_binding(binding) {
                 log::info!(
@@ -915,11 +946,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 return Ok(());
             }
         }
-
-        let handle_ty = match *inner {
-            TypeInner::BindingArray { ref base, .. } => &module.types[*base].inner,
-            _ => inner,
-        };
 
         // Samplers are handled entirely differently, so defer entirely to that method.
         let is_sampler = matches!(*handle_ty, TypeInner::Sampler { .. });
@@ -1129,6 +1155,70 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             _ => unreachable!(),
         };
+
+        Ok(())
+    }
+
+    /// Write the declarations for an external texture global variable.
+    /// These are emitted as multiple global variables: Three `Texture2D`s
+    /// (one for each plane) and a parameters cbuffer.
+    fn write_global_external_texture(
+        &mut self,
+        module: &Module,
+        handle: Handle<crate::GlobalVariable>,
+        global: &crate::GlobalVariable,
+    ) -> BackendResult {
+        let res_binding = global
+            .binding
+            .as_ref()
+            .expect("External texture global variables must have a resource binding");
+        let ext_tex_bindings = match self
+            .options
+            .resolve_external_texture_resource_binding(res_binding)
+        {
+            Ok(bindings) => bindings,
+            Err(err) => {
+                log::info!(
+                    "Skipping global {:?} (name {:?}) for being inaccessible: {}",
+                    handle,
+                    global.name,
+                    err,
+                );
+                return Ok(());
+            }
+        };
+
+        let mut write_plane = |bt: &super::BindTarget, name| -> BackendResult {
+            write!(
+                self.out,
+                "Texture2D<float4> {}: register(t{}",
+                name, bt.register
+            )?;
+            if bt.space != 0 {
+                write!(self.out, ", space{}", bt.space)?;
+            }
+            writeln!(self.out, ");")?;
+            Ok(())
+        };
+        for (i, bt) in ext_tex_bindings.planes.iter().enumerate() {
+            let plane_name = &self.names
+                [&NameKey::ExternalTextureGlobalVariable(handle, ExternalTextureNameKey::Plane(i))];
+            write_plane(bt, plane_name)?;
+        }
+
+        let params_name = &self.names
+            [&NameKey::ExternalTextureGlobalVariable(handle, ExternalTextureNameKey::Params)];
+        let params_ty_name =
+            &self.names[&NameKey::Type(module.special_types.external_texture_params.unwrap())];
+        write!(
+            self.out,
+            "cbuffer {}: register(b{}",
+            params_name, ext_tex_bindings.params.register
+        )?;
+        if ext_tex_bindings.params.space != 0 {
+            write!(self.out, ", space{}", ext_tex_bindings.params.space)?;
+        }
+        writeln!(self.out, ") {{ {params_ty_name} {params_name}; }};")?;
 
         Ok(())
     }
@@ -1485,26 +1575,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     if index != 0 {
                         write!(self.out, ", ")?;
                     }
-                    // Write argument type
-                    let arg_ty = match module.types[arg.ty].inner {
-                        // pointers in function arguments are expected and resolve to `inout`
-                        TypeInner::Pointer { base, .. } => {
-                            //TODO: can we narrow this down to just `in` when possible?
-                            write!(self.out, "inout ")?;
-                            base
-                        }
-                        _ => arg.ty,
-                    };
-                    self.write_type(module, arg_ty)?;
 
-                    let argument_name =
-                        &self.names[&NameKey::FunctionArgument(handle, index as u32)];
-
-                    // Write argument name. Space is important.
-                    write!(self.out, " {argument_name}")?;
-                    if let TypeInner::Array { base, size, .. } = module.types[arg_ty].inner {
-                        self.write_array_size(module, base, size)?;
-                    }
+                    self.write_function_argument(module, handle, arg, index)?;
                 }
             }
             back::FunctionType::EntryPoint(ep_index) => {
@@ -1615,6 +1687,74 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         self.named_expressions.clear();
 
+        Ok(())
+    }
+
+    fn write_function_argument(
+        &mut self,
+        module: &Module,
+        handle: Handle<crate::Function>,
+        arg: &crate::FunctionArgument,
+        index: usize,
+    ) -> BackendResult {
+        // External texture arguments must be expanded into separate
+        // arguments for each plane and the params buffer.
+        if let TypeInner::Image {
+            class: crate::ImageClass::External,
+            ..
+        } = module.types[arg.ty].inner
+        {
+            return self.write_function_external_texture_argument(module, handle, index);
+        }
+
+        // Write argument type
+        let arg_ty = match module.types[arg.ty].inner {
+            // pointers in function arguments are expected and resolve to `inout`
+            TypeInner::Pointer { base, .. } => {
+                //TODO: can we narrow this down to just `in` when possible?
+                write!(self.out, "inout ")?;
+                base
+            }
+            _ => arg.ty,
+        };
+        self.write_type(module, arg_ty)?;
+
+        let argument_name = &self.names[&NameKey::FunctionArgument(handle, index as u32)];
+
+        // Write argument name. Space is important.
+        write!(self.out, " {argument_name}")?;
+        if let TypeInner::Array { base, size, .. } = module.types[arg_ty].inner {
+            self.write_array_size(module, base, size)?;
+        }
+
+        Ok(())
+    }
+
+    fn write_function_external_texture_argument(
+        &mut self,
+        module: &Module,
+        handle: Handle<crate::Function>,
+        index: usize,
+    ) -> BackendResult {
+        let plane_names = [0, 1, 2].map(|i| {
+            &self.names[&NameKey::ExternalTextureFunctionArgument(
+                handle,
+                index as u32,
+                ExternalTextureNameKey::Plane(i),
+            )]
+        });
+        let params_name = &self.names[&NameKey::ExternalTextureFunctionArgument(
+            handle,
+            index as u32,
+            ExternalTextureNameKey::Params,
+        )];
+        let params_ty_name =
+            &self.names[&NameKey::Type(module.special_types.external_texture_params.unwrap())];
+        write!(
+            self.out,
+            "Texture2D<float4> {}, Texture2D<float4> {}, Texture2D<float4> {}, {params_ty_name} {params_name}",
+            plane_names[0], plane_names[1], plane_names[2],
+        )?;
         Ok(())
     }
 
@@ -3117,9 +3257,34 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             Expression::FunctionArgument(pos) => {
-                let key = func_ctx.argument_key(pos);
-                let name = &self.names[&key];
-                write!(self.out, "{name}")?;
+                let ty = func_ctx.resolve_type(expr, &module.types);
+
+                // We know that any external texture function argument has been expanded into
+                // separate consecutive arguments for each plane and the parameters buffer. And we
+                // also know that external textures can only ever be used as an argument to another
+                // function. Therefore we can simply emit each of the expanded arguments in a
+                // consecutive comma-separated list.
+                if let TypeInner::Image {
+                    class: crate::ImageClass::External,
+                    ..
+                } = *ty
+                {
+                    let plane_names = [0, 1, 2].map(|i| {
+                        &self.names[&func_ctx
+                            .external_texture_argument_key(pos, ExternalTextureNameKey::Plane(i))]
+                    });
+                    let params_name = &self.names[&func_ctx
+                        .external_texture_argument_key(pos, ExternalTextureNameKey::Params)];
+                    write!(
+                        self.out,
+                        "{}, {}, {}, {}",
+                        plane_names[0], plane_names[1], plane_names[2], params_name
+                    )?;
+                } else {
+                    let key = func_ctx.argument_key(pos);
+                    let name = &self.names[&key];
+                    write!(self.out, "{name}")?;
+                }
             }
             Expression::ImageSample {
                 coordinate,
@@ -3282,7 +3447,34 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 let is_storage_space =
                     matches!(global_variable.space, crate::AddressSpace::Storage { .. });
 
-                if !is_binding_array_of_samplers && !is_storage_space {
+                // Our external texture global variable has been expanded into multiple
+                // global variables, one for each plane and the parameters buffer.
+                // External textures can only ever be used as arguments to a function
+                // call, and we know that an external texture argument to any function
+                // will have been expanded to separate consecutive arguments for each
+                // plane and the parameters buffer. Therefore we can simply emit each of
+                // the expanded global variables in a consecutive comma-separated list.
+                if let TypeInner::Image {
+                    class: crate::ImageClass::External,
+                    ..
+                } = *ty
+                {
+                    let plane_names = [0, 1, 2].map(|i| {
+                        &self.names[&NameKey::ExternalTextureGlobalVariable(
+                            handle,
+                            ExternalTextureNameKey::Plane(i),
+                        )]
+                    });
+                    let params_name = &self.names[&NameKey::ExternalTextureGlobalVariable(
+                        handle,
+                        ExternalTextureNameKey::Params,
+                    )];
+                    write!(
+                        self.out,
+                        "{}, {}, {}, {}",
+                        plane_names[0], plane_names[1], plane_names[2], params_name
+                    )?;
+                } else if !is_binding_array_of_samplers && !is_storage_space {
                     let name = &self.names[&NameKey::GlobalVariable(handle)];
                     write!(self.out, "{name}")?;
                 }
@@ -4113,6 +4305,17 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> Result<(), Error> {
         let mut wrapping_type = None;
         match *func_ctx.resolve_type(image, &module.types) {
+            TypeInner::Image {
+                class: crate::ImageClass::External,
+                ..
+            } => {
+                write!(self.out, "{IMAGE_LOAD_EXTERNAL_FUNCTION}(")?;
+                self.write_expr(module, image, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, coordinate, func_ctx)?;
+                write!(self.out, ")")?;
+                return Ok(());
+            }
             TypeInner::Image {
                 class: crate::ImageClass::Storage { format, .. },
                 ..

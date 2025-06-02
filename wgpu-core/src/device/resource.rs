@@ -83,26 +83,55 @@ pub(crate) struct CommandIndices {
 pub struct ExternalTextureParams {
     /// 4x4 column-major matrix with which to convert sampled YCbCr values
     /// to RGBA.
+    ///
     /// This is ignored when `num_planes` is 1.
     pub yuv_conversion_matrix: [f32; 16],
-    /// 3x2 column-major matrix with which to multiply normalized texture
-    /// coordinates prior to sampling from the external texture. This may
-    /// scale, translate, flip, and rotate in 90-degree increments, but the
-    /// result of transforming the rectangle (0,0)..(1,1) must be an
-    /// axis-aligned rectangle that falls within the bounds of (0,0)..(1,1).
+
+    /// Transform to apply to [`ImageSample`] coordinates.
+    ///
+    /// This is a 3x2 column-major matrix representing an affine transform from
+    /// normalized texture coordinates to the normalized coordinates that should
+    /// be sampled from the external texture's underlying plane(s).
+    ///
+    /// This transform may scale, translate, flip, and rotate in 90-degree
+    /// increments, but the result of transforming the rectangle (0,0)..(1,1)
+    /// must be an axis-aligned rectangle that falls within the bounds of
+    /// (0,0)..(1,1).
+    ///
+    /// [`ImageSample`]: naga::ir::Expression::ImageSample
     pub sample_transform: [f32; 6],
-    /// 3x2 column-major matrix with which to multiply unnormalized texture
-    /// coordinates prior to loading from the external texture. This may scale,
-    /// translate, flip, and rotate in 90-degree increments, but the result of
-    /// transforming the rectangle (0,0)..(texture_size - 1) must be an
-    /// axis-aligned rectangle that falls within the bounds of
-    /// (0,0)..(texture_size - 1).
+
+    /// Transform to apply to [`ImageLoad`] coordinates.
+    ///
+    /// This is a 3x2 column-major matrix representing an affine transform from
+    /// non-normalized texel coordinates to the non-normalized coordinates of
+    /// the texel that should be loaded from the external texture's underlying
+    /// plane 0. For planes 1 and 2, if present, plane 0's coordinates are
+    /// scaled according to the textures' relative sizes.
+    ///
+    /// This transform may scale, translate, flip, and rotate in 90-degree
+    /// increments, but the result of transforming the rectangle (0,0)..[`size`]
+    /// must be an axis-aligned rectangle that falls within the bounds of
+    /// (0,0)..[`size`].
+    ///
+    /// [`ImageLoad`]: naga::ir::Expression::ImageLoad
+    /// [`size`]: Self::size
     pub load_transform: [f32; 6],
-    /// Size of the external texture. This value should be returned by size
-    /// queries in shader code. Note that this may not match the dimensions of
-    /// the underlying texture(s). A value of [0, 0] indicates that the actual
-    /// size of plane 0 should be used.
+
+    /// Size of the external texture.
+    ///
+    /// This is the value that should be returned by size queries in shader
+    /// code; it does not necessarily match the dimensions of the underlying
+    /// texture(s). As a special case, if this is `[0, 0]`, the actual size of
+    /// plane 0 should be used instead.
+    ///
+    /// This must be consistent with [`sample_transform`]: it should be the size
+    /// in texels of the rectangle covered by the square (0,0)..(1,1) after
+    /// [`sample_transform`] has been applied to it.
+    ///
+    /// [`sample_transform`]: Self::sample_transform
     pub size: [u32; 2],
+
     /// Number of planes. 1 indicates a single RGBA plane. 2 indicates a Y
     /// plane and an interleaved CbCr plane. 3 indicates separate Y, Cb, and Cr
     /// planes.

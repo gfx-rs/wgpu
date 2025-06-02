@@ -1388,6 +1388,7 @@ impl crate::Device for super::Device {
                 restrict_indexing: true,
                 sampler_heap_target,
                 sampler_buffer_binding_map,
+                external_texture_binding_map: hlsl::ExternalTextureBindingMap::default(),
                 force_loop_bounding: true,
             },
         })

@@ -6285,6 +6285,20 @@ pub enum ExternalTextureFormat {
 
 /// Describes an [`ExternalTexture`](../wgpu/struct.ExternalTexture.html).
 ///
+/// Note that [`width`] and [`height`] are the values that should be returned by
+/// size queries in shader code; they do not necessarily match the dimensions of
+/// the underlying plane texture(s). As a special case, if `(width, height)` is
+/// `(0, 0)`, the actual size of the first underlying plane should be used instead.
+///
+/// The size given by [`width`] and [`height`] must be consistent with
+/// [`sample_transform`]: they should be the size in texels of the rectangle
+/// covered by the square (0,0)..(1,1) after [`sample_transform`] has been applied
+/// to it.
+///
+/// [`width`]: Self::width
+/// [`height`]: Self::height
+/// [`sample_transform`]: Self::sample_transform
+///
 /// Corresponds to [WebGPU `GPUExternalTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturedescriptor).
 #[repr(C)]
@@ -6294,23 +6308,51 @@ pub struct ExternalTextureDescriptor<L> {
     /// Debug label of the external texture. This will show up in graphics
     /// debuggers for easy identification.
     pub label: L,
-    /// Width of the external texture. Note that both this and `height` may
-    /// not match the dimensions of the underlying texture(s). This could be
-    /// due to a crop rect or rotation.
+
+    /// Width of the external texture.
     pub width: u32,
+
     /// Height of the external texture.
     pub height: u32,
+
     /// Format of the external texture.
     pub format: ExternalTextureFormat,
+
     /// 4x4 column-major matrix with which to convert sampled YCbCr values
     /// to RGBA.
     /// This is ignored when `format` is [`ExternalTextureFormat::Rgba`].
     pub yuv_conversion_matrix: [f32; 16],
-    /// 3x2 column-major matrix with which to multiply normalized texture
-    /// coordinates prior to sampling from the external texture.
+
+    /// Transform to apply to [`ImageSample`] coordinates.
+    ///
+    /// This is a 3x2 column-major matrix representing an affine transform from
+    /// normalized texture coordinates to the normalized coordinates that should
+    /// be sampled from the external texture's underlying plane(s).
+    ///
+    /// This transform may scale, translate, flip, and rotate in 90-degree
+    /// increments, but the result of transforming the rectangle (0,0)..(1,1)
+    /// must be an axis-aligned rectangle that falls within the bounds of
+    /// (0,0)..(1,1).
+    ///
+    /// [`ImageSample`]: https://docs.rs/naga/latest/naga/ir/enum.Expression.html#variant.ImageSample
     pub sample_transform: [f32; 6],
-    /// 3x2 column-major matrix with which to multiply unnormalized texture
-    /// coordinates prior to loading from the external texture.
+
+    /// Transform to apply to [`ImageLoad`] coordinates.
+    ///
+    /// This is a 3x2 column-major matrix representing an affine transform from
+    /// non-normalized texel coordinates to the non-normalized coordinates of
+    /// the texel that should be loaded from the external texture's underlying
+    /// plane 0. For planes 1 and 2, if present, plane 0's coordinates are
+    /// scaled according to the textures' relative sizes.
+    ///
+    /// This transform may scale, translate, flip, and rotate in 90-degree
+    /// increments, but the result of transforming the rectangle (0,0)..([`width`],
+    /// [`height`]) must be an axis-aligned rectangle that falls within the bounds
+    /// of (0,0)..([`width`], [`height`]).
+    ///
+    /// [`ImageLoad`]: https://docs.rs/naga/latest/naga/ir/enum.Expression.html#variant.ImageLoad
+    /// [`width`]: Self::width
+    /// [`height`]: Self::height
     pub load_transform: [f32; 6],
 }
 

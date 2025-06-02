@@ -261,6 +261,15 @@ impl super::Validator {
         }
     }
 
+    /// Check whether `scalar` is a permitted scalar width.
+    ///
+    /// If `scalar` is not a width allowed by the selected [`Capabilities`],
+    /// return an error explaining why.
+    ///
+    /// If `scalar` is allowed, return a [`PushConstantCompatibility`] result
+    /// that says whether `scalar` is allowed specifically in push constants.
+    ///
+    /// [`Capabilities`]: crate::valid::Capabilities
     pub(super) const fn check_width(
         &self,
         scalar: crate::Scalar,
