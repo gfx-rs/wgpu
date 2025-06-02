@@ -70,7 +70,7 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
             let mut strong = None;
             #[cfg(not(feature = "once_cell"))]
             let mut removal_key = None;
-            let mut try_constructor = || {
+            let try_constructor = || {
                 let key = key.take().unwrap();
 
                 #[cfg(not(feature = "once_cell"))]
@@ -88,6 +88,7 @@ impl<K: Clone + Eq + Hash, V> ResourcePool<K, V> {
                     let weak = entry.get_or_try_init(try_constructor)?;
                 } else {
                     // FIXME(https://github.com/rust-lang/rust/issues/109737): use `get_or_try_init` once stable.
+                    let mut try_constructor = try_constructor;
                     let mut error = None;
                     let weak = entry.get_or_init(|| {
                         try_constructor().unwrap_or_else(|err| {
