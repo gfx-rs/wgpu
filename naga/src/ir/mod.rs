@@ -2346,6 +2346,28 @@ pub struct SpecialTypes {
     /// Call [`Module::generate_vertex_return_type`]
     pub ray_vertex_return: Option<Handle<Type>>,
 
+    /// Struct containing parameters required by some backends to emit code for
+    /// [`ImageClass::External`] textures.
+    ///
+    /// See `wgpu_core::device::resource::ExternalTextureParams` for the
+    /// documentation of each field.
+    ///
+    /// In WGSL, this type would be:
+    ///
+    /// ```ignore
+    /// struct NagaExternalTextureParams {      // align size offset
+    ///     yuv_conversion_matrix: mat4x4<f32>, //    16   64      0
+    ///     sample_transform: mat3x2<f32>,      //     8   24     64
+    ///     load_transform: mat3x2<f32>,        //     8   24     88
+    ///     size: vec2<u32>,                    //     8    8    112
+    ///     num_planes: u32,                    //     4    4    120
+    /// }                         // whole struct:    16  128
+    /// ```
+    ///
+    /// Call [`Module::generate_external_texture_params_type`] to populate this
+    /// if needed and return the handle.
+    pub external_texture_params: Option<Handle<Type>>,
+
     /// Types for predeclared wgsl types instantiated on demand.
     ///
     /// Call [`Module::generate_predeclared_type`] to populate this if

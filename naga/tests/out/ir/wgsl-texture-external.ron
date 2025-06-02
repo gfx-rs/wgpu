@@ -2,6 +2,83 @@
     types: [
         (
             name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Matrix(
+                columns: Tri,
+                rows: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Matrix(
+                columns: Quad,
+                rows: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: Some("NagaExternalTextureParams"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("yuv_conversion_matrix"),
+                        ty: 3,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("sample_transform"),
+                        ty: 2,
+                        binding: None,
+                        offset: 64,
+                    ),
+                    (
+                        name: Some("load_transform"),
+                        ty: 2,
+                        binding: None,
+                        offset: 88,
+                    ),
+                    (
+                        name: Some("size"),
+                        ty: 1,
+                        binding: None,
+                        offset: 112,
+                    ),
+                    (
+                        name: Some("num_planes"),
+                        ty: 0,
+                        binding: None,
+                        offset: 120,
+                    ),
+                ],
+                span: 128,
+            ),
+        ),
+        (
+            name: None,
             inner: Image(
                 dim: D2,
                 arrayed: false,
@@ -24,21 +101,12 @@
                 ),
             ),
         ),
-        (
-            name: None,
-            inner: Vector(
-                size: Bi,
-                scalar: (
-                    kind: Uint,
-                    width: 4,
-                ),
-            ),
-        ),
     ],
     special_types: (
         ray_desc: None,
         ray_intersection: None,
         ray_vertex_return: None,
+        external_texture_params: Some(4),
         predeclared_types: {},
     ),
     constants: [],
@@ -51,7 +119,7 @@
                 group: 0,
                 binding: 0,
             )),
-            ty: 0,
+            ty: 5,
             init: None,
         ),
         (
@@ -61,7 +129,7 @@
                 group: 0,
                 binding: 1,
             )),
-            ty: 1,
+            ty: 6,
             init: None,
         ),
     ],
@@ -72,28 +140,28 @@
             arguments: [
                 (
                     name: Some("t"),
-                    ty: 0,
+                    ty: 5,
                     binding: None,
                 ),
             ],
             result: Some((
-                ty: 2,
+                ty: 7,
                 binding: None,
             )),
             local_variables: [
                 (
                     name: Some("a"),
-                    ty: 2,
+                    ty: 7,
                     init: None,
                 ),
                 (
                     name: Some("b"),
-                    ty: 2,
+                    ty: 7,
                     init: None,
                 ),
                 (
                     name: Some("c"),
-                    ty: 3,
+                    ty: 1,
                     init: None,
                 ),
             ],
@@ -217,7 +285,7 @@
                 name: Some("fragment_main"),
                 arguments: [],
                 result: Some((
-                    ty: 2,
+                    ty: 7,
                     binding: Some(Location(
                         location: 0,
                         interpolation: Some(Perspective),
@@ -256,7 +324,7 @@
                 name: Some("vertex_main"),
                 arguments: [],
                 result: Some((
-                    ty: 2,
+                    ty: 7,
                     binding: Some(BuiltIn(Position(
                         invariant: false,
                     ))),

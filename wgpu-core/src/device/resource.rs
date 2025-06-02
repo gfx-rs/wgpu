@@ -85,9 +85,18 @@ pub struct ExternalTextureParams {
     /// to RGBA.
     /// This is ignored when `num_planes` is 1.
     pub yuv_conversion_matrix: [f32; 16],
-    /// 3x2 column-major matrix with which to multiply texture coordinates
-    /// prior to sampling from the external texture.
+    /// 3x2 column-major matrix with which to multiply normalized texture
+    /// coordinates prior to sampling from the external texture. This may
+    /// scale, translate, flip, and rotate in 90-degree increments, but the
+    /// result of transforming the rectangle (0,0)..(1,1) must be an
+    /// axis-aligned rectangle that falls within the bounds of (0,0)..(1,1).
     pub sample_transform: [f32; 6],
+    /// 3x2 column-major matrix with which to multiply unnormalized texture
+    /// coordinates prior to loading from the external texture. This may scale,
+    /// translate, flip, and rotate in 90-degree increments, but the result of
+    /// transforming the rectangle (0,0)..(texture_size - 1) must be an
+    /// axis-aligned rectangle that falls within the bounds of
+    /// (0,0)..(texture_size - 1).
     pub load_transform: [f32; 6],
     /// Size of the external texture. This value should be returned by size
     /// queries in shader code. Note that this may not match the dimensions of

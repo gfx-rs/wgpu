@@ -276,6 +276,100 @@ impl crate::Module {
         handle
     }
 
+    /// Generate [`SpecialTypes::external_texture_params`].
+    ///
+    /// [`SpecialTypes::external_texture_params`]: crate::ir::SpecialTypes::external_texture_params
+    pub fn generate_external_texture_params_type(&mut self) -> Handle<crate::Type> {
+        if let Some(handle) = self.special_types.external_texture_params {
+            return handle;
+        }
+
+        let ty_u32 = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Scalar(crate::Scalar::U32),
+            },
+            Span::UNDEFINED,
+        );
+        let ty_vec2u = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Vector {
+                    size: crate::VectorSize::Bi,
+                    scalar: crate::Scalar::U32,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        let ty_mat3x2f = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Bi,
+                    scalar: crate::Scalar::F32,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        let ty_mat4x4f = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Quad,
+                    rows: crate::VectorSize::Quad,
+                    scalar: crate::Scalar::F32,
+                },
+            },
+            Span::UNDEFINED,
+        );
+
+        let handle = self.types.insert(
+            crate::Type {
+                name: Some("NagaExternalTextureParams".to_string()),
+                inner: crate::TypeInner::Struct {
+                    members: vec![
+                        crate::StructMember {
+                            name: Some("yuv_conversion_matrix".to_string()),
+                            ty: ty_mat4x4f,
+                            binding: None,
+                            offset: 0,
+                        },
+                        crate::StructMember {
+                            name: Some("sample_transform".to_string()),
+                            ty: ty_mat3x2f,
+                            binding: None,
+                            offset: 64,
+                        },
+                        crate::StructMember {
+                            name: Some("load_transform".to_string()),
+                            ty: ty_mat3x2f,
+                            binding: None,
+                            offset: 88,
+                        },
+                        crate::StructMember {
+                            name: Some("size".to_string()),
+                            ty: ty_vec2u,
+                            binding: None,
+                            offset: 112,
+                        },
+                        crate::StructMember {
+                            name: Some("num_planes".to_string()),
+                            ty: ty_u32,
+                            binding: None,
+                            offset: 120,
+                        },
+                    ],
+                    span: 128,
+                },
+            },
+            Span::UNDEFINED,
+        );
+
+        self.special_types.external_texture_params = Some(handle);
+        handle
+    }
+
     /// Populate this module's [`SpecialTypes::predeclared_types`] type and return the handle.
     ///
     /// [`SpecialTypes::predeclared_types`]: crate::SpecialTypes::predeclared_types
