@@ -2665,11 +2665,7 @@ impl Device {
 
         used.buffers
             .insert_single(external_texture.params.clone(), wgt::BufferUses::UNIFORM);
-        let params = hal::BufferBinding {
-            buffer: external_texture.params.try_raw(snatch_guard)?,
-            offset: 0,
-            size: wgt::BufferSize::new(external_texture.params.size),
-        };
+        let params = external_texture.params.binding(0, None, snatch_guard)?.0;
 
         Ok(hal::ExternalTextureBinding { planes, params })
     }
@@ -2718,11 +2714,11 @@ impl Device {
                 usage: internal_use,
             },
         ];
-        let params = hal::BufferBinding {
-            buffer: self.default_external_texture_params_buffer.as_ref(),
-            offset: 0,
-            size: None,
-        };
+        let params = hal::BufferBinding::new_unchecked(
+            self.default_external_texture_params_buffer.as_ref(),
+            0,
+            None,
+        );
 
         Ok(hal::ExternalTextureBinding { planes, params })
     }
