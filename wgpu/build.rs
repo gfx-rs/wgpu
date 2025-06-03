@@ -53,7 +53,9 @@ fn main() {
             // TODO: Remove this when an alternative Mutex implementation is available for `no_std`.
             // send_sync requires an appropriate Mutex implementation, which is only currently
             // possible with `std` enabled.
-            send_sync
+            send_sync,
+            // Unwinding panics necessitate access to `std` to determine if a thread is panicking
+            panic = "unwind"
         ) },
         no_std: { not(std) }
     }
