@@ -413,9 +413,9 @@ impl error::Error for CreateSurfaceError {
             #[cfg(wgpu_core)]
             CreateSurfaceErrorKind::Hal(e) => e.source(),
             CreateSurfaceErrorKind::Web(_) => None,
-            #[cfg(feature = "std")]
+            #[cfg(std)]
             CreateSurfaceErrorKind::RawHandle(e) => e.source(),
-            #[cfg(not(feature = "std"))]
+            #[cfg(no_std)]
             CreateSurfaceErrorKind::RawHandle(_) => None,
         }
     }

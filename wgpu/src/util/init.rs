@@ -10,7 +10,7 @@ pub fn initialize_adapter_from_env(
     compatible_surface: Option<&Surface<'_>>,
 ) -> Result<Adapter, wgt::RequestAdapterError> {
     cfg_if::cfg_if! {
-        if #[cfg(feature = "std")] {
+        if #[cfg(std)] {
             let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
                 .as_deref()
                 .map(str::to_lowercase)

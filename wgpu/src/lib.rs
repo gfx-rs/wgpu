@@ -31,7 +31,7 @@
 #![cfg_attr(not(any(wgpu_core, webgpu)), allow(unused))]
 
 extern crate alloc;
-#[cfg(feature = "std")]
+#[cfg(std)]
 extern crate std;
 #[cfg(wgpu_core)]
 pub extern crate wgpu_core as wgc;

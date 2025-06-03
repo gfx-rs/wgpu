@@ -3,7 +3,7 @@
 cfg_if::cfg_if! {
     if #[cfg(feature = "parking_lot")] {
         use parking_lot::Mutex as MutexInner;
-    } else if #[cfg(feature = "std")] {
+    } else if #[cfg(std)] {
         use std::sync::Mutex as MutexInner;
     } else {
         use core::cell::RefCell as MutexInner;
@@ -42,7 +42,7 @@ impl<T: ?Sized> Mutex<T> {
         cfg_if::cfg_if! {
             if #[cfg(feature = "parking_lot")] {
                 self.inner.lock()
-            } else if #[cfg(feature = "std")] {
+            } else if #[cfg(std)] {
                 self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
             } else {
                 loop {

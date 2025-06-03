@@ -7,7 +7,7 @@
 ///
 /// Allow [`belt::StagingBelt`] in `no_std` by replacing usage of [`std::sync::mpsc`] with an
 /// appropriate alternative.
-#[cfg(feature = "std")]
+#[cfg(std)]
 mod belt;
 mod device;
 mod encoder;
@@ -18,7 +18,7 @@ mod texture_blitter;
 use alloc::{borrow::Cow, format, string::String, vec};
 use core::ptr::copy_nonoverlapping;
 
-#[cfg(feature = "std")]
+#[cfg(std)]
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
