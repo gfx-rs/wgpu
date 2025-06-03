@@ -14,9 +14,18 @@ pub(crate) struct Mutex<T: ?Sized> {
     inner: MutexInner<T>,
 }
 
-impl<T: ?Sized + core::fmt::Debug> core::fmt::Debug for Mutex<T> {
+impl<T: ?Sized> core::fmt::Debug for Mutex<T>
+where
+    MutexInner<T>: core::fmt::Debug,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         <MutexInner<T> as core::fmt::Debug>::fmt(&self.inner, f)
+    }
+}
+
+impl<T: Default> Default for Mutex<T> {
+    fn default() -> Self {
+        Self::new(<T as Default>::default())
     }
 }
 
