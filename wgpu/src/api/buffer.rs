@@ -4,8 +4,7 @@ use core::{
     ops::{Bound, Deref, DerefMut, Range, RangeBounds},
 };
 
-use parking_lot::Mutex;
-
+use crate::util::Mutex;
 use crate::*;
 
 /// Handle to a GPU-accessible buffer.

@@ -29,7 +29,7 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
-default = ["dx12", "metal", "gles", "vulkan", "wgsl", "webgpu"]
+default = ["std", "dx12", "metal", "gles", "vulkan", "wgsl", "webgpu"]
 
 #! ### Backends
 # --------------------------------------------------------------------
@@ -155,6 +155,9 @@ fragile-send-sync-non-atomic-wasm = [
 ## context around the WASM VM, e.g., when the WASM binary is used in a browser.
 web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
 
+std = ["raw-window-handle/std", "wgpu-types/std", "wgpu-core/std"]
+
+parking_lot = ["dep:parking_lot"]
 
 #########################
 # Standard Dependencies #
@@ -168,12 +171,13 @@ wgpu-types.workspace = true
 # Needed for both wgpu-core and webgpu
 arrayvec.workspace = true
 bitflags.workspace = true
+cfg-if.workspace = true
 document-features.workspace = true
 hashbrown.workspace = true
 log.workspace = true
-parking_lot.workspace = true
+parking_lot = { workspace = true, optional = true }
 profiling.workspace = true
-raw-window-handle = { workspace = true, features = ["std"] }
+raw-window-handle = { workspace = true, features = ["alloc"] }
 static_assertions.workspace = true
 
 ########################################

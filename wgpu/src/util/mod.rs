@@ -3,15 +3,22 @@
 //! Nothing in this module is a part of the WebGPU API specification;
 //! they are unique to the `wgpu` library.
 
+/// # TODO
+///
+/// Allow [`belt::StagingBelt`] in `no_std` by replacing usage of [`std::sync::mpsc`] with an
+/// appropriate alternative.
+#[cfg(feature = "std")]
 mod belt;
 mod device;
 mod encoder;
 mod init;
+mod mutex;
 mod texture_blitter;
 
 use alloc::{borrow::Cow, format, string::String, vec};
 use core::ptr::copy_nonoverlapping;
 
+#[cfg(feature = "std")]
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
@@ -21,6 +28,8 @@ pub use texture_blitter::{TextureBlitter, TextureBlitterBuilder};
 pub use wgt::{
     math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs, TextureDataOrder,
 };
+
+pub(crate) use mutex::Mutex;
 
 use crate::dispatch;
 

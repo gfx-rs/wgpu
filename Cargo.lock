@@ -4754,6 +4754,7 @@ dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
  "bytemuck",
+ "cfg-if",
  "cfg_aliases 0.2.1",
  "document-features",
  "hashbrown",
