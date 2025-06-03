@@ -44,16 +44,16 @@ default = [
 # --------------------------------------------------------------------
 
 ## Enables the DX12 backend on Windows.
-dx12 = ["wgpu-core?/dx12"]
+dx12 = ["wgpu-core?/dx12", "std"]
 
 ## Enables the Metal backend on macOS & iOS.
-metal = ["wgpu-core?/metal"]
+metal = ["wgpu-core?/metal", "std"]
 
 ## Enables the Vulkan backend on Windows, Linux, and Android.
-vulkan = ["wgpu-core?/vulkan"]
+vulkan = ["wgpu-core?/vulkan", "std"]
 
 ## Enables the OpenGL/GLES backend on Windows, Linux, Android, and Emscripten.
-gles = ["wgpu-core?/gles"]
+gles = ["wgpu-core?/gles", "std"]
 
 ## Enables the WebGPU backend on WebAssembly.
 webgpu = [
@@ -67,18 +67,19 @@ webgpu = [
     "web-sys/Window",
     "web-sys/WorkerGlobalScope",
     "web-sys/WorkerNavigator",
+    "std",
 ]
 
 #! ### Conditional Backends
 
 ## Enables the GLES backend on macOS only for use with [ANGLE](https://github.com/google/angle).
-angle = ["wgpu-core?/angle"]
+angle = ["wgpu-core?/angle", "std"]
 
 ## Enables the Vulkan backend on macOS & iOS only for use with [MoltenVK](https://github.com/KhronosGroup/MoltenVK).
-vulkan-portability = ["wgpu-core?/vulkan-portability"]
+vulkan-portability = ["wgpu-core?/vulkan-portability", "std"]
 
 ## Enables the GLES backend on WebAssembly only.
-webgl = ["web", "wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
+webgl = ["web", "wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec", "std"]
 
 ## Enables the noop backend for testing.
 ##
@@ -86,13 +87,13 @@ webgl = ["web", "wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
 ## but performs no computation.
 ## Because it lacks basic functionality, it is only actually used if explicitly enabled
 ## through `NoopBackendOptions`.
-noop = ["wgpu-core/noop", "dep:wgpu-hal", "dep:smallvec"]
+noop = ["wgpu-core/noop", "dep:wgpu-hal", "dep:smallvec", "std"]
 
 #! **Note:** In the documentation, if you see that an item depends on a backend,
 #! it means that the item is only available when that backend is enabled _and_ the backend
 #! is supported on the current platform.
 
-custom = []
+custom = ["std"]
 
 #! ### Shading language support
 # --------------------------------------------------------------------
@@ -100,16 +101,16 @@ custom = []
 #! We will translate the input language to whatever the backend requires.
 
 ## Enable accepting SPIR-V shaders as input.
-spirv = ["naga/spv-in", "wgpu-core?/spirv"]
+spirv = ["naga/spv-in", "wgpu-core?/spirv", "std"]
 
 ## Enable accepting GLSL shaders as input.
-glsl = ["naga/glsl-in", "wgpu-core?/glsl"]
+glsl = ["naga/glsl-in", "wgpu-core?/glsl", "std"]
 
 ## Enable accepting WGSL shaders as input.
-wgsl = ["wgpu-core?/wgsl"]
+wgsl = ["wgpu-core?/wgsl", "std"]
 
 ## Enable accepting naga IR shaders as input.
-naga-ir = ["dep:naga"]
+naga-ir = ["dep:naga", "std"]
 
 #! ### Assertions and Serialization
 # --------------------------------------------------------------------
@@ -162,7 +163,7 @@ fragile-send-sync-non-atomic-wasm = [
 ##
 ## Those libraties (wasm-bindgen, web-sys, js-sys) can only be used when there is a JavaScript
 ## context around the WASM VM, e.g., when the WASM binary is used in a browser.
-web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
+web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web", "std"]
 
 std = ["raw-window-handle/std", "wgpu-types/std", "wgpu-core/std"]
 
