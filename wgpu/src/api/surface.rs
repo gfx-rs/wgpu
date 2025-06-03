@@ -415,7 +415,7 @@ impl error::Error for CreateSurfaceError {
             CreateSurfaceErrorKind::Web(_) => None,
             #[cfg(feature = "std")]
             CreateSurfaceErrorKind::RawHandle(e) => e.source(),
-            #[cfg(no_std)]
+            #[cfg(not(feature = "std"))]
             CreateSurfaceErrorKind::RawHandle(_) => None,
         }
     }
