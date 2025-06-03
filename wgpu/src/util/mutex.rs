@@ -41,9 +41,9 @@ impl<T: ?Sized> Mutex<T> {
     pub fn lock(&self) -> impl core::ops::DerefMut<Target = T> + '_ {
         cfg_if::cfg_if! {
             if #[cfg(feature = "parking_lot")] {
-                return self.inner.lock();
+                self.inner.lock()
             } else if #[cfg(feature = "std")] {
-                return self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
             } else {
                 loop {
                     let Ok(lock) = self.inner.try_borrow_mut() else {
@@ -52,7 +52,7 @@ impl<T: ?Sized> Mutex<T> {
                         continue;
                     };
 
-                    return lock;
+                    break lock;
                 }
             }
         }
