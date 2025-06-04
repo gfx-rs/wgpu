@@ -55,7 +55,7 @@
     entry_points: [],
     diagnostic_filters: [],
     diagnostic_filter_leaf: None,
-    comments: Some((
+    doc_comments: Some((
         types: {},
         struct_members: {},
         entry_points: {},

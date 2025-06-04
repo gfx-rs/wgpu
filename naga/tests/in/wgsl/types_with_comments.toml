@@ -1,2 +1,2 @@
 targets = "IR"
-wgsl-in = { parse_comments = true }
+wgsl-in = { parse_doc_comments = true }

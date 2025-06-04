@@ -1130,9 +1130,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             layouter: &mut proc::Layouter::default(),
             global_expression_kind_tracker: &mut proc::ExpressionKindTracker::new(),
         };
-        if !tu.comments.is_empty() {
-            ctx.module.get_comments_or_insert_default().module =
-                tu.comments.iter().map(|s| s.to_string()).collect();
+        if !tu.doc_comments.is_empty() {
+            ctx.module.get_or_insert_default_doc_comments().module =
+                tu.doc_comments.iter().map(|s| s.to_string()).collect();
         }
 
         for decl_handle in self.index.visit_ordered() {
@@ -1142,24 +1142,24 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             match decl.kind {
                 ast::GlobalDeclKind::Fn(ref f) => {
                     let lowered_decl = self.function(f, span, &mut ctx)?;
-                    if !f.comments.is_empty() {
+                    if !f.doc_comments.is_empty() {
                         match lowered_decl {
                             LoweredGlobalDecl::Function { handle, .. } => {
                                 ctx.module
-                                    .get_comments_or_insert_default()
+                                    .get_or_insert_default_doc_comments()
                                     .functions
                                     .insert(
                                         handle,
-                                        f.comments.iter().map(|s| s.to_string()).collect(),
+                                        f.doc_comments.iter().map(|s| s.to_string()).collect(),
                                     );
                             }
                             LoweredGlobalDecl::EntryPoint(index) => {
                                 ctx.module
-                                    .get_comments_or_insert_default()
+                                    .get_or_insert_default_doc_comments()
                                     .entry_points
                                     .insert(
                                         index,
-                                        f.comments.iter().map(|s| s.to_string()).collect(),
+                                        f.doc_comments.iter().map(|s| s.to_string()).collect(),
                                     );
                             }
                             _ => {}
@@ -1200,11 +1200,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         span,
                     );
 
-                    if !v.comments.is_empty() {
+                    if !v.doc_comments.is_empty() {
                         ctx.module
-                            .get_comments_or_insert_default()
+                            .get_or_insert_default_doc_comments()
                             .global_variables
-                            .insert(handle, v.comments.iter().map(|s| s.to_string()).collect());
+                            .insert(
+                                handle,
+                                v.doc_comments.iter().map(|s| s.to_string()).collect(),
+                            );
                     }
                     ctx.globals
                         .insert(v.name.name, LoweredGlobalDecl::Var(handle));
@@ -1236,11 +1239,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     ctx.globals
                         .insert(c.name.name, LoweredGlobalDecl::Const(handle));
-                    if !c.comments.is_empty() {
+                    if !c.doc_comments.is_empty() {
                         ctx.module
-                            .get_comments_or_insert_default()
+                            .get_or_insert_default_doc_comments()
                             .constants
-                            .insert(handle, c.comments.iter().map(|s| s.to_string()).collect());
+                            .insert(
+                                handle,
+                                c.doc_comments.iter().map(|s| s.to_string()).collect(),
+                            );
                     }
                 }
                 ast::GlobalDeclKind::Override(ref o) => {
@@ -1288,11 +1294,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let handle = self.r#struct(s, span, &mut ctx)?;
                     ctx.globals
                         .insert(s.name.name, LoweredGlobalDecl::Type(handle));
-                    if !s.comments.is_empty() {
+                    if !s.doc_comments.is_empty() {
                         ctx.module
-                            .get_comments_or_insert_default()
+                            .get_or_insert_default_doc_comments()
                             .types
-                            .insert(handle, s.comments.iter().map(|s| s.to_string()).collect());
+                            .insert(
+                                handle,
+                                s.doc_comments.iter().map(|s| s.to_string()).collect(),
+                            );
                     }
                 }
                 ast::GlobalDeclKind::Type(ref alias) => {
@@ -3628,7 +3637,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut struct_alignment = proc::Alignment::ONE;
         let mut members = Vec::with_capacity(s.members.len());
 
-        let mut comments: Vec<Option<Vec<String>>> = Vec::new();
+        let mut doc_comments: Vec<Option<Vec<String>>> = Vec::new();
 
         for member in s.members.iter() {
             let ty = self.resolve_ast_type(member.ty, &mut ctx.as_const())?;
@@ -3672,9 +3681,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             offset = member_alignment.round_up(offset);
             struct_alignment = struct_alignment.max(member_alignment);
 
-            if !member.comments.is_empty() {
-                comments.push(Some(
-                    member.comments.iter().map(|s| s.to_string()).collect(),
+            if !member.doc_comments.is_empty() {
+                doc_comments.push(Some(
+                    member.doc_comments.iter().map(|s| s.to_string()).collect(),
                 ));
             }
             members.push(ir::StructMember {
@@ -3700,10 +3709,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             },
             span,
         );
-        for (i, c) in comments.drain(..).enumerate() {
+        for (i, c) in doc_comments.drain(..).enumerate() {
             if let Some(comment) = c {
-                let comments = ctx.module.get_comments_or_insert_default();
-                comments.struct_members.insert((handle, i), comment);
+                ctx.module
+                    .get_or_insert_default_doc_comments()
+                    .struct_members
+                    .insert((handle, i), comment);
             }
         }
         Ok(handle)

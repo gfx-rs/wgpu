@@ -2909,5 +2909,5 @@
     ],
     diagnostic_filters: [],
     diagnostic_filter_leaf: None,
-    comments: None,
+    doc_comments: None,
 )

@@ -90,5 +90,5 @@
         ),
     ],
     diagnostic_filter_leaf: Some(0),
-    comments: None,
+    doc_comments: None,
 )

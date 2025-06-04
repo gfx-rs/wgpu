@@ -42,7 +42,7 @@ impl super::Validator {
             ref global_expressions,
             ref diagnostic_filters,
             ref diagnostic_filter_leaf,
-            ref comments,
+            ref doc_comments,
         } = module;
 
         // Because types can refer to global expressions and vice versa, to
@@ -257,69 +257,66 @@ impl super::Validator {
             handle.check_valid_for(diagnostic_filters)?;
         }
 
-        if let Some(comments) = comments.as_ref() {
-            let crate::Comments {
+        if let Some(doc_comments) = doc_comments.as_ref() {
+            let crate::DocComments {
                 module: _,
-                types: ref comment_types,
-                struct_members: ref comment_struct_members,
-                entry_points: ref comment_entry_points,
-                functions: ref comment_functions,
-                constants: ref comment_constants,
-                global_variables: ref comment_global_variables,
-            } = **comments;
+                types: ref doc_comments_for_types,
+                struct_members: ref doc_comments_for_struct_members,
+                entry_points: ref doc_comments_for_entry_points,
+                functions: ref doc_comments_for_functions,
+                constants: ref doc_comments_for_constants,
+                global_variables: ref doc_comments_for_global_variables,
+            } = **doc_comments;
 
-            for comment_type in comment_types.iter() {
-                validate_type(*comment_type.0)?;
+            for (&ty, _) in doc_comments_for_types.iter() {
+                validate_type(ty)?;
             }
 
-            for comment_struct_member_doc in comment_struct_members.iter() {
-                validate_type(comment_struct_member_doc.0 .0)?;
-                let struct_type = types.get_handle(comment_struct_member_doc.0 .0).unwrap();
+            for (&(ty, struct_member_index), _) in doc_comments_for_struct_members.iter() {
+                validate_type(ty)?;
+                let struct_type = types.get_handle(ty).unwrap();
                 match struct_type.inner {
                     crate::TypeInner::Struct {
                         ref members,
                         span: ref _span,
                     } => {
                         (0..members.len())
-                            .contains(&comment_struct_member_doc.0 .1)
+                            .contains(&struct_member_index)
                             .then_some(())
                             // TODO: what errors should this be?
                             .ok_or_else(|| ValidationError::Type {
-                                handle: comment_struct_member_doc.0 .0,
+                                handle: ty,
                                 name: struct_type.name.as_ref().map_or_else(
                                     || "members length incorrect".to_string(),
                                     |name| name.to_string(),
                                 ),
-                                source: TypeError::InvalidData(comment_struct_member_doc.0 .0),
+                                source: TypeError::InvalidData(ty),
                             })?;
                     }
                     _ => {
                         // TODO: internal error ? We should never get here.
                         // If entering there, it's probably that we forgot to adjust a handle in the compact phase.
                         return Err(ValidationError::Type {
-                            handle: comment_struct_member_doc.0 .0,
+                            handle: ty,
                             name: struct_type
                                 .name
                                 .as_ref()
                                 .map_or_else(|| "Unknown".to_string(), |name| name.to_string()),
-                            source: TypeError::InvalidData(comment_struct_member_doc.0 .0),
+                            source: TypeError::InvalidData(ty),
                         });
                     }
                 }
-                for comment_function in comment_functions.iter() {
-                    Self::validate_function_handle(*comment_function.0, functions)?;
+                for (&function, _) in doc_comments_for_functions.iter() {
+                    Self::validate_function_handle(function, functions)?;
                 }
-                for comment_entry_point in comment_entry_points.iter() {
-                    Self::validate_entry_point_index(*comment_entry_point.0, entry_points)?;
+                for (&entry_point_index, _) in doc_comments_for_entry_points.iter() {
+                    Self::validate_entry_point_index(entry_point_index, entry_points)?;
                 }
-                for comment_constant in comment_constants.iter() {
-                    Self::validate_constant_handle(*comment_constant.0, constants)?;
+                for (&constant, _) in doc_comments_for_constants.iter() {
+                    Self::validate_constant_handle(constant, constants)?;
                 }
-                for comment_global_variable in comment_global_variables.iter() {
-                    Self::validate_global_variable_handle(
-                        *comment_global_variable.0,
-                        global_variables,
-                    )?;
+                for (&global_variable, _) in doc_comments_for_global_variables.iter() {
+                    Self::validate_global_variable_handle(global_variable, global_variables)?;
                 }
             }
         }

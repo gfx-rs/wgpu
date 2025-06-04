@@ -81,7 +81,7 @@ where
 #[derive(Default, serde::Deserialize)]
 #[serde(default)]
 struct WgslInParameters {
-    parse_comments: bool,
+    parse_doc_comments: bool,
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -817,9 +817,9 @@ fn convert_snapshots_wgsl() {
         let source = source.replace('\r', "");
 
         let params = input.read_parameters();
-        let WgslInParameters { parse_comments } = params.wgsl_in;
+        let WgslInParameters { parse_doc_comments } = params.wgsl_in;
 
-        let options = naga::front::wgsl::Options { parse_comments };
+        let options = naga::front::wgsl::Options { parse_doc_comments };
         let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
         match frontend.parse(&source) {
             Ok(mut module) => check_targets(&input, &mut module, Some(&source)),

@@ -272,46 +272,40 @@ pub fn compact(module: &mut crate::Module) {
             module_map.global_expressions.adjust(init);
         }
     }
-    // Adjust comments
-    if let Some(ref mut comments) = module.comments {
-        let crate::Comments {
+    // Adjust doc comments
+    if let Some(ref mut doc_comments) = module.doc_comments {
+        let crate::DocComments {
             module: _,
-            types: ref mut comment_types,
-            struct_members: ref mut comment_struct_members,
+            types: ref mut doc_comments_for_types,
+            struct_members: ref mut doc_comments_for_struct_members,
             entry_points: _,
             functions: _,
-            constants: ref mut comment_constants,
+            constants: ref mut doc_comments_for_constants,
             global_variables: _,
-        } = **comments;
-        log::trace!("adjusting comments for types");
-        for (mut comment_type_handle, comment) in core::mem::take(comment_types) {
-            if !module_map.types.used(comment_type_handle) {
+        } = **doc_comments;
+        log::trace!("adjusting doc comments for types");
+        for (mut ty, doc_comment) in core::mem::take(doc_comments_for_types) {
+            if !module_map.types.used(ty) {
                 continue;
             }
-            module_map.types.adjust(&mut comment_type_handle);
-            comment_types.insert(comment_type_handle, comment);
+            module_map.types.adjust(&mut ty);
+            doc_comments_for_types.insert(ty, doc_comment);
         }
-        log::trace!("adjusting comments for struct members");
-        for (mut comment_struct_member_handle, comment) in core::mem::take(comment_struct_members) {
-            if !module_map.types.used(comment_struct_member_handle.0) {
+        log::trace!("adjusting doc comments for struct members");
+        for ((mut ty, index), doc_comment) in core::mem::take(doc_comments_for_struct_members) {
+            if !module_map.types.used(ty) {
                 continue;
             }
-            module_map.types.adjust(&mut comment_struct_member_handle.0);
-            comment_struct_members.insert(
-                (
-                    comment_struct_member_handle.0,
-                    comment_struct_member_handle.1,
-                ),
-                comment,
-            );
+            module_map.types.adjust(&mut ty);
+            doc_comments_for_struct_members.insert((ty, index), doc_comment);
         }
-        log::trace!("adjusting comments for constants");
-        for (mut comment_constant_handle, comment) in core::mem::take(comment_constants) {
-            if !module_map.constants.used(comment_constant_handle) {
+        log::trace!("adjusting doc comments for constants");
+        for (mut constant, doc_comment) in core::mem::take(doc_comments_for_constants) {
+            if !module_map.constants.used(constant) {
                 continue;
             }
-            module_map.constants.adjust(&mut comment_constant_handle);
-            comment_constants.insert(comment_constant_handle, comment);
+            module_map.constants.adjust(&mut constant);
+            doc_comments_for_constants.insert(constant, doc_comment);
         }
     }
 

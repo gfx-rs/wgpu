@@ -2386,7 +2386,7 @@ pub enum RayQueryIntersection {
     Aabb = 3,
 }
 
-/// Comments preceding items.
+/// Doc comments preceding items.
 ///
 /// These can be used to generate automated documentation,
 /// IDE hover information or translate shaders with their context comments.
@@ -2394,7 +2394,7 @@ pub enum RayQueryIntersection {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub struct Comments {
+pub struct DocComments {
     pub types: FastIndexMap<Handle<Type>, Vec<String>>,
     // The key is:
     // - key.0: the handle to the Struct
@@ -2404,7 +2404,7 @@ pub struct Comments {
     pub functions: FastIndexMap<Handle<Function>, Vec<String>>,
     pub constants: FastIndexMap<Handle<Constant>, Vec<String>>,
     pub global_variables: FastIndexMap<Handle<GlobalVariable>, Vec<String>>,
-    // top level comments, appearing before any space.
+    // Top level comments, appearing before any space.
     pub module: Vec<String>,
 }
 
@@ -2493,6 +2493,6 @@ pub struct Module {
     /// See [`DiagnosticFilterNode`] for details on how the tree is represented and used in
     /// validation.
     pub diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
-    /// Comments, usually serving as documentation
-    pub comments: Option<Box<Comments>>,
+    /// Doc comments.
+    pub doc_comments: Option<Box<DocComments>>,
 }

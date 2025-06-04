@@ -332,8 +332,8 @@ impl<Name: fmt::Debug, Var: fmt::Debug> fmt::Debug for SymbolTable<Name, Var> {
 }
 
 impl crate::Module {
-    pub fn get_comments_or_insert_default(&mut self) -> &mut Box<crate::Comments> {
-        self.comments
-            .get_or_insert_with(|| Box::new(crate::Comments::default()))
+    pub fn get_or_insert_default_doc_comments(&mut self) -> &mut Box<crate::DocComments> {
+        self.doc_comments
+            .get_or_insert_with(|| Box::new(crate::DocComments::default()))
     }
 }
