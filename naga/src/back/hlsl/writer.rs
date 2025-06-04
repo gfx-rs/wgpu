@@ -2924,7 +2924,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 right,
             } if matches!(
                 func_ctx.resolve_type(expr, &module.types).scalar_kind(),
-                Some(ScalarKind::Sint | ScalarKind::Uint)
+                Some(ScalarKind::Sint | ScalarKind::Uint | ScalarKind::Float)
             ) =>
             {
                 write!(self.out, "{MOD_FUNCTION}(")?;
@@ -2934,21 +2934,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?;
             }
 
-            // While HLSL supports float operands with the % operator it is only
-            // defined in cases where both sides are either positive or negative.
-            Expression::Binary {
-                op: crate::BinaryOperator::Modulo,
-                left,
-                right,
-            } if func_ctx.resolve_type(left, &module.types).scalar_kind()
-                == Some(ScalarKind::Float) =>
-            {
-                write!(self.out, "fmod(")?;
-                self.write_expr(module, left, func_ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(module, right, func_ctx)?;
-                write!(self.out, ")")?;
-            }
             Expression::Binary { op, left, right } => {
                 write!(self.out, "(")?;
                 self.write_expr(module, left, func_ctx)?;

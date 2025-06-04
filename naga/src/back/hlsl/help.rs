@@ -1318,7 +1318,7 @@ impl<W: Write> super::Writer<'_, W> {
                         crate::BinaryOperator::Modulo,
                         Some(
                             scalar @ crate::Scalar {
-                                kind: ScalarKind::Sint | ScalarKind::Uint,
+                                kind: ScalarKind::Sint | ScalarKind::Uint | ScalarKind::Float,
                                 ..
                             },
                         ),
@@ -1366,6 +1366,14 @@ impl<W: Write> super::Writer<'_, W> {
                             }
                             ScalarKind::Uint => {
                                 writeln!(self.out, "{level}return lhs % (rhs == 0u ? 1u : rhs);")?
+                            }
+                            // HLSL's fmod has the same definition as WGSL's % operator but due
+                            // to its implementation in DXC it is not as accurate as the WGSL spec
+                            // requires it to be. See:
+                            // - https://shader-playground.timjones.io/0c8572816dbb6fc4435cc5d016a978a7
+                            // - https://github.com/llvm/llvm-project/blob/50f9b8acafdca48e87e6b8e393c1f116a2d193ee/clang/lib/Headers/hlsl/hlsl_intrinsic_helpers.h#L78-L81
+                            ScalarKind::Float => {
+                                writeln!(self.out, "{level}return lhs - rhs * trunc(lhs / rhs);")?
                             }
                             _ => unreachable!(),
                         }
