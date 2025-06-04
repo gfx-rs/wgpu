@@ -15,9 +15,6 @@ env:
 
 jobs:
   cts:
-    # For pull requests, only run if we add the "PR: run CTS" label
-    if: "github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'PR: run CTS')"
-
     strategy:
       fail-fast: false
       matrix:
@@ -26,13 +23,19 @@ jobs:
           - name: Windows x86_64
             os: windows-2022
             target: x86_64-pc-windows-msvc
-            backends: dx12
 
-          # Linux
+          # Mac
+          - name: Mac aarch64
+            os: macos-14
+            target: x86_64-apple-darwin
+
+          # Linux is not working, https://github.com/gfx-rs/wgpu/issues/7751.
+          # Note that there is a Mesa setup step that needs to be copied from
+          # the CI job, but it doesn't seem worth duplicating the code for
+          # something we won't even run.
           #- name: Linux x86_64
-          #  os: ubuntu-20.04
+          #  os: ubuntu-24.04
           #  target: x86_64-unknown-linux-gnu
-          #  backends: vulkan # gl
 
     name: CTS ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -77,12 +80,10 @@ jobs:
         shell: bash
         run: |
           cd cts;
-          for backend in ${{ matrix.backends }}; do
-            echo "======= CTS TESTS $backend ======";
-            grep -v '^//' ../wgpu/cts_runner/test.lst | while IFS=$' \t\r\n' read test; do
-              echo "=== Running $test ===";
-              DENO_WEBGPU_BACKEND=$backend cargo run --manifest-path ../wgpu/cts_runner/Cargo.toml --frozen -- ./tools/run_deno --verbose "$test";
-            done
+          echo "======= CTS TESTS ======";
+          grep -v '^//' ../wgpu/cts_runner/test.lst | while IFS=$' \t\r\n' read test; do
+            echo "=== Running $test ===";
+            cargo run --manifest-path ../wgpu/cts_runner/Cargo.toml --frozen -- ./tools/run_deno --verbose "$test";
           done
           echo;
           echo "Note: Summary reflects only the last test suite, not the entire run."
