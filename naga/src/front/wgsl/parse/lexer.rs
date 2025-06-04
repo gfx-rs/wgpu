@@ -323,24 +323,30 @@ impl<'a> Lexer<'a> {
         (token, rest)
     }
 
-    /// Collect all doc comments until a non doc token is found.
-    pub(in crate::front::wgsl) fn accumulate_doc_comments(&'a mut self) -> Vec<Span> {
-        let mut comments = Vec::new();
+    /// Collect all module doc comments until a non doc token is found.
+    pub(in crate::front::wgsl) fn accumulate_module_doc_comments(&mut self) -> Vec<&'a str> {
+        let mut doc_comments = Vec::new();
         loop {
-            let start = self.current_byte_offset();
-            // Eat all trivia because `next` doesn't eat trailing trivia.
             let (token, rest) = consume_token(self.input, false, self.save_doc_comments);
-            if let Token::DocComment(_) = token {
+            if let Token::ModuleDocComment(doc_comment) = token {
                 self.input = rest;
-                let next = self.current_byte_offset();
-                comments.push(Span::new(start as u32, next as u32));
-            } else if let Token::Trivia = token {
-                self.input = rest;
-            } else if let Token::ModuleDocComment(_) = token {
-                self.input = rest;
-                // TODO: return an error ?
+                doc_comments.push(doc_comment);
             } else {
-                return comments;
+                return doc_comments;
+            }
+        }
+    }
+
+    /// Collect all doc comments until a non doc token is found.
+    pub(in crate::front::wgsl) fn accumulate_doc_comments(&mut self) -> Vec<&'a str> {
+        let mut doc_comments = Vec::new();
+        loop {
+            let (token, rest) = consume_token(self.input, false, self.save_doc_comments);
+            if let Token::DocComment(doc_comment) = token {
+                self.input = rest;
+                doc_comments.push(doc_comment);
+            } else {
+                return doc_comments;
             }
         }
     }
