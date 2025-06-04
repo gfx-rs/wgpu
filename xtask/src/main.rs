@@ -16,8 +16,11 @@ const HELP: &str = "\
 Usage: xtask <COMMAND>
 
 Commands:
-  cts [<test selector> | -f <test list file>]...
+  cts [--skip-checkout] [<test selector> | -f <test list file>]...
     Check out, build, and run CTS tests
+
+    --skip-checkout     Don't check out the pinned CTS version, use whatever is
+                        already checked out.
 
   run-wasm
     Build and run web examples

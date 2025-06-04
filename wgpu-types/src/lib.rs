@@ -4996,7 +4996,7 @@ bitflags::bitflags! {
         /// may have is COPY_DST.
         const MAP_READ = 1 << 0;
         /// Allow a buffer to be mapped for writing using [`Buffer::map_async`] + [`Buffer::get_mapped_range_mut`].
-        /// This does not include creating a buffer with `mapped_at_creation` set.
+        /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
         ///
         /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] feature isn't enabled, the only other usage a buffer
         /// may have is COPY_SRC.

@@ -55,12 +55,14 @@ Bottom level categories:
 
 - When emitting GLSL, Uniform and Storage Buffer memory layouts are now emitted even if no explicit binding is given. By @cloone8 in [#7579](https://github.com/gfx-rs/wgpu/pull/7579).
 - Add support for [quad operations](https://www.w3.org/TR/WGSL/#quad-builtin-functions) (requires `SUBGROUP` feature to be enabled). By @dzamkov and @valaphee in [#7683](https://github.com/gfx-rs/wgpu/pull/7683).
+- Add support for `atomicCompareExchangeWeak` in HLSL and GLSL backends. By @cryvosh in [#7658](https://github.com/gfx-rs/wgpu/pull/7658)
 
 ### Bug Fixes
 
 #### General
 
 - Fix error message for sampler array limit. By @LPGhatguy in [#7704](https://github.com/gfx-rs/wgpu/pull/7704).
+- Fix bug where using `BufferSlice::get_mapped_range_as_array_buffer()` on a buffer would prevent you from ever unmapping it. Note that this API has changed and is now `BufferView::as_uint8array()`.
 
 #### Naga
 
@@ -78,6 +80,10 @@ Naga now infers the correct binding layout when a resource appears only in an as
 #### DX12
 
 - Get `vertex_index` & `instance_index` builtins working for indirect draws. By @teoxoy in [#7535](https://github.com/gfx-rs/wgpu/pull/7535)
+
+#### Metal
+
+- Remove extraneous main thread warning in `fn surface_capabilities()`. By @jamesordner in [#7692](https://github.com/gfx-rs/wgpu/pull/7692)
 
 ### Changes
 
@@ -479,15 +485,16 @@ By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](h
 
 - Call `pre_present_notify()` before presenting. By @kjarosh in [#7074](https://github.com/gfx-rs/wgpu/pull/7074).
 
-
 ## v24.0.5 (2025-05-24)
 
 ### Bug Fixes
 
 #### General
+
 - Fix a possible deadlock within `Queue::write_buffer`. By @RedMindZ in [#7582](https://github.com/gfx-rs/wgpu/pull/7582)
 
 #### WebGPU
+
 - Insert fragment pipeline constants into fragment descriptor instead of vertex descriptor. By @DerSchmale in [#7621](https://github.com/gfx-rs/wgpu/pull/7621)
 
 ## v24.0.4 (2025-04-03)
