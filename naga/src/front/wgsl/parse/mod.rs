@@ -3072,7 +3072,7 @@ impl Parser {
     ) -> Result<'a, ast::TranslationUnit<'a>> {
         self.reset();
 
-        let mut lexer = Lexer::new(source, options.parse_doc_comments);
+        let mut lexer = Lexer::new(source, !options.parse_doc_comments);
         let mut tu = ast::TranslationUnit::default();
         let mut enable_extensions = EnableExtensions::empty();
         let mut diagnostic_filters = DiagnosticFilterMap::new();

@@ -49,8 +49,10 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 /// -   Otherwise, interpret `<<` and `>>` as shift operators:
 ///     `Token::LogicalOperation` tokens.
 ///
+/// If `ignore_doc_comments` is true, doc comments are treated as [`Token::Trivia`].
+///
 /// [§3.1 Parsing]: https://gpuweb.github.io/gpuweb/wgsl/#parsing
-fn consume_token(input: &str, generic: bool, save_doc_comments: bool) -> (Token<'_>, &str) {
+fn consume_token(input: &str, generic: bool, ignore_doc_comments: bool) -> (Token<'_>, &str) {
     let mut chars = input.chars();
     let cur = match chars.next() {
         Some(c) => c,
@@ -96,7 +98,7 @@ fn consume_token(input: &str, generic: bool, save_doc_comments: bool) -> (Token<
                             input.len()
                         }
                     };
-                    if !save_doc_comments {
+                    if ignore_doc_comments {
                         return (Token::Trivia, &input[end_position..]);
                     }
                     let next_char = chars.next();
@@ -118,7 +120,7 @@ fn consume_token(input: &str, generic: bool, save_doc_comments: bool) -> (Token<
                     char_indices.next();
                     char_indices.next();
 
-                    let mut constructing_token = if !save_doc_comments {
+                    let mut constructing_token = if ignore_doc_comments {
                         Token::Trivia
                     } else {
                         let next_char = char_indices
@@ -267,21 +269,21 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     /// statements.
     last_end_offset: usize,
 
-    /// Whether or not to save doc comments as we lexe through them.
-    /// If `false`, doc comments are saved as [`Token::Trivia`].
-    save_doc_comments: bool,
+    /// Whether or not to ignore doc comments.
+    /// If `true`, doc comments are treated as [`Token::Trivia`].
+    ignore_doc_comments: bool,
 
     pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
 }
 
 impl<'a> Lexer<'a> {
-    pub(in crate::front::wgsl) const fn new(input: &'a str, save_doc_comments: bool) -> Self {
+    pub(in crate::front::wgsl) const fn new(input: &'a str, ignore_doc_comments: bool) -> Self {
         Lexer {
             input,
             source: input,
             last_end_offset: 0,
             enable_extensions: EnableExtensions::empty(),
-            save_doc_comments,
+            ignore_doc_comments,
         }
     }
 
@@ -307,7 +309,7 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn start_byte_offset(&mut self) -> usize {
         loop {
             // Eat all trivia because `next` doesn't eat trailing trivia.
-            let (token, rest) = consume_token(self.input, false, false);
+            let (token, rest) = consume_token(self.input, false, true);
             if let Token::Trivia = token {
                 self.input = rest;
             } else {
@@ -327,7 +329,7 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn accumulate_module_doc_comments(&mut self) -> Vec<&'a str> {
         let mut doc_comments = Vec::new();
         loop {
-            let (token, rest) = consume_token(self.input, false, self.save_doc_comments);
+            let (token, rest) = consume_token(self.input, false, self.ignore_doc_comments);
             if let Token::ModuleDocComment(doc_comment) = token {
                 self.input = rest;
                 doc_comments.push(doc_comment);
@@ -341,7 +343,7 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn accumulate_doc_comments(&mut self) -> Vec<&'a str> {
         let mut doc_comments = Vec::new();
         loop {
-            let (token, rest) = consume_token(self.input, false, self.save_doc_comments);
+            let (token, rest) = consume_token(self.input, false, self.ignore_doc_comments);
             if let Token::DocComment(doc_comment) = token {
                 self.input = rest;
                 doc_comments.push(doc_comment);
@@ -391,7 +393,7 @@ impl<'a> Lexer<'a> {
             let (token, rest) = consume_token(
                 self.input,
                 generic,
-                self.save_doc_comments && !ignore_doc_comments,
+                ignore_doc_comments || self.ignore_doc_comments,
             );
             self.input = rest;
             match token {
@@ -605,15 +607,15 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 #[track_caller]
 fn sub_test(source: &str, expected_tokens: &[Token]) {
-    sub_test_with(false, source, expected_tokens);
+    sub_test_with(true, source, expected_tokens);
 }
 
 #[cfg(test)]
 #[track_caller]
 fn sub_test_with_and_without_doc_comments(source: &str, expected_tokens: &[Token]) {
-    sub_test_with(true, source, expected_tokens);
+    sub_test_with(false, source, expected_tokens);
     sub_test_with(
-        false,
+        true,
         source,
         expected_tokens
             .iter()
@@ -626,8 +628,8 @@ fn sub_test_with_and_without_doc_comments(source: &str, expected_tokens: &[Token
 
 #[cfg(test)]
 #[track_caller]
-fn sub_test_with(with_doc_comments: bool, source: &str, expected_tokens: &[Token]) {
-    let mut lex = Lexer::new(source, with_doc_comments);
+fn sub_test_with(ignore_doc_comments: bool, source: &str, expected_tokens: &[Token]) {
+    let mut lex = Lexer::new(source, ignore_doc_comments);
     for &token in expected_tokens {
         assert_eq!(lex.next_with_unignored_doc_comments().0, token);
     }
