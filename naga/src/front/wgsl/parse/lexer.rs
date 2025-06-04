@@ -307,8 +307,8 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn start_byte_offset(&mut self) -> usize {
         loop {
             // Eat all trivia because `next` doesn't eat trailing trivia.
-            let (token, rest) = consume_token(self.input, false, self.save_doc_comments);
-            if let Token::Trivia | Token::DocComment(_) | Token::ModuleDocComment(_) = token {
+            let (token, rest) = consume_token(self.input, false, false);
+            if let Token::Trivia = token {
                 self.input = rest;
             } else {
                 return self.current_byte_offset();
@@ -365,7 +365,7 @@ impl<'a> Lexer<'a> {
     /// occur, but not angle brackets.
     #[must_use]
     pub(in crate::front::wgsl) fn next(&mut self) -> TokenSpan<'a> {
-        self.next_impl(false)
+        self.next_impl(false, true)
     }
 
     /// Return the next non-whitespace token from `self`.
@@ -374,37 +374,33 @@ impl<'a> Lexer<'a> {
     /// but not bit shift operators.
     #[must_use]
     pub(in crate::front::wgsl) fn next_generic(&mut self) -> TokenSpan<'a> {
-        self.next_impl(true)
+        self.next_impl(true, true)
+    }
+
+    #[cfg(test)]
+    pub fn next_with_unignored_doc_comments(&mut self) -> TokenSpan<'a> {
+        self.next_impl(false, false)
     }
 
     /// Return the next non-whitespace token from `self`, with a span.
     ///
     /// See [`consume_token`] for the meaning of `generic`.
-    fn next_impl(&mut self, generic: bool) -> TokenSpan<'a> {
-        self.next_until(
-            |token| {
-                !matches!(
-                    token,
-                    Token::Trivia | Token::DocComment(_) | Token::ModuleDocComment(_)
-                )
-            },
-            generic,
-        )
-    }
-
-    /// Return the next token from `self` for which `stop_at` returns true.
-    ///
-    /// See [`consume_token`] for the meaning of `generic`.
-    pub fn next_until(&mut self, stop_at: fn(Token) -> bool, generic: bool) -> TokenSpan<'a> {
+    fn next_impl(&mut self, generic: bool, ignore_doc_comments: bool) -> TokenSpan<'a> {
         let mut start_byte_offset = self.current_byte_offset();
         loop {
-            let (token, rest) = consume_token(self.input, generic, self.save_doc_comments);
+            let (token, rest) = consume_token(
+                self.input,
+                generic,
+                self.save_doc_comments && !ignore_doc_comments,
+            );
             self.input = rest;
-            if stop_at(token) {
-                self.last_end_offset = self.current_byte_offset();
-                return (token, self.span_from(start_byte_offset));
+            match token {
+                Token::Trivia => start_byte_offset = self.current_byte_offset(),
+                _ => {
+                    self.last_end_offset = self.current_byte_offset();
+                    return (token, self.span_from(start_byte_offset));
+                }
             }
-            start_byte_offset = self.current_byte_offset();
         }
     }
 
@@ -633,11 +629,7 @@ fn sub_test_with_and_without_doc_comments(source: &str, expected_tokens: &[Token
 fn sub_test_with(with_doc_comments: bool, source: &str, expected_tokens: &[Token]) {
     let mut lex = Lexer::new(source, with_doc_comments);
     for &token in expected_tokens {
-        assert_eq!(
-            lex.next_until(|token| !matches!(token, Token::Trivia), false)
-                .0,
-            token
-        );
+        assert_eq!(lex.next_with_unignored_doc_comments().0, token);
     }
     assert_eq!(lex.next().0, Token::End);
 }
