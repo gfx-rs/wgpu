@@ -29,6 +29,7 @@ env:
   DXC_RELEASE: "v1.8.2502"
   DXC_FILENAME: "dxc_2025_02_20.zip"
 
+  # These Mesa version definitions are duplicated in the CTS job.
   # Sourced from https://archive.mesa3d.org/. Bumping this requires
   # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
   MESA_VERSION: "24.3.4"
@@ -626,6 +627,7 @@ jobs:
           sudo apt-get update
           sudo apt install -y vulkan-sdk
 
+      # This step is duplicated in the CTS job.
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
         shell: bash
