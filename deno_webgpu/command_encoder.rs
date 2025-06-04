@@ -191,6 +191,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(2)]
+  #[undefined]
   fn copy_buffer_to_buffer<'a>(
     &self,
     scope: &mut v8::HandleScope<'a>,
@@ -280,6 +281,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(3)]
+  #[undefined]
   fn copy_buffer_to_texture(
     &self,
     #[webidl] source: GPUTexelCopyBufferInfo,
@@ -315,6 +317,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(3)]
+  #[undefined]
   fn copy_texture_to_buffer(
     &self,
     #[webidl] source: GPUTexelCopyTextureInfo,
@@ -350,6 +353,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(3)]
+  #[undefined]
   fn copy_texture_to_texture(
     &self,
     #[webidl] source: GPUTexelCopyTextureInfo,
@@ -383,6 +387,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(1)]
+  #[undefined]
   fn clear_buffer(
     &self,
     #[webidl] buffer: Ptr<GPUBuffer>,
@@ -397,6 +402,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(5)]
+  #[undefined]
   fn resolve_query_set(
     &self,
     #[webidl] query_set: Ptr<super::query_set::GPUQuerySet>,

@@ -7,7 +7,6 @@ use std::time::Duration;
 use deno_core::cppgc::Ptr;
 use deno_core::futures::channel::oneshot;
 use deno_core::op2;
-use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
@@ -63,11 +62,11 @@ impl GPUQueue {
   }
 
   #[required(1)]
+  #[undefined]
   fn submit(
     &self,
-    scope: &mut v8::HandleScope,
     #[webidl] command_buffers: Vec<Ptr<GPUCommandBuffer>>,
-  ) -> Result<v8::Local<v8::Value>, JsErrorBox> {
+  ) -> Result<(), JsErrorBox> {
     let ids = command_buffers
       .into_iter()
       .map(|cb| cb.id)
@@ -79,9 +78,12 @@ impl GPUQueue {
       self.error_handler.push_error(Some(err));
     }
 
-    Ok(v8::undefined(scope).into())
+    Ok(())
   }
 
+  // In the successful case, the promise should resolve to undefined, but
+  // `#[undefined]` does not seem to work here.
+  // https://github.com/denoland/deno/issues/29603
   #[async_method]
   async fn on_submitted_work_done(&self) -> Result<(), JsErrorBox> {
     let (sender, receiver) = oneshot::channel::<()>();
@@ -124,6 +126,7 @@ impl GPUQueue {
   }
 
   #[required(3)]
+  #[undefined]
   fn write_buffer(
     &self,
     #[webidl] buffer: Ptr<GPUBuffer>,
@@ -148,6 +151,7 @@ impl GPUQueue {
   }
 
   #[required(4)]
+  #[undefined]
   fn write_texture(
     &self,
     #[webidl] destination: GPUTexelCopyTextureInfo,

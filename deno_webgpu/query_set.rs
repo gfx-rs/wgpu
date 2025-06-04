@@ -53,6 +53,7 @@ impl GPUQuerySet {
   }
 
   #[fast]
+  #[undefined]
   fn destroy(&self) -> Result<(), JsErrorBox> {
     // TODO(https://github.com/gfx-rs/wgpu/issues/6495): Destroy the query
     // set. Until that is supported, it is okay to do nothing here, the

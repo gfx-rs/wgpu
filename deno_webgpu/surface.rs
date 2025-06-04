@@ -68,6 +68,7 @@ impl GPUCanvasContext {
     self.canvas.clone()
   }
 
+  #[undefined]
   fn configure(
     &self,
     #[webidl] configuration: GPUCanvasConfiguration,
@@ -113,6 +114,7 @@ impl GPUCanvasContext {
   }
 
   #[fast]
+  #[undefined]
   fn unconfigure(&self) {
     *self.config.borrow_mut() = None;
   }

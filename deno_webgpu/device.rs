@@ -142,6 +142,7 @@ impl GPUDevice {
   }
 
   #[fast]
+  #[undefined]
   fn destroy(&self) {
     self.instance.device_destroy(self.id);
     self
@@ -623,6 +624,7 @@ impl GPUDevice {
   }
 
   #[required(1)]
+  #[undefined]
   fn push_error_scope(&self, #[webidl] filter: super::error::GPUErrorFilter) {
     self
       .error_handler

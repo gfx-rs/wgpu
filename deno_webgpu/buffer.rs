@@ -114,6 +114,9 @@ impl GPUBuffer {
     *self.map_state.borrow()
   }
 
+  // In the successful case, the promise should resolve to undefined, but
+  // `#[undefined]` does not seem to work here.
+  // https://github.com/denoland/deno/issues/29603
   #[async_method]
   async fn map_async(
     &self,
@@ -250,6 +253,7 @@ impl GPUBuffer {
   }
 
   #[nofast]
+  #[undefined]
   fn unmap(&self, scope: &mut v8::HandleScope) -> Result<(), BufferError> {
     for ab in self.mapped_js_buffers.replace(vec![]) {
       let ab = ab.open(scope);
@@ -267,6 +271,7 @@ impl GPUBuffer {
   }
 
   #[fast]
+  #[undefined]
   fn destroy(&self) {
     self.instance.buffer_destroy(self.id);
   }
