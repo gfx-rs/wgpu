@@ -88,64 +88,57 @@ fn consume_token(input: &str, generic: bool, ignore_doc_comments: bool) -> (Toke
             let og_chars = chars.as_str();
             match chars.next() {
                 Some('/') => {
-                    let end_position = {
-                        if let Some(end_position) = input
-                            .char_indices()
-                            .find(|char_indices| is_comment_end(char_indices.1))
-                        {
-                            end_position.0
-                        } else {
-                            input.len()
+                    let mut input_chars = input.char_indices();
+                    let doc_comment_end = input_chars
+                        .find_map(|(index, c)| is_comment_end(c).then_some(index))
+                        .unwrap_or(input.len());
+                    let token = match chars.next() {
+                        Some('/') if !ignore_doc_comments => {
+                            Token::DocComment(&input[..doc_comment_end])
                         }
+                        Some('!') if !ignore_doc_comments => {
+                            Token::ModuleDocComment(&input[..doc_comment_end])
+                        }
+                        _ => Token::Trivia,
                     };
-                    if ignore_doc_comments {
-                        return (Token::Trivia, &input[end_position..]);
-                    }
-                    let next_char = chars.next();
-                    (
-                        match next_char {
-                            Some('/') => Token::DocComment(&input[..end_position]),
-                            Some('!') => Token::ModuleDocComment(&input[..end_position]),
-                            _ => Token::Trivia,
-                        },
-                        &input[end_position..],
-                    )
+                    (token, input_chars.as_str())
                 }
                 Some('*') => {
-                    let mut depth = 1;
-                    let mut prev = None;
-                    let mut char_indices = input.char_indices();
+                    let next_c = chars.next();
 
-                    // Skip '/' and '*'
-                    char_indices.next();
-                    char_indices.next();
-
-                    let mut constructing_token = if ignore_doc_comments {
-                        Token::Trivia
-                    } else {
-                        let next_char = char_indices
-                            .clone()
-                            .next()
-                            .map(|peeked_next_char| peeked_next_char.1);
-                        match next_char {
-                            Some('*') => Token::DocComment(""),
-                            Some('!') => Token::ModuleDocComment(""),
-                            _ => Token::Trivia,
-                        }
+                    enum CommentType {
+                        Doc,
+                        ModuleDoc,
+                        Normal,
+                    }
+                    let comment_type = match next_c {
+                        Some('*') if !ignore_doc_comments => CommentType::Doc,
+                        Some('!') if !ignore_doc_comments => CommentType::ModuleDoc,
+                        _ => CommentType::Normal,
                     };
-                    for (index, c) in char_indices {
+
+                    let mut depth = 1;
+                    let mut prev = next_c;
+
+                    for c in &mut chars {
                         match (prev, c) {
                             (Some('*'), '/') => {
                                 prev = None;
                                 depth -= 1;
                                 if depth == 0 {
-                                    if let Token::DocComment(ref mut doc)
-                                    | Token::ModuleDocComment(ref mut doc) = constructing_token
-                                    {
-                                        *doc = &input[..=index];
-                                    }
-
-                                    return (constructing_token, &input[(index + 1)..]);
+                                    let rest = chars.as_str();
+                                    let token = match comment_type {
+                                        CommentType::Doc => {
+                                            let doc_comment_end = input.len() - rest.len();
+                                            Token::DocComment(&input[..doc_comment_end])
+                                        }
+                                        CommentType::ModuleDoc => {
+                                            let doc_comment_end = input.len() - rest.len();
+                                            Token::ModuleDocComment(&input[..doc_comment_end])
+                                        }
+                                        CommentType::Normal => Token::Trivia,
+                                    };
+                                    return (token, rest);
                                 }
                             }
                             (Some('/'), '*') => {
