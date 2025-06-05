@@ -60,8 +60,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p .cargo
-          echo """[profile.dev]
-          debug = 1" > .cargo/config.toml
+          cat <<EOF >> .cargo/config.toml
+          [profile.dev]
+          debug = 1
+          EOF
 
       - name: run CTS
         shell: bash
