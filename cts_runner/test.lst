@@ -19,4 +19,5 @@ webgpu:api,operation,rendering,draw:*
 webgpu:api,operation,uncapturederror:iff_uncaptured:*
 //FAIL: webgpu:api,operation,uncapturederror:onuncapturederror_order_wrt_addEventListener
 // There are also two unimplemented SKIPs in uncapturederror not enumerated here.
+webgpu:api,validation,encoding,queries,general:occlusion_query,query_type:*
 webgpu:shader,execution,flow_control,return:*

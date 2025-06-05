@@ -43,9 +43,10 @@ impl GPUQuerySet {
 
     #[fast]
     fn destroy(&self) -> Result<(), JsErrorBox> {
-        Err(JsErrorBox::generic(
-            "This operation is currently not supported",
-        ))
+        // TODO(#6495): Destroy the query set. Until that is supported, it is
+        // okay to do nothing here, the query set will be garbage collected
+        // and dropped eventually.
+        Ok(())
     }
 
     #[getter]
