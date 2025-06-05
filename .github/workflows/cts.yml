@@ -53,7 +53,8 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: cts-b # suffix for cache busting
+          prefix-key: v1-rust # Increment version for cache busting
+          cache-directories: cts
 
       # We enable line numbers for panics, but that's it
       - name: disable debug
