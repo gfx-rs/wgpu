@@ -22,6 +22,27 @@
                 ),
             ),
         ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: Some("TestS"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("test_m"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
     ],
     special_types: (
         ray_desc: None,
@@ -29,7 +50,13 @@
         ray_vertex_return: None,
         predeclared_types: {},
     ),
-    constants: [],
+    constants: [
+        (
+            name: Some("test_c"),
+            ty: 2,
+            init: 0,
+        ),
+    ],
     overrides: [],
     global_variables: [
         (
@@ -50,20 +77,88 @@
             init: None,
         ),
     ],
-    global_expressions: [],
-    functions: [],
-    entry_points: [],
+    global_expressions: [
+        Literal(U32(1)),
+    ],
+    functions: [
+        (
+            name: Some("test_f"),
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [],
+            named_expressions: {},
+            body: [
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            name: "test_ep",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("test_ep"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
     diagnostic_filters: [],
     diagnostic_filter_leaf: None,
     doc_comments: Some((
-        types: {},
-        struct_members: {},
-        entry_points: {},
-        functions: {},
-        constants: {},
-        global_variables: {},
+        types: {
+            3: [
+                "/// struct doc comment",
+            ],
+        },
+        struct_members: {
+            (3, 0): [
+                "/// member doc comment",
+            ],
+        },
+        entry_points: {
+            0: [
+                "/// entry point doc comment",
+            ],
+        },
+        functions: {
+            0: [
+                "/// function doc comment",
+            ],
+        },
+        constants: {
+            0: [
+                "/// constant doc comment",
+            ],
+        },
+        global_variables: {
+            0: [
+                "/**\n 🍽\u{fe0f} /* nested comment */\n */",
+            ],
+            1: [
+                "/// workgroup var doc comment",
+                "/// 2nd line of workgroup var doc comment",
+            ],
+        },
         module: [
-            "//! Module comment.",
+            "//! Module doc comment.",
+            "//! 2nd line of module doc comment.",
         ],
     )),
 )

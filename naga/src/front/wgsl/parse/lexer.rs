@@ -329,6 +329,9 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn accumulate_module_doc_comments(&mut self) -> Vec<&'a str> {
         let mut doc_comments = Vec::new();
         loop {
+            // ignore blankspace
+            self.input = consume_any(self.input, is_blankspace).1;
+
             let (token, rest) = consume_token(self.input, false, self.ignore_doc_comments);
             if let Token::ModuleDocComment(doc_comment) = token {
                 self.input = rest;
@@ -343,6 +346,9 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn accumulate_doc_comments(&mut self) -> Vec<&'a str> {
         let mut doc_comments = Vec::new();
         loop {
+            // ignore blankspace
+            self.input = consume_any(self.input, is_blankspace).1;
+
             let (token, rest) = consume_token(self.input, false, self.ignore_doc_comments);
             if let Token::DocComment(doc_comment) = token {
                 self.input = rest;
