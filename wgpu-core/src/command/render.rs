@@ -806,15 +806,12 @@ pub struct RenderPassError {
     pub(super) inner: RenderPassErrorInner,
 }
 
-impl<T, E> MapPassErr<T, RenderPassError> for Result<T, E>
-where
-    E: Into<RenderPassErrorInner>,
-{
-    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, RenderPassError> {
-        self.map_err(|inner| RenderPassError {
+impl<E: Into<RenderPassErrorInner>> MapPassErr<RenderPassError> for E {
+    fn map_pass_err(self, scope: PassErrorScope) -> RenderPassError {
+        RenderPassError {
             scope,
-            inner: inner.into(),
-        })
+            inner: self.into(),
+        }
     }
 }
 

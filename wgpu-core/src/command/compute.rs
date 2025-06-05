@@ -181,15 +181,15 @@ pub struct ComputePassError {
     pub(super) inner: ComputePassErrorInner,
 }
 
-impl<T, E> MapPassErr<T, ComputePassError> for Result<T, E>
+impl<E> MapPassErr<ComputePassError> for E
 where
     E: Into<ComputePassErrorInner>,
 {
-    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, ComputePassError> {
-        self.map_err(|inner| ComputePassError {
+    fn map_pass_err(self, scope: PassErrorScope) -> ComputePassError {
+        ComputePassError {
             scope,
-            inner: inner.into(),
-        })
+            inner: self.into(),
+        }
     }
 }
 

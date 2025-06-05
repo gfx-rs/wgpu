@@ -1020,8 +1020,17 @@ impl Default for BindGroupStateChange {
     }
 }
 
-trait MapPassErr<T, O> {
-    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, O>;
+trait MapPassErr<T> {
+    fn map_pass_err(self, scope: PassErrorScope) -> T;
+}
+
+impl<T, E, F> MapPassErr<Result<T, F>> for Result<T, E>
+where
+    E: MapPassErr<F>,
+{
+    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, F> {
+        self.map_err(|err| err.map_pass_err(scope))
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
