@@ -43,14 +43,6 @@ jobs:
     steps:
       - name: checkout repo
         uses: actions/checkout@v4
-        with:
-          path: wgpu
-
-      - name: checkout cts
-        run: |
-          git clone https://github.com/gpuweb/cts.git
-          cd cts
-          git checkout $(cat ../wgpu/cts_runner/revision.txt)
 
       - name: Install Repo MSRV toolchain
         run: |
@@ -62,28 +54,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           key: cts-b # suffix for cache busting
-          workspaces: wgpu
 
       # We enable line numbers for panics, but that's it
       - name: disable debug
         shell: bash
         run: |
-          mkdir -p wgpu/.cargo
+          mkdir -p .cargo
           echo """[profile.dev]
-          debug = 1" > wgpu/.cargo/config.toml
-
-      - name: build CTS runner
-        run: |
-          cargo build --manifest-path wgpu/cts_runner/Cargo.toml
+          debug = 1" > .cargo/config.toml
 
       - name: run CTS
         shell: bash
-        run: |
-          cd cts;
-          echo "======= CTS TESTS ======";
-          grep -v '^//' ../wgpu/cts_runner/test.lst | while IFS=$' \t\r\n' read test; do
-            echo "=== Running $test ===";
-            cargo run --manifest-path ../wgpu/cts_runner/Cargo.toml --frozen -- ./tools/run_deno --verbose "$test";
-          done
-          echo;
-          echo "Note: Summary reflects only the last test suite, not the entire run."
+        run: cargo xtask cts

@@ -77,6 +77,7 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
 
     log::info!("Running CTS");
     for test in &tests {
+        log::info!("Running {}", test.to_string_lossy());
         shell
             .cmd("cargo")
             .args(["run"])
