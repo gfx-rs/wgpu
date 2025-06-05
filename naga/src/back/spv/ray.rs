@@ -54,7 +54,7 @@ impl Writer {
         let scalar_type_id = self.get_f32_type_id();
         let float_pointer_type_id = self.get_f32_pointer_type_id(spirv::StorageClass::Function);
 
-        let argument_type_id = self.get_ray_query_pointer_id(ir_module);
+        let argument_type_id = self.get_ray_query_pointer_id();
 
         let func_ty = self.get_function_type(LookupFunctionType {
             parameter_type_ids: vec![argument_type_id],

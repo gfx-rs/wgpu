@@ -301,25 +301,9 @@ impl Writer {
         self.get_pointer_type_id(base_id, class)
     }
 
-    pub(super) fn get_ray_query_pointer_id(&mut self, module: &crate::Module) -> Word {
-        let rq_ty = module
-            .types
-            .get(&crate::Type {
-                name: None,
-                inner: crate::TypeInner::RayQuery {
-                    vertex_return: false,
-                },
-            })
-            .or_else(|| {
-                module.types.get(&crate::Type {
-                    name: None,
-                    inner: crate::TypeInner::RayQuery {
-                        vertex_return: true,
-                    },
-                })
-            })
-            .expect("ray_query type should have been populated by the variable passed into this!");
-        self.get_handle_pointer_type_id(rq_ty, spirv::StorageClass::Function)
+    pub(super) fn get_ray_query_pointer_id(&mut self) -> Word {
+        let rq_id = self.get_type_id(LookupType::Local(LocalType::RayQuery));
+        self.get_pointer_type_id(rq_id, spirv::StorageClass::Function)
     }
 
     /// Return a SPIR-V type for a pointer to `resolution`.
