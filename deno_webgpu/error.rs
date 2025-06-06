@@ -17,7 +17,6 @@ use wgpu_core::binding_model::GetBindGroupLayoutError;
 use wgpu_core::command::ClearError;
 use wgpu_core::command::CommandEncoderError;
 use wgpu_core::command::ComputePassError;
-use wgpu_core::command::CopyError;
 use wgpu_core::command::CreateRenderBundleError;
 use wgpu_core::command::EncoderStateError;
 use wgpu_core::command::QueryError;
@@ -269,12 +268,6 @@ impl From<RenderBundleError> for GPUError {
 
 impl From<CreateRenderBundleError> for GPUError {
     fn from(err: CreateRenderBundleError) -> Self {
-        GPUError::Validation(fmt_err(&err))
-    }
-}
-
-impl From<CopyError> for GPUError {
-    fn from(err: CopyError) -> Self {
         GPUError::Validation(fmt_err(&err))
     }
 }
