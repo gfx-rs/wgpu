@@ -448,7 +448,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                buffer: &buffer,
+                buffer: buffer.clone(),
                 offset: 0,
                 size: None,
             }),
@@ -460,7 +460,7 @@ fn bgl_dedupe_derived(ctx: TestingContext) {
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                buffer: &buffer,
+                buffer: buffer.clone(),
                 offset: 0,
                 size: None,
             }),

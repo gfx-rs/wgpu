@@ -96,7 +96,7 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &buffer,
+                    buffer: buffer.clone(),
                     offset: 0,
                     size: Some(NonZeroU64::new(u64::try_from(8 - 4 * i).unwrap()).unwrap()),
                 }),

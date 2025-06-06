@@ -479,7 +479,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                buffer: &output_buffer,
+                buffer: output_buffer.clone(),
                 offset: 0,
                 size: None,
             }),

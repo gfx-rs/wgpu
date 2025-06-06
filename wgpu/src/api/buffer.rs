@@ -193,9 +193,9 @@ impl Buffer {
     }
 
     /// Return the binding view of the entire buffer.
-    pub fn as_entire_buffer_binding(&self) -> BufferBinding<'_> {
+    pub fn as_entire_buffer_binding(&self) -> BufferBinding {
         BufferBinding {
-            buffer: self,
+            buffer: self.clone(),
             offset: 0,
             size: None,
         }
@@ -241,11 +241,11 @@ impl Buffer {
     /// - If `bounds` is outside of the bounds of `self`.
     /// - If `bounds` has a length less than 1.
     #[track_caller]
-    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'_> {
+    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice {
         let (offset, size) = range_to_offset_size(bounds, self.size);
         check_buffer_bounds(self.size, offset, size);
         BufferSlice {
-            buffer: self,
+            buffer: self.clone(),
             offset,
             size,
         }
@@ -331,7 +331,7 @@ impl Buffer {
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferView<'_> {
+    pub fn get_mapped_range<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferView {
         self.slice(bounds).get_mapped_range()
     }
 
@@ -354,10 +354,7 @@ impl Buffer {
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range_mut<S: RangeBounds<BufferAddress>>(
-        &self,
-        bounds: S,
-    ) -> BufferViewMut<'_> {
+    pub fn get_mapped_range_mut<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferViewMut {
         self.slice(bounds).get_mapped_range_mut()
     }
 
@@ -408,16 +405,16 @@ impl Buffer {
 /// working with the [`Buffer`], instead.
 ///
 /// [map]: Buffer#mapping-buffers
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct BufferSlice<'a> {
-    pub(crate) buffer: &'a Buffer,
+#[derive(Clone, Debug, PartialEq)]
+pub struct BufferSlice {
+    pub(crate) buffer: Buffer,
     pub(crate) offset: BufferAddress,
     pub(crate) size: BufferSize,
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(BufferSlice<'_>: Send, Sync);
+static_assertions::assert_impl_all!(BufferSlice: Send, Sync);
 
-impl<'a> BufferSlice<'a> {
+impl BufferSlice {
     /// Return another [`BufferSlice`] referring to the portion of `self`'s contents
     /// indicated by `bounds`.
     ///
@@ -431,11 +428,11 @@ impl<'a> BufferSlice<'a> {
     /// - If `bounds` is outside of the bounds of `self`.
     /// - If `bounds` has a length less than 1.
     #[track_caller]
-    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice<'a> {
+    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice {
         let (offset, size) = range_to_offset_size(bounds, self.size.get());
         check_buffer_bounds(self.size.get(), offset, size);
         BufferSlice {
-            buffer: self.buffer,
+            buffer: self.buffer.clone(),
             offset: self.offset + offset, // check_buffer_bounds ensures this does not overflow
             size,                         // check_buffer_bounds ensures this is essentially min()
         }
@@ -495,11 +492,11 @@ impl<'a> BufferSlice<'a> {
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range(&self) -> BufferView<'a> {
+    pub fn get_mapped_range(&self) -> BufferView {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let range = self.buffer.inner.get_mapped_range(self.offset..end);
         BufferView {
-            slice: *self,
+            slice: self.clone(),
             inner: range,
         }
     }
@@ -521,11 +518,11 @@ impl<'a> BufferSlice<'a> {
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
+    pub fn get_mapped_range_mut(&self) -> BufferViewMut {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let range = self.buffer.inner.get_mapped_range(self.offset..end);
         BufferViewMut {
-            slice: *self,
+            slice: self.clone(),
             inner: range,
             readable: self.buffer.usage.contains(BufferUsages::MAP_READ),
         }
@@ -536,8 +533,8 @@ impl<'a> BufferSlice<'a> {
     /// You should usually not need to call this, and if you received the buffer from code you
     /// do not control, you should refrain from accessing the buffer outside the bounds of the
     /// slice. Nevertheless, it’s possible to get this access, so this method makes it simple.
-    pub fn buffer(&self) -> &'a Buffer {
-        self.buffer
+    pub fn buffer(&self) -> Buffer {
+        self.buffer.clone()
     }
 
     /// Returns the offset in [`Self::buffer()`] this slice starts at.
@@ -551,22 +548,22 @@ impl<'a> BufferSlice<'a> {
     }
 }
 
-impl<'a> From<BufferSlice<'a>> for crate::BufferBinding<'a> {
+impl From<BufferSlice> for crate::BufferBinding {
     /// Convert a [`BufferSlice`] to an equivalent [`BufferBinding`],
     /// provided that it will be used without a dynamic offset.
-    fn from(value: BufferSlice<'a>) -> Self {
+    fn from(value: BufferSlice) -> Self {
         BufferBinding {
-            buffer: value.buffer,
+            buffer: value.buffer.clone(),
             offset: value.offset,
             size: Some(value.size),
         }
     }
 }
 
-impl<'a> From<BufferSlice<'a>> for crate::BindingResource<'a> {
+impl From<BufferSlice> for crate::BindingResource<'_> {
     /// Convert a [`BufferSlice`] to an equivalent [`BindingResource::Buffer`],
     /// provided that it will be used without a dynamic offset.
-    fn from(value: BufferSlice<'a>) -> Self {
+    fn from(value: BufferSlice) -> Self {
         crate::BindingResource::Buffer(crate::BufferBinding::from(value))
     }
 }
@@ -702,8 +699,8 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 /// [map]: Buffer#mapping-buffers
 /// [`map_async`]: BufferSlice::map_async
 #[derive(Debug)]
-pub struct BufferView<'a> {
-    slice: BufferSlice<'a>,
+pub struct BufferView {
+    slice: BufferSlice,
     inner: dispatch::DispatchBufferMappedRange,
 }
 
@@ -717,7 +714,7 @@ impl BufferView<'_> {
     }
 }
 
-impl core::ops::Deref for BufferView<'_> {
+impl core::ops::Deref for BufferView {
     type Target = [u8];
 
     #[inline]
@@ -726,7 +723,7 @@ impl core::ops::Deref for BufferView<'_> {
     }
 }
 
-impl AsRef<[u8]> for BufferView<'_> {
+impl AsRef<[u8]> for BufferView {
     #[inline]
     fn as_ref(&self) -> &[u8] {
         self.inner.slice()
@@ -752,20 +749,20 @@ impl AsRef<[u8]> for BufferView<'_> {
 ///
 /// [map]: Buffer#mapping-buffers
 #[derive(Debug)]
-pub struct BufferViewMut<'a> {
-    slice: BufferSlice<'a>,
+pub struct BufferViewMut {
+    slice: BufferSlice,
     inner: dispatch::DispatchBufferMappedRange,
     readable: bool,
 }
 
-impl AsMut<[u8]> for BufferViewMut<'_> {
+impl AsMut<[u8]> for BufferViewMut {
     #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
 
-impl Deref for BufferViewMut<'_> {
+impl Deref for BufferViewMut {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -777,13 +774,13 @@ impl Deref for BufferViewMut<'_> {
     }
 }
 
-impl DerefMut for BufferViewMut<'_> {
+impl DerefMut for BufferViewMut {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.slice_mut()
     }
 }
 
-impl Drop for BufferView<'_> {
+impl Drop for BufferView {
     fn drop(&mut self) {
         self.slice
             .buffer
@@ -793,7 +790,7 @@ impl Drop for BufferView<'_> {
     }
 }
 
-impl Drop for BufferViewMut<'_> {
+impl Drop for BufferViewMut {
     fn drop(&mut self) {
         self.slice
             .buffer

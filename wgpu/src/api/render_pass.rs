@@ -95,7 +95,7 @@ impl RenderPass<'_> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'_>, index_format: IndexFormat) {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice, index_format: IndexFormat) {
         self.inner.set_index_buffer(
             &buffer_slice.buffer.inner,
             index_format,
@@ -116,7 +116,7 @@ impl RenderPass<'_> {
     ///
     /// [`draw`]: RenderPass::draw
     /// [`draw_indexed`]: RenderPass::draw_indexed
-    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'_>) {
+    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice) {
         self.inner.set_vertex_buffer(
             slot,
             &buffer_slice.buffer.inner,

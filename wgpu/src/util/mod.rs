@@ -95,7 +95,7 @@ impl DownloadBuffer {
     pub fn read_buffer(
         device: &super::Device,
         queue: &super::Queue,
-        buffer: &super::BufferSlice<'_>,
+        buffer: &super::BufferSlice,
         callback: impl FnOnce(Result<Self, super::BufferAsyncError>) + Send + 'static,
     ) {
         let size = buffer.size.into();
@@ -109,7 +109,7 @@ impl DownloadBuffer {
 
         let mut encoder =
             device.create_command_encoder(&super::CommandEncoderDescriptor { label: None });
-        encoder.copy_buffer_to_buffer(buffer.buffer, buffer.offset, &download, 0, size);
+        encoder.copy_buffer_to_buffer(&buffer.buffer, buffer.offset, &download, 0, size);
         let command_buffer: super::CommandBuffer = encoder.finish();
         queue.submit(Some(command_buffer));
 

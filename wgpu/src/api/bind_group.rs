@@ -38,14 +38,14 @@ pub enum BindingResource<'a> {
     ///
     /// Corresponds to [`wgt::BufferBindingType::Uniform`] and [`wgt::BufferBindingType::Storage`]
     /// with [`BindGroupLayoutEntry::count`] set to None.
-    Buffer(BufferBinding<'a>),
+    Buffer(BufferBinding),
     /// Binding is backed by an array of buffers.
     ///
     /// [`Features::BUFFER_BINDING_ARRAY`] must be supported to use this feature.
     ///
     /// Corresponds to [`wgt::BufferBindingType::Uniform`] and [`wgt::BufferBindingType::Storage`]
     /// with [`BindGroupLayoutEntry::count`] set to Some.
-    BufferArray(&'a [BufferBinding<'a>]),
+    BufferArray(&'a [BufferBinding]),
     /// Binding is a sampler.
     ///
     /// Corresponds to [`wgt::BindingType::Sampler`] with [`BindGroupLayoutEntry::count`] set to None.
@@ -90,9 +90,9 @@ static_assertions::assert_impl_all!(BindingResource<'_>: Send, Sync);
 /// Corresponds to [WebGPU `GPUBufferBinding`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferbinding).
 #[derive(Clone, Debug)]
-pub struct BufferBinding<'a> {
+pub struct BufferBinding {
     /// The buffer to bind.
-    pub buffer: &'a Buffer,
+    pub buffer: Buffer,
 
     /// Base offset of the buffer, in bytes.
     ///
@@ -115,7 +115,7 @@ pub struct BufferBinding<'a> {
     pub size: Option<BufferSize>,
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(BufferBinding<'_>: Send, Sync);
+static_assertions::assert_impl_all!(BufferBinding: Send, Sync);
 
 /// An element of a [`BindGroupDescriptor`], consisting of a bindable resource
 /// and the slot to bind it to.

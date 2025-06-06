@@ -54,7 +54,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
             entries: &[BindGroupEntry {
                 binding: 0,
                 resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &output_buffer,
+                    buffer: output_buffer.clone(),
                     offset: 0,
                     size: Some(NonZeroU64::new(BUFFER_BINDING_SIZE as u64).unwrap()),
                 }),

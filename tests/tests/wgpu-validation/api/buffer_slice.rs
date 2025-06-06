@@ -36,7 +36,7 @@ fn getters() {
             slice_with_size.offset(),
             slice_with_size.size()
         ),
-        (&buffer, 10, NonZero::new(80).unwrap())
+        (buffer.clone(), 10, NonZero::new(80).unwrap())
     );
 
     let slice_without_size = buffer.slice(10..);
@@ -46,7 +46,7 @@ fn getters() {
             slice_without_size.offset(),
             slice_without_size.size()
         ),
-        (&buffer, 10, NonZero::new(90).unwrap())
+        (buffer.clone(), 10, NonZero::new(90).unwrap())
     );
 }
 
@@ -64,6 +64,6 @@ fn into_buffer_binding() {
     else {
         panic!("didn't match")
     };
-    assert_eq!(b, &buffer);
+    assert_eq!(b, buffer.clone());
     assert_eq!(size, NonZero::new(30).unwrap());
 }

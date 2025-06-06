@@ -331,7 +331,7 @@ impl crate::framework::Example for Example {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &local_buffer,
+                    buffer: local_buffer.clone(),
                     offset: 0,
                     size: wgpu::BufferSize::new(size_of::<Bunny>() as _),
                 }),

@@ -77,14 +77,14 @@ impl StagingBelt {
         offset: BufferAddress,
         size: BufferSize,
         device: &Device,
-    ) -> BufferViewMut<'_> {
+    ) -> BufferViewMut {
         let slice_of_belt = self.allocate(
             size,
             const { BufferSize::new(crate::COPY_BUFFER_ALIGNMENT).unwrap() },
             device,
         );
         encoder.copy_buffer_to_buffer(
-            slice_of_belt.buffer(),
+            &slice_of_belt.buffer(),
             slice_of_belt.offset(),
             target,
             offset,
@@ -117,7 +117,7 @@ impl StagingBelt {
         size: BufferSize,
         alignment: BufferSize,
         device: &Device,
-    ) -> BufferSlice<'_> {
+    ) -> BufferSlice {
         assert!(
             alignment.get().is_power_of_two(),
             "alignment must be a power of two, not {alignment}"

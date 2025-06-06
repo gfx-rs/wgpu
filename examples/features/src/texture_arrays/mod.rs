@@ -316,7 +316,7 @@ impl crate::framework::Example for Example {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &texture_index_buffer,
+                    buffer: texture_index_buffer.clone(),
                     offset: 0,
                     size: Some(NonZeroU64::new(4).unwrap()),
                 }),

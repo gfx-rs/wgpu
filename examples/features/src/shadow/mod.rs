@@ -350,7 +350,7 @@ impl crate::framework::Example for Example {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &entity_uniform_buf,
+                    buffer: entity_uniform_buf.clone(),
                     offset: 0,
                     size: wgpu::BufferSize::new(entity_uniform_size),
                 }),

@@ -333,7 +333,7 @@ fn copy_via_compute(
             BindGroupEntry {
                 binding: 1,
                 resource: BindingResource::Buffer(BufferBinding {
-                    buffer: &output_buffer,
+                    buffer: output_buffer.clone(),
                     offset: 0,
                     size: None,
                 }),

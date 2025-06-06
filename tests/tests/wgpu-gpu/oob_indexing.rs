@@ -396,7 +396,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
             wgpu::BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &in_data_uniform_buffer,
+                    buffer: in_data_uniform_buffer.clone(),
                     offset: 0,
                     size: Some(std::num::NonZeroU64::new(4 * 4).unwrap()),
                 }),
@@ -404,7 +404,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
             wgpu::BindGroupEntry {
                 binding: 3,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &in_data_storage_buffer,
+                    buffer: in_data_storage_buffer.clone(),
                     offset: 0,
                     size: Some(std::num::NonZeroU64::new(4 * 4).unwrap()),
                 }),

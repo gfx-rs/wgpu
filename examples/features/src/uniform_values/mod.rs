@@ -150,7 +150,7 @@ impl WgpuContext {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &uniform_buffer,
+                    buffer: uniform_buffer.clone(),
                     offset: 0,
                     size: None,
                 }),

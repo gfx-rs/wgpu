@@ -88,7 +88,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderBundleEncoder::draw_indexed) on this [`RenderBundleEncoder`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>, index_format: IndexFormat) {
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice, index_format: IndexFormat) {
         self.inner.set_index_buffer(
             &buffer_slice.buffer.inner,
             index_format,
@@ -107,7 +107,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// [`draw`]: RenderBundleEncoder::draw
     /// [`draw_indexed`]: RenderBundleEncoder::draw_indexed
-    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice) {
         self.inner.set_vertex_buffer(
             slot,
             &buffer_slice.buffer.inner,

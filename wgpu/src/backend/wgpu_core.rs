@@ -1205,7 +1205,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 binding: entry.binding,
                 resource: match entry.resource {
                     BindingResource::Buffer(BufferBinding {
-                        buffer,
+                        ref buffer,
                         offset,
                         size,
                     }) => bm::BindingResource::Buffer(bm::BufferBinding {
