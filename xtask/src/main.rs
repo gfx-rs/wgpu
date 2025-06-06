@@ -68,7 +68,7 @@ fn main() -> anyhow::Result<ExitCode> {
 
     let mut args = Arguments::from_env();
 
-    if args.contains("--help") {
+    if args.contains(["-h", "--help"]) {
         eprint!("{HELP}");
         return Ok(ExitCode::FAILURE);
     }
