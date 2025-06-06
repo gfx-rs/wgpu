@@ -108,6 +108,10 @@ pub struct FileName<'a> {
 impl<'a> FileName<'a> {
     /// Get a [`str`] from this [`FileName`], replacing non-UTF-8 characters where required.
     #[inline]
+    #[cfg_attr(
+        no_std,
+        expect(clippy::missing_const_for_fn, reason = "std variant cannot be const")
+    )]
     pub fn to_string_lossy(&self) -> Cow<'a, str> {
         #[cfg(std)]
         return self.inner.to_string_lossy();

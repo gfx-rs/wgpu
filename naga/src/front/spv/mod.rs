@@ -447,7 +447,7 @@ impl From<PathBuf> for DumpPrefix {
 }
 
 #[cfg(std)]
-impl<'a> From<DumpPrefix> for PathBuf {
+impl From<DumpPrefix> for PathBuf {
     fn from(value: DumpPrefix) -> Self {
         value.inner
     }
