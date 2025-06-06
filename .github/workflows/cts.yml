@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [labeled, opened, synchronize]
   schedule:
-    - cron: '33 2 * * *'
+    - cron: "33 2 * * *"
   workflow_dispatch:
 
 env:
@@ -12,13 +12,6 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
   MSRV: "1.84"
-
-  # These Mesa version definitions are duplicated in the CI job.
-  # Sourced from https://archive.mesa3d.org/. Bumping this requires
-  # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
-  MESA_VERSION: "24.3.4"
-  # Corresponds to https://github.com/gfx-rs/ci-build/releases
-  CI_BINARY_BUILD: "build20"
 
 jobs:
   cts:
@@ -70,33 +63,9 @@ jobs:
           debug = 1
           EOF
 
-      # This step is duplicated in the CI job.
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
-        shell: bash
-        run: |
-          set -e
-
-          curl -L --retry 5 https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz -o mesa.tar.xz
-          mkdir mesa
-          tar xpf mesa.tar.xz -C mesa
-
-          # The ICD provided by the mesa build is hardcoded to the build environment.
-          #
-          # We write out our own ICD file to point to the mesa vulkan
-          cat <<- EOF > icd.json
-          {
-            "ICD": {
-                "api_version": "1.1.255",
-                "library_path": "$PWD/mesa/lib/x86_64-linux-gnu/libvulkan_lvp.so"
-            },
-            "file_format_version": "1.0.0"
-          }
-          EOF
-
-          echo "VK_DRIVER_FILES=$PWD/icd.json" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=$PWD/mesa/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
-          echo "LIBGL_DRIVERS_PATH=$PWD/mesa/lib/x86_64-linux-gnu/dri" >> "$GITHUB_ENV"
+        uses: ./.github/install-mesa-action
 
       - name: run CTS
         shell: bash
