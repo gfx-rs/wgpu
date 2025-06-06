@@ -188,11 +188,8 @@ fn blas_compaction(ctx: TestingContext) {
     let mut build_entry = as_ctx.blas_build_entry();
     build_entry.blas = &compacted;
 
-    fail(
-        &ctx.device,
-        || fail_encoder.build_acceleration_structures([&build_entry], []),
-        None,
-    );
+    fail_encoder.build_acceleration_structures([&build_entry], []);
+    fail(&ctx.device, || fail_encoder.finish(), None);
 }
 
 #[gpu_test]
@@ -733,13 +730,8 @@ fn only_tlas_vertex_return(ctx: TestingContext) {
             label: Some("TLAS 1"),
         });
 
-    fail(
-        &ctx.device,
-        || {
-            encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
-        },
-        None,
-    );
+    encoder_tlas.build_acceleration_structures([], [&as_ctx.tlas]);
+    fail(&ctx.device, || encoder_tlas.finish(), None);
 }
 
 #[gpu_test]
@@ -817,30 +809,29 @@ fn test_as_build_format_stride(
         .create_command_encoder(&CommandEncoderDescriptor {
             label: Some("BLAS_1"),
         });
-    fail_if(
+    command_encoder.build_acceleration_structures(
+        &[BlasBuildEntry {
+            blas: &blas,
+            geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
+                size: &blas_size,
+                vertex_buffer: &vertices,
+                first_vertex: 0,
+                vertex_stride: stride,
+                index_buffer: None,
+                first_index: None,
+                transform_buffer: None,
+                transform_buffer_offset: None,
+            }]),
+        }],
+        &[],
+    );
+    let command_buffer = fail_if(
         &ctx.device,
         invalid_combination,
-        || {
-            command_encoder.build_acceleration_structures(
-                &[BlasBuildEntry {
-                    blas: &blas,
-                    geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {
-                        size: &blas_size,
-                        vertex_buffer: &vertices,
-                        first_vertex: 0,
-                        vertex_stride: stride,
-                        index_buffer: None,
-                        first_index: None,
-                        transform_buffer: None,
-                        transform_buffer_offset: None,
-                    }]),
-                }],
-                &[],
-            )
-        },
+        || command_encoder.finish(),
         None,
     );
     if !invalid_combination {
-        ctx.queue.submit([command_encoder.finish()]);
+        ctx.queue.submit([command_buffer]);
     }
 }

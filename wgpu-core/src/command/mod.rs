@@ -37,7 +37,7 @@ use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
 use crate::init_tracker::BufferInitTrackerAction;
-use crate::ray_tracing::AsAction;
+use crate::ray_tracing::{AsAction, BuildAccelerationStructureError};
 use crate::resource::{
     DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice as _, QuerySet,
 };
@@ -106,17 +106,6 @@ pub(crate) enum CommandEncoderStatus {
 }
 
 impl CommandEncoderStatus {
-    /// Checks that the encoder is in the [`Self::Recording`] state.
-    pub(crate) fn record(&mut self) -> Result<RecordingGuard<'_>, EncoderStateError> {
-        match self {
-            Self::Recording(_) => Ok(RecordingGuard { inner: self }),
-            Self::Locked(_) => Err(self.invalidate(EncoderStateError::Locked)),
-            Self::Finished(_) => Err(EncoderStateError::Ended),
-            Self::Error(_) => Err(EncoderStateError::Invalid),
-            Self::Transitioning => unreachable!(),
-        }
-    }
-
     /// Record commands using the supplied closure.
     ///
     /// If the encoder is in the [`Self::Recording`] state, calls the closure to
@@ -138,29 +127,50 @@ impl CommandEncoderStatus {
         &mut self,
         f: F,
     ) -> Result<(), EncoderStateError> {
-        let err = match self.record() {
-            Ok(guard) => {
-                guard.record(f);
-                return Ok(());
-            }
-            Err(err) => err,
-        };
-        match err {
-            err @ EncoderStateError::Locked => {
-                // Invalidate the encoder and do not record anything, but do not
-                // return an immediate validation error.
-                self.invalidate(err);
+        match self {
+            Self::Recording(_) => {
+                RecordingGuard { inner: self }.record(f);
                 Ok(())
             }
-            err @ EncoderStateError::Ended => {
-                // Invalidate the encoder, do not record anything, and return an
-                // immediate validation error.
-                Err(self.invalidate(err))
+            Self::Locked(_) => {
+                // Invalidate the encoder and do not record anything, but do not
+                // return an immediate validation error.
+                self.invalidate(EncoderStateError::Locked);
+                Ok(())
             }
+            // Encoder is ended. Invalidate the encoder, do not record anything,
+            // and return an immediate validation error.
+            Self::Finished(_) => Err(self.invalidate(EncoderStateError::Ended)),
             // Encoder is already invalid. Do not record anything, but do not
             // return an immediate validation error.
-            EncoderStateError::Invalid => Ok(()),
-            EncoderStateError::Unlocked | EncoderStateError::Submitted => unreachable!(),
+            Self::Error(_) => Ok(()),
+            Self::Transitioning => unreachable!(),
+        }
+    }
+
+    /// Special version of record used by `command_encoder_as_hal_mut`. This
+    /// differs from the regular version in two ways:
+    ///
+    /// 1. The recording closure is infallible.
+    /// 2. The recording closure takes `Option<&mut CommandBufferMutable>`, and
+    ///    in the case that the encoder is not in a valid state for recording, the
+    ///    closure is still called, with `None` as its argument.
+    pub(crate) fn record_as_hal_mut<T, F: FnOnce(Option<&mut CommandBufferMutable>) -> T>(
+        &mut self,
+        f: F,
+    ) -> T {
+        match self {
+            Self::Recording(_) => RecordingGuard { inner: self }.record_as_hal_mut(f),
+            Self::Locked(_) => {
+                self.invalidate(EncoderStateError::Locked);
+                f(None)
+            }
+            Self::Finished(_) => {
+                self.invalidate(EncoderStateError::Ended);
+                f(None)
+            }
+            Self::Error(_) => f(None),
+            Self::Transitioning => unreachable!(),
         }
     }
 
@@ -294,6 +304,17 @@ impl<'a> RecordingGuard<'a> {
                 self.inner.invalidate(err);
             }
         }
+    }
+
+    /// Special version of record used by `command_encoder_as_hal_mut`. This
+    /// version takes an infallible recording closure.
+    pub(crate) fn record_as_hal_mut<T, F: FnOnce(Option<&mut CommandBufferMutable>) -> T>(
+        mut self,
+        f: F,
+    ) -> T {
+        let res = f(Some(&mut self));
+        self.mark_successful();
+        res
     }
 }
 
@@ -898,6 +919,10 @@ pub enum CommandEncoderError {
     Transfer(#[from] TransferError),
     #[error(transparent)]
     Clear(#[from] ClearError),
+    #[error(transparent)]
+    Query(#[from] QueryError),
+    #[error(transparent)]
+    BuildAccelerationStructure(#[from] BuildAccelerationStructureError),
     #[error(transparent)]
     TransitionResources(#[from] TransitionResourcesError),
     #[error(

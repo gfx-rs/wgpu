@@ -330,20 +330,19 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         );
 
         // Texture clear should fail.
+        encoder_for_clear.clear_texture(
+            &texture_for_write,
+            &wgpu::ImageSubresourceRange {
+                aspect: wgpu::TextureAspect::All,
+                base_mip_level: 0,
+                mip_level_count: None,
+                base_array_layer: 0,
+                array_layer_count: None,
+            },
+        );
         fail(
             &ctx.device,
-            || {
-                encoder_for_clear.clear_texture(
-                    &texture_for_write,
-                    &wgpu::ImageSubresourceRange {
-                        aspect: wgpu::TextureAspect::All,
-                        base_mip_level: 0,
-                        mip_level_count: None,
-                        base_array_layer: 0,
-                        array_layer_count: None,
-                    },
-                );
-            },
+            || encoder_for_clear.finish(),
             Some("device with '' label is invalid"),
         );
 

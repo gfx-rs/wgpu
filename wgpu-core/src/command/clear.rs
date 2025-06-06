@@ -86,7 +86,7 @@ impl Global {
         dst: BufferId,
         offset: BufferAddress,
         size: Option<BufferAddress>,
-    ) -> Result<(), ClearError> {
+    ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::clear_buffer");
         api_log!("CommandEncoder::clear_buffer {dst:?}");
 
@@ -96,77 +96,74 @@ impl Global {
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
-        let cmd_buf_data = &mut *cmd_buf_data_guard;
+        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
+            #[cfg(feature = "trace")]
+            if let Some(ref mut list) = cmd_buf_data.commands {
+                list.push(TraceCommand::ClearBuffer { dst, offset, size });
+            }
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.commands {
-            list.push(TraceCommand::ClearBuffer { dst, offset, size });
-        }
+            let dst_buffer = hub.buffers.get(dst).get()?;
 
-        let dst_buffer = hub.buffers.get(dst).get()?;
+            dst_buffer.same_device_as(cmd_buf.as_ref())?;
 
-        dst_buffer.same_device_as(cmd_buf.as_ref())?;
+            let dst_pending = cmd_buf_data
+                .trackers
+                .buffers
+                .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
 
-        let dst_pending = cmd_buf_data
-            .trackers
-            .buffers
-            .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
+            let snatch_guard = dst_buffer.device.snatchable_lock.read();
+            let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
+            dst_buffer.check_usage(BufferUsages::COPY_DST)?;
 
-        let snatch_guard = dst_buffer.device.snatchable_lock.read();
-        let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
-        dst_buffer.check_usage(BufferUsages::COPY_DST)?;
+            // Check if offset & size are valid.
+            if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+                return Err(ClearError::UnalignedBufferOffset(offset));
+            }
 
-        // Check if offset & size are valid.
-        if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(ClearError::UnalignedBufferOffset(offset));
-        }
-
-        let size = size.unwrap_or(dst_buffer.size.saturating_sub(offset));
-        if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(ClearError::UnalignedFillSize(size));
-        }
-        let end_offset =
-            offset
-                .checked_add(size)
-                .ok_or(ClearError::OffsetPlusSizeExceeds64BitBounds {
+            let size = size.unwrap_or(dst_buffer.size.saturating_sub(offset));
+            if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+                return Err(ClearError::UnalignedFillSize(size));
+            }
+            let end_offset =
+                offset
+                    .checked_add(size)
+                    .ok_or(ClearError::OffsetPlusSizeExceeds64BitBounds {
+                        start_offset: offset,
+                        requested_size: size,
+                    })?;
+            if end_offset > dst_buffer.size {
+                return Err(ClearError::BufferOverrun {
                     start_offset: offset,
-                    requested_size: size,
-                })?;
-        if end_offset > dst_buffer.size {
-            return Err(ClearError::BufferOverrun {
-                start_offset: offset,
-                end_offset,
-                buffer_size: dst_buffer.size,
-            });
-        }
+                    end_offset,
+                    buffer_size: dst_buffer.size,
+                });
+            }
 
-        if offset == end_offset {
-            log::trace!("Ignoring fill_buffer of size 0");
+            if offset == end_offset {
+                log::trace!("Ignoring fill_buffer of size 0");
+                return Ok(());
+            }
 
-            cmd_buf_data_guard.mark_successful();
-            return Ok(());
-        }
+            // Mark dest as initialized.
+            cmd_buf_data.buffer_memory_init_actions.extend(
+                dst_buffer.initialization_status.read().create_action(
+                    &dst_buffer,
+                    offset..end_offset,
+                    MemoryInitKind::ImplicitlyInitialized,
+                ),
+            );
 
-        // Mark dest as initialized.
-        cmd_buf_data.buffer_memory_init_actions.extend(
-            dst_buffer.initialization_status.read().create_action(
-                &dst_buffer,
-                offset..end_offset,
-                MemoryInitKind::ImplicitlyInitialized,
-            ),
-        );
+            // actual hal barrier & operation
+            let dst_barrier =
+                dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
+            let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+            unsafe {
+                cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
+                cmd_buf_raw.clear_buffer(dst_raw, offset..end_offset);
+            }
 
-        // actual hal barrier & operation
-        let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-        unsafe {
-            cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
-            cmd_buf_raw.clear_buffer(dst_raw, offset..end_offset);
-        }
-
-        cmd_buf_data_guard.mark_successful();
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn command_encoder_clear_texture(
@@ -174,7 +171,7 @@ impl Global {
         command_encoder_id: CommandEncoderId,
         dst: TextureId,
         subresource_range: &ImageSubresourceRange,
-    ) -> Result<(), ClearError> {
+    ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::clear_texture");
         api_log!("CommandEncoder::clear_texture {dst:?}");
 
@@ -184,79 +181,78 @@ impl Global {
             .command_buffers
             .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
-        let cmd_buf_data = &mut *cmd_buf_data_guard;
+        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
+            #[cfg(feature = "trace")]
+            if let Some(ref mut list) = cmd_buf_data.commands {
+                list.push(TraceCommand::ClearTexture {
+                    dst,
+                    subresource_range: *subresource_range,
+                });
+            }
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.commands {
-            list.push(TraceCommand::ClearTexture {
-                dst,
-                subresource_range: *subresource_range,
-            });
-        }
+            if !cmd_buf.support_clear_texture {
+                return Err(ClearError::MissingClearTextureFeature);
+            }
 
-        if !cmd_buf.support_clear_texture {
-            return Err(ClearError::MissingClearTextureFeature);
-        }
+            let dst_texture = hub.textures.get(dst).get()?;
 
-        let dst_texture = hub.textures.get(dst).get()?;
+            dst_texture.same_device_as(cmd_buf.as_ref())?;
 
-        dst_texture.same_device_as(cmd_buf.as_ref())?;
+            // Check if subresource aspects are valid.
+            let clear_aspects =
+                hal::FormatAspects::new(dst_texture.desc.format, subresource_range.aspect);
+            if clear_aspects.is_empty() {
+                return Err(ClearError::MissingTextureAspect {
+                    texture_format: dst_texture.desc.format,
+                    subresource_range_aspects: subresource_range.aspect,
+                });
+            };
 
-        // Check if subresource aspects are valid.
-        let clear_aspects =
-            hal::FormatAspects::new(dst_texture.desc.format, subresource_range.aspect);
-        if clear_aspects.is_empty() {
-            return Err(ClearError::MissingTextureAspect {
-                texture_format: dst_texture.desc.format,
-                subresource_range_aspects: subresource_range.aspect,
-            });
-        };
+            // Check if subresource level range is valid
+            let subresource_mip_range =
+                subresource_range.mip_range(dst_texture.full_range.mips.end);
+            if dst_texture.full_range.mips.start > subresource_mip_range.start
+                || dst_texture.full_range.mips.end < subresource_mip_range.end
+            {
+                return Err(ClearError::InvalidTextureLevelRange {
+                    texture_level_range: dst_texture.full_range.mips.clone(),
+                    subresource_base_mip_level: subresource_range.base_mip_level,
+                    subresource_mip_level_count: subresource_range.mip_level_count,
+                });
+            }
+            // Check if subresource layer range is valid
+            let subresource_layer_range =
+                subresource_range.layer_range(dst_texture.full_range.layers.end);
+            if dst_texture.full_range.layers.start > subresource_layer_range.start
+                || dst_texture.full_range.layers.end < subresource_layer_range.end
+            {
+                return Err(ClearError::InvalidTextureLayerRange {
+                    texture_layer_range: dst_texture.full_range.layers.clone(),
+                    subresource_base_array_layer: subresource_range.base_array_layer,
+                    subresource_array_layer_count: subresource_range.array_layer_count,
+                });
+            }
 
-        // Check if subresource level range is valid
-        let subresource_mip_range = subresource_range.mip_range(dst_texture.full_range.mips.end);
-        if dst_texture.full_range.mips.start > subresource_mip_range.start
-            || dst_texture.full_range.mips.end < subresource_mip_range.end
-        {
-            return Err(ClearError::InvalidTextureLevelRange {
-                texture_level_range: dst_texture.full_range.mips.clone(),
-                subresource_base_mip_level: subresource_range.base_mip_level,
-                subresource_mip_level_count: subresource_range.mip_level_count,
-            });
-        }
-        // Check if subresource layer range is valid
-        let subresource_layer_range =
-            subresource_range.layer_range(dst_texture.full_range.layers.end);
-        if dst_texture.full_range.layers.start > subresource_layer_range.start
-            || dst_texture.full_range.layers.end < subresource_layer_range.end
-        {
-            return Err(ClearError::InvalidTextureLayerRange {
-                texture_layer_range: dst_texture.full_range.layers.clone(),
-                subresource_base_array_layer: subresource_range.base_array_layer,
-                subresource_array_layer_count: subresource_range.array_layer_count,
-            });
-        }
+            let device = &cmd_buf.device;
+            device.check_is_valid()?;
+            let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
 
-        let device = &cmd_buf.device;
-        device.check_is_valid()?;
-        let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
+            let snatch_guard = device.snatchable_lock.read();
+            clear_texture(
+                &dst_texture,
+                TextureInitRange {
+                    mip_range: subresource_mip_range,
+                    layer_range: subresource_layer_range,
+                },
+                encoder,
+                &mut tracker.textures,
+                &device.alignments,
+                device.zero_buffer.as_ref(),
+                &snatch_guard,
+            )?;
 
-        let snatch_guard = device.snatchable_lock.read();
-        clear_texture(
-            &dst_texture,
-            TextureInitRange {
-                mip_range: subresource_mip_range,
-                layer_range: subresource_layer_range,
-            },
-            encoder,
-            &mut tracker.textures,
-            &device.alignments,
-            device.zero_buffer.as_ref(),
-            &snatch_guard,
-        )?;
-
-        cmd_buf_data_guard.mark_successful();
-        Ok(())
+            Ok(())
+        })
     }
 }
 

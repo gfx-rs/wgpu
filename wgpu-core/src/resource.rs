@@ -1383,20 +1383,15 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data_guard = cmd_buf_data.record();
-
-        if let Ok(mut cmd_buf_data_guard) = cmd_buf_data_guard {
-            let cmd_buf_raw = cmd_buf_data_guard
-                .encoder
-                .open()
-                .ok()
-                .and_then(|encoder| encoder.as_any_mut().downcast_mut());
-            let ret = hal_command_encoder_callback(cmd_buf_raw);
-            cmd_buf_data_guard.mark_successful();
-            ret
-        } else {
-            hal_command_encoder_callback(None)
-        }
+        cmd_buf_data.record_as_hal_mut(|opt_cmd_buf| -> R {
+            hal_command_encoder_callback(opt_cmd_buf.and_then(|cmd_buf| {
+                cmd_buf
+                    .encoder
+                    .open()
+                    .ok()
+                    .and_then(|encoder| encoder.as_any_mut().downcast_mut())
+            }))
+        })
     }
 
     /// # Safety
