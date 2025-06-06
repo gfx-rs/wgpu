@@ -1,8 +1,4 @@
-use alloc::{
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
+use alloc::{string::String, vec, vec::Vec};
 
 use hashbrown::hash_map::Entry;
 use spirv::Word;
@@ -2387,7 +2383,7 @@ impl Writer {
             if let Some(debug_info) = debug_info.as_ref() {
                 let source_file_id = self.id_gen.next();
                 self.debugs.push(Instruction::string(
-                    &debug_info.file_name.display().to_string(),
+                    &debug_info.file_name.to_string_lossy(),
                     source_file_id,
                 ));
 

@@ -39,6 +39,7 @@ naga = { workspace = true, features = [
     "deserialize",
     "termcolor",
     "stderr",
+    "fs",
 ] }
 
 bincode.workspace = true

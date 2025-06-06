@@ -80,6 +80,9 @@ termcolor = ["codespan-reporting/termcolor"]
 ## Enables writing output to stderr.
 stderr = ["codespan-reporting/std"]
 
+## Enables integration with the underlying filesystem.
+fs = []
+
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 arrayvec.workspace = true

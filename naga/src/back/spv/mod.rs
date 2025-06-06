@@ -18,7 +18,7 @@ mod writer;
 
 pub use spirv::{Capability, SourceLanguage};
 
-use alloc::{string::String, vec::Vec};
+use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::ops;
 
 use spirv::Word;
@@ -92,8 +92,59 @@ impl IdGenerator {
 #[derive(Debug, Clone)]
 pub struct DebugInfo<'a> {
     pub source_code: &'a str,
-    pub file_name: &'a std::path::Path,
+    pub file_name: FileName<'a>,
     pub language: SourceLanguage,
+}
+
+/// Abstraction over `Path` which falls back to [`str`] for `no_std` compatibility.
+#[derive(Clone, Copy)]
+pub struct FileName<'a> {
+    #[cfg(std)]
+    inner: &'a std::path::Path,
+    #[cfg(no_std)]
+    inner: &'a str,
+}
+
+impl<'a> FileName<'a> {
+    /// Get a [`str`] from this [`FileName`], replacing non-UTF-8 characters where required.
+    #[inline]
+    pub fn to_string_lossy(&self) -> Cow<'a, str> {
+        #[cfg(std)]
+        return self.inner.to_string_lossy();
+        #[cfg(no_std)]
+        return Cow::Borrowed(self.inner);
+    }
+}
+
+impl core::fmt::Debug for FileName<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        core::fmt::Debug::fmt(self.inner, f)
+    }
+}
+
+impl<'a> From<&'a str> for FileName<'a> {
+    fn from(value: &'a str) -> Self {
+        Self {
+            #[cfg(std)]
+            inner: std::path::Path::new(value),
+            #[cfg(no_std)]
+            inner: value,
+        }
+    }
+}
+
+#[cfg(std)]
+impl<'a> From<&'a std::path::Path> for FileName<'a> {
+    fn from(value: &'a std::path::Path) -> Self {
+        Self { inner: value }
+    }
+}
+
+#[cfg(std)]
+impl<'a> From<FileName<'a>> for &'a std::path::Path {
+    fn from(value: FileName<'a>) -> Self {
+        value.inner
+    }
 }
 
 /// A SPIR-V block to which we are still adding instructions.
