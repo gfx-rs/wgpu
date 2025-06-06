@@ -817,8 +817,18 @@ crate::impl_storage_item!(CommandBuffer);
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BasePass<C> {
+pub struct BasePass<C, E> {
     pub label: Option<String>,
+
+    /// If the pass is invalid, contains the error that caused the invalidation.
+    ///
+    /// If the pass is valid, this is `None`.
+    ///
+    /// Passes are serialized into traces. but we don't support doing so for
+    /// passes containing errors. These serde attributes allow `E` to be
+    /// `Infallible`.
+    #[cfg_attr(feature = "serde", serde(skip, default = "Option::default"))]
+    pub error: Option<E>,
 
     /// The stream of commands.
     pub commands: Vec<C>,
@@ -842,10 +852,11 @@ pub struct BasePass<C> {
     pub push_constant_data: Vec<u32>,
 }
 
-impl<C: Clone> BasePass<C> {
+impl<C: Clone, E: Clone> BasePass<C, E> {
     fn new(label: &Label) -> Self {
         Self {
             label: label.as_deref().map(str::to_owned),
+            error: None,
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),

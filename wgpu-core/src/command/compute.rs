@@ -40,7 +40,7 @@ pub struct ComputePass {
     ///
     /// If this is `None`, the pass is in the 'ended' state and can no longer be used.
     /// Any attempt to record more commands will result in a validation error.
-    base: Option<BasePass<ArcComputeCommand>>,
+    base: Option<BasePass<ArcComputeCommand, Infallible>>,
 
     /// Parent command buffer that this pass records commands into.
     ///
@@ -80,7 +80,7 @@ impl ComputePass {
     fn base_mut<'a>(
         &'a mut self,
         scope: PassErrorScope,
-    ) -> Result<&'a mut BasePass<ArcComputeCommand>, ComputePassError> {
+    ) -> Result<&'a mut BasePass<ArcComputeCommand, Infallible>, ComputePassError> {
         self.base
             .as_mut()
             .ok_or(ComputePassErrorInner::PassEnded)
@@ -330,7 +330,7 @@ impl Global {
     pub fn compute_pass_end_with_unresolved_commands(
         &self,
         encoder_id: id::CommandEncoderId,
-        base: BasePass<super::ComputeCommand>,
+        base: BasePass<super::ComputeCommand, core::convert::Infallible>,
         timestamp_writes: Option<&PassTimestampWrites>,
     ) {
         #[cfg(feature = "trace")]
@@ -346,6 +346,7 @@ impl Global {
                 list.push(crate::device::trace::Command::RunComputePass {
                     base: BasePass {
                         label: base.label.clone(),
+                        error: None,
                         commands: base.commands.clone(),
                         dynamic_offsets: base.dynamic_offsets.clone(),
                         string_data: base.string_data.clone(),
@@ -358,6 +359,7 @@ impl Global {
 
         let BasePass {
             label,
+            error: _,
             commands,
             dynamic_offsets,
             string_data,
@@ -377,6 +379,7 @@ impl Global {
 
         compute_pass.base = Some(BasePass {
             label,
+            error: None,
             commands: super::ComputeCommand::resolve_compute_command_ids(&self.hub, &commands)
                 .unwrap(),
             dynamic_offsets,

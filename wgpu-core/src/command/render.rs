@@ -249,7 +249,7 @@ pub struct RenderPass {
     ///
     /// If this is `None`, the pass is in the 'ended' state and can no longer be used.
     /// Any attempt to record more commands will result in a validation error.
-    base: Option<BasePass<ArcRenderCommand>>,
+    base: Option<BasePass<ArcRenderCommand, Infallible>>,
 
     /// Parent command buffer that this pass records commands into.
     ///
@@ -299,7 +299,7 @@ impl RenderPass {
     fn base_mut<'a>(
         &'a mut self,
         scope: PassErrorScope,
-    ) -> Result<&'a mut BasePass<ArcRenderCommand>, RenderPassError> {
+    ) -> Result<&'a mut BasePass<ArcRenderCommand, Infallible>, RenderPassError> {
         self.base
             .as_mut()
             .ok_or(RenderPassErrorInner::PassEnded)
@@ -1623,7 +1623,7 @@ impl Global {
     pub fn render_pass_end_with_unresolved_commands(
         &self,
         encoder_id: id::CommandEncoderId,
-        base: BasePass<super::RenderCommand>,
+        base: BasePass<super::RenderCommand, core::convert::Infallible>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&PassTimestampWrites>,
@@ -1642,6 +1642,7 @@ impl Global {
                 list.push(crate::device::trace::Command::RunRenderPass {
                     base: BasePass {
                         label: base.label.clone(),
+                        error: None,
                         commands: base.commands.clone(),
                         dynamic_offsets: base.dynamic_offsets.clone(),
                         string_data: base.string_data.clone(),
@@ -1657,6 +1658,7 @@ impl Global {
 
         let BasePass {
             label,
+            error,
             commands,
             dynamic_offsets,
             string_data,
@@ -1679,6 +1681,7 @@ impl Global {
 
         render_pass.base = Some(BasePass {
             label,
+            error,
             commands: super::RenderCommand::resolve_render_command_ids(&self.hub, &commands)
                 .unwrap(),
             dynamic_offsets,
