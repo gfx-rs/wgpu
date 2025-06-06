@@ -108,10 +108,14 @@ impl CommandEncoderStatus {
     }
 
     #[cfg(feature = "trace")]
-    fn get_inner(&mut self) -> Result<&mut CommandBufferMutable, CommandEncoderError> {
+    fn get_inner(&mut self) -> &mut CommandBufferMutable {
         match self {
-            Self::Locked(inner) | Self::Finished(inner) | Self::Recording(inner) => Ok(inner),
-            Self::Error => Err(CommandEncoderError::Invalid),
+            Self::Locked(inner) | Self::Finished(inner) | Self::Recording(inner) => inner,
+            // This is unreachable because this function is only used when
+            // playing back a recorded trace. If only to avoid having to
+            // implement serialization for all the error types, we don't support
+            // storing the errors in a trace.
+            Self::Error => unreachable!("passes in a trace do not store errors"),
         }
     }
 

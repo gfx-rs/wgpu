@@ -1630,9 +1630,7 @@ impl Global {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&PassTimestampWrites>,
         occlusion_query_set: Option<id::QuerySetId>,
-    ) -> Result<(), RenderPassError> {
-        let pass_scope = PassErrorScope::Pass;
-
+    ) {
         #[cfg(feature = "trace")]
         {
             let cmd_buf = self
@@ -1640,7 +1638,7 @@ impl Global {
                 .command_buffers
                 .get(encoder_id.into_command_buffer_id());
             let mut cmd_buf_data = cmd_buf.data.lock();
-            let cmd_buf_data = cmd_buf_data.get_inner().map_pass_err(pass_scope)?;
+            let cmd_buf_data = cmd_buf_data.get_inner();
 
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunRenderPass {
@@ -1678,21 +1676,19 @@ impl Global {
             },
         );
         if let Some(err) = encoder_error {
-            return Err(RenderPassError {
-                scope: pass_scope,
-                inner: err.into(),
-            });
+            panic!("{:?}", err);
         };
 
         render_pass.base = Some(BasePass {
             label,
-            commands: super::RenderCommand::resolve_render_command_ids(&self.hub, &commands)?,
+            commands: super::RenderCommand::resolve_render_command_ids(&self.hub, &commands)
+                .unwrap(),
             dynamic_offsets,
             string_data,
             push_constant_data,
         });
 
-        self.render_pass_end(&mut render_pass)
+        self.render_pass_end(&mut render_pass).unwrap();
     }
 
     pub fn render_pass_end(&self, pass: &mut RenderPass) -> Result<(), RenderPassError> {

@@ -321,6 +321,9 @@ impl Global {
 
     /// Note that this differs from [`Self::compute_pass_end`], it will
     /// create a new pass, replay the commands and end the pass.
+    ///
+    /// # Panics
+    /// On any error.
     #[doc(hidden)]
     #[cfg(any(feature = "serde", feature = "replay"))]
     pub fn compute_pass_end_with_unresolved_commands(
@@ -328,9 +331,7 @@ impl Global {
         encoder_id: id::CommandEncoderId,
         base: BasePass<super::ComputeCommand>,
         timestamp_writes: Option<&PassTimestampWrites>,
-    ) -> Result<(), ComputePassError> {
-        let pass_scope = PassErrorScope::Pass;
-
+    ) {
         #[cfg(feature = "trace")]
         {
             let cmd_buf = self
@@ -338,7 +339,7 @@ impl Global {
                 .command_buffers
                 .get(encoder_id.into_command_buffer_id());
             let mut cmd_buf_data = cmd_buf.data.lock();
-            let cmd_buf_data = cmd_buf_data.get_inner().map_pass_err(pass_scope)?;
+            let cmd_buf_data = cmd_buf_data.get_inner();
 
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunComputePass {
@@ -370,21 +371,19 @@ impl Global {
             },
         );
         if let Some(err) = encoder_error {
-            return Err(ComputePassError {
-                scope: pass_scope,
-                inner: err.into(),
-            });
+            panic!("{:?}", err);
         };
 
         compute_pass.base = Some(BasePass {
             label,
-            commands: super::ComputeCommand::resolve_compute_command_ids(&self.hub, &commands)?,
+            commands: super::ComputeCommand::resolve_compute_command_ids(&self.hub, &commands)
+                .unwrap(),
             dynamic_offsets,
             string_data,
             push_constant_data,
         });
 
-        self.compute_pass_end(&mut compute_pass)
+        self.compute_pass_end(&mut compute_pass).unwrap();
     }
 
     pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), ComputePassError> {
