@@ -449,8 +449,11 @@ impl Global {
     }
 
     pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), EncoderStateError> {
-        profiling::scope!("CommandEncoder::run_compute_pass");
         let pass_scope = PassErrorScope::Pass;
+        profiling::scope!(
+            "CommandEncoder::run_compute_pass {}",
+            base.label.as_deref().unwrap_or("")
+        );
 
         let cmd_buf = pass.parent.take().ok_or(EncoderStateError::Ended)?;
         let mut cmd_buf_data = cmd_buf.data.lock();
@@ -1169,18 +1172,17 @@ impl Global {
     ) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetBindGroup;
 
-        let redundant = pass.current_bind_groups.set_and_check_redundant(
-            bind_group_id,
-            index,
-            &mut pass.base.dynamic_offsets,
-            offsets,
-        );
-
-        // This statement will return an error if the pass is ended.
-        // Its important the error check comes before the early-out for `redundant`.
+        // This statement will return an error if the pass is ended. It's
+        // important the error check comes before the early-out for
+        // `set_and_check_redundant`.
         let base = pass_base!(pass, scope);
 
-        if redundant {
+        if pass.current_bind_groups.set_and_check_redundant(
+            bind_group_id,
+            index,
+            &mut base.dynamic_offsets,
+            offsets,
+        ) {
             return Ok(());
         }
 
@@ -1192,7 +1194,7 @@ impl Global {
             bind_group = Some(pass_try!(
                 base,
                 scope,
-                hub.bind_groups.get(bind_group_id).get()
+                hub.bind_groups.get(bind_group_id).get(),
             ));
         }
 

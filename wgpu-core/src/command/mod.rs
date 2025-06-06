@@ -214,33 +214,6 @@ impl CommandEncoderStatus {
         }
     }
 
-    /// Unlocks the [`CommandBuffer`] and puts it back into the [`Self::Recording`] state.
-    ///
-    /// This function is the unlocking counterpart to [`Self::lock_encoder`].
-    ///
-    /// It is only valid to call this function if the encoder is in the [`Self::Locked`] state.
-    fn unlock_encoder(&mut self) -> Result<RecordingGuard<'_>, EncoderStateError> {
-        match mem::replace(self, Self::Transitioning) {
-            Self::Locked(inner) => {
-                *self = Self::Recording(inner);
-                Ok(RecordingGuard { inner: self })
-            }
-            st @ Self::Finished(_) => {
-                // Attempting to end a pass on a finished encoder raises a
-                // validation error but does not invalidate the encoder. This is
-                // related to https://github.com/gpuweb/gpuweb/issues/5207.
-                *self = st;
-                Err(EncoderStateError::Ended)
-            }
-            Self::Recording(_) => Err(self.invalidate(EncoderStateError::Unlocked)),
-            st @ Self::Error(_) => {
-                *self = st;
-                Err(EncoderStateError::Invalid)
-            }
-            Self::Transitioning => unreachable!(),
-        }
-    }
-
     /// Unlocks the [`CommandBuffer`] and puts it back into the
     /// [`Self::Recording`] state, then records commands using the supplied
     /// closure.
@@ -1007,10 +980,6 @@ pub enum CommandEncoderError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    InvalidColorAttachment(#[from] ColorAttachmentError),
-    #[error(transparent)]
-    InvalidAttachment(#[from] AttachmentError),
-    #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
@@ -1030,13 +999,8 @@ pub enum CommandEncoderError {
     TransitionResources(#[from] TransitionResourcesError),
     #[error(transparent)]
     ComputePass(#[from] ComputePassError),
-    // TODO: The following are temporary and can be removed once error handling
-    // is updated for render passes. (They will report via RenderPassError
-    // instead.)
     #[error(transparent)]
-    QueryUse(#[from] QueryUseError),
-    #[error(transparent)]
-    TimestampWrites(#[from] TimestampWritesError),
+    RenderPass(#[from] RenderPassError),
 }
 
 #[derive(Clone, Debug, Error)]
