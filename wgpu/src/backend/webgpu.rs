@@ -1964,7 +1964,7 @@ impl dispatch::DeviceInterface for WebDevice {
             .map(|binding| {
                 let mapped_resource = match binding.resource {
                     crate::BindingResource::Buffer(crate::BufferBinding {
-                        buffer,
+                        ref buffer,
                         offset,
                         size,
                     }) => {

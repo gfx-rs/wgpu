@@ -705,7 +705,7 @@ pub struct BufferView {
 }
 
 #[cfg(webgpu)]
-impl BufferView<'_> {
+impl BufferView {
     /// Provides the same data as dereferencing the view, but as a `Uint8Array` in js.
     /// This can be MUCH faster than dereferencing the view which copies the data into
     /// the Rust / wasm heap.
