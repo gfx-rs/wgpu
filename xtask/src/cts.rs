@@ -38,7 +38,8 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         }))
     }
 
-    let wgpu_cargo_toml = shell.current_dir().join("Cargo.toml").canonicalize()?;
+    let wgpu_cargo_toml = std::path::absolute(shell.current_dir().join("Cargo.toml"))
+        .context("Failed to get path to Cargo.toml")?;
 
     let cts_revision = shell
         .read_file(CTS_REVISION_PATH)
@@ -59,9 +60,32 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
             .quiet()
             .run()
             .context("Failed to clone CTS")?;
-    }
 
-    shell.change_dir(CTS_CHECKOUT_PATH);
+        shell.change_dir(CTS_CHECKOUT_PATH);
+    } else if !skip_checkout {
+        shell.change_dir(CTS_CHECKOUT_PATH);
+
+        // If we don't have the CTS commit we want, try to fetch it.
+        if shell
+            .cmd("git")
+            .args(["cat-file", "commit", &cts_revision])
+            .quiet()
+            .ignore_stdout()
+            .ignore_stderr()
+            .run()
+            .is_err()
+        {
+            log::info!("Fetching CTS");
+            shell
+                .cmd("git")
+                .args(["fetch", "--quiet"])
+                .quiet()
+                .run()
+                .context("Failed to fetch CTS")?;
+        }
+    } else {
+        shell.change_dir(CTS_CHECKOUT_PATH);
+    }
 
     if !skip_checkout {
         log::info!("Checking out CTS");
@@ -77,6 +101,7 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
 
     log::info!("Running CTS");
     for test in &tests {
+        log::info!("Running {}", test.to_string_lossy());
         shell
             .cmd("cargo")
             .args(["run"])

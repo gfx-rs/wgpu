@@ -2,16 +2,15 @@
 
 use core::{convert::TryInto, hash::Hash};
 
-use super::ValidationError;
+use super::{TypeError, ValidationError};
 use crate::non_max_u32::NonMaxU32;
 use crate::{
     arena::{BadHandle, BadRangeError},
     diagnostic_filter::DiagnosticFilterNode,
-    Handle,
+    EntryPoint, Handle,
 };
 use crate::{Arena, UniqueArena};
 
-#[cfg(test)]
 use alloc::string::ToString;
 
 impl super::Validator {
@@ -43,6 +42,7 @@ impl super::Validator {
             ref global_expressions,
             ref diagnostic_filters,
             ref diagnostic_filter_leaf,
+            ref doc_comments,
         } = module;
 
         // Because types can refer to global expressions and vice versa, to
@@ -257,6 +257,70 @@ impl super::Validator {
             handle.check_valid_for(diagnostic_filters)?;
         }
 
+        if let Some(doc_comments) = doc_comments.as_ref() {
+            let crate::DocComments {
+                module: _,
+                types: ref doc_comments_for_types,
+                struct_members: ref doc_comments_for_struct_members,
+                entry_points: ref doc_comments_for_entry_points,
+                functions: ref doc_comments_for_functions,
+                constants: ref doc_comments_for_constants,
+                global_variables: ref doc_comments_for_global_variables,
+            } = **doc_comments;
+
+            for (&ty, _) in doc_comments_for_types.iter() {
+                validate_type(ty)?;
+            }
+
+            for (&(ty, struct_member_index), _) in doc_comments_for_struct_members.iter() {
+                validate_type(ty)?;
+                let struct_type = types.get_handle(ty).unwrap();
+                match struct_type.inner {
+                    crate::TypeInner::Struct {
+                        ref members,
+                        span: ref _span,
+                    } => {
+                        (0..members.len())
+                            .contains(&struct_member_index)
+                            .then_some(())
+                            // TODO: what errors should this be?
+                            .ok_or_else(|| ValidationError::Type {
+                                handle: ty,
+                                name: struct_type.name.as_ref().map_or_else(
+                                    || "members length incorrect".to_string(),
+                                    |name| name.to_string(),
+                                ),
+                                source: TypeError::InvalidData(ty),
+                            })?;
+                    }
+                    _ => {
+                        // TODO: internal error ? We should never get here.
+                        // If entering there, it's probably that we forgot to adjust a handle in the compact phase.
+                        return Err(ValidationError::Type {
+                            handle: ty,
+                            name: struct_type
+                                .name
+                                .as_ref()
+                                .map_or_else(|| "Unknown".to_string(), |name| name.to_string()),
+                            source: TypeError::InvalidData(ty),
+                        });
+                    }
+                }
+                for (&function, _) in doc_comments_for_functions.iter() {
+                    Self::validate_function_handle(function, functions)?;
+                }
+                for (&entry_point_index, _) in doc_comments_for_entry_points.iter() {
+                    Self::validate_entry_point_index(entry_point_index, entry_points)?;
+                }
+                for (&constant, _) in doc_comments_for_constants.iter() {
+                    Self::validate_constant_handle(constant, constants)?;
+                }
+                for (&global_variable, _) in doc_comments_for_global_variables.iter() {
+                    Self::validate_global_variable_handle(global_variable, global_variables)?;
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -272,6 +336,13 @@ impl super::Validator {
         constants: &Arena<crate::Constant>,
     ) -> Result<(), InvalidHandleError> {
         handle.check_valid_for(constants).map(|_| ())
+    }
+
+    fn validate_global_variable_handle(
+        handle: Handle<crate::GlobalVariable>,
+        global_variables: &Arena<crate::GlobalVariable>,
+    ) -> Result<(), InvalidHandleError> {
+        handle.check_valid_for(global_variables).map(|_| ())
     }
 
     fn validate_override_handle(
@@ -341,6 +412,22 @@ impl super::Validator {
         };
 
         Ok(max_expr)
+    }
+
+    fn validate_entry_point_index(
+        entry_point_index: usize,
+        entry_points: &[EntryPoint],
+    ) -> Result<(), InvalidHandleError> {
+        (0..entry_points.len())
+            .contains(&entry_point_index)
+            .then_some(())
+            .ok_or_else(|| {
+                BadHandle {
+                    kind: "EntryPoint",
+                    index: entry_point_index,
+                }
+                .into()
+            })
     }
 
     /// Validate all handles that occur in `expression`, whose handle is `handle`.

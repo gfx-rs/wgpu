@@ -45,6 +45,7 @@ Bottom level categories:
 #### Naga
 
 - Added `no_std` support with default features disabled. By @Bushrat011899 in [#7585](https://github.com/gfx-rs/wgpu/pull/7585).
+- [wgsl-in,ir] Add support for parsing rust-style doc comments via `naga::front::glsl::Frontend::new_with_options`. By @Vrixyz in [#6364](https://github.com/gfx-rs/wgpu/pull/6364).
 
 #### General
 

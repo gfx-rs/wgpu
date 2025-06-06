@@ -221,7 +221,7 @@ An override expression can be evaluated at pipeline creation time.
 
 mod block;
 
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
@@ -2386,6 +2386,28 @@ pub enum RayQueryIntersection {
     Aabb = 3,
 }
 
+/// Doc comments preceding items.
+///
+/// These can be used to generate automated documentation,
+/// IDE hover information or translate shaders with their context comments.
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub struct DocComments {
+    pub types: FastIndexMap<Handle<Type>, Vec<String>>,
+    // The key is:
+    // - key.0: the handle to the Struct
+    // - key.1: the index of the `StructMember`.
+    pub struct_members: FastIndexMap<(Handle<Type>, usize), Vec<String>>,
+    pub entry_points: FastIndexMap<usize, Vec<String>>,
+    pub functions: FastIndexMap<Handle<Function>, Vec<String>>,
+    pub constants: FastIndexMap<Handle<Constant>, Vec<String>>,
+    pub global_variables: FastIndexMap<Handle<GlobalVariable>, Vec<String>>,
+    // Top level comments, appearing before any space.
+    pub module: Vec<String>,
+}
+
 /// Shader module.
 ///
 /// A module is a set of constants, global variables and functions, as well as
@@ -2471,4 +2493,6 @@ pub struct Module {
     /// See [`DiagnosticFilterNode`] for details on how the tree is represented and used in
     /// validation.
     pub diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
+    /// Doc comments.
+    pub doc_comments: Option<Box<DocComments>>,
 }

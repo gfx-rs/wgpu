@@ -212,19 +212,16 @@ If you are a user and want a way to help contribute to wgpu, we always need more
 
 ### WebGPU Conformance Test Suite
 
-WebGPU includes a Conformance Test Suite to validate that implementations are working correctly. We can run this CTS against wgpu.
+WebGPU includes a Conformance Test Suite to validate that implementations are
+working correctly. We run cases from the CTS against wgpu using
+[Deno](https://deno.com/). A [default list of enabled
+tests](./cts_runner/test.lst) is automatically run on pull requests in CI.
 
-To have GitHub run the CTS against a pull request, you can add the `PR: run CTS` label to the PR.
-
-To run the CTS locally, run:
+To run the default set of CTS tests locally, run:
 
 ```
 cargo xtask cts
 ```
-
-This will clone the CTS into the `cts` directory, check out the
-[pinned version](./cts_runner/revision.txt), and run the
-[default list of enabled tests](./cts_runner/test.lst).
 
 You can also specify a test selector on the command line:
 
@@ -240,6 +237,9 @@ cargo xtask cts -f your_tests.lst
 
 To find the full list of tests, go to the
 [web version of the CTS](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
+
+The version of the CTS used by `cargo xtask cts` is specified in
+[`cts_runner/revision.txt`](./cts_runner/revision.txt).
 
 ## Tracking the WebGPU and WGSL draft specifications
 

@@ -16,5 +16,7 @@ webgpu:api,operation,rendering,color_target_state:blending,formats:*
 webgpu:api,operation,rendering,color_target_state:blend_constant,setting:*
 webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
-webgpu:api,operation,uncapturederror:*
+webgpu:api,operation,uncapturederror:iff_uncaptured:*
+//FAIL: webgpu:api,operation,uncapturederror:onuncapturederror_order_wrt_addEventListener
+// There are also two unimplemented SKIPs in uncapturederror not enumerated here.
 webgpu:shader,execution,flow_control,return:*
