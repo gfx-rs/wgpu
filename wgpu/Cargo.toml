@@ -164,7 +164,7 @@ fragile-send-sync-non-atomic-wasm = [
 ## context around the WASM VM, e.g., when the WASM binary is used in a browser.
 web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
 
-std = ["raw-window-handle/std", "wgpu-types/std", "wgpu-core/std"]
+std = ["raw-window-handle/std", "wgpu-types/std", "wgpu-core?/std"]
 
 parking_lot = ["dep:parking_lot"]
 
