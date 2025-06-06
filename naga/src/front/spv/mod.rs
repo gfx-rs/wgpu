@@ -44,7 +44,7 @@ use alloc::{
 };
 use core::{convert::TryInto, mem, num::NonZeroU32};
 
-#[cfg(feature = "fs")]
+#[cfg(std)]
 use std::path::PathBuf;
 
 use half::f16;
