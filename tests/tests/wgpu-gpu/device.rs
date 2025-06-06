@@ -347,34 +347,34 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         );
 
         // Creating a compute pass should fail.
+        let pass = encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        drop(pass);
         fail(
             &ctx.device,
-            || {
-                encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                    label: None,
-                    timestamp_writes: None,
-                });
-            },
+            || encoder_for_compute_pass.finish(),
             Some("device with '' label is invalid"),
         );
 
         // Creating a render pass should fail.
+        let pass = encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations::default(),
+                resolve_target: None,
+                view: &target_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        drop(pass);
         fail(
             &ctx.device,
-            || {
-                encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: None,
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        ops: wgpu::Operations::default(),
-                        resolve_target: None,
-                        view: &target_view,
-                        depth_slice: None,
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
-            },
+            || encoder_for_render_pass.finish(),
             Some("device with '' label is invalid"),
         );
 

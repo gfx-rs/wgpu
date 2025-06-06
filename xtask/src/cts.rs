@@ -34,7 +34,7 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         tests.extend(shell.read_file(file)?.lines().filter_map(|line| {
             let trimmed = line.trim();
             let is_comment = trimmed.starts_with("//") || trimmed.starts_with("#");
-            (!is_comment).then(|| OsString::from(trimmed))
+            (!trimmed.is_empty() && !is_comment).then(|| OsString::from(trimmed))
         }))
     }
 
