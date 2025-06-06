@@ -189,8 +189,9 @@ impl CommandEncoderStatus {
 
     /// Locks the encoder by putting it in the [`Self::Locked`] state.
     ///
-    /// Call [`Self::unlock_encoder`] to put the [`CommandBuffer`] back into the
-    /// [`Self::Recording`] state.
+    /// Render or compute passes call this on start. At the end of the pass,
+    /// they call [`Self::unlock_and_record`] to put the [`CommandBuffer`] back
+    /// into the [`Self::Recording`] state.
     fn lock_encoder(&mut self) -> Result<(), EncoderStateError> {
         match mem::replace(self, Self::Transitioning) {
             Self::Recording(inner) => {
@@ -235,6 +236,52 @@ impl CommandEncoderStatus {
             st @ Self::Error(_) => {
                 *self = st;
                 Err(EncoderStateError::Invalid)
+            }
+            Self::Transitioning => unreachable!(),
+        }
+    }
+
+    /// Unlocks the [`CommandBuffer`] and puts it back into the
+    /// [`Self::Recording`] state, then records commands using the supplied
+    /// closure.
+    ///
+    /// This function is the unlocking counterpart to [`Self::lock_encoder`]. It
+    /// is only valid to call this function if the encoder is in the
+    /// [`Self::Locked`] state.
+    ///
+    /// If the closure returns an error, stores that error in the encoder for
+    /// later reporting when `finish()` is called. Returns `Ok(())` even if the
+    /// closure returned an error.
+    ///
+    /// If the encoder is not in the [`Self::Locked`] state, the closure will
+    /// not be called and nothing will be recorded. If a validation error should
+    /// be raised immediately, returns it in `Err`, otherwise, returns `Ok(())`.
+    fn unlock_and_record<
+        F: FnOnce(&mut CommandBufferMutable) -> Result<(), E>,
+        E: Clone + Into<CommandEncoderError>,
+    >(
+        &mut self,
+        f: F,
+    ) -> Result<(), EncoderStateError> {
+        match mem::replace(self, Self::Transitioning) {
+            Self::Locked(inner) => {
+                *self = Self::Recording(inner);
+                RecordingGuard { inner: self }.record(f);
+                Ok(())
+            }
+            st @ Self::Finished(_) => {
+                *self = st;
+                Err(EncoderStateError::Ended)
+            }
+            Self::Recording(_) => {
+                *self = Self::Error(EncoderStateError::Unlocked.into());
+                Err(EncoderStateError::Unlocked)
+            }
+            st @ Self::Error(_) => {
+                // Encoder is invalid. Do not record anything, but do not
+                // return an immediate validation error.
+                *self = st;
+                Ok(())
             }
             Self::Transitioning => unreachable!(),
         }
@@ -863,7 +910,52 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
             push_constant_data: Vec::new(),
         }
     }
+
+    fn new_invalid(label: &Label, err: E) -> Self {
+        Self {
+            label: label.as_deref().map(str::to_owned),
+            error: Some(err),
+            commands: Vec::new(),
+            dynamic_offsets: Vec::new(),
+            string_data: Vec::new(),
+            push_constant_data: Vec::new(),
+        }
+    }
 }
+
+macro_rules! pass_base {
+    ($pass:expr, $scope:expr $(,)?) => {
+        match (&$pass.parent, &$pass.base.error) {
+            // Attempting to record a command on a finished encoder raises a
+            // validation error.
+            (&None, _) => return Err(EncoderStateError::Ended).map_pass_err($scope),
+
+            // Attempting to record a command on an open but invalid pass (i.e.
+            // a pass with a stored error) fails silently. (The stored error
+            // will be transferred to the parent encoder when the pass is ended,
+            // and then raised as a validation error when `finish()` is called
+            // for the parent).
+            (&Some(_), &Some(_)) => return Ok(()),
+
+            // Happy path
+            (&Some(_), &None) => &mut $pass.base,
+        }
+    };
+}
+pub(crate) use pass_base;
+
+macro_rules! pass_try {
+    ($base:expr, $scope:expr, $res:expr $(,)?) => {
+        match $res.map_pass_err($scope) {
+            Ok(val) => val,
+            Err(err) => {
+                $base.error.get_or_insert(err);
+                return Ok(());
+            }
+        }
+    };
+}
+pub(crate) use pass_try;
 
 /// Errors related to the state of a command or pass encoder.
 ///
@@ -936,14 +1028,26 @@ pub enum CommandEncoderError {
     BuildAccelerationStructure(#[from] BuildAccelerationStructureError),
     #[error(transparent)]
     TransitionResources(#[from] TransitionResourcesError),
+    #[error(transparent)]
+    ComputePass(#[from] ComputePassError),
+    // TODO: The following are temporary and can be removed once error handling
+    // is updated for render passes. (They will report via RenderPassError
+    // instead.)
+    #[error(transparent)]
+    QueryUse(#[from] QueryUseError),
+    #[error(transparent)]
+    TimestampWrites(#[from] TimestampWritesError),
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum TimestampWritesError {
     #[error(
         "begin and end indices of pass timestamp writes are both set to {idx}, which is not allowed"
     )]
-    TimestampWriteIndicesEqual { idx: u32 },
-    #[error(transparent)]
-    TimestampWritesInvalid(#[from] QueryUseError),
+    IndicesEqual { idx: u32 },
     #[error("no begin or end indices were specified for pass timestamp writes, expected at least one to be set")]
-    TimestampWriteIndicesMissing,
+    IndicesMissing,
 }
 
 impl Global {
@@ -1064,11 +1168,18 @@ impl Global {
         })
     }
 
-    fn validate_pass_timestamp_writes(
+    fn validate_pass_timestamp_writes<E>(
         device: &Device,
         query_sets: &Storage<Fallible<QuerySet>>,
         timestamp_writes: &PassTimestampWrites,
-    ) -> Result<ArcPassTimestampWrites, CommandEncoderError> {
+    ) -> Result<ArcPassTimestampWrites, E>
+    where
+        E: From<TimestampWritesError>
+            + From<QueryUseError>
+            + From<DeviceError>
+            + From<MissingFeatures>
+            + From<InvalidResourceError>,
+    {
         let &PassTimestampWrites {
             query_set,
             beginning_of_pass_write_index,
@@ -1090,7 +1201,7 @@ impl Global {
 
         if let Some((begin, end)) = beginning_of_pass_write_index.zip(end_of_pass_write_index) {
             if begin == end {
-                return Err(CommandEncoderError::TimestampWriteIndicesEqual { idx: begin });
+                return Err(TimestampWritesError::IndicesEqual { idx: begin }.into());
             }
         }
 
@@ -1098,7 +1209,7 @@ impl Global {
             .or(end_of_pass_write_index)
             .is_none()
         {
-            return Err(CommandEncoderError::TimestampWriteIndicesMissing);
+            return Err(TimestampWritesError::IndicesMissing.into());
         }
 
         Ok(ArcPassTimestampWrites {
@@ -1218,6 +1329,12 @@ where
     }
 }
 
+impl MapPassErr<PassStateError> for EncoderStateError {
+    fn map_pass_err(self, scope: PassErrorScope) -> PassStateError {
+        PassStateError { scope, inner: self }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum DrawKind {
     Draw,
@@ -1276,4 +1393,13 @@ pub enum PassErrorScope {
     PopDebugGroup,
     #[error("In a insert_debug_marker command")]
     InsertDebugMarker,
+}
+
+/// Variant of `EncoderStateError` that includes the pass scope.
+#[derive(Clone, Debug, Error)]
+#[error("{scope}")]
+pub struct PassStateError {
+    pub scope: PassErrorScope,
+    #[source]
+    pub(super) inner: EncoderStateError,
 }

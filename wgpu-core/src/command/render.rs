@@ -1577,7 +1577,7 @@ impl Global {
 
             arc_desc.timestamp_writes = desc
                 .timestamp_writes
-                .map(|tw| Global::validate_pass_timestamp_writes(device, &query_sets, tw))
+                .map(|tw| Global::validate_pass_timestamp_writes::<CommandEncoderError>(device, &query_sets, tw))
                 .transpose()?;
 
             arc_desc.occlusion_query_set =
