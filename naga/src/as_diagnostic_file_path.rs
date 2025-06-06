@@ -15,7 +15,8 @@ mod sealed {
 /// A trait that abstracts over types accepted for conversion to the most
 /// featureful path representation possible; that is:
 ///
-/// - When `no_std` is active, this represents types can be converted to `Cow<'_, str>`.
+/// - When `no_std` is active, this is implemented for [`String`], [`str`], and [`Cow`] (i.e.,
+///   `Cow<'_, str>`).
 /// - Otherwise, types that implement `AsRef<Path>` (to extract a `&Path`).
 ///
 /// This type is used as the type bounds for various diagnostic rendering methods, i.e.,
