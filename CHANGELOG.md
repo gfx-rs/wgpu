@@ -87,6 +87,7 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Removed `MaintainBase` in favor of using `PollType`. By @waywardmonkeys in [#7508](https://github.com/gfx-rs/wgpu/pull/7508).
 - The `destroy` functions for buffers and textures in wgpu-core are now infallible. Previously, they returned an error if called multiple times for the same object. This only affects the wgpu-core API; the wgpu API already allowed multiple `destroy` calls. By @andyleiserson in [#7686](https://github.com/gfx-rs/wgpu/pull/7686) and [#7720](https://github.com/gfx-rs/wgpu/pull/7720).
+- Gated usage of `once_cell` and `parking_lot` in `wgpu-core` under features of the same name, enabling `no_std` support. By @bushrat011899 in [#7746](https://github.com/gfx-rs/wgpu/pull/7746).
 
 #### Naga
 
