@@ -1046,7 +1046,11 @@ impl Global {
             return (id.into_command_encoder_id(), None);
         };
 
-        let id = fid.assign(Arc::new(CommandBuffer::new_invalid(&device, &desc.label)));
+        let id = fid.assign(Arc::new(CommandBuffer::new_invalid(
+            &device,
+            &desc.label,
+            error.clone().into(),
+        )));
         (id.into_command_encoder_id(), Some(error))
     }
 
