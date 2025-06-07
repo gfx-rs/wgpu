@@ -26,6 +26,8 @@ skip = [
     { name = "windows-result", version = "0.3.4" },
     { name = "windows-strings", version = "0.4.2" },
 
+    # cargo-metadata uses an old version of ordered-float. Only used for testing.
+    { name = "ordered-float", version = "2.10.1" },
     # criterion uses an old version
     { name = "itertools", version = "0.10.5" },
     # bindgen (used by deno) uses old version
