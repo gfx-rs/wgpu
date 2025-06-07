@@ -123,6 +123,12 @@ Naga now infers the correct binding layout when a resource appears only in an as
 
 - Allow scalars as the first argument of the `distance` built-in function. By @bernhl in [#7530](https://github.com/gfx-rs/wgpu/pull/7530).
 
+### Documentation
+
+#### General
+
+- Remove outdated information about `Adapter::request_device`. By @tesselode in [#7768](https://github.com/gfx-rs/wgpu/pull/7768)
+
 ## v25.0.2 (2025-05-24)
 
 ### Bug Fixes
