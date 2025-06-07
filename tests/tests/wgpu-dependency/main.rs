@@ -84,7 +84,7 @@ fn get_all_wgpu_features() -> Vec<String> {
     metadata
         .packages
         .iter()
-        .find(|p| p.name == "wgpu")
+        .find(|p| p.name.as_str() == "wgpu")
         .unwrap()
         .features
         .keys()
