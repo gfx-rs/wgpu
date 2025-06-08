@@ -182,7 +182,7 @@ spirv = "0.3"
 static_assertions = "1.1"
 strum = { version = "0.27", default-features = false, features = ["derive"] }
 syn = "2.0.98"
-toml = "0.8"
+toml = "0.8.9"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.3", default-features = false }
