@@ -189,7 +189,7 @@ thiserror = { version = "2.0.3", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.29", features = ["android-native-activity"] }
-which = "7"
+which = "8"
 xshell = "0.2.2"
 
 # Metal dependencies
