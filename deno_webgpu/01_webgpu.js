@@ -557,8 +557,8 @@ ObjectDefineProperty(GPUCompilationMessage, customInspect, {
   },
 });
 const GPUCompilationMessagePrototype = GPUCompilationMessage.prototype;
-// Naming it `r#type` in Rust does not seem to work.
-// There is likely a problem with `GPUQuerySet.type` as well.
+// Naming it `type` or `r#type` in Rust does not work.
+// https://github.com/gfx-rs/wgpu/issues/7778
 ObjectDefineProperty(GPUCompilationMessage.prototype, "type", {
   get() {
     return this.ty;
@@ -777,6 +777,13 @@ ObjectDefineProperty(GPUQuerySet, customInspect, {
   },
 });
 const GPUQuerySetPrototype = GPUQuerySet.prototype;
+// Naming it `type` or `r#type` in Rust does not work.
+// https://github.com/gfx-rs/wgpu/issues/7778
+ObjectDefineProperty(GPUQuerySet.prototype, "type", {
+  get() {
+    return this.ty;
+  }
+});
 
 // Converters
 

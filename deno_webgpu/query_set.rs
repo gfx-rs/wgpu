@@ -48,9 +48,11 @@ impl GPUQuerySet {
         ))
     }
 
+    // Naming this `type` or `r#type` does not work.
+    // https://github.com/gfx-rs/wgpu/issues/7778
     #[getter]
     #[string]
-    fn r#type(&self) -> &'static str {
+    fn ty(&self) -> &'static str {
         self.r#type.as_str()
     }
 

@@ -64,7 +64,7 @@ pub(crate) struct GPUShaderModuleDescriptor {
 
 pub struct GPUCompilationMessage {
     message: String,
-    ty: GPUCompilationMessageType,
+    r#type: GPUCompilationMessageType,
     line_num: u64,
     line_pos: u64,
     offset: u64,
@@ -81,10 +81,12 @@ impl GPUCompilationMessage {
         self.message.clone()
     }
 
+    // Naming this `type` or `r#type` does not work.
+    // https://github.com/gfx-rs/wgpu/issues/7778
     #[getter]
     #[string]
     fn ty(&self) -> &'static str {
-        self.ty.as_str()
+        self.r#type.as_str()
     }
 
     #[getter]
@@ -134,7 +136,7 @@ impl GPUCompilationMessage {
 
                 Self {
                     message,
-                    ty: GPUCompilationMessageType::Error,
+                    r#type: GPUCompilationMessageType::Error,
                     line_num: loc.line_number.into(),
                     line_pos,
                     offset: len_utf16(&source[0..start]),
@@ -143,7 +145,7 @@ impl GPUCompilationMessage {
             }
             _ => Self {
                 message,
-                ty: GPUCompilationMessageType::Error,
+                r#type: GPUCompilationMessageType::Error,
                 line_num: 0,
                 line_pos: 0,
                 offset: 0,

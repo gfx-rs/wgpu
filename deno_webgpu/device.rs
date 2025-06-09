@@ -426,9 +426,9 @@ impl GPUDevice {
             None,
         );
 
-        let info1 = GPUCompilationInfo::new(scope, err.iter(), &descriptor.code);
-        let info2 = make_cppgc_object(scope, info1);
-        let compilation_info = v8::Global::new(scope, info2);
+        let compilation_info = GPUCompilationInfo::new(scope, err.iter(), &descriptor.code);
+        let compilation_info = make_cppgc_object(scope, compilation_info);
+        let compilation_info = v8::Global::new(scope, compilation_info);
         self.error_handler.push_error(err);
 
         GPUShaderModule {
