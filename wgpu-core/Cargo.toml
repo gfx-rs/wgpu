@@ -130,12 +130,22 @@ static-dxc = ["wgpu-hal/static-dxc"]
 portable-atomic = ["dep:portable-atomic", "wgpu-hal/portable-atomic"]
 
 ## Enables the `parking_lot` set of locking primitives.
+## This is the recommended implementation and will be used in preference to
+## any other implementation.
+## Will fallback to a `RefCell` based implementation which is `!Sync` when no
+## alternative feature is enabled.
 parking_lot = ["dep:parking_lot"]
 
 ## Enables the `spin` set of locking primitives.
+## This is generally only useful for `no_std` targets, and will be unused if
+## either `std` or `parking_lot` are available.
+## Will fallback to a `RefCell` based implementation which is `!Sync` when no
+## alternative feature is enabled.
 spin = ["dep:spin"]
 
 ## Enables `once_cell` initialization primitives.
+## This allows the `ResourcePool` to be `Sync`, but requires either `std` or
+## `once_cell/critical-section` to be enabled.
 once_cell = ["dep:once_cell"]
 
 #! ### Target Conditional Features
