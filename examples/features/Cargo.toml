@@ -38,7 +38,7 @@ flume.workspace = true
 glam = { workspace = true, features = ["bytemuck"] }
 ktx2.workspace = true
 log.workspace = true
-nanorand.workspace = true
+nanorand = { workspace = true, features = ["tls"] }
 noise.workspace = true
 obj.workspace = true
 png.workspace = true

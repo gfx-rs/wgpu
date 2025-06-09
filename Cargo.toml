@@ -139,7 +139,7 @@ libm = { version = "0.2.6", default-features = false }
 libtest-mimic = "0.8"
 log = "0.4.21"
 nanoserde = "0.2"
-nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
+nanorand = { version = "0.8", default-features = false, features = ["wyrand"] }
 noise = "0.9"
 num_cpus = "1"
 # `half` requires 0.2.16 for `FromBytes` and `ToBytes`.

@@ -1459,7 +1459,7 @@ checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
 dependencies = [
  "futures-core",
  "futures-sink",
- "nanorand",
+ "nanorand 0.7.0",
  "spin",
 ]
 
@@ -2522,6 +2522,12 @@ checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
 dependencies = [
  "getrandom 0.2.16",
 ]
+
+[[package]]
+name = "nanorand"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e3d189da485332e96ba8a5ef646a311871abd7915bf06ac848a9117f19cf6e4"
 
 [[package]]
 name = "nanoserde"
@@ -4782,7 +4788,7 @@ dependencies = [
  "bytemuck",
  "criterion",
  "naga",
- "nanorand",
+ "nanorand 0.8.0",
  "pollster",
  "profiling",
  "rayon",
@@ -4894,7 +4900,7 @@ dependencies = [
  "glam",
  "ktx2",
  "log",
- "nanorand",
+ "nanorand 0.8.0",
  "noise",
  "obj",
  "png",
@@ -5009,7 +5015,7 @@ dependencies = [
  "js-sys",
  "libtest-mimic",
  "log",
- "nanorand",
+ "nanorand 0.8.0",
  "nv-flip",
  "parking_lot",
  "png",
