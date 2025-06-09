@@ -21,7 +21,7 @@ use crate::{
     proc::{
         self,
         index::{self, BoundsCheck},
-        NameKey, TypeResolution,
+        ExternalTextureNameKey, NameKey, TypeResolution,
     },
     valid, FastHashMap, FastHashSet,
 };
@@ -61,6 +61,8 @@ pub(crate) const F2I32_FUNCTION: &str = "naga_f2i32";
 pub(crate) const F2U32_FUNCTION: &str = "naga_f2u32";
 pub(crate) const F2I64_FUNCTION: &str = "naga_f2i64";
 pub(crate) const F2U64_FUNCTION: &str = "naga_f2u64";
+pub(crate) const IMAGE_LOAD_EXTERNAL_FUNCTION: &str = "nagaTextureLoadExternal";
+pub(crate) const IMAGE_SIZE_EXTERNAL_FUNCTION: &str = "nagaTextureDimensionsExternal";
 pub(crate) const IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION: &str =
     "nagaTextureSampleBaseClampToEdge";
 /// For some reason, Metal does not let you have `metal::texture<..>*` as a buffer argument.
@@ -71,6 +73,11 @@ pub(crate) const IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION: &str =
 /// This allows `NagaArgumentBufferWrapper<metal::texture<..>>*` to work. The astute among
 /// you have noticed that this should be exactly the same to the compiler, and you're correct.
 pub(crate) const ARGUMENT_BUFFER_WRAPPER_STRUCT: &str = "NagaArgumentBufferWrapper";
+/// Name of the struct that is declared to wrap the 3 textures and parameters
+/// buffer that [`crate::ImageClass::External`] variables are lowered to,
+/// allowing them to be conveniently passed to user-defined or wrapper
+/// functions. The struct is declared in [`Writer::write_type_defs`].
+pub(crate) const EXTERNAL_TEXTURE_WRAPPER_STRUCT: &str = "NagaExternalTextureWrapper";
 
 /// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
 ///
@@ -321,7 +328,9 @@ impl Display for TypeContext<'_> {
                         };
                         ("texture", "", format.into(), access)
                     }
-                    crate::ImageClass::External => unimplemented!(),
+                    crate::ImageClass::External => {
+                        return write!(out, "{EXTERNAL_TEXTURE_WRAPPER_STRUCT}");
+                    }
                 };
                 let base_name = scalar.to_msl_name();
                 let array_str = if arrayed { "_array" } else { "" };
@@ -449,8 +458,15 @@ enum WrappedFunction {
         vector_size: Option<crate::VectorSize>,
         dst_scalar: crate::Scalar,
     },
+    ImageLoad {
+        class: crate::ImageClass,
+    },
     ImageSample {
+        class: crate::ImageClass,
         clamp_to_edge: bool,
+    },
+    ImageQuerySize {
+        class: crate::ImageClass,
     },
 }
 
@@ -1064,6 +1080,17 @@ impl<W: Write> Writer<W> {
         kind: crate::ScalarKind,
         context: &ExpressionContext,
     ) -> BackendResult {
+        if let crate::TypeInner::Image {
+            class: crate::ImageClass::External,
+            ..
+        } = *context.resolve_type(image)
+        {
+            write!(self.out, "{IMAGE_SIZE_EXTERNAL_FUNCTION}(")?;
+            self.put_expression(image, context, true)?;
+            write!(self.out, ")")?;
+            return Ok(());
+        }
+
         //Note: MSL only has separate width/height/depth queries,
         // so compose the result of them.
         let dim = match *context.resolve_type(image) {
@@ -1321,6 +1348,19 @@ impl<W: Write> Writer<W> {
         mut address: TexelAddress,
         context: &ExpressionContext,
     ) -> BackendResult {
+        if let crate::TypeInner::Image {
+            class: crate::ImageClass::External,
+            ..
+        } = *context.resolve_type(image)
+        {
+            write!(self.out, "{IMAGE_LOAD_EXTERNAL_FUNCTION}(")?;
+            self.put_expression(image, context, true)?;
+            write!(self.out, ", ")?;
+            self.put_cast_to_uint_scalar_or_vector(address.coordinate, context)?;
+            write!(self.out, ")")?;
+            return Ok(());
+        }
+
         match context.policies.image_load {
             proc::BoundsCheckPolicy::Restrict => {
                 // Use the cached restricted level of detail, if any. Omit the
@@ -4387,15 +4427,43 @@ impl<W: Write> Writer<W> {
 
     fn write_type_defs(&mut self, module: &crate::Module) -> BackendResult {
         let mut generated_argument_buffer_wrapper = false;
+        let mut generated_external_texture_wrapper = false;
         for (handle, ty) in module.types.iter() {
-            if let crate::TypeInner::BindingArray { .. } = ty.inner {
-                if !generated_argument_buffer_wrapper {
+            match ty.inner {
+                crate::TypeInner::BindingArray { .. } if !generated_argument_buffer_wrapper => {
                     writeln!(self.out, "template <typename T>")?;
                     writeln!(self.out, "struct {ARGUMENT_BUFFER_WRAPPER_STRUCT} {{")?;
                     writeln!(self.out, "{}T {WRAPPED_ARRAY_FIELD};", back::INDENT)?;
                     writeln!(self.out, "}};")?;
                     generated_argument_buffer_wrapper = true;
                 }
+                crate::TypeInner::Image {
+                    class: crate::ImageClass::External,
+                    ..
+                } if !generated_external_texture_wrapper => {
+                    let params_ty_name = &self.names
+                        [&NameKey::Type(module.special_types.external_texture_params.unwrap())];
+                    writeln!(self.out, "struct {EXTERNAL_TEXTURE_WRAPPER_STRUCT} {{")?;
+                    writeln!(
+                        self.out,
+                        "{}{NAMESPACE}::texture2d<float, {NAMESPACE}::access::sample> plane0;",
+                        back::INDENT
+                    )?;
+                    writeln!(
+                        self.out,
+                        "{}{NAMESPACE}::texture2d<float, {NAMESPACE}::access::sample> plane1;",
+                        back::INDENT
+                    )?;
+                    writeln!(
+                        self.out,
+                        "{}{NAMESPACE}::texture2d<float, {NAMESPACE}::access::sample> plane2;",
+                        back::INDENT
+                    )?;
+                    writeln!(self.out, "{}{params_ty_name} params;", back::INDENT)?;
+                    writeln!(self.out, "}};")?;
+                    generated_external_texture_wrapper = true;
+                }
+                _ => {}
             }
 
             if !ty.needs_alias() {
@@ -5873,12 +5941,149 @@ template <typename A>
         Ok(())
     }
 
+    /// Helper function used by [`Self::write_wrapped_image_load`] and
+    /// [`Self::write_wrapped_image_sample`] to write the shared YUV to RGB
+    /// conversion code for external textures. Expects the preceding code to
+    /// declare the Y component as a `float` variable of name `y`, the UV
+    /// components as a `float2` variable of name `uv`, and the external
+    /// texture params as a variable of name `params`. The emitted code will
+    /// return the result.
+    fn write_convert_yuv_to_rgb_and_return(
+        &mut self,
+        level: back::Level,
+        y: &str,
+        uv: &str,
+        params: &str,
+    ) -> BackendResult {
+        let l1 = level;
+        let l2 = l1.next();
+
+        // Convert from YUV to non-linear RGB in the source color space.
+        writeln!(
+            self.out,
+            "{l1}float3 srcGammaRgb = ({params}.yuv_conversion_matrix * float4({y}, {uv}, 1.0)).rgb;"
+        )?;
+
+        // Apply the inverse of the source transfer function to convert to
+        // linear RGB in the source color space.
+        writeln!(self.out, "{l1}float3 srcLinearRgb = {NAMESPACE}::select(")?;
+        writeln!(self.out, "{l2}{NAMESPACE}::pow((srcGammaRgb + {params}.src_tf.a - 1.0) / {params}.src_tf.a, {params}.src_tf.g),")?;
+        writeln!(self.out, "{l2}srcGammaRgb / {params}.src_tf.k,")?;
+        writeln!(
+            self.out,
+            "{l2}srcGammaRgb < {params}.src_tf.k * {params}.src_tf.b);"
+        )?;
+
+        // Multiply by the gamut conversion matrix to convert to linear RGB in
+        // the destination color space.
+        writeln!(
+            self.out,
+            "{l1}float3 dstLinearRgb = {params}.gamut_conversion_matrix * srcLinearRgb;"
+        )?;
+
+        // Finally, apply the dest transfer function to convert to non-linear
+        // RGB in the destination color space, and return the result.
+        writeln!(self.out, "{l1}float3 dstGammaRgb = {NAMESPACE}::select(")?;
+        writeln!(self.out, "{l2}{params}.dst_tf.a * {NAMESPACE}::pow(dstLinearRgb, 1.0 / {params}.dst_tf.g) - ({params}.dst_tf.a - 1),")?;
+        writeln!(self.out, "{l2}{params}.dst_tf.k * dstLinearRgb,")?;
+        writeln!(self.out, "{l2}dstLinearRgb < {params}.dst_tf.b);")?;
+
+        writeln!(self.out, "{l1}return float4(dstGammaRgb, 1.0);")?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn write_wrapped_image_load(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
+        _coordinate: Handle<crate::Expression>,
+        _array_index: Option<Handle<crate::Expression>>,
+        _sample: Option<Handle<crate::Expression>>,
+        _level: Option<Handle<crate::Expression>>,
+    ) -> BackendResult {
+        // We currently only need to wrap image loads for external textures
+        let class = match *func_ctx.resolve_type(image, &module.types) {
+            crate::TypeInner::Image { class, .. } => class,
+            _ => unreachable!(),
+        };
+        if class != crate::ImageClass::External {
+            return Ok(());
+        }
+        let wrapped = WrappedFunction::ImageLoad { class };
+        if !self.wrapped_functions.insert(wrapped) {
+            return Ok(());
+        }
+
+        writeln!(self.out, "float4 {IMAGE_LOAD_EXTERNAL_FUNCTION}({EXTERNAL_TEXTURE_WRAPPER_STRUCT} tex, uint2 coords) {{")?;
+        let l1 = back::Level(1);
+        let l2 = l1.next();
+        let l3 = l2.next();
+        writeln!(
+            self.out,
+            "{l1}uint2 plane0_size = uint2(tex.plane0.get_width(), tex.plane0.get_height());"
+        )?;
+        // Clamp coords to provided size of external texture to prevent OOB
+        // read. If params.size is zero then clamp to the actual size of the
+        // texture.
+        writeln!(
+            self.out,
+            "{l1}uint2 cropped_size = {NAMESPACE}::any(tex.params.size != 0) ? tex.params.size : plane0_size;"
+        )?;
+        writeln!(
+            self.out,
+            "{l1}coords = {NAMESPACE}::min(coords, cropped_size - 1);"
+        )?;
+
+        // Apply load transformation
+        writeln!(self.out, "{l1}uint2 plane0_coords = uint2({NAMESPACE}::round(tex.params.load_transform * float3(float2(coords), 1.0)));")?;
+        writeln!(self.out, "{l1}if (tex.params.num_planes == 1u) {{")?;
+        // For single plane, simply read from plane0
+        writeln!(self.out, "{l2}return tex.plane0.read(plane0_coords);")?;
+        writeln!(self.out, "{l1}}} else {{")?;
+
+        // Chroma planes may be subsampled so we must scale the coords accordingly.
+        writeln!(
+            self.out,
+            "{l2}uint2 plane1_size = uint2(tex.plane1.get_width(), tex.plane1.get_height());"
+        )?;
+        writeln!(self.out, "{l2}uint2 plane1_coords = uint2({NAMESPACE}::floor(float2(plane0_coords) * float2(plane1_size) / float2(plane0_size)));")?;
+
+        // For multi-plane, read the Y value from plane 0
+        writeln!(self.out, "{l2}float y = tex.plane0.read(plane0_coords).x;")?;
+
+        writeln!(self.out, "{l2}float2 uv;")?;
+        writeln!(self.out, "{l2}if (tex.params.num_planes == 2u) {{")?;
+        // For 2 planes, read UV from interleaved plane 1
+        writeln!(self.out, "{l3}uv = tex.plane1.read(plane1_coords).xy;")?;
+        writeln!(self.out, "{l2}}} else {{")?;
+        // For 3 planes, read U and V from planes 1 and 2 respectively
+        writeln!(
+            self.out,
+            "{l2}uint2 plane2_size = uint2(tex.plane2.get_width(), tex.plane2.get_height());"
+        )?;
+        writeln!(self.out, "{l2}uint2 plane2_coords = uint2({NAMESPACE}::floor(float2(plane0_coords) * float2(plane2_size) / float2(plane0_size)));")?;
+        writeln!(
+            self.out,
+            "{l3}uv = float2(tex.plane1.read(plane1_coords).x, tex.plane2.read(plane2_coords).x);"
+        )?;
+        writeln!(self.out, "{l2}}}")?;
+
+        self.write_convert_yuv_to_rgb_and_return(l2, "y", "uv", "tex.params")?;
+
+        writeln!(self.out, "{l1}}}")?;
+        writeln!(self.out, "}}")?;
+        writeln!(self.out)?;
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn write_wrapped_image_sample(
         &mut self,
-        _module: &crate::Module,
-        _func_ctx: &back::FunctionCtx,
-        _image: Handle<crate::Expression>,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
         _sampler: Handle<crate::Expression>,
         _gather: Option<crate::SwizzleComponent>,
         _coordinate: Handle<crate::Expression>,
@@ -5888,23 +6093,163 @@ template <typename A>
         _depth_ref: Option<Handle<crate::Expression>>,
         clamp_to_edge: bool,
     ) -> BackendResult {
+        // We currently only need to wrap textureSampleBaseClampToEdge, for
+        // both sampled and external textures.
         if !clamp_to_edge {
             return Ok(());
         }
+        let class = match *func_ctx.resolve_type(image, &module.types) {
+            crate::TypeInner::Image { class, .. } => class,
+            _ => unreachable!(),
+        };
         let wrapped = WrappedFunction::ImageSample {
+            class,
             clamp_to_edge: true,
         };
         if !self.wrapped_functions.insert(wrapped) {
             return Ok(());
         }
+        match class {
+            crate::ImageClass::External => {
+                writeln!(self.out, "float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}({EXTERNAL_TEXTURE_WRAPPER_STRUCT} tex, {NAMESPACE}::sampler samp, float2 coords) {{")?;
+                let l1 = back::Level(1);
+                let l2 = l1.next();
+                let l3 = l2.next();
+                writeln!(self.out, "{l1}uint2 plane0_size = uint2(tex.plane0.get_width(), tex.plane0.get_height());")?;
+                writeln!(
+                    self.out,
+                    "{l1}coords = tex.params.sample_transform * float3(coords, 1.0);"
+                )?;
 
-        writeln!(self.out, "{NAMESPACE}::float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}({NAMESPACE}::texture2d<float, {NAMESPACE}::access::sample> tex, {NAMESPACE}::sampler samp, {NAMESPACE}::float2 coords) {{")?;
-        let l1 = back::Level(1);
-        writeln!(self.out, "{l1}{NAMESPACE}::float2 half_texel = 0.5 / {NAMESPACE}::float2(tex.get_width(0u), tex.get_height(0u));")?;
+                // Calculate the sample bounds. The purported size of the texture
+                // (params.size) is irrelevant here as we are dealing with normalized
+                // coordinates. Usually we would clamp to (0,0)..(1,1). However, we must
+                // apply the sample transformation to that, also bearing in mind that it
+                // may contain a flip on either axis. We calculate and adjust for the
+                // half-texel separately for each plane as it depends on the actual
+                // texture size which may vary between planes.
+                writeln!(
+                    self.out,
+                    "{l1}float2 bounds_min = tex.params.sample_transform * float3(0.0, 0.0, 1.0);"
+                )?;
+                writeln!(
+                    self.out,
+                    "{l1}float2 bounds_max = tex.params.sample_transform * float3(1.0, 1.0, 1.0);"
+                )?;
+                writeln!(self.out, "{l1}float4 bounds = float4({NAMESPACE}::min(bounds_min, bounds_max), {NAMESPACE}::max(bounds_min, bounds_max));")?;
+                writeln!(
+                    self.out,
+                    "{l1}float2 plane0_half_texel = float2(0.5, 0.5) / float2(plane0_size);"
+                )?;
+                writeln!(
+                    self.out,
+                    "{l1}float2 plane0_coords = {NAMESPACE}::clamp(coords, bounds.xy + plane0_half_texel, bounds.zw - plane0_half_texel);"
+                )?;
+                writeln!(self.out, "{l1}if (tex.params.num_planes == 1u) {{")?;
+                // For single plane, simply sample from plane0
+                writeln!(
+                    self.out,
+                    "{l2}return tex.plane0.sample(samp, plane0_coords, {NAMESPACE}::level(0.0f));"
+                )?;
+                writeln!(self.out, "{l1}}} else {{")?;
+                writeln!(self.out, "{l2}uint2 plane1_size = uint2(tex.plane1.get_width(), tex.plane1.get_height());")?;
+                writeln!(
+                    self.out,
+                    "{l2}float2 plane1_half_texel = float2(0.5, 0.5) / float2(plane1_size);"
+                )?;
+                writeln!(
+                    self.out,
+                    "{l2}float2 plane1_coords = {NAMESPACE}::clamp(coords, bounds.xy + plane1_half_texel, bounds.zw - plane1_half_texel);"
+                )?;
+
+                // For multi-plane, sample the Y value from plane 0
+                writeln!(
+                    self.out,
+                    "{l2}float y = tex.plane0.sample(samp, plane0_coords, {NAMESPACE}::level(0.0f)).r;"
+                )?;
+                writeln!(self.out, "{l2}float2 uv = float2(0.0, 0.0);")?;
+                writeln!(self.out, "{l2}if (tex.params.num_planes == 2u) {{")?;
+                // For 2 planes, sample UV from interleaved plane 1
+                writeln!(
+                    self.out,
+                    "{l3}uv = tex.plane1.sample(samp, plane1_coords, {NAMESPACE}::level(0.0f)).xy;"
+                )?;
+                writeln!(self.out, "{l2}}} else {{")?;
+                // For 3 planes, sample U and V from planes 1 and 2 respectively
+                writeln!(self.out, "{l3}uint2 plane2_size = uint2(tex.plane2.get_width(), tex.plane2.get_height());")?;
+                writeln!(
+                    self.out,
+                    "{l3}float2 plane2_half_texel = float2(0.5, 0.5) / float2(plane2_size);"
+                )?;
+                writeln!(
+                    self.out,
+                    "{l3}float2 plane2_coords = {NAMESPACE}::clamp(coords, bounds.xy + plane2_half_texel, bounds.zw - plane1_half_texel);"
+                )?;
+                writeln!(self.out, "{l3}uv.x = tex.plane1.sample(samp, plane1_coords, {NAMESPACE}::level(0.0f)).x;")?;
+                writeln!(self.out, "{l3}uv.y = tex.plane2.sample(samp, plane2_coords, {NAMESPACE}::level(0.0f)).x;")?;
+                writeln!(self.out, "{l2}}}")?;
+
+                self.write_convert_yuv_to_rgb_and_return(l2, "y", "uv", "tex.params")?;
+
+                writeln!(self.out, "{l1}}}")?;
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+            _ => {
+                writeln!(self.out, "{NAMESPACE}::float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}({NAMESPACE}::texture2d<float, {NAMESPACE}::access::sample> tex, {NAMESPACE}::sampler samp, {NAMESPACE}::float2 coords) {{")?;
+                let l1 = back::Level(1);
+                writeln!(self.out, "{l1}{NAMESPACE}::float2 half_texel = 0.5 / {NAMESPACE}::float2(tex.get_width(0u), tex.get_height(0u));")?;
+                writeln!(
+                    self.out,
+                    "{l1}return tex.sample(samp, {NAMESPACE}::clamp(coords, half_texel, 1.0 - half_texel), {NAMESPACE}::level(0.0));"
+                )?;
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn write_wrapped_image_query(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+        image: Handle<crate::Expression>,
+        query: crate::ImageQuery,
+    ) -> BackendResult {
+        // We currently only need to wrap size image queries for external textures
+        if !matches!(query, crate::ImageQuery::Size { .. }) {
+            return Ok(());
+        }
+        let class = match *func_ctx.resolve_type(image, &module.types) {
+            crate::TypeInner::Image { class, .. } => class,
+            _ => unreachable!(),
+        };
+        if class != crate::ImageClass::External {
+            return Ok(());
+        }
+        let wrapped = WrappedFunction::ImageQuerySize { class };
+        if !self.wrapped_functions.insert(wrapped) {
+            return Ok(());
+        }
         writeln!(
             self.out,
-            "{l1}return tex.sample(samp, {NAMESPACE}::clamp(coords, half_texel, 1.0 - half_texel), {NAMESPACE}::level(0.0));"
+            "uint2 {IMAGE_SIZE_EXTERNAL_FUNCTION}({EXTERNAL_TEXTURE_WRAPPER_STRUCT} tex) {{"
         )?;
+        let l1 = back::Level(1);
+        let l2 = l1.next();
+        writeln!(
+            self.out,
+            "{l1}if ({NAMESPACE}::any(tex.params.size != uint2(0u))) {{"
+        )?;
+        writeln!(self.out, "{l2}return tex.params.size;")?;
+        writeln!(self.out, "{l1}}} else {{")?;
+        // params.size == (0, 0) indicates to query and return plane 0's actual size
+        writeln!(
+            self.out,
+            "{l2}return uint2(tex.plane0.get_width(), tex.plane0.get_height());"
+        )?;
+        writeln!(self.out, "{l1}}}")?;
         writeln!(self.out, "}}")?;
         writeln!(self.out)?;
         Ok(())
@@ -5939,6 +6284,23 @@ template <typename A>
                 } => {
                     self.write_wrapped_cast(module, func_ctx, expr, kind, convert)?;
                 }
+                crate::Expression::ImageLoad {
+                    image,
+                    coordinate,
+                    array_index,
+                    sample,
+                    level,
+                } => {
+                    self.write_wrapped_image_load(
+                        module,
+                        func_ctx,
+                        image,
+                        coordinate,
+                        array_index,
+                        sample,
+                        level,
+                    )?;
+                }
                 crate::Expression::ImageSample {
                     image,
                     sampler,
@@ -5963,6 +6325,9 @@ template <typename A>
                         depth_ref,
                         clamp_to_edge,
                     )?;
+                }
+                crate::Expression::ImageQuery { image, query } => {
+                    self.write_wrapped_image_query(module, func_ctx, image, query)?;
                 }
                 _ => {}
             }
@@ -6293,6 +6658,10 @@ template <typename A>
                                     // so that binding arrays fall to the buffer location.
 
                                     match module.types[var.ty].inner {
+                                        crate::TypeInner::Image {
+                                            class: crate::ImageClass::External,
+                                            ..
+                                        } => target.external_texture.is_some(),
                                         crate::TypeInner::Image { .. } => target.texture.is_some(),
                                         crate::TypeInner::Sampler { .. } => {
                                             target.sampler.is_some()
@@ -6719,7 +7088,11 @@ template <typename A>
                                             "read-write textures".to_string(),
                                         ));
                                     }
-                                    crate::ImageClass::External => unimplemented!(),
+                                    crate::ImageClass::External => {
+                                        return Err(Error::UnsupportedArrayOf(
+                                            "external textures".to_string(),
+                                        ));
+                                    }
                                 },
                                 _ => {
                                     return Err(Error::UnsupportedArrayOfType(base));
@@ -6746,27 +7119,81 @@ template <typename A>
                     }
                 }
 
-                let tyvar = TypedGlobalVariable {
-                    module,
-                    names: &self.names,
-                    handle,
-                    usage,
-                    reference: true,
+                let mut separator = || {
+                    if is_first_argument {
+                        is_first_argument = false;
+                        ' '
+                    } else {
+                        ','
+                    }
                 };
-                let separator = if is_first_argument {
-                    is_first_argument = false;
-                    ' '
-                } else {
-                    ','
-                };
-                write!(self.out, "{separator} ")?;
-                tyvar.try_fmt(&mut self.out)?;
-                if let Some(resolved) = resolved {
-                    resolved.try_fmt(&mut self.out)?;
-                }
-                if let Some(value) = var.init {
-                    write!(self.out, " = ")?;
-                    self.put_const_expression(value, module, mod_info, &module.global_expressions)?;
+
+                match module.types[var.ty].inner {
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::External,
+                        ..
+                    } => {
+                        // External texture global variables get lowered to 3 textures
+                        // and a constant buffer. We must emit a separate argument for
+                        // each of these.
+                        let target = match resolved {
+                            Some(back::msl::ResolvedBinding::Resource(target)) => {
+                                target.external_texture
+                            }
+                            _ => None,
+                        };
+
+                        for i in 0..3 {
+                            write!(self.out, "{} ", separator())?;
+
+                            let plane_name = &self.names[&NameKey::ExternalTextureGlobalVariable(
+                                handle,
+                                ExternalTextureNameKey::Plane(i),
+                            )];
+                            write!(
+                              self.out,
+                              "{NAMESPACE}::texture2d<float, {NAMESPACE}::access::sample> {plane_name}"
+                            )?;
+                            if let Some(ref target) = target {
+                                write!(self.out, " [[texture({})]]", target.planes[i])?;
+                            }
+                            writeln!(self.out)?;
+                        }
+                        let params_ty_name = &self.names
+                            [&NameKey::Type(module.special_types.external_texture_params.unwrap())];
+                        let params_name = &self.names[&NameKey::ExternalTextureGlobalVariable(
+                            handle,
+                            ExternalTextureNameKey::Params,
+                        )];
+                        write!(self.out, "{} ", separator())?;
+                        write!(self.out, "constant {params_ty_name}& {params_name}")?;
+                        if let Some(ref target) = target {
+                            write!(self.out, " [[buffer({})]]", target.params)?;
+                        }
+                    }
+                    _ => {
+                        let tyvar = TypedGlobalVariable {
+                            module,
+                            names: &self.names,
+                            handle,
+                            usage,
+                            reference: true,
+                        };
+                        write!(self.out, "{} ", separator())?;
+                        tyvar.try_fmt(&mut self.out)?;
+                        if let Some(resolved) = resolved {
+                            resolved.try_fmt(&mut self.out)?;
+                        }
+                        if let Some(value) = var.init {
+                            write!(self.out, " = ")?;
+                            self.put_const_expression(
+                                value,
+                                module,
+                                mod_info,
+                                &module.global_expressions,
+                            )?;
+                        }
+                    }
                 }
                 writeln!(self.out)?;
             }
@@ -7008,9 +7435,9 @@ template <typename A>
                         }
                     };
                 } else if let Some(ref binding) = var.binding {
-                    // write an inline sampler
                     let resolved = options.resolve_resource_binding(ep, binding).unwrap();
                     if let Some(sampler) = resolved.as_inline_sampler(options) {
+                        // write an inline sampler
                         let name = &self.names[&NameKey::GlobalVariable(handle)];
                         writeln!(
                             self.out,
@@ -7021,6 +7448,33 @@ template <typename A>
                         )?;
                         self.put_inline_sampler_properties(back::Level(2), sampler)?;
                         writeln!(self.out, "{});", back::INDENT)?;
+                    } else if let crate::TypeInner::Image {
+                        class: crate::ImageClass::External,
+                        ..
+                    } = module.types[var.ty].inner
+                    {
+                        // Wrap the individual arguments for each external texture global
+                        // in a struct which can be easily passed around.
+                        let wrapper_name = &self.names[&NameKey::GlobalVariable(handle)];
+                        let l1 = back::Level(1);
+                        let l2 = l1.next();
+                        writeln!(
+                            self.out,
+                            "{l1}const {EXTERNAL_TEXTURE_WRAPPER_STRUCT} {wrapper_name} {{"
+                        )?;
+                        for i in 0..3 {
+                            let plane_name = &self.names[&NameKey::ExternalTextureGlobalVariable(
+                                handle,
+                                ExternalTextureNameKey::Plane(i),
+                            )];
+                            writeln!(self.out, "{l2}.plane{i} = {plane_name},")?;
+                        }
+                        let params_name = &self.names[&NameKey::ExternalTextureGlobalVariable(
+                            handle,
+                            ExternalTextureNameKey::Params,
+                        )];
+                        writeln!(self.out, "{l2}.params = {params_name},")?;
+                        writeln!(self.out, "{l1}}};")?;
                     }
                 }
             }
