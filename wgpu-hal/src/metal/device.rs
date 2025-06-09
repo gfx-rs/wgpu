@@ -747,7 +747,19 @@ impl crate::Device for super::Device {
                                 };
                             }
                             wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
-                            wgt::BindingType::ExternalTexture => unimplemented!(),
+                            wgt::BindingType::ExternalTexture => {
+                                target.external_texture =
+                                    Some(naga::back::msl::BindExternalTextureTarget {
+                                        planes: [
+                                            info.counters.textures as _,
+                                            (info.counters.textures + 1) as _,
+                                            (info.counters.textures + 2) as _,
+                                        ],
+                                        params: info.counters.buffers as _,
+                                    });
+                                info.counters.textures += 3;
+                                info.counters.buffers += 1;
+                            }
                         }
                     }
 
@@ -980,7 +992,28 @@ impl crate::Device for super::Device {
                                 counter.textures += 1;
                             }
                             wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
-                            wgt::BindingType::ExternalTexture => unimplemented!(),
+                            wgt::BindingType::ExternalTexture => {
+                                // We don't yet support binding arrays of external textures.
+                                // https://github.com/gfx-rs/wgpu/issues/8027
+                                assert_eq!(entry.count, 1);
+                                let external_texture =
+                                    &desc.external_textures[entry.resource_index as usize];
+                                bg.textures.extend(
+                                    external_texture
+                                        .planes
+                                        .iter()
+                                        .map(|plane| plane.view.as_raw()),
+                                );
+                                bg.buffers.push(super::BufferResource {
+                                    ptr: external_texture.params.buffer.as_raw(),
+                                    offset: external_texture.params.offset,
+                                    dynamic_index: None,
+                                    binding_size: None,
+                                    binding_location: layout.binding,
+                                });
+                                counter.textures += 3;
+                                counter.buffers += 1;
+                            }
                         }
                     }
                 }
