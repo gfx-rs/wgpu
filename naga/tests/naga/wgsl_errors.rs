@@ -3667,3 +3667,55 @@ fn subgroup_invalid_broadcast() {
         naga::valid::Capabilities::SUBGROUP
     }
 }
+
+#[test]
+fn invalid_clip_distances() {
+    // Check for capability
+    check_validation! {
+        r#"
+            struct VertexOutput {
+                @builtin(position) pos: vec4f,
+                @builtin(clip_distances) clip_distances: array<f32, 8>,
+            }
+
+            @vertex
+            fn vs_main() -> VertexOutput {
+                var out: VertexOutput;
+                return out;
+            }
+        "#:
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Vertex,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCE),
+                ),
+                ..
+            },
+        )
+    }
+
+    // Check maximum clip distances
+    check_validation! {
+        r#"
+            struct VertexOutput {
+                @builtin(position) pos: vec4f,
+                @builtin(clip_distances) clip_distances: array<f32, 9>,
+            }
+
+            @vertex
+            fn vs_main() -> VertexOutput {
+                var out: VertexOutput;
+                return out;
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            source: naga::valid::EntryPointError::Result(
+                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance)
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::CLIP_DISTANCE
+    }
+}
