@@ -164,8 +164,18 @@ fragile-send-sync-non-atomic-wasm = [
 ## context around the WASM VM, e.g., when the WASM binary is used in a browser.
 web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
 
+## Enables use of the standard library within `wgpu` and its dependencies.
+##
+## This can allow for better error reporting and for improved multithreading
+## support.
 std = ["raw-window-handle/std", "wgpu-types/std", "wgpu-core?/std"]
 
+## Uses `parking_lot` as the implementation for locking primitives.
+##
+## This is a recommended feature for most users and should only be disabled when
+## required, e.g., for `no_std` support.
+## If disabled, either `std::sync::Mutex` or `core::cell::RefCell` will be used,
+## based on whether `std` is enabled or not.
 parking_lot = ["dep:parking_lot"]
 
 #########################
