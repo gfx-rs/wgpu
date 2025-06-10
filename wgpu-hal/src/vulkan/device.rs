@@ -761,9 +761,18 @@ impl super::Device {
         let image =
             self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
 
+        // Some external memory types require dedicated allocation
+        // https://docs.vulkan.org/guide/latest/extensions/external.html#_importing_memory
+        let mut dedicated_allocate_info =
+            vk::MemoryDedicatedAllocateInfo::default().image(image.raw);
+
         let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::default()
             .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE)
             .handle(d3d11_shared_handle.0 as _);
+        #[allow(clippy::unnecessary_mut_passed)]
+        {
+            import_memory_info.p_next = <*const _>::cast(&mut dedicated_allocate_info);
+        }
 
         let mem_type_index = self
             .find_memory_type_index(
