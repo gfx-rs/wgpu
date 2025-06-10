@@ -63,7 +63,10 @@ console_log.workspace = true
 fern.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
-wgpu = { path = "../../wgpu", default-features = false, features = ["wgsl"] }
+wgpu = { path = "../../wgpu", default-features = false, features = [
+    "wgsl",
+    "std",
+] }
 # We need these features in the framework examples and tests
 web-sys = { workspace = true, features = [
     "Location",
