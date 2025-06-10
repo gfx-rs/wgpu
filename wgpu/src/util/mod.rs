@@ -3,10 +3,8 @@
 //! Nothing in this module is a part of the WebGPU API specification;
 //! they are unique to the `wgpu` library.
 
-/// # TODO
-///
-/// Allow [`belt::StagingBelt`] in `no_std` by replacing usage of [`std::sync::mpsc`] with an
-/// appropriate alternative.
+// TODO: For [`belt::StagingBelt`] to be available in `no_std` its usage of [`std::sync::mpsc`]
+// must be replaced with an appropriate alternative.
 #[cfg(std)]
 mod belt;
 mod device;
