@@ -446,9 +446,7 @@ impl Instance {
             let mut backend_adapters =
                 unsafe { instance.enumerate_adapters(compatible_hal_surface) };
             if backend_adapters.is_empty() {
-                log::debug!(
-                    "enabled backend `{:?}` has no adapters",
-                    backend);
+                log::debug!("enabled backend `{:?}` has no adapters", backend);
                 no_adapter_backends |= Backends::from(backend);
                 // by continuing, we avoid setting the further error bits below
                 continue;
