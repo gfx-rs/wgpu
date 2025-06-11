@@ -50,7 +50,11 @@ use crate::device::trace::Command as TraceCommand;
 
 const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 
-/// The current state of a [`CommandBuffer`].
+/// The current state of a command or pass encoder.
+///
+/// In the WebGPU spec, the state of an encoder (open, locked, or ended) is
+/// orthogonal to the validity of the encoder. However, this enum does not
+/// represent the state of an invalid encoder.
 pub(crate) enum CommandEncoderStatus {
     /// Ready to record commands. An encoder's initial state.
     ///
@@ -70,9 +74,9 @@ pub(crate) enum CommandEncoderStatus {
     /// This state is entered when a render/compute pass is created,
     /// and exited when the pass is ended.
     ///
-    /// As long as the command encoder is locked, any command building operation on it will fail
-    /// and put the encoder into the [`Self::Error`] state.
-    /// See <https://www.w3.org/TR/webgpu/#encoder-state-locked>
+    /// As long as the command encoder is locked, any command building operation
+    /// on it will fail and put the encoder into the [`Self::Error`] state. See
+    /// <https://www.w3.org/TR/webgpu/#encoder-state-locked>
     Locked(CommandBufferMutable),
 
     /// Command recording is complete, and the buffer is ready for submission.
@@ -93,8 +97,8 @@ pub(crate) enum CommandEncoderStatus {
     /// be raised by `CommandEncoder.finish()`.
     Error(CommandEncoderError),
 
-    /// Temporary state used by the functions below. Encoder should never be
-    /// left in this state.
+    /// Temporary state used internally by methods on `CommandEncoderStatus`.
+    /// Encoder should never be left in this state.
     Transitioning,
 }
 
@@ -125,7 +129,8 @@ impl CommandEncoderStatus {
 
     /// Locks the encoder by putting it in the [`Self::Locked`] state.
     ///
-    /// Call [`Self::unlock_encoder`] to put the [`CommandBuffer`] back into the [`Self::Recording`] state.
+    /// Call [`Self::unlock_encoder`] to put the [`CommandBuffer`] back into the
+    /// [`Self::Recording`] state.
     fn lock_encoder(&mut self) -> Result<(), EncoderStateError> {
         match mem::replace(self, Self::Transitioning) {
             Self::Recording(inner) => {
@@ -197,7 +202,8 @@ impl CommandEncoderStatus {
     // Invalidate the command encoder and store the error `err` causing the
     // invalidation for diagnostic purposes.
     //
-    // Note that this also unlocks the encoder.
+    // Since we do not track the state of an invalid encoder, it is not
+    // necessary to unlock an encoder that has been invalidated.
     fn invalidate<E: Clone + Into<CommandEncoderError>>(&mut self, err: E) -> E {
         *self = Self::Error(err.clone().into());
         err
@@ -764,32 +770,35 @@ impl<C: Clone> BasePass<C> {
 
 /// Errors related to the state of a command or pass encoder.
 ///
-/// `EncoderStateError::Ended` is returned immediately when an attempt is made
-/// to encode a command using an encoder that has already finished.
-///
-/// `EncoderStateError::Locked` is returned by a subsequent call to
-/// `encoder.finish()`, if there was an attempt to open a second pass on the
-/// encoder while a previous pass was still open.
-///
-/// `EncoderStateError::Invalid` is used internally by wgpu. It should usually
-/// not be seen by users of the API, since an effort should be made to provide
-/// the caller with a more specific reason for the encoder being invalid.
-///
 /// The exact behavior of these errors may change based on the resolution of
 /// <https://github.com/gpuweb/gpuweb/issues/5207>.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum EncoderStateError {
+    /// Used internally by wgpu functions to indicate the encoder already
+    /// contained an error. This variant should usually not be seen by users of
+    /// the API, since an effort should be made to provide the caller with a
+    /// more specific reason for the encoder being invalid.
     #[error("Encoder is invalid")]
     Invalid,
+
+    /// Returned immediately when an attempt is made to encode a command using
+    /// an encoder that has already finished.
     #[error("Encoding must not have ended")]
     Ended,
 
+    /// Returned by a subsequent call to `encoder.finish()`, if there was an
+    /// attempt to open a second pass on the encoder while it was locked for
+    /// a first pass (i.e. the first pass was still open).
+    ///
     /// Note: only command encoders can be locked (not pass encoders).
     #[error("Encoder is locked by a previously created render/compute pass. Before recording any new commands, the pass must be ended.")]
     Locked,
+
+    /// Returned when attempting to end a pass if the parent encoder is not
+    /// locked. This can only happen if pass begin/end calls are mismatched.
     #[error(
-        "Encoder is not currently locked. A pass can only be ended while the recorder is locked."
+        "Encoder is not currently locked. A pass can only be ended while the encoder is locked."
     )]
     Unlocked,
 
