@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::num::NonZeroU64;
 use std::rc::Rc;
 
+use deno_core::cppgc::make_cppgc_object;
 use deno_core::cppgc::SameObject;
 use deno_core::op2;
 use deno_core::v8;
@@ -33,6 +34,7 @@ use crate::error::GPUError;
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
+use crate::shader::GPUCompilationInfo;
 use crate::webidl::features_to_feature_names;
 use crate::Instance;
 
@@ -409,6 +411,7 @@ impl GPUDevice {
     #[cppgc]
     fn create_shader_module(
         &self,
+        scope: &mut v8::HandleScope<'_>,
         #[webidl] descriptor: super::shader::GPUShaderModuleDescriptor,
     ) -> GPUShaderModule {
         let wgpu_descriptor = wgpu_core::pipeline::ShaderModuleDescriptor {
@@ -419,16 +422,20 @@ impl GPUDevice {
         let (id, err) = self.instance.device_create_shader_module(
             self.id,
             &wgpu_descriptor,
-            wgpu_core::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(descriptor.code)),
+            wgpu_core::pipeline::ShaderModuleSource::Wgsl(Cow::Borrowed(&descriptor.code)),
             None,
         );
 
+        let compilation_info = GPUCompilationInfo::new(scope, err.iter(), &descriptor.code);
+        let compilation_info = make_cppgc_object(scope, compilation_info);
+        let compilation_info = v8::Global::new(scope, compilation_info);
         self.error_handler.push_error(err);
 
         GPUShaderModule {
             instance: self.instance.clone(),
             id,
             label: descriptor.label,
+            compilation_info,
         }
     }
 

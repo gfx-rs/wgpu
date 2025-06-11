@@ -10,7 +10,6 @@ use alloc::{
 use core::{error::Error, fmt, future::ready, ops::Range, pin::Pin, ptr::NonNull, slice};
 
 use arrayvec::ArrayVec;
-use parking_lot::Mutex;
 use smallvec::SmallVec;
 use wgc::{
     command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError,
@@ -18,6 +17,7 @@ use wgc::{
 };
 use wgt::WasmNotSendSync;
 
+use crate::util::Mutex;
 use crate::{
     api,
     dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},

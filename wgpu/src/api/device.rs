@@ -1,10 +1,9 @@
 use alloc::{boxed::Box, string::String, sync::Arc};
 use core::{error, fmt, future::Future};
 
-use parking_lot::Mutex;
-
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
+use crate::util::Mutex;
 use crate::*;
 
 /// Open connection to a graphics and/or compute device.

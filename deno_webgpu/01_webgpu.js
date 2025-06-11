@@ -16,6 +16,8 @@ import {
   GPUBuffer,
   GPUCommandBuffer,
   GPUCommandEncoder,
+  GPUCompilationInfo,
+  GPUCompilationMessage,
   GPUComputePassEncoder,
   GPUComputePipeline,
   GPUDevice,
@@ -39,6 +41,7 @@ const {
   ObjectDefineProperty,
   ObjectPrototypeIsPrototypeOf,
   ObjectSetPrototypeOf,
+  ReflectGet,
   Symbol,
   SymbolFor,
 } = primordials;
@@ -510,6 +513,58 @@ ObjectDefineProperty(GPUShaderModule, customInspect, {
 });
 const GPUShaderModulePrototype = GPUShaderModule.prototype;
 
+ObjectDefineProperty(GPUCompilationInfo, customInspect, {
+  __proto__: null,
+  value(inspect, inspectOptions) {
+    return inspect(
+      createFilteredInspectProxy({
+        object: this,
+        evaluate: ObjectPrototypeIsPrototypeOf(
+          GPUCompilationInfoPrototype,
+          this,
+        ),
+        keys: [
+          "messages",
+        ],
+      }),
+      inspectOptions,
+    );
+  },
+});
+const GPUCompilationInfoPrototype = GPUCompilationInfo.prototype;
+
+ObjectDefineProperty(GPUCompilationMessage, customInspect, {
+  __proto__: null,
+  value(inspect, inspectOptions) {
+    return inspect(
+      createFilteredInspectProxy({
+        object: this,
+        evaluate: ObjectPrototypeIsPrototypeOf(
+          GPUCompilationMessagePrototype,
+          this,
+        ),
+        keys: [
+          "message",
+          "type",
+          "line_num",
+          "line_pos",
+          "offset",
+          "length",
+        ],
+      }),
+      inspectOptions,
+    );
+  },
+});
+const GPUCompilationMessagePrototype = GPUCompilationMessage.prototype;
+// Naming it `type` or `r#type` in Rust does not work.
+// https://github.com/gfx-rs/wgpu/issues/7778
+ObjectDefineProperty(GPUCompilationMessage.prototype, "type", {
+  get() {
+    return this.ty;
+  }
+});
+
 class GPUShaderStage {
   constructor() {
     webidl.illegalConstructor();
@@ -722,6 +777,13 @@ ObjectDefineProperty(GPUQuerySet, customInspect, {
   },
 });
 const GPUQuerySetPrototype = GPUQuerySet.prototype;
+// Naming it `type` or `r#type` in Rust does not work.
+// https://github.com/gfx-rs/wgpu/issues/7778
+ObjectDefineProperty(GPUQuerySet.prototype, "type", {
+  get() {
+    return this.ty;
+  }
+});
 
 // Converters
 
@@ -779,6 +841,8 @@ export {
   GPUColorWrite,
   GPUCommandBuffer,
   GPUCommandEncoder,
+  GPUCompilationInfo,
+  GPUCompilationMessage,
   GPUComputePassEncoder,
   GPUComputePipeline,
   GPUDevice,

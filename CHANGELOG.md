@@ -77,6 +77,7 @@ Naga now infers the correct binding layout when a resource appears only in an as
 - Properly apply WGSL's automatic conversions to the arguments to texture sampling functions. By @jimblandy in [#7548](https://github.com/gfx-rs/wgpu/pull/7548).
 - Properly evaluate `abs(most negative abstract int)`. By @jimblandy in [#7507](https://github.com/gfx-rs/wgpu/pull/7507).
 - Generate vectorized code for `[un]pack4x{I,U}8[Clamp]` on SPIR-V and MSL 2.1+. By @robamler in [#7664](https://github.com/gfx-rs/wgpu/pull/7664).
+- Fix typing for `select`, which had issues particularly with a lack of automatic type conversion. By @ErichDonGubler in [#7572](https://github.com/gfx-rs/wgpu/pull/7572).
 
 #### DX12
 
@@ -101,6 +102,7 @@ Naga now infers the correct binding layout when a resource appears only in an as
 - Mark `readonly_and_readwrite_storage_textures` & `packed_4x8_integer_dot_product` language extensions as implemented. By @teoxoy in [#7543](https://github.com/gfx-rs/wgpu/pull/7543)
 - `naga::back::hlsl::Writer::new` has a new `pipeline_options` argument. `hlsl::PipelineOptions::default()` can be passed as a default. The `shader_stage` and `entry_point` members of `pipeline_options` can be used to write only a single entry point when using the HLSL and MSL backends (GLSL and SPIR-V already had this functionality). The Metal and DX12 HALs now write only a single entry point when loading shaders. By @andyleiserson in [#7626](https://github.com/gfx-rs/wgpu/pull/7626).
 - Implemented `early_depth_test` for SPIR-V backend, enabling `SHADER_EARLY_DEPTH_TEST` for Vulkan. Additionally, fixed conservative depth optimizations when using `early_depth_test`. The syntax for forcing early depth tests is now `@early_depth_test(force)` instead of `@early_depth_test`. By @dzamkov in [#7676](https://github.com/gfx-rs/wgpu/pull/7676).
+- `ImplementedLanguageExtension::VARIANTS` is now implemented manually rather than derived using `strum` (allowing `strum` to become a dev-only dependency) so it is no longer a member of the `strum::VARIANTS` trait. Unless you are using this trait as a bound this should have no effect.
 
 #### D3D12
 
@@ -123,6 +125,12 @@ Naga now infers the correct binding layout when a resource appears only in an as
 #### Naga
 
 - Allow scalars as the first argument of the `distance` built-in function. By @bernhl in [#7530](https://github.com/gfx-rs/wgpu/pull/7530).
+
+### Documentation
+
+#### General
+
+- Remove outdated information about `Adapter::request_device`. By @tesselode in [#7768](https://github.com/gfx-rs/wgpu/pull/7768)
 
 ## v25.0.2 (2025-05-24)
 

@@ -2012,8 +2012,9 @@ fn invalid_runtime_sized_arrays() {
 
 #[test]
 fn select() {
-    check_validation! {
-        "
+    let snapshots = [
+        (
+            "
         fn select_pointers(which: bool) -> i32 {
             var x: i32 = 1;
             var y: i32 = 2;
@@ -2021,7 +2022,19 @@ fn select() {
             return *p;
         }
         ",
-        "
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:5:28
+  │
+5 │             let p = select(&x, &y, which);
+  │                            ^^ this value of type `ptr<function, i32>`
+  │
+  = note: expected a scalar or a `vecN` of scalars
+
+",
+        ),
+        (
+            "
         fn select_arrays(which: bool) -> i32 {
             var x: array<i32, 4>;
             var y: array<i32, 4>;
@@ -2029,7 +2042,19 @@ fn select() {
             return s[0];
         }
         ",
-        "
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:5:28
+  │
+5 │             let s = select(x, y, which);
+  │                            ^ this value of type `array<i32, 4>`
+  │
+  = note: expected a scalar or a `vecN` of scalars
+
+",
+        ),
+        (
+            "
         struct S { member: i32 }
         fn select_structs(which: bool) -> S {
             var x: S = S(1);
@@ -2037,18 +2062,58 @@ fn select() {
             let s = select(x, y, which);
             return s;
         }
-        ":
-        Err(
-            naga::valid::ValidationError::Function {
-                name,
-                source: naga::valid::FunctionError::Expression {
-                    source: naga::valid::ExpressionError::SelectConditionNotABool { .. },
-                    ..
-                },
-                ..
-            },
-        )
-        if name.starts_with("select_")
+        ",
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:6:28
+  │
+6 │             let s = select(x, y, which);
+  │                            ^ this value of type `S`
+  │
+  = note: expected a scalar or a `vecN` of scalars
+
+",
+        ),
+        (
+            "
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `9001` isn't a `bool`.
+            _ = select(1, 2, 9001);
+        }
+        ",
+            "\
+error: Expected boolean expression for condition argument of `select`, got something else
+  ┌─ wgsl:5:17
+  │
+5 │             _ = select(1, 2, 9001);
+  │                 ^^^^^^ see msg
+
+",
+        ),
+        (
+            "
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `bool` and abstract int args. don't match.
+            _ = select(true, 1, false);
+        }
+        ",
+            "\
+error: type mismatch for reject and accept values in `select` call
+  ┌─ wgsl:5:24
+  │
+5 │             _ = select(true, 1, false);
+  │                        ^^^^  ^ accept value of type `{AbstractInt}`
+  │                        │      
+  │                        reject value of type `bool`
+
+",
+        ),
+    ];
+
+    for (input, snapshot) in snapshots {
+        check(input, snapshot);
     }
 }
 

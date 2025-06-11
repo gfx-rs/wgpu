@@ -563,6 +563,27 @@ pub enum ConstantEvaluatorError {
     RuntimeExpr,
     #[error("Unexpected override-expression")]
     OverrideExpr,
+    #[error("Expected boolean expression for condition argument of `select`, got something else")]
+    SelectScalarConditionNotABool,
+    #[error(
+        "Expected vectors of the same size for reject and accept args., got {:?} and {:?}",
+        reject,
+        accept
+    )]
+    SelectVecRejectAcceptSizeMismatch {
+        reject: crate::VectorSize,
+        accept: crate::VectorSize,
+    },
+    #[error("Expected boolean vector for condition arg., got something else")]
+    SelectConditionNotAVecBool,
+    #[error(
+        "Expected same number of vector components between condition, accept, and reject args., got something else",
+    )]
+    SelectConditionVecSizeMismatch,
+    #[error(
+        "Expected reject and accept args. to be scalars of vectors of the same type, got something else",
+    )]
+    SelectAcceptRejectTypeMismatch,
 }
 
 impl<'a> ConstantEvaluator<'a> {
@@ -904,9 +925,19 @@ impl<'a> ConstantEvaluator<'a> {
                     )),
                 }
             }
-            Expression::Select { .. } => Err(ConstantEvaluatorError::NotImplemented(
-                "select built-in function".into(),
-            )),
+            Expression::Select {
+                reject,
+                accept,
+                condition,
+            } => {
+                let mut arg = |expr| self.check_and_get(expr);
+
+                let reject = arg(reject)?;
+                let accept = arg(accept)?;
+                let condition = arg(condition)?;
+
+                self.select(reject, accept, condition, span)
+            }
             Expression::Relational { fun, argument } => {
                 let argument = self.check_and_get(argument)?;
                 self.relational(fun, argument, span)
@@ -1845,6 +1876,10 @@ impl<'a> ConstantEvaluator<'a> {
                         Literal::AbstractFloat(v) => v,
                         _ => return make_error(),
                     }),
+                    Sc::ABSTRACT_INT => Literal::AbstractInt(match literal {
+                        Literal::AbstractInt(v) => v,
+                        _ => return make_error(),
+                    }),
                     _ => {
                         log::debug!("Constant evaluator refused to convert value to {target:?}");
                         return make_error();
@@ -2496,6 +2531,116 @@ impl<'a> ConstantEvaluator<'a> {
         };
 
         Ok(resolution)
+    }
+
+    fn select(
+        &mut self,
+        reject: Handle<Expression>,
+        accept: Handle<Expression>,
+        condition: Handle<Expression>,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let mut arg = |arg| self.eval_zero_value_and_splat(arg, span);
+
+        let reject = arg(reject)?;
+        let accept = arg(accept)?;
+        let condition = arg(condition)?;
+
+        let select_single_component =
+            |this: &mut Self, reject_scalar, reject, accept, condition| {
+                let accept = this.cast(accept, reject_scalar, span)?;
+                if condition {
+                    Ok(accept)
+                } else {
+                    Ok(reject)
+                }
+            };
+
+        match (&self.expressions[reject], &self.expressions[accept]) {
+            (&Expression::Literal(reject_lit), &Expression::Literal(_accept_lit)) => {
+                let reject_scalar = reject_lit.scalar();
+                let &Expression::Literal(Literal::Bool(condition)) = &self.expressions[condition]
+                else {
+                    return Err(ConstantEvaluatorError::SelectScalarConditionNotABool);
+                };
+                select_single_component(self, reject_scalar, reject, accept, condition)
+            }
+            (
+                &Expression::Compose {
+                    ty: reject_ty,
+                    components: ref reject_components,
+                },
+                &Expression::Compose {
+                    ty: accept_ty,
+                    components: ref accept_components,
+                },
+            ) => {
+                let ty_deets = |ty| {
+                    let (size, scalar) = self.types[ty].inner.vector_size_and_scalar().unwrap();
+                    (size.unwrap(), scalar)
+                };
+
+                let expected_vec_size = {
+                    let [(reject_vec_size, _), (accept_vec_size, _)] =
+                        [reject_ty, accept_ty].map(ty_deets);
+
+                    if reject_vec_size != accept_vec_size {
+                        return Err(ConstantEvaluatorError::SelectVecRejectAcceptSizeMismatch {
+                            reject: reject_vec_size,
+                            accept: accept_vec_size,
+                        });
+                    }
+                    reject_vec_size
+                };
+
+                let condition_components = match self.expressions[condition] {
+                    Expression::Literal(Literal::Bool(condition)) => {
+                        vec![condition; (expected_vec_size as u8).into()]
+                    }
+                    Expression::Compose {
+                        ty: condition_ty,
+                        components: ref condition_components,
+                    } => {
+                        let (condition_vec_size, condition_scalar) = ty_deets(condition_ty);
+                        if condition_scalar.kind != ScalarKind::Bool {
+                            return Err(ConstantEvaluatorError::SelectConditionNotAVecBool);
+                        }
+                        if condition_vec_size != expected_vec_size {
+                            return Err(ConstantEvaluatorError::SelectConditionVecSizeMismatch);
+                        }
+                        condition_components
+                            .iter()
+                            .copied()
+                            .map(|component| match &self.expressions[component] {
+                                &Expression::Literal(Literal::Bool(condition)) => condition,
+                                _ => unreachable!(),
+                            })
+                            .collect()
+                    }
+
+                    _ => return Err(ConstantEvaluatorError::SelectConditionNotAVecBool),
+                };
+
+                let evaluated = Expression::Compose {
+                    ty: reject_ty,
+                    components: reject_components
+                        .clone()
+                        .into_iter()
+                        .zip(accept_components.clone().into_iter())
+                        .zip(condition_components.into_iter())
+                        .map(|((reject, accept), condition)| {
+                            let reject_scalar = match &self.expressions[reject] {
+                                &Expression::Literal(lit) => lit.scalar(),
+                                _ => unreachable!(),
+                            };
+                            select_single_component(self, reject_scalar, reject, accept, condition)
+                        })
+                        .collect::<Result<_, _>>()?,
+                };
+                self.register_evaluated_expr(evaluated, span)
+            }
+            _ => Err(ConstantEvaluatorError::SelectAcceptRejectTypeMismatch),
+        }
     }
 }
 

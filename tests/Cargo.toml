@@ -40,7 +40,6 @@ arrayvec.workspace = true
 approx.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
-cargo_metadata.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true
@@ -62,6 +61,8 @@ trybuild.workspace = true
 
 # Non-Webassembly
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Cargo-metadata doesn't compile on wasm due to old cargo-util-schemas dependency.
+cargo_metadata.workspace = true
 env_logger.workspace = true
 nv-flip.workspace = true
 parking_lot = { workspace = true, features = ["deadlock_detection"] }

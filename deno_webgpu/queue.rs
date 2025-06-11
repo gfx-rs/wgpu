@@ -7,6 +7,7 @@ use std::time::Duration;
 use deno_core::cppgc::Ptr;
 use deno_core::futures::channel::oneshot;
 use deno_core::op2;
+use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
@@ -53,8 +54,9 @@ impl GPUQueue {
     #[required(1)]
     fn submit(
         &self,
+        scope: &mut v8::HandleScope,
         #[webidl] command_buffers: Vec<Ptr<GPUCommandBuffer>>,
-    ) -> Result<(), JsErrorBox> {
+    ) -> Result<v8::Local<v8::Value>, JsErrorBox> {
         let ids = command_buffers
             .into_iter()
             .enumerate()
@@ -75,7 +77,7 @@ impl GPUQueue {
             self.error_handler.push_error(Some(err));
         }
 
-        Ok(())
+        Ok(v8::undefined(scope).into())
     }
 
     #[async_method]

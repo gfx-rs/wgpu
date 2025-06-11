@@ -38,7 +38,7 @@ flume.workspace = true
 glam = { workspace = true, features = ["bytemuck"] }
 ktx2.workspace = true
 log.workspace = true
-nanorand.workspace = true
+nanorand = { workspace = true, features = ["tls"] }
 noise.workspace = true
 obj.workspace = true
 png.workspace = true
@@ -63,7 +63,10 @@ console_log.workspace = true
 fern.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
-wgpu = { path = "../../wgpu", default-features = false, features = ["wgsl"] }
+wgpu = { path = "../../wgpu", default-features = false, features = [
+    "wgsl",
+    "std",
+] }
 # We need these features in the framework examples and tests
 web-sys = { workspace = true, features = [
     "Location",

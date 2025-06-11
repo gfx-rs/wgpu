@@ -47,6 +47,16 @@ fn main() {
         // ⚠️ Keep in sync with target.cfg() definition in wgpu-hal/Cargo.toml and cfg_alias in `wgpu-hal` crate ⚠️
         static_dxc: { all(target_os = "windows", feature = "static-dxc", not(target_arch = "aarch64")) },
         supports_64bit_atomics: { target_has_atomic = "64" },
-        custom: {any(feature = "custom")}
+        custom: {any(feature = "custom")},
+        std: { any(
+            feature = "std",
+            // TODO: Remove this when an alternative Mutex implementation is available for `no_std`.
+            // send_sync requires an appropriate Mutex implementation, which is only currently
+            // possible with `std` enabled.
+            send_sync,
+            // Unwinding panics necessitate access to `std` to determine if a thread is panicking
+            panic = "unwind"
+        ) },
+        no_std: { not(std) }
     }
 }

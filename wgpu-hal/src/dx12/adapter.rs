@@ -589,7 +589,8 @@ impl super::Adapter {
                     max_inter_stage_shader_components: base.max_inter_stage_shader_components,
                     max_color_attachments,
                     max_color_attachment_bytes_per_sample,
-                    max_compute_workgroup_storage_size: base.max_compute_workgroup_storage_size, //TODO?
+                    // From: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.6%20Inter-Thread%20Data%20Sharing
+                    max_compute_workgroup_storage_size: 32768,
                     max_compute_invocations_per_workgroup:
                         Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP,
                     max_compute_workgroup_size_x: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_X,

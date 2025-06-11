@@ -102,8 +102,7 @@ impl GlobalPlay for wgc::global::Global {
                         encoder,
                         base,
                         timestamp_writes.as_ref(),
-                    )
-                    .unwrap();
+                    );
                 }
                 trace::Command::RunRenderPass {
                     base,
@@ -119,8 +118,7 @@ impl GlobalPlay for wgc::global::Global {
                         target_depth_stencil.as_ref(),
                         timestamp_writes.as_ref(),
                         occlusion_query_set_id,
-                    )
-                    .unwrap();
+                    );
                 }
                 trace::Command::BuildAccelerationStructuresUnsafeTlas { blas, tlas } => {
                     let blas_iter = blas.iter().map(|x| {
