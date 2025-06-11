@@ -39,6 +39,7 @@ var<storage, read_write> output: UniformCompatible;
 var<storage, read_write> output_arrays: StorageCompatible;
 
 fn int64_function(x: i64) -> i64 {
+   _ = private_variable;
    var val: i64 = i64(constant_variable);
    // A number too big for i32
    val += 31li - 1002003004005006li + -0x7fffffffffffffffli;

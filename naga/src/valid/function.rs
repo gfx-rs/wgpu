@@ -73,6 +73,8 @@ pub enum SubgroupError {
     UnsupportedOperation(super::SubgroupOperationSet),
     #[error("Unknown operation")]
     UnknownOperation,
+    #[error("Invocation ID must be a const-expression")]
+    InvalidInvocationIdExprType(Handle<crate::Expression>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -112,8 +114,6 @@ pub enum FunctionError {
         name: String,
         space: crate::AddressSpace,
     },
-    #[error("There are instructions after `return`/`break`/`continue`")]
-    InstructionsAfterReturn,
     #[error("The `break` is used outside of a `loop` or `switch` context")]
     BreakOutsideOfLoopOrSwitch,
     #[error("The `continue` is used outside of a `loop` context")]
@@ -234,7 +234,6 @@ bitflags::bitflags! {
 
 struct BlockInfo {
     stages: super::ShaderStages,
-    finished: bool,
 }
 
 struct BlockContext<'a> {
@@ -248,6 +247,7 @@ struct BlockContext<'a> {
     special_types: &'a crate::SpecialTypes,
     prev_infos: &'a [FunctionInfo],
     return_type: Option<Handle<crate::Type>>,
+    local_expr_kind: &'a crate::proc::ExpressionKindTracker,
 }
 
 impl<'a> BlockContext<'a> {
@@ -256,6 +256,7 @@ impl<'a> BlockContext<'a> {
         module: &'a crate::Module,
         info: &'a FunctionInfo,
         prev_infos: &'a [FunctionInfo],
+        local_expr_kind: &'a crate::proc::ExpressionKindTracker,
     ) -> Self {
         Self {
             abilities: ControlFlowAbility::RETURN,
@@ -268,6 +269,7 @@ impl<'a> BlockContext<'a> {
             special_types: &module.special_types,
             prev_infos,
             return_type: fun.result.as_ref().map(|fr| fr.ty),
+            local_expr_kind,
         }
     }
 
@@ -705,7 +707,8 @@ impl super::Validator {
             | crate::GatherMode::Shuffle(index)
             | crate::GatherMode::ShuffleDown(index)
             | crate::GatherMode::ShuffleUp(index)
-            | crate::GatherMode::ShuffleXor(index) => {
+            | crate::GatherMode::ShuffleXor(index)
+            | crate::GatherMode::QuadBroadcast(index) => {
                 let index_ty = context.resolve_type_inner(index, &self.valid_expression_set)?;
                 match *index_ty {
                     crate::TypeInner::Scalar(crate::Scalar::U32) => {}
@@ -720,6 +723,17 @@ impl super::Validator {
                     }
                 }
             }
+            crate::GatherMode::QuadSwap(_) => {}
+        }
+        match *mode {
+            crate::GatherMode::Broadcast(index) | crate::GatherMode::QuadBroadcast(index) => {
+                if !context.local_expr_kind.is_const(index) {
+                    return Err(SubgroupError::InvalidInvocationIdExprType(index)
+                        .with_span_handle(index, context.expressions)
+                        .into_other());
+                }
+            }
+            _ => {}
         }
         let argument_inner = context.resolve_type_inner(argument, &self.valid_expression_set)?;
         if !matches!(*argument_inner,
@@ -751,13 +765,8 @@ impl super::Validator {
         context: &BlockContext,
     ) -> Result<BlockInfo, WithSpan<FunctionError>> {
         use crate::{AddressSpace, Statement as S, TypeInner as Ti};
-        let mut finished = false;
         let mut stages = super::ShaderStages::all();
         for (statement, &span) in statements.span_iter() {
-            if finished {
-                return Err(FunctionError::InstructionsAfterReturn
-                    .with_span_static(span, "instructions after return"));
-            }
             match *statement {
                 S::Emit(ref range) => {
                     for handle in range.clone() {
@@ -806,7 +815,6 @@ impl super::Validator {
                 S::Block(ref block) => {
                     let info = self.validate_block(block, context)?;
                     stages &= info.stages;
-                    finished = info.finished;
                 }
                 S::If {
                     condition,
@@ -949,14 +957,12 @@ impl super::Validator {
                         return Err(FunctionError::BreakOutsideOfLoopOrSwitch
                             .with_span_static(span, "invalid break"));
                     }
-                    finished = true;
                 }
                 S::Continue => {
                     if !context.abilities.contains(ControlFlowAbility::CONTINUE) {
                         return Err(FunctionError::ContinueOutsideOfLoop
                             .with_span_static(span, "invalid continue"));
                     }
-                    finished = true;
                 }
                 S::Return { value } => {
                     if !context.abilities.contains(ControlFlowAbility::RETURN) {
@@ -996,11 +1002,9 @@ impl super::Validator {
                             .with_span_static(span, "invalid return"));
                         }
                     }
-                    finished = true;
                 }
                 S::Kill => {
                     stages &= super::ShaderStages::FRAGMENT;
-                    finished = true;
                 }
                 S::Barrier(barrier) => {
                     stages &= super::ShaderStages::COMPUTE;
@@ -1618,7 +1622,7 @@ impl super::Validator {
                 }
             }
         }
-        Ok(BlockInfo { stages, finished })
+        Ok(BlockInfo { stages })
     }
 
     fn validate_block(
@@ -1772,7 +1776,7 @@ impl super::Validator {
             let stages = self
                 .validate_block(
                     &fun.body,
-                    &BlockContext::new(fun, module, &info, &mod_info.functions),
+                    &BlockContext::new(fun, module, &info, &mod_info.functions, &local_expr_kind),
                 )?
                 .stages;
             info.available_stages &= stages;

@@ -272,6 +272,42 @@ pub fn compact(module: &mut crate::Module) {
             module_map.global_expressions.adjust(init);
         }
     }
+    // Adjust doc comments
+    if let Some(ref mut doc_comments) = module.doc_comments {
+        let crate::DocComments {
+            module: _,
+            types: ref mut doc_comments_for_types,
+            struct_members: ref mut doc_comments_for_struct_members,
+            entry_points: _,
+            functions: _,
+            constants: ref mut doc_comments_for_constants,
+            global_variables: _,
+        } = **doc_comments;
+        log::trace!("adjusting doc comments for types");
+        for (mut ty, doc_comment) in core::mem::take(doc_comments_for_types) {
+            if !module_map.types.used(ty) {
+                continue;
+            }
+            module_map.types.adjust(&mut ty);
+            doc_comments_for_types.insert(ty, doc_comment);
+        }
+        log::trace!("adjusting doc comments for struct members");
+        for ((mut ty, index), doc_comment) in core::mem::take(doc_comments_for_struct_members) {
+            if !module_map.types.used(ty) {
+                continue;
+            }
+            module_map.types.adjust(&mut ty);
+            doc_comments_for_struct_members.insert((ty, index), doc_comment);
+        }
+        log::trace!("adjusting doc comments for constants");
+        for (mut constant, doc_comment) in core::mem::take(doc_comments_for_constants) {
+            if !module_map.constants.used(constant) {
+                continue;
+            }
+            module_map.constants.adjust(&mut constant);
+            doc_comments_for_constants.insert(constant, doc_comment);
+        }
+    }
 
     // Temporary storage to help us reuse allocations of existing
     // named expression tables.

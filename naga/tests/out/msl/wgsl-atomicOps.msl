@@ -11,6 +11,64 @@ struct Struct {
     metal::atomic_uint atomic_scalar;
     type_2 atomic_arr;
 };
+struct _atomic_compare_exchange_resultUint4_ {
+    uint old_value;
+    bool exchanged;
+};
+struct _atomic_compare_exchange_resultSint4_ {
+    int old_value;
+    bool exchanged;
+};
+
+template <typename A>
+_atomic_compare_exchange_resultUint4_ naga_atomic_compare_exchange_weak_explicit(
+    device A *atomic_ptr,
+    uint cmp,
+    uint v
+) {
+    bool swapped = metal::atomic_compare_exchange_weak_explicit(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return _atomic_compare_exchange_resultUint4_{cmp, swapped};
+}
+template <typename A>
+_atomic_compare_exchange_resultUint4_ naga_atomic_compare_exchange_weak_explicit(
+    threadgroup A *atomic_ptr,
+    uint cmp,
+    uint v
+) {
+    bool swapped = metal::atomic_compare_exchange_weak_explicit(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return _atomic_compare_exchange_resultUint4_{cmp, swapped};
+}
+
+template <typename A>
+_atomic_compare_exchange_resultSint4_ naga_atomic_compare_exchange_weak_explicit(
+    device A *atomic_ptr,
+    int cmp,
+    int v
+) {
+    bool swapped = metal::atomic_compare_exchange_weak_explicit(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return _atomic_compare_exchange_resultSint4_{cmp, swapped};
+}
+template <typename A>
+_atomic_compare_exchange_resultSint4_ naga_atomic_compare_exchange_weak_explicit(
+    threadgroup A *atomic_ptr,
+    int cmp,
+    int v
+) {
+    bool swapped = metal::atomic_compare_exchange_weak_explicit(
+        atomic_ptr, &cmp, v,
+        metal::memory_order_relaxed, metal::memory_order_relaxed
+    );
+    return _atomic_compare_exchange_resultSint4_{cmp, swapped};
+}
 
 struct cs_mainInput {
 };
@@ -122,5 +180,13 @@ kernel void cs_main(
     int _e295 = metal::atomic_exchange_explicit(&workgroup_atomic_arr.inner[1], 1, metal::memory_order_relaxed);
     uint _e299 = metal::atomic_exchange_explicit(&workgroup_struct.atomic_scalar, 1u, metal::memory_order_relaxed);
     int _e304 = metal::atomic_exchange_explicit(&workgroup_struct.atomic_arr.inner[1], 1, metal::memory_order_relaxed);
+    _atomic_compare_exchange_resultUint4_ _e308 = naga_atomic_compare_exchange_weak_explicit(&storage_atomic_scalar, 1u, 2u);
+    _atomic_compare_exchange_resultSint4_ _e313 = naga_atomic_compare_exchange_weak_explicit(&storage_atomic_arr.inner[1], 1, 2);
+    _atomic_compare_exchange_resultUint4_ _e318 = naga_atomic_compare_exchange_weak_explicit(&storage_struct.atomic_scalar, 1u, 2u);
+    _atomic_compare_exchange_resultSint4_ _e324 = naga_atomic_compare_exchange_weak_explicit(&storage_struct.atomic_arr.inner[1], 1, 2);
+    _atomic_compare_exchange_resultUint4_ _e328 = naga_atomic_compare_exchange_weak_explicit(&workgroup_atomic_scalar, 1u, 2u);
+    _atomic_compare_exchange_resultSint4_ _e333 = naga_atomic_compare_exchange_weak_explicit(&workgroup_atomic_arr.inner[1], 1, 2);
+    _atomic_compare_exchange_resultUint4_ _e338 = naga_atomic_compare_exchange_weak_explicit(&workgroup_struct.atomic_scalar, 1u, 2u);
+    _atomic_compare_exchange_resultSint4_ _e344 = naga_atomic_compare_exchange_weak_explicit(&workgroup_struct.atomic_arr.inner[1], 1, 2);
     return;
 }

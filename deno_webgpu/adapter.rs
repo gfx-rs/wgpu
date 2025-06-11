@@ -126,7 +126,9 @@ impl GPUAdapter {
         let required_limits =
             serde_json::from_value(serde_json::to_value(descriptor.required_limits)?)?;
 
-        let webgpu_trace = std::env::var_os("DENO_WEBGPU_TRACE").unwrap();
+        let trace = std::env::var_os("DENO_WEBGPU_TRACE")
+            .map(|path| wgpu_types::Trace::Directory(std::path::PathBuf::from(path)))
+            .unwrap_or_default();
 
         let wgpu_descriptor = wgpu_types::DeviceDescriptor {
             label: crate::transform_label(descriptor.label.clone()),
@@ -135,7 +137,7 @@ impl GPUAdapter {
             ),
             required_limits,
             memory_hints: Default::default(),
-            trace: wgpu_types::Trace::Directory(std::path::PathBuf::from(webgpu_trace)),
+            trace,
         };
 
         let (device, queue) =

@@ -50,7 +50,11 @@ use crate::device::trace::Command as TraceCommand;
 
 const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 
-/// The current state of a [`CommandBuffer`].
+/// The current state of a command or pass encoder.
+///
+/// In the WebGPU spec, the state of an encoder (open, locked, or ended) is
+/// orthogonal to the validity of the encoder. However, this enum does not
+/// represent the state of an invalid encoder.
 pub(crate) enum CommandEncoderStatus {
     /// Ready to record commands. An encoder's initial state.
     ///
@@ -70,9 +74,9 @@ pub(crate) enum CommandEncoderStatus {
     /// This state is entered when a render/compute pass is created,
     /// and exited when the pass is ended.
     ///
-    /// As long as the command encoder is locked, any command building operation on it will fail
-    /// and put the encoder into the [`Self::Error`] state.
-    /// See <https://www.w3.org/TR/webgpu/#encoder-state-locked>
+    /// As long as the command encoder is locked, any command building operation
+    /// on it will fail and put the encoder into the [`Self::Error`] state. See
+    /// <https://www.w3.org/TR/webgpu/#encoder-state-locked>
     Locked(CommandBufferMutable),
 
     /// Command recording is complete, and the buffer is ready for submission.
@@ -80,56 +84,72 @@ pub(crate) enum CommandEncoderStatus {
     /// [`Global::command_encoder_finish`] transitions a
     /// `CommandBuffer` from the `Recording` state into this state.
     ///
-    /// [`Global::queue_submit`] drops command buffers unless they are
+    /// [`Global::queue_submit`] requires that command buffers are
     /// in this state.
+    ///
+    /// This corresponds to WebGPU's "ended" state.
+    /// See <https://www.w3.org/TR/webgpu/#encoder-state-ended>
     Finished(CommandBufferMutable),
 
-    /// An error occurred while recording a compute or render pass.
+    /// The command encoder is invalid.
     ///
-    /// When a `CommandEncoder` is left in this state, we have also
-    /// returned an error result from the function that encountered
-    /// the problem. Future attempts to use the encoder (for example,
-    /// calls to [`Self::record`]) will also return errors.
-    Error,
+    /// The error that caused the invalidation is stored here, and will
+    /// be raised by `CommandEncoder.finish()`.
+    Error(CommandEncoderError),
+
+    /// Temporary state used internally by methods on `CommandEncoderStatus`.
+    /// Encoder should never be left in this state.
+    Transitioning,
 }
 
 impl CommandEncoderStatus {
     /// Checks that the encoder is in the [`Self::Recording`] state.
-    pub(crate) fn record(&mut self) -> Result<RecordingGuard<'_>, CommandEncoderError> {
+    pub(crate) fn record(&mut self) -> Result<RecordingGuard<'_>, EncoderStateError> {
         match self {
             Self::Recording(_) => Ok(RecordingGuard { inner: self }),
-            Self::Locked(_) => {
-                *self = Self::Error;
-                Err(CommandEncoderError::Locked)
-            }
-            Self::Finished(_) => Err(CommandEncoderError::NotRecording),
-            Self::Error => Err(CommandEncoderError::Invalid),
+            Self::Locked(_) => Err(self.invalidate(EncoderStateError::Locked)),
+            Self::Finished(_) => Err(EncoderStateError::Ended),
+            Self::Error(_) => Err(EncoderStateError::Invalid),
+            Self::Transitioning => unreachable!(),
         }
     }
 
     #[cfg(feature = "trace")]
-    fn get_inner(&mut self) -> Result<&mut CommandBufferMutable, CommandEncoderError> {
+    fn get_inner(&mut self) -> &mut CommandBufferMutable {
         match self {
-            Self::Locked(inner) | Self::Finished(inner) | Self::Recording(inner) => Ok(inner),
-            Self::Error => Err(CommandEncoderError::Invalid),
+            Self::Locked(inner) | Self::Finished(inner) | Self::Recording(inner) => inner,
+            // This is unreachable because this function is only used when
+            // playing back a recorded trace. If only to avoid having to
+            // implement serialization for all the error types, we don't support
+            // storing the errors in a trace.
+            Self::Error(_) => unreachable!("passes in a trace do not store errors"),
+            Self::Transitioning => unreachable!(),
         }
     }
 
     /// Locks the encoder by putting it in the [`Self::Locked`] state.
     ///
-    /// Call [`Self::unlock_encoder`] to put the [`CommandBuffer`] back into the [`Self::Recording`] state.
-    fn lock_encoder(&mut self) -> Result<(), CommandEncoderError> {
-        match mem::replace(self, Self::Error) {
+    /// Call [`Self::unlock_encoder`] to put the [`CommandBuffer`] back into the
+    /// [`Self::Recording`] state.
+    fn lock_encoder(&mut self) -> Result<(), EncoderStateError> {
+        match mem::replace(self, Self::Transitioning) {
             Self::Recording(inner) => {
                 *self = Self::Locked(inner);
                 Ok(())
             }
-            Self::Finished(inner) => {
-                *self = Self::Finished(inner);
-                Err(CommandEncoderError::NotRecording)
+            st @ Self::Finished(_) => {
+                // Attempting to open a pass on a finished encoder raises a
+                // validation error but does not invalidate the encoder. This is
+                // related to https://github.com/gpuweb/gpuweb/issues/5207.
+                *self = st;
+                Err(EncoderStateError::Ended)
             }
-            Self::Locked(_) => Err(CommandEncoderError::Locked),
-            Self::Error => Err(CommandEncoderError::Invalid),
+            Self::Locked(_) => Err(self.invalidate(EncoderStateError::Locked)),
+            st @ Self::Error(_) => {
+                *self = st;
+                Err(EncoderStateError::Invalid)
+            }
+            Self::Transitioning => unreachable!(),
         }
     }
 
@@ -138,26 +158,33 @@ impl CommandEncoderStatus {
     /// This function is the unlocking counterpart to [`Self::lock_encoder`].
     ///
     /// It is only valid to call this function if the encoder is in the [`Self::Locked`] state.
-    fn unlock_encoder(&mut self) -> Result<RecordingGuard<'_>, CommandEncoderError> {
-        match mem::replace(self, Self::Error) {
+    fn unlock_encoder(&mut self) -> Result<RecordingGuard<'_>, EncoderStateError> {
+        match mem::replace(self, Self::Transitioning) {
             Self::Locked(inner) => {
                 *self = Self::Recording(inner);
                 Ok(RecordingGuard { inner: self })
             }
-            Self::Finished(inner) => {
-                *self = Self::Finished(inner);
-                Err(CommandEncoderError::NotRecording)
+            st @ Self::Finished(_) => {
+                // Attempting to end a pass on a finished encoder raises a
+                // validation error but does not invalidate the encoder. This is
+                // related to https://github.com/gpuweb/gpuweb/issues/5207.
+                *self = st;
+                Err(EncoderStateError::Ended)
             }
-            Self::Recording(_) => Err(CommandEncoderError::Invalid),
-            Self::Error => Err(CommandEncoderError::Invalid),
+            Self::Recording(_) => Err(self.invalidate(EncoderStateError::Unlocked)),
+            st @ Self::Error(_) => {
+                *self = st;
+                Err(EncoderStateError::Invalid)
+            }
+            Self::Transitioning => unreachable!(),
         }
     }
 
     fn finish(&mut self) -> Result<(), CommandEncoderError> {
-        match mem::replace(self, Self::Error) {
+        match mem::replace(self, Self::Transitioning) {
             Self::Recording(mut inner) => {
                 if let Err(e) = inner.encoder.close_if_open() {
-                    Err(e.into())
+                    Err(self.invalidate(e.into()))
                 } else {
                     *self = Self::Finished(inner);
                     // Note: if we want to stop tracking the swapchain texture view,
@@ -165,13 +192,21 @@ impl CommandEncoderStatus {
                     Ok(())
                 }
             }
-            Self::Finished(inner) => {
-                *self = Self::Finished(inner);
-                Err(CommandEncoderError::NotRecording)
-            }
-            Self::Locked(_) => Err(CommandEncoderError::Locked),
-            Self::Error => Err(CommandEncoderError::Invalid),
+            Self::Finished(_) => Err(self.invalidate(EncoderStateError::Ended.into())),
+            Self::Locked(_) => Err(self.invalidate(EncoderStateError::Locked.into())),
+            Self::Error(err) => Err(self.invalidate(err)),
+            Self::Transitioning => unreachable!(),
         }
+    }
+
+    // Invalidate the command encoder and store the error `err` causing the
+    // invalidation for diagnostic purposes.
+    //
+    // Since we do not track the state of an invalid encoder, it is not
+    // necessary to unlock an encoder that has been invalidated.
+    fn invalidate<E: Clone + Into<CommandEncoderError>>(&mut self, err: E) -> E {
+        *self = Self::Error(err.clone().into());
+        err
     }
 }
 
@@ -199,7 +234,11 @@ impl<'a> RecordingGuard<'a> {
 
 impl<'a> Drop for RecordingGuard<'a> {
     fn drop(&mut self) {
-        *self.inner = CommandEncoderStatus::Error;
+        if matches!(*self.inner, CommandEncoderStatus::Error(_)) {
+            // Don't overwrite an error that is already present.
+            return;
+        }
+        self.inner.invalidate(EncoderStateError::Invalid);
     }
 }
 
@@ -567,12 +606,16 @@ impl CommandBuffer {
         }
     }
 
-    pub(crate) fn new_invalid(device: &Arc<Device>, label: &Label) -> Self {
+    pub(crate) fn new_invalid(
+        device: &Arc<Device>,
+        label: &Label,
+        err: CommandEncoderError,
+    ) -> Self {
         CommandBuffer {
             device: device.clone(),
             support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
             label: label.to_string(),
-            data: Mutex::new(rank::COMMAND_BUFFER_DATA, CommandEncoderStatus::Error),
+            data: Mutex::new(rank::COMMAND_BUFFER_DATA, CommandEncoderStatus::Error(err)),
         }
     }
 
@@ -655,12 +698,16 @@ impl CommandBuffer {
 
 impl CommandBuffer {
     pub fn take_finished<'a>(&'a self) -> Result<CommandBufferMutable, InvalidResourceError> {
-        let status = mem::replace(&mut *self.data.lock(), CommandEncoderStatus::Error);
-        match status {
-            CommandEncoderStatus::Finished(command_buffer_mutable) => Ok(command_buffer_mutable),
-            CommandEncoderStatus::Recording(_)
-            | CommandEncoderStatus::Locked(_)
-            | CommandEncoderStatus::Error => Err(InvalidResourceError(self.error_ident())),
+        use CommandEncoderStatus as St;
+        match mem::replace(
+            &mut *self.data.lock(),
+            CommandEncoderStatus::Error(EncoderStateError::Submitted.into()),
+        ) {
+            St::Finished(command_buffer_mutable) => Ok(command_buffer_mutable),
+            St::Recording(_) | St::Locked(_) | St::Error(_) => {
+                Err(InvalidResourceError(self.error_ident()))
+            }
+            St::Transitioning => unreachable!(),
         }
     }
 }
@@ -721,18 +768,55 @@ impl<C: Clone> BasePass<C> {
     }
 }
 
+/// Errors related to the state of a command or pass encoder.
+///
+/// The exact behavior of these errors may change based on the resolution of
+/// <https://github.com/gpuweb/gpuweb/issues/5207>.
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum EncoderStateError {
+    /// Used internally by wgpu functions to indicate the encoder already
+    /// contained an error. This variant should usually not be seen by users of
+    /// the API, since an effort should be made to provide the caller with a
+    /// more specific reason for the encoder being invalid.
+    #[error("Encoder is invalid")]
+    Invalid,
+
+    /// Returned immediately when an attempt is made to encode a command using
+    /// an encoder that has already finished.
+    #[error("Encoding must not have ended")]
+    Ended,
+
+    /// Returned by a subsequent call to `encoder.finish()`, if there was an
+    /// attempt to open a second pass on the encoder while it was locked for
+    /// a first pass (i.e. the first pass was still open).
+    ///
+    /// Note: only command encoders can be locked (not pass encoders).
+    #[error("Encoder is locked by a previously created render/compute pass. Before recording any new commands, the pass must be ended.")]
+    Locked,
+
+    /// Returned when attempting to end a pass if the parent encoder is not
+    /// locked. This can only happen if pass begin/end calls are mismatched.
+    #[error(
+        "Encoder is not currently locked. A pass can only be ended while the encoder is locked."
+    )]
+    Unlocked,
+
+    /// The command buffer has already been submitted.
+    ///
+    /// Although command encoders and command buffers are distinct WebGPU
+    /// objects, we use `CommandEncoderStatus` for both.
+    #[error("This command buffer has already been submitted.")]
+    Submitted,
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CommandEncoderError {
-    #[error("Command encoder is invalid")]
-    Invalid,
-    #[error("Command encoder must be active")]
-    NotRecording,
+    #[error(transparent)]
+    State(#[from] EncoderStateError),
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Command encoder is locked by a previously created render/compute pass. Before recording any new commands, the pass must be ended.")]
-    Locked,
-
     #[error(transparent)]
     InvalidColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
@@ -1016,8 +1100,17 @@ impl Default for BindGroupStateChange {
     }
 }
 
-trait MapPassErr<T, O> {
-    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, O>;
+trait MapPassErr<T> {
+    fn map_pass_err(self, scope: PassErrorScope) -> T;
+}
+
+impl<T, E, F> MapPassErr<Result<T, F>> for Result<T, E>
+where
+    E: MapPassErr<F>,
+{
+    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, F> {
+        self.map_err(|err| err.map_pass_err(scope))
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

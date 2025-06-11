@@ -2,9 +2,7 @@
 use alloc::vec::Vec;
 use core::future::Future;
 
-use parking_lot::Mutex;
-
-use crate::{dispatch::InstanceInterface, *};
+use crate::{dispatch::InstanceInterface, util::Mutex, *};
 
 bitflags::bitflags! {
     /// WGSL language extensions.
@@ -303,7 +301,7 @@ impl Instance {
                 surface
             }?,
 
-            #[cfg(any(webgpu, webgl))]
+            #[cfg(web)]
             SurfaceTarget::Canvas(canvas) => {
                 handle_source = None;
 
@@ -322,7 +320,7 @@ impl Instance {
                 }?
             }
 
-            #[cfg(any(webgpu, webgl))]
+            #[cfg(web)]
             SurfaceTarget::OffscreenCanvas(canvas) => {
                 handle_source = None;
 

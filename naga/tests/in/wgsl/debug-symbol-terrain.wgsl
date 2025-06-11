@@ -186,7 +186,7 @@ fn gen_terrain_fragment(in: GenVertexOutput) -> GenFragmentOutput {
     let v = terrain_vertex(p, gen_data.min_max_height);
 
     var vert_component: f32 = 0.;
-    
+
     switch comp_index {
         case 0u: { vert_component = v.position.x; }
         case 1u: { vert_component = v.position.y; }
@@ -275,6 +275,11 @@ fn color23(p: vec2<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    _ = t_diffuse;
+    _ = s_diffuse;
+    _ = t_normal;
+    _ = s_normal;
+
     color23(vec2(1, 2));
 
     var color = smoothstep(vec3<f32>(0.0), vec3<f32>(0.1), fract(in.world_pos));

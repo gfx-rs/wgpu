@@ -29,7 +29,16 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
-default = ["dx12", "metal", "gles", "vulkan", "wgsl", "webgpu"]
+default = [
+    "std",
+    "parking_lot",
+    "dx12",
+    "metal",
+    "gles",
+    "vulkan",
+    "wgsl",
+    "webgpu",
+]
 
 #! ### Backends
 # --------------------------------------------------------------------
@@ -48,6 +57,7 @@ gles = ["wgpu-core?/gles"]
 
 ## Enables the WebGPU backend on WebAssembly.
 webgpu = [
+    "web",
     "naga?/wgsl-out",
     "dep:wasm-bindgen-futures",
     "web-sys/Document",
@@ -68,7 +78,7 @@ angle = ["wgpu-core?/angle"]
 vulkan-portability = ["wgpu-core?/vulkan-portability"]
 
 ## Enables the GLES backend on WebAssembly only.
-webgl = ["wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
+webgl = ["web", "wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
 
 ## Enables the noop backend for testing.
 ##
@@ -148,6 +158,26 @@ fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
 
+## Use web-specific libraries on WASM
+##
+## Those libraties (wasm-bindgen, web-sys, js-sys) can only be used when there is a JavaScript
+## context around the WASM VM, e.g., when the WASM binary is used in a browser.
+web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
+
+## Enables use of the standard library within `wgpu` and its dependencies.
+##
+## This can allow for better error reporting and for improved multithreading
+## support.
+std = ["raw-window-handle/std", "wgpu-types/std", "wgpu-core?/std"]
+
+## Uses `parking_lot` as the implementation for locking primitives.
+##
+## This is a recommended feature for most users and should only be disabled when
+## required, e.g., for `no_std` support.
+## If disabled, either `std::sync::Mutex` or `core::cell::RefCell` will be used,
+## based on whether `std` is enabled or not.
+parking_lot = ["dep:parking_lot"]
+
 #########################
 # Standard Dependencies #
 #########################
@@ -160,12 +190,13 @@ wgpu-types.workspace = true
 # Needed for both wgpu-core and webgpu
 arrayvec.workspace = true
 bitflags.workspace = true
+cfg-if.workspace = true
 document-features.workspace = true
 hashbrown.workspace = true
 log.workspace = true
-parking_lot.workspace = true
+parking_lot = { workspace = true, optional = true }
 profiling.workspace = true
-raw-window-handle = { workspace = true, features = ["std"] }
+raw-window-handle = { workspace = true, features = ["alloc"] }
 static_assertions.workspace = true
 
 ########################################
@@ -192,9 +223,9 @@ smallvec.workspace = true
 ###############
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 # Needed for all backends
-js-sys = { workspace = true, features = ["default"] }
-wasm-bindgen.workspace = true
-web-sys = { workspace = true, features = [
+js-sys = { workspace = true, optional = true, features = ["default"] }
+wasm-bindgen = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true, features = [
     "HtmlCanvasElement",
     "OffscreenCanvas",
 ] }

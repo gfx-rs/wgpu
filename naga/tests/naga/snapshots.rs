@@ -80,6 +80,12 @@ where
 
 #[derive(Default, serde::Deserialize)]
 #[serde(default)]
+struct WgslInParameters {
+    parse_doc_comments: bool,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct SpirvInParameters {
     adjust_coordinate_space: bool,
 }
@@ -116,6 +122,10 @@ struct FragmentModule {
 struct Parameters {
     // -- GOD MODE --
     god_mode: bool,
+
+    // -- wgsl-in options --
+    #[serde(rename = "wgsl-in")]
+    wgsl_in: WgslInParameters,
 
     // -- spirv-in options --
     #[serde(rename = "spv-in")]
@@ -805,7 +815,13 @@ fn convert_snapshots_wgsl() {
         let source = input.read_source();
         // crlf will make the large split output different on different platform
         let source = source.replace('\r', "");
-        match naga::front::wgsl::parse_str(&source) {
+
+        let params = input.read_parameters();
+        let WgslInParameters { parse_doc_comments } = params.wgsl_in;
+
+        let options = naga::front::wgsl::Options { parse_doc_comments };
+        let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
+        match frontend.parse(&source) {
             Ok(mut module) => check_targets(&input, &mut module, Some(&source)),
             Err(e) => panic!(
                 "{}",

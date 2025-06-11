@@ -1,5 +1,4 @@
 use core::{error, fmt};
-use std::thread;
 
 use crate::*;
 
@@ -48,7 +47,7 @@ impl SurfaceTexture {
 
 impl Drop for SurfaceTexture {
     fn drop(&mut self) {
-        if !self.presented && !thread::panicking() {
+        if !self.presented && !thread_panicking() {
             self.detail.texture_discard();
         }
     }
@@ -83,3 +82,22 @@ impl fmt::Display for SurfaceError {
 }
 
 impl error::Error for SurfaceError {}
+
+fn thread_panicking() -> bool {
+    cfg_if::cfg_if! {
+        if #[cfg(std)] {
+            std::thread::panicking()
+        } else if #[cfg(panic = "abort")] {
+            // If `panic = "abort"` then a thread _cannot_ be observably panicking by definition.
+            false
+        } else {
+            // TODO: This is potentially overly pessimistic; it may be appropriate to instead allow a
+            // texture to not be discarded.
+            // Alternatively, this could _also_ be a `panic!`, since we only care if the thread is panicking
+            // when the surface has not been presented.
+            compile_error!(
+                "cannot determine if a thread is panicking without either `panic = \"abort\"` or `std`"
+            );
+        }
+    }
+}

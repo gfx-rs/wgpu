@@ -16,7 +16,7 @@ env:
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
   #
   # We don't include the 4th version number, as it's not used in any URL.
-  VULKAN_SDK_VERSION: "1.4.309"
+  VULKAN_SDK_VERSION: "1.4.313"
 
   # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
   #

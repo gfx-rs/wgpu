@@ -103,5 +103,13 @@ fn cs_main(@builtin(local_invocation_id) id: vec3<u32>) {
     let _e295 = atomicExchange((&workgroup_atomic_arr[1]), 1i);
     let _e299 = atomicExchange((&workgroup_struct.atomic_scalar), 1u);
     let _e304 = atomicExchange((&workgroup_struct.atomic_arr[1]), 1i);
+    let _e308 = atomicCompareExchangeWeak((&storage_atomic_scalar), 1u, 2u);
+    let _e313 = atomicCompareExchangeWeak((&storage_atomic_arr[1]), 1i, 2i);
+    let _e318 = atomicCompareExchangeWeak((&storage_struct.atomic_scalar), 1u, 2u);
+    let _e324 = atomicCompareExchangeWeak((&storage_struct.atomic_arr[1]), 1i, 2i);
+    let _e328 = atomicCompareExchangeWeak((&workgroup_atomic_scalar), 1u, 2u);
+    let _e333 = atomicCompareExchangeWeak((&workgroup_atomic_arr[1]), 1i, 2i);
+    let _e338 = atomicCompareExchangeWeak((&workgroup_struct.atomic_scalar), 1u, 2u);
+    let _e344 = atomicCompareExchangeWeak((&workgroup_struct.atomic_arr[1]), 1i, 2i);
     return;
 }

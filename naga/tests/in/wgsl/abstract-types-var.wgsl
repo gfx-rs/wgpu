@@ -80,6 +80,76 @@ var<private> iavipai = array(vec3(1));
 var<private> iavfpai = array(vec3(1));
 var<private> iavfpaf = array(vec3(1.0));
 
+fn globals() {
+    _ = xvipaiai;
+    _ = xvupaiai;
+    _ = xvfpaiai;
+    _ = xvfpafaf;
+    _ = xvfpaiaf;
+
+    _ = xvupuai;
+    _ = xvupaiu;
+
+    _ = xvuuai;
+    _ = xvuaiu;
+
+    _ = xvip____;
+    _ = xvup____;
+    _ = xvfp____;
+    _ = xmfp____;
+
+    _ = xmfpaiaiaiai;
+    _ = xmfpafaiaiai;
+    _ = xmfpaiafaiai;
+    _ = xmfpaiaiafai;
+    _ = xmfpaiaiaiaf;
+
+    _ = xvispai;
+    _ = xvfspaf;
+    _ = xvis_ai;
+    _ = xvus_ai;
+    _ = xvfs_ai;
+    _ = xvfs_af;
+
+    _ = xafafaf;
+    _ = xafaiai;
+
+    _ = xaipaiai;
+    _ = xaupaiai;
+    _ = xafpaiaf;
+    _ = xafpafai;
+    _ = xafpafaf;
+
+    _ = xavipai;
+    _ = xavfpai;
+    _ = xavfpaf;
+
+    // Construction with splats
+    _ = xvisai;
+    _ = xvusai;
+    _ = xvfsai;
+    _ = xvfsaf;
+
+    _ = ivispai;
+    _ = ivfspaf;
+    _ = ivis_ai;
+    _ = ivus_ai;
+    _ = ivfs_ai;
+    _ = ivfs_af;
+
+    _ = iafafaf;
+    _ = iafaiai;
+
+    _ = iaipaiai;
+    _ = iafpafaf;
+    _ = iafpaiaf;
+    _ = iafpafai;
+
+    _ = iavipai;
+    _ = iavfpai;
+    _ = iavfpaf;
+}
+
 fn all_constant_arguments() {
     var xvipaiai: vec2<i32> = vec2(42, 43);
     var xvupaiai: vec2<u32> = vec2(44, 45);
@@ -278,6 +348,7 @@ fn mixed_constant_and_runtime_arguments() {
 
 @compute @workgroup_size(1)
 fn main() {
+    globals();
     all_constant_arguments();
     mixed_constant_and_runtime_arguments();
 }

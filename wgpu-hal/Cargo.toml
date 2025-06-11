@@ -81,6 +81,7 @@ metal = [
     "dep:log",
     "dep:metal",
     "dep:objc",
+    "dep:parking_lot",
     "dep:profiling",
 ]
 vulkan = [
@@ -96,6 +97,7 @@ vulkan = [
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:smallvec",
     "dep:windows",
@@ -115,9 +117,11 @@ gles = [
     "dep:log",
     "dep:ndk-sys",
     "dep:objc",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:wasm-bindgen",
     "dep:web-sys",
+    "wgpu-types/web",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_System_LibraryLoader",
@@ -133,6 +137,7 @@ dx12 = [
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:range-alloc",
     "dep:windows-core",
@@ -174,6 +179,8 @@ device_lost_panic = []
 #
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
+# Tracks validation errors in a `VALIDATION_CANARY` static.
+validation_canary = ["dep:parking_lot"]
 
 ###################
 ### Workarounds ###
@@ -196,12 +203,12 @@ required-features = ["gles"]
 
 [dependencies]
 naga.workspace = true
-wgpu-types.workspace = true
+wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
 raw-window-handle.workspace = true
-parking_lot.workspace = true
+parking_lot = { workspace = true, optional = true }
 thiserror.workspace = true
 
 # Target agnostic dependencies used only in backends.

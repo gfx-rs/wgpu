@@ -1,7 +1,13 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::time::Duration;
+
 use deno_core::cppgc::Ptr;
+use deno_core::futures::channel::oneshot;
 use deno_core::op2;
+use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
@@ -21,6 +27,7 @@ pub struct GPUQueue {
     pub label: String,
 
     pub id: wgpu_core::id::QueueId,
+    pub device: wgpu_core::id::DeviceId,
 }
 
 impl Drop for GPUQueue {
@@ -47,8 +54,9 @@ impl GPUQueue {
     #[required(1)]
     fn submit(
         &self,
+        scope: &mut v8::HandleScope,
         #[webidl] command_buffers: Vec<Ptr<GPUCommandBuffer>>,
-    ) -> Result<(), JsErrorBox> {
+    ) -> Result<v8::Local<v8::Value>, JsErrorBox> {
         let ids = command_buffers
             .into_iter()
             .enumerate()
@@ -69,14 +77,46 @@ impl GPUQueue {
             self.error_handler.push_error(Some(err));
         }
 
-        Ok(())
+        Ok(v8::undefined(scope).into())
     }
 
     #[async_method]
     async fn on_submitted_work_done(&self) -> Result<(), JsErrorBox> {
-        Err(JsErrorBox::generic(
-            "This operation is currently not supported",
-        ))
+        let (sender, receiver) = oneshot::channel::<()>();
+
+        let callback = Box::new(move || {
+            sender.send(()).unwrap();
+        });
+
+        self.instance
+            .queue_on_submitted_work_done(self.id, callback);
+
+        let done = Rc::new(RefCell::new(false));
+        let done_ = done.clone();
+        let device_poll_fut = async move {
+            while !*done.borrow() {
+                {
+                    self.instance
+                        .device_poll(self.device, wgpu_types::PollType::wait())
+                        .unwrap();
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            Ok::<(), JsErrorBox>(())
+        };
+
+        let receiver_fut = async move {
+            receiver
+                .await
+                .map_err(|e| JsErrorBox::generic(e.to_string()))?;
+            let mut done = done_.borrow_mut();
+            *done = true;
+            Ok::<(), JsErrorBox>(())
+        };
+
+        tokio::try_join!(device_poll_fut, receiver_fut)?;
+
+        Ok(())
     }
 
     #[required(3)]

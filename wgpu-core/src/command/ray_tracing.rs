@@ -161,7 +161,7 @@ impl Global {
         #[cfg(feature = "trace")]
         let trace_tlas: Vec<TlasBuildEntry> = tlas_iter.collect();
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.data.lock().get_inner()?.commands {
+        if let Some(ref mut list) = cmd_buf.data.lock().get_inner().commands {
             list.push(
                 crate::device::trace::Command::BuildAccelerationStructuresUnsafeTlas {
                     blas: trace_blas.clone(),
@@ -444,7 +444,7 @@ impl Global {
             .collect();
 
         #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf.data.lock().get_inner()?.commands {
+        if let Some(ref mut list) = cmd_buf.data.lock().get_inner().commands {
             list.push(crate::device::trace::Command::BuildAccelerationStructures {
                 blas: trace_blas.clone(),
                 tlas: trace_tlas.clone(),

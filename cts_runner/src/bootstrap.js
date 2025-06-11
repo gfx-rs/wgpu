@@ -29,6 +29,7 @@ import * as performance from "ext:deno_web/15_performance.js";
 import { loadWebGPU } from "ext:deno_webgpu/00_init.js";
 import * as imageData from "ext:deno_web/16_image_data.js";
 const webgpu = loadWebGPU();
+webgpu.initGPU();
 
 // imports needed to pass module evaluation
 import "ext:deno_url/01_urlpattern.js";
@@ -203,6 +204,8 @@ const windowOrWorkerGlobalScope = {
   GPUBindGroupLayout: util.nonEnumerable(webgpu.GPUBindGroupLayout),
   GPUPipelineLayout: util.nonEnumerable(webgpu.GPUPipelineLayout),
   GPUBindGroup: util.nonEnumerable(webgpu.GPUBindGroup),
+  GPUCompilationInfo: util.nonEnumerable(webgpu.GPUCompilationInfo),
+  GPUCompilationMessage: util.nonEnumerable(webgpu.GPUCompilationMessage),
   GPUShaderModule: util.nonEnumerable(webgpu.GPUShaderModule),
   GPUShaderStage: util.nonEnumerable(webgpu.GPUShaderStage),
   GPUComputePipeline: util.nonEnumerable(webgpu.GPUComputePipeline),

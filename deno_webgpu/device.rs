@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use std::num::NonZeroU64;
 use std::rc::Rc;
 
+use deno_core::cppgc::make_cppgc_object;
 use deno_core::cppgc::SameObject;
 use deno_core::op2;
 use deno_core::v8;
@@ -33,6 +34,7 @@ use crate::error::GPUError;
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
+use crate::shader::GPUCompilationInfo;
 use crate::webidl::features_to_feature_names;
 use crate::Instance;
 
@@ -119,6 +121,7 @@ impl GPUDevice {
     fn queue(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
         self.queue_obj.get(scope, |_| GPUQueue {
             id: self.queue,
+            device: self.id,
             error_handler: self.error_handler.clone(),
             instance: self.instance.clone(),
             label: self.label.clone(),
@@ -134,15 +137,17 @@ impl GPUDevice {
 
     #[required(1)]
     #[cppgc]
-    fn create_buffer(
-        &self,
-        #[webidl] descriptor: super::buffer::GPUBufferDescriptor,
-    ) -> Result<GPUBuffer, JsErrorBox> {
+    fn create_buffer(&self, #[webidl] descriptor: super::buffer::GPUBufferDescriptor) -> GPUBuffer {
+        // Validation of the usage needs to happen on the device timeline, so
+        // don't raise an error immediately if it isn't valid. wgpu will
+        // reject `BufferUsages::empty()`.
+        let usage = wgpu_types::BufferUsages::from_bits(descriptor.usage)
+            .unwrap_or(wgpu_types::BufferUsages::empty());
+
         let wgpu_descriptor = wgpu_core::resource::BufferDescriptor {
             label: crate::transform_label(descriptor.label.clone()),
             size: descriptor.size,
-            usage: wgpu_types::BufferUsages::from_bits(descriptor.usage)
-                .ok_or_else(|| JsErrorBox::type_error("usage is not valid"))?,
+            usage,
             mapped_at_creation: descriptor.mapped_at_creation,
         };
 
@@ -152,7 +157,7 @@ impl GPUDevice {
 
         self.error_handler.push_error(err);
 
-        Ok(GPUBuffer {
+        GPUBuffer {
             instance: self.instance.clone(),
             error_handler: self.error_handler.clone(),
             id,
@@ -171,7 +176,7 @@ impl GPUDevice {
                 None
             }),
             mapped_js_buffers: RefCell::new(vec![]),
-        })
+        }
     }
 
     #[required(1)]
@@ -406,6 +411,7 @@ impl GPUDevice {
     #[cppgc]
     fn create_shader_module(
         &self,
+        scope: &mut v8::HandleScope<'_>,
         #[webidl] descriptor: super::shader::GPUShaderModuleDescriptor,
     ) -> GPUShaderModule {
         let wgpu_descriptor = wgpu_core::pipeline::ShaderModuleDescriptor {
@@ -416,16 +422,20 @@ impl GPUDevice {
         let (id, err) = self.instance.device_create_shader_module(
             self.id,
             &wgpu_descriptor,
-            wgpu_core::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(descriptor.code)),
+            wgpu_core::pipeline::ShaderModuleSource::Wgsl(Cow::Borrowed(&descriptor.code)),
             None,
         );
 
+        let compilation_info = GPUCompilationInfo::new(scope, err.iter(), &descriptor.code);
+        let compilation_info = make_cppgc_object(scope, compilation_info);
+        let compilation_info = v8::Global::new(scope, compilation_info);
         self.error_handler.push_error(err);
 
         GPUShaderModule {
             instance: self.instance.clone(),
             id,
             label: descriptor.label,
+            compilation_info,
         }
     }
 

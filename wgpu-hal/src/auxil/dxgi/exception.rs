@@ -1,7 +1,4 @@
-use alloc::{
-    borrow::Cow,
-    string::{String, ToString as _},
-};
+use alloc::{borrow::Cow, string::String};
 
 use parking_lot::Mutex;
 use windows::Win32::{Foundation, System::Diagnostics::Debug};
@@ -86,7 +83,10 @@ unsafe extern "system" fn output_debug_string_handler(
         log::log!(level, "{}", message);
     });
 
+    #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && level == log::Level::Error {
+        use alloc::string::ToString as _;
+
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());
     }

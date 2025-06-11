@@ -84,10 +84,11 @@ mod suballocation;
 mod types;
 mod view;
 
-use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
+use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
 use core::{ffi, fmt, mem, num::NonZeroU32, ops::Deref};
 
 use arrayvec::ArrayVec;
+use hashbrown::HashMap;
 use parking_lot::{Mutex, RwLock};
 use suballocation::Allocator;
 use windows::{
@@ -460,7 +461,7 @@ pub struct Instance {
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
 
 impl Instance {
@@ -592,7 +593,7 @@ pub struct Adapter {
     #[allow(unused)]
     workarounds: Workarounds,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
 
 unsafe impl Send for Adapter {}
@@ -655,7 +656,8 @@ pub struct Device {
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Allocator,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
+    shader_cache: Mutex<ShaderCache>,
     counters: Arc<wgt::HalCounters>,
 }
 
@@ -1077,6 +1079,28 @@ pub struct ShaderModule {
 
 impl crate::DynShaderModule for ShaderModule {}
 
+#[derive(Default)]
+pub struct ShaderCache {
+    nr_of_shaders_compiled: u32,
+    entries: HashMap<ShaderCacheKey, ShaderCacheValue>,
+}
+
+#[derive(PartialEq, Eq, Hash)]
+pub(super) struct ShaderCacheKey {
+    source: String,
+    entry_point: String,
+    stage: naga::ShaderStage,
+    shader_model: naga::back::hlsl::ShaderModel,
+}
+
+pub(super) struct ShaderCacheValue {
+    /// This is the value of [`ShaderCache::nr_of_shaders_compiled`]
+    /// at the time the cache entry was last used.
+    last_used: u32,
+    shader: CompiledShader,
+}
+
+#[derive(Clone)]
 pub(super) enum CompiledShader {
     Dxc(Direct3D::Dxc::IDxcBlob),
     Fxc(Direct3D::ID3DBlob),
@@ -1095,8 +1119,6 @@ impl CompiledShader {
             },
         }
     }
-
-    unsafe fn destroy(self) {}
 }
 
 #[derive(Debug)]

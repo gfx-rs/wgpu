@@ -1040,10 +1040,31 @@ bitflags_array! {
         const SHADER_PRIMITIVE_INDEX = 1 << 34;
         /// Allows shaders to use the `early_depth_test` attribute.
         ///
+        /// The attribute is applied to the fragment shader entry point. It can be used in two
+        /// ways:
+        ///
+        ///   1. Force early depth/stencil tests:
+        ///
+        ///      - `@early_depth_test(force)` (WGSL)
+        ///
+        ///      - `layout(early_fragment_tests) in;` (GLSL)
+        ///
+        ///   2. Provide a conservative depth specifier that allows an additional early
+        ///      depth test under certain conditions:
+        ///
+        ///      - `@early_depth_test(greater_equal/less_equal/unchanged)` (WGSL)
+        ///
+        ///      - `layout(depth_<greater/less/unchanged>) out float gl_FragDepth;` (GLSL)
+        ///
+        /// See [`EarlyDepthTest`] for more details.
+        ///
         /// Supported platforms:
+        /// - Vulkan
         /// - GLES 3.1+
         ///
         /// This is a native only feature.
+        ///
+        /// [`EarlyDepthTest`]: https://docs.rs/naga/latest/naga/ir/enum.EarlyDepthTest.html
         const SHADER_EARLY_DEPTH_TEST = 1 << 35;
         /// Allows shaders to use i64 and u64.
         ///

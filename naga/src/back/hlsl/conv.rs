@@ -222,7 +222,7 @@ impl crate::AtomicFunction {
             Self::Min => "Min",
             Self::Max => "Max",
             Self::Exchange { compare: None } => "Exchange",
-            Self::Exchange { .. } => "", //TODO
+            Self::Exchange { .. } => "CompareExchange",
         }
     }
 }

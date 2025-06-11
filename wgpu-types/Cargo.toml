@@ -37,7 +37,7 @@ alloc_instead_of_core = "warn"
 
 [features]
 default = ["std"]
-std = ["js-sys/std", "web-sys/std", "thiserror/std"]
+std = ["js-sys?/std", "web-sys?/std", "thiserror/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
 serde = ["dep:serde", "bitflags/serde"]
@@ -45,6 +45,8 @@ serde = ["dep:serde", "bitflags/serde"]
 counters = []
 # Enables variants of `Trace` other than `Trace::Off`
 trace = ["std"]
+# Enable web-specific dependencies for wasm.
+web = ["dep:js-sys", "dep:web-sys"]
 
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
@@ -57,8 +59,8 @@ serde = { workspace = true, default-features = false, features = [
 ], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = { workspace = true, default-features = false }
-web-sys = { workspace = true, default-features = false, features = [
+js-sys = { workspace = true, optional = true, default-features = false }
+web-sys = { workspace = true, optional = true, default-features = false, features = [
     "ImageBitmap",
     "ImageData",
     "HtmlImageElement",

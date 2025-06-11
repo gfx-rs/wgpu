@@ -52,6 +52,63 @@ var<private> iavipai: array<vec3<i32>, 1> = array<vec3<i32>, 1>(vec3(1i));
 var<private> iavfpai: array<vec3<i32>, 1> = array<vec3<i32>, 1>(vec3(1i));
 var<private> iavfpaf: array<vec3<f32>, 1> = array<vec3<f32>, 1>(vec3(1f));
 
+fn globals() {
+    let phony = xvipaiai_1;
+    let phony_1 = xvupaiai_1;
+    let phony_2 = xvfpaiai_1;
+    let phony_3 = xvfpafaf_1;
+    let phony_4 = xvfpaiaf_1;
+    let phony_5 = xvupuai_2;
+    let phony_6 = xvupaiu_2;
+    let phony_7 = xvuuai_2;
+    let phony_8 = xvuaiu_2;
+    let phony_9 = xvip_1;
+    let phony_10 = xvup_1;
+    let phony_11 = xvfp_1;
+    let phony_12 = xmfp_1;
+    let phony_13 = xmfpaiaiaiai_1;
+    let phony_14 = xmfpafaiaiai_1;
+    let phony_15 = xmfpaiafaiai_1;
+    let phony_16 = xmfpaiaiafai_1;
+    let phony_17 = xmfpaiaiaiaf_1;
+    let phony_18 = xvispai_1;
+    let phony_19 = xvfspaf_1;
+    let phony_20 = xvis_ai_1;
+    let phony_21 = xvus_ai_1;
+    let phony_22 = xvfs_ai_1;
+    let phony_23 = xvfs_af_1;
+    let phony_24 = xafafaf_1;
+    let phony_25 = xafaiai_1;
+    let phony_26 = xaipaiai_1;
+    let phony_27 = xaupaiai;
+    let phony_28 = xafpaiaf_1;
+    let phony_29 = xafpafai_1;
+    let phony_30 = xafpafaf_1;
+    let phony_31 = xavipai_1;
+    let phony_32 = xavfpai_1;
+    let phony_33 = xavfpaf_1;
+    let phony_34 = xvisai_1;
+    let phony_35 = xvusai_1;
+    let phony_36 = xvfsai_1;
+    let phony_37 = xvfsaf_1;
+    let phony_38 = ivispai;
+    let phony_39 = ivfspaf;
+    let phony_40 = ivis_ai;
+    let phony_41 = ivus_ai;
+    let phony_42 = ivfs_ai;
+    let phony_43 = ivfs_af;
+    let phony_44 = iafafaf;
+    let phony_45 = iafaiai;
+    let phony_46 = iaipaiai_1;
+    let phony_47 = iafpafaf_1;
+    let phony_48 = iafpaiaf_1;
+    let phony_49 = iafpafai_1;
+    let phony_50 = iavipai;
+    let phony_51 = iavfpai;
+    let phony_52 = iavfpaf;
+    return;
+}
+
 fn all_constant_arguments() {
     var xvipaiai: vec2<i32> = vec2<i32>(42i, 43i);
     var xvupaiai: vec2<u32> = vec2<u32>(44u, 45u);
@@ -288,6 +345,7 @@ fn mixed_constant_and_runtime_arguments() {
 
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
+    globals();
     all_constant_arguments();
     mixed_constant_and_runtime_arguments();
     return;

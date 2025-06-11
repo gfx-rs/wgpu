@@ -648,9 +648,8 @@ fn binding_arrays_cannot_hold_scalars() {
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn validation_error_messages() {
-    let cases = [
-        (
-            r#"@group(0) @binding(0) var my_sampler: sampler;
+    let cases = [(
+        r#"@group(0) @binding(0) var my_sampler: sampler;
 
                 fn foo(tex: texture_2d<f32>) -> vec4<f32> {
                     return textureSampleLevel(tex, my_sampler, vec2f(0, 0), 0.0);
@@ -660,7 +659,7 @@ fn validation_error_messages() {
                     foo();
                 }
             "#,
-            "\
+        "\
 error: Function [1] 'main' is invalid
   ┌─ wgsl:7:17
   │  \n7 │ ╭                 fn main() {
@@ -671,48 +670,7 @@ error: Function [1] 'main' is invalid
   = Requires 1 arguments, but 0 are provided
 
 ",
-        ),
-        (
-            "\
-@compute @workgroup_size(1, 1)
-fn main() {
-    // Bad: `9001` isn't a `bool`.
-    _ = select(1, 2, 9001);
-}
-",
-            "\
-error: Entry point main at Compute is invalid
-  ┌─ wgsl:4:9
-  │
-4 │     _ = select(1, 2, 9001);
-  │         ^^^^^^ naga::ir::Expression [3]
-  │
-  = Expression [3] is invalid
-  = Expected selection condition to be a boolean value, got Scalar(Scalar { kind: Sint, width: 4 })
-
-",
-        ),
-        (
-            "\
-@compute @workgroup_size(1, 1)
-fn main() {
-    // Bad: `bool` and abstract int args. don't match.
-    _ = select(true, 1, false);
-}
-",
-            "\
-error: Entry point main at Compute is invalid
-  ┌─ wgsl:4:9
-  │
-4 │     _ = select(true, 1, false);
-  │         ^^^^^^ naga::ir::Expression [3]
-  │
-  = Expression [3] is invalid
-  = Expected selection argument types to match, but reject value of type Scalar(Scalar { kind: Bool, width: 1 }) does not match accept value of value Scalar(Scalar { kind: Sint, width: 4 })
-
-",
-        ),
-    ];
+    )];
 
     for (source, expected_err) in cases {
         let module = naga::front::wgsl::parse_str(source).unwrap();
@@ -921,5 +879,36 @@ fn main() {
     assert_eq!(
         info.get_entry_point(0)[global],
         naga::valid::GlobalUse::QUERY
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn global_use_unreachable() {
+    // We should allow statements after `return`, and such statements should
+    // still contribute to global usage. (Unreachable statements should not
+    // contribute to uniformity analysis, but there are multiple issues with
+    // the current implementation of uniformity analysis, see #4369.)
+
+    let source = "
+@group(0) @binding(0)
+var<storage, read_write> global: u32;
+
+@compute @workgroup_size(64)
+fn main() {
+    var used: u32;
+    return;
+    used = global;
+}
+    ";
+
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let mut validator = valid::Validator::new(Default::default(), valid::Capabilities::all());
+    let info = validator.validate(&module).unwrap();
+
+    let global = module.global_variables.iter().next().unwrap().0;
+    assert_eq!(
+        info.get_entry_point(0)[global],
+        naga::valid::GlobalUse::READ,
     );
 }

@@ -13,7 +13,7 @@ use thiserror::Error;
 use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
 
 use crate::{
-    command::CommandEncoderError,
+    command::EncoderStateError,
     device::{DeviceError, MissingFeatures},
     id::{BlasId, BufferId, TlasId},
     resource::{
@@ -50,7 +50,7 @@ pub enum CreateTlasError {
 #[derive(Clone, Debug, Error)]
 pub enum BuildAccelerationStructureError {
     #[error(transparent)]
-    Encoder(#[from] CommandEncoderError),
+    EncoderState(#[from] EncoderStateError),
 
     #[error(transparent)]
     Device(#[from] DeviceError),

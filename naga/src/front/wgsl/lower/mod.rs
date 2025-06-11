@@ -1,6 +1,7 @@
 use alloc::{
     borrow::ToOwned,
     boxed::Box,
+    format,
     string::{String, ToString},
     vec::Vec,
 };
@@ -70,8 +71,9 @@ macro_rules! resolve_inner_binary {
 /// [`TypeResolution`]: proc::TypeResolution
 macro_rules! resolve {
     ($ctx:ident, $expr:expr) => {{
-        $ctx.grow_types($expr)?;
-        &$ctx.typifier()[$expr]
+        let expr = $expr;
+        $ctx.grow_types(expr)?;
+        &$ctx.typifier()[expr]
     }};
 }
 pub(super) use resolve;
@@ -1022,7 +1024,7 @@ enum LoweredGlobalDecl {
     Const(Handle<ir::Constant>),
     Override(Handle<ir::Override>),
     Type(Handle<ir::Type>),
-    EntryPoint,
+    EntryPoint(usize),
 }
 
 enum Texture {
@@ -1078,6 +1080,7 @@ enum SubgroupGather {
     ShuffleDown,
     ShuffleUp,
     ShuffleXor,
+    QuadBroadcast,
 }
 
 impl SubgroupGather {
@@ -1089,6 +1092,7 @@ impl SubgroupGather {
             "subgroupShuffleDown" => Self::ShuffleDown,
             "subgroupShuffleUp" => Self::ShuffleUp,
             "subgroupShuffleXor" => Self::ShuffleXor,
+            "quadBroadcast" => Self::QuadBroadcast,
             _ => return None,
         })
     }
@@ -1128,6 +1132,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             layouter: &mut proc::Layouter::default(),
             global_expression_kind_tracker: &mut proc::ExpressionKindTracker::new(),
         };
+        if !tu.doc_comments.is_empty() {
+            ctx.module.get_or_insert_default_doc_comments().module =
+                tu.doc_comments.iter().map(|s| s.to_string()).collect();
+        }
 
         for decl_handle in self.index.visit_ordered() {
             let span = tu.decls.get_span(decl_handle);
@@ -1136,6 +1144,29 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             match decl.kind {
                 ast::GlobalDeclKind::Fn(ref f) => {
                     let lowered_decl = self.function(f, span, &mut ctx)?;
+                    if !f.doc_comments.is_empty() {
+                        match lowered_decl {
+                            LoweredGlobalDecl::Function { handle, .. } => {
+                                ctx.module
+                                    .get_or_insert_default_doc_comments()
+                                    .functions
+                                    .insert(
+                                        handle,
+                                        f.doc_comments.iter().map(|s| s.to_string()).collect(),
+                                    );
+                            }
+                            LoweredGlobalDecl::EntryPoint(index) => {
+                                ctx.module
+                                    .get_or_insert_default_doc_comments()
+                                    .entry_points
+                                    .insert(
+                                        index,
+                                        f.doc_comments.iter().map(|s| s.to_string()).collect(),
+                                    );
+                            }
+                            _ => {}
+                        }
+                    }
                     ctx.globals.insert(f.name.name, lowered_decl);
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
@@ -1171,6 +1202,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         span,
                     );
 
+                    if !v.doc_comments.is_empty() {
+                        ctx.module
+                            .get_or_insert_default_doc_comments()
+                            .global_variables
+                            .insert(
+                                handle,
+                                v.doc_comments.iter().map(|s| s.to_string()).collect(),
+                            );
+                    }
                     ctx.globals
                         .insert(v.name.name, LoweredGlobalDecl::Var(handle));
                 }
@@ -1201,6 +1241,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     ctx.globals
                         .insert(c.name.name, LoweredGlobalDecl::Const(handle));
+                    if !c.doc_comments.is_empty() {
+                        ctx.module
+                            .get_or_insert_default_doc_comments()
+                            .constants
+                            .insert(
+                                handle,
+                                c.doc_comments.iter().map(|s| s.to_string()).collect(),
+                            );
+                    }
                 }
                 ast::GlobalDeclKind::Override(ref o) => {
                     let explicit_ty =
@@ -1247,6 +1296,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let handle = self.r#struct(s, span, &mut ctx)?;
                     ctx.globals
                         .insert(s.name.name, LoweredGlobalDecl::Type(handle));
+                    if !s.doc_comments.is_empty() {
+                        ctx.module
+                            .get_or_insert_default_doc_comments()
+                            .types
+                            .insert(
+                                handle,
+                                s.doc_comments.iter().map(|s| s.to_string()).collect(),
+                            );
+                    }
                 }
                 ast::GlobalDeclKind::Type(ref alias) => {
                     let ty = self.resolve_named_ast_type(
@@ -1467,7 +1525,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 workgroup_size_overrides,
                 function,
             });
-            Ok(LoweredGlobalDecl::EntryPoint)
+            Ok(LoweredGlobalDecl::EntryPoint(
+                ctx.module.entry_points.len() - 1,
+            ))
         } else {
             let handle = ctx.module.functions.append(function, span);
             Ok(LoweredGlobalDecl::Function {
@@ -2084,7 +2144,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                     LoweredGlobalDecl::Function { .. }
                     | LoweredGlobalDecl::Type(_)
-                    | LoweredGlobalDecl::EntryPoint => {
+                    | LoweredGlobalDecl::EntryPoint(_) => {
                         return Err(Box::new(Error::Unexpected(span, ExpectedToken::Variable)));
                     }
                 };
@@ -2371,7 +2431,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 function_span,
                 ExpectedToken::Function,
             ))),
-            Some(&LoweredGlobalDecl::EntryPoint) => {
+            Some(&LoweredGlobalDecl::EntryPoint(_)) => {
                 Err(Box::new(Error::CalledEntryPoint(function_span)))
             }
             Some(&LoweredGlobalDecl::Function {
@@ -2483,11 +2543,67 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         "select" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
 
-                            let reject = self.expression(args.next()?, ctx)?;
-                            let accept = self.expression(args.next()?, ctx)?;
+                            let reject_orig = args.next()?;
+                            let accept_orig = args.next()?;
+                            let mut values = [
+                                self.expression_for_abstract(reject_orig, ctx)?,
+                                self.expression_for_abstract(accept_orig, ctx)?,
+                            ];
                             let condition = self.expression(args.next()?, ctx)?;
 
                             args.finish()?;
+
+                            let diagnostic_details =
+                                |ctx: &ExpressionContext<'_, '_, '_>,
+                                 ty_res: &proc::TypeResolution,
+                                 orig_expr| {
+                                    (
+                                        ctx.ast_expressions.get_span(orig_expr),
+                                        format!("`{}`", ctx.as_diagnostic_display(ty_res)),
+                                    )
+                                };
+                            for (&value, orig_value) in
+                                values.iter().zip([reject_orig, accept_orig])
+                            {
+                                let value_ty_res = resolve!(ctx, value);
+                                if value_ty_res
+                                    .inner_with(&ctx.module.types)
+                                    .vector_size_and_scalar()
+                                    .is_none()
+                                {
+                                    let (arg_span, arg_type) =
+                                        diagnostic_details(ctx, value_ty_res, orig_value);
+                                    return Err(Box::new(Error::SelectUnexpectedArgumentType {
+                                        arg_span,
+                                        arg_type,
+                                    }));
+                                }
+                            }
+                            let mut consensus_scalar = ctx
+                                .automatic_conversion_consensus(&values)
+                                .map_err(|_idx| {
+                                    let [reject, accept] = values;
+                                    let [(reject_span, reject_type), (accept_span, accept_type)] =
+                                        [(reject_orig, reject), (accept_orig, accept)].map(
+                                            |(orig_expr, expr)| {
+                                                let ty_res = &ctx.typifier()[expr];
+                                                diagnostic_details(ctx, ty_res, orig_expr)
+                                            },
+                                        );
+                                    Error::SelectRejectAndAcceptHaveNoCommonType {
+                                        reject_span,
+                                        reject_type,
+                                        accept_span,
+                                        accept_type,
+                                    }
+                                })?;
+                            if !ctx.is_const(condition) {
+                                consensus_scalar = consensus_scalar.concretize();
+                            }
+
+                            ctx.convert_slice_to_common_leaf_scalar(&mut values, consensus_scalar)?;
+
+                            let [reject, accept] = values;
 
                             ir::Expression::Select {
                                 reject,
@@ -2938,6 +3054,77 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
                                 .push(ir::Statement::SubgroupBallot { result, predicate }, span);
+                            return Ok(Some(result));
+                        }
+                        "quadSwapX" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+
+                            let argument = self.expression(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let ty = ctx.register_type(argument)?;
+
+                            let result = ctx.interrupt_emitter(
+                                crate::Expression::SubgroupOperationResult { ty },
+                                span,
+                            )?;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block.push(
+                                crate::Statement::SubgroupGather {
+                                    mode: crate::GatherMode::QuadSwap(crate::Direction::X),
+                                    argument,
+                                    result,
+                                },
+                                span,
+                            );
+                            return Ok(Some(result));
+                        }
+
+                        "quadSwapY" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+
+                            let argument = self.expression(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let ty = ctx.register_type(argument)?;
+
+                            let result = ctx.interrupt_emitter(
+                                crate::Expression::SubgroupOperationResult { ty },
+                                span,
+                            )?;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block.push(
+                                crate::Statement::SubgroupGather {
+                                    mode: crate::GatherMode::QuadSwap(crate::Direction::Y),
+                                    argument,
+                                    result,
+                                },
+                                span,
+                            );
+                            return Ok(Some(result));
+                        }
+
+                        "quadSwapDiagonal" => {
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+
+                            let argument = self.expression(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            let ty = ctx.register_type(argument)?;
+
+                            let result = ctx.interrupt_emitter(
+                                crate::Expression::SubgroupOperationResult { ty },
+                                span,
+                            )?;
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block.push(
+                                crate::Statement::SubgroupGather {
+                                    mode: crate::GatherMode::QuadSwap(crate::Direction::Diagonal),
+                                    argument,
+                                    result,
+                                },
+                                span,
+                            );
                             return Ok(Some(result));
                         }
                         _ => {
@@ -3471,12 +3658,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         } else {
             let index = self.expression(args.next()?, ctx)?;
             match mode {
+                Sg::BroadcastFirst => unreachable!(),
                 Sg::Broadcast => ir::GatherMode::Broadcast(index),
                 Sg::Shuffle => ir::GatherMode::Shuffle(index),
                 Sg::ShuffleDown => ir::GatherMode::ShuffleDown(index),
                 Sg::ShuffleUp => ir::GatherMode::ShuffleUp(index),
                 Sg::ShuffleXor => ir::GatherMode::ShuffleXor(index),
-                Sg::BroadcastFirst => unreachable!(),
+                Sg::QuadBroadcast => ir::GatherMode::QuadBroadcast(index),
             }
         };
 
@@ -3506,6 +3694,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut offset = 0;
         let mut struct_alignment = proc::Alignment::ONE;
         let mut members = Vec::with_capacity(s.members.len());
+
+        let mut doc_comments: Vec<Option<Vec<String>>> = Vec::new();
 
         for member in s.members.iter() {
             let ty = self.resolve_ast_type(member.ty, &mut ctx.as_const())?;
@@ -3549,6 +3739,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             offset = member_alignment.round_up(offset);
             struct_alignment = struct_alignment.max(member_alignment);
 
+            if !member.doc_comments.is_empty() {
+                doc_comments.push(Some(
+                    member.doc_comments.iter().map(|s| s.to_string()).collect(),
+                ));
+            }
             members.push(ir::StructMember {
                 name: Some(member.name.name.to_owned()),
                 ty,
@@ -3572,6 +3767,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             },
             span,
         );
+        for (i, c) in doc_comments.drain(..).enumerate() {
+            if let Some(comment) = c {
+                ctx.module
+                    .get_or_insert_default_doc_comments()
+                    .struct_members
+                    .insert((handle, i), comment);
+            }
+        }
         Ok(handle)
     }
 

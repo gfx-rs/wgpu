@@ -750,22 +750,23 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Enable early depth tests if needed
-        if let Some(depth_test) = self.entry_point.early_depth_test {
+        if let Some(early_depth_test) = self.entry_point.early_depth_test {
             // If early depth test is supported for this version of GLSL
             if self.options.version.supports_early_depth_test() {
-                writeln!(self.out, "layout(early_fragment_tests) in;")?;
-
-                if let Some(conservative) = depth_test.conservative {
-                    use crate::ConservativeDepth as Cd;
-
-                    let depth = match conservative {
-                        Cd::GreaterEqual => "greater",
-                        Cd::LessEqual => "less",
-                        Cd::Unchanged => "unchanged",
-                    };
-                    writeln!(self.out, "layout (depth_{depth}) out float gl_FragDepth;")?;
+                match early_depth_test {
+                    crate::EarlyDepthTest::Force => {
+                        writeln!(self.out, "layout(early_fragment_tests) in;")?;
+                    }
+                    crate::EarlyDepthTest::Allow { conservative, .. } => {
+                        use crate::ConservativeDepth as Cd;
+                        let depth = match conservative {
+                            Cd::GreaterEqual => "greater",
+                            Cd::LessEqual => "less",
+                            Cd::Unchanged => "unchanged",
+                        };
+                        writeln!(self.out, "layout (depth_{depth}) out float gl_FragDepth;")?;
+                    }
                 }
-                writeln!(self.out)?;
             } else {
                 log::warn!(
                     "Early depth testing is not supported for this version of GLSL: {}",
@@ -787,6 +788,8 @@ impl<'a, W: Write> Writer<'a, W> {
         // you can't make a struct without adding all of its members first.
         for (handle, ty) in self.module.types.iter() {
             if let TypeInner::Struct { ref members, .. } = ty.inner {
+                let struct_name = &self.names[&NameKey::Type(handle)];
+
                 // Structures ending with runtime-sized arrays can only be
                 // rendered as shader storage blocks in GLSL, not stand-alone
                 // struct types.
@@ -794,19 +797,19 @@ impl<'a, W: Write> Writer<'a, W> {
                     .inner
                     .is_dynamically_sized(&self.module.types)
                 {
-                    let name = &self.names[&NameKey::Type(handle)];
-                    write!(self.out, "struct {name} ")?;
+                    write!(self.out, "struct {struct_name} ")?;
                     self.write_struct_body(handle, members)?;
                     writeln!(self.out, ";")?;
                 }
             }
         }
 
-        // Write functions to create special types.
+        // Write functions for special types.
         for (type_key, struct_ty) in self.module.special_types.predeclared_types.iter() {
             match type_key {
                 &crate::PredeclaredType::ModfResult { size, scalar }
                 | &crate::PredeclaredType::FrexpResult { size, scalar } => {
+                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
                     let arg_type_name_owner;
                     let arg_type_name = if let Some(size) = size {
                         arg_type_name_owner = format!(
@@ -835,8 +838,6 @@ impl<'a, W: Write> Writer<'a, W> {
                             (FREXP_FUNCTION, "frexp", other_type_name)
                         };
 
-                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
-
                     writeln!(self.out)?;
                     if !self.options.version.supports_frexp_function()
                         && matches!(type_key, &crate::PredeclaredType::FrexpResult { .. })
@@ -860,7 +861,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         )?;
                     }
                 }
-                &crate::PredeclaredType::AtomicCompareExchangeWeakResult { .. } => {}
+                &crate::PredeclaredType::AtomicCompareExchangeWeakResult(_) => {
+                    // Handled by the general struct writing loop earlier.
+                }
             }
         }
 
@@ -1479,6 +1482,18 @@ impl<'a, W: Write> Writer<'a, W> {
                     }
                     _ => {}
                 }
+            }
+        }
+
+        for statement in func.body.iter() {
+            match *statement {
+                crate::Statement::Atomic {
+                    fun: crate::AtomicFunction::Exchange { compare: Some(cmp) },
+                    ..
+                } => {
+                    self.need_bake_expressions.insert(cmp);
+                }
+                _ => {}
             }
         }
     }
@@ -2572,33 +2587,50 @@ impl<'a, W: Write> Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                if let Some(result) = result {
-                    let res_name = Baked(result).to_string();
-                    let res_ty = ctx.resolve_type(result, &self.module.types);
-                    self.write_value_type(res_ty)?;
-                    write!(self.out, " {res_name} = ")?;
-                    self.named_expressions.insert(result, res_name);
-                }
 
-                let fun_str = fun.to_glsl();
-                write!(self.out, "atomic{fun_str}(")?;
-                self.write_expr(pointer, ctx)?;
-                write!(self.out, ", ")?;
-                // handle the special cases
                 match *fun {
-                    crate::AtomicFunction::Subtract => {
-                        // we just wrote `InterlockedAdd`, so negate the argument
-                        write!(self.out, "-")?;
+                    crate::AtomicFunction::Exchange {
+                        compare: Some(compare_expr),
+                    } => {
+                        let result_handle = result.expect("CompareExchange must have a result");
+                        let res_name = Baked(result_handle).to_string();
+                        self.write_type(ctx.info[result_handle].ty.handle().unwrap())?;
+                        write!(self.out, " {res_name};")?;
+                        write!(self.out, " {res_name}.old_value = atomicCompSwap(")?;
+                        self.write_expr(pointer, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(compare_expr, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(value, ctx)?;
+                        writeln!(self.out, ");")?;
+
+                        write!(
+                            self.out,
+                            "{level}{res_name}.exchanged = ({res_name}.old_value == "
+                        )?;
+                        self.write_expr(compare_expr, ctx)?;
+                        writeln!(self.out, ");")?;
+                        self.named_expressions.insert(result_handle, res_name);
                     }
-                    crate::AtomicFunction::Exchange { compare: Some(_) } => {
-                        return Err(Error::Custom(
-                            "atomic CompareExchange is not implemented".to_string(),
-                        ));
+                    _ => {
+                        if let Some(result) = result {
+                            let res_name = Baked(result).to_string();
+                            self.write_type(ctx.info[result].ty.handle().unwrap())?;
+                            write!(self.out, " {res_name} = ")?;
+                            self.named_expressions.insert(result, res_name);
+                        }
+                        let fun_str = fun.to_glsl();
+                        write!(self.out, "atomic{fun_str}(")?;
+                        self.write_expr(pointer, ctx)?;
+                        write!(self.out, ", ")?;
+                        if let crate::AtomicFunction::Subtract = *fun {
+                            // Emulate `atomicSub` with `atomicAdd` by negating the value.
+                            write!(self.out, "-")?;
+                        }
+                        self.write_expr(value, ctx)?;
+                        writeln!(self.out, ");")?;
                     }
-                    _ => {}
                 }
-                self.write_expr(value, ctx)?;
-                writeln!(self.out, ");")?;
             }
             // Stores a value into an image.
             Statement::ImageAtomic {
@@ -2716,6 +2748,20 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::GatherMode::ShuffleXor(_) => {
                         write!(self.out, "subgroupShuffleXor(")?;
                     }
+                    crate::GatherMode::QuadBroadcast(_) => {
+                        write!(self.out, "subgroupQuadBroadcast(")?;
+                    }
+                    crate::GatherMode::QuadSwap(direction) => match direction {
+                        crate::Direction::X => {
+                            write!(self.out, "subgroupQuadSwapHorizontal(")?;
+                        }
+                        crate::Direction::Y => {
+                            write!(self.out, "subgroupQuadSwapVertical(")?;
+                        }
+                        crate::Direction::Diagonal => {
+                            write!(self.out, "subgroupQuadSwapDiagonal(")?;
+                        }
+                    },
                 }
                 self.write_expr(argument, ctx)?;
                 match mode {
@@ -2724,10 +2770,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     | crate::GatherMode::Shuffle(index)
                     | crate::GatherMode::ShuffleDown(index)
                     | crate::GatherMode::ShuffleUp(index)
-                    | crate::GatherMode::ShuffleXor(index) => {
+                    | crate::GatherMode::ShuffleXor(index)
+                    | crate::GatherMode::QuadBroadcast(index) => {
                         write!(self.out, ", ")?;
                         self.write_expr(index, ctx)?;
                     }
+                    crate::GatherMode::QuadSwap(_) => {}
                 }
                 writeln!(self.out, ");")?;
             }

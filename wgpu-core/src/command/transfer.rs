@@ -8,7 +8,7 @@ use wgt::{BufferAddress, BufferUsages, Extent3d, TextureSelector, TextureUsages}
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     api_log,
-    command::{clear_texture, CommandEncoderError},
+    command::{clear_texture, EncoderStateError},
     conv,
     device::{Device, DeviceError, MissingDownlevelFlags},
     global::Global,
@@ -161,19 +161,15 @@ pub enum TransferError {
 #[non_exhaustive]
 pub enum CopyError {
     #[error(transparent)]
-    Encoder(#[from] CommandEncoderError),
+    EncoderState(#[from] EncoderStateError),
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error("Copy error")]
     Transfer(#[from] TransferError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
-}
-
-impl From<DeviceError> for CopyError {
-    fn from(err: DeviceError) -> Self {
-        CopyError::Encoder(CommandEncoderError::Device(err))
-    }
 }
 
 pub(crate) fn extract_texture_selector<T>(
@@ -532,7 +528,7 @@ impl Global {
         source_offset: BufferAddress,
         destination: BufferId,
         destination_offset: BufferAddress,
-        size: BufferAddress,
+        size: Option<BufferAddress>,
     ) -> Result<(), CopyError> {
         profiling::scope!("CommandEncoder::copy_buffer_to_buffer");
         api_log!(
@@ -598,6 +594,11 @@ impl Global {
             .map_err(TransferError::MissingBufferUsage)?;
         let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
+        let (size, source_end_offset) = match size {
+            Some(size) => (size, source_offset + size),
+            None => (src_buffer.size - source_offset, src_buffer.size),
+        };
+
         if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(size).into());
         }
@@ -628,7 +629,6 @@ impl Global {
             }
         }
 
-        let source_end_offset = source_offset + size;
         let destination_end_offset = destination_offset + size;
         if source_end_offset > src_buffer.size {
             return Err(TransferError::BufferOverrun {

@@ -602,8 +602,10 @@ impl<'a> DeviceAllocationContext<'a> {
             }
         };
 
-        if info.CurrentUsage + allocation_info.SizeInBytes.max(memblock_size)
-            >= info.Budget / 100 * threshold as u64
+        if info
+            .CurrentUsage
+            .checked_add(allocation_info.SizeInBytes.max(memblock_size))
+            .is_none_or(|usage| usage >= info.Budget / 100 * threshold as u64)
         {
             return Err(crate::DeviceError::OutOfMemory);
         }

@@ -10,11 +10,11 @@ use alloc::{
 use core::{error::Error, fmt, future::ready, ops::Range, pin::Pin, ptr::NonNull, slice};
 
 use arrayvec::ArrayVec;
-use parking_lot::Mutex;
 use smallvec::SmallVec;
 use wgc::{command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError};
 use wgt::WasmNotSendSync;
 
+use crate::util::Mutex;
 use crate::{
     api,
     dispatch::{self, BufferMappedRangeInterface},
@@ -1874,7 +1874,7 @@ impl dispatch::QueueInterface for CoreQueue {
 
     // This method needs to exist if either webgpu or webgl is enabled,
     // but we only actually have an implementation if webgl is enabled.
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     #[cfg_attr(not(webgl), expect(unused_variables))]
     fn copy_external_image_to_texture(
         &self,
@@ -2037,14 +2037,6 @@ impl dispatch::BufferInterface for CoreBuffer {
         }
     }
 
-    #[cfg(webgpu)]
-    fn get_mapped_range_as_array_buffer(
-        &self,
-        _sub_range: Range<wgt::BufferAddress>,
-    ) -> Option<js_sys::ArrayBuffer> {
-        None
-    }
-
     fn unmap(&self) {
         match self.context.0.buffer_unmap(self.id) {
             Ok(()) => (),
@@ -2056,8 +2048,7 @@ impl dispatch::BufferInterface for CoreBuffer {
     }
 
     fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.buffer_destroy(self.id);
+        self.context.0.buffer_destroy(self.id);
     }
 }
 
@@ -2101,8 +2092,7 @@ impl dispatch::TextureInterface for CoreTexture {
     }
 
     fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.texture_destroy(self.id);
+        self.context.0.texture_destroy(self.id);
     }
 }
 
@@ -2217,7 +2207,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         source_offset: crate::BufferAddress,
         destination: &dispatch::DispatchBuffer,
         destination_offset: crate::BufferAddress,
-        copy_size: crate::BufferAddress,
+        copy_size: Option<crate::BufferAddress>,
     ) {
         let source = source.as_core();
         let destination = destination.as_core();
@@ -3706,5 +3696,10 @@ impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.size) }
+    }
+
+    #[cfg(webgpu)]
+    fn as_uint8array(&self) -> &js_sys::Uint8Array {
+        panic!("Only available on WebGPU")
     }
 }

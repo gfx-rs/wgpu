@@ -3914,12 +3914,12 @@ impl Device {
         let trackers = self.trackers.lock();
         for buffer in trackers.buffers.used_resources() {
             if let Some(buffer) = Weak::upgrade(buffer) {
-                let _ = buffer.destroy();
+                buffer.destroy();
             }
         }
         for texture in trackers.textures.used_resources() {
             if let Some(texture) = Weak::upgrade(texture) {
-                let _ = texture.destroy();
+                texture.destroy();
             }
         }
     }

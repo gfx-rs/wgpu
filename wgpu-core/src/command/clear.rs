@@ -5,7 +5,7 @@ use core::ops::Range;
 use crate::device::trace::Command as TraceCommand;
 use crate::{
     api_log,
-    command::CommandEncoderError,
+    command::EncoderStateError,
     device::DeviceError,
     get_lowest_common_denom,
     global::Global,
@@ -74,7 +74,7 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    CommandEncoderError(#[from] CommandEncoderError),
+    EncoderState(#[from] EncoderStateError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
 }
