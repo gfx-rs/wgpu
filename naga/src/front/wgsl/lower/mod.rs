@@ -70,8 +70,9 @@ macro_rules! resolve_inner_binary {
 /// [`TypeResolution`]: proc::TypeResolution
 macro_rules! resolve {
     ($ctx:ident, $expr:expr) => {{
-        $ctx.grow_types($expr)?;
-        &$ctx.typifier()[$expr]
+        let expr = $expr;
+        $ctx.grow_types(expr)?;
+        &$ctx.typifier()[expr]
     }};
 }
 pub(super) use resolve;
