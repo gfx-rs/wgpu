@@ -277,7 +277,7 @@ pub enum BlasPrepareCompactError {
 #[derive(Clone, Debug, Error)]
 pub enum CompactBlasError {
     #[error(transparent)]
-    Encoder(#[from] CommandEncoderError),
+    Encoder(#[from] EncoderStateError),
 
     #[error(transparent)]
     Device(#[from] DeviceError),
