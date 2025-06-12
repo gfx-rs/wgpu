@@ -5,7 +5,17 @@ webgpu:api,operation,compute,basic:memcpy:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute_pipeline,overrides:*
 webgpu:api,operation,device,lost:*
-webgpu:api,validation,encoding,cmds,clearBuffer:out_of_bounds,*
+webgpu:api,validation,encoding,cmds,clearBuffer:buffer_state:bufferState="valid"
+//FAIL: webgpu:api,validation,encoding,cmds,clearBuffer:buffer_state:bufferState="invalid"
+// https://github.com/gfx-rs/wgpu/issues/7796 (Mac only)
+webgpu:api,validation,encoding,cmds,clearBuffer:buffer_state:bufferState="destroyed"
+webgpu:api,validation,encoding,cmds,clearBuffer:buffer,device_mismatch:*
+webgpu:api,validation,encoding,cmds,clearBuffer:default_args:*
+webgpu:api,validation,encoding,cmds,clearBuffer:buffer_usage:*
+webgpu:api,validation,encoding,cmds,clearBuffer:size_alignment:*
+webgpu:api,validation,encoding,cmds,clearBuffer:offset_alignment:*
+webgpu:api,validation,encoding,cmds,clearBuffer:overflow:*
+webgpu:api,validation,encoding,cmds,clearBuffer:out_of_bounds:*
 webgpu:api,validation,encoding,cmds,compute_pass:set_pipeline:*
 webgpu:api,validation,encoding,cmds,compute_pass:dispatch_sizes:*
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_with_invalid_or_destroyed_texture:*

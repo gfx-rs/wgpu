@@ -803,15 +803,16 @@ impl CommandBuffer {
 }
 
 impl CommandBuffer {
-    pub fn take_finished<'a>(&'a self) -> Result<CommandBufferMutable, InvalidResourceError> {
+    pub fn take_finished(&self) -> Result<CommandBufferMutable, CommandEncoderError> {
         use CommandEncoderStatus as St;
         match mem::replace(
             &mut *self.data.lock(),
             CommandEncoderStatus::Error(EncoderStateError::Submitted.into()),
         ) {
             St::Finished(command_buffer_mutable) => Ok(command_buffer_mutable),
-            St::Recording(_) | St::Locked(_) | St::Error(_) => {
-                Err(InvalidResourceError(self.error_ident()))
+            St::Error(err) => Err(err),
+            St::Recording(_) | St::Locked(_) => {
+                Err(InvalidResourceError(self.error_ident()).into())
             }
             St::Transitioning => unreachable!(),
         }
@@ -1003,6 +1004,25 @@ pub enum CommandEncoderError {
     RenderPass(#[from] RenderPassError),
 }
 
+impl CommandEncoderError {
+    fn is_destroyed_error(&self) -> bool {
+        matches!(
+            self,
+            Self::DestroyedResource(_)
+                | Self::Clear(ClearError::DestroyedResource(_))
+                | Self::Query(QueryError::DestroyedResource(_))
+                | Self::ComputePass(ComputePassError {
+                    inner: ComputePassErrorInner::DestroyedResource(_),
+                    ..
+                })
+                | Self::RenderPass(RenderPassError {
+                    inner: RenderPassErrorInner::DestroyedResource(_),
+                    ..
+                })
+        )
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum TimestampWritesError {
@@ -1026,9 +1046,11 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
+        // Errors related to destroyed resources are not reported until the
+        // command buffer is submitted.
         let error = match cmd_buf.data.lock().finish() {
-            Ok(_) => None,
-            Err(e) => Some(e),
+            Err(e) if !e.is_destroyed_error() => Some(e),
+            _ => None,
         };
 
         (encoder_id.into_command_buffer_id(), error)
