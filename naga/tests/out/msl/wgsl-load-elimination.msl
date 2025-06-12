@@ -1,0 +1,25 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+
+void simple(
+    thread uint& sink
+) {
+    uint a = {};
+    uint _e1 = sink;
+    a = _e1;
+    uint b = a;
+    a = 2u;
+    sink = b;
+    return;
+}
+
+kernel void main_(
+) {
+    uint sink = 0u;
+    simple(sink);
+    return;
+}

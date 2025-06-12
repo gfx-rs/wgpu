@@ -1,0 +1,117 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("sink"),
+            space: Private,
+            binding: None,
+            ty: 0,
+            init: Some(0),
+        ),
+    ],
+    global_expressions: [
+        Literal(U32(0)),
+    ],
+    functions: [
+        (
+            name: Some("simple"),
+            arguments: [],
+            result: None,
+            local_variables: [
+                (
+                    name: Some("a"),
+                    ty: 0,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                GlobalVariable(0),
+                Load(
+                    pointer: 0,
+                ),
+                LocalVariable(0),
+                Load(
+                    pointer: 2,
+                ),
+                Literal(U32(2)),
+                GlobalVariable(0),
+            ],
+            named_expressions: {
+                3: "b",
+            },
+            body: [
+                Emit((
+                    start: 1,
+                    end: 2,
+                )),
+                Store(
+                    pointer: 2,
+                    value: 1,
+                ),
+                Emit((
+                    start: 3,
+                    end: 4,
+                )),
+                Store(
+                    pointer: 2,
+                    value: 4,
+                ),
+                Store(
+                    pointer: 5,
+                    value: 3,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("main"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 0,
+                        arguments: [],
+                        result: None,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)

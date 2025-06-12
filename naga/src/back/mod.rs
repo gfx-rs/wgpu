@@ -30,6 +30,8 @@ pub mod pipeline_constants;
 #[cfg(any(hlsl_out, glsl_out))]
 mod continue_forward;
 
+mod load_baking;
+
 /// Names of vector components.
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 /// Indent for backends.
