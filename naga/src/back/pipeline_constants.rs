@@ -41,17 +41,16 @@ pub enum PipelineConstantError {
     NegativeWorkgroupSize,
 }
 
-/// Replace all overrides in `module` with constants.
+/// Compact `module` and replace all overrides with constants.
 ///
-/// If no changes are needed, this just returns `Cow::Borrowed`
-/// references to `module` and `module_info`. Otherwise, it clones
-/// `module`, edits its [`global_expressions`] arena to contain only
-/// fully-evaluated expressions, and returns `Cow::Owned` values
-/// holding the simplified module and its validation results.
+/// If no changes are needed, this just returns `Cow::Borrowed` references to
+/// `module` and `module_info`. Otherwise, it clones `module`, retains only the
+/// selected entry point, compacts the module, edits its [`global_expressions`]
+/// arena to contain only fully-evaluated expressions, and returns the
+/// simplified module and its validation results.
 ///
-/// In either case, the module returned has an empty `overrides`
-/// arena, and the `global_expressions` arena contains only
-/// fully-evaluated expressions.
+/// The module returned has an empty `overrides` arena, and the
+/// `global_expressions` arena contains only fully-evaluated expressions.
 ///
 /// [`global_expressions`]: Module::global_expressions
 pub fn process_overrides<'a>(
@@ -60,21 +59,26 @@ pub fn process_overrides<'a>(
     entry_point: Option<(ir::ShaderStage, &str)>,
     pipeline_constants: &PipelineConstants,
 ) -> Result<(Cow<'a, Module>, Cow<'a, ModuleInfo>), PipelineConstantError> {
-    if module.overrides.is_empty() {
+    if (entry_point.is_none() || module.entry_points.len() <= 1) && module.overrides.is_empty() {
         return Ok((Cow::Borrowed(module), Cow::Borrowed(module_info)));
     }
 
     let mut module = module.clone();
-
-    // If an entry point was specified, compact the module to remove anything
-    // not reachable from that entry point. This is necessary because we may not
-    // have values for overrides that are not reachable from the entry point.
     if let Some((ep_stage, ep_name)) = entry_point {
         module
             .entry_points
             .retain(|ep| ep.stage == ep_stage && ep.name == ep_name);
     }
+
+    // Compact the module to remove anything not reachable from an entry point.
+    // This is necessary because we may not have values for overrides that are
+    // not reachable from the/an entry point.
     compact(&mut module, KeepUnused::No);
+
+    // If there are no overrides in the module, then we can skip the rest.
+    if module.overrides.is_empty() {
+        return revalidate(module);
+    }
 
     // A map from override handles to the handles of the constants
     // we've replaced them with.
@@ -237,9 +241,14 @@ pub fn process_overrides<'a>(
     // Now that we've rewritten all the expressions, we need to
     // recompute their types and other metadata. For the time being,
     // do a full re-validation.
+    revalidate(module)
+}
+
+fn revalidate(
+    module: Module,
+) -> Result<(Cow<'static, Module>, Cow<'static, ModuleInfo>), PipelineConstantError> {
     let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
     let module_info = validator.validate_resolved_overrides(&module)?;
-
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
 }
 
