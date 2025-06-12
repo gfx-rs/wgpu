@@ -1,0 +1,298 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 0,
+                space: Storage(
+                    access: ("LOAD | STORE"),
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 0,
+                size: Dynamic,
+                stride: 4,
+            ),
+        ),
+        (
+            name: Some("RWStructuredBuffer"),
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 4,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 5,
+                space: Storage(
+                    access: ("LOAD | STORE"),
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: None,
+            ty: 0,
+            init: 0,
+        ),
+        (
+            name: None,
+            ty: 0,
+            init: 1,
+        ),
+        (
+            name: None,
+            ty: 2,
+            init: 2,
+        ),
+        (
+            name: None,
+            ty: 0,
+            init: 3,
+        ),
+        (
+            name: None,
+            ty: 0,
+            init: 4,
+        ),
+    ],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("data"),
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 5,
+            init: None,
+        ),
+    ],
+    global_expressions: [
+        Literal(U32(0)),
+        Literal(U32(4)),
+        Literal(I32(0)),
+        Literal(U32(1)),
+        Literal(U32(2)),
+    ],
+    functions: [
+        (
+            name: Some("main"),
+            arguments: [],
+            result: None,
+            local_variables: [
+                (
+                    name: Some("phi_19"),
+                    ty: 0,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                GlobalVariable(0),
+                Constant(0),
+                Constant(4),
+                Constant(1),
+                Constant(3),
+                Constant(2),
+                LocalVariable(0),
+                Load(
+                    pointer: 6,
+                ),
+                Binary(
+                    op: Less,
+                    left: 7,
+                    right: 3,
+                ),
+                AccessIndex(
+                    base: 0,
+                    index: 0,
+                ),
+                Access(
+                    base: 9,
+                    index: 7,
+                ),
+                Load(
+                    pointer: 10,
+                ),
+                Binary(
+                    op: Equal,
+                    left: 11,
+                    right: 4,
+                ),
+                Load(
+                    pointer: 10,
+                ),
+                Binary(
+                    op: Equal,
+                    left: 13,
+                    right: 2,
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 7,
+                    right: 2,
+                ),
+                Binary(
+                    op: Add,
+                    left: 7,
+                    right: 4,
+                ),
+                LocalVariable(0),
+            ],
+            named_expressions: {},
+            body: [
+                Store(
+                    pointer: 17,
+                    value: 1,
+                ),
+                Loop(
+                    body: [
+                        Emit((
+                            start: 7,
+                            end: 8,
+                        )),
+                        Switch(
+                            selector: 5,
+                            cases: [
+                                (
+                                    value: Default,
+                                    body: [
+                                        Emit((
+                                            start: 8,
+                                            end: 9,
+                                        )),
+                                        If(
+                                            condition: 8,
+                                            accept: [],
+                                            reject: [
+                                                Break,
+                                            ],
+                                        ),
+                                        Emit((
+                                            start: 9,
+                                            end: 13,
+                                        )),
+                                        If(
+                                            condition: 12,
+                                            accept: [
+                                                Break,
+                                            ],
+                                            reject: [],
+                                        ),
+                                        Emit((
+                                            start: 13,
+                                            end: 15,
+                                        )),
+                                        If(
+                                            condition: 14,
+                                            accept: [
+                                                Break,
+                                            ],
+                                            reject: [],
+                                        ),
+                                        Emit((
+                                            start: 15,
+                                            end: 16,
+                                        )),
+                                        Store(
+                                            pointer: 10,
+                                            value: 15,
+                                        ),
+                                        Break,
+                                    ],
+                                    fall_through: false,
+                                ),
+                            ],
+                        ),
+                        Emit((
+                            start: 16,
+                            end: 17,
+                        )),
+                        Continue,
+                    ],
+                    continuing: [
+                        Store(
+                            pointer: 17,
+                            value: 16,
+                        ),
+                    ],
+                    break_if: None,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("main_wrap"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 0,
+                        arguments: [],
+                        result: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)

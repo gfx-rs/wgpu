@@ -1,0 +1,10 @@
+targets = "HLSL | METAL | GLSL | WGSL | IR"
+
+[spv]
+force_loop_bounding = false
+
+[hlsl]
+force_loop_bounding = false
+
+[msl]
+force_loop_bounding = false
