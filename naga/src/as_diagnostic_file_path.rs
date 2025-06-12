@@ -21,6 +21,8 @@ mod sealed {
 ///
 /// This type is used as the type bounds for various diagnostic rendering methods, i.e.,
 /// [`WithSpan::emit_to_string_with_path`](crate::span::WithSpan::emit_to_string_with_path).
+///
+/// [`String`]: alloc::string::String
 pub trait AsDiagnosticFilePath: sealed::Sealed {
     fn to_string_lossy(&self) -> Cow<'_, str>;
 }
