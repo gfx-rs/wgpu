@@ -110,6 +110,7 @@ Bottom level categories:
 ### Changes
 
 - Loosen Viewport validation requirements to match the [new specs](https://github.com/gpuweb/gpuweb/pull/5025). By @ebbdrop in [#7564](https://github.com/gfx-rs/wgpu/pull/7564)
+- `wgpu` now uses `wgpu-types::error::WebGpuError` to classify errors. Any changes here are likely to be regressions; please report them if you find them! By @ErichDonGubler in [#6547](https://github.com/gfx-rs/wgpu/pull/6547).
 
 #### General
 

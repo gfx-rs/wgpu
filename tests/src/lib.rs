@@ -108,6 +108,11 @@ pub fn did_fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool
     did_fill_error_scope(device, callback, wgpu::ErrorFilter::Validation)
 }
 
+/// Returns true if the provided callback encounters an out-of-memory error.
+pub fn did_oom<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool, T) {
+    did_fill_error_scope(device, callback, wgpu::ErrorFilter::OutOfMemory)
+}
+
 /// Adds the necessary main function for our gpu test harness.
 #[macro_export]
 macro_rules! gpu_test_main {

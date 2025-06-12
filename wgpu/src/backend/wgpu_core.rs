@@ -15,7 +15,10 @@ use wgc::{
     command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError,
     resource::BlasPrepareCompactResult,
 };
-use wgt::WasmNotSendSync;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    WasmNotSendSync,
+};
 
 use crate::util::Mutex;
 use crate::{
@@ -304,62 +307,33 @@ impl ContextWgpuCore {
     fn handle_error_inner(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
+        error_type: ErrorType,
         source: ContextErrorSource,
         label: Label<'_>,
         fn_ident: &'static str,
     ) {
-        let source_error: ErrorSource = Box::new(wgc::error::ContextError {
+        let source: ErrorSource = Box::new(wgc::error::ContextError {
             fn_ident,
             source,
             label: label.unwrap_or_default().to_string(),
         });
         let mut sink = sink_mutex.lock();
-        let mut source_opt: Option<&(dyn Error + 'static)> = Some(&*source_error);
-        let error = loop {
-            if let Some(source) = source_opt {
-                if let Some(wgc::device::DeviceError::OutOfMemory) =
-                    source.downcast_ref::<wgc::device::DeviceError>()
-                {
-                    break crate::Error::OutOfMemory {
-                        source: source_error,
-                    };
+        let description = || self.format_error(&*source);
+        let error = match error_type {
+            ErrorType::Internal => {
+                let description = description();
+                crate::Error::Internal {
+                    source,
+                    description,
                 }
-                let device_error =
-                    if let Some(wgc::resource::CreateTextureError::Device(device_error)) =
-                        source.downcast_ref::<wgc::resource::CreateTextureError>()
-                    {
-                        Some(device_error)
-                    } else if let Some(wgc::resource::CreateBufferError::Device(device_error)) =
-                        source.downcast_ref::<wgc::resource::CreateBufferError>()
-                    {
-                        Some(device_error)
-                    } else if let Some(wgc::resource::CreateQuerySetError::Device(device_error)) =
-                        source.downcast_ref::<wgc::resource::CreateQuerySetError>()
-                    {
-                        Some(device_error)
-                    } else if let Some(wgc::ray_tracing::CreateBlasError::Device(device_error)) =
-                        source.downcast_ref::<wgc::ray_tracing::CreateBlasError>()
-                    {
-                        Some(device_error)
-                    } else if let Some(wgc::ray_tracing::CreateTlasError::Device(device_error)) =
-                        source.downcast_ref::<wgc::ray_tracing::CreateTlasError>()
-                    {
-                        Some(device_error)
-                    } else {
-                        None
-                    };
-                if let Some(wgc::device::DeviceError::OutOfMemory) = device_error {
-                    break crate::Error::OutOfMemory {
-                        source: source_error,
-                    };
+            }
+            ErrorType::OutOfMemory => crate::Error::OutOfMemory { source },
+            ErrorType::Validation => {
+                let description = description();
+                crate::Error::Validation {
+                    source,
+                    description,
                 }
-                source_opt = source.source();
-            } else {
-                // Otherwise, it is a validation error
-                break crate::Error::Validation {
-                    description: self.format_error(&*source_error),
-                    source: source_error,
-                };
             }
             ErrorType::DeviceLost { reason: _ } => return,
         };
@@ -371,11 +345,12 @@ impl ContextWgpuCore {
     fn handle_error(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        source: impl Error + WasmNotSendSync + 'static,
+        source: impl WebGpuError + WasmNotSendSync + 'static,
         label: Label<'_>,
         fn_ident: &'static str,
     ) {
-        self.handle_error_inner(sink_mutex, Box::new(source), label, fn_ident)
+        let error_type = source.webgpu_error_type();
+        self.handle_error_inner(sink_mutex, error_type, Box::new(source), label, fn_ident)
     }
 
     #[inline]
@@ -383,10 +358,11 @@ impl ContextWgpuCore {
     fn handle_error_nolabel(
         &self,
         sink_mutex: &Mutex<ErrorSinkRaw>,
-        source: impl Error + WasmNotSendSync + 'static,
+        source: impl WebGpuError + WasmNotSendSync + 'static,
         fn_ident: &'static str,
     ) {
-        self.handle_error_inner(sink_mutex, Box::new(source), None, fn_ident)
+        let error_type = source.webgpu_error_type();
+        self.handle_error_inner(sink_mutex, error_type, Box::new(source), None, fn_ident)
     }
 
     #[track_caller]
