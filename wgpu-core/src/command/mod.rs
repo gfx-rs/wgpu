@@ -123,8 +123,11 @@ impl CommandEncoderStatus {
     ///
     /// If the encoder is not in the [`Self::Recording`] state, the closure will
     /// not be called and nothing will be recorded. The encoder will be
-    /// invalidated (if it is not already). If the error should be raised
-    /// immediately, returns it in `Err`, otherwise, returns `Ok(())`.
+    /// invalidated (if it is not already). If the error is a [validation error
+    /// that should be raised immediately][ves], returns it in `Err`, otherwise,
+    /// returns `Ok(())`.
+    ///
+    /// [ves]: https://www.w3.org/TR/webgpu/#abstract-opdef-validate-the-encoder-state
     fn record_with<
         F: FnOnce(&mut CommandBufferMutable) -> Result<(), E>,
         E: Clone + Into<CommandEncoderError>,
