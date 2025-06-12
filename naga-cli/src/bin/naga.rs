@@ -75,6 +75,10 @@ struct Args {
     #[argh(switch)]
     keep_coordinate_space: bool,
 
+    /// force loop bounding if the backend supports it.
+    #[argh(switch)]
+    force_loop_bounding: bool,
+
     /// in dot output, include only the control flow graph
     #[argh(switch)]
     dot_cfg_only: bool,
@@ -427,6 +431,10 @@ fn run() -> anyhow::Result<()> {
         block_ctx_dump_prefix: args.block_ctx_dir.clone().map(std::path::PathBuf::from),
     };
 
+    params.spv_out.force_loop_bounding = args.force_loop_bounding;
+    params.msl.force_loop_bounding = args.force_loop_bounding;
+    params.hlsl.force_loop_bounding = args.force_loop_bounding;
+
     params.entry_point.clone_from(&args.entry_point);
     if let Some(ref version) = args.profile {
         params.glsl.version = version.0;
@@ -706,7 +714,7 @@ fn write_output(
             let file = fs::File::create(output_path)?;
             bincode::serialize_into(file, module)?;
         }
-        "metal" => {
+        "metal" | "msl" => {
             use naga::back::msl;
 
             let mut options = params.msl.clone();
