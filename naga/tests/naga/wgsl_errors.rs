@@ -3670,9 +3670,10 @@ fn subgroup_invalid_broadcast() {
 
 #[test]
 fn invalid_clip_distances() {
-    // Check for capability
+    // Missing capability.
     check_validation! {
         r#"
+            enable clip_distances;
             struct VertexOutput {
                 @builtin(position) pos: vec4f,
                 @builtin(clip_distances) clip_distances: array<f32, 8>,
@@ -3695,9 +3696,31 @@ fn invalid_clip_distances() {
         )
     }
 
-    // Check maximum clip distances
+    // Missing enable directive.
+    // Note that this is a parsing error, not a validation error.
+    check(
+        r#"
+            @vertex
+            fn vs_main() -> @builtin(clip_distances) array<f32, 8> {
+                var out: array<f32, 8>;
+                return out;
+            }
+        "#,
+        r###"error: the `clip_distances` enable extension is not enabled
+  ┌─ wgsl:3:38
+  │
+3 │             fn vs_main() -> @builtin(clip_distances) array<f32, 8> {
+  │                                      ^^^^^^^^^^^^^^ the `clip_distances` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable clip_distances;` at the top of the shader, before any other items.
+
+"###,
+    );
+
+    // Maximum clip distances exceeded
     check_validation! {
         r#"
+            enable clip_distances;
             struct VertexOutput {
                 @builtin(position) pos: vec4f,
                 @builtin(clip_distances) clip_distances: array<f32, 9>,

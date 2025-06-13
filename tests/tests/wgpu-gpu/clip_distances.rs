@@ -128,6 +128,7 @@ async fn clip_distances(ctx: TestingContext) {
 }
 
 const SHADER_SRC: &str = "
+enable clip_distances;
 struct VertexOutput {
     @builtin(position) pos: vec4f,
     @builtin(clip_distances) clip_distances: array<f32, 2>,
