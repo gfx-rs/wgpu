@@ -211,7 +211,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
 
     // Test for https://github.com/gfx-rs/wgpu/issues/5262.
     //
-    // The struct is supposed to have a size of 32 and alignment of 16, but on metal, it has size 24.
+    // The struct is supposed to have a size of 32 and alignment of 16.
     for ty in ["f32", "u32", "i32"] {
         let header = format!("struct Inner {{ vec: vec3<{ty}>, scalar1: u32, scalar2: u32 }}");
         let members = String::from("arr: array<Inner, 2>");
@@ -238,8 +238,7 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
                 &input_values,
                 &[0, 1, 2, 3, 4, 8, 9, 10, 11, 12],
             )
-            .header(header)
-            .failures(Backends::METAL),
+            .header(header),
         );
     }
 

@@ -18,6 +18,7 @@ struct Globals {
     metal::float4 v;
     metal::float3x4 m;
     type_4 d;
+    char _pad4[12];
 };
 
 float index_array(

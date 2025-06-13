@@ -4470,6 +4470,16 @@ impl<W: Write> Writer<W> {
                             }
                         }
                     }
+                    if last_offset < span {
+                        let pad = span - last_offset;
+                        writeln!(
+                            self.out,
+                            "{}char _pad{}[{}];",
+                            back::INDENT,
+                            members.len(),
+                            pad
+                        )?;
+                    }
                     writeln!(self.out, "}};")?;
                 }
                 _ => {

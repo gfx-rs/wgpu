@@ -14,10 +14,12 @@ struct Struct {
 struct _atomic_compare_exchange_resultUint4_ {
     uint old_value;
     bool exchanged;
+    char _pad2[3];
 };
 struct _atomic_compare_exchange_resultSint4_ {
     int old_value;
     bool exchanged;
+    char _pad2[3];
 };
 
 template <typename A>

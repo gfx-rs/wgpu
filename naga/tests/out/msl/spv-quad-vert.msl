@@ -12,6 +12,7 @@ struct gl_PerVertex {
     float gl_PointSize;
     type_3 gl_ClipDistance;
     type_3 gl_CullDistance;
+    char _pad4[4];
 };
 struct VertexOutput {
     metal::float2 member;
