@@ -27,6 +27,7 @@ webgpu:api,operation,uncapturederror:iff_uncaptured:*
 // There are also two unimplemented SKIPs in uncapturederror not enumerated here.
 webgpu:api,validation,encoding,queries,general:occlusion_query,query_type:*
 webgpu:shader,execution,flow_control,return:*
+webgpu:shader,validation,expression,call,builtin,max:values:*
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break_if"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="continue"

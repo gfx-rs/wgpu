@@ -80,6 +80,7 @@ Bottom level categories:
 - Generate vectorized code for `[un]pack4x{I,U}8[Clamp]` on SPIR-V and MSL 2.1+. By @robamler in [#7664](https://github.com/gfx-rs/wgpu/pull/7664).
 - Fix typing for `select`, which had issues particularly with a lack of automatic type conversion. By @ErichDonGubler in [#7572](https://github.com/gfx-rs/wgpu/pull/7572).
 - Allow scalars as the first argument of the `distance` built-in function. By @bernhl in [#7530](https://github.com/gfx-rs/wgpu/pull/7530).
+- Don't panic when handling `f16` for pipeline constants, i.e., `override`s in WGSL. By @ErichDonGubler in [#7801](https://github.com/gfx-rs/wgpu/pull/7801).
 
 #### DX12
 
@@ -127,7 +128,6 @@ Bottom level categories:
 #### HAL
 
 - Added initial `no_std` support to `wgpu-hal`. By @bushrat011899 in [#7599](https://github.com/gfx-rs/wgpu/pull/7599)
-
 
 ### Documentation
 
