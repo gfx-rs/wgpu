@@ -979,7 +979,10 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
 
             Ok(Literal::F64(value))
         }
-        _ => unreachable!(),
+        Scalar::ABSTRACT_FLOAT | Scalar::ABSTRACT_INT => {
+            unreachable!("abstract values should not be validated out of override processing")
+        }
+        _ => unreachable!("unrecognized scalar type for override"),
     }
 }
 
