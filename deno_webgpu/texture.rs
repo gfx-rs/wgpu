@@ -550,7 +550,7 @@ impl From<GPUTextureFormat> for TextureFormat {
                 channel: AstcChannel::Unorm,
             },
             GPUTextureFormat::Astc4x4UnormSrgb => Self::Astc {
-                block: AstcBlock::B5x4,
+                block: AstcBlock::B4x4,
                 channel: AstcChannel::UnormSrgb,
             },
             GPUTextureFormat::Astc5x4Unorm => Self::Astc {

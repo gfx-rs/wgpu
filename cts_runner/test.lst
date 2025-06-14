@@ -9,6 +9,11 @@ webgpu:api,operation,compute,basic:memcpy:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute_pipeline,overrides:*
 webgpu:api,operation,device,lost:*
+webgpu:api,validation,queue,submit:command_buffer,device_mismatch:*
+webgpu:api,validation,queue,submit:command_buffer,duplicate_buffers:*
+webgpu:api,validation,queue,submit:command_buffer,submit_invalidates:*
+//FAIL: webgpu:api,validation,queue,submit:command_buffer,invalid_submit_invalidates:*
+// https://github.com/gfx-rs/wgpu/issues/3911#issuecomment-2972995675
 webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*

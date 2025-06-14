@@ -59,17 +59,8 @@ impl GPUQueue {
     ) -> Result<v8::Local<v8::Value>, JsErrorBox> {
         let ids = command_buffers
             .into_iter()
-            .enumerate()
-            .map(|(i, cb)| {
-                if cb.consumed.set(()).is_err() {
-                    Err(JsErrorBox::type_error(format!(
-                        "The command buffer at position {i} has already been submitted."
-                    )))
-                } else {
-                    Ok(cb.id)
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|cb| cb.id)
+            .collect::<Vec<_>>();
 
         let err = self.instance.queue_submit(self.id, &ids).err();
 
