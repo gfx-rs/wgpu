@@ -421,11 +421,12 @@ impl GPUCommandEncoder {
             label: crate::transform_label(descriptor.label.clone()),
         };
 
-        // TODO: This is not right, it should be a validation error, and it
-        // would be nice if we can just let wgpu generate it for us. The problem
-        // is that if the encoder was already finished, we transferred
-        // ownership of the id to a command buffer, so we have to bail out
-        // before we mint a duplicate command buffer with the same id below.
+        // TODO(https://github.com/gfx-rs/wgpu/issues/7812): This is not right,
+        // it should be a validation error, and it would be nice if we can just
+        // let wgpu generate it for us. The problem is that if the encoder was
+        // already finished, we transferred ownership of the id to a command
+        // buffer, so we have to bail out before we mint a duplicate command
+        // buffer with the same id below.
         if self.finished.fetch_or(true, Ordering::SeqCst) {
             return Err(JsErrorBox::type_error(
                 "The command encoder has already finished.",
