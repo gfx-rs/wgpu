@@ -112,7 +112,8 @@ impl StatementGraph {
                     }
                     "Continue"
                 }
-                S::Barrier(_flags) => "Barrier",
+                S::ControlBarrier(_flags) => "ControlBarrier",
+                S::MemoryBarrier(_flags) => "MemoryBarrier",
                 S::Block(ref b) => {
                     let (other, last) = self.add(b, targets);
                     self.flow.push((id, other, ""));

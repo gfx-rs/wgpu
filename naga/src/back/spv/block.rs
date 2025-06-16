@@ -3240,8 +3240,11 @@ impl BlockContext<'_> {
                     self.function.consume(block, Instruction::kill());
                     return Ok(BlockExitDisposition::Discarded);
                 }
-                Statement::Barrier(flags) => {
-                    self.writer.write_barrier(flags, &mut block);
+                Statement::ControlBarrier(flags) => {
+                    self.writer.write_control_barrier(flags, &mut block);
+                }
+                Statement::MemoryBarrier(flags) => {
+                    self.writer.write_memory_barrier(flags, &mut block);
                 }
                 Statement::Store { pointer, value } => {
                     let value_id = self.cached[value];
@@ -3576,7 +3579,7 @@ impl BlockContext<'_> {
                 }
                 Statement::WorkGroupUniformLoad { pointer, result } => {
                     self.writer
-                        .write_barrier(crate::Barrier::WORK_GROUP, &mut block);
+                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block);
                     let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
                     // Embed the body of
                     match self.write_access_chain(
@@ -3616,7 +3619,7 @@ impl BlockContext<'_> {
                         }
                     }
                     self.writer
-                        .write_barrier(crate::Barrier::WORK_GROUP, &mut block);
+                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block);
                 }
                 Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);

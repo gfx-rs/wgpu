@@ -3700,7 +3700,8 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Kill => {
                     writeln!(self.out, "{level}{NAMESPACE}::discard_fragment();")?;
                 }
-                crate::Statement::Barrier(flags) => {
+                crate::Statement::ControlBarrier(flags)
+                | crate::Statement::MemoryBarrier(flags) => {
                     self.write_barrier(flags, level)?;
                 }
                 crate::Statement::Store { pointer, value } => {

@@ -830,7 +830,7 @@ impl<W: Write> Writer<W> {
             Statement::Continue => {
                 writeln!(self.out, "{level}continue;")?;
             }
-            Statement::Barrier(barrier) => {
+            Statement::ControlBarrier(barrier) | Statement::MemoryBarrier(barrier) => {
                 if barrier.contains(crate::Barrier::STORAGE) {
                     writeln!(self.out, "{level}storageBarrier();")?;
                 }

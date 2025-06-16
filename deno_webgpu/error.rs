@@ -19,6 +19,7 @@ use wgpu_core::command::CommandEncoderError;
 use wgpu_core::command::ComputePassError;
 use wgpu_core::command::CopyError;
 use wgpu_core::command::CreateRenderBundleError;
+use wgpu_core::command::EncoderStateError;
 use wgpu_core::command::QueryError;
 use wgpu_core::command::RenderBundleError;
 use wgpu_core::command::RenderPassError;
@@ -196,6 +197,12 @@ fn fmt_err(err: &(dyn std::error::Error + 'static)) -> String {
     }
 
     output
+}
+
+impl From<EncoderStateError> for GPUError {
+    fn from(err: EncoderStateError) -> Self {
+        GPUError::Validation(fmt_err(&err))
+    }
 }
 
 impl From<CreateBufferError> for GPUError {

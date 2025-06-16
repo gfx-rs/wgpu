@@ -1695,9 +1695,11 @@ impl Writer {
         Ok(id)
     }
 
-    pub(super) fn write_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
+    pub(super) fn write_control_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
         let memory_scope = if flags.contains(crate::Barrier::STORAGE) {
             spirv::Scope::Device
+        } else if flags.contains(crate::Barrier::SUB_GROUP) {
+            spirv::Scope::Subgroup
         } else {
             spirv::Scope::Workgroup
         };
@@ -1709,6 +1711,10 @@ impl Writer {
         semantics.set(
             spirv::MemorySemantics::WORKGROUP_MEMORY,
             flags.contains(crate::Barrier::WORK_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::SUBGROUP_MEMORY,
+            flags.contains(crate::Barrier::SUB_GROUP),
         );
         semantics.set(
             spirv::MemorySemantics::IMAGE_MEMORY,
@@ -1726,6 +1732,37 @@ impl Writer {
             mem_scope_id,
             semantics_id,
         ));
+    }
+
+    pub(super) fn write_memory_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
+        let mut semantics = spirv::MemorySemantics::ACQUIRE_RELEASE;
+        semantics.set(
+            spirv::MemorySemantics::UNIFORM_MEMORY,
+            flags.contains(crate::Barrier::STORAGE),
+        );
+        semantics.set(
+            spirv::MemorySemantics::WORKGROUP_MEMORY,
+            flags.contains(crate::Barrier::WORK_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::SUBGROUP_MEMORY,
+            flags.contains(crate::Barrier::SUB_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::IMAGE_MEMORY,
+            flags.contains(crate::Barrier::TEXTURE),
+        );
+        let mem_scope_id = if flags.contains(crate::Barrier::STORAGE) {
+            self.get_index_constant(spirv::Scope::Device as u32)
+        } else if flags.contains(crate::Barrier::SUB_GROUP) {
+            self.get_index_constant(spirv::Scope::Subgroup as u32)
+        } else {
+            self.get_index_constant(spirv::Scope::Workgroup as u32)
+        };
+        let semantics_id = self.get_index_constant(semantics.bits());
+        block
+            .body
+            .push(Instruction::memory_barrier(mem_scope_id, semantics_id));
     }
 
     fn generate_workgroup_vars_init_block(
@@ -1828,7 +1865,7 @@ impl Writer {
 
         let mut post_if_block = Block::new(merge_id);
 
-        self.write_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block);
+        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block);
 
         let next_id = self.id_gen.next();
         function.consume(post_if_block, Instruction::branch(next_id));

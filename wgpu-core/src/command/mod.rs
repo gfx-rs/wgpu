@@ -114,6 +114,53 @@ impl CommandEncoderStatus {
         }
     }
 
+    /// Record commands using the supplied closure.
+    ///
+    /// If the encoder is in the [`Self::Recording`] state, calls the closure to
+    /// record commands. If the closure returns an error, stores that error in
+    /// the encoder for later reporting when `finish()` is called. Returns
+    /// `Ok(())` even if the closure returned an error.
+    ///
+    /// If the encoder is not in the [`Self::Recording`] state, the closure will
+    /// not be called and nothing will be recorded. The encoder will be
+    /// invalidated (if it is not already). If the error is a [validation error
+    /// that should be raised immediately][ves], returns it in `Err`, otherwise,
+    /// returns `Ok(())`.
+    ///
+    /// [ves]: https://www.w3.org/TR/webgpu/#abstract-opdef-validate-the-encoder-state
+    fn record_with<
+        F: FnOnce(&mut CommandBufferMutable) -> Result<(), E>,
+        E: Clone + Into<CommandEncoderError>,
+    >(
+        &mut self,
+        f: F,
+    ) -> Result<(), EncoderStateError> {
+        let err = match self.record() {
+            Ok(guard) => {
+                guard.record(f);
+                return Ok(());
+            }
+            Err(err) => err,
+        };
+        match err {
+            err @ EncoderStateError::Locked => {
+                // Invalidate the encoder and do not record anything, but do not
+                // return an immediate validation error.
+                self.invalidate(err);
+                Ok(())
+            }
+            err @ EncoderStateError::Ended => {
+                // Invalidate the encoder, do not record anything, and return an
+                // immediate validation error.
+                Err(self.invalidate(err))
+            }
+            // Encoder is already invalid. Do not record anything, but do not
+            // return an immediate validation error.
+            EncoderStateError::Invalid => Ok(()),
+            EncoderStateError::Unlocked | EncoderStateError::Submitted => unreachable!(),
+        }
+    }
+
     #[cfg(feature = "trace")]
     fn get_inner(&mut self) -> &mut CommandBufferMutable {
         match self {
@@ -229,6 +276,21 @@ pub(crate) struct RecordingGuard<'a> {
 impl<'a> RecordingGuard<'a> {
     pub(crate) fn mark_successful(self) {
         mem::forget(self)
+    }
+
+    fn record<
+        F: FnOnce(&mut CommandBufferMutable) -> Result<(), E>,
+        E: Clone + Into<CommandEncoderError>,
+    >(
+        mut self,
+        f: F,
+    ) {
+        match f(&mut self) {
+            Ok(()) => self.mark_successful(),
+            Err(err) => {
+                self.inner.invalidate(err);
+            }
+        }
     }
 }
 
@@ -859,7 +921,7 @@ impl Global {
         &self,
         encoder_id: id::CommandEncoderId,
         label: &str,
-    ) -> Result<(), CommandEncoderError> {
+    ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::push_debug_group");
         api_log!("CommandEncoder::push_debug_group {label}");
 
@@ -867,34 +929,32 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
-        let cmd_buf_data = &mut *cmd_buf_data_guard;
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.commands {
-            list.push(TraceCommand::PushDebugGroup(label.to_owned()));
-        }
-
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-        if !cmd_buf
-            .device
-            .instance_flags
-            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-        {
-            unsafe {
-                cmd_buf_raw.begin_debug_marker(label);
+        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
+            #[cfg(feature = "trace")]
+            if let Some(ref mut list) = cmd_buf_data.commands {
+                list.push(TraceCommand::PushDebugGroup(label.to_owned()));
             }
-        }
 
-        cmd_buf_data_guard.mark_successful();
-        Ok(())
+            let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+            if !cmd_buf
+                .device
+                .instance_flags
+                .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+            {
+                unsafe {
+                    cmd_buf_raw.begin_debug_marker(label);
+                }
+            }
+
+            Ok(())
+        })
     }
 
     pub fn command_encoder_insert_debug_marker(
         &self,
         encoder_id: id::CommandEncoderId,
         label: &str,
-    ) -> Result<(), CommandEncoderError> {
+    ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::insert_debug_marker");
         api_log!("CommandEncoder::insert_debug_marker {label}");
 
@@ -902,33 +962,31 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
-        let cmd_buf_data = &mut *cmd_buf_data_guard;
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.commands {
-            list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
-        }
-
-        if !cmd_buf
-            .device
-            .instance_flags
-            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-        {
-            let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-            unsafe {
-                cmd_buf_raw.insert_debug_marker(label);
+        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
+            #[cfg(feature = "trace")]
+            if let Some(ref mut list) = cmd_buf_data.commands {
+                list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
             }
-        }
 
-        cmd_buf_data_guard.mark_successful();
-        Ok(())
+            if !cmd_buf
+                .device
+                .instance_flags
+                .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+            {
+                let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+                unsafe {
+                    cmd_buf_raw.insert_debug_marker(label);
+                }
+            }
+
+            Ok(())
+        })
     }
 
     pub fn command_encoder_pop_debug_group(
         &self,
         encoder_id: id::CommandEncoderId,
-    ) -> Result<(), CommandEncoderError> {
+    ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::pop_debug_marker");
         api_log!("CommandEncoder::pop_debug_group");
 
@@ -936,27 +994,25 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
-        let mut cmd_buf_data_guard = cmd_buf_data.record()?;
-        let cmd_buf_data = &mut *cmd_buf_data_guard;
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.commands {
-            list.push(TraceCommand::PopDebugGroup);
-        }
-
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-        if !cmd_buf
-            .device
-            .instance_flags
-            .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-        {
-            unsafe {
-                cmd_buf_raw.end_debug_marker();
+        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
+            #[cfg(feature = "trace")]
+            if let Some(ref mut list) = cmd_buf_data.commands {
+                list.push(TraceCommand::PopDebugGroup);
             }
-        }
 
-        cmd_buf_data_guard.mark_successful();
-        Ok(())
+            let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+            if !cmd_buf
+                .device
+                .instance_flags
+                .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+            {
+                unsafe {
+                    cmd_buf_raw.end_debug_marker();
+                }
+            }
+
+            Ok(())
+        })
     }
 
     fn validate_pass_timestamp_writes(
