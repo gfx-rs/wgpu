@@ -65,7 +65,7 @@ jobs:
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
-        uses: ./.github/install-mesa-action
+        uses: ./.github/actions/install-mesa
 
       - name: run CTS
         shell: bash
