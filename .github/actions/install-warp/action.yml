@@ -20,6 +20,6 @@ runs:
         7z.exe e warp.zip -owarp build/native/bin/x64/d3d10warp.dll
 
         for dir in ${{ inputs.target-dirs }}; do
-          mkdir -p ${{ inputs.target-dirs }}
+          mkdir -p "$dir"
           cp -v warp/d3d10warp.dll "$dir"
         done

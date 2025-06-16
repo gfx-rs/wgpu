@@ -63,6 +63,16 @@ jobs:
           debug = 1
           EOF
 
+      - name: (Windows) Install DXC
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/install-dxc
+
+      - name: (Windows) Install WARP
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/install-warp
+        with:
+          target-dirs: "target/debug"
+
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/install-mesa
