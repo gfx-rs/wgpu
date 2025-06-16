@@ -1500,3 +1500,10 @@ struct RawTlasInstance {
     shader_binding_table_record_offset_and_flags: u32,
     acceleration_structure_reference: u64,
 }
+
+pub type CreateDeviceCallback<'a> = &'a dyn Fn(
+    &mut Vec<&'static CStr>,
+    &mut PhysicalDeviceFeatures,
+    &mut Vec<vk::DeviceQueueCreateInfo>,
+    &mut vk::DeviceCreateInfo,
+);
