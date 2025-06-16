@@ -88,6 +88,10 @@ Bottom level categories:
 
 - Get `vertex_index` & `instance_index` builtins working for indirect draws. By @teoxoy in [#7535](https://github.com/gfx-rs/wgpu/pull/7535)
 
+#### Vulkan
+
+- Fix OpenBSD compilation of `wgpu_hal::vulkan::drm`. By @ErichDonGubler in [#7810](https://github.com/gfx-rs/wgpu/pull/7810).
+
 #### Metal
 
 - Remove extraneous main thread warning in `fn surface_capabilities()`. By @jamesordner in [#7692](https://github.com/gfx-rs/wgpu/pull/7692)
