@@ -84,6 +84,8 @@ impl GPUAdapter {
     fn features(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
         self.features.get(scope, |scope| {
             let features = self.instance.adapter_features(self.id);
+            // Only expose WebGPU features, not wgpu native-only features
+            let features = features & wgpu_types::Features::all_webgpu_mask();
             let features = features_to_feature_names(features);
             GPUSupportedFeatures::new(scope, features)
         })
