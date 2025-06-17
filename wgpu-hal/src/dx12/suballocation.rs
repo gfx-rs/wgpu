@@ -566,6 +566,14 @@ impl<'a> DeviceAllocationContext<'a> {
                 .GetResourceAllocationInfo(0, core::slice::from_ref(desc))
         };
 
+        // Some versions of WARP return SizeInBytes == 0 for very large
+        // allocations. Proceeding to attempt to allocate a zero-sized resource
+        // will result in a device lost error, so it seems preferable to return
+        // an out of memory error now.
+        if allocation_info.SizeInBytes == 0 {
+            return Err(crate::DeviceError::OutOfMemory);
+        }
+
         let Some(threshold) = self
             .mem_allocator
             .memory_budget_thresholds
