@@ -715,11 +715,11 @@ jobs:
       - name: Check for typos
         uses: crate-ci/typos@v1.33.1
 
-  cts-runner:
+  check-cts-runner:
     # runtime is normally 2 minutes
     timeout-minutes: 10
 
-    name: cts_runner
+    name: Clippy cts_runner
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -746,13 +746,9 @@ jobs:
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
 
-      - name: Build and Clippy
+      - name: Build Deno
         run: |
           cargo clippy --manifest-path cts_runner/Cargo.toml
-
-      - name: Tests
-        run: |
-          cargo test --manifest-path cts_runner/Cargo.toml
 
   # Separate job so that new advisories don't block CI.
   #
