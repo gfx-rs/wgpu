@@ -112,7 +112,8 @@ impl StatementGraph {
                     }
                     "Continue"
                 }
-                S::Barrier(_flags) => "Barrier",
+                S::ControlBarrier(_flags) => "ControlBarrier",
+                S::MemoryBarrier(_flags) => "MemoryBarrier",
                 S::Block(ref b) => {
                     let (other, last) = self.add(b, targets);
                     self.flow.push((id, other, ""));
@@ -599,6 +600,7 @@ fn write_function_expressions(
                 offset: _,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 edges.insert("image", image);
                 edges.insert("sampler", sampler);

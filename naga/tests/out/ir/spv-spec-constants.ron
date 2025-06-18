@@ -251,10 +251,10 @@
                         binding: Some(BuiltIn(Position(
                             invariant: false,
                         ))),
-                        offset: 0,
+                        offset: 16,
                     ),
                 ],
-                span: 65535,
+                span: 32,
             ),
         ),
     ],

@@ -308,7 +308,7 @@ fn load_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> SceneComponents {
 struct Example {
     uniforms: Uniforms,
     uniform_buf: wgpu::Buffer,
-    tlas_package: wgpu::TlasPackage,
+    tlas: wgpu::Tlas,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     scene_components: SceneComponents,
@@ -370,8 +370,6 @@ impl crate::framework::Example for Example {
             max_instances: side_count * side_count,
         });
 
-        let tlas_package = wgpu::TlasPackage::new(tlas);
-
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
@@ -414,7 +412,7 @@ impl crate::framework::Example for Example {
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
-                    resource: tlas_package.as_binding(),
+                    resource: tlas.as_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -438,7 +436,7 @@ impl crate::framework::Example for Example {
         Example {
             uniforms,
             uniform_buf,
-            tlas_package,
+            tlas,
             pipeline,
             bind_group,
             scene_components,
@@ -479,7 +477,7 @@ impl crate::framework::Example for Example {
 
             for x in 0..side_count {
                 for y in 0..side_count {
-                    let instance = self.tlas_package.index_mut(x + y * side_count);
+                    let instance = self.tlas.index_mut(x + y * side_count);
 
                     let blas_index = (x + y)
                         % self
@@ -521,7 +519,7 @@ impl crate::framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package));
+        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas));
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

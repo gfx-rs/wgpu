@@ -1,9 +1,9 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
 use core::{error, fmt};
 
-use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
+use crate::util::Mutex;
 use crate::*;
 
 /// Describes a [`Surface`].
@@ -413,7 +413,10 @@ impl error::Error for CreateSurfaceError {
             #[cfg(wgpu_core)]
             CreateSurfaceErrorKind::Hal(e) => e.source(),
             CreateSurfaceErrorKind::Web(_) => None,
+            #[cfg(feature = "std")]
             CreateSurfaceErrorKind::RawHandle(e) => e.source(),
+            #[cfg(not(feature = "std"))]
+            CreateSurfaceErrorKind::RawHandle(_) => None,
         }
     }
 }

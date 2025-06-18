@@ -23,6 +23,7 @@ default = []
 dot-out = []
 glsl-in = ["dep:pp-rs"]
 glsl-out = []
+std = []
 
 ## Enables outputting to the Metal Shading Language (MSL).
 ##
@@ -58,7 +59,7 @@ arbitrary = [
 ]
 spv-in = ["dep:petgraph", "petgraph/graphmap", "dep:spirv"]
 spv-out = ["dep:spirv"]
-wgsl-in = ["dep:hexf-parse", "dep:strum", "dep:unicode-ident", "compact"]
+wgsl-in = ["dep:hexf-parse", "dep:unicode-ident"]
 wgsl-out = []
 
 ## Enables outputting to HLSL (Microsoft's High-Level Shader Language).
@@ -71,8 +72,6 @@ hlsl-out = []
 ##
 ## If you want to enable HLSL output it regardless of the target platform, use `naga/hlsl-out`.
 hlsl-out-if-target-windows = []
-
-compact = []
 
 ## Enables colored output through codespan-reporting and termcolor.
 termcolor = ["codespan-reporting/termcolor"]
@@ -98,7 +97,6 @@ libm = { workspace = true, default-features = false }
 log.workspace = true
 num-traits.workspace = true
 once_cell = { workspace = true, features = ["alloc", "race"] }
-strum = { workspace = true, optional = true }
 spirv = { workspace = true, optional = true }
 thiserror.workspace = true
 serde = { workspace = true, features = ["alloc", "derive"], optional = true }
@@ -120,6 +118,7 @@ ron.workspace = true
 rspirv.workspace = true
 serde = { workspace = true, features = ["default", "derive"] }
 spirv = { workspace = true, features = ["deserialize"] }
+strum = { workspace = true }
 toml.workspace = true
 walkdir.workspace = true
 

@@ -34,7 +34,7 @@ wgpu/red.png
 **/*-difference.png
 
 # Readme says to check out CTS here
-cts/
+/cts
 
 # Readme says to put angle in working directory
 *.dll

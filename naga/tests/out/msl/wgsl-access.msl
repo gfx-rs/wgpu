@@ -16,6 +16,7 @@ struct GlobalConst {
 };
 struct AlignedWrapper {
     int value;
+    char _pad1[4];
 };
 struct type_6 {
     metal::float2x2 inner[2];
@@ -35,6 +36,7 @@ struct Bar {
     char _pad4[4];
     type_10 arr;
     type_11 data;
+    char _pad6[8];
 };
 struct Baz {
     metal::float3x2 m;

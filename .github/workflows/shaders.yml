@@ -18,12 +18,6 @@ env:
   # We don't include the 4th version number, as it's not used in any URL.
   VULKAN_SDK_VERSION: "1.4.313"
 
-  # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
-  #
-  # Must also be changed in ci.yaml
-  DXC_RELEASE: "v1.8.2502"
-  DXC_FILENAME: "dxc_2025_02_20.zip"
-
 jobs:
   naga-validate-windows:
     name: "Validate: HLSL"
@@ -56,15 +50,7 @@ jobs:
         shell: powershell
 
       - name: Setup DXC
-        shell: bash
-        run: |
-          set -e
-
-          curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
-          7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll}
-
-          # We need to use cygpath to convert PWD to a windows path as we're using bash.
-          cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
+        uses: ./.github/actions/install-dxc
 
       - name: Validate
         shell: bash

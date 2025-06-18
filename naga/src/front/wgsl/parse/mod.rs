@@ -199,8 +199,10 @@ impl<'a> BindingParser<'a> {
             "builtin" => {
                 lexer.expect(Token::Paren('('))?;
                 let (raw, span) = lexer.next_ident_with_span()?;
-                self.built_in
-                    .set(conv::map_built_in(raw, span)?, name_span)?;
+                self.built_in.set(
+                    conv::map_built_in(&lexer.enable_extensions, raw, span)?,
+                    name_span,
+                )?;
                 lexer.expect(Token::Paren(')'))?;
             }
             "interpolate" => {

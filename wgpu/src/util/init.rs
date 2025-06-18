@@ -9,10 +9,16 @@ pub fn initialize_adapter_from_env(
     instance: &Instance,
     compatible_surface: Option<&Surface<'_>>,
 ) -> Result<Adapter, wgt::RequestAdapterError> {
-    let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
-        .as_deref()
-        .map(str::to_lowercase)
-        .map_err(|_| wgt::RequestAdapterError::EnvNotSet)?;
+    cfg_if::cfg_if! {
+        if #[cfg(std)] {
+            let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
+                .as_deref()
+                .map(str::to_lowercase)
+                .map_err(|_| wgt::RequestAdapterError::EnvNotSet)?;
+        } else {
+            return Err(wgt::RequestAdapterError::EnvNotSet);
+        }
+    }
 
     let adapters = instance.enumerate_adapters(crate::Backends::all());
 

@@ -48,17 +48,15 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
         },
     );
 
-    let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
+    let mut tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
         label: None,
         flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         max_instances,
     });
 
-    let mut tlas_package = wgpu::TlasPackage::new(tlas);
-
     for j in 0..max_instances {
-        tlas_package[j as usize] = Some(wgpu::TlasInstance::new(
+        tlas[j as usize] = Some(wgpu::TlasInstance::new(
             &blas,
             mesh_gen::affine_to_rows(&Affine3A::from_rotation_translation(
                 Quat::from_rotation_y(45.9_f32.to_radians()),
@@ -90,7 +88,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
                 transform_buffer_offset: None,
             }]),
         }),
-        iter::once(&tlas_package),
+        iter::once(&tlas),
     );
 
     ctx.queue.submit(Some(encoder.finish()));

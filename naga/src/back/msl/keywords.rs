@@ -353,6 +353,7 @@ pub const RESERVED: &[&str] = &[
     super::writer::F2U32_FUNCTION,
     super::writer::F2I64_FUNCTION,
     super::writer::F2U64_FUNCTION,
+    super::writer::IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION,
     super::writer::ARGUMENT_BUFFER_WRAPPER_STRUCT,
 ];
 

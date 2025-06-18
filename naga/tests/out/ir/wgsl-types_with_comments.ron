@@ -30,6 +30,20 @@
             )),
         ),
         (
+            name: Some("TestR"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("test_m"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
             name: Some("TestS"),
             inner: Struct(
                 members: [
@@ -76,6 +90,13 @@
             ty: 1,
             init: None,
         ),
+        (
+            name: Some("w_mem2"),
+            space: WorkGroup,
+            binding: None,
+            ty: 1,
+            init: None,
+        ),
     ],
     global_expressions: [
         Literal(U32(1)),
@@ -83,6 +104,20 @@
     functions: [
         (
             name: Some("test_f"),
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [],
+            named_expressions: {},
+            body: [
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("test_g"),
             arguments: [],
             result: None,
             local_variables: [],
@@ -108,9 +143,27 @@
                 arguments: [],
                 result: None,
                 local_variables: [],
-                expressions: [],
-                named_expressions: {},
+                expressions: [
+                    GlobalVariable(2),
+                    Load(
+                        pointer: 0,
+                    ),
+                    ZeroValue(4),
+                ],
+                named_expressions: {
+                    1: "phony",
+                    2: "phony",
+                },
                 body: [
+                    Emit((
+                        start: 1,
+                        end: 2,
+                    )),
+                    Call(
+                        function: 1,
+                        arguments: [],
+                        result: None,
+                    ),
                     Return(
                         value: None,
                     ),
@@ -124,11 +177,17 @@
     doc_comments: Some((
         types: {
             3: [
-                "/// struct doc comment",
+                "/// struct R doc comment",
+            ],
+            4: [
+                "/// struct S doc comment",
             ],
         },
         struct_members: {
             (3, 0): [
+                "/// member doc comment",
+            ],
+            (4, 0): [
                 "/// member doc comment",
             ],
         },
@@ -139,7 +198,10 @@
         },
         functions: {
             0: [
-                "/// function doc comment",
+                "/// function f doc comment",
+            ],
+            1: [
+                "/// function g doc comment",
             ],
         },
         constants: {
@@ -152,8 +214,11 @@
                 "/**\n 🍽\u{fe0f} /* nested comment */\n */",
             ],
             1: [
-                "/// workgroup var doc comment",
+                "/// workgroup var 1 doc comment",
                 "/// 2nd line of workgroup var doc comment",
+            ],
+            2: [
+                "/// workgroup var 2 doc comment",
             ],
         },
         module: [

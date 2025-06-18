@@ -542,7 +542,7 @@ fn run() -> anyhow::Result<()> {
                 write_output(&module, &info, &params, before_compaction)?;
             }
 
-            naga::compact::compact(&mut module);
+            naga::compact::compact(&mut module, KeepUnused::No);
 
             // Re-validate the IR after compaction.
             match naga::valid::Validator::new(params.validation_flags, validation_caps)
@@ -717,9 +717,13 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let (module, info) = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                None,
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
             let pipeline_options = msl::PipelineOptions::default();
             let (msl, _) =
@@ -751,9 +755,13 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let (module, info) = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                None,
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
             let spv =
                 spv::write_vec(&module, &info, &params.spv_out, pipeline_options).unwrap_pretty();
@@ -788,9 +796,13 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let (module, info) = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                None,
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
             let mut buffer = String::new();
             let mut writer = glsl::Writer::new(
@@ -819,9 +831,13 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let (module, info) = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                None,
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
             let mut buffer = String::new();
             let pipeline_options = Default::default();
@@ -906,4 +922,4 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
 }
 
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
-use naga::FastHashMap;
+use naga::{compact::KeepUnused, FastHashMap};

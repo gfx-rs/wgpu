@@ -61,6 +61,8 @@ pub(crate) const F2I32_FUNCTION: &str = "naga_f2i32";
 pub(crate) const F2U32_FUNCTION: &str = "naga_f2u32";
 pub(crate) const F2I64_FUNCTION: &str = "naga_f2i64";
 pub(crate) const F2U64_FUNCTION: &str = "naga_f2u64";
+pub(crate) const IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION: &str =
+    "nagaTextureSampleBaseClampToEdge";
 /// For some reason, Metal does not let you have `metal::texture<..>*` as a buffer argument.
 /// However, if you put that texture inside a struct, everything is totally fine. This
 /// baffles me to no end.
@@ -445,6 +447,9 @@ enum WrappedFunction {
         src_scalar: crate::Scalar,
         vector_size: Option<crate::VectorSize>,
         dst_scalar: crate::Scalar,
+    },
+    ImageSample {
+        clamp_to_edge: bool,
     },
 }
 
@@ -1941,6 +1946,25 @@ impl<W: Write> Writer<W> {
             }
             crate::Expression::Load { pointer } => self.put_load(pointer, context, is_scoped)?,
             crate::Expression::ImageSample {
+                coordinate,
+                image,
+                sampler,
+                clamp_to_edge: true,
+                gather: None,
+                array_index: None,
+                offset: None,
+                level: crate::SampleLevel::Zero,
+                depth_ref: None,
+            } => {
+                write!(self.out, "{IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}(")?;
+                self.put_expression(image, context, true)?;
+                write!(self.out, ", ")?;
+                self.put_expression(sampler, context, true)?;
+                write!(self.out, ", ")?;
+                self.put_expression(coordinate, context, true)?;
+                write!(self.out, ")")?;
+            }
+            crate::Expression::ImageSample {
                 image,
                 sampler,
                 gather,
@@ -1949,7 +1973,14 @@ impl<W: Write> Writer<W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
+                if clamp_to_edge {
+                    return Err(Error::GenericValidation(
+                        "ImageSample::clamp_to_edge should have been validated out".to_string(),
+                    ));
+                }
+
                 let main_op = match gather {
                     Some(_) => "gather",
                     None => "sample",
@@ -3700,7 +3731,8 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Kill => {
                     writeln!(self.out, "{level}{NAMESPACE}::discard_fragment();")?;
                 }
-                crate::Statement::Barrier(flags) => {
+                crate::Statement::ControlBarrier(flags)
+                | crate::Statement::MemoryBarrier(flags) => {
                     self.write_barrier(flags, level)?;
                 }
                 crate::Statement::Store { pointer, value } => {
@@ -4468,6 +4500,16 @@ impl<W: Write> Writer<W> {
                                 }
                             }
                         }
+                    }
+                    if last_offset < span {
+                        let pad = span - last_offset;
+                        writeln!(
+                            self.out,
+                            "{}char _pad{}[{}];",
+                            back::INDENT,
+                            members.len(),
+                            pad
+                        )?;
                     }
                     writeln!(self.out, "}};")?;
                 }
@@ -5816,6 +5858,27 @@ template <typename A>
                     write!(self.out, ", ")?;
                     self.put_literal(max)?;
                     writeln!(self.out, "));")?;
+                    writeln!(self.out, "}}")?;
+                    writeln!(self.out)?;
+                }
+                crate::Expression::ImageSample {
+                    clamp_to_edge: true,
+                    ..
+                } => {
+                    let wrapped = WrappedFunction::ImageSample {
+                        clamp_to_edge: true,
+                    };
+                    if !self.wrapped_functions.insert(wrapped) {
+                        continue;
+                    }
+
+                    writeln!(self.out, "{NAMESPACE}::float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}({NAMESPACE}::texture2d<float, {NAMESPACE}::access::sample> tex, {NAMESPACE}::sampler samp, {NAMESPACE}::float2 coords) {{")?;
+                    let l1 = back::Level(1);
+                    writeln!(self.out, "{l1}{NAMESPACE}::float2 half_texel = 0.5 / {NAMESPACE}::float2(tex.get_width(0u), tex.get_height(0u));")?;
+                    writeln!(
+                        self.out,
+                        "{l1}return tex.sample(samp, {NAMESPACE}::clamp(coords, half_texel, 1.0 - half_texel), {NAMESPACE}::level(0.0));"
+                    )?;
                     writeln!(self.out, "}}")?;
                     writeln!(self.out)?;
                 }

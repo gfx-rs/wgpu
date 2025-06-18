@@ -6,7 +6,7 @@ const v_i32_one: vec4<i32> = vec4<i32>(1i, 1i, 1i, 1i);
 fn builtins() -> vec4<f32> {
     let s1_ = select(0i, 1i, true);
     let s2_ = select(v_f32_zero, v_f32_one, true);
-    let s3_ = select(v_f32_one, v_f32_zero, vec4<bool>(false, false, false, false));
+    let s3_ = vec4<f32>(1f, 1f, 1f, 1f);
     let m1_ = mix(v_f32_zero, v_f32_one, v_f32_half);
     let m2_ = mix(v_f32_zero, v_f32_one, 0.1f);
     let b1_ = bitcast<f32>(1i);

@@ -1,12 +1,12 @@
 use alloc::{
     borrow::ToOwned,
     boxed::Box,
+    format,
     string::{String, ToString},
     vec::Vec,
 };
 use core::num::NonZeroU32;
 
-use crate::common::wgsl::{TryToWgsl, TypeContext};
 use crate::common::ForDebugWithTypes;
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
@@ -14,6 +14,10 @@ use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::wgsl::Result;
 use crate::front::Typifier;
+use crate::{
+    common::wgsl::{TryToWgsl, TypeContext},
+    compact::KeepUnused,
+};
 use crate::{ir, proc};
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
@@ -70,8 +74,9 @@ macro_rules! resolve_inner_binary {
 /// [`TypeResolution`]: proc::TypeResolution
 macro_rules! resolve {
     ($ctx:ident, $expr:expr) => {{
-        $ctx.grow_types($expr)?;
-        &$ctx.typifier()[$expr]
+        let expr = $expr;
+        $ctx.grow_types(expr)?;
+        &$ctx.typifier()[expr]
     }};
 }
 pub(super) use resolve;
@@ -1035,7 +1040,7 @@ enum Texture {
     SampleCompareLevel,
     SampleGrad,
     SampleLevel,
-    // SampleBaseClampToEdge,
+    SampleBaseClampToEdge,
 }
 
 impl Texture {
@@ -1050,7 +1055,7 @@ impl Texture {
             "textureSampleCompareLevel" => Self::SampleCompareLevel,
             "textureSampleGrad" => Self::SampleGrad,
             "textureSampleLevel" => Self::SampleLevel,
-            // "textureSampleBaseClampToEdge" => Some(Self::SampleBaseClampToEdge),
+            "textureSampleBaseClampToEdge" => Self::SampleBaseClampToEdge,
             _ => return None,
         })
     }
@@ -1066,7 +1071,7 @@ impl Texture {
             Self::SampleCompareLevel => 5,
             Self::SampleGrad => 6,
             Self::SampleLevel => 5,
-            // Self::SampleBaseClampToEdge => 3,
+            Self::SampleBaseClampToEdge => 3,
         }
     }
 }
@@ -1333,7 +1338,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         // Constant evaluation may leave abstract-typed literals and
         // compositions in expression arenas, so we need to compact the module
         // to remove unused expressions and types.
-        crate::compact::compact(&mut module);
+        crate::compact::compact(&mut module, KeepUnused::Yes);
 
         Ok(module)
     }
@@ -2541,11 +2546,67 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         "select" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
 
-                            let reject = self.expression(args.next()?, ctx)?;
-                            let accept = self.expression(args.next()?, ctx)?;
+                            let reject_orig = args.next()?;
+                            let accept_orig = args.next()?;
+                            let mut values = [
+                                self.expression_for_abstract(reject_orig, ctx)?,
+                                self.expression_for_abstract(accept_orig, ctx)?,
+                            ];
                             let condition = self.expression(args.next()?, ctx)?;
 
                             args.finish()?;
+
+                            let diagnostic_details =
+                                |ctx: &ExpressionContext<'_, '_, '_>,
+                                 ty_res: &proc::TypeResolution,
+                                 orig_expr| {
+                                    (
+                                        ctx.ast_expressions.get_span(orig_expr),
+                                        format!("`{}`", ctx.as_diagnostic_display(ty_res)),
+                                    )
+                                };
+                            for (&value, orig_value) in
+                                values.iter().zip([reject_orig, accept_orig])
+                            {
+                                let value_ty_res = resolve!(ctx, value);
+                                if value_ty_res
+                                    .inner_with(&ctx.module.types)
+                                    .vector_size_and_scalar()
+                                    .is_none()
+                                {
+                                    let (arg_span, arg_type) =
+                                        diagnostic_details(ctx, value_ty_res, orig_value);
+                                    return Err(Box::new(Error::SelectUnexpectedArgumentType {
+                                        arg_span,
+                                        arg_type,
+                                    }));
+                                }
+                            }
+                            let mut consensus_scalar = ctx
+                                .automatic_conversion_consensus(&values)
+                                .map_err(|_idx| {
+                                    let [reject, accept] = values;
+                                    let [(reject_span, reject_type), (accept_span, accept_type)] =
+                                        [(reject_orig, reject), (accept_orig, accept)].map(
+                                            |(orig_expr, expr)| {
+                                                let ty_res = &ctx.typifier()[expr];
+                                                diagnostic_details(ctx, ty_res, orig_expr)
+                                            },
+                                        );
+                                    Error::SelectRejectAndAcceptHaveNoCommonType {
+                                        reject_span,
+                                        reject_type,
+                                        accept_span,
+                                        accept_type,
+                                    }
+                                })?;
+                            if !ctx.is_const(condition) {
+                                consensus_scalar = consensus_scalar.concretize();
+                            }
+
+                            ctx.convert_slice_to_common_leaf_scalar(&mut values, consensus_scalar)?;
+
+                            let [reject, accept] = values;
 
                             ir::Expression::Select {
                                 reject,
@@ -2676,7 +2737,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
-                                .push(ir::Statement::Barrier(ir::Barrier::STORAGE), span);
+                                .push(ir::Statement::ControlBarrier(ir::Barrier::STORAGE), span);
                             return Ok(None);
                         }
                         "workgroupBarrier" => {
@@ -2684,7 +2745,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
-                                .push(ir::Statement::Barrier(ir::Barrier::WORK_GROUP), span);
+                                .push(ir::Statement::ControlBarrier(ir::Barrier::WORK_GROUP), span);
                             return Ok(None);
                         }
                         "subgroupBarrier" => {
@@ -2692,7 +2753,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
-                                .push(ir::Statement::Barrier(ir::Barrier::SUB_GROUP), span);
+                                .push(ir::Statement::ControlBarrier(ir::Barrier::SUB_GROUP), span);
                             return Ok(None);
                         }
                         "textureBarrier" => {
@@ -2700,7 +2761,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block
-                                .push(ir::Statement::Barrier(ir::Barrier::TEXTURE), span);
+                                .push(ir::Statement::ControlBarrier(ir::Barrier::TEXTURE), span);
                             return Ok(None);
                         }
                         "workgroupUniformLoad" => {
@@ -3466,6 +3527,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let sampler = self.expression_for_abstract(args.next()?, ctx)?;
 
         let coordinate = self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?;
+        let clamp_to_edge = matches!(fun, Texture::SampleBaseClampToEdge);
 
         let (class, arrayed) = ctx.image_data(image, image_span)?;
         let array_index = arrayed
@@ -3532,6 +3594,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 level = ir::SampleLevel::Exact(exact);
                 depth_ref = None;
             }
+            Texture::SampleBaseClampToEdge => {
+                level = crate::SampleLevel::Zero;
+                depth_ref = None;
+            }
         };
 
         let offset = args
@@ -3551,6 +3617,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             offset,
             level,
             depth_ref,
+            clamp_to_edge,
         })
     }
 

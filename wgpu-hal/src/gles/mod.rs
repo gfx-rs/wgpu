@@ -669,6 +669,7 @@ struct PipelineInner {
     sampler_map: SamplerBindMap,
     first_instance_location: Option<glow::UniformLocation>,
     push_constant_descs: ArrayVec<PushConstantDesc, MAX_PUSH_CONSTANT_COMMANDS>,
+    clip_distance_count: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -1005,6 +1006,10 @@ enum Command {
         uniform: PushConstantDesc,
         /// Offset from the start of the `data_bytes`
         offset: u32,
+    },
+    SetClipDistances {
+        old_count: u32,
+        new_count: u32,
     },
 }
 

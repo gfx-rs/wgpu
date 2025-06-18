@@ -449,7 +449,7 @@ impl crate::Scalar {
         self.automatic_conversion_combine(goal) == Some(goal)
     }
 
-    const fn concretize(self) -> Self {
+    pub(in crate::front::wgsl) const fn concretize(self) -> Self {
         use crate::ScalarKind as Sk;
         match self.kind {
             Sk::Sint | Sk::Uint | Sk::Float | Sk::Bool => self,

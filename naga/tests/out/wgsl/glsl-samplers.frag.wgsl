@@ -26,8 +26,6 @@ var tex2DArrayShadow: texture_depth_2d_array;
 var texCubeShadow: texture_depth_cube;
 @group(1) @binding(15) 
 var texCubeArrayShadow: texture_depth_cube_array;
-@group(1) @binding(16) 
-var tex3DShadow: texture_3d<f32>;
 @group(1) @binding(17) 
 var sampShadow: sampler_comparison;
 @group(0) @binding(18) 

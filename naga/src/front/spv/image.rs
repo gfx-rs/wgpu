@@ -754,6 +754,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             offset,
             level,
             depth_ref,
+            clamp_to_edge: false,
         };
         let image_sample_handle = ctx.expressions.append(expr, self.span_from_with_op(start));
         let handle = if is_depth && depth_ref.is_none() {

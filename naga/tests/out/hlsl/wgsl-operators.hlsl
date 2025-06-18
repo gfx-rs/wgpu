@@ -7,7 +7,7 @@ float4 builtins()
 {
     int s1_ = (true ? int(1) : int(0));
     float4 s2_ = (true ? v_f32_one : v_f32_zero);
-    float4 s3_ = (bool4(false, false, false, false) ? v_f32_zero : v_f32_one);
+    float4 s3_ = float4(1.0, 1.0, 1.0, 1.0);
     float4 m1_ = lerp(v_f32_zero, v_f32_one, v_f32_half);
     float4 m2_ = lerp(v_f32_zero, v_f32_one, 0.1);
     float b1_ = asfloat(int(1));

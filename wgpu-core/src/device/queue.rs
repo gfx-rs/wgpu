@@ -1,19 +1,19 @@
-use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
+use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
 use core::{
     iter,
     mem::{self, ManuallyDrop},
+    num::NonZeroU64,
     ptr::NonNull,
     sync::atomic::Ordering,
 };
-
 use smallvec::SmallVec;
 use thiserror::Error;
+use wgt::AccelerationStructureFlags;
 
 use super::{life::LifetimeTracker, Device};
 use crate::device::resource::CommandIndices;
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
-use crate::scratch::ScratchBuffer;
 use crate::{
     api_log,
     command::{
@@ -25,16 +25,19 @@ use crate::{
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
-    id::{self, QueueId},
+    id::{self, BlasId, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
-    lock::{rank, Mutex, MutexGuard, RwLockWriteGuard},
+    lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
+    ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
     resource::{
-        Buffer, BufferAccessError, BufferMapState, DestroyedBuffer, DestroyedResourceError,
-        DestroyedTexture, Fallible, FlushedStagingBuffer, InvalidResourceError, Labeled,
-        ParentDevice, ResourceErrorIdent, StagingBuffer, Texture, TextureInner, Trackable,
+        AccelerationStructure, Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState,
+        DestroyedBuffer, DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
+        InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
+        TextureInner, Trackable, TrackingData,
     },
     resource_log,
-    snatch::SnatchGuard,
+    scratch::ScratchBuffer,
+    snatch::{SnatchGuard, Snatchable},
     track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };
@@ -116,16 +119,23 @@ impl Queue {
     ) -> (
         SmallVec<[SubmittedWorkDoneClosure; 1]>,
         Vec<super::BufferMapPendingClosure>,
+        Vec<BlasCompactReadyPendingClosure>,
         bool,
     ) {
         let mut life_tracker = self.lock_life();
         let submission_closures = life_tracker.triage_submissions(submission_index);
 
         let mapping_closures = life_tracker.handle_mapping(snatch_guard);
+        let blas_closures = life_tracker.handle_compact_read_back();
 
         let queue_empty = life_tracker.queue_empty();
 
-        (submission_closures, mapping_closures, queue_empty)
+        (
+            submission_closures,
+            mapping_closures,
+            blas_closures,
+            queue_empty,
+        )
     }
 }
 
@@ -220,7 +230,7 @@ impl Drop for Queue {
         drop(fence);
 
         let snatch_guard = self.device.snatchable_lock.read();
-        let (submission_closures, mapping_closures, queue_empty) =
+        let (submission_closures, mapping_closures, blas_compact_ready_closures, queue_empty) =
             self.maintain(last_successful_submission_index, &snatch_guard);
         drop(snatch_guard);
 
@@ -228,6 +238,7 @@ impl Drop for Queue {
 
         let closures = crate::device::UserClosures {
             mappings: mapping_closures,
+            blas_compact_ready: blas_compact_ready_closures,
             submissions: submission_closures,
             device_lost_invocations: SmallVec::new(),
         };
@@ -275,6 +286,8 @@ pub(crate) struct EncoderInFlight {
     pub(crate) pending_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     /// These are the textures that have been tracked by `PendingWrites`.
     pub(crate) pending_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
+    /// These are the BLASes that have been tracked by `PendingWrites`.
+    pub(crate) pending_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
 }
 
 /// A private command encoder for writes made directly on the device
@@ -312,6 +325,7 @@ pub(crate) struct PendingWrites {
     temp_resources: Vec<TempResource>,
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
+    copied_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
 }
 
 impl PendingWrites {
@@ -322,6 +336,7 @@ impl PendingWrites {
             temp_resources: Vec::new(),
             dst_buffers: FastHashMap::default(),
             dst_textures: FastHashMap::default(),
+            copied_blas_s: FastHashMap::default(),
         }
     }
 
@@ -333,6 +348,11 @@ impl PendingWrites {
     pub fn insert_texture(&mut self, texture: &Arc<Texture>) {
         self.dst_textures
             .insert(texture.tracker_index(), texture.clone());
+    }
+
+    pub fn insert_blas(&mut self, blas: &Arc<Blas>) {
+        self.copied_blas_s
+            .insert(blas.tracker_index(), blas.clone());
     }
 
     pub fn contains_buffer(&self, buffer: &Arc<Buffer>) -> bool {
@@ -361,6 +381,7 @@ impl PendingWrites {
         if self.is_recording {
             let pending_buffers = mem::take(&mut self.dst_buffers);
             let pending_textures = mem::take(&mut self.dst_textures);
+            let pending_blas_s = mem::take(&mut self.copied_blas_s);
 
             let cmd_buf = unsafe { self.command_encoder.end_encoding() }
                 .map_err(|e| device.handle_hal_error(e))?;
@@ -385,11 +406,13 @@ impl PendingWrites {
                 ),
                 pending_buffers,
                 pending_textures,
+                pending_blas_s,
             };
             Ok(Some(encoder))
         } else {
             self.dst_buffers.clear();
             self.dst_textures.clear();
+            self.copied_blas_s.clear();
             Ok(None)
         }
     }
@@ -1228,6 +1251,7 @@ impl Queue {
                                 .indirect_draw_validation_resources,
                             pending_buffers: FastHashMap::default(),
                             pending_textures: FastHashMap::default(),
+                            pending_blas_s: FastHashMap::default(),
                         });
                     }
 
@@ -1380,6 +1404,84 @@ impl Queue {
         api_log!("Queue::on_submitted_work_done");
         //TODO: flush pending writes
         self.lock_life().add_work_done_closure(closure)
+    }
+
+    pub fn compact_blas(&self, blas: &Arc<Blas>) -> Result<Arc<Blas>, CompactBlasError> {
+        profiling::scope!("Queue::compact_blas");
+        api_log!("Queue::compact_blas");
+
+        self.same_device_as(blas.as_ref())?;
+
+        let device = blas.device.clone();
+
+        let snatch_guard = device.snatchable_lock.read();
+
+        let BlasCompactState::Ready { size } = *blas.compacted_state.lock() else {
+            return Err(CompactBlasError::BlasNotReady);
+        };
+
+        let mut size_info = blas.size_info;
+        size_info.acceleration_structure_size = size;
+
+        let mut pending_writes = self.pending_writes.lock();
+        let cmd_buf_raw = pending_writes.activate();
+
+        let raw = unsafe {
+            device
+                .raw()
+                .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
+                    label: None,
+                    size: size_info.acceleration_structure_size,
+                    format: hal::AccelerationStructureFormat::BottomLevel,
+                    allow_compaction: false,
+                })
+        }
+        .map_err(DeviceError::from_hal)?;
+
+        let src_raw = blas.try_raw(&snatch_guard)?;
+
+        unsafe {
+            cmd_buf_raw.copy_acceleration_structure_to_acceleration_structure(
+                src_raw,
+                raw.as_ref(),
+                wgt::AccelerationStructureCopy::Compact,
+            )
+        };
+
+        let handle = unsafe {
+            device
+                .raw()
+                .get_acceleration_structure_device_address(raw.as_ref())
+        };
+
+        drop(snatch_guard);
+
+        let mut command_indices_lock = device.command_indices.write();
+        command_indices_lock.next_acceleration_structure_build_command_index += 1;
+        let built_index =
+            NonZeroU64::new(command_indices_lock.next_acceleration_structure_build_command_index)
+                .unwrap();
+
+        let new_blas = Arc::new(Blas {
+            raw: Snatchable::new(raw),
+            device: device.clone(),
+            size_info,
+            sizes: blas.sizes.clone(),
+            flags: blas.flags & !AccelerationStructureFlags::ALLOW_COMPACTION,
+            update_mode: blas.update_mode,
+            // Bypass the submit checks which update this because we don't submit this normally.
+            built_index: RwLock::new(rank::BLAS_BUILT_INDEX, Some(built_index)),
+            handle,
+            label: blas.label.clone() + " compacted",
+            tracking_data: TrackingData::new(blas.device.tracker_indices.blas_s.clone()),
+            compaction_buffer: None,
+            compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Compacted),
+        });
+
+        pending_writes.insert_blas(blas);
+        pending_writes.insert_blas(&new_blas);
+
+        Ok(new_blas)
     }
 }
 
@@ -1534,6 +1636,57 @@ impl Global {
         let queue = self.hub.queues.get(queue_id);
         let result = queue.on_submitted_work_done(closure);
         result.unwrap_or(0) // '0' means no wait is necessary
+    }
+
+    pub fn queue_compact_blas(
+        &self,
+        queue_id: QueueId,
+        blas_id: BlasId,
+        id_in: Option<BlasId>,
+    ) -> (BlasId, Option<u64>, Option<CompactBlasError>) {
+        api_log!("Queue::compact_blas {queue_id:?}, {blas_id:?}");
+
+        let fid = self.hub.blas_s.prepare(id_in);
+
+        let queue = self.hub.queues.get(queue_id);
+        let blas = self.hub.blas_s.get(blas_id);
+        let device = &queue.device;
+
+        // TODO: Tracing
+
+        let error = 'error: {
+            match device.require_features(
+                wgpu_types::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+            ) {
+                Ok(_) => {}
+                Err(err) => break 'error err.into(),
+            }
+
+            let blas = match blas.get() {
+                Ok(blas) => blas,
+                Err(err) => break 'error err.into(),
+            };
+
+            let new_blas = match queue.compact_blas(&blas) {
+                Ok(blas) => blas,
+                Err(err) => break 'error err,
+            };
+
+            // We should have no more errors after this because we have marked the command encoder as successful.
+            let old_blas_size = blas.size_info.acceleration_structure_size;
+            let new_blas_size = new_blas.size_info.acceleration_structure_size;
+            let handle = new_blas.handle;
+
+            let id = fid.assign(Fallible::Valid(new_blas));
+
+            api_log!("CommandEncoder::compact_blas {blas_id:?} (size: {old_blas_size}) -> {id:?} (size: {new_blas_size})");
+
+            return (id, Some(handle), None);
+        };
+
+        let id = fid.assign(Fallible::Invalid(Arc::new(error.to_string())));
+
+        (id, None, Some(error))
     }
 }
 

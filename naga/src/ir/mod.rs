@@ -1509,6 +1509,10 @@ pub enum Expression {
         offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
+        /// Whether the sampling operation should clamp each component of
+        /// `coordinate` to the range `[half_texel, 1 - half_texel]`, regardless
+        /// of `sampler`.
+        clamp_to_edge: bool,
     },
 
     /// Load a texel from an image.
@@ -1916,7 +1920,12 @@ pub enum Statement {
     /// Synchronize invocations within the work group.
     /// The `Barrier` flags control which memory accesses should be synchronized.
     /// If empty, this becomes purely an execution barrier.
-    Barrier(Barrier),
+    ControlBarrier(Barrier),
+
+    /// Synchronize invocations within the work group.
+    /// The `Barrier` flags control which memory accesses should be synchronized.
+    MemoryBarrier(Barrier),
+
     /// Stores a value at an address.
     ///
     /// For [`TypeInner::Atomic`] type behind the pointer, the value

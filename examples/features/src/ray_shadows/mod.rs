@@ -170,7 +170,7 @@ impl crate::framework::Example for Example {
             },
         );
 
-        let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
+        let mut tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
@@ -244,9 +244,7 @@ impl crate::framework::Example for Example {
             cache: None,
         });
 
-        let mut tlas_package = wgpu::TlasPackage::new(tlas);
-
-        tlas_package[0] = Some(wgpu::TlasInstance::new(
+        tlas[0] = Some(wgpu::TlasInstance::new(
             &blas,
             [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
             0,
@@ -272,7 +270,7 @@ impl crate::framework::Example for Example {
                     },
                 ]),
             }),
-            iter::once(&tlas_package),
+            iter::once(&tlas),
         );
 
         queue.submit(Some(encoder.finish()));
@@ -287,7 +285,7 @@ impl crate::framework::Example for Example {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: tlas_package.as_binding(),
+                    resource: tlas.as_binding(),
                 },
             ],
         });

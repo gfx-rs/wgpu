@@ -54,6 +54,11 @@ pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>)
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
 
+#[cfg(send_sync)]
+pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + 'static>;
+
 // remove when rust 1.86
 #[cfg_attr(not(custom), expect(dead_code))]
 pub trait AsAny {
@@ -222,6 +227,8 @@ pub trait QueueInterface: CommonTraits {
 
     fn get_timestamp_period(&self) -> f32;
     fn on_submitted_work_done(&self, callback: BoxSubmittedWorkDoneCallback);
+
+    fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
 }
 
 pub trait ShaderModuleInterface: CommonTraits {
@@ -250,7 +257,10 @@ pub trait TextureInterface: CommonTraits {
 
     fn destroy(&self);
 }
-pub trait BlasInterface: CommonTraits {}
+pub trait BlasInterface: CommonTraits {
+    fn prepare_compact_async(&self, callback: BlasCompactCallback);
+    fn ready_for_compaction(&self) -> bool;
+}
 pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {}
 pub trait PipelineLayoutInterface: CommonTraits {}
@@ -326,15 +336,10 @@ pub trait CommandEncoderInterface: CommonTraits {
         tlas: &mut dyn Iterator<Item = &'a Tlas>,
     );
 
-    fn build_acceleration_structures_unsafe_tlas<'a>(
-        &self,
-        blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasBuildEntry<'a>>,
-    );
     fn build_acceleration_structures<'a>(
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
+        tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
     );
 
     fn transition_resources<'a>(

@@ -1138,6 +1138,12 @@ impl super::Instruction {
         instruction.add_operand(semantics_id);
         instruction
     }
+    pub(super) fn memory_barrier(mem_scope_id: Word, semantics_id: Word) -> Self {
+        let mut instruction = Self::new(Op::MemoryBarrier);
+        instruction.add_operand(mem_scope_id);
+        instruction.add_operand(semantics_id);
+        instruction
+    }
 
     // Group Instructions
 

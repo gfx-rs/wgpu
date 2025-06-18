@@ -27,7 +27,10 @@ use wgt::Backends;
 use js_sys::Promise;
 use wasm_bindgen::{prelude::*, JsCast};
 
-use crate::{dispatch, Blas, SurfaceTargetUnsafe, Tlas};
+use crate::{
+    dispatch::{self, BlasCompactCallback},
+    Blas, SurfaceTargetUnsafe, Tlas,
+};
 
 use defined_non_null_js_value::DefinedNonNullJsValue;
 
@@ -709,7 +712,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 14] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 15] = [
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
         webgpu_sys::GpuFeatureName::DepthClipControl,
@@ -765,6 +768,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 14] = [
     (
         wgt::Features::DUAL_SOURCE_BLENDING,
         webgpu_sys::GpuFeatureName::DualSourceBlending,
+    ),
+    (
+        wgt::Features::CLIP_DISTANCES,
+        webgpu_sys::GpuFeatureName::ClipDistances,
     ),
 ];
 
@@ -1935,6 +1942,11 @@ impl dispatch::DeviceInterface for WebDevice {
                         mapped_entry.set_storage_texture(&storage_texture);
                     }
                     wgt::BindingType::AccelerationStructure { .. } => todo!(),
+                    wgt::BindingType::ExternalTexture => {
+                        mapped_entry.set_external_texture(
+                            &webgpu_sys::GpuExternalTextureBindingLayout::new(),
+                        );
+                    }
                 }
 
                 mapped_entry
@@ -2581,6 +2593,13 @@ impl dispatch::QueueInterface for WebQueue {
     fn on_submitted_work_done(&self, _callback: dispatch::BoxSubmittedWorkDoneCallback) {
         unimplemented!("on_submitted_work_done is not yet implemented");
     }
+
+    fn compact_blas(
+        &self,
+        _blas: &dispatch::DispatchBlas,
+    ) -> (Option<u64>, dispatch::DispatchBlas) {
+        unimplemented!("Raytracing not implemented for web")
+    }
 }
 impl Drop for WebQueue {
     fn drop(&mut self) {
@@ -2727,7 +2746,14 @@ impl Drop for WebTexture {
     }
 }
 
-impl dispatch::BlasInterface for WebBlas {}
+impl dispatch::BlasInterface for WebBlas {
+    fn prepare_compact_async(&self, _callback: BlasCompactCallback) {
+        unimplemented!("Raytracing not implemented for web")
+    }
+    fn ready_for_compaction(&self) -> bool {
+        unimplemented!("Raytracing not implemented for web")
+    }
+}
 impl Drop for WebBlas {
     fn drop(&mut self) {
         // no-op
@@ -3090,18 +3116,10 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         unimplemented!("Raytracing not implemented for web");
     }
 
-    fn build_acceleration_structures_unsafe_tlas<'a>(
-        &self,
-        _blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        _tlas: &mut dyn Iterator<Item = &'a crate::TlasBuildEntry<'a>>,
-    ) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
     fn build_acceleration_structures<'a>(
         &self,
         _blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        _tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
+        _tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
     ) {
         unimplemented!("Raytracing not implemented for web");
     }

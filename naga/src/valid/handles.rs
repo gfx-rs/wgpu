@@ -529,6 +529,7 @@ impl super::Validator {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 handle
                     .check_dep(image)?
@@ -837,7 +838,8 @@ impl super::Validator {
             crate::Statement::Break
             | crate::Statement::Continue
             | crate::Statement::Kill
-            | crate::Statement::Barrier(_) => Ok(()),
+            | crate::Statement::ControlBarrier(_)
+            | crate::Statement::MemoryBarrier(_) => Ok(()),
         })
     }
 }

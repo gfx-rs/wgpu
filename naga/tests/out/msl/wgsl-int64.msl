@@ -21,6 +21,7 @@ struct UniformCompatible {
     metal::long3 val_i64_3_;
     metal::long4 val_i64_4_;
     ulong final_value;
+    char _pad12[24];
 };
 struct type_11 {
     ulong inner[2];

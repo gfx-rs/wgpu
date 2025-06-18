@@ -7,6 +7,7 @@ using metal::uint;
 struct OurVertexShaderOutput {
     metal::float4 position;
     metal::float2 texcoord;
+    char _pad2[8];
 };
 
 struct vsInput {

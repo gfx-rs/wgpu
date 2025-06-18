@@ -446,14 +446,23 @@ impl Instance {
             let mut backend_adapters =
                 unsafe { instance.enumerate_adapters(compatible_hal_surface) };
             if backend_adapters.is_empty() {
+                log::debug!("enabled backend `{:?}` has no adapters", backend);
                 no_adapter_backends |= Backends::from(backend);
                 // by continuing, we avoid setting the further error bits below
                 continue;
             }
 
             if desc.force_fallback_adapter {
-                backend_adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
+                log::debug!("Filtering `{backend:?}` for `force_fallback_adapter`");
+                backend_adapters.retain(|exposed| {
+                    let keep = exposed.info.device_type == wgt::DeviceType::Cpu;
+                    if !keep {
+                        log::debug!("* Eliminating adapter `{}`", exposed.info.name);
+                    }
+                    keep
+                });
                 if backend_adapters.is_empty() {
+                    log::debug!("* Backend `{:?}` has no fallback adapters", backend);
                     no_fallback_backends |= Backends::from(backend);
                     continue;
                 }

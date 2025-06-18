@@ -1,19 +1,24 @@
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
-use core::mem::ManuallyDrop;
+use core::mem::{size_of, ManuallyDrop};
 
-use crate::api_log;
 #[cfg(feature = "trace")]
 use crate::device::trace;
-use crate::lock::rank;
-use crate::resource::{Fallible, TrackingData};
-use crate::snatch::Snatchable;
+use crate::device::DeviceError;
 use crate::{
+    api_log,
     device::Device,
     global::Global,
     id::{self, BlasId, TlasId},
     lock::RwLock,
+    lock::{rank, Mutex},
+    ray_tracing::BlasPrepareCompactError,
     ray_tracing::{CreateBlasError, CreateTlasError},
-    resource, LabelHelpers,
+    resource,
+    resource::{
+        BlasCompactCallback, BlasCompactState, Fallible, InvalidResourceError, TrackingData,
+    },
+    snatch::Snatchable,
+    LabelHelpers,
 };
 use hal::AccelerationStructureTriangleIndices;
 use wgt::Features;
@@ -105,11 +110,31 @@ impl Device {
                     label: blas_desc.label.as_deref(),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
-                    // change this once compaction is implemented in wgpu-core
-                    allow_compaction: false,
+                    allow_compaction: blas_desc
+                        .flags
+                        .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION),
                 })
         }
         .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
+
+        let compaction_buffer = if blas_desc
+            .flags
+            .contains(wgpu_types::AccelerationStructureFlags::ALLOW_COMPACTION)
+        {
+            Some(ManuallyDrop::new(unsafe {
+                self.raw()
+                    .create_buffer(&hal::BufferDescriptor {
+                        label: Some("(wgpu internal) compaction read-back buffer"),
+                        size: size_of::<wgpu_types::BufferAddress>() as wgpu_types::BufferAddress,
+                        usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY
+                            | wgpu_types::BufferUses::MAP_READ,
+                        memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+                    })
+                    .map_err(DeviceError::from_hal)?
+            }))
+        } else {
+            None
+        };
 
         let handle = unsafe {
             self.raw()
@@ -127,6 +152,8 @@ impl Device {
             label: blas_desc.label.to_string(),
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, None),
             tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
+            compaction_buffer,
+            compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Idle),
         }))
     }
 
@@ -310,5 +337,44 @@ impl Global {
                 t.add(trace::Action::DestroyTlas(tlas_id));
             }
         }
+    }
+
+    pub fn blas_prepare_compact_async(
+        &self,
+        blas_id: BlasId,
+        callback: Option<BlasCompactCallback>,
+    ) -> Result<crate::SubmissionIndex, BlasPrepareCompactError> {
+        profiling::scope!("Blas::prepare_compact_async");
+        api_log!("Blas::prepare_compact_async {blas_id:?}");
+
+        let hub = &self.hub;
+
+        let compact_result = match hub.blas_s.get(blas_id).get() {
+            Ok(blas) => blas.prepare_compact_async(callback),
+            Err(e) => Err((callback, e.into())),
+        };
+
+        match compact_result {
+            Ok(submission_index) => Ok(submission_index),
+            Err((mut callback, err)) => {
+                if let Some(callback) = callback.take() {
+                    callback(Err(err.clone()));
+                }
+                Err(err)
+            }
+        }
+    }
+
+    pub fn ready_for_compaction(&self, blas_id: BlasId) -> Result<bool, InvalidResourceError> {
+        profiling::scope!("Blas::prepare_compact_async");
+        api_log!("Blas::prepare_compact_async {blas_id:?}");
+
+        let hub = &self.hub;
+
+        let blas = hub.blas_s.get(blas_id).get()?;
+
+        let lock = blas.compacted_state.lock();
+
+        Ok(matches!(*lock, BlasCompactState::Ready { .. }))
     }
 }

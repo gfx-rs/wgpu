@@ -42,6 +42,8 @@ pub(crate) const F2I32_FUNCTION: &str = "naga_f2i32";
 pub(crate) const F2U32_FUNCTION: &str = "naga_f2u32";
 pub(crate) const F2I64_FUNCTION: &str = "naga_f2i64";
 pub(crate) const F2U64_FUNCTION: &str = "naga_f2u64";
+pub(crate) const IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION: &str =
+    "nagaTextureSampleBaseClampToEdge";
 
 struct EpStructMember {
     name: String,
@@ -1647,7 +1649,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         writeln!(self.out, "{level}}}")?;
-        self.write_barrier(crate::Barrier::WORK_GROUP, level)
+        self.write_control_barrier(crate::Barrier::WORK_GROUP, level)
     }
 
     /// Helper method used to write switches
@@ -2291,8 +2293,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, "{level}continue;")?
                 }
             }
-            Statement::Barrier(barrier) => {
-                self.write_barrier(barrier, level)?;
+            Statement::ControlBarrier(barrier) => {
+                self.write_control_barrier(barrier, level)?;
+            }
+            Statement::MemoryBarrier(barrier) => {
+                self.write_memory_barrier(barrier, level)?;
             }
             Statement::ImageStore {
                 image,
@@ -2464,12 +2469,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::WorkGroupUniformLoad { pointer, result } => {
-                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+                self.write_control_barrier(crate::Barrier::WORK_GROUP, level)?;
                 write!(self.out, "{level}")?;
                 let name = Baked(result).to_string();
                 self.write_named_expr(module, pointer, name, result, func_ctx)?;
 
-                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+                self.write_control_barrier(crate::Barrier::WORK_GROUP, level)?;
             }
             Statement::Switch {
                 selector,
@@ -3181,6 +3186,25 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "{name}")?;
             }
             Expression::ImageSample {
+                coordinate,
+                image,
+                sampler,
+                clamp_to_edge: true,
+                gather: None,
+                array_index: None,
+                offset: None,
+                level: crate::SampleLevel::Zero,
+                depth_ref: None,
+            } => {
+                write!(self.out, "{IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}(")?;
+                self.write_expr(module, image, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, sampler, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, coordinate, func_ctx)?;
+                write!(self.out, ")")?;
+            }
+            Expression::ImageSample {
                 image,
                 sampler,
                 gather,
@@ -3189,7 +3213,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
+                if clamp_to_edge {
+                    return Err(Error::Custom(
+                        "ImageSample::clamp_to_edge should have been validated out".to_string(),
+                    ));
+                }
+
                 use crate::SampleLevel as Sl;
                 const COMPONENTS: [&str; 4] = ["", "Green", "Blue", "Alpha"];
 
@@ -4287,7 +4318,11 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         Ok(())
     }
 
-    fn write_barrier(&mut self, barrier: crate::Barrier, level: back::Level) -> BackendResult {
+    fn write_control_barrier(
+        &mut self,
+        barrier: crate::Barrier,
+        level: back::Level,
+    ) -> BackendResult {
         if barrier.contains(crate::Barrier::STORAGE) {
             writeln!(self.out, "{level}DeviceMemoryBarrierWithGroupSync();")?;
         }
@@ -4299,6 +4334,26 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
         if barrier.contains(crate::Barrier::TEXTURE) {
             writeln!(self.out, "{level}DeviceMemoryBarrierWithGroupSync();")?;
+        }
+        Ok(())
+    }
+
+    fn write_memory_barrier(
+        &mut self,
+        barrier: crate::Barrier,
+        level: back::Level,
+    ) -> BackendResult {
+        if barrier.contains(crate::Barrier::STORAGE) {
+            writeln!(self.out, "{level}DeviceMemoryBarrier();")?;
+        }
+        if barrier.contains(crate::Barrier::WORK_GROUP) {
+            writeln!(self.out, "{level}GroupMemoryBarrier();")?;
+        }
+        if barrier.contains(crate::Barrier::SUB_GROUP) {
+            // Does not exist in DirectX
+        }
+        if barrier.contains(crate::Barrier::TEXTURE) {
+            writeln!(self.out, "{level}DeviceMemoryBarrier();")?;
         }
         Ok(())
     }

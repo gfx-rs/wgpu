@@ -1,0 +1,36 @@
+name: 'Install Mesa'
+description: 'Install Mesa'
+runs:
+  using: "composite"
+  steps:
+    - name: Install Mesa
+      shell: bash
+      env:
+        # Sourced from https://archive.mesa3d.org/. Bumping this requires
+        # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
+        MESA_VERSION: "24.3.4"
+        # Corresponds to https://github.com/gfx-rs/ci-build/releases
+        CI_BINARY_BUILD: "build20"
+      run: |
+        set -e
+
+        curl -L --retry 5 https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz -o mesa.tar.xz
+        mkdir mesa
+        tar xpf mesa.tar.xz -C mesa
+
+        # The ICD provided by the mesa build is hardcoded to the build environment.
+        #
+        # We write out our own ICD file to point to the mesa vulkan
+        cat <<- EOF > icd.json
+        {
+          "ICD": {
+              "api_version": "1.1.255",
+              "library_path": "$PWD/mesa/lib/x86_64-linux-gnu/libvulkan_lvp.so"
+          },
+          "file_format_version": "1.0.0"
+        }
+        EOF
+
+        echo "VK_DRIVER_FILES=$PWD/icd.json" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$PWD/mesa/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+        echo "LIBGL_DRIVERS_PATH=$PWD/mesa/lib/x86_64-linux-gnu/dri" >> "$GITHUB_ENV"
