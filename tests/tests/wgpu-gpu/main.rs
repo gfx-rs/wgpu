@@ -28,7 +28,6 @@ mod dispatch_workgroups_indirect;
 mod draw_indirect;
 mod dual_source_blending;
 mod encoder;
-mod external_memory;
 mod external_texture;
 mod float32_filterable;
 mod image_atomics;
