@@ -2221,7 +2221,7 @@ impl dispatch::DeviceInterface for WebDevice {
         fd: i32,
         offset: u64,
         desc: &crate::BufferDescriptor<'_>,
-    ) -> DispatchBuffer {
+    ) -> dispatch::DispatchBuffer {
         panic!("VULKAN_EXTERNAL_MEMORY_FD feature must be enabled to call draw_mesh_tasks")
     }
 
