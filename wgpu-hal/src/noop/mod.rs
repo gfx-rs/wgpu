@@ -286,6 +286,14 @@ impl crate::Device for Context {
     unsafe fn create_buffer(&self, desc: &crate::BufferDescriptor) -> DeviceResult<Buffer> {
         Buffer::new(desc)
     }
+    unsafe fn create_buffer_external_memory_fd(
+        &self,
+        fd: i32,
+        offset: u64,
+        desc: &crate::BufferDescriptor,
+    ) -> Result<<Self::A as crate::Api>::Buffer, crate::DeviceError> {
+        unreachable!()
+    }
 
     unsafe fn destroy_buffer(&self, buffer: Buffer) {}
     unsafe fn add_raw_buffer(&self, _buffer: &Buffer) {}

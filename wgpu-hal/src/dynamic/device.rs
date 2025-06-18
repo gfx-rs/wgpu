@@ -22,6 +22,12 @@ pub trait DynDevice: DynResource {
         &self,
         desc: &BufferDescriptor,
     ) -> Result<Box<dyn DynBuffer>, DeviceError>;
+    unsafe fn create_buffer_external_memory_fd(
+        &self,
+        fd: i32,
+        offset: u64,
+        desc: &BufferDescriptor,
+    ) -> Result<Box<dyn DynBuffer>, DeviceError>;
 
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>);
     unsafe fn add_raw_buffer(&self, buffer: &dyn DynBuffer);
@@ -181,6 +187,17 @@ impl<D: Device + DynResource> DynDevice for D {
         desc: &BufferDescriptor,
     ) -> Result<Box<dyn DynBuffer>, DeviceError> {
         unsafe { D::create_buffer(self, desc) }.map(|b| -> Box<dyn DynBuffer> { Box::new(b) })
+    }
+    unsafe fn create_buffer_external_memory_fd(
+        &self,
+        fd: i32,
+        offset: u64,
+        desc: &BufferDescriptor,
+    ) -> Result<Box<dyn DynBuffer>, DeviceError> {
+        unsafe {
+            D::create_buffer_external_memory_fd(self, fd, offset, desc)
+                .map(|b| -> Box<dyn DynBuffer> { Box::new(b) })
+        }
     }
 
     unsafe fn destroy_buffer(&self, buffer: Box<dyn DynBuffer>) {

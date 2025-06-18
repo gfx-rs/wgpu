@@ -779,6 +779,192 @@ impl Device {
         Ok(buffer)
     }
 
+    pub(crate) fn create_buffer_external_memory_fd(
+        self: &Arc<Self>,
+        fd: i32,
+        offset: u64,
+        desc: &resource::BufferDescriptor,
+    ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
+        self.check_is_valid()?;
+
+        self.require_features(wgt::Features::VULKAN_EXTERNAL_MEMORY_FD)
+            .map_err(|_| resource::CreateBufferError::ExternalMemoryFeatureNotEnabled)?;
+
+        if desc.size > self.limits.max_buffer_size {
+            return Err(resource::CreateBufferError::MaxBufferSize {
+                requested: desc.size,
+                maximum: self.limits.max_buffer_size,
+            });
+        }
+
+        if desc.usage.contains(wgt::BufferUsages::INDEX)
+            && desc.usage.contains(
+                wgt::BufferUsages::VERTEX
+                    | wgt::BufferUsages::UNIFORM
+                    | wgt::BufferUsages::INDIRECT
+                    | wgt::BufferUsages::STORAGE,
+            )
+        {
+            self.require_downlevel_flags(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)?;
+        }
+        if desc.mapped_at_creation {
+            return Err(resource::CreateBufferError::ExternalMemoryMappedAtCreation);
+        }
+
+        if desc.usage.is_empty()
+            || desc.usage.contains_unknown_bits()
+            || desc
+                .usage
+                .intersects(wgt::BufferUsages::MAP_READ | wgt::BufferUsages::MAP_WRITE)
+        {
+            return Err(resource::CreateBufferError::InvalidUsage(desc.usage));
+        }
+
+        if !self
+            .features
+            .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
+        {
+            use wgt::BufferUsages as Bu;
+            let write_mismatch = desc.usage.contains(Bu::MAP_WRITE)
+                && !(Bu::MAP_WRITE | Bu::COPY_SRC).contains(desc.usage);
+            let read_mismatch = desc.usage.contains(Bu::MAP_READ)
+                && !(Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage);
+            if write_mismatch || read_mismatch {
+                return Err(resource::CreateBufferError::UsageMismatch(desc.usage));
+            }
+        }
+
+        let mut usage = conv::map_buffer_usage(desc.usage);
+
+        if desc.usage.contains(wgt::BufferUsages::INDIRECT) {
+            self.require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
+            // We are going to be reading from it, internally;
+            // when validating the content of the buffer
+            usage |= wgt::BufferUses::STORAGE_READ_ONLY | wgt::BufferUses::STORAGE_READ_WRITE;
+        }
+
+        if desc.usage.contains(wgt::BufferUsages::QUERY_RESOLVE) {
+            usage |= TIMESTAMP_NORMALIZATION_BUFFER_USES;
+        }
+
+        if desc.mapped_at_creation {
+            if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+                return Err(resource::CreateBufferError::UnalignedSize);
+            }
+            if !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+                // we are going to be copying into it, internally
+                usage |= wgt::BufferUses::COPY_DST;
+            }
+        } else {
+            // We are required to zero out (initialize) all memory. This is done
+            // on demand using clear_buffer which requires write transfer usage!
+            usage |= wgt::BufferUses::COPY_DST;
+        }
+
+        let actual_size = if desc.size == 0 {
+            wgt::COPY_BUFFER_ALIGNMENT
+        } else if desc.usage.contains(wgt::BufferUsages::VERTEX) {
+            // Bumping the size by 1 so that we can bind an empty range at the
+            // end of the buffer.
+            desc.size + 1
+        } else {
+            desc.size
+        };
+        let clear_remainder = actual_size % wgt::COPY_BUFFER_ALIGNMENT;
+        let aligned_size = if clear_remainder != 0 {
+            actual_size + wgt::COPY_BUFFER_ALIGNMENT - clear_remainder
+        } else {
+            actual_size
+        };
+
+        let hal_desc = hal::BufferDescriptor {
+            label: desc.label.to_hal(self.instance_flags),
+            size: aligned_size,
+            usage,
+            memory_flags: hal::MemoryFlags::empty(),
+        };
+        let buffer = unsafe {
+            self.raw()
+                .create_buffer_external_memory_fd(fd, offset, &hal_desc)
+        }
+        .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
+
+        let timestamp_normalization_bind_group = Snatchable::new(
+            self.timestamp_normalizer
+                .get()
+                .unwrap()
+                .create_normalization_bind_group(
+                    self,
+                    &*buffer,
+                    desc.label.as_deref(),
+                    desc.size,
+                    desc.usage,
+                )?,
+        );
+
+        let indirect_validation_bind_groups =
+            self.create_indirect_validation_bind_groups(buffer.as_ref(), desc.size, desc.usage)?;
+
+        let buffer = Buffer {
+            raw: Snatchable::new(buffer),
+            device: self.clone(),
+            usage: desc.usage,
+            size: desc.size,
+            initialization_status: RwLock::new(
+                rank::BUFFER_INITIALIZATION_STATUS,
+                BufferInitTracker::new(aligned_size),
+            ),
+            map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
+            label: desc.label.to_string(),
+            tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
+            bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
+            timestamp_normalization_bind_group,
+            indirect_validation_bind_groups,
+        };
+
+        let buffer = Arc::new(buffer);
+
+        let buffer_use = if !desc.mapped_at_creation {
+            wgt::BufferUses::empty()
+        } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+            // buffer is mappable, so we are just doing that at start
+            let map_size = buffer.size;
+            let mapping = if map_size == 0 {
+                hal::BufferMapping {
+                    ptr: core::ptr::NonNull::dangling(),
+                    is_coherent: true,
+                }
+            } else {
+                let snatch_guard: SnatchGuard = self.snatchable_lock.read();
+                map_buffer(&buffer, 0, map_size, HostMap::Write, &snatch_guard)?
+            };
+            *buffer.map_state.lock() = resource::BufferMapState::Active {
+                mapping,
+                range: 0..map_size,
+                host: HostMap::Write,
+            };
+            wgt::BufferUses::MAP_WRITE
+        } else {
+            let mut staging_buffer =
+                StagingBuffer::new(self, wgt::BufferSize::new(aligned_size).unwrap())?;
+
+            // Zero initialize memory and then mark the buffer as initialized
+            // (it's guaranteed that this is the case by the time the buffer is usable)
+            staging_buffer.write_zeros();
+            buffer.initialization_status.write().drain(0..aligned_size);
+
+            *buffer.map_state.lock() = resource::BufferMapState::Init { staging_buffer };
+            wgt::BufferUses::COPY_DST
+        };
+
+        self.trackers
+            .lock()
+            .buffers
+            .insert_single(&buffer, buffer_use);
+
+        Ok(buffer)
+    }
+
     pub(crate) fn create_texture_from_hal(
         self: &Arc<Self>,
         hal_texture: Box<dyn hal::DynTexture>,

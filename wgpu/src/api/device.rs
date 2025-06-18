@@ -349,6 +349,32 @@ impl Device {
         }
     }
 
+    /// # Safety
+    /// * TODO
+    #[must_use]
+    pub unsafe fn create_buffer_external_memory_fd(
+        &self,
+        fd: i32,
+        offset: u64,
+        desc: &BufferDescriptor<'_>,
+    ) -> Buffer {
+        let mut map_context = MapContext::new();
+        if desc.mapped_at_creation {
+            map_context.initial_range = 0..desc.size;
+        }
+
+        let buffer = self
+            .inner
+            .create_buffer_external_memory_fd(fd, offset, desc);
+
+        Buffer {
+            inner: buffer,
+            map_context: Arc::new(Mutex::new(map_context)),
+            size: desc.size,
+            usage: desc.usage,
+        }
+    }
+
     /// Creates a new [`Sampler`].
     ///
     /// `desc` specifies the behavior of the sampler.

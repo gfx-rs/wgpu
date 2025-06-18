@@ -160,6 +160,7 @@ pub struct InstanceShared {
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::get_physical_device_properties2::Instance>,
+    external_memory_capabilities: Option<khr::external_memory_capabilities::Instance>,
     entry: ash::Entry,
     has_nv_optimus: bool,
     android_sdk_version: u32,

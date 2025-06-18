@@ -180,6 +180,15 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn create_buffer_external_memory_fd(
+        &self,
+        _fd: i32,
+        _offset: u64,
+        _desc: &wgpu::BufferDescriptor<'_>,
+    ) -> wgpu::custom::DispatchBuffer {
+        unimplemented!()
+    }
+
     fn create_texture(&self, _desc: &wgpu::TextureDescriptor<'_>) -> wgpu::custom::DispatchTexture {
         unimplemented!()
     }

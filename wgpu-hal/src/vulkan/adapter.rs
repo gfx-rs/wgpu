@@ -537,11 +537,12 @@ impl PhysicalDeviceFeatures {
     /// [`DownlevelFlags`]: wgt::DownlevelFlags
     fn to_wgpu(
         &self,
-        instance: &ash::Instance,
+        instance_shared: &super::InstanceShared,
         phd: vk::PhysicalDevice,
         caps: &PhysicalDeviceProperties,
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use wgt::{DownlevelFlags as Df, Features as F};
+        let instance = &instance_shared.raw;
         let mut features = F::empty()
             | F::SPIRV_SHADER_PASSTHROUGH
             | F::MAPPABLE_PRIMARY_BUFFERS
@@ -857,11 +858,13 @@ impl PhysicalDeviceFeatures {
 
         features.set(
             F::VULKAN_EXTERNAL_MEMORY_WIN32,
-            caps.supports_extension(khr::external_memory_win32::NAME),
+            caps.supports_extension(khr::external_memory_win32::NAME)
+                && instance_shared.external_memory_capabilities.is_some(),
         );
         features.set(
             F::VULKAN_EXTERNAL_MEMORY_FD,
-            caps.supports_extension(khr::external_memory_fd::NAME),
+            caps.supports_extension(khr::external_memory_fd::NAME)
+                && instance_shared.external_memory_capabilities.is_some(),
         );
         features.set(
             F::EXPERIMENTAL_MESH_SHADER,
@@ -1002,6 +1005,9 @@ impl PhysicalDeviceProperties {
                 //   we require that one already.
                 extensions.push(khr::_16bit_storage::NAME);
             }
+            // These aren't strictly required except for some cases of external memory usage.
+            extensions.push(khr::get_memory_requirements2::NAME);
+            extensions.push(khr::dedicated_allocation::NAME);
         }
 
         if self.device_api_version < vk::API_VERSION_1_2 {
@@ -1628,7 +1634,7 @@ impl super::Instance {
             backend: wgt::Backend::Vulkan,
         };
         let (available_features, downlevel_flags) =
-            phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
+            phd_features.to_wgpu(&self.shared, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
             // TODO: only enable for particular devices

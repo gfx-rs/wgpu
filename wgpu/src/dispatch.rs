@@ -156,6 +156,12 @@ pub trait DeviceInterface: CommonTraits {
         desc: &crate::PipelineCacheDescriptor<'_>,
     ) -> DispatchPipelineCache;
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> DispatchBuffer;
+    fn create_buffer_external_memory_fd(
+        &self,
+        fd: i32,
+        offset: u64,
+        desc: &crate::BufferDescriptor<'_>,
+    ) -> DispatchBuffer;
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> DispatchTexture;
     fn create_blas(
         &self,

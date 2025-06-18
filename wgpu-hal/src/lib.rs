@@ -735,6 +735,13 @@ pub trait Device: WasmNotSendSync {
         desc: &BufferDescriptor,
     ) -> Result<<Self::A as Api>::Buffer, DeviceError>;
 
+    unsafe fn create_buffer_external_memory_fd(
+        &self,
+        fd: i32,
+        offset: u64,
+        desc: &BufferDescriptor,
+    ) -> Result<<Self::A as Api>::Buffer, DeviceError>;
+
     /// Free `buffer` and any GPU resources it owns.
     ///
     /// Note that backends are allowed to allocate GPU memory for buffers from

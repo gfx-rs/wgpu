@@ -142,6 +142,58 @@ impl Global {
         (id, Some(error))
     }
 
+    pub fn device_create_buffer_external_memory_fd(
+        &self,
+        device_id: DeviceId,
+        fd: i32,
+        offset: u64,
+        desc: &resource::BufferDescriptor,
+        id_in: Option<id::BufferId>,
+    ) -> (id::BufferId, Option<CreateBufferError>) {
+        profiling::scope!("Device::create_buffer_external_memory_fd");
+
+        let hub = &self.hub;
+        let fid = hub.buffers.prepare(id_in);
+
+        let error = 'error: {
+            let device = self.hub.devices.get(device_id);
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                let mut desc = desc.clone();
+                let mapped_at_creation = core::mem::replace(&mut desc.mapped_at_creation, false);
+                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+                    desc.usage |= wgt::BufferUsages::COPY_DST;
+                }
+                trace.add(trace::Action::CreateBuffer(fid.id(), desc));
+            }
+
+            let buffer = match device.create_buffer_external_memory_fd(fd, offset, desc) {
+                Ok(buffer) => buffer,
+                Err(e) => {
+                    break 'error e;
+                }
+            };
+
+            let id = fid.assign(Fallible::Valid(buffer));
+
+            api_log!(
+                "Device::create_buffer_external_memory_fd({fd}, {offset}, {:?}{}) -> {id:?}",
+                desc.label.as_deref().unwrap_or(""),
+                if desc.mapped_at_creation {
+                    ", mapped_at_creation"
+                } else {
+                    ""
+                }
+            );
+
+            return (id, None);
+        };
+
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        (id, Some(error))
+    }
+
     /// Assign `id_in` an error with the given `label`.
     ///
     /// Ensure that future attempts to use `id_in` as a buffer ID will propagate
@@ -390,7 +442,7 @@ impl Global {
         desc: &resource::BufferDescriptor,
         id_in: Option<id::BufferId>,
     ) -> (id::BufferId, Option<CreateBufferError>) {
-        profiling::scope!("Device::create_buffer");
+        profiling::scope!("Device::create_buffer_from_hal");
 
         let hub = &self.hub;
         let fid = hub.buffers.prepare(id_in);
@@ -407,7 +459,7 @@ impl Global {
         let (buffer, err) = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
 
         let id = fid.assign(buffer);
-        api_log!("Device::create_buffer -> {id:?}");
+        api_log!("Device::create_buffer_from_hal -> {id:?}");
 
         (id, err)
     }

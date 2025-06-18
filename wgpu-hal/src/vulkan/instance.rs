@@ -319,6 +319,9 @@ impl super::Instance {
         // so that we don't have to conditionally use the functions provided by the 1.1 instance
         extensions.push(khr::get_physical_device_properties2::NAME);
 
+        // This is required so we can check if a physical device might require dedicated memory for a given allocation.
+        extensions.push(khr::external_memory_capabilities::NAME);
+
         // Only keep available extensions.
         extensions.retain(|&ext| {
             if instance_extensions
@@ -398,6 +401,17 @@ impl super::Instance {
                 None
             };
 
+        let external_memory_capabilities =
+            if extensions.contains(&khr::external_memory_capabilities::NAME) {
+                log::debug!("Enabling external memory capabilities");
+                Some(khr::external_memory_capabilities::Instance::new(
+                    &entry,
+                    &raw_instance,
+                ))
+            } else {
+                None
+            };
+
         let drop_guard = crate::DropGuard::from_option(drop_callback);
 
         Ok(Self {
@@ -409,6 +423,7 @@ impl super::Instance {
                 memory_budget_thresholds,
                 debug_utils,
                 get_physical_device_properties,
+                external_memory_capabilities,
                 entry,
                 has_nv_optimus,
                 instance_api_version,

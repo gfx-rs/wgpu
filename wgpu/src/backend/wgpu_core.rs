@@ -1510,6 +1510,33 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into()
     }
 
+    fn create_buffer_external_memory_fd(
+        &self,
+        fd: i32,
+        offset: u64,
+        desc: &crate::BufferDescriptor<'_>,
+    ) -> dispatch::DispatchBuffer {
+        let (id, error) = self.context.0.device_create_buffer_external_memory_fd(
+            self.id,
+            fd,
+            offset,
+            &desc.map_label(|l| l.map(Borrowed)),
+            None,
+        );
+
+        if let Some(cause) = error {
+            self.context
+                .handle_error(&self.error_sink, cause, desc.label, "Device::create_buffer");
+        }
+
+        CoreBuffer {
+            context: self.context.clone(),
+            id,
+            error_sink: Arc::clone(&self.error_sink),
+        }
+        .into()
+    }
+
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> dispatch::DispatchTexture {
         let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
         let (id, error) = self

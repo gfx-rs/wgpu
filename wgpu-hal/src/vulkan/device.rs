@@ -1145,6 +1145,15 @@ impl crate::Device for super::Device {
             block: Some(Mutex::new(super::BufferMemoryBacking::Managed(block))),
         })
     }
+    unsafe fn create_buffer_external_memory_fd(
+        &self,
+        fd: i32,
+        offset: u64,
+        desc: &crate::BufferDescriptor,
+    ) -> Result<<Self::A as crate::Api>::Buffer, crate::DeviceError> {
+        unsafe { self.create_buffer_external_memory(fd as i64, offset, desc, false) }
+    }
+
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         unsafe { self.shared.raw.destroy_buffer(buffer.raw, None) };
         if let Some(block) = buffer.block {
@@ -2997,6 +3006,127 @@ impl crate::Device for super::Device {
         }
 
         Ok(())
+    }
+}
+impl super::Device {
+    unsafe fn create_buffer_external_memory(
+        &self,
+        // larger of i32, isize
+        handle: i64,
+        offset: u64,
+        desc: &crate::BufferDescriptor,
+        is_win32: bool,
+    ) -> Result<<<Self as crate::Device>::A as crate::Api>::Buffer, crate::DeviceError> {
+        let buffer_usage = conv::map_buffer_usage(desc.usage);
+
+        let mut external_properties = vk::ExternalBufferProperties::default();
+        unsafe {
+            let caps = self
+                .shared_instance()
+                .external_memory_capabilities
+                .as_ref()
+                .unwrap();
+            let info = vk::PhysicalDeviceExternalBufferInfoKHR::default()
+                .flags(vk::BufferCreateFlags::empty());
+            (caps.fp().get_physical_device_external_buffer_properties_khr)(
+                self.raw_physical_device(),
+                &info,
+                &mut external_properties,
+            );
+        }
+        if !external_properties
+            .external_memory_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE_KHR)
+        {
+            return Err(crate::DeviceError::Unexpected);
+        }
+        let needs_dedicated = external_properties
+            .external_memory_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::DEDICATED_ONLY_KHR);
+
+        let vk_info = vk::BufferCreateInfo::default()
+            .size(desc.size)
+            .usage(buffer_usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+
+        let raw = unsafe {
+            self.shared
+                .raw
+                .create_buffer(&vk_info, None)
+                .map_err(super::map_host_device_oom_and_ioca_err)?
+        };
+
+        let mut alloc_usage = if desc
+            .usage
+            .intersects(wgt::BufferUses::MAP_READ | wgt::BufferUses::MAP_WRITE)
+        {
+            let mut flags = gpu_alloc::UsageFlags::HOST_ACCESS;
+            //TODO: find a way to use `crate::MemoryFlags::PREFER_COHERENT`
+            flags.set(
+                gpu_alloc::UsageFlags::DOWNLOAD,
+                desc.usage.contains(wgt::BufferUses::MAP_READ),
+            );
+            flags.set(
+                gpu_alloc::UsageFlags::UPLOAD,
+                desc.usage.contains(wgt::BufferUses::MAP_WRITE),
+            );
+            flags
+        } else {
+            gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS
+        };
+        alloc_usage.set(
+            gpu_alloc::UsageFlags::TRANSIENT,
+            desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
+        );
+
+        let mut dedicated_alloc_info = vk::MemoryDedicatedAllocateInfoKHR::default().buffer(raw);
+        let memory = if is_win32 {
+            let mut import_info = vk::ImportMemoryWin32HandleInfoKHR::default()
+                .handle(handle as isize)
+                .handle_type(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KHR);
+            let mut allocate_info = vk::MemoryAllocateInfo::default().push_next(&mut import_info);
+            if needs_dedicated {
+                allocate_info = allocate_info.push_next(&mut dedicated_alloc_info);
+            }
+            unsafe { self.raw_device().allocate_memory(&allocate_info, None) }
+        } else {
+            let mut import_info = vk::ImportMemoryFdInfoKHR::default()
+                .fd(handle as i32)
+                .handle_type(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD_KHR);
+            let mut allocate_info = vk::MemoryAllocateInfo::default().push_next(&mut import_info);
+            if needs_dedicated {
+                allocate_info = allocate_info.push_next(&mut dedicated_alloc_info);
+            }
+            unsafe { self.raw_device().allocate_memory(&allocate_info, None) }
+        }
+        .map_err(|_| crate::DeviceError::Unexpected)
+        .inspect_err(|_| unsafe { self.raw_device().destroy_buffer(raw, None) })?;
+
+        unsafe { self.shared.raw.bind_buffer_memory(raw, memory, offset) }
+            .map_err(super::map_host_device_oom_and_ioca_err)
+            .inspect_err(|_| {
+                unsafe { self.shared.raw.destroy_buffer(raw, None) };
+            })?;
+
+        if let Some(label) = desc.label {
+            unsafe { self.shared.set_object_name(raw, label) };
+        }
+
+        self.counters.buffer_memory.add(desc.size as isize);
+        self.counters.buffers.add(1);
+
+        Ok(super::Buffer {
+            raw,
+            block: Some(Mutex::new(
+                crate::vulkan::BufferMemoryBacking::VulkanMemory {
+                    memory,
+                    offset,
+                    size: desc.size,
+                },
+            )),
+        })
     }
 }
 
