@@ -1244,6 +1244,16 @@ bitflags_array! {
         ///
         /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor
         const EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS = 1 << 51;
+
+        /// Allows using the [VK_KHR_external_memory_fd] Vulkan extension.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_KHR_external_memory_fd])
+        ///
+        /// This is a native only feature.
+        ///
+        /// [VK_KHR_external_memory_fd]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_fd.html
+        const VULKAN_EXTERNAL_MEMORY_FD = 1 << 45;
     }
 
     /// Features that are not guaranteed to be supported.
