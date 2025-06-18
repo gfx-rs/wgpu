@@ -777,7 +777,9 @@ pub enum CreateBufferError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error("Failed to create bind group for indirect buffer validation: {0}")]
     IndirectValidationBindGroup(DeviceError),
-    #[error("Buffers created with `create_buffer_external_memory_fd` cannot be maped at creation")]
+    #[error(
+        "Buffers created with `create_buffer_external_memory_fd` cannot be mapped at creation"
+    )]
     ExternalMemoryMappedAtCreation,
     #[error("The VULKAN_EXTERNAL_MEMORY_FD feature must be enabled in order to create buffers from external memory file descriptors")]
     ExternalMemoryFeatureNotEnabled,
