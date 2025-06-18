@@ -118,6 +118,7 @@ Bottom level categories:
 #### D3D12
 
 - Remove the need for dxil.dll. By @teoxoy in [#7566](https://github.com/gfx-rs/wgpu/pull/7566)
+- Ability to get the raw `IDXGIFactory4` from `Instance`. By @MendyBerger in [#7827](https://github.com/gfx-rs/wgpu/pull/7827)
 
 #### Vulkan
 
