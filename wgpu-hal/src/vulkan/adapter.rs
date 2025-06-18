@@ -860,6 +860,10 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(khr::external_memory_win32::NAME),
         );
         features.set(
+            F::VULKAN_EXTERNAL_MEMORY_FD,
+            caps.supports_extension(khr::external_memory_fd::NAME),
+        );
+        features.set(
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
