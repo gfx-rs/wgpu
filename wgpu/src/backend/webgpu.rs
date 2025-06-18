@@ -2218,9 +2218,9 @@ impl dispatch::DeviceInterface for WebDevice {
 
     fn create_buffer_external_memory_fd(
         &self,
-        fd: i32,
-        offset: u64,
-        desc: &crate::BufferDescriptor<'_>,
+        _fd: i32,
+        _offset: u64,
+        _desc: &crate::BufferDescriptor<'_>,
     ) -> dispatch::DispatchBuffer {
         panic!("VULKAN_EXTERNAL_MEMORY_FD feature must be enabled to call draw_mesh_tasks")
     }
