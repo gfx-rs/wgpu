@@ -172,7 +172,8 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 
             cfg_if::cfg_if! {
                 if #[cfg(feature = "fs")] {
-                    let dest = prefix.as_ref().join(dump_suffix);
+                    let prefix: &std::path::Path = prefix.as_ref();
+                    let dest = prefix.join(dump_suffix);
                     let dump = format!("{block_ctx:#?}");
                     if let Err(e) = std::fs::write(&dest, dump) {
                         log::error!("Unable to dump the block context into {:?}: {}", dest, e);

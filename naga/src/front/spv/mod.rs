@@ -35,17 +35,8 @@ mod null;
 
 pub use error::Error;
 
-use alloc::{
-    borrow::{Cow, ToOwned},
-    format,
-    string::String,
-    vec,
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned, format, string::String, vec, vec::Vec};
 use core::{convert::TryInto, mem, num::NonZeroU32};
-
-#[cfg(std)]
-use std::path::PathBuf;
 
 use half::f16;
 use petgraph::graphmap::GraphMap;
@@ -53,6 +44,7 @@ use petgraph::graphmap::GraphMap;
 use super::atomic_upgrade::Upgrades;
 use crate::{
     arena::{Arena, Handle, UniqueArena},
+    path_like::PathLikeOwned,
     proc::{Alignment, Layouter},
     FastHashMap, FastHashSet, FastIndexMap,
 };
@@ -389,7 +381,7 @@ pub struct Options {
     pub adjust_coordinate_space: bool,
     /// Only allow shaders with the known set of capabilities.
     pub strict_capabilities: bool,
-    pub block_ctx_dump_prefix: Option<DumpPrefix>,
+    pub block_ctx_dump_prefix: Option<PathLikeOwned>,
 }
 
 impl Default for Options {
@@ -399,64 +391,6 @@ impl Default for Options {
             strict_capabilities: true,
             block_ctx_dump_prefix: None,
         }
-    }
-}
-
-/// Abstraction over `PathBuf` which falls back to [`String`] for `no_std` compatibility.
-#[derive(Clone)]
-pub struct DumpPrefix {
-    #[cfg(std)]
-    inner: PathBuf,
-    #[cfg(no_std)]
-    inner: String,
-}
-
-impl DumpPrefix {
-    /// Get a [`str`] from this [`DumpPrefix`], replacing non-UTF-8 characters where required.
-    #[inline]
-    pub fn to_string_lossy(&self) -> Cow<'_, str> {
-        #[cfg(std)]
-        return self.inner.to_string_lossy();
-        #[cfg(no_std)]
-        return Cow::Borrowed(&self.inner);
-    }
-}
-
-impl core::fmt::Debug for DumpPrefix {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        core::fmt::Debug::fmt(&self.inner, f)
-    }
-}
-
-impl From<String> for DumpPrefix {
-    fn from(value: String) -> Self {
-        Self {
-            #[cfg(std)]
-            inner: PathBuf::from(value),
-            #[cfg(no_std)]
-            inner: value,
-        }
-    }
-}
-
-#[cfg(std)]
-impl From<PathBuf> for DumpPrefix {
-    fn from(value: PathBuf) -> Self {
-        Self { inner: value }
-    }
-}
-
-#[cfg(std)]
-impl From<DumpPrefix> for PathBuf {
-    fn from(value: DumpPrefix) -> Self {
-        value.inner
-    }
-}
-
-#[cfg(std)]
-impl AsRef<PathBuf> for DumpPrefix {
-    fn as_ref(&self) -> &PathBuf {
-        &self.inner
     }
 }
 

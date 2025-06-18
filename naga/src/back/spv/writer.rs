@@ -14,6 +14,7 @@ use super::{
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
     back::spv::{BindingInfo, WrappedFunction},
+    path_like::PathLike,
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
