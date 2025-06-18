@@ -1507,3 +1507,12 @@ pub type CreateDeviceCallback<'a> = &'a dyn Fn(
     &mut Vec<vk::DeviceQueueCreateInfo>,
     &mut vk::DeviceCreateInfo,
 );
+
+pub type CreateInstanceCallback<'a> = &'a dyn Fn(
+    // extensions
+    &mut Vec<&'static CStr>,
+    // create info
+    &mut vk::InstanceCreateInfo,
+    // The wgpu loaded entry
+    &ash::Entry,
+);
