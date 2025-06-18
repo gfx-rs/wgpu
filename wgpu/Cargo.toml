@@ -29,7 +29,16 @@ ignored = ["cfg_aliases"]
 [lib]
 
 [features]
-default = ["dx12", "metal", "gles", "vulkan", "wgsl", "webgpu"]
+default = [
+    "std",
+    "parking_lot",
+    "dx12",
+    "metal",
+    "gles",
+    "vulkan",
+    "wgsl",
+    "webgpu",
+]
 
 #! ### Backends
 # --------------------------------------------------------------------
@@ -155,6 +164,19 @@ fragile-send-sync-non-atomic-wasm = [
 ## context around the WASM VM, e.g., when the WASM binary is used in a browser.
 web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
 
+## Enables use of the standard library within `wgpu` and its dependencies.
+##
+## This can allow for better error reporting and for improved multithreading
+## support.
+std = ["raw-window-handle/std", "wgpu-types/std", "wgpu-core?/std"]
+
+## Uses `parking_lot` as the implementation for locking primitives.
+##
+## This is a recommended feature for most users and should only be disabled when
+## required, e.g., for `no_std` support.
+## If disabled, either `std::sync::Mutex` or `core::cell::RefCell` will be used,
+## based on whether `std` is enabled or not.
+parking_lot = ["dep:parking_lot"]
 
 #########################
 # Standard Dependencies #
@@ -168,12 +190,13 @@ wgpu-types.workspace = true
 # Needed for both wgpu-core and webgpu
 arrayvec.workspace = true
 bitflags.workspace = true
+cfg-if.workspace = true
 document-features.workspace = true
 hashbrown.workspace = true
 log.workspace = true
-parking_lot.workspace = true
+parking_lot = { workspace = true, optional = true }
 profiling.workspace = true
-raw-window-handle = { workspace = true, features = ["std"] }
+raw-window-handle = { workspace = true, features = ["alloc"] }
 static_assertions.workspace = true
 
 ########################################

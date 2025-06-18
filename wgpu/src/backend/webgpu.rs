@@ -14,6 +14,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{
+    cell::OnceCell,
     cell::RefCell,
     fmt,
     future::Future,
@@ -26,7 +27,10 @@ use wgt::Backends;
 use js_sys::Promise;
 use wasm_bindgen::{prelude::*, JsCast};
 
-use crate::{dispatch, Blas, SurfaceTargetUnsafe, Tlas};
+use crate::{
+    dispatch::{self, BlasCompactCallback},
+    Blas, SurfaceTargetUnsafe, Tlas,
+};
 
 use defined_non_null_js_value::DefinedNonNullJsValue;
 
@@ -708,7 +712,7 @@ fn map_map_mode(mode: crate::MapMode) -> u32 {
     }
 }
 
-const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 14] = [
+const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 15] = [
     (
         wgt::Features::DEPTH_CLIP_CONTROL,
         webgpu_sys::GpuFeatureName::DepthClipControl,
@@ -764,6 +768,10 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 14] = [
     (
         wgt::Features::DUAL_SOURCE_BLENDING,
         webgpu_sys::GpuFeatureName::DualSourceBlending,
+    ),
+    (
+        wgt::Features::CLIP_DISTANCES,
+        webgpu_sys::GpuFeatureName::ClipDistances,
     ),
 ];
 
@@ -1219,16 +1227,6 @@ impl WebBuffer {
         }
     }
 
-    /// Creates a raw Javascript array buffer over the provided range.
-    fn get_mapped_array_buffer(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::ArrayBuffer {
-        self.inner
-            .get_mapped_range_with_f64_and_f64(
-                sub_range.start as f64,
-                (sub_range.end - sub_range.start) as f64,
-            )
-            .unwrap()
-    }
-
     /// Obtains a reference to the re-usable buffer mapping as a Javascript array view.
     fn get_mapped_range(&self, sub_range: Range<wgt::BufferAddress>) -> js_sys::Uint8Array {
         let mut mapping = self.mapping.borrow_mut();
@@ -1374,9 +1372,9 @@ pub struct WebQueueWriteBuffer {
 #[derive(Debug)]
 pub struct WebBufferMappedRange {
     actual_mapping: js_sys::Uint8Array,
-    /// Copy of the mapped data that lives in the Rust/Wasm heap instead of JS,
-    /// so Rust code can borrow it.
-    temporary_mapping: Vec<u8>,
+    /// Copy of actual_mapping that lives in the Rust/Wasm heap instead of JS. This
+    /// is done only when accessed for the first time to avoid unnecessary allocations.
+    temporary_mapping: OnceCell<Vec<u8>>,
     /// Whether `temporary_mapping` has possibly been written to and needs to be written back to JS.
     temporary_mapping_modified: bool,
     /// Unique identifier for this BufferMappedRange.
@@ -1944,6 +1942,11 @@ impl dispatch::DeviceInterface for WebDevice {
                         mapped_entry.set_storage_texture(&storage_texture);
                     }
                     wgt::BindingType::AccelerationStructure { .. } => todo!(),
+                    wgt::BindingType::ExternalTexture => {
+                        mapped_entry.set_external_texture(
+                            &webgpu_sys::GpuExternalTextureBindingLayout::new(),
+                        );
+                    }
                 }
 
                 mapped_entry
@@ -2590,6 +2593,13 @@ impl dispatch::QueueInterface for WebQueue {
     fn on_submitted_work_done(&self, _callback: dispatch::BoxSubmittedWorkDoneCallback) {
         unimplemented!("on_submitted_work_done is not yet implemented");
     }
+
+    fn compact_blas(
+        &self,
+        _blas: &dispatch::DispatchBlas,
+    ) -> (Option<u64>, dispatch::DispatchBlas) {
+        unimplemented!("Raytracing not implemented for web")
+    }
 }
 impl Drop for WebQueue {
     fn drop(&mut self) {
@@ -2667,21 +2677,13 @@ impl dispatch::BufferInterface for WebBuffer {
         sub_range: Range<crate::BufferAddress>,
     ) -> dispatch::DispatchBufferMappedRange {
         let actual_mapping = self.get_mapped_range(sub_range);
-        let temporary_mapping = actual_mapping.to_vec();
         WebBufferMappedRange {
             actual_mapping,
-            temporary_mapping,
+            temporary_mapping: OnceCell::new(),
             temporary_mapping_modified: false,
             ident: crate::cmp::Identifier::create(),
         }
         .into()
-    }
-
-    fn get_mapped_range_as_array_buffer(
-        &self,
-        sub_range: Range<wgt::BufferAddress>,
-    ) -> Option<js_sys::ArrayBuffer> {
-        Some(self.get_mapped_array_buffer(sub_range))
     }
 
     fn unmap(&self) {
@@ -2744,7 +2746,14 @@ impl Drop for WebTexture {
     }
 }
 
-impl dispatch::BlasInterface for WebBlas {}
+impl dispatch::BlasInterface for WebBlas {
+    fn prepare_compact_async(&self, _callback: BlasCompactCallback) {
+        unimplemented!("Raytracing not implemented for web")
+    }
+    fn ready_for_compaction(&self) -> bool {
+        unimplemented!("Raytracing not implemented for web")
+    }
+}
 impl Drop for WebBlas {
     fn drop(&mut self) {
         // no-op
@@ -3107,18 +3116,10 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         unimplemented!("Raytracing not implemented for web");
     }
 
-    fn build_acceleration_structures_unsafe_tlas<'a>(
-        &self,
-        _blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        _tlas: &mut dyn Iterator<Item = &'a crate::TlasBuildEntry<'a>>,
-    ) {
-        unimplemented!("Raytracing not implemented for web");
-    }
-
     fn build_acceleration_structures<'a>(
         &self,
         _blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        _tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
+        _tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
     ) {
         unimplemented!("Raytracing not implemented for web");
     }
@@ -3794,13 +3795,22 @@ impl Drop for WebSurfaceOutputDetail {
 impl dispatch::BufferMappedRangeInterface for WebBufferMappedRange {
     #[inline]
     fn slice(&self) -> &[u8] {
-        &self.temporary_mapping
+        self.temporary_mapping
+            .get_or_init(|| self.actual_mapping.to_vec())
+            .as_slice()
     }
 
     #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
         self.temporary_mapping_modified = true;
-        &mut self.temporary_mapping
+        self.temporary_mapping
+            .get_or_init(|| self.actual_mapping.to_vec());
+        self.temporary_mapping.get_mut().unwrap()
+    }
+
+    #[inline]
+    fn as_uint8array(&self) -> &js_sys::Uint8Array {
+        &self.actual_mapping
     }
 }
 impl Drop for WebBufferMappedRange {
@@ -3813,7 +3823,7 @@ impl Drop for WebBufferMappedRange {
 
         // Copy from the temporary mapping back into the array buffer that was
         // originally provided by the browser
-        let temporary_mapping_slice = self.temporary_mapping.as_slice();
+        let temporary_mapping_slice = self.temporary_mapping.get().unwrap().as_slice();
         unsafe {
             // Note: no allocations can happen between `view` and `set`, or this
             // will break

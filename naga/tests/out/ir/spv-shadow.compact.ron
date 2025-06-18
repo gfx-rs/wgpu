@@ -516,6 +516,7 @@
                     offset: None,
                     level: Zero,
                     depth_ref: Some(28),
+                    clamp_to_edge: false,
                 ),
             ],
             named_expressions: {},
@@ -1033,4 +1034,5 @@
     ],
     diagnostic_filters: [],
     diagnostic_filter_leaf: None,
+    doc_comments: None,
 )

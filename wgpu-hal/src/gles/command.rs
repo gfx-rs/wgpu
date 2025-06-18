@@ -37,6 +37,7 @@ pub(super) struct State {
     // The current state of the push constant data block.
     current_push_constant_data: [u32; super::MAX_PUSH_CONSTANTS],
     end_of_pass_timestamp: Option<glow::Query>,
+    clip_distance_count: u32,
 }
 
 impl Default for State {
@@ -65,6 +66,7 @@ impl Default for State {
             push_constant_descs: Default::default(),
             current_push_constant_data: [0; super::MAX_PUSH_CONSTANTS],
             end_of_pass_timestamp: Default::default(),
+            clip_distance_count: Default::default(),
         }
     }
 }
@@ -980,6 +982,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.state.color_targets.clear();
         for ct in pipeline.color_targets.iter() {
             self.state.color_targets.push(ct.clone());
+        }
+
+        // set clip plane count
+        if pipeline.inner.clip_distance_count != self.state.clip_distance_count {
+            self.cmd_buffer.commands.push(C::SetClipDistances {
+                old_count: self.state.clip_distance_count,
+                new_count: pipeline.inner.clip_distance_count,
+            });
+            self.state.clip_distance_count = pipeline.inner.clip_distance_count;
         }
     }
 

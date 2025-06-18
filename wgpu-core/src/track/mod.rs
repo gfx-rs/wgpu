@@ -95,6 +95,7 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 [`UsageScope`]: https://gpuweb.github.io/gpuweb/#programming-model-synchronization
 */
 
+mod blas;
 mod buffer;
 mod metadata;
 mod range;
@@ -107,6 +108,7 @@ use crate::{
     pipeline,
     resource::{self, Labeled, ResourceErrorIdent},
     snatch::SnatchGuard,
+    track::blas::BlasTracker,
 };
 
 use alloc::{sync::Arc, vec::Vec};
@@ -601,7 +603,7 @@ impl DeviceTracker {
 pub(crate) struct Tracker {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,
-    pub blas_s: StatelessTracker<resource::Blas>,
+    pub blas_s: BlasTracker,
     pub tlas_s: StatelessTracker<resource::Tlas>,
     pub views: StatelessTracker<resource::TextureView>,
     pub bind_groups: StatelessTracker<binding_model::BindGroup>,
@@ -616,7 +618,7 @@ impl Tracker {
         Self {
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
-            blas_s: StatelessTracker::new(),
+            blas_s: BlasTracker::new(),
             tlas_s: StatelessTracker::new(),
             views: StatelessTracker::new(),
             bind_groups: StatelessTracker::new(),

@@ -69,6 +69,15 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         return vk::FALSE;
     }
 
+    // Silence Vulkan Validation error "VUID-StandaloneSpirv-None-10684".
+    //
+    // This is a bug. To prevent massive noise in the tests, lets suppress it for now.
+    // https://github.com/gfx-rs/wgpu/issues/7696
+    const VUID_STANDALONESPIRV_NONE_10684: i32 = 0xb210f7c2_u32 as i32;
+    if cd.message_id_number == VUID_STANDALONESPIRV_NONE_10684 {
+        return vk::FALSE;
+    }
+
     let level = match message_severity {
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Debug,
         vk::DebugUtilsMessageSeverityFlagsEXT::INFO => log::Level::Info,

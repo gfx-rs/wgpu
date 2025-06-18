@@ -160,10 +160,10 @@
                         binding: Some(BuiltIn(Position(
                             invariant: false,
                         ))),
-                        offset: 0,
+                        offset: 16,
                     ),
                 ],
-                span: 65535,
+                span: 32,
             ),
         ),
     ],
@@ -615,4 +615,5 @@
     ],
     diagnostic_filters: [],
     diagnostic_filter_leaf: None,
+    doc_comments: None,
 )

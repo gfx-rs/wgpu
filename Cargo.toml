@@ -103,7 +103,7 @@ bytemuck = { version = "1.22", features = [
     "extern_crate_alloc",
     "min_const_generics",
 ] }
-cargo_metadata = "0.19"
+cargo_metadata = "0.20"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.6"
@@ -139,7 +139,7 @@ libm = { version = "0.2.6", default-features = false }
 libtest-mimic = "0.8"
 log = "0.4.21"
 nanoserde = "0.2"
-nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
+nanorand = { version = "0.8", default-features = false, features = ["wyrand"] }
 noise = "0.9"
 num_cpus = "1"
 # `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
@@ -184,14 +184,14 @@ spirv = "0.3"
 static_assertions = "1.1"
 strum = { version = "0.27", default-features = false, features = ["derive"] }
 syn = "2.0.98"
-toml = "0.8"
+toml = "0.8.9"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.3", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.29", features = ["android-native-activity"] }
-which = "7"
+which = "8"
 xshell = "0.2.2"
 
 # Metal dependencies

@@ -7,6 +7,7 @@ using metal::uint;
 struct Foo {
     metal::float4 a;
     int b;
+    char _pad2[12];
 };
 struct type_6 {
     metal::float2x2 inner[1];

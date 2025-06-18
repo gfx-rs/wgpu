@@ -223,4 +223,5 @@
     ],
     diagnostic_filters: [],
     diagnostic_filter_leaf: None,
+    doc_comments: None,
 )

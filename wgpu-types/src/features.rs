@@ -59,6 +59,9 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 13;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 14;
 }
 
 macro_rules! bitflags_array_impl {
@@ -994,6 +997,21 @@ bitflags_array! {
         /// This is a native-only feature.
         const EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 30;
 
+        /// Allows for the creation and usage of `ExternalTexture`s, and bind
+        /// group layouts containing external texture `BindingType`s.
+        ///
+        /// Conceptually this should really be a [`crate::DownlevelFlags`] as
+        /// it corresponds to WebGPU's [`GPUExternalTexture`](
+        /// https://www.w3.org/TR/webgpu/#gpuexternaltexture).
+        /// However, the implementation is currently in-progress, and until it
+        /// is complete we do not want applications to ignore adapters due to
+        /// a missing downlevel flag, when they may not require this feature at
+        /// all.
+        ///
+        /// Supported platforms:
+        /// - None
+        const EXTERNAL_TEXTURE = 1 << 31;
+
         // Shader:
 
         /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
@@ -1006,7 +1024,7 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native-only feature.
-        const EXPERIMENTAL_RAY_QUERY = 1 << 31;
+        const EXPERIMENTAL_RAY_QUERY = 1 << 32;
         /// Enables 64-bit floating point types in SPIR-V shaders.
         ///
         /// Note: even when supported by GPU hardware, 64-bit floating point operations are
@@ -1016,14 +1034,14 @@ bitflags_array! {
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const SHADER_F64 = 1 << 32;
+        const SHADER_F64 = 1 << 33;
         /// Allows shaders to use i16. Not currently supported in `naga`, only available through `spirv-passthrough`.
         ///
         /// Supported platforms:
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const SHADER_I16 = 1 << 33;
+        const SHADER_I16 = 1 << 34;
         /// Enables `builtin(primitive_index)` in fragment shaders.
         ///
         /// Note: enables geometry processing for pipelines using the builtin.
@@ -1037,7 +1055,7 @@ bitflags_array! {
         /// - OpenGL (some)
         ///
         /// This is a native only feature.
-        const SHADER_PRIMITIVE_INDEX = 1 << 34;
+        const SHADER_PRIMITIVE_INDEX = 1 << 35;
         /// Allows shaders to use the `early_depth_test` attribute.
         ///
         /// The attribute is applied to the fragment shader entry point. It can be used in two
@@ -1065,7 +1083,7 @@ bitflags_array! {
         /// This is a native only feature.
         ///
         /// [`EarlyDepthTest`]: https://docs.rs/naga/latest/naga/ir/enum.EarlyDepthTest.html
-        const SHADER_EARLY_DEPTH_TEST = 1 << 35;
+        const SHADER_EARLY_DEPTH_TEST = 1 << 36;
         /// Allows shaders to use i64 and u64.
         ///
         /// Supported platforms:
@@ -1074,7 +1092,7 @@ bitflags_array! {
         /// - Metal (with MSL 2.3+)
         ///
         /// This is a native only feature.
-        const SHADER_INT64 = 1 << 36;
+        const SHADER_INT64 = 1 << 37;
         /// Allows compute and fragment shaders to use the subgroup operation built-ins
         ///
         /// Supported Platforms:
@@ -1083,14 +1101,14 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
-        const SUBGROUP = 1 << 37;
+        const SUBGROUP = 1 << 38;
         /// Allows vertex shaders to use the subgroup operation built-ins
         ///
         /// Supported Platforms:
         /// - Vulkan
         ///
         /// This is a native only feature.
-        const SUBGROUP_VERTEX = 1 << 38;
+        const SUBGROUP_VERTEX = 1 << 39;
         /// Allows shaders to use the subgroup barrier
         ///
         /// Supported Platforms:
@@ -1098,7 +1116,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
-        const SUBGROUP_BARRIER = 1 << 39;
+        const SUBGROUP_BARRIER = 1 << 40;
         /// Allows the use of pipeline cache objects
         ///
         /// Supported platforms:
@@ -1107,7 +1125,7 @@ bitflags_array! {
         /// Unimplemented Platforms:
         /// - DX12
         /// - Metal
-        const PIPELINE_CACHE = 1 << 40;
+        const PIPELINE_CACHE = 1 << 41;
         /// Allows shaders to use i64 and u64 atomic min and max.
         ///
         /// Supported platforms:
@@ -1116,7 +1134,7 @@ bitflags_array! {
         /// - Metal (with MSL 2.4+)
         ///
         /// This is a native only feature.
-        const SHADER_INT64_ATOMIC_MIN_MAX = 1 << 41;
+        const SHADER_INT64_ATOMIC_MIN_MAX = 1 << 42;
         /// Allows shaders to use all i64 and u64 atomic operations.
         ///
         /// Supported platforms:
@@ -1124,7 +1142,7 @@ bitflags_array! {
         /// - DX12 (with SM 6.6+)
         ///
         /// This is a native only feature.
-        const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 42;
+        const SHADER_INT64_ATOMIC_ALL_OPS = 1 << 43;
         /// Allows using the [VK_GOOGLE_display_timing] Vulkan extension.
         ///
         /// This is used for frame pacing to reduce latency, and is generally only available on Android.
@@ -1140,7 +1158,7 @@ bitflags_array! {
         ///
         /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
         /// [`Surface::as_hal()`]: https://docs.rs/wgpu/latest/wgpu/struct.Surface.html#method.as_hal
-        const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 43;
+        const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 44;
 
         /// Allows using the [VK_KHR_external_memory_win32] Vulkan extension.
         ///
@@ -1150,7 +1168,7 @@ bitflags_array! {
         /// This is a native only feature.
         ///
         /// [VK_KHR_external_memory_win32]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_win32.html
-        const VULKAN_EXTERNAL_MEMORY_WIN32 = 1 << 44;
+        const VULKAN_EXTERNAL_MEMORY_WIN32 = 1 << 45;
 
         /// Enables R64Uint image atomic min and max.
         ///
@@ -1160,7 +1178,7 @@ bitflags_array! {
         /// - Metal (with MSL 3.1+)
         ///
         /// This is a native only feature.
-        const TEXTURE_INT64_ATOMIC = 1 << 45;
+        const TEXTURE_INT64_ATOMIC = 1 << 46;
 
         /// Allows uniform buffers to be bound as binding arrays.
         ///
@@ -1177,7 +1195,7 @@ bitflags_array! {
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s `shaderUniformBufferArrayNonUniformIndexing` feature)
         ///
         /// This is a native only feature.
-        const UNIFORM_BUFFER_BINDING_ARRAYS = 1 << 46;
+        const UNIFORM_BUFFER_BINDING_ARRAYS = 1 << 47;
 
         /// Enables mesh shaders and task shaders in mesh shader pipelines.
         ///
@@ -1189,7 +1207,7 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
-        const EXPERIMENTAL_MESH_SHADER = 1 << 47;
+        const EXPERIMENTAL_MESH_SHADER = 1 << 48;
 
         /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
         /// major bugs in them and are expected to be subject to breaking changes, suggestions
@@ -1204,7 +1222,7 @@ bitflags_array! {
         /// This is a native only feature
         ///
         /// [`AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN`]: super::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN
-        const EXPERIMENTAL_RAY_HIT_VERTEX_RETURN = 1 << 48;
+        const EXPERIMENTAL_RAY_HIT_VERTEX_RETURN = 1 << 49;
 
         /// Enables multiview in mesh shader pipelines
         ///
@@ -1216,7 +1234,16 @@ bitflags_array! {
         /// - Metal
         ///
         /// This is a native only feature.
-        const EXPERIMENTAL_MESH_SHADER_MULTIVIEW = 1 << 49;
+        const EXPERIMENTAL_MESH_SHADER_MULTIVIEW = 1 << 50;
+
+        /// Allows usage of additional vertex formats in [BlasTriangleGeometrySizeDescriptor::vertex_format]
+        ///
+        /// Supported platforms
+        /// - Vulkan
+        /// - DX12
+        ///
+        /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor
+        const EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS = 1 << 51;
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1454,7 +1481,18 @@ bitflags_array! {
         /// - Metal (with MSL 1.2+)
         /// - Vulkan (with dualSrcBlend)
         /// - DX12
+        ///
+        /// This is a web and native feature.
         const DUAL_SOURCE_BLENDING = WEBGPU_FEATURE_DUAL_SOURCE_BLENDING;
+
+        /// Allows the use of `@builtin(clip_distances)` in WGSL.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (mainly on Desktop GPUs)
+        /// - GL (Desktop or `GL_EXT_clip_cull_distance`)
+        ///
+        /// This is a web and native feature.
+        const CLIP_DISTANCES = WEBGPU_FEATURE_CLIP_DISTANCES;
     }
 }
 
@@ -1483,6 +1521,13 @@ impl Features {
         let mut formats = Vec::new();
         if self.contains(Self::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
             formats.push(VertexFormat::Float32x3);
+        }
+        if self.contains(Self::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS) {
+            formats.push(VertexFormat::Float32x2);
+            formats.push(VertexFormat::Float16x2);
+            formats.push(VertexFormat::Float16x4);
+            formats.push(VertexFormat::Snorm16x2);
+            formats.push(VertexFormat::Snorm16x4);
         }
         formats
     }

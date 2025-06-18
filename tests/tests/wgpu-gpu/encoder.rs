@@ -80,11 +80,15 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
 
 #[gpu_test]
 static ENCODER_OPERATIONS_FAIL_WHILE_PASS_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(
-        wgpu::Features::CLEAR_TEXTURE
-            | wgpu::Features::TIMESTAMP_QUERY
-            | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
-    ))
+    .parameters(
+        TestParameters::default()
+            .features(
+                wgpu::Features::CLEAR_TEXTURE
+                    | wgpu::Features::TIMESTAMP_QUERY
+                    | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
+            )
+            .expect_fail(FailureCase::always()), // temporary, until https://github.com/gfx-rs/wgpu/issues/7391 is completed
+    )
     .run_sync(encoder_operations_fail_while_pass_alive);
 
 fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
@@ -308,23 +312,15 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
             log::info!("Testing operation {op_name:?} on a locked command encoder while a {pass_type:?} pass is active");
-            fail(
-                &ctx.device,
-                || op(&mut encoder),
-                Some("Command encoder is locked"),
-            );
+            fail(&ctx.device, || op(&mut encoder), Some("encoder is locked"));
 
             // Drop the pass - this also fails now since the encoder is invalid:
-            fail(
-                &ctx.device,
-                || drop(pass),
-                Some("Command encoder is invalid"),
-            );
+            fail(&ctx.device, || drop(pass), Some("encoder is invalid"));
             // Also, it's not possible to create a new pass on the encoder:
             fail(
                 &ctx.device,
                 || encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()),
-                Some("Command encoder is invalid"),
+                Some("encoder is invalid"),
             );
         }
 
@@ -334,16 +330,8 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
             let pass = create_pass(&mut encoder, pass_type);
-            fail(
-                &ctx.device,
-                || encoder.finish(),
-                Some("Command encoder is locked"),
-            );
-            fail(
-                &ctx.device,
-                || drop(pass),
-                Some("Command encoder is invalid"),
-            );
+            fail(&ctx.device, || encoder.finish(), Some("encoder is locked"));
+            fail(&ctx.device, || drop(pass), Some("encoder is invalid"));
         }
     }
 }

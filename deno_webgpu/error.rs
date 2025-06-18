@@ -17,8 +17,8 @@ use wgpu_core::binding_model::GetBindGroupLayoutError;
 use wgpu_core::command::ClearError;
 use wgpu_core::command::CommandEncoderError;
 use wgpu_core::command::ComputePassError;
-use wgpu_core::command::CopyError;
 use wgpu_core::command::CreateRenderBundleError;
+use wgpu_core::command::EncoderStateError;
 use wgpu_core::command::QueryError;
 use wgpu_core::command::RenderBundleError;
 use wgpu_core::command::RenderPassError;
@@ -198,6 +198,12 @@ fn fmt_err(err: &(dyn std::error::Error + 'static)) -> String {
     output
 }
 
+impl From<EncoderStateError> for GPUError {
+    fn from(err: EncoderStateError) -> Self {
+        GPUError::Validation(fmt_err(&err))
+    }
+}
+
 impl From<CreateBufferError> for GPUError {
     fn from(err: CreateBufferError) -> Self {
         match err {
@@ -262,12 +268,6 @@ impl From<RenderBundleError> for GPUError {
 
 impl From<CreateRenderBundleError> for GPUError {
     fn from(err: CreateRenderBundleError) -> Self {
-        GPUError::Validation(fmt_err(&err))
-    }
-}
-
-impl From<CopyError> for GPUError {
-    fn from(err: CopyError) -> Self {
         GPUError::Validation(fmt_err(&err))
     }
 }

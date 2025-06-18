@@ -4974,6 +4974,36 @@ impl VertexFormat {
             Self::Float64x4 => 32,
         }
     }
+
+    /// Returns the size read by an acceleration structure build of the vertex format. This is
+    /// slightly different from [`Self::size`] because the alpha component of 4-component formats
+    /// are not read in an acceleration structure build, allowing for a smaller stride.
+    #[must_use]
+    pub const fn min_acceleration_structure_vertex_stride(&self) -> u64 {
+        match self {
+            Self::Float16x2 | Self::Snorm16x2 => 4,
+            Self::Float32x3 => 12,
+            Self::Float32x2 => 8,
+            // This is the minimum value from DirectX
+            // > A16 component is ignored, other data can be packed there, such as setting vertex stride to 6 bytes
+            //
+            // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_raytracing_geometry_triangles_desc
+            //
+            // Vulkan does not express a minimum stride.
+            Self::Float16x4 | Self::Snorm16x4 => 6,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Returns the alignment required for `wgpu::BlasTriangleGeometry::vertex_stride`
+    #[must_use]
+    pub const fn acceleration_structure_stride_alignment(&self) -> u64 {
+        match self {
+            Self::Float16x4 | Self::Float16x2 | Self::Snorm16x4 | Self::Snorm16x2 => 2,
+            Self::Float32x2 | Self::Float32x3 => 4,
+            _ => unreachable!(),
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -6376,13 +6406,6 @@ pub struct TexelCopyBufferLayout {
     pub rows_per_image: Option<u32>,
 }
 
-/// Old name for a [`TexelCopyBufferLayout`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyBufferLayout`, and will be removed in 25.0.0."
-)]
-pub type ImageDataLayout = TexelCopyBufferLayout;
-
 /// Specific type of a buffer binding.
 ///
 /// Corresponds to [WebGPU `GPUBufferBindingType`](
@@ -6776,6 +6799,20 @@ pub enum BindingType {
         /// If enabled requires [`Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`]
         vertex_return: bool,
     },
+
+    /// An external texture binding.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_external;
+    /// ```
+    ///
+    /// Corresponds to [WebGPU `GPUExternalTextureBindingLayout`](
+    /// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturebindinglayout).
+    ///
+    /// Requires [`Features::EXTERNAL_TEXTURE`]
+    ExternalTexture,
 }
 
 impl BindingType {
@@ -6835,13 +6872,6 @@ pub struct TexelCopyBufferInfo<B> {
     pub layout: TexelCopyBufferLayout,
 }
 
-/// Old name for a [`TexelCopyBufferInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyBufferInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyBuffer<B> = TexelCopyBufferInfo<B>;
-
 /// View of a texture which can be used to copy to/from a buffer/texture.
 ///
 /// Corresponds to [WebGPU `GPUTexelCopyTextureInfo`](
@@ -6883,13 +6913,6 @@ impl<T> TexelCopyTextureInfo<T> {
     }
 }
 
-/// Old name for a [`TexelCopyTextureInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyTextureInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyTexture<T> = TexelCopyTextureInfo<T>;
-
 /// View of an external texture that can be used to copy to a texture.
 ///
 /// Corresponds to [WebGPU `GPUCopyExternalImageSourceInfo`](
@@ -6912,14 +6935,6 @@ pub struct CopyExternalImageSourceInfo {
     /// true, `origin` is still relative to the top left.
     pub flip_y: bool,
 }
-
-/// Old name for a [`CopyExternalImageSourceInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `CopyExternalImageSourceInfo`, and will be removed in 25.0.0."
-)]
-#[cfg(all(target_arch = "wasm32", feature = "web"))]
-pub type ImageCopyExternalImage = CopyExternalImageSourceInfo;
 
 /// Source of an external texture copy.
 ///
@@ -7058,13 +7073,6 @@ impl<T> CopyExternalImageDestInfo<T> {
         }
     }
 }
-
-/// Old name for a [`CopyExternalImageDestInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `CopyExternalImageDestInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyTextureTagged<T> = CopyExternalImageDestInfo<T>;
 
 /// Subresource range within an image
 #[repr(C)]
@@ -7436,7 +7444,7 @@ impl Default for ShaderRuntimeChecks {
 pub struct BlasTriangleGeometrySizeDescriptor {
     /// Format of a vertex position, must be [`VertexFormat::Float32x3`]
     /// with just [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
-    /// but later features may add more formats.
+    /// but [`Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS`] adds more.
     pub vertex_format: VertexFormat,
     /// Number of vertices.
     pub vertex_count: u32,
@@ -7535,8 +7543,8 @@ bitflags::bitflags!(
         /// Allow for incremental updates (no change in size), currently this is unimplemented
         /// and will build as normal (this is fine, update vs build should be unnoticeable)
         const ALLOW_UPDATE = 1 << 0;
-        /// Allow the acceleration structure to be compacted in a copy operation, the function
-        /// to compact is not currently implemented.
+        /// Allow the acceleration structure to be compacted in a copy operation
+        /// (`Blas::prepare_for_compaction`, `CommandEncoder::compact_blas`).
         const ALLOW_COMPACTION = 1 << 1;
         /// Optimize for fast ray tracing performance, recommended if the geometry is unlikely
         /// to change (e.g. in a game: non-interactive scene geometry)

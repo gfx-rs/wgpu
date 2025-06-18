@@ -13,6 +13,7 @@ pub struct EnableExtensions {
     dual_source_blending: bool,
     /// Whether `enable f16;` was written earlier in the shader module.
     f16: bool,
+    clip_distances: bool,
 }
 
 impl EnableExtensions {
@@ -20,6 +21,7 @@ impl EnableExtensions {
         Self {
             f16: false,
             dual_source_blending: false,
+            clip_distances: false,
         }
     }
 
@@ -28,6 +30,7 @@ impl EnableExtensions {
         let field = match ext {
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
             ImplementedEnableExtension::F16 => &mut self.f16,
+            ImplementedEnableExtension::ClipDistances => &mut self.clip_distances,
         };
         *field = true;
     }
@@ -37,6 +40,7 @@ impl EnableExtensions {
         match ext {
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
             ImplementedEnableExtension::F16 => self.f16,
+            ImplementedEnableExtension::ClipDistances => self.clip_distances,
         }
     }
 }
@@ -72,9 +76,7 @@ impl EnableExtension {
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<Self> {
         Ok(match word {
             Self::F16 => Self::Implemented(ImplementedEnableExtension::F16),
-            Self::CLIP_DISTANCES => {
-                Self::Unimplemented(UnimplementedEnableExtension::ClipDistances)
-            }
+            Self::CLIP_DISTANCES => Self::Implemented(ImplementedEnableExtension::ClipDistances),
             Self::DUAL_SOURCE_BLENDING => {
                 Self::Implemented(ImplementedEnableExtension::DualSourceBlending)
             }
@@ -89,9 +91,9 @@ impl EnableExtension {
             Self::Implemented(kind) => match kind {
                 ImplementedEnableExtension::DualSourceBlending => Self::DUAL_SOURCE_BLENDING,
                 ImplementedEnableExtension::F16 => Self::F16,
+                ImplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
             },
             Self::Unimplemented(kind) => match kind {
-                UnimplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
                 UnimplementedEnableExtension::Subgroups => Self::SUBGROUPS,
             },
         }
@@ -113,17 +115,17 @@ pub enum ImplementedEnableExtension {
     ///
     /// [`enable dual_source_blending;`]: https://www.w3.org/TR/WGSL/#extension-dual_source_blending
     DualSourceBlending,
-}
-
-/// A variant of [`EnableExtension::Unimplemented`].
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-pub enum UnimplementedEnableExtension {
     /// Enables the `clip_distances` variable in WGSL.
     ///
     /// In the WGSL standard, this corresponds to [`enable clip_distances;`].
     ///
     /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-clip_distances
     ClipDistances,
+}
+
+/// A variant of [`EnableExtension::Unimplemented`].
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub enum UnimplementedEnableExtension {
     /// Enables subgroup built-ins in all languages.
     ///
     /// In the WGSL standard, this corresponds to [`enable subgroups;`].
@@ -135,7 +137,6 @@ pub enum UnimplementedEnableExtension {
 impl UnimplementedEnableExtension {
     pub(crate) const fn tracking_issue_num(self) -> u16 {
         match self {
-            Self::ClipDistances => 6236,
             Self::Subgroups => 5555,
         }
     }

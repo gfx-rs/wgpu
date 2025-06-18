@@ -2,9 +2,7 @@
 use alloc::vec::Vec;
 use core::future::Future;
 
-use parking_lot::Mutex;
-
-use crate::{dispatch::InstanceInterface, *};
+use crate::{dispatch::InstanceInterface, util::Mutex, *};
 
 bitflags::bitflags! {
     /// WGSL language extensions.

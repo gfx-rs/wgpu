@@ -301,4 +301,17 @@ impl Queue {
             hal_queue_callback(None)
         }
     }
+
+    /// Compact a BLAS, it must have had [`Blas::prepare_compaction_async`] called on it and had the
+    /// callback provided called.
+    ///
+    /// The returned BLAS is more restricted than a normal BLAS because it may not be rebuilt or
+    /// compacted.
+    pub fn compact_blas(&self, blas: &Blas) -> Blas {
+        let (handle, dispatch) = self.inner.compact_blas(&blas.inner);
+        Blas {
+            handle,
+            inner: dispatch,
+        }
+    }
 }

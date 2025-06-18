@@ -11,6 +11,7 @@ void function(
 ) {
     uint _e5 = global_2;
     uint _e6 = global_3;
+    metal::threadgroup_barrier(metal::mem_flags::mem_none);
     metal::uint4 unnamed = metal::uint4((uint64_t)metal::simd_ballot((_e6 & 1u) == 1u), 0, 0, 0);
     metal::uint4 unnamed_1 = metal::uint4((uint64_t)metal::simd_ballot(true), 0, 0, 0);
     bool unnamed_2 = metal::simd_all(_e6 != 0u);

@@ -10,6 +10,8 @@ use thiserror::Error;
 use super::PipelineConstants;
 use crate::{
     arena::HandleVec,
+    compact::{compact, KeepUnused},
+    ir,
     proc::{ConstantEvaluator, ConstantEvaluatorError, Emitter},
     valid::{Capabilities, ModuleInfo, ValidationError, ValidationFlags, Validator},
     Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
@@ -39,29 +41,44 @@ pub enum PipelineConstantError {
     NegativeWorkgroupSize,
 }
 
-/// Replace all overrides in `module` with constants.
+/// Compact `module` and replace all overrides with constants.
 ///
-/// If no changes are needed, this just returns `Cow::Borrowed`
-/// references to `module` and `module_info`. Otherwise, it clones
-/// `module`, edits its [`global_expressions`] arena to contain only
-/// fully-evaluated expressions, and returns `Cow::Owned` values
-/// holding the simplified module and its validation results.
+/// If no changes are needed, this just returns `Cow::Borrowed` references to
+/// `module` and `module_info`. Otherwise, it clones `module`, retains only the
+/// selected entry point, compacts the module, edits its [`global_expressions`]
+/// arena to contain only fully-evaluated expressions, and returns the
+/// simplified module and its validation results.
 ///
-/// In either case, the module returned has an empty `overrides`
-/// arena, and the `global_expressions` arena contains only
-/// fully-evaluated expressions.
+/// The module returned has an empty `overrides` arena, and the
+/// `global_expressions` arena contains only fully-evaluated expressions.
 ///
 /// [`global_expressions`]: Module::global_expressions
 pub fn process_overrides<'a>(
     module: &'a Module,
     module_info: &'a ModuleInfo,
+    entry_point: Option<(ir::ShaderStage, &str)>,
     pipeline_constants: &PipelineConstants,
 ) -> Result<(Cow<'a, Module>, Cow<'a, ModuleInfo>), PipelineConstantError> {
-    if module.overrides.is_empty() {
+    if (entry_point.is_none() || module.entry_points.len() <= 1) && module.overrides.is_empty() {
         return Ok((Cow::Borrowed(module), Cow::Borrowed(module_info)));
     }
 
     let mut module = module.clone();
+    if let Some((ep_stage, ep_name)) = entry_point {
+        module
+            .entry_points
+            .retain(|ep| ep.stage == ep_stage && ep.name == ep_name);
+    }
+
+    // Compact the module to remove anything not reachable from an entry point.
+    // This is necessary because we may not have values for overrides that are
+    // not reachable from the/an entry point.
+    compact(&mut module, KeepUnused::No);
+
+    // If there are no overrides in the module, then we can skip the rest.
+    if module.overrides.is_empty() {
+        return revalidate(module);
+    }
 
     // A map from override handles to the handles of the constants
     // we've replaced them with.
@@ -224,9 +241,14 @@ pub fn process_overrides<'a>(
     // Now that we've rewritten all the expressions, we need to
     // recompute their types and other metadata. For the time being,
     // do a full re-validation.
+    revalidate(module)
+}
+
+fn revalidate(
+    module: Module,
+) -> Result<(Cow<'static, Module>, Cow<'static, ModuleInfo>), PipelineConstantError> {
     let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
     let module_info = validator.validate_resolved_overrides(&module)?;
-
     Ok((Cow::Owned(module), Cow::Owned(module_info)))
 }
 
@@ -446,6 +468,7 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
             ref mut level,
             ref mut depth_ref,
             gather: _,
+            clamp_to_edge: _,
         } => {
             adjust(image);
             adjust(sampler);
@@ -803,7 +826,11 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::Terminate => {}
             }
         }
-        Statement::Break | Statement::Continue | Statement::Kill | Statement::Barrier(_) => {}
+        Statement::Break
+        | Statement::Continue
+        | Statement::Kill
+        | Statement::ControlBarrier(_)
+        | Statement::MemoryBarrier(_) => {}
     }
 }
 
@@ -932,6 +959,19 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
             let value = value as u32;
             Ok(Literal::U32(value))
         }
+        Scalar::F16 => {
+            // https://webidl.spec.whatwg.org/#js-float
+            if !value.is_finite() {
+                return Err(PipelineConstantError::SrcNeedsToBeFinite);
+            }
+
+            let value = half::f16::from_f64(value);
+            if !value.is_finite() {
+                return Err(PipelineConstantError::DstRangeTooSmall);
+            }
+
+            Ok(Literal::F16(value))
+        }
         Scalar::F32 => {
             // https://webidl.spec.whatwg.org/#js-float
             if !value.is_finite() {
@@ -953,7 +993,10 @@ fn map_value_to_literal(value: f64, scalar: Scalar) -> Result<Literal, PipelineC
 
             Ok(Literal::F64(value))
         }
-        _ => unreachable!(),
+        Scalar::ABSTRACT_FLOAT | Scalar::ABSTRACT_INT => {
+            unreachable!("abstract values should not be validated out of override processing")
+        }
+        _ => unreachable!("unrecognized scalar type for override"),
     }
 }
 

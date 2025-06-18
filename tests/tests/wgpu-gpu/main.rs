@@ -19,6 +19,7 @@ mod buffer;
 mod buffer_copy;
 mod buffer_usages;
 mod clear_texture;
+mod clip_distances;
 mod cloneable_types;
 mod compute_pass_ownership;
 mod create_surface_error;

@@ -20,13 +20,18 @@ pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpa
     }
 }
 
-pub fn map_built_in(word: &str, span: Span) -> Result<'_, crate::BuiltIn> {
-    Ok(match word {
+pub fn map_built_in(
+    enable_extensions: &EnableExtensions,
+    word: &str,
+    span: Span,
+) -> Result<'static, crate::BuiltIn> {
+    let built_in = match word {
         "position" => crate::BuiltIn::Position { invariant: false },
         // vertex
         "vertex_index" => crate::BuiltIn::VertexIndex,
         "instance_index" => crate::BuiltIn::InstanceIndex,
         "view_index" => crate::BuiltIn::ViewIndex,
+        "clip_distances" => crate::BuiltIn::ClipDistance,
         // fragment
         "front_facing" => crate::BuiltIn::FrontFacing,
         "frag_depth" => crate::BuiltIn::FragDepth,
@@ -45,7 +50,19 @@ pub fn map_built_in(word: &str, span: Span) -> Result<'_, crate::BuiltIn> {
         "subgroup_size" => crate::BuiltIn::SubgroupSize,
         "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
-    })
+    };
+    match built_in {
+        crate::BuiltIn::ClipDistance => {
+            if !enable_extensions.contains(ImplementedEnableExtension::ClipDistances) {
+                return Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::ClipDistances.into(),
+                }));
+            }
+        }
+        _ => {}
+    }
+    Ok(built_in)
 }
 
 pub fn map_interpolation(word: &str, span: Span) -> Result<'_, crate::Interpolation> {
