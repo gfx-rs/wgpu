@@ -2216,6 +2216,15 @@ impl dispatch::DeviceInterface for WebDevice {
         WebBuffer::new(self.inner.create_buffer(&mapped_desc).unwrap(), desc).into()
     }
 
+    fn create_buffer_external_memory_fd(
+        &self,
+        fd: i32,
+        offset: u64,
+        desc: &crate::BufferDescriptor<'_>,
+    ) -> DispatchBuffer {
+        panic!("VULKAN_EXTERNAL_MEMORY_FD feature must be enabled to call draw_mesh_tasks")
+    }
+
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> dispatch::DispatchTexture {
         let mapped_desc = webgpu_sys::GpuTextureDescriptor::new(
             map_texture_format(desc.format),

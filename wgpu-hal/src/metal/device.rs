@@ -379,6 +379,14 @@ impl crate::Device for super::Device {
             })
         })
     }
+    unsafe fn create_buffer_external_memory_fd(
+        &self,
+        _fd: i32,
+        _offset: u64,
+        _desc: &crate::BufferDescriptor,
+    ) -> Result<<Self::A as crate::Api>::Buffer, crate::DeviceError> {
+        unreachable!()
+    }
     unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {
         self.counters.buffers.sub(1);
     }
