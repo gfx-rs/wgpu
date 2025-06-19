@@ -1063,7 +1063,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    naga: crate::NagaShader,
+    source: ShaderModuleSource,
     raw_name: Option<ffi::CString>,
     runtime_checks: wgt::ShaderRuntimeChecks,
 }
@@ -1455,4 +1455,15 @@ impl crate::Queue for Queue {
         let frequency = unsafe { self.raw.GetTimestampFrequency() }.expect("GetTimestampFrequency");
         (1_000_000_000.0 / frequency as f64) as f32
     }
+}
+#[derive(Debug)]
+pub struct PassthroughShader {
+    pub shader: Vec<u8>,
+    pub entry_point: crate::String,
+    pub num_workgroups: (u32, u32, u32),
+}
+#[derive(Debug)]
+pub enum ShaderModuleSource {
+    Naga(crate::NagaShader),
+    Passthrough(PassthroughShader),
 }

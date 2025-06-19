@@ -113,6 +113,7 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
+        device.create_shader_module_passthrough(desc)
         // Create the vertex and index buffers
         let vertex_size = size_of::<Vertex>();
         let (vertex_data, index_data) = create_vertices();

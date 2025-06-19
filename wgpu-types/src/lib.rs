@@ -7666,6 +7666,8 @@ pub enum CreateShaderModuleDescriptorPassthrough<'a, L> {
     SpirV(ShaderModuleDescriptorSpirV<'a, L>),
     /// Passthrough for MSL source code.
     Msl(ShaderModuleDescriptorMsl<'a, L>),
+    /// Passthrough for DXIL compiled with DXC
+    Dxil(ShaderModuleDescriptorDxil<'a, L>),
 }
 
 impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
@@ -7691,6 +7693,14 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
                     source: inner.source.clone(),
                 })
             }
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Dxil(ShaderModuleDescriptorDxil {
+                    entry_point: inner.entry_point.clone(),
+                    label: fun(&inner.label),
+                    num_workgroups: inner.num_workgroups,
+                    source: inner.source,
+                })
+            }
         }
     }
 
@@ -7699,6 +7709,7 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         match self {
             CreateShaderModuleDescriptorPassthrough::SpirV(inner) => &inner.label,
             CreateShaderModuleDescriptorPassthrough::Msl(inner) => &inner.label,
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => &inner.label,
         }
     }
 
@@ -7710,6 +7721,7 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
                 bytemuck::cast_slice(&inner.source)
             }
             CreateShaderModuleDescriptorPassthrough::Msl(inner) => inner.source.as_bytes(),
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => inner.source,
         }
     }
 
@@ -7719,6 +7731,7 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         match self {
             CreateShaderModuleDescriptorPassthrough::SpirV(..) => "spv",
             CreateShaderModuleDescriptorPassthrough::Msl(..) => "msl",
+            CreateShaderModuleDescriptorPassthrough::Dxil(..) => "dxil",
         }
     }
 }
@@ -7737,6 +7750,22 @@ pub struct ShaderModuleDescriptorMsl<'a, L> {
     pub num_workgroups: (u32, u32, u32),
     /// Shader MSL source.
     pub source: Cow<'a, str>,
+}
+
+/// Descriptor for a shader module given by DirectX DXIL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorDxil<'a, L> {
+    /// Entrypoint.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
+    /// Shader MSL source.
+    pub source: &'a [u8],
 }
 
 /// Descriptor for a shader module given by SPIR-V binary.

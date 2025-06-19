@@ -1333,6 +1333,9 @@ impl crate::Device for super::Device {
                     panic!("`Features::MSL_SHADER_PASSTHROUGH` is not enabled")
                 }
                 crate::ShaderInput::Naga(naga) => naga,
+                crate::ShaderInput::Dxil { .. } => {
+                    panic!("`Features::DXIL_SHADER_PASSTHROUGH` is not enabled")
+                }
             },
             label: desc.label.map(|str| str.to_string()),
             id: self.shared.next_shader_id.fetch_add(1, Ordering::Relaxed),

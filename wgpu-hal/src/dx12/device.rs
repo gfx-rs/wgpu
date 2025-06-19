@@ -265,10 +265,13 @@ impl super::Device {
 
         let frag_ep = fragment_stage
             .map(|fs_stage| {
-                hlsl::FragmentEntryPoint::new(&fs_stage.module.naga.module, fs_stage.entry_point)
-                    .ok_or(crate::PipelineError::EntryPoint(
-                        naga::ShaderStage::Fragment,
-                    ))
+                hlsl::FragmentEntryPoint::new(
+                    &fs_stage.module.source.naga.module,
+                    fs_stage.entry_point,
+                )
+                .ok_or(crate::PipelineError::EntryPoint(
+                    naga::ShaderStage::Fragment,
+                ))
             })
             .transpose()?;
 
@@ -1634,7 +1637,7 @@ impl crate::Device for super::Device {
         let raw_name = desc.label.and_then(|label| ffi::CString::new(label).ok());
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
-                naga,
+                source: super::ShaderModuleSource::Naga(naga),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
@@ -1644,6 +1647,19 @@ impl crate::Device for super::Device {
             crate::ShaderInput::Msl { .. } => {
                 panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
             }
+            crate::ShaderInput::Dxil {
+                shader,
+                entry_point,
+                num_workgroups,
+            } => Ok(super::ShaderModule {
+                source: super::ShaderModuleSource::Passthrough(super::PassthroughShader {
+                    shader: shader.to_vec(),
+                    entry_point,
+                    num_workgroups,
+                }),
+                raw_name,
+                runtime_checks: desc.runtime_checks,
+            }),
         }
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {

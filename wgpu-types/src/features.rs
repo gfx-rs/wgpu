@@ -1193,6 +1193,16 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const EXPERIMENTAL_MESH_SHADER_MULTIVIEW = 1 << 49;
+
+        /// Enables creating shader modules from DirectX DXIL shaders (unsafe)
+        ///
+        /// DXIL data is not parsed or interpreted in any way
+        ///
+        /// Supported platforms:
+        /// - DirectX
+        ///
+        /// This is a native only feature.
+        const DXIL_SHADER_PASSTHROUGH = 1 << 50;
     }
 
     /// Features that are not guaranteed to be supported.
