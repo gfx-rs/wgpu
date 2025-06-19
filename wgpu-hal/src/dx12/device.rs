@@ -1,3 +1,4 @@
+use alloc::borrow::ToOwned;
 use alloc::{
     borrow::Cow,
     string::{String, ToString as _},
@@ -5,7 +6,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{ffi, num::NonZeroU32, ptr, time::Duration};
-use std::{borrow::ToOwned, time::Instant};
+use std::time::Instant;
 
 use bytemuck::TransparentWrapper;
 use parking_lot::Mutex;
