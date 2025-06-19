@@ -264,128 +264,148 @@ impl super::Device {
         naga_stage: naga::ShaderStage,
         fragment_stage: Option<&crate::ProgrammableStage<super::ShaderModule>>,
     ) -> Result<super::CompiledShader, crate::PipelineError> {
-        use naga::back::hlsl;
-
-        let frag_ep = fragment_stage
-            .map(|fs_stage| {
-                hlsl::FragmentEntryPoint::new(
-                    &fs_stage.module.source.naga.module,
-                    fs_stage.entry_point,
-                )
-                .ok_or(crate::PipelineError::EntryPoint(
-                    naga::ShaderStage::Fragment,
-                ))
-            })
-            .transpose()?;
-
         let stage_bit = auxil::map_naga_stage(naga_stage);
 
-        let (module, info) = naga::back::pipeline_constants::process_overrides(
-            &stage.module.naga.module,
-            &stage.module.naga.info,
-            Some((naga_stage, stage.entry_point)),
-            stage.constants,
-        )
-        .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}")))?;
+        let compiled_shader = match &stage.module.source {
+            super::ShaderModuleSource::Naga(naga_shader) => {
+                use naga::back::hlsl;
 
-        let needs_temp_options = stage.zero_initialize_workgroup_memory
-            != layout.naga_options.zero_initialize_workgroup_memory
-            || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing
-            || stage.module.runtime_checks.force_loop_bounding
-                != layout.naga_options.force_loop_bounding;
-        let mut temp_options;
-        let naga_options = if needs_temp_options {
-            temp_options = layout.naga_options.clone();
-            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
-            temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
-            temp_options.force_loop_bounding = stage.module.runtime_checks.force_loop_bounding;
-            &temp_options
-        } else {
-            &layout.naga_options
-        };
+                let frag_ep = match fragment_stage {
+                    Some(crate::ProgrammableStage {
+                        module:
+                            super::ShaderModule {
+                                source: super::ShaderModuleSource::Naga(naga_shader),
+                                ..
+                            },
+                        entry_point,
+                        ..
+                    }) => Some(
+                        hlsl::FragmentEntryPoint::new(&naga_shader.module, entry_point).ok_or(
+                            crate::PipelineError::EntryPoint(naga::ShaderStage::Fragment),
+                        ),
+                    ),
+                    _ => None,
+                }
+                .transpose()?;
+                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                    &naga_shader.module,
+                    &naga_shader.info,
+                    Some((naga_stage, stage.entry_point)),
+                    stage.constants,
+                )
+                .map_err(|e| {
+                    crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}"))
+                })?;
 
-        let pipeline_options = hlsl::PipelineOptions {
-            entry_point: Some((naga_stage, stage.entry_point.to_string())),
-        };
+                let needs_temp_options = stage.zero_initialize_workgroup_memory
+                    != layout.naga_options.zero_initialize_workgroup_memory
+                    || stage.module.runtime_checks.bounds_checks
+                        != layout.naga_options.restrict_indexing
+                    || stage.module.runtime_checks.force_loop_bounding
+                        != layout.naga_options.force_loop_bounding;
+                let mut temp_options;
+                let naga_options = if needs_temp_options {
+                    temp_options = layout.naga_options.clone();
+                    temp_options.zero_initialize_workgroup_memory =
+                        stage.zero_initialize_workgroup_memory;
+                    temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
+                    temp_options.force_loop_bounding =
+                        stage.module.runtime_checks.force_loop_bounding;
+                    &temp_options
+                } else {
+                    &layout.naga_options
+                };
 
-        //TODO: reuse the writer
-        let (source, entry_point) = {
-            let mut source = String::new();
-            let mut writer = hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
+                let pipeline_options = hlsl::PipelineOptions {
+                    entry_point: Some((naga_stage, stage.entry_point.to_string())),
+                };
 
-            profiling::scope!("naga::back::hlsl::write");
-            let mut reflection_info = writer
-                .write(&module, &info, frag_ep.as_ref())
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
+                //TODO: reuse the writer
+                let (source, entry_point) = {
+                    let mut source = String::new();
+                    let mut writer =
+                        hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
 
-            assert_eq!(reflection_info.entry_point_names.len(), 1);
+                    profiling::scope!("naga::back::hlsl::write");
+                    let mut reflection_info = writer
+                        .write(&module, &info, frag_ep.as_ref())
+                        .map_err(|e| {
+                            crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}"))
+                        })?;
 
-            let entry_point = reflection_info
-                .entry_point_names
-                .pop()
-                .unwrap()
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
+                    assert_eq!(reflection_info.entry_point_names.len(), 1);
 
-            (source, entry_point)
-        };
+                    let entry_point = reflection_info
+                        .entry_point_names
+                        .pop()
+                        .unwrap()
+                        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
 
-        log::info!(
-            "Naga generated shader for {:?} at {:?}:\n{}",
-            entry_point,
-            naga_stage,
-            source
-        );
+                    (source, entry_point)
+                };
+                log::info!(
+                    "Naga generated shader for {:?} at {:?}:\n{}",
+                    entry_point,
+                    naga_stage,
+                    source
+                );
 
-        let key = ShaderCacheKey {
-            source,
-            entry_point,
-            stage: naga_stage,
-            shader_model: naga_options.shader_model,
-        };
+                let key = ShaderCacheKey {
+                    source,
+                    entry_point,
+                    stage: naga_stage,
+                    shader_model: naga_options.shader_model,
+                };
 
-        {
-            let mut shader_cache = self.shader_cache.lock();
-            let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
-            if let Some(value) = shader_cache.entries.get_mut(&key) {
-                value.last_used = nr_of_shaders_compiled;
-                return Ok(value.shader.clone());
+                {
+                    let mut shader_cache = self.shader_cache.lock();
+                    let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
+                    if let Some(value) = shader_cache.entries.get_mut(&key) {
+                        value.last_used = nr_of_shaders_compiled;
+                        return Ok(value.shader.clone());
+                    }
+                }
+
+                let source_name = stage.module.raw_name.as_deref();
+
+                let full_stage = format!(
+                    "{}_{}",
+                    naga_stage.to_hlsl_str(),
+                    naga_options.shader_model.to_str()
+                );
+
+                let compiled_shader = self.compiler_container.compile(
+                    self,
+                    &key.source,
+                    source_name,
+                    &key.entry_point,
+                    stage_bit,
+                    &full_stage,
+                )?;
+
+                {
+                    let mut shader_cache = self.shader_cache.lock();
+                    shader_cache.nr_of_shaders_compiled += 1;
+                    let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
+                    let value = ShaderCacheValue {
+                        last_used: nr_of_shaders_compiled,
+                        shader: compiled_shader.clone(),
+                    };
+                    shader_cache.entries.insert(key, value);
+
+                    // Retain all entries that have been used since we compiled the last 100 shaders.
+                    if shader_cache.entries.len() > 200 {
+                        shader_cache
+                            .entries
+                            .retain(|_, v| v.last_used >= nr_of_shaders_compiled - 100);
+                    }
+                }
+                compiled_shader
             }
-        }
-
-        let source_name = stage.module.raw_name.as_deref();
-
-        let full_stage = format!(
-            "{}_{}",
-            naga_stage.to_hlsl_str(),
-            naga_options.shader_model.to_str()
-        );
-
-        let compiled_shader = self.compiler_container.compile(
-            self,
-            &key.source,
-            source_name,
-            &key.entry_point,
-            stage_bit,
-            &full_stage,
-        )?;
-
-        {
-            let mut shader_cache = self.shader_cache.lock();
-            shader_cache.nr_of_shaders_compiled += 1;
-            let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
-            let value = ShaderCacheValue {
-                last_used: nr_of_shaders_compiled,
-                shader: compiled_shader.clone(),
-            };
-            shader_cache.entries.insert(key, value);
-
-            // Retain all entries that have been used since we compiled the last 100 shaders.
-            if shader_cache.entries.len() > 200 {
-                shader_cache
-                    .entries
-                    .retain(|_, v| v.last_used >= nr_of_shaders_compiled - 100);
+            super::ShaderModuleSource::DxilPassthrough(passthrough) => {
+                super::CompiledShader::Precompiled(passthrough.shader.clone())
             }
-        }
+        };
 
         Ok(compiled_shader)
     }
@@ -1689,7 +1709,7 @@ impl crate::Device for super::Device {
                 entry_point,
                 num_workgroups,
             } => Ok(super::ShaderModule {
-                source: super::ShaderModuleSource::Passthrough(super::PassthroughShader {
+                source: super::ShaderModuleSource::DxilPassthrough(super::PassthroughShader {
                     shader: shader.to_vec(),
                     entry_point,
                     num_workgroups,

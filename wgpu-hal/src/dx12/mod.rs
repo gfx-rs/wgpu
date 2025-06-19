@@ -1104,6 +1104,7 @@ pub(super) struct ShaderCacheValue {
 pub(super) enum CompiledShader {
     Dxc(Direct3D::Dxc::IDxcBlob),
     Fxc(Direct3D::ID3DBlob),
+    Precompiled(Vec<u8>),
 }
 
 impl CompiledShader {
@@ -1116,6 +1117,10 @@ impl CompiledShader {
             CompiledShader::Fxc(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
                 pShaderBytecode: unsafe { shader.GetBufferPointer() },
                 BytecodeLength: unsafe { shader.GetBufferSize() },
+            },
+            CompiledShader::Precompiled(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
+                pShaderBytecode: shader.as_ptr().cast(),
+                BytecodeLength: shader.len(),
             },
         }
     }
@@ -1488,11 +1493,11 @@ impl crate::Queue for Queue {
 #[derive(Debug)]
 pub struct PassthroughShader {
     pub shader: Vec<u8>,
-    pub entry_point: crate::String,
+    pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
 #[derive(Debug)]
 pub enum ShaderModuleSource {
     Naga(crate::NagaShader),
-    Passthrough(PassthroughShader),
+    DxilPassthrough(PassthroughShader),
 }
