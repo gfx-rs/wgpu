@@ -2109,6 +2109,12 @@ pub enum ShaderInput<'a> {
         entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
+    Hlsl {
+        shader: String,
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+        shader_model: naga::back::hlsl::ShaderModel,
+    },
 }
 
 pub struct ShaderModuleDescriptor<'a> {

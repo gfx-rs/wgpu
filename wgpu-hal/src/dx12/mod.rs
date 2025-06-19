@@ -1491,13 +1491,21 @@ impl crate::Queue for Queue {
     }
 }
 #[derive(Debug)]
-pub struct PassthroughShader {
+pub struct DxilPassthroughShader {
     pub shader: Vec<u8>,
     pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
 #[derive(Debug)]
+pub struct HlslPassthroughShader {
+    pub shader: String,
+    pub entry_point: String,
+    pub num_workgroups: (u32, u32, u32),
+    pub shader_model: naga::back::hlsl::ShaderModel,
+}
+#[derive(Debug)]
 pub enum ShaderModuleSource {
     Naga(crate::NagaShader),
-    DxilPassthrough(PassthroughShader),
+    DxilPassthrough(DxilPassthroughShader),
+    HlslPassthrough(HlslPassthroughShader),
 }

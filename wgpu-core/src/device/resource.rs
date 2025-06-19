@@ -1802,7 +1802,7 @@ impl Device {
                 }
             }
             pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
-                self.require_features(wgt::Features::DXIL_SHADER_PASSTHROUGH)?;
+                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
                 hal::ShaderInput::Dxil {
                     shader: inner.source,
                     entry_point: inner.entry_point.clone(),

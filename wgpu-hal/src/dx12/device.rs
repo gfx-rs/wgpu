@@ -266,7 +266,7 @@ impl super::Device {
     ) -> Result<super::CompiledShader, crate::PipelineError> {
         let stage_bit = auxil::map_naga_stage(naga_stage);
 
-        let compiled_shader = match &stage.module.source {
+        let key = match &stage.module.source {
             super::ShaderModuleSource::Naga(naga_shader) => {
                 use naga::back::hlsl;
 
@@ -350,62 +350,66 @@ impl super::Device {
                     source
                 );
 
-                let key = ShaderCacheKey {
+                ShaderCacheKey {
                     source,
                     entry_point,
                     stage: naga_stage,
                     shader_model: naga_options.shader_model,
-                };
-
-                {
-                    let mut shader_cache = self.shader_cache.lock();
-                    let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
-                    if let Some(value) = shader_cache.entries.get_mut(&key) {
-                        value.last_used = nr_of_shaders_compiled;
-                        return Ok(value.shader.clone());
-                    }
                 }
-
-                let source_name = stage.module.raw_name.as_deref();
-
-                let full_stage = format!(
-                    "{}_{}",
-                    naga_stage.to_hlsl_str(),
-                    naga_options.shader_model.to_str()
-                );
-
-                let compiled_shader = self.compiler_container.compile(
-                    self,
-                    &key.source,
-                    source_name,
-                    &key.entry_point,
-                    stage_bit,
-                    &full_stage,
-                )?;
-
-                {
-                    let mut shader_cache = self.shader_cache.lock();
-                    shader_cache.nr_of_shaders_compiled += 1;
-                    let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
-                    let value = ShaderCacheValue {
-                        last_used: nr_of_shaders_compiled,
-                        shader: compiled_shader.clone(),
-                    };
-                    shader_cache.entries.insert(key, value);
-
-                    // Retain all entries that have been used since we compiled the last 100 shaders.
-                    if shader_cache.entries.len() > 200 {
-                        shader_cache
-                            .entries
-                            .retain(|_, v| v.last_used >= nr_of_shaders_compiled - 100);
-                    }
-                }
-                compiled_shader
             }
+            super::ShaderModuleSource::HlslPassthrough(passthrough) => ShaderCacheKey {
+                source: passthrough.shader.clone(),
+                entry_point: passthrough.entry_point.clone(),
+                stage: naga_stage,
+                shader_model: passthrough.shader_model,
+            },
+
             super::ShaderModuleSource::DxilPassthrough(passthrough) => {
-                super::CompiledShader::Precompiled(passthrough.shader.clone())
+                return Ok(super::CompiledShader::Precompiled(
+                    passthrough.shader.clone(),
+                ))
             }
         };
+
+        {
+            let mut shader_cache = self.shader_cache.lock();
+            let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
+            if let Some(value) = shader_cache.entries.get_mut(&key) {
+                value.last_used = nr_of_shaders_compiled;
+                return Ok(value.shader.clone());
+            }
+        }
+
+        let source_name = stage.module.raw_name.as_deref();
+
+        let full_stage = format!("{}_{}", naga_stage.to_hlsl_str(), key.shader_model.to_str());
+
+        let compiled_shader = self.compiler_container.compile(
+            self,
+            &key.source,
+            source_name,
+            &key.entry_point,
+            stage_bit,
+            &full_stage,
+        )?;
+
+        {
+            let mut shader_cache = self.shader_cache.lock();
+            shader_cache.nr_of_shaders_compiled += 1;
+            let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
+            let value = ShaderCacheValue {
+                last_used: nr_of_shaders_compiled,
+                shader: compiled_shader.clone(),
+            };
+            shader_cache.entries.insert(key, value);
+
+            // Retain all entries that have been used since we compiled the last 100 shaders.
+            if shader_cache.entries.len() > 200 {
+                shader_cache
+                    .entries
+                    .retain(|_, v| v.last_used >= nr_of_shaders_compiled - 100);
+            }
+        }
 
         Ok(compiled_shader)
     }
@@ -1709,10 +1713,25 @@ impl crate::Device for super::Device {
                 entry_point,
                 num_workgroups,
             } => Ok(super::ShaderModule {
-                source: super::ShaderModuleSource::DxilPassthrough(super::PassthroughShader {
+                source: super::ShaderModuleSource::DxilPassthrough(super::DxilPassthroughShader {
                     shader: shader.to_vec(),
                     entry_point,
                     num_workgroups,
+                }),
+                raw_name,
+                runtime_checks: desc.runtime_checks,
+            }),
+            crate::ShaderInput::Hlsl {
+                shader,
+                entry_point,
+                num_workgroups,
+                shader_model,
+            } => Ok(super::ShaderModule {
+                source: super::ShaderModuleSource::HlslPassthrough(super::HlslPassthroughShader {
+                    shader,
+                    entry_point,
+                    num_workgroups,
+                    shader_model,
                 }),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
