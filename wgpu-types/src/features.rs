@@ -1253,7 +1253,7 @@ bitflags_array! {
         /// - DirectX
         ///
         /// This is a native only feature.
-        const DXIL_SHADER_PASSTHROUGH = 1 << 50;
+        const DXIL_SHADER_PASSTHROUGH = 1 << 53;
     }
 
     /// Features that are not guaranteed to be supported.
