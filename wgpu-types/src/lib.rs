@@ -39,6 +39,7 @@ mod env;
 mod features;
 pub mod instance;
 pub mod math;
+pub mod sync;
 mod transfers;
 
 pub use counters::*;

@@ -5100,10 +5100,13 @@ version = "25.0.0"
 dependencies = [
  "bitflags 2.9.1",
  "bytemuck",
+ "cfg-if",
  "js-sys",
  "log",
+ "parking_lot",
  "serde",
  "serde_json",
+ "spin",
  "thiserror 2.0.12",
  "web-sys",
 ]

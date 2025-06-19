@@ -48,6 +48,20 @@ trace = ["std"]
 # Enable web-specific dependencies for wasm.
 web = ["dep:js-sys", "dep:web-sys"]
 
+# Enables the `parking_lot` set of locking primitives.
+# This is the recommended implementation and will be used in preference to
+# any other implementation.
+# Will fallback to a `RefCell` based implementation which is `!Sync` when no
+# alternative feature is enabled.
+parking_lot = ["dep:parking_lot"]
+
+# Enables the `spin` set of locking primitives.
+# This is generally only useful for `no_std` targets, and will be unused if
+# either `std` or `parking_lot` are available.
+# Will fallback to a `RefCell` based implementation which is `!Sync` when no
+# alternative feature is enabled.
+spin = ["dep:spin"]
+
 [dependencies]
 bitflags = { workspace = true, features = ["serde"] }
 bytemuck = { workspace = true, features = ["derive"] }
@@ -57,6 +71,13 @@ serde = { workspace = true, default-features = false, features = [
     "alloc",
     "derive",
 ], optional = true }
+cfg-if.workspace = true
+spin = { workspace = true, features = [
+    "rwlock",
+    "mutex",
+    "spin_mutex",
+], optional = true }
+parking_lot = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = { workspace = true, optional = true, default-features = false }
