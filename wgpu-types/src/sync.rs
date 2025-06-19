@@ -75,17 +75,15 @@ impl<T> Mutex<T> {
 
     /// Lock the provided [`Mutex`], allowing reading and/or writing.
     pub fn lock(&self) -> MutexGuard<T> {
-        let lock;
-
         cfg_if::cfg_if! {
             if #[cfg(feature = "parking_lot")] {
-                lock = self.0.lock();
+                let lock = self.0.lock();
             } else if #[cfg(feature = "std")] {
-                lock = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let lock = self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
             } else if #[cfg(feature = "spin")] {
-                lock = self.0.lock();
+                let lock = self.0.lock();
             } else {
-                lock = implementation::spin_unwrap(|| self.0.try_borrow_mut().ok());
+                let lock = implementation::spin_unwrap(|| self.0.try_borrow_mut().ok());
             }
         }
 
@@ -103,7 +101,7 @@ impl<T> Mutex<T> {
     }
 }
 
-impl<'a, T> ops::Deref for MutexGuard<'a, T> {
+impl<T> ops::Deref for MutexGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -111,7 +109,7 @@ impl<'a, T> ops::Deref for MutexGuard<'a, T> {
     }
 }
 
-impl<'a, T> ops::DerefMut for MutexGuard<'a, T> {
+impl<T> ops::DerefMut for MutexGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0.deref_mut()
     }
@@ -154,17 +152,15 @@ impl<T> RwLock<T> {
 
     /// Read from the provided [`RwLock`].
     pub fn read(&self) -> RwLockReadGuard<T> {
-        let guard;
-
         cfg_if::cfg_if! {
             if #[cfg(feature = "parking_lot")] {
-                guard = self.0.read();
+                let guard = self.0.read();
             } else if #[cfg(feature = "std")] {
-                guard = self.0.read().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let guard = self.0.read().unwrap_or_else(std::sync::PoisonError::into_inner);
             } else if #[cfg(feature = "spin")] {
-                guard = self.0.read();
+                let guard = self.0.read();
             } else {
-                guard = implementation::spin_unwrap(|| self.0.try_borrow().ok());
+                let guard = implementation::spin_unwrap(|| self.0.try_borrow().ok());
             }
         }
 
@@ -173,17 +169,15 @@ impl<T> RwLock<T> {
 
     /// Write to the provided [`RwLock`].
     pub fn write(&self) -> RwLockWriteGuard<T> {
-        let guard;
-
         cfg_if::cfg_if! {
             if #[cfg(feature = "parking_lot")] {
-                guard = self.0.write();
+                let guard = self.0.write();
             } else if #[cfg(feature = "std")] {
-                guard = self.0.write().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let guard = self.0.write().unwrap_or_else(std::sync::PoisonError::into_inner);
             } else if #[cfg(feature = "spin")] {
-                guard = self.0.write();
+                let guard = self.0.write();
             } else {
-                guard = implementation::spin_unwrap(|| self.0.try_borrow_mut().ok());
+                let guard = implementation::spin_unwrap(|| self.0.try_borrow_mut().ok());
             }
         }
 
@@ -220,7 +214,7 @@ impl<T: fmt::Debug> fmt::Debug for RwLock<T> {
     }
 }
 
-impl<'a, T> ops::Deref for RwLockReadGuard<'a, T> {
+impl<T> ops::Deref for RwLockReadGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -228,7 +222,7 @@ impl<'a, T> ops::Deref for RwLockReadGuard<'a, T> {
     }
 }
 
-impl<'a, T> ops::Deref for RwLockWriteGuard<'a, T> {
+impl<T> ops::Deref for RwLockWriteGuard<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -236,7 +230,7 @@ impl<'a, T> ops::Deref for RwLockWriteGuard<'a, T> {
     }
 }
 
-impl<'a, T> ops::DerefMut for RwLockWriteGuard<'a, T> {
+impl<T> ops::DerefMut for RwLockWriteGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.guard.deref_mut()
     }
