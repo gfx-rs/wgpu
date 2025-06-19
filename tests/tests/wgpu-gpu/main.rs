@@ -28,7 +28,7 @@ mod dispatch_workgroups_indirect;
 mod draw_indirect;
 mod dual_source_blending;
 mod encoder;
-mod external_texture;
+mod external_image_copy;
 mod float32_filterable;
 mod image_atomics;
 mod instance;
