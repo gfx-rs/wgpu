@@ -5,7 +5,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{ffi, num::NonZeroU32, ptr, time::Duration};
-use std::time::Instant;
+use std::{borrow::ToOwned, time::Instant};
 
 use bytemuck::TransparentWrapper;
 use parking_lot::Mutex;
@@ -266,6 +266,22 @@ impl super::Device {
     ) -> Result<super::CompiledShader, crate::PipelineError> {
         let stage_bit = auxil::map_naga_stage(naga_stage);
 
+        let needs_temp_options = stage.zero_initialize_workgroup_memory
+            != layout.naga_options.zero_initialize_workgroup_memory
+            || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing
+            || stage.module.runtime_checks.force_loop_bounding
+                != layout.naga_options.force_loop_bounding;
+        let mut temp_options;
+        let naga_options = if needs_temp_options {
+            temp_options = layout.naga_options.clone();
+            temp_options.zero_initialize_workgroup_memory = stage.zero_initialize_workgroup_memory;
+            temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
+            temp_options.force_loop_bounding = stage.module.runtime_checks.force_loop_bounding;
+            &temp_options
+        } else {
+            &layout.naga_options
+        };
+
         let key = match &stage.module.source {
             super::ShaderModuleSource::Naga(naga_shader) => {
                 use naga::back::hlsl;
@@ -296,25 +312,6 @@ impl super::Device {
                 .map_err(|e| {
                     crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}"))
                 })?;
-
-                let needs_temp_options = stage.zero_initialize_workgroup_memory
-                    != layout.naga_options.zero_initialize_workgroup_memory
-                    || stage.module.runtime_checks.bounds_checks
-                        != layout.naga_options.restrict_indexing
-                    || stage.module.runtime_checks.force_loop_bounding
-                        != layout.naga_options.force_loop_bounding;
-                let mut temp_options;
-                let naga_options = if needs_temp_options {
-                    temp_options = layout.naga_options.clone();
-                    temp_options.zero_initialize_workgroup_memory =
-                        stage.zero_initialize_workgroup_memory;
-                    temp_options.restrict_indexing = stage.module.runtime_checks.bounds_checks;
-                    temp_options.force_loop_bounding =
-                        stage.module.runtime_checks.force_loop_bounding;
-                    &temp_options
-                } else {
-                    &layout.naga_options
-                };
 
                 let pipeline_options = hlsl::PipelineOptions {
                     entry_point: Some((naga_stage, stage.entry_point.to_string())),
@@ -361,7 +358,7 @@ impl super::Device {
                 source: passthrough.shader.clone(),
                 entry_point: passthrough.entry_point.clone(),
                 stage: naga_stage,
-                shader_model: passthrough.shader_model,
+                shader_model: naga_options.shader_model,
             },
 
             super::ShaderModuleSource::DxilPassthrough(passthrough) => {
@@ -1725,13 +1722,11 @@ impl crate::Device for super::Device {
                 shader,
                 entry_point,
                 num_workgroups,
-                shader_model,
             } => Ok(super::ShaderModule {
                 source: super::ShaderModuleSource::HlslPassthrough(super::HlslPassthroughShader {
-                    shader,
+                    shader: shader.to_owned(),
                     entry_point,
                     num_workgroups,
-                    shader_model,
                 }),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
