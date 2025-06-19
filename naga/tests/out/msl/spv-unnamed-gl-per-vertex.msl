@@ -12,6 +12,7 @@ struct type_4 {
     float member_1;
     type_3 member_2;
     type_3 member_3;
+    char _pad4[4];
 };
 
 void function(

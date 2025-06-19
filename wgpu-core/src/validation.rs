@@ -36,6 +36,7 @@ pub enum BindingTypeName {
     Texture,
     Sampler,
     AccelerationStructure,
+    ExternalTexture,
 }
 
 impl From<&ResourceType> for BindingTypeName {
@@ -57,6 +58,7 @@ impl From<&BindingType> for BindingTypeName {
             BindingType::StorageTexture { .. } => BindingTypeName::Texture,
             BindingType::Sampler { .. } => BindingTypeName::Sampler,
             BindingType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+            BindingType::ExternalTexture => BindingTypeName::ExternalTexture,
         }
     }
 }
@@ -466,6 +468,7 @@ impl Resource {
                 let view_dimension = match entry.ty {
                     BindingType::Texture { view_dimension, .. }
                     | BindingType::StorageTexture { view_dimension, .. } => view_dimension,
+                    BindingType::ExternalTexture => wgt::TextureViewDimension::D2,
                     _ => {
                         return Err(BindingError::WrongTextureViewDimension {
                             dim,
@@ -815,19 +818,6 @@ impl NumericType {
             _ => false,
         }
     }
-
-    fn is_compatible_with(&self, other: &NumericType) -> bool {
-        if self.scalar.kind != other.scalar.kind {
-            return false;
-        }
-        match (self.dim, other.dim) {
-            (NumericDimension::Scalar, NumericDimension::Scalar) => true,
-            (NumericDimension::Scalar, NumericDimension::Vector(_)) => true,
-            (NumericDimension::Vector(_), NumericDimension::Vector(_)) => true,
-            (NumericDimension::Matrix(..), NumericDimension::Matrix(..)) => true,
-            _ => false,
-        }
-    }
 }
 
 /// Return true if the fragment `format` is covered by the provided `output`.
@@ -1160,6 +1150,9 @@ impl Interface {
                 );
                 let texture_sample_type = match texture_layout.ty {
                     BindingType::Texture { sample_type, .. } => sample_type,
+                    BindingType::ExternalTexture => {
+                        wgt::TextureSampleType::Float { filterable: true }
+                    }
                     _ => unreachable!(),
                 };
 
@@ -1221,8 +1214,10 @@ impl Interface {
                                     // For vertex attributes, there are defaults filled out
                                     // by the driver if data is not provided.
                                     naga::ShaderStage::Vertex => {
+                                        let is_compatible =
+                                            iv.ty.scalar.kind == provided.ty.scalar.kind;
                                         // vertex inputs don't count towards inter-stage
-                                        (iv.ty.is_compatible_with(&provided.ty), 0)
+                                        (is_compatible, 0)
                                     }
                                     naga::ShaderStage::Fragment => {
                                         if iv.interpolation != provided.interpolation {

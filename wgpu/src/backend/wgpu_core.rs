@@ -10,14 +10,17 @@ use alloc::{
 use core::{error::Error, fmt, future::ready, ops::Range, pin::Pin, ptr::NonNull, slice};
 
 use arrayvec::ArrayVec;
-use parking_lot::Mutex;
 use smallvec::SmallVec;
-use wgc::{command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError};
+use wgc::{
+    command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError,
+    resource::BlasPrepareCompactResult,
+};
 use wgt::WasmNotSendSync;
 
+use crate::util::Mutex;
 use crate::{
     api,
-    dispatch::{self, BufferMappedRangeInterface},
+    dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},
     BindingResource, Blas, BufferBinding, BufferDescriptor, CompilationInfo, CompilationMessage,
     CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas,
@@ -321,6 +324,35 @@ impl ContextWgpuCore {
                         source: source_error,
                     };
                 }
+                let device_error =
+                    if let Some(wgc::resource::CreateTextureError::Device(device_error)) =
+                        source.downcast_ref::<wgc::resource::CreateTextureError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::resource::CreateBufferError::Device(device_error)) =
+                        source.downcast_ref::<wgc::resource::CreateBufferError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::resource::CreateQuerySetError::Device(device_error)) =
+                        source.downcast_ref::<wgc::resource::CreateQuerySetError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::ray_tracing::CreateBlasError::Device(device_error)) =
+                        source.downcast_ref::<wgc::ray_tracing::CreateBlasError>()
+                    {
+                        Some(device_error)
+                    } else if let Some(wgc::ray_tracing::CreateTlasError::Device(device_error)) =
+                        source.downcast_ref::<wgc::ray_tracing::CreateTlasError>()
+                    {
+                        Some(device_error)
+                    } else {
+                        None
+                    };
+                if let Some(wgc::device::DeviceError::OutOfMemory) = device_error {
+                    break crate::Error::OutOfMemory {
+                        source: source_error,
+                    };
+                }
                 source_opt = source.source();
             } else {
                 // Otherwise, it is a validation error
@@ -615,7 +647,7 @@ pub struct CoreCommandEncoder {
 pub struct CoreBlas {
     pub(crate) context: ContextWgpuCore,
     id: wgc::id::BlasId,
-    // error_sink: ErrorSink,
+    error_sink: ErrorSink,
 }
 
 #[derive(Debug)]
@@ -888,6 +920,12 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             crate::WgslLanguageFeatures::empty(),
             |acc, wle| {
                 acc | match wle {
+                    ImplementedLanguageExtension::ReadOnlyAndReadWriteStorageTextures => {
+                        crate::WgslLanguageFeatures::ReadOnlyAndReadWriteStorageTextures
+                    }
+                    ImplementedLanguageExtension::Packed4x8IntegerDotProduct => {
+                        crate::WgslLanguageFeatures::Packed4x8IntegerDotProduct
+                    }
                     ImplementedLanguageExtension::PointerCompositeAccess => {
                         crate::WgslLanguageFeatures::PointerCompositeAccess
                     }
@@ -1203,7 +1241,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     }
                     BindingResource::AccelerationStructure(acceleration_structure) => {
                         bm::BindingResource::AccelerationStructure(
-                            acceleration_structure.shared.inner.as_core().id,
+                            acceleration_structure.inner.as_core().id,
                         )
                     }
                 },
@@ -1512,7 +1550,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             CoreBlas {
                 context: self.context.clone(),
                 id,
-                // error_sink: Arc::clone(&self.error_sink),
+                error_sink: Arc::clone(&self.error_sink),
             }
             .into(),
         )
@@ -1680,9 +1718,8 @@ impl dispatch::DeviceInterface for CoreDevice {
         };
     }
 
-    fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError> {
-        let maintain_inner = poll_type.map_index(|i| i.index);
-        match self.context.0.device_poll(self.id, maintain_inner) {
+    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
+        match self.context.0.device_poll(self.id, poll_type) {
             Ok(status) => Ok(status),
             Err(err) => {
                 if let Some(poll_error) = err.to_poll_error() {
@@ -1840,7 +1877,7 @@ impl dispatch::QueueInterface for CoreQueue {
 
     // This method needs to exist if either webgpu or webgl is enabled,
     // but we only actually have an implementation if webgl is enabled.
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     #[cfg_attr(not(webgl), expect(unused_variables))]
     fn copy_external_image_to_texture(
         &self,
@@ -1896,6 +1933,27 @@ impl dispatch::QueueInterface for CoreQueue {
         self.context
             .0
             .queue_on_submitted_work_done(self.id, callback);
+    }
+
+    fn compact_blas(&self, blas: &dispatch::DispatchBlas) -> (Option<u64>, dispatch::DispatchBlas) {
+        let (id, handle, error) =
+            self.context
+                .0
+                .queue_compact_blas(self.id, blas.as_core().id, None);
+
+        if let Some(cause) = error {
+            self.context
+                .handle_error_nolabel(&self.error_sink, cause, "Queue::compact_blas");
+        }
+        (
+            handle,
+            CoreBlas {
+                context: self.context.clone(),
+                id,
+                error_sink: Arc::clone(&self.error_sink),
+            }
+            .into(),
+        )
     }
 }
 
@@ -2003,14 +2061,6 @@ impl dispatch::BufferInterface for CoreBuffer {
         }
     }
 
-    #[cfg(webgpu)]
-    fn get_mapped_range_as_array_buffer(
-        &self,
-        _sub_range: Range<wgt::BufferAddress>,
-    ) -> Option<js_sys::ArrayBuffer> {
-        None
-    }
-
     fn unmap(&self) {
         match self.context.0.buffer_unmap(self.id) {
             Ok(()) => (),
@@ -2022,8 +2072,7 @@ impl dispatch::BufferInterface for CoreBuffer {
     }
 
     fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.buffer_destroy(self.id);
+        self.context.0.buffer_destroy(self.id);
     }
 }
 
@@ -2067,8 +2116,7 @@ impl dispatch::TextureInterface for CoreTexture {
     }
 
     fn destroy(&self) {
-        // Per spec, no error to report. Even calling destroy multiple times is valid.
-        let _ = self.context.0.texture_destroy(self.id);
+        self.context.0.texture_destroy(self.id);
     }
 }
 
@@ -2078,7 +2126,39 @@ impl Drop for CoreTexture {
     }
 }
 
-impl dispatch::BlasInterface for CoreBlas {}
+impl dispatch::BlasInterface for CoreBlas {
+    fn prepare_compact_async(&self, callback: BlasCompactCallback) {
+        let callback: Option<wgc::resource::BlasCompactCallback> =
+            Some(Box::new(|status: BlasPrepareCompactResult| {
+                let res = status.map_err(|_| crate::BlasAsyncError);
+                callback(res);
+            }));
+
+        match self.context.0.blas_prepare_compact_async(self.id, callback) {
+            Ok(_) => (),
+            Err(cause) => self.context.handle_error_nolabel(
+                &self.error_sink,
+                cause,
+                "Blas::prepare_compact_async",
+            ),
+        }
+    }
+
+    fn ready_for_compaction(&self) -> bool {
+        match self.context.0.ready_for_compaction(self.id) {
+            Ok(ready) => ready,
+            Err(cause) => {
+                self.context.handle_error_nolabel(
+                    &self.error_sink,
+                    cause,
+                    "Blas::ready_for_compaction",
+                );
+                // A BLAS is definitely not ready for compaction if it's not valid
+                false
+            }
+        }
+    }
+}
 
 impl Drop for CoreBlas {
     fn drop(&mut self) {
@@ -2183,7 +2263,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         source_offset: crate::BufferAddress,
         destination: &dispatch::DispatchBuffer,
         destination_offset: crate::BufferAddress,
-        copy_size: crate::BufferAddress,
+        copy_size: Option<crate::BufferAddress>,
     ) {
         let source = source.as_core();
         let destination = destination.as_core();
@@ -2314,6 +2394,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 ca.as_ref()
                     .map(|at| wgc::command::RenderPassColorAttachment {
                         view: at.view.inner.as_core().id,
+                        depth_slice: at.depth_slice,
                         resolve_target: at.resolve_target.map(|view| view.inner.as_core().id),
                         load_op: at.ops.load,
                         store_op: at.ops.store,
@@ -2513,7 +2594,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
             .map(|b| b.inner.as_core().id)
             .collect::<SmallVec<[_; 4]>>();
         let tlas = tlas
-            .map(|t| t.shared.inner.as_core().id)
+            .map(|t| t.inner.as_core().id)
             .collect::<SmallVec<[_; 4]>>();
         if let Err(cause) = self
             .context
@@ -2528,60 +2609,10 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
         }
     }
 
-    fn build_acceleration_structures_unsafe_tlas<'a>(
-        &self,
-        blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasBuildEntry<'a>>,
-    ) {
-        let blas = blas.map(|e: &crate::BlasBuildEntry<'_>| {
-            let geometries = match e.geometry {
-                crate::BlasGeometries::TriangleGeometries(ref triangle_geometries) => {
-                    let iter = triangle_geometries.iter().map(|tg| {
-                        wgc::ray_tracing::BlasTriangleGeometry {
-                            vertex_buffer: tg.vertex_buffer.inner.as_core().id,
-                            index_buffer: tg.index_buffer.map(|buf| buf.inner.as_core().id),
-                            transform_buffer: tg.transform_buffer.map(|buf| buf.inner.as_core().id),
-                            size: tg.size,
-                            transform_buffer_offset: tg.transform_buffer_offset,
-                            first_vertex: tg.first_vertex,
-                            vertex_stride: tg.vertex_stride,
-                            first_index: tg.first_index,
-                        }
-                    });
-                    wgc::ray_tracing::BlasGeometries::TriangleGeometries(Box::new(iter))
-                }
-            };
-            wgc::ray_tracing::BlasBuildEntry {
-                blas_id: e.blas.inner.as_core().id,
-                geometries,
-            }
-        });
-
-        let tlas = tlas.into_iter().map(|e: &crate::TlasBuildEntry<'a>| {
-            wgc::ray_tracing::TlasBuildEntry {
-                tlas_id: e.tlas.shared.inner.as_core().id,
-                instance_buffer_id: e.instance_buffer.inner.as_core().id,
-                instance_count: e.instance_count,
-            }
-        });
-
-        if let Err(cause) = self
-            .context
-            .0
-            .command_encoder_build_acceleration_structures_unsafe_tlas(self.id, blas, tlas)
-        {
-            self.context.handle_error_nolabel(
-                &self.error_sink,
-                cause,
-                "CommandEncoder::build_acceleration_structures_unsafe_tlas",
-            );
-        }
-    }
-
     fn build_acceleration_structures<'a>(
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
+        tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
     ) {
         let blas = blas.map(|e: &crate::BlasBuildEntry<'_>| {
             let geometries = match e.geometry {
@@ -2622,7 +2653,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                         })
                 });
             wgc::ray_tracing::TlasPackage {
-                tlas_id: e.tlas.shared.inner.as_core().id,
+                tlas_id: e.inner.as_core().id,
                 instances: Box::new(instances),
                 lowest_unmodified: e.lowest_unmodified,
             }
@@ -3671,5 +3702,10 @@ impl dispatch::BufferMappedRangeInterface for CoreBufferMappedRange {
     #[inline]
     fn slice_mut(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.size) }
+    }
+
+    #[cfg(webgpu)]
+    fn as_uint8array(&self) -> &js_sys::Uint8Array {
+        panic!("Only available on WebGPU")
     }
 }

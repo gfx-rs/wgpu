@@ -2,10 +2,10 @@
 <img align="right" width="20%" src="logo.png">
 
 [![Matrix Space](https://img.shields.io/static/v1?label=Space&message=%23Wgpu&color=blue&logo=matrix)](https://matrix.to/#/#Wgpu:matrix.org)
-[![Dev Matrix  ](https://img.shields.io/static/v1?label=devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org)
-[![User Matrix ](https://img.shields.io/static/v1?label=users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org)
-[![Build Status](https://github.com/gfx-rs/wgpu/workflows/CI/badge.svg)](https://github.com/gfx-rs/wgpu/actions)
-[![codecov.io](https://codecov.io/gh/gfx-rs/wgpu/branch/trunk/graph/badge.svg?token=84qJTesmeS)](https://codecov.io/gh/gfx-rs/wgpu)
+[![Dev Matrix](https://img.shields.io/static/v1?label=devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org)
+[![User Matrix](https://img.shields.io/static/v1?label=users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/gfx-rs/wgpu/ci.yml?branch=trunk&logo=github&label=CI)](https://github.com/gfx-rs/wgpu/actions)
+[![codecov.io](https://img.shields.io/codecov/c/github/gfx-rs/wgpu?logo=codecov&logoColor=fff&label=codecov&token=84qJTesmeS)](https://codecov.io/gh/gfx-rs/wgpu)
 
 `wgpu` is a cross-platform, safe, pure-rust graphics API. It runs natively on Vulkan, Metal, D3D12, and OpenGL; and on top of WebGL2 and WebGPU on wasm.
 
@@ -168,7 +168,7 @@ All testing and example infrastructure share the same set of environment variabl
 - `WGPU_ADAPTER_NAME` with a substring of the name of the adapter you want to use (ex. `1080` will match `NVIDIA GeForce 1080ti`).
 - `WGPU_BACKEND` with a comma-separated list of the backends you want to use (`vulkan`, `metal`, `dx12`, or `gl`).
 - `WGPU_POWER_PREF` with the power preference to choose when a specific adapter name isn't specified (`high`, `low` or `none`)
-- `WGPU_DX12_COMPILER` with the DX12 shader compiler you wish to use (`dxc`, `static-dxc`, or `fxc`). Note that `dxc` requires `dxil.dll` and `dxcompiler.dll` to be in the working directory, and `static-dxc` requires the `static-dxc` crate feature to be enabled. Otherwise, it will fall back to `fxc`.
+- `WGPU_DX12_COMPILER` with the DX12 shader compiler you wish to use (`dxc`, `static-dxc`, or `fxc`). Note that `dxc` requires `dxcompiler.dll` (min v1.8.2502) to be in the working directory, and `static-dxc` requires the `static-dxc` crate feature to be enabled. Otherwise, it will fall back to `fxc`.
 - `WGPU_GLES_MINOR_VERSION` with the minor OpenGL ES 3 version number to request (`0`, `1`, `2` or `automatic`).
 - `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER` with a boolean whether non-compliant drivers are enumerated (`0` for false, `1` for true).
 
@@ -212,27 +212,34 @@ If you are a user and want a way to help contribute to wgpu, we always need more
 
 ### WebGPU Conformance Test Suite
 
-WebGPU includes a Conformance Test Suite to validate that implementations are working correctly. We can run this CTS against wgpu.
+WebGPU includes a Conformance Test Suite to validate that implementations are
+working correctly. We run cases from the CTS against wgpu using
+[Deno](https://deno.com/). A [default list of enabled
+tests](./cts_runner/test.lst) is automatically run on pull requests in CI.
 
-To run the CTS, first, you need to check it out:
-
-```
-git clone https://github.com/gpuweb/cts.git
-cd cts
-# works in bash and powershell
-git checkout $(cat ../cts_runner/revision.txt)
-```
-
-To run a given set of tests:
+To run the default set of CTS tests locally, run:
 
 ```
-# Must be inside the `cts` folder we just checked out, else this will fail
-cargo run --manifest-path ../Cargo.toml -p cts_runner --bin cts_runner -- ./tools/run_deno --verbose "<test string>"
+cargo xtask cts
 ```
 
-To find the full list of tests, go to the [online cts viewer](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
+You can also specify a test selector on the command line:
 
-The list of currently enabled CTS tests can be found [here](./cts_runner/test.lst).
+```
+cargo xtask cts 'webgpu:api,operation,command_buffer,basic:*'
+```
+
+Or supply your own test list in a file:
+
+```
+cargo xtask cts -f your_tests.lst
+```
+
+To find the full list of tests, go to the
+[web version of the CTS](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
+
+The version of the CTS used by `cargo xtask cts` is specified in
+[`cts_runner/revision.txt`](./cts_runner/revision.txt).
 
 ## Tracking the WebGPU and WGSL draft specifications
 

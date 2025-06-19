@@ -86,11 +86,14 @@ deno_core::extension!(
         render_pass::GPURenderPassEncoder,
         render_pipeline::GPURenderPipeline,
         sampler::GPUSampler,
+        shader::GPUCompilationInfo,
+        shader::GPUCompilationMessage,
         shader::GPUShaderModule,
         adapter::GPUSupportedFeatures,
         adapter::GPUSupportedLimits,
         texture::GPUTexture,
         texture::GPUTextureView,
+        texture::GPUExternalTexture,
         byow::UnsafeWindowSurface,
         surface::GPUCanvasContext,
     ],
@@ -148,6 +151,10 @@ impl GPU {
                 &wgpu_types::InstanceDescriptor {
                     backends,
                     flags: wgpu_types::InstanceFlags::from_build_config(),
+                    memory_budget_thresholds: wgpu_types::MemoryBudgetThresholds {
+                        for_resource_creation: Some(97),
+                        for_device_loss: Some(99),
+                    },
                     backend_options: wgpu_types::BackendOptions {
                         dx12: wgpu_types::Dx12BackendOptions {
                             shader_compiler: wgpu_types::Dx12Compiler::Fxc,

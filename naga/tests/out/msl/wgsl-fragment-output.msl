@@ -19,6 +19,7 @@ struct FragmentOutputVec2Scalar {
     float scalarf;
     int scalari;
     uint scalaru;
+    char _pad6[4];
 };
 
 struct main_vec4vec3_Output {

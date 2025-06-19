@@ -19,15 +19,15 @@ layout(std430) buffer FooStruct_block_0Compute { FooStruct _group_0_binding_1_cs
 
 layout(std430) readonly buffer type_6_block_1Compute { vec2 _group_0_binding_2_cs[]; };
 
-uniform type_8_block_2Compute { vec4 _group_0_binding_3_cs[20]; };
+layout(std140) uniform type_8_block_2Compute { vec4 _group_0_binding_3_cs[20]; };
 
-uniform type_4_block_3Compute { vec3 _group_0_binding_4_cs; };
+layout(std140) uniform type_4_block_3Compute { vec3 _group_0_binding_4_cs; };
 
-uniform type_9_block_4Compute { mat3x2 _group_0_binding_5_cs; };
+layout(std140) uniform type_9_block_4Compute { mat3x2 _group_0_binding_5_cs; };
 
-uniform type_12_block_5Compute { mat2x4 _group_0_binding_6_cs[2][2]; };
+layout(std140) uniform type_12_block_5Compute { mat2x4 _group_0_binding_6_cs[2][2]; };
 
-uniform type_15_block_6Compute { mat4x2 _group_0_binding_7_cs[2][2]; };
+layout(std140) uniform type_15_block_6Compute { mat4x2 _group_0_binding_7_cs[2][2]; };
 
 
 void test_msl_packed_vec3_as_arg(vec3 arg) {

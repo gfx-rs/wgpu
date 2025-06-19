@@ -55,5 +55,9 @@ fn breakIfSeparateVariable() {
 
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
+    breakIfEmpty();
+    breakIfEmptyBody(false);
+    breakIf(false);
+    breakIfSeparateVariable();
     return;
 }

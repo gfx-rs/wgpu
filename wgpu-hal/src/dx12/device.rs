@@ -1,13 +1,11 @@
-use std::{
+use alloc::{
     borrow::Cow,
-    ffi, mem,
-    num::NonZeroU32,
-    ptr,
     string::{String, ToString as _},
     sync::Arc,
-    time::{Duration, Instant},
     vec::Vec,
 };
+use core::{ffi, num::NonZeroU32, ptr, time::Duration};
+use std::time::Instant;
 
 use bytemuck::TransparentWrapper;
 use parking_lot::Mutex;
@@ -28,7 +26,7 @@ use crate::{
     },
     dx12::{
         borrow_optional_interface_temporarily, shader_compilation, suballocation,
-        DynamicStorageBufferOffsets, Event,
+        DynamicStorageBufferOffsets, Event, ShaderCacheKey, ShaderCacheValue,
     },
     AccelerationStructureEntries, TlasInstance,
 };
@@ -39,6 +37,7 @@ const NAGA_LOCATION_SEMANTIC: &[u8] = c"LOC".to_bytes();
 impl super::Device {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
+        adapter: auxil::dxgi::factory::DxgiAdapter,
         raw: Direct3D12::ID3D12Device,
         present_queue: Direct3D12::ID3D12CommandQueue,
         features: wgt::Features,
@@ -46,7 +45,8 @@ impl super::Device {
         memory_hints: &wgt::MemoryHints,
         private_caps: super::PrivateCapabilities,
         library: &Arc<D3D12Lib>,
-        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+        memory_budget_thresholds: wgt::MemoryBudgetThresholds,
+        compiler_container: Arc<shader_compilation::CompilerContainer>,
     ) -> Result<Self, crate::DeviceError> {
         if private_caps
             .instance_flags
@@ -55,7 +55,8 @@ impl super::Device {
             auxil::dxgi::exception::register_exception_handler();
         }
 
-        let mem_allocator = Arc::new(suballocation::create_allocator(&raw, memory_hints)?);
+        let mem_allocator =
+            suballocation::Allocator::new(&raw, memory_hints, memory_budget_thresholds)?;
 
         let idle_fence: Direct3D12::ID3D12Fence = unsafe {
             profiling::scope!("ID3D12Device::CreateFence");
@@ -113,6 +114,7 @@ impl super::Device {
         let capacity_views = limits.max_non_sampler_bindings as u64;
 
         let shared = super::DeviceShared {
+            adapter,
             zero_buffer,
             cmd_signatures: super::CommandSignatures {
                 draw: Self::create_command_signature(
@@ -186,7 +188,7 @@ impl super::Device {
             },
             features,
             shared: Arc::new(shared),
-            rtv_pool: Mutex::new(rtv_pool),
+            rtv_pool: Arc::new(Mutex::new(rtv_pool)),
             dsv_pool: Mutex::new(descriptor::CpuPool::new(
                 raw.clone(),
                 Direct3D12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
@@ -200,7 +202,8 @@ impl super::Device {
             render_doc: Default::default(),
             null_rtv_handle,
             mem_allocator,
-            dxc_container,
+            compiler_container,
+            shader_cache: Default::default(),
             counters: Default::default(),
         })
     }
@@ -280,6 +283,7 @@ impl super::Device {
         let (module, info) = naga::back::pipeline_constants::process_overrides(
             &stage.module.naga.module,
             &stage.module.naga.info,
+            Some((naga_stage, stage.entry_point)),
             stage.constants,
         )
         .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}")))?;
@@ -300,15 +304,55 @@ impl super::Device {
             &layout.naga_options
         };
 
-        //TODO: reuse the writer
-        let mut source = String::new();
-        let mut writer = hlsl::Writer::new(&mut source, naga_options);
-        let reflection_info = {
-            profiling::scope!("naga::back::hlsl::write");
-            writer
-                .write(&module, &info, frag_ep.as_ref())
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?
+        let pipeline_options = hlsl::PipelineOptions {
+            entry_point: Some((naga_stage, stage.entry_point.to_string())),
         };
+
+        //TODO: reuse the writer
+        let (source, entry_point) = {
+            let mut source = String::new();
+            let mut writer = hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
+
+            profiling::scope!("naga::back::hlsl::write");
+            let mut reflection_info = writer
+                .write(&module, &info, frag_ep.as_ref())
+                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
+
+            assert_eq!(reflection_info.entry_point_names.len(), 1);
+
+            let entry_point = reflection_info
+                .entry_point_names
+                .pop()
+                .unwrap()
+                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
+
+            (source, entry_point)
+        };
+
+        log::info!(
+            "Naga generated shader for {:?} at {:?}:\n{}",
+            entry_point,
+            naga_stage,
+            source
+        );
+
+        let key = ShaderCacheKey {
+            source,
+            entry_point,
+            stage: naga_stage,
+            shader_model: naga_options.shader_model,
+        };
+
+        {
+            let mut shader_cache = self.shader_cache.lock();
+            let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
+            if let Some(value) = shader_cache.entries.get_mut(&key) {
+                value.last_used = nr_of_shaders_compiled;
+                return Ok(value.shader.clone());
+            }
+        }
+
+        let source_name = stage.module.raw_name.as_deref();
 
         let full_stage = format!(
             "{}_{}",
@@ -316,54 +360,34 @@ impl super::Device {
             naga_options.shader_model.to_str()
         );
 
-        let ep_index = module
-            .entry_points
-            .iter()
-            .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
-            .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
+        let compiled_shader = self.compiler_container.compile(
+            self,
+            &key.source,
+            source_name,
+            &key.entry_point,
+            stage_bit,
+            &full_stage,
+        )?;
 
-        let raw_ep = reflection_info.entry_point_names[ep_index]
-            .as_ref()
-            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
+        {
+            let mut shader_cache = self.shader_cache.lock();
+            shader_cache.nr_of_shaders_compiled += 1;
+            let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
+            let value = ShaderCacheValue {
+                last_used: nr_of_shaders_compiled,
+                shader: compiled_shader.clone(),
+            };
+            shader_cache.entries.insert(key, value);
 
-        let source_name = stage.module.raw_name.as_deref();
+            // Retain all entries that have been used since we compiled the last 100 shaders.
+            if shader_cache.entries.len() > 200 {
+                shader_cache
+                    .entries
+                    .retain(|_, v| v.last_used >= nr_of_shaders_compiled - 100);
+            }
+        }
 
-        // Compile with DXC if available, otherwise fall back to FXC
-        let result = if let Some(ref dxc_container) = self.dxc_container {
-            shader_compilation::compile_dxc(
-                self,
-                &source,
-                source_name,
-                raw_ep,
-                stage_bit,
-                &full_stage,
-                dxc_container,
-            )
-        } else {
-            shader_compilation::compile_fxc(
-                self,
-                &source,
-                source_name,
-                raw_ep,
-                stage_bit,
-                &full_stage,
-            )
-        };
-
-        let log_level = if result.is_ok() {
-            log::Level::Info
-        } else {
-            log::Level::Error
-        };
-
-        log::log!(
-            log_level,
-            "Naga generated shader for {:?} at {:?}:\n{}",
-            raw_ep,
-            naga_stage,
-            source
-        );
-        result
+        Ok(compiled_shader)
     }
 
     pub fn raw_device(&self) -> &Direct3D12::ID3D12Device {
@@ -540,10 +564,14 @@ impl crate::Device for super::Device {
         Ok(super::TextureView {
             raw_format: view_desc.rtv_dsv_format,
             aspects: view_desc.aspects,
-            target_base: (
-                texture.resource.clone(),
-                texture.calc_subresource(desc.range.base_mip_level, desc.range.base_array_layer, 0),
+            dimension: desc.dimension,
+            texture: texture.resource.clone(),
+            subresource_index: texture.calc_subresource(
+                desc.range.base_mip_level,
+                desc.range.base_array_layer,
+                0,
             ),
+            mip_slice: desc.range.base_mip_level,
             handle_srv: if desc.usage.intersects(wgt::TextureUses::RESOURCE) {
                 match unsafe { view_desc.to_srv() } {
                     Some(raw_desc) => {
@@ -585,7 +613,10 @@ impl crate::Device for super::Device {
             } else {
                 None
             },
-            handle_rtv: if desc.usage.intersects(wgt::TextureUses::COLOR_TARGET) {
+            handle_rtv: if desc.usage.intersects(wgt::TextureUses::COLOR_TARGET)
+                && desc.dimension != wgt::TextureViewDimension::D3
+            // 3D RTVs must be created in the render pass
+            {
                 let raw_desc = unsafe { view_desc.to_rtv() };
                 let handle = self.rtv_pool.lock().alloc_handle()?;
                 unsafe {
@@ -726,6 +757,8 @@ impl crate::Device for super::Device {
             device: self.raw.clone(),
             shared: Arc::clone(&self.shared),
             mem_allocator: self.mem_allocator.clone(),
+            rtv_pool: Arc::clone(&self.rtv_pool),
+            temp_rtv_handles: Vec::new(),
             null_rtv_handle: self.null_rtv_handle,
             list: None,
             free_lists: Vec::new(),
@@ -755,6 +788,7 @@ impl crate::Device for super::Device {
                 | wgt::BindingType::StorageTexture { .. }
                 | wgt::BindingType::AccelerationStructure { .. } => num_views += count,
                 wgt::BindingType::Sampler { .. } => has_sampler_in_group = true,
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             }
         }
 
@@ -867,7 +901,7 @@ impl crate::Device for super::Device {
             bind_cbv.space += 1;
         }
 
-        let mut dynamic_storage_buffer_offsets_targets = std::collections::BTreeMap::new();
+        let mut dynamic_storage_buffer_offsets_targets = alloc::collections::BTreeMap::new();
         let mut total_dynamic_storage_buffers = 0;
 
         // Collect the whole number of bindings we will create upfront.
@@ -1520,6 +1554,7 @@ impl crate::Device for super::Device {
                         inner.stage.push(handle);
                     }
                 }
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             }
         }
 
@@ -1634,7 +1669,9 @@ impl crate::Device for super::Device {
     ) -> Result<super::ShaderModule, crate::ShaderError> {
         self.counters.shader_modules.add(1);
 
-        let raw_name = desc.label.and_then(|label| ffi::CString::new(label).ok());
+        let raw_name = desc
+            .label
+            .and_then(|label| alloc::ffi::CString::new(label).ok());
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
                 source: super::ShaderModuleSource::Naga(naga),
@@ -1836,11 +1873,6 @@ impl crate::Device for super::Device {
         }
         .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.to_string()))?;
 
-        unsafe { blob_vs.destroy() };
-        if let Some(blob_fs) = blob_fs {
-            unsafe { blob_fs.destroy() };
-        };
-
         if let Some(label) = desc.label {
             raw.set_name(label)?;
         }
@@ -1898,8 +1930,6 @@ impl crate::Device for super::Device {
             }
         };
 
-        unsafe { blob_cs.destroy() };
-
         let raw: Direct3D12::ID3D12PipelineState = pair.map_err(|err| {
             crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.to_string())
         })?;
@@ -1946,6 +1976,24 @@ impl crate::Device for super::Device {
                 Direct3D12::D3D12_QUERY_TYPE_TIMESTAMP,
             ),
         };
+
+        if let Some(threshold) = self
+            .mem_allocator
+            .memory_budget_thresholds
+            .for_resource_creation
+        {
+            let info = self
+                .shared
+                .adapter
+                .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL)?;
+
+            // Assume each query is 256 bytes.
+            // On an AMD W6800 with driver version 32.0.12030.9, occlusion and pipeline statistics are 256, timestamp is 8.
+
+            if info.CurrentUsage + desc.count as u64 * 256 >= info.Budget / 100 * threshold as u64 {
+                return Err(crate::DeviceError::OutOfMemory);
+            }
+        }
 
         let mut raw = None::<Direct3D12::ID3D12QueryHeap>;
         unsafe {
@@ -2279,33 +2327,7 @@ impl crate::Device for super::Device {
     }
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
-        let mut upstream = self.mem_allocator.lock().generate_report();
-
-        let allocations = upstream
-            .allocations
-            .iter_mut()
-            .map(|alloc| wgt::AllocationReport {
-                name: mem::take(&mut alloc.name),
-                offset: alloc.offset,
-                size: alloc.size,
-            })
-            .collect();
-
-        let blocks = upstream
-            .blocks
-            .iter()
-            .map(|block| wgt::MemoryBlockReport {
-                size: block.size,
-                allocations: block.allocations.clone(),
-            })
-            .collect();
-
-        Some(wgt::AllocatorReport {
-            allocations,
-            blocks,
-            total_allocated_bytes: upstream.total_allocated_bytes,
-            total_reserved_bytes: upstream.total_reserved_bytes,
-        })
+        Some(self.mem_allocator.generate_report())
     }
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
@@ -2320,5 +2342,36 @@ impl crate::Device for super::Device {
         wgt::bytemuck_wrapper!(unsafe struct Desc(Direct3D12::D3D12_RAYTRACING_INSTANCE_DESC));
 
         bytemuck::bytes_of(&Desc::wrap(temp)).to_vec()
+    }
+
+    fn check_if_oom(&self) -> Result<(), crate::DeviceError> {
+        let Some(threshold) = self.mem_allocator.memory_budget_thresholds.for_device_loss else {
+            return Ok(());
+        };
+
+        let info = self
+            .shared
+            .adapter
+            .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_LOCAL)?;
+
+        if info.CurrentUsage >= info.Budget / 100 * threshold as u64 {
+            return Err(crate::DeviceError::OutOfMemory);
+        }
+
+        if matches!(
+            self.shared.private_caps.memory_architecture,
+            super::MemoryArchitecture::NonUnified
+        ) {
+            let info = self
+                .shared
+                .adapter
+                .query_video_memory_info(Dxgi::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL)?;
+
+            if info.CurrentUsage >= info.Budget / 100 * threshold as u64 {
+                return Err(crate::DeviceError::OutOfMemory);
+            }
+        }
+
+        Ok(())
     }
 }

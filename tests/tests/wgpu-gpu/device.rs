@@ -330,20 +330,19 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         );
 
         // Texture clear should fail.
+        encoder_for_clear.clear_texture(
+            &texture_for_write,
+            &wgpu::ImageSubresourceRange {
+                aspect: wgpu::TextureAspect::All,
+                base_mip_level: 0,
+                mip_level_count: None,
+                base_array_layer: 0,
+                array_layer_count: None,
+            },
+        );
         fail(
             &ctx.device,
-            || {
-                encoder_for_clear.clear_texture(
-                    &texture_for_write,
-                    &wgpu::ImageSubresourceRange {
-                        aspect: wgpu::TextureAspect::All,
-                        base_mip_level: 0,
-                        mip_level_count: None,
-                        base_array_layer: 0,
-                        array_layer_count: None,
-                    },
-                );
-            },
+            || encoder_for_clear.finish(),
             Some("device with '' label is invalid"),
         );
 
@@ -369,6 +368,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                         ops: wgpu::Operations::default(),
                         resolve_target: None,
                         view: &target_view,
+                        depth_slice: None,
                     })],
                     depth_stencil_attachment: None,
                     timestamp_writes: None,
@@ -379,70 +379,66 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
         );
 
         // Copying a buffer to a buffer should fail.
+        encoder_for_buffer_buffer_copy.copy_buffer_to_buffer(
+            &buffer_source,
+            0,
+            &buffer_dest,
+            0,
+            256,
+        );
         fail(
             &ctx.device,
-            || {
-                encoder_for_buffer_buffer_copy.copy_buffer_to_buffer(
-                    &buffer_source,
-                    0,
-                    &buffer_dest,
-                    0,
-                    256,
-                );
-            },
+            || encoder_for_buffer_buffer_copy.finish(),
             Some("device with '' label is invalid"),
         );
 
         // Copying a buffer to a texture should fail.
+        encoder_for_buffer_texture_copy.copy_buffer_to_texture(
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer_source,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: None,
+                },
+            },
+            texture_for_write.as_image_copy(),
+            texture_extent,
+        );
         fail(
             &ctx.device,
-            || {
-                encoder_for_buffer_texture_copy.copy_buffer_to_texture(
-                    wgpu::TexelCopyBufferInfo {
-                        buffer: &buffer_source,
-                        layout: wgpu::TexelCopyBufferLayout {
-                            offset: 0,
-                            bytes_per_row: Some(4),
-                            rows_per_image: None,
-                        },
-                    },
-                    texture_for_write.as_image_copy(),
-                    texture_extent,
-                );
-            },
+            || encoder_for_buffer_texture_copy.finish(),
             Some("device with '' label is invalid"),
         );
 
         // Copying a texture to a buffer should fail.
+        encoder_for_texture_buffer_copy.copy_texture_to_buffer(
+            texture_for_read.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer_source,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: None,
+                },
+            },
+            texture_extent,
+        );
         fail(
             &ctx.device,
-            || {
-                encoder_for_texture_buffer_copy.copy_texture_to_buffer(
-                    texture_for_read.as_image_copy(),
-                    wgpu::TexelCopyBufferInfo {
-                        buffer: &buffer_source,
-                        layout: wgpu::TexelCopyBufferLayout {
-                            offset: 0,
-                            bytes_per_row: Some(4),
-                            rows_per_image: None,
-                        },
-                    },
-                    texture_extent,
-                );
-            },
+            || encoder_for_texture_buffer_copy.finish(),
             Some("device with '' label is invalid"),
         );
 
         // Copying a texture to a texture should fail.
+        encoder_for_texture_texture_copy.copy_texture_to_texture(
+            texture_for_read.as_image_copy(),
+            texture_for_write.as_image_copy(),
+            texture_extent,
+        );
         fail(
             &ctx.device,
-            || {
-                encoder_for_texture_texture_copy.copy_texture_to_texture(
-                    texture_for_read.as_image_copy(),
-                    texture_for_write.as_image_copy(),
-                    texture_extent,
-                );
-            },
+            || encoder_for_texture_texture_copy.finish(),
             Some("device with '' label is invalid"),
         );
 

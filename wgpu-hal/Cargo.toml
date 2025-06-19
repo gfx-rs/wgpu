@@ -81,6 +81,7 @@ metal = [
     "dep:log",
     "dep:metal",
     "dep:objc",
+    "dep:parking_lot",
     "dep:profiling",
 ]
 vulkan = [
@@ -96,6 +97,7 @@ vulkan = [
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:smallvec",
     "dep:windows",
@@ -115,9 +117,11 @@ gles = [
     "dep:log",
     "dep:ndk-sys",
     "dep:objc",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:wasm-bindgen",
     "dep:web-sys",
+    "wgpu-types/web",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_System_LibraryLoader",
@@ -133,6 +137,7 @@ dx12 = [
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:range-alloc",
     "dep:windows-core",
@@ -166,10 +171,6 @@ portable-atomic = ["dep:portable-atomic"]
 ### Internal Debugging Features ###
 ###################################
 
-# Panic when running into an out-of-memory error (for debugging purposes).
-#
-# Only affects the d3d12 and vulkan backends.
-oom_panic = []
 # Panic when running into a device lost error (for debugging purposes).
 # Only affects the d3d12 and vulkan backends.
 device_lost_panic = []
@@ -178,6 +179,8 @@ device_lost_panic = []
 #
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
+# Tracks validation errors in a `VALIDATION_CANARY` static.
+validation_canary = ["dep:parking_lot"]
 
 ###################
 ### Workarounds ###
@@ -200,12 +203,12 @@ required-features = ["gles"]
 
 [dependencies]
 naga.workspace = true
-wgpu-types.workspace = true
+wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
 raw-window-handle.workspace = true
-parking_lot.workspace = true
+parking_lot = { workspace = true, optional = true }
 thiserror.workspace = true
 
 # Target agnostic dependencies used only in backends.
@@ -300,7 +303,7 @@ web-sys = { workspace = true, optional = true, features = [
     "WebGl2RenderingContext",
     "OffscreenCanvas",
 ] }
-js-sys = { workspace = true, optional = true, features = ["default"] }
+js-sys = { workspace = true, optional = true, default-features = true }
 
 ############################
 ### Platform: Emscripten ###
@@ -324,13 +327,14 @@ cfg_aliases.workspace = true
 [dev-dependencies]
 cfg-if.workspace = true
 env_logger.workspace = true
-glam.workspace = true                               # for ray-traced-triangle example
-naga = { workspace = true, features = ["wgsl-in"] }
-winit.workspace = true                              # for "halmark" example
+glam.workspace = true                                            # for ray-traced-triangle example
+naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
+winit.workspace = true                                           # for "halmark" example
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dev-dependencies]
 glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
 glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
-rwh_05 = { version = "0.5", package = "raw-window-handle" }                      # temporary compatibility for glutin-winit
+# temporary compatibility for glutin-winit
+rwh_05.workspace = true
 winit = { workspace = true, features = ["rwh_05"] }

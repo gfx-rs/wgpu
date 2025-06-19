@@ -1,0 +1,5 @@
+god_mode = true
+targets = "SPIRV | GLSL | WGSL"
+
+[glsl]
+version.Desktop = 330

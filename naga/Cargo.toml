@@ -23,6 +23,7 @@ default = []
 dot-out = []
 glsl-in = ["dep:pp-rs"]
 glsl-out = []
+std = []
 
 ## Enables outputting to the Metal Shading Language (MSL).
 ##
@@ -56,15 +57,9 @@ arbitrary = [
     "half/arbitrary",
     "half/std",
 ]
-spv-in = ["dep:petgraph", "dep:spirv"]
+spv-in = ["dep:petgraph", "petgraph/graphmap", "dep:spirv"]
 spv-out = ["dep:spirv"]
-wgsl-in = [
-    "dep:hexf-parse",
-    "dep:strum",
-    "dep:unicode-ident",
-    "indexmap/std",
-    "compact",
-]
+wgsl-in = ["dep:hexf-parse", "dep:unicode-ident"]
 wgsl-out = []
 
 ## Enables outputting to HLSL (Microsoft's High-Level Shader Language).
@@ -78,54 +73,50 @@ hlsl-out = []
 ## If you want to enable HLSL output it regardless of the target platform, use `naga/hlsl-out`.
 hlsl-out-if-target-windows = []
 
-compact = []
+## Enables colored output through codespan-reporting and termcolor.
+termcolor = ["codespan-reporting/termcolor"]
+
+## Enables writing output to stderr.
+stderr = ["codespan-reporting/std"]
 
 [dependencies]
-arbitrary = { version = "1.4", features = ["derive"], optional = true }
+arbitrary = { workspace = true, features = ["derive"], optional = true }
 arrayvec.workspace = true
 bitflags.workspace = true
 bit-set.workspace = true
-codespan-reporting = { workspace = true, default-features = false, features = [
-    "std",
-    "termcolor",
-] }
+cfg-if.workspace = true
+codespan-reporting = { workspace = true }
 hashbrown.workspace = true
-half = { workspace = true, default-features = false, features = ["num-traits"] }
+half = { workspace = true, features = ["num-traits"] }
 rustc-hash.workspace = true
 indexmap.workspace = true
-log = "0.4"
-# `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
-num-traits = { version = "0.2.16", default-features = false }
+libm = { workspace = true, default-features = false }
+log.workspace = true
+num-traits.workspace = true
 once_cell = { workspace = true, features = ["alloc", "race"] }
-strum = { workspace = true, optional = true }
-spirv = { version = "0.3", optional = true }
+spirv = { workspace = true, optional = true }
 thiserror.workspace = true
-serde = { version = "1.0.219", features = [
-    "default",
-    "derive",
-], optional = true }
-petgraph = { version = "0.8", optional = true }
-pp-rs = { version = "0.2.1", optional = true }
-hexf-parse = { version = "0.2.1", optional = true }
-unicode-ident = { version = "1.0", optional = true }
+serde = { workspace = true, features = ["alloc", "derive"], optional = true }
+petgraph = { workspace = true, optional = true }
+pp-rs = { workspace = true, optional = true }
+hexf-parse = { workspace = true, optional = true }
+unicode-ident = { workspace = true, optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true
 
 [dev-dependencies]
-diff = "0.1"
+diff.workspace = true
 env_logger.workspace = true
 hashbrown = { workspace = true, features = ["serde"] }
-# This _cannot_ have a version specified. If it does, crates.io will look
-# for a version of the package on crates when we publish naga. Path dependencies
-# are allowed through though.
-hlsl-snapshots = { path = "./hlsl-snapshots" }
+hlsl-snapshots.workspace = true
 itertools.workspace = true
 ron.workspace = true
-rspirv = { version = "0.11", git = "https://github.com/gfx-rs/rspirv", rev = "b969f175d5663258b4891e44b76c1544da9661ab" }
+rspirv.workspace = true
 serde = { workspace = true, features = ["default", "derive"] }
-spirv = { version = "0.3", features = ["deserialize"] }
-toml = "0.8"
+spirv = { workspace = true, features = ["deserialize"] }
+strum = { workspace = true }
+toml.workspace = true
 walkdir.workspace = true
 
 [lints.clippy]

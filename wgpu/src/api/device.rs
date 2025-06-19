@@ -1,10 +1,9 @@
-use alloc::{boxed::Box, string::String, sync::Arc};
+use alloc::{boxed::Box, string::String, sync::Arc, vec};
 use core::{error, fmt, future::Future};
-
-use parking_lot::Mutex;
 
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
+use crate::util::Mutex;
 use crate::*;
 
 /// Open connection to a graphics and/or compute device.
@@ -34,6 +33,12 @@ pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(DeviceDescriptor<'_>: Send, Sync);
 
 impl Device {
+    #[cfg(custom)]
+    /// Returns custom implementation of Device (if custom backend and is internally T)
+    pub fn as_custom<T: custom::DeviceInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+
     #[cfg(custom)]
     /// Creates Device from custom implementation
     pub fn from_custom<T: custom::DeviceInterface>(device: T) -> Self {
@@ -86,7 +91,7 @@ impl Device {
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
     pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
-        self.inner.poll(poll_type)
+        self.inner.poll(poll_type.map_index(|s| s.index))
     }
 
     /// The features which can be used on this device.
@@ -248,7 +253,7 @@ impl Device {
     /// Creates a [`Buffer`].
     #[must_use]
     pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
-        let mut map_context = MapContext::new(desc.size);
+        let mut map_context = MapContext::new();
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
         }
@@ -324,7 +329,7 @@ impl Device {
         hal_buffer: A::Buffer,
         desc: &BufferDescriptor<'_>,
     ) -> Buffer {
-        let mut map_context = MapContext::new(desc.size);
+        let mut map_context = MapContext::new();
         if desc.mapped_at_creation {
             map_context.initial_range = 0..desc.size;
         }
@@ -598,10 +603,9 @@ impl Device {
         let tlas = self.inner.create_tlas(desc);
 
         Tlas {
-            shared: Arc::new(TlasShared {
-                inner: tlas,
-                max_instances: desc.max_instances,
-            }),
+            inner: tlas,
+            instances: vec![None; desc.max_instances as usize],
+            lowest_unmodified: 0,
         }
     }
 }

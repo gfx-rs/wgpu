@@ -74,6 +74,8 @@ impl ir::MathFunction {
             }
             Mf::Pack4xI8 => regular!(1, VEC4 of I32 -> U32).into(),
             Mf::Pack4xU8 => regular!(1, VEC4 of U32 -> U32).into(),
+            Mf::Pack4xI8Clamp => regular!(1, VEC4 of I32 -> U32).into(),
+            Mf::Pack4xU8Clamp => regular!(1, VEC4 of U32 -> U32).into(),
 
             // Unpacking functions
             Mf::Unpack4x8snorm | Mf::Unpack4x8unorm => regular!(1, SCALAR of U32 -> Vec4F).into(),
@@ -92,7 +94,9 @@ impl ir::MathFunction {
             Mf::Ldexp => ldexp().into(),
             Mf::Outer => outer().into(),
             Mf::Cross => regular!(2, VEC3 of FLOAT).into(),
-            Mf::Distance => regular!(2, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into(),
+            Mf::Distance => {
+                regular!(2, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into()
+            }
             Mf::Length => regular!(1, SCALAR|VECN of FLOAT_ABSTRACT_UNIMPLEMENTED -> Scalar).into(),
             Mf::Normalize => regular!(1, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),
             Mf::FaceForward => regular!(3, VECN of FLOAT_ABSTRACT_UNIMPLEMENTED).into(),

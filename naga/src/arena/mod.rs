@@ -234,7 +234,6 @@ impl<T> Arena<T> {
         Ok(())
     }
 
-    #[cfg(feature = "compact")]
     pub(crate) fn retain_mut<P>(&mut self, mut predicate: P)
     where
         P: FnMut(Handle<T>, &mut T) -> bool,

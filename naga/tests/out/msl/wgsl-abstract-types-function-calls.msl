@@ -81,7 +81,7 @@ void func_f_i(
     return;
 }
 
-void main_(
+kernel void main_(
 ) {
     func_f(0.0);
     func_f(0.0);

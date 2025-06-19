@@ -1,9 +1,10 @@
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task, time::Instant};
+use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task};
 
 use bytemuck::{Pod, Zeroable};
 use glam::{Affine3A, Mat4, Quat, Vec3};
 use wgpu::util::DeviceExt;
 
+use crate::utils;
 use wgpu::StoreOp;
 
 // from cube
@@ -120,12 +121,12 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
 
 struct Example {
     rt_target: wgpu::Texture,
-    tlas_package: wgpu::TlasPackage,
+    tlas: wgpu::Tlas,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
     blit_pipeline: wgpu::RenderPipeline,
     blit_bind_group: wgpu::BindGroup,
-    start_inst: Instant,
+    animation_timer: utils::AnimationTimer,
 }
 
 impl crate::framework::Example for Example {
@@ -138,8 +139,12 @@ impl crate::framework::Example for Example {
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
-        wgpu::DownlevelCapabilities::default()
+        wgpu::DownlevelCapabilities {
+            flags: wgpu::DownlevelFlags::COMPUTE_SHADERS,
+            ..Default::default()
+        }
     }
+
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits::default()
     }
@@ -245,7 +250,7 @@ impl crate::framework::Example for Example {
             },
         );
 
-        let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
+        let mut tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
             label: None,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
                 | wgpu::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
@@ -335,13 +340,11 @@ impl crate::framework::Example for Example {
             ],
         });
 
-        let mut tlas_package = wgpu::TlasPackage::new(tlas);
-
         let dist = 3.0;
 
         for x in 0..side_count {
             for y in 0..side_count {
-                tlas_package[(x + y * side_count) as usize] = Some(wgpu::TlasInstance::new(
+                tlas[(x + y * side_count) as usize] = Some(wgpu::TlasInstance::new(
                     &blas,
                     affine_to_rows(&Affine3A::from_rotation_translation(
                         Quat::from_rotation_y(45.9_f32.to_radians()),
@@ -376,21 +379,19 @@ impl crate::framework::Example for Example {
                     },
                 ]),
             }),
-            iter::once(&tlas_package),
+            iter::once(&tlas),
         );
 
         queue.submit(Some(encoder.finish()));
 
-        let start_inst = Instant::now();
-
         Example {
             rt_target,
-            tlas_package,
+            tlas,
             compute_pipeline,
             compute_bind_group,
             blit_pipeline,
             blit_bind_group,
-            start_inst,
+            animation_timer: utils::AnimationTimer::default(),
         }
     }
 
@@ -409,9 +410,9 @@ impl crate::framework::Example for Example {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         device.push_error_scope(wgpu::ErrorFilter::Validation);
 
-        let anim_time = self.start_inst.elapsed().as_secs_f64() as f32;
+        let anim_time = self.animation_timer.time();
 
-        self.tlas_package[0].as_mut().unwrap().transform =
+        self.tlas[0].as_mut().unwrap().transform =
             affine_to_rows(&Affine3A::from_rotation_translation(
                 Quat::from_euler(
                     glam::EulerRot::XYZ,
@@ -429,7 +430,7 @@ impl crate::framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package));
+        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas));
 
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -446,6 +447,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
@@ -474,20 +476,14 @@ pub fn main() {
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_cube_normals",
-    image_path: "/examples/src/ray_cube_normals/screenshot.png",
+    image_path: "/examples/features/src/ray_cube_normals/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),
-    base_test_parameters: wgpu_test::TestParameters {
-        required_features: <Example as crate::framework::Example>::required_features(),
-        required_limits: <Example as crate::framework::Example>::required_limits(),
-        force_fxc: false,
-        skips: vec![],
-        failures: Vec::new(),
-        required_downlevel_caps:
-            <Example as crate::framework::Example>::required_downlevel_capabilities(),
-        ..Default::default()
-    },
+    base_test_parameters: wgpu_test::TestParameters::default().expect_fail(
+        wgpu_test::FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")
+            .panic("Image data mismatch"),
+    ),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
 };

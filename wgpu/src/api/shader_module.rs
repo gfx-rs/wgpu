@@ -1,8 +1,4 @@
-use alloc::{
-    string::{String, ToString as _},
-    vec,
-    vec::Vec,
-};
+use alloc::{string::String, vec::Vec};
 use core::{future::Future, marker::PhantomData};
 
 use crate::*;
@@ -28,6 +24,12 @@ impl ShaderModule {
     /// Get the compilation info for the shader module.
     pub fn get_compilation_info(&self) -> impl Future<Output = CompilationInfo> + WasmNotSend {
         self.inner.get_compilation_info()
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of ShaderModule (if custom backend and is internally T)
+    pub fn as_custom<T: custom::ShaderModuleInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 }
 
@@ -92,6 +94,7 @@ impl From<crate::naga::error::ShaderError<crate::naga::front::wgsl::ParseError>>
     for CompilationInfo
 {
     fn from(value: crate::naga::error::ShaderError<crate::naga::front::wgsl::ParseError>) -> Self {
+        use alloc::{string::ToString, vec};
         CompilationInfo {
             messages: vec![CompilationMessage {
                 message: value.to_string(),
@@ -104,6 +107,7 @@ impl From<crate::naga::error::ShaderError<crate::naga::front::wgsl::ParseError>>
 #[cfg(feature = "glsl")]
 impl From<naga::error::ShaderError<naga::front::glsl::ParseErrors>> for CompilationInfo {
     fn from(value: naga::error::ShaderError<naga::front::glsl::ParseErrors>) -> Self {
+        use alloc::string::ToString;
         let messages = value
             .inner
             .errors
@@ -121,6 +125,7 @@ impl From<naga::error::ShaderError<naga::front::glsl::ParseErrors>> for Compilat
 #[cfg(feature = "spirv")]
 impl From<naga::error::ShaderError<naga::front::spv::Error>> for CompilationInfo {
     fn from(value: naga::error::ShaderError<naga::front::spv::Error>) -> Self {
+        use alloc::{string::ToString, vec};
         CompilationInfo {
             messages: vec![CompilationMessage {
                 message: value.to_string(),
@@ -142,6 +147,7 @@ impl
             crate::naga::WithSpan<crate::naga::valid::ValidationError>,
         >,
     ) -> Self {
+        use alloc::{string::ToString, vec};
         CompilationInfo {
             messages: vec![CompilationMessage {
                 message: value.to_string(),

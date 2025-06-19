@@ -7,7 +7,7 @@ use wgpu::{
     BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors, BlasTriangleGeometry,
     BlasTriangleGeometrySizeDescriptor, BufferAddress, BufferUsages, CommandEncoderDescriptor,
     ComputePassDescriptor, ComputePipelineDescriptor, CreateBlasDescriptor, CreateTlasDescriptor,
-    PollType, TlasInstance, TlasPackage, VertexFormat,
+    PollType, TlasInstance, VertexFormat,
 };
 use wgpu_macros::gpu_test;
 use wgpu_test::{FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
@@ -49,16 +49,14 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
         },
     );
     // Create the TLAS
-    let tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
+    let mut tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
         label: Some("tlas use after free"),
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: AccelerationStructureUpdateMode::Build,
     });
 
-    // Put an unbuilt BLAS in the tlas package.
-    let mut tlas_package = TlasPackage::new(tlas);
-    tlas_package[0] = Some(TlasInstance::new(
+    tlas[0] = Some(TlasInstance::new(
         &blas,
         [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
         0,
@@ -95,7 +93,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor::default());
-    encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
+    encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas));
     ctx.queue.submit(Some(encoder.finish()));
 
     // Create a compute shader that uses an AS.
@@ -118,12 +116,12 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
         layout: &compute_pipeline.get_bind_group_layout(0),
         entries: &[BindGroupEntry {
             binding: 0,
-            resource: BindingResource::AccelerationStructure(tlas_package.tlas()),
+            resource: BindingResource::AccelerationStructure(&tlas),
         }],
     });
 
     // Drop the TLAS package and ensure that if it was going to die, it is dead.
-    drop(tlas_package);
+    drop(tlas);
     ctx.device.poll(PollType::Wait).unwrap();
 
     // Run the pass with the bind group that references the TLAS package.

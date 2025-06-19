@@ -184,6 +184,7 @@ async fn pulling_common(
                 },
                 resolve_target: None,
                 view: &color_view,
+                depth_slice: None,
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,

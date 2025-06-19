@@ -123,6 +123,8 @@ pub enum ExpressionError {
     InvalidSampleLevelBiasDimension(crate::ImageDimension),
     #[error("Sample level (gradient) of {1:?} doesn't match the image dimension {0:?}")]
     InvalidSampleLevelGradientType(crate::ImageDimension, Handle<crate::Expression>),
+    #[error("Clamping sample coordinate to edge is not supported with {0}")]
+    InvalidSampleClampCoordinateToEdge(alloc::string::String),
     #[error("Unable to cast")]
     InvalidCastArgument,
     #[error("Invalid argument count for {0:?}")]
@@ -413,6 +415,7 @@ impl super::Validator {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
                 // check the validity of expressions
                 let image_ty = Self::global_var_ty(module, function, image)?;
@@ -540,6 +543,52 @@ impl super::Validator {
                     }
                 }
 
+                // Clamping coordinate to edge is only supported with 2d non-arrayed, sampled images
+                // when sampling from level Zero without any offset, gather, or depth comparison.
+                if clamp_to_edge {
+                    if !matches!(
+                        class,
+                        crate::ImageClass::Sampled {
+                            kind: crate::ScalarKind::Float,
+                            multi: false
+                        }
+                    ) {
+                        return Err(ExpressionError::InvalidSampleClampCoordinateToEdge(
+                            alloc::format!("image class `{class:?}`"),
+                        ));
+                    }
+                    if dim != crate::ImageDimension::D2 {
+                        return Err(ExpressionError::InvalidSampleClampCoordinateToEdge(
+                            alloc::format!("image dimension `{dim:?}`"),
+                        ));
+                    }
+                    if gather.is_some() {
+                        return Err(ExpressionError::InvalidSampleClampCoordinateToEdge(
+                            "gather".into(),
+                        ));
+                    }
+                    if array_index.is_some() {
+                        return Err(ExpressionError::InvalidSampleClampCoordinateToEdge(
+                            "array index".into(),
+                        ));
+                    }
+                    if offset.is_some() {
+                        return Err(ExpressionError::InvalidSampleClampCoordinateToEdge(
+                            "offset".into(),
+                        ));
+                    }
+                    if level != crate::SampleLevel::Zero {
+                        return Err(ExpressionError::InvalidSampleClampCoordinateToEdge(
+                            "non-zero level".into(),
+                        ));
+                    }
+                    if depth_ref.is_some() {
+                        return Err(ExpressionError::InvalidSampleClampCoordinateToEdge(
+                            "depth comparison".into(),
+                        ));
+                    }
+                }
+
                 // check level properties
                 match level {
                     crate::SampleLevel::Auto => ShaderStages::FRAGMENT,
@@ -631,64 +680,52 @@ impl super::Validator {
                 level,
             } => {
                 let ty = Self::global_var_ty(module, function, image)?;
-                match module.types[ty].inner {
-                    Ti::Image {
-                        class,
-                        arrayed,
-                        dim,
-                    } => {
-                        match resolver[coordinate].image_storage_coordinates() {
-                            Some(coord_dim) if coord_dim == dim => {}
-                            _ => {
-                                return Err(ExpressionError::InvalidImageCoordinateType(
-                                    dim, coordinate,
-                                ))
-                            }
-                        };
-                        if arrayed != array_index.is_some() {
-                            return Err(ExpressionError::InvalidImageArrayIndex);
-                        }
-                        if let Some(expr) = array_index {
-                            match resolver[expr] {
-                                Ti::Scalar(Sc {
-                                    kind: Sk::Sint | Sk::Uint,
-                                    width: _,
-                                }) => {}
-                                _ => return Err(ExpressionError::InvalidImageArrayIndexType(expr)),
-                            }
-                        }
+                let Ti::Image {
+                    class,
+                    arrayed,
+                    dim,
+                } = module.types[ty].inner
+                else {
+                    return Err(ExpressionError::ExpectedImageType(ty));
+                };
 
-                        match (sample, class.is_multisampled()) {
-                            (None, false) => {}
-                            (Some(sample), true) => {
-                                if resolver[sample].scalar_kind() != Some(Sk::Sint) {
-                                    return Err(ExpressionError::InvalidImageOtherIndexType(
-                                        sample,
-                                    ));
-                                }
-                            }
-                            _ => {
-                                return Err(ExpressionError::InvalidImageOtherIndex);
-                            }
-                        }
+                match resolver[coordinate].image_storage_coordinates() {
+                    Some(coord_dim) if coord_dim == dim => {}
+                    _ => return Err(ExpressionError::InvalidImageCoordinateType(dim, coordinate)),
+                };
+                if arrayed != array_index.is_some() {
+                    return Err(ExpressionError::InvalidImageArrayIndex);
+                }
+                if let Some(expr) = array_index {
+                    if !matches!(resolver[expr], Ti::Scalar(Sc::I32 | Sc::U32)) {
+                        return Err(ExpressionError::InvalidImageArrayIndexType(expr));
+                    }
+                }
 
-                        match (level, class.is_mipmapped()) {
-                            (None, false) => {}
-                            (Some(level), true) => match resolver[level] {
-                                Ti::Scalar(Sc {
-                                    kind: Sk::Sint | Sk::Uint,
-                                    width: _,
-                                }) => {}
-                                _ => {
-                                    return Err(ExpressionError::InvalidImageArrayIndexType(level))
-                                }
-                            },
-                            _ => {
-                                return Err(ExpressionError::InvalidImageOtherIndex);
-                            }
+                match (sample, class.is_multisampled()) {
+                    (None, false) => {}
+                    (Some(sample), true) => {
+                        if !matches!(resolver[sample], Ti::Scalar(Sc::I32 | Sc::U32)) {
+                            return Err(ExpressionError::InvalidImageOtherIndexType(sample));
                         }
                     }
-                    _ => return Err(ExpressionError::ExpectedImageType(ty)),
+                    _ => {
+                        return Err(ExpressionError::InvalidImageOtherIndex);
+                    }
+                }
+
+                match (level, class.is_mipmapped()) {
+                    (None, false) => {}
+                    (Some(level), true) => match resolver[level] {
+                        Ti::Scalar(Sc {
+                            kind: Sk::Sint | Sk::Uint,
+                            width: _,
+                        }) => {}
+                        _ => return Err(ExpressionError::InvalidImageArrayIndexType(level)),
+                    },
+                    _ => {
+                        return Err(ExpressionError::InvalidImageOtherIndex);
+                    }
                 }
                 ShaderStages::all()
             }

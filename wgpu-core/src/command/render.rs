@@ -11,10 +11,11 @@ use wgt::{
 use crate::binding_model::BindGroup;
 use crate::command::{
     validate_and_begin_occlusion_query, validate_and_begin_pipeline_statistics_query,
+    EncoderStateError,
 };
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::{RenderPipeline, VertexStep};
-use crate::resource::InvalidResourceError;
+use crate::resource::{InvalidResourceError, ResourceErrorIdent};
 use crate::snatch::SnatchGuard;
 use crate::{
     api_log,
@@ -162,6 +163,8 @@ impl<V: Copy + Default> ResolvedPassChannel<V> {
 pub struct RenderPassColorAttachment<TV = id::TextureViewId> {
     /// The view to use as an attachment.
     pub view: TV,
+    /// The depth slice index of a 3D view. It must not be provided if the view is not 3D.
+    pub depth_slice: Option<u32>,
     /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<TV>,
     /// Operation to perform to the output attachment at the start of a
@@ -619,6 +622,18 @@ pub enum ColorAttachmentError {
     TooMany { given: usize, limit: usize },
     #[error("The total number of bytes per sample in color attachments {total} exceeds the limit {limit}")]
     TooManyBytesPerSample { total: u32, limit: u32 },
+    #[error("Depth slice must be less than {limit} but is {given}")]
+    DepthSliceLimit { given: u32, limit: u32 },
+    #[error("Color attachment's view is 3D and requires depth slice to be provided")]
+    MissingDepthSlice,
+    #[error("Depth slice was provided but the color attachment's view is not 3D")]
+    UnneededDepthSlice,
+    #[error("{view}'s subresource at mip {mip_level} and depth/array layer {depth_or_array_layer} is already attached to this render pass")]
+    SubresourceOverlap {
+        view: ResourceErrorIdent,
+        mip_level: u32,
+        depth_or_array_layer: u32,
+    },
 }
 
 #[derive(Clone, Debug, Error)]
@@ -648,7 +663,7 @@ pub enum RenderPassErrorInner {
     #[error(transparent)]
     ColorAttachment(#[from] ColorAttachmentError),
     #[error(transparent)]
-    Encoder(#[from] CommandEncoderError),
+    EncoderState(#[from] EncoderStateError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
     #[error("The format of the {location} ({format:?}) is not resolvable")]
@@ -792,15 +807,12 @@ pub struct RenderPassError {
     pub(super) inner: RenderPassErrorInner,
 }
 
-impl<T, E> MapPassErr<T, RenderPassError> for Result<T, E>
-where
-    E: Into<RenderPassErrorInner>,
-{
-    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, RenderPassError> {
-        self.map_err(|inner| RenderPassError {
+impl<E: Into<RenderPassErrorInner>> MapPassErr<RenderPassError> for E {
+    fn map_pass_err(self, scope: PassErrorScope) -> RenderPassError {
+        RenderPassError {
             scope,
-            inner: inner.into(),
-        })
+            inner: self.into(),
+        }
     }
 }
 
@@ -1094,6 +1106,8 @@ impl<'d> RenderPassInfo<'d> {
             });
         }
 
+        let mut attachment_set = crate::FastHashSet::default();
+
         let mut color_attachments_hal =
             ArrayVec::<Option<hal::ColorAttachment<_>>, { hal::MAX_COLOR_ATTACHMENTS }>::new();
         for (index, attachment) in color_attachments.iter().enumerate() {
@@ -1124,6 +1138,71 @@ impl<'d> RenderPassInfo<'d> {
                 ));
             }
 
+            if color_view.desc.dimension == TextureViewDimension::D3 {
+                if let Some(depth_slice) = at.depth_slice {
+                    let mip = color_view.desc.range.base_mip_level;
+                    let mip_size = color_view
+                        .parent
+                        .desc
+                        .size
+                        .mip_level_size(mip, color_view.parent.desc.dimension);
+                    let limit = mip_size.depth_or_array_layers;
+                    if depth_slice >= limit {
+                        return Err(RenderPassErrorInner::ColorAttachment(
+                            ColorAttachmentError::DepthSliceLimit {
+                                given: depth_slice,
+                                limit,
+                            },
+                        ));
+                    }
+                } else {
+                    return Err(RenderPassErrorInner::ColorAttachment(
+                        ColorAttachmentError::MissingDepthSlice,
+                    ));
+                }
+            } else if at.depth_slice.is_some() {
+                return Err(RenderPassErrorInner::ColorAttachment(
+                    ColorAttachmentError::UnneededDepthSlice,
+                ));
+            }
+
+            fn check_attachment_overlap(
+                attachment_set: &mut crate::FastHashSet<(crate::track::TrackerIndex, u32, u32)>,
+                view: &TextureView,
+                depth_slice: Option<u32>,
+            ) -> Result<(), ColorAttachmentError> {
+                let mut insert = |slice| {
+                    let mip_level = view.desc.range.base_mip_level;
+                    if attachment_set.insert((view.tracking_data.tracker_index(), mip_level, slice))
+                    {
+                        Ok(())
+                    } else {
+                        Err(ColorAttachmentError::SubresourceOverlap {
+                            view: view.error_ident(),
+                            mip_level,
+                            depth_or_array_layer: slice,
+                        })
+                    }
+                };
+                match view.desc.dimension {
+                    TextureViewDimension::D2 => {
+                        insert(view.desc.range.base_array_layer)?;
+                    }
+                    TextureViewDimension::D2Array => {
+                        for layer in view.selector.layers.clone() {
+                            insert(layer)?;
+                        }
+                    }
+                    TextureViewDimension::D3 => {
+                        insert(depth_slice.unwrap())?;
+                    }
+                    _ => unreachable!(),
+                };
+                Ok(())
+            }
+
+            check_attachment_overlap(&mut attachment_set, color_view, at.depth_slice)?;
+
             Self::add_pass_texture_init_actions(
                 at.load_op,
                 at.store_op,
@@ -1138,6 +1217,8 @@ impl<'d> RenderPassInfo<'d> {
             if let Some(resolve_view) = &at.resolve_target {
                 resolve_view.same_device(device)?;
                 check_multiview(resolve_view)?;
+
+                check_attachment_overlap(&mut attachment_set, resolve_view, None)?;
 
                 let resolve_location = AttachmentErrorLocation::Color {
                     index,
@@ -1201,6 +1282,7 @@ impl<'d> RenderPassInfo<'d> {
                     view: color_view.try_raw(snatch_guard)?,
                     usage: wgt::TextureUses::COLOR_TARGET,
                 },
+                depth_slice: at.depth_slice,
                 resolve_target: hal_resolve_target,
                 ops: at.hal_ops(),
                 clear_value: at.clear_value(),
@@ -1274,7 +1356,10 @@ impl<'d> RenderPassInfo<'d> {
             occlusion_query_set: occlusion_query_set_hal,
         };
         unsafe {
-            encoder.raw.begin_render_pass(&hal_desc);
+            encoder
+                .raw
+                .begin_render_pass(&hal_desc)
+                .map_err(|e| device.handle_hal_error(e))?;
         };
         drop(color_attachments_hal); // Drop, so we can consume `color_attachments` for the tracker.
 
@@ -1310,6 +1395,7 @@ impl<'d> RenderPassInfo<'d> {
 
     fn finish(
         mut self,
+        device: &Device,
         raw: &mut dyn hal::DynCommandEncoder,
         snatch_guard: &SnatchGuard,
     ) -> Result<(UsageScope<'d>, SurfacesInDiscardState), RenderPassErrorInner> {
@@ -1372,7 +1458,8 @@ impl<'d> RenderPassInfo<'d> {
                 occlusion_query_set: None,
             };
             unsafe {
-                raw.begin_render_pass(&desc);
+                raw.begin_render_pass(&desc)
+                    .map_err(|e| device.handle_hal_error(e))?;
                 raw.end_render_pass();
             }
         }
@@ -1417,6 +1504,7 @@ impl Global {
             for color_attachment in desc.color_attachments.iter() {
                 if let Some(RenderPassColorAttachment {
                     view: view_id,
+                    depth_slice,
                     resolve_target,
                     load_op,
                     store_op,
@@ -1438,6 +1526,7 @@ impl Global {
                         .color_attachments
                         .push(Some(ArcRenderPassColorAttachment {
                             view,
+                            depth_slice: *depth_slice,
                             resolve_target,
                             load_op: *load_op,
                             store_op: *store_op,
@@ -1519,7 +1608,7 @@ impl Global {
 
         match cmd_buf.data.lock().lock_encoder() {
             Ok(_) => {}
-            Err(e) => return make_err(e, arc_desc),
+            Err(e) => return make_err(e.into(), arc_desc),
         };
 
         let err = fill_arc_desc(hub, desc, &mut arc_desc, &cmd_buf.device).err();
@@ -1539,9 +1628,7 @@ impl Global {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&PassTimestampWrites>,
         occlusion_query_set: Option<id::QuerySetId>,
-    ) -> Result<(), RenderPassError> {
-        let pass_scope = PassErrorScope::Pass;
-
+    ) {
         #[cfg(feature = "trace")]
         {
             let cmd_buf = self
@@ -1549,7 +1636,7 @@ impl Global {
                 .command_buffers
                 .get(encoder_id.into_command_buffer_id());
             let mut cmd_buf_data = cmd_buf.data.lock();
-            let cmd_buf_data = cmd_buf_data.get_inner().map_pass_err(pass_scope)?;
+            let cmd_buf_data = cmd_buf_data.get_inner();
 
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(crate::device::trace::Command::RunRenderPass {
@@ -1587,21 +1674,19 @@ impl Global {
             },
         );
         if let Some(err) = encoder_error {
-            return Err(RenderPassError {
-                scope: pass_scope,
-                inner: err.into(),
-            });
+            panic!("{:?}", err);
         };
 
         render_pass.base = Some(BasePass {
             label,
-            commands: super::RenderCommand::resolve_render_command_ids(&self.hub, &commands)?,
+            commands: super::RenderCommand::resolve_render_command_ids(&self.hub, &commands)
+                .unwrap(),
             dynamic_offsets,
             string_data,
             push_constant_data,
         });
 
-        self.render_pass_end(&mut render_pass)
+        self.render_pass_end(&mut render_pass).unwrap();
     }
 
     pub fn render_pass_end(&self, pass: &mut RenderPass) -> Result<(), RenderPassError> {
@@ -1969,7 +2054,7 @@ impl Global {
 
             let (trackers, pending_discard_init_fixups) = state
                 .info
-                .finish(state.raw_encoder, state.snatch_guard)
+                .finish(device, state.raw_encoder, state.snatch_guard)
                 .map_pass_err(pass_scope)?;
 
             encoder.close().map_pass_err(pass_scope)?;
@@ -2347,14 +2432,33 @@ fn set_viewport(
     depth_max: f32,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::set_viewport {rect:?}");
-    if rect.x < 0.0
-        || rect.y < 0.0
-        || rect.w <= 0.0
-        || rect.h <= 0.0
-        || rect.x + rect.w > state.info.extent.width as f32
-        || rect.y + rect.h > state.info.extent.height as f32
+
+    if rect.w < 0.0
+        || rect.h < 0.0
+        || rect.w > state.device.limits.max_texture_dimension_2d as f32
+        || rect.h > state.device.limits.max_texture_dimension_2d as f32
     {
-        return Err(RenderCommandError::InvalidViewportRect(rect, state.info.extent).into());
+        return Err(RenderCommandError::InvalidViewportRectSize {
+            w: rect.w,
+            h: rect.h,
+            max: state.device.limits.max_texture_dimension_2d,
+        }
+        .into());
+    }
+
+    let max_viewport_range = state.device.limits.max_texture_dimension_2d as f32 * 2.0;
+
+    if rect.x < -max_viewport_range
+        || rect.y < -max_viewport_range
+        || rect.x + rect.w > max_viewport_range - 1.0
+        || rect.y + rect.h > max_viewport_range - 1.0
+    {
+        return Err(RenderCommandError::InvalidViewportRectPosition {
+            rect,
+            min: -max_viewport_range,
+            max: max_viewport_range - 1.0,
+        }
+        .into());
     }
     if !(0.0..=1.0).contains(&depth_min) || !(0.0..=1.0).contains(&depth_max) {
         return Err(RenderCommandError::InvalidViewportDepth(depth_min, depth_max).into());
@@ -2523,6 +2627,7 @@ fn multi_draw_indirect(
 
     indirect_buffer.same_device_as(cmd_buf.as_ref())?;
     indirect_buffer.check_usage(BufferUsages::INDIRECT)?;
+    indirect_buffer.check_destroyed(state.snatch_guard)?;
 
     if offset % 4 != 0 {
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));

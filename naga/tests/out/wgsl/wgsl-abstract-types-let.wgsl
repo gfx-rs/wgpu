@@ -110,3 +110,9 @@ fn mixed_constant_and_runtime_arguments() {
     return;
 }
 
+@compute @workgroup_size(1, 1, 1) 
+fn main() {
+    all_constant_arguments();
+    mixed_constant_and_runtime_arguments();
+    return;
+}

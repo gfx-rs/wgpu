@@ -16,6 +16,7 @@ struct GlobalConst {
 };
 struct AlignedWrapper {
     int value;
+    char _pad1[4];
 };
 struct type_6 {
     metal::float2x2 inner[2];
@@ -35,6 +36,7 @@ struct Bar {
     char _pad4[4];
     type_10 arr;
     type_11 data;
+    char _pad6[8];
 };
 struct Baz {
     metal::float3x2 m;
@@ -178,6 +180,15 @@ void assign_array_through_ptr_fn(
     return;
 }
 
+void assign_through_ptr(
+) {
+    uint val = 33u;
+    type_22 arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
+    assign_through_ptr_fn(val);
+    assign_array_through_ptr_fn(arr);
+    return;
+}
+
 uint fetch_arg_ptr_member(
     thread AssignToMember& p_1
 ) {
@@ -203,6 +214,17 @@ void assign_to_arg_ptr_array_element(
     thread type_25& p_4
 ) {
     p_4.inner[1] = 10u;
+    return;
+}
+
+void assign_to_ptr_components(
+) {
+    AssignToMember s1_ = {};
+    type_25 a1_ = {};
+    assign_to_arg_ptr_member(s1_);
+    uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    uint _e3 = fetch_arg_ptr_array_element(a1_);
     return;
 }
 
@@ -265,10 +287,12 @@ vertex foo_vertOutput foo_vert(
 , constant MatCx2InArray& nested_mat_cx2_ [[buffer(3)]]
 , constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
 ) {
+    GlobalConst msl_padding_global_const = GlobalConst {0u, {}, metal::uint3(0u, 0u, 0u), 0};
     float foo = 0.0;
     type_20 c2_ = {};
     float baz_1 = foo;
     foo = 1.0;
+    GlobalConst phony = msl_padding_global_const;
     test_matrix_within_struct_accesses(baz);
     test_matrix_within_array_within_struct_accesses(nested_mat_cx2_);
     metal::float4x3 _matrix = bar._matrix;
@@ -276,11 +300,11 @@ vertex foo_vertOutput foo_vert(
     float b = bar._matrix[3u].x;
     int a_2 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
     metal::int2 c = qux;
-    float _e33 = read_from_private(foo);
+    float _e35 = read_from_private(foo);
     c2_ = type_20 {a_2, naga_f2i32(b), 3, 4, 5};
     c2_.inner[vi + 1u] = 42;
     int value_1 = c2_.inner[vi];
-    float _e47 = test_arr_as_arg(type_18 {});
+    float _e49 = test_arr_as_arg(type_18 {});
     return foo_vertOutput { metal::float4(_matrix * static_cast<metal::float4>(metal::int4(value_1)), 2.0) };
 }
 
@@ -302,23 +326,13 @@ fragment foo_fragOutput foo_frag(
 }
 
 
-kernel void assign_through_ptr(
+kernel void foo_compute(
 ) {
-    uint val = 33u;
-    type_22 arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
-    assign_through_ptr_fn(val);
-    assign_array_through_ptr_fn(arr);
-    return;
-}
-
-
-kernel void assign_to_ptr_components(
-) {
-    AssignToMember s1_ = {};
-    type_25 a1_ = {};
-    assign_to_arg_ptr_member(s1_);
-    uint _e1 = fetch_arg_ptr_member(s1_);
-    assign_to_arg_ptr_array_element(a1_);
-    uint _e3 = fetch_arg_ptr_array_element(a1_);
+    assign_through_ptr();
+    assign_to_ptr_components();
+    bool _e1 = index_ptr(true);
+    int _e2 = member_ptr();
+    int _e3 = let_members_of_members();
+    int _e4 = var_members_of_members();
     return;
 }

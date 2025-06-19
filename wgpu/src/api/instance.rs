@@ -2,9 +2,7 @@
 use alloc::vec::Vec;
 use core::future::Future;
 
-use parking_lot::Mutex;
-
-use crate::{dispatch::InstanceInterface, *};
+use crate::{dispatch::InstanceInterface, util::Mutex, *};
 
 bitflags::bitflags! {
     /// WGSL language extensions.
@@ -208,6 +206,12 @@ impl Instance {
         }
     }
 
+    #[cfg(custom)]
+    /// Returns custom implementation of Instance (if custom backend and is internally T)
+    pub fn as_custom<T: custom::InstanceInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
     /// # Arguments
@@ -297,7 +301,7 @@ impl Instance {
                 surface
             }?,
 
-            #[cfg(any(webgpu, webgl))]
+            #[cfg(web)]
             SurfaceTarget::Canvas(canvas) => {
                 handle_source = None;
 
@@ -316,7 +320,7 @@ impl Instance {
                 }?
             }
 
-            #[cfg(any(webgpu, webgl))]
+            #[cfg(web)]
             SurfaceTarget::OffscreenCanvas(canvas) => {
                 handle_source = None;
 

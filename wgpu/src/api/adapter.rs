@@ -43,11 +43,6 @@ impl Adapter {
     /// [`Adapter`].
     /// However, `wgpu` does not currently enforce this restriction.
     ///
-    /// # Arguments
-    ///
-    /// - `desc` - Description of the features and limits requested from the given device.
-    /// - `trace` - Can be used for API call tracing, if the feature is enabled.
-    ///
     /// # Panics
     ///
     /// - `request_device()` was already called on this `Adapter`.
@@ -131,6 +126,12 @@ impl Adapter {
         } else {
             hal_adapter_callback(None)
         }
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of adapter (if custom backend and is internally T)
+    pub fn as_custom<T: custom::AdapterInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 
     #[cfg(custom)]

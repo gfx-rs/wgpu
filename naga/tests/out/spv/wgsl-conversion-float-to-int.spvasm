@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 280
+; Bound: 314
 OpCapability Shader
 OpCapability Float16
 OpCapability StorageBuffer16BitAccess
@@ -114,6 +114,15 @@ OpExecutionMode %278 LocalSize 1 1 1
 %266 = OpConstantComposite  %16  %165 %165
 %272 = OpTypeFunction %14 %16
 %274 = OpConstantComposite  %16  %173 %173
+%279 = OpConstant  %3  2.1524e-41
+%280 = OpConstant  %4  1.0
+%281 = OpConstant  %5  1.0
+%282 = OpConstant  %3  2.2959e-41
+%283 = OpConstantComposite  %10  %279 %282
+%284 = OpConstant  %4  2.0
+%285 = OpConstantComposite  %15  %280 %284
+%286 = OpConstant  %5  2.0
+%287 = OpConstantComposite  %16  %281 %286
 %24 = OpFunction  %2  None %25
 %23 = OpLabel
 %73 = OpVariable  %51  Function %40
@@ -366,7 +375,32 @@ OpReturnValue %276
 OpFunctionEnd
 %278 = OpFunction  %2  None %25
 %277 = OpLabel
-OpBranch %279
-%279 = OpLabel
+OpBranch %288
+%288 = OpLabel
+%289 = OpFunctionCall  %2  %24
+%290 = OpFunctionCall  %6  %79 %279
+%291 = OpFunctionCall  %7  %86 %279
+%292 = OpFunctionCall  %8  %94 %279
+%293 = OpFunctionCall  %9  %101 %279
+%294 = OpFunctionCall  %6  %108 %280
+%295 = OpFunctionCall  %7  %117 %280
+%296 = OpFunctionCall  %8  %126 %280
+%297 = OpFunctionCall  %9  %135 %280
+%298 = OpFunctionCall  %6  %143 %281
+%299 = OpFunctionCall  %7  %152 %281
+%300 = OpFunctionCall  %8  %161 %281
+%301 = OpFunctionCall  %9  %170 %281
+%302 = OpFunctionCall  %11  %178 %283
+%303 = OpFunctionCall  %12  %187 %283
+%304 = OpFunctionCall  %13  %195 %283
+%305 = OpFunctionCall  %14  %202 %283
+%306 = OpFunctionCall  %11  %209 %285
+%307 = OpFunctionCall  %12  %218 %285
+%308 = OpFunctionCall  %13  %227 %285
+%309 = OpFunctionCall  %14  %236 %285
+%310 = OpFunctionCall  %11  %244 %287
+%311 = OpFunctionCall  %12  %253 %287
+%312 = OpFunctionCall  %13  %262 %287
+%313 = OpFunctionCall  %14  %271 %287
 OpReturn
 OpFunctionEnd

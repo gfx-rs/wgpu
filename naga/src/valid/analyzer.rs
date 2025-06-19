@@ -158,8 +158,11 @@ pub struct ExpressionInfo {
     /// originates. Otherwise, this is `None`.
     pub uniformity: Uniformity,
 
-    /// The number of statements and other expressions using this
-    /// expression's value.
+    /// The number of direct references to this expression in statements and
+    /// other expressions.
+    ///
+    /// This is a _local_ reference count only, it may be non-zero for
+    /// expressions that are ultimately unused.
     pub ref_count: usize,
 
     /// The global variable into which this expression produces a pointer.
@@ -362,7 +365,7 @@ impl FunctionInfo {
     ) -> NonUniformResult {
         let info = &mut self.expressions[expr.index()];
         info.ref_count += 1;
-        // mark the used global as read
+        // Record usage if this expression may access a global
         if let Some(global) = info.assignable_global {
             self.global_uses[global.index()] |= global_use;
         }
@@ -661,6 +664,7 @@ impl FunctionInfo {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 let image_storage = GlobalOrArgument::from_expression(expression_arena, image)?;
                 let sampler_storage = GlobalOrArgument::from_expression(expression_arena, sampler)?;
@@ -899,7 +903,7 @@ impl FunctionInfo {
                         ExitFlags::empty()
                     },
                 },
-                S::Barrier(_) => FunctionUniformity {
+                S::ControlBarrier(_) | S::MemoryBarrier(_) => FunctionUniformity {
                     result: Uniformity {
                         non_uniform_result: None,
                         requirements: UniformityRequirements::WORK_GROUP_BARRIER,
@@ -1139,9 +1143,11 @@ impl FunctionInfo {
                         | crate::GatherMode::Shuffle(index)
                         | crate::GatherMode::ShuffleDown(index)
                         | crate::GatherMode::ShuffleUp(index)
-                        | crate::GatherMode::ShuffleXor(index) => {
+                        | crate::GatherMode::ShuffleXor(index)
+                        | crate::GatherMode::QuadBroadcast(index) => {
                             let _ = self.add_ref(index);
                         }
+                        crate::GatherMode::QuadSwap(_) => {}
                     }
                     FunctionUniformity::new()
                 }
@@ -1219,6 +1225,19 @@ impl ModuleInfo {
         )?;
         info.uniformity = uniformity.result;
         info.may_kill = uniformity.exit.contains(ExitFlags::MAY_KILL);
+
+        // If there are any globals referenced directly by a named expression,
+        // ensure they are marked as used even if they are not referenced
+        // anywhere else. An important case where this matters is phony
+        // assignments used to include a global in the shader's resource
+        // interface. https://www.w3.org/TR/WGSL/#phony-assignment-section
+        for &handle in fun.named_expressions.keys() {
+            if let Some(global) = info[handle].assignable_global {
+                if info.global_uses[global.index()].is_empty() {
+                    info.global_uses[global.index()] = GlobalUse::QUERY;
+                }
+            }
+        }
 
         Ok(info)
     }

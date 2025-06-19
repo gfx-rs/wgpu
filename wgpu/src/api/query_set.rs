@@ -15,6 +15,14 @@ static_assertions::assert_impl_all!(QuerySet: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(QuerySet => .inner);
 
+impl QuerySet {
+    #[cfg(custom)]
+    /// Returns custom implementation of QuerySet (if custom backend and is internally T)
+    pub fn as_custom<T: custom::QuerySetInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+}
+
 /// Describes a [`QuerySet`].
 ///
 /// For use with [`Device::create_query_set`].

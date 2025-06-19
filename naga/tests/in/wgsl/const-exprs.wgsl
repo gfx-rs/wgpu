@@ -11,8 +11,14 @@ fn main() {
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    map_texture_kind(1);
     compose_of_splat();
     test_local_const();
+    compose_vector_zero_val_binop();
+    relational();
+    packed_dot_product();
+    test_local_const();
+    abstract_access(1);
 }
 
 // Swizzle the value of nested Compose expressions.

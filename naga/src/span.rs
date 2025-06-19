@@ -6,7 +6,7 @@ use alloc::{
 };
 use core::{error::Error, fmt, ops::Range};
 
-use crate::{Arena, Handle, UniqueArena};
+use crate::{as_diagnostic_file_path::AsDiagnosticFilePath, Arena, Handle, UniqueArena};
 
 /// A source code span, used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -273,6 +273,7 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "stderr")]
     pub fn emit_to_stderr(&self, source: &str)
     where
         E: Error,
@@ -281,16 +282,26 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
-    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str)
+    #[cfg(feature = "stderr")]
+    pub fn emit_to_stderr_with_path<P>(&self, source: &str, path: P)
     where
         E: Error,
+        P: AsDiagnosticFilePath,
     {
-        use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
         use codespan_reporting::{files, term};
 
+        let path = path.to_string_lossy();
         let files = files::SimpleFile::new(path, source);
         let config = term::Config::default();
-        let writer = StandardStream::stderr(ColorChoice::Auto);
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "termcolor")] {
+                let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
+            } else {
+                let writer = std::io::stderr();
+            }
+        }
+
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
             .expect("cannot write error");
     }
@@ -304,18 +315,21 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to a string.
-    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String
+    pub fn emit_to_string_with_path<P>(&self, source: &str, path: P) -> String
     where
         E: Error,
+        P: AsDiagnosticFilePath,
     {
-        use codespan_reporting::term::termcolor::NoColor;
         use codespan_reporting::{files, term};
 
+        let path = path.to_string_lossy();
         let files = files::SimpleFile::new(path, source);
         let config = term::Config::default();
-        let mut writer = NoColor::new(Vec::new());
-        term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
-        String::from_utf8(writer.into_inner()).unwrap()
+
+        let mut writer = crate::error::DiagnosticBuffer::new();
+        term::emit(writer.inner_mut(), &config, &files, &self.diagnostic())
+            .expect("cannot write error");
+        writer.into_string()
     }
 }
 

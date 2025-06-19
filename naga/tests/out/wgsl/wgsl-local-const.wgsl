@@ -6,3 +6,8 @@ fn const_in_fn() {
     return;
 }
 
+@compute @workgroup_size(1, 1, 1) 
+fn main() {
+    const_in_fn();
+    return;
+}

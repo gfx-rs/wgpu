@@ -151,7 +151,7 @@ pub enum Command {
         src_offset: wgt::BufferAddress,
         dst: id::BufferId,
         dst_offset: wgt::BufferAddress,
-        size: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
     },
     CopyBufferToTexture {
         src: crate::command::TexelCopyBufferInfo,
@@ -201,10 +201,6 @@ pub enum Command {
         target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<crate::command::PassTimestampWrites>,
         occlusion_query_set_id: Option<id::QuerySetId>,
-    },
-    BuildAccelerationStructuresUnsafeTlas {
-        blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
-        tlas: Vec<crate::ray_tracing::TlasBuildEntry>,
     },
     BuildAccelerationStructures {
         blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,

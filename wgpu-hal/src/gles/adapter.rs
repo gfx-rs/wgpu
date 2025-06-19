@@ -384,8 +384,7 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
-            | wgt::DownlevelFlags::COMPARISON_SAMPLERS
-            | wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
+            | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
@@ -467,6 +466,10 @@ impl super::Adapter {
                 || extensions.contains("GL_ARB_blend_func_extended"),
         );
         features.set(
+            wgt::Features::CLIP_DISTANCES,
+            full_ver.is_some() || extensions.contains("GL_EXT_clip_cull_distance"),
+        );
+        features.set(
             wgt::Features::SHADER_PRIMITIVE_INDEX,
             supported((3, 2), (3, 2))
                 || extensions.contains("OES_geometry_shader")
@@ -532,6 +535,7 @@ impl super::Adapter {
                     .compressed_texture_astc_supports_ldr_profile()
                 {
                     features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                    features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D);
                 }
                 if context
                     .glow_context
@@ -544,12 +548,18 @@ impl super::Adapter {
             #[cfg(any(native, Emscripten))]
             {
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D);
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
             }
         } else {
             features.set(
                 wgt::Features::TEXTURE_COMPRESSION_ASTC,
                 extensions.contains("GL_KHR_texture_compression_astc_ldr"),
+            );
+            features.set(
+                wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+                extensions.contains("GL_KHR_texture_compression_astc_ldr")
+                    && extensions.contains("GL_KHR_texture_compression_astc_sliced_3d"),
             );
             features.set(
                 wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR,

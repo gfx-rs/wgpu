@@ -112,7 +112,8 @@ impl StatementGraph {
                     }
                     "Continue"
                 }
-                S::Barrier(_flags) => "Barrier",
+                S::ControlBarrier(_flags) => "ControlBarrier",
+                S::MemoryBarrier(_flags) => "MemoryBarrier",
                 S::Block(ref b) => {
                     let (other, last) = self.add(b, targets);
                     self.flow.push((id, other, ""));
@@ -379,9 +380,11 @@ impl StatementGraph {
                         | crate::GatherMode::Shuffle(index)
                         | crate::GatherMode::ShuffleDown(index)
                         | crate::GatherMode::ShuffleUp(index)
-                        | crate::GatherMode::ShuffleXor(index) => {
+                        | crate::GatherMode::ShuffleXor(index)
+                        | crate::GatherMode::QuadBroadcast(index) => {
                             self.dependencies.push((id, index, "index"))
                         }
+                        crate::GatherMode::QuadSwap(_) => {}
                     }
                     self.dependencies.push((id, argument, "arg"));
                     self.emits.push((id, result));
@@ -392,6 +395,12 @@ impl StatementGraph {
                         crate::GatherMode::ShuffleDown(_) => "SubgroupShuffleDown",
                         crate::GatherMode::ShuffleUp(_) => "SubgroupShuffleUp",
                         crate::GatherMode::ShuffleXor(_) => "SubgroupShuffleXor",
+                        crate::GatherMode::QuadBroadcast(_) => "SubgroupQuadBroadcast",
+                        crate::GatherMode::QuadSwap(direction) => match direction {
+                            crate::Direction::X => "SubgroupQuadSwapX",
+                            crate::Direction::Y => "SubgroupQuadSwapY",
+                            crate::Direction::Diagonal => "SubgroupQuadSwapDiagonal",
+                        },
                     }
                 }
             };
@@ -591,6 +600,7 @@ fn write_function_expressions(
                 offset: _,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 edges.insert("image", image);
                 edges.insert("sampler", sampler);

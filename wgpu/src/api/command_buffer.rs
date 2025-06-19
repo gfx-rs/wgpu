@@ -13,3 +13,11 @@ pub struct CommandBuffer {
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(CommandBuffer: Send, Sync);
+
+impl CommandBuffer {
+    #[cfg(custom)]
+    /// Returns custom implementation of CommandBuffer (if custom backend and is internally T)
+    pub fn as_custom<T: custom::CommandBufferInterface>(&self) -> Option<&T> {
+        self.buffer.as_custom()
+    }
+}

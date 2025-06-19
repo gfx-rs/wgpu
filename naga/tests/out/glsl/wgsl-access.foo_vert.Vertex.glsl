@@ -30,6 +30,8 @@ struct Outer {
     Inner om_nom_nom;
     uint thing;
 };
+GlobalConst msl_padding_global_const = GlobalConst(0u, uvec3(0u, 0u, 0u), 0);
+
 layout(std430) buffer Bar_block_0Vertex {
     mat4x3 _matrix;
     mat2x2 matrix_array[2];
@@ -39,11 +41,11 @@ layout(std430) buffer Bar_block_0Vertex {
     AlignedWrapper data[];
 } _group_0_binding_0_vs;
 
-uniform Baz_block_1Vertex { Baz _group_0_binding_1_vs; };
+layout(std140) uniform Baz_block_1Vertex { Baz _group_0_binding_1_vs; };
 
 layout(std430) buffer type_13_block_2Vertex { ivec2 _group_0_binding_2_vs; };
 
-uniform MatCx2InArray_block_3Vertex { MatCx2InArray _group_0_binding_3_vs; };
+layout(std140) uniform MatCx2InArray_block_3Vertex { MatCx2InArray _group_0_binding_3_vs; };
 
 
 void test_matrix_within_struct_accesses() {
@@ -135,6 +137,14 @@ void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
     return;
 }
 
+void assign_through_ptr() {
+    uint val = 33u;
+    vec4 arr[2] = vec4[2](vec4(6.0), vec4(7.0));
+    assign_through_ptr_fn(val);
+    assign_array_through_ptr_fn(arr);
+    return;
+}
+
 uint fetch_arg_ptr_member(inout AssignToMember p_1) {
     uint _e2 = p_1.x;
     return _e2;
@@ -152,6 +162,16 @@ uint fetch_arg_ptr_array_element(inout uint p_3[4]) {
 
 void assign_to_arg_ptr_array_element(inout uint p_4[4]) {
     p_4[1] = 10u;
+    return;
+}
+
+void assign_to_ptr_components() {
+    AssignToMember s1_ = AssignToMember(0u);
+    uint a1_[4] = uint[4](0u, 0u, 0u, 0u);
+    assign_to_arg_ptr_member(s1_);
+    uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    uint _e3 = fetch_arg_ptr_array_element(a1_);
     return;
 }
 
@@ -198,6 +218,7 @@ void main() {
     int c2_[5] = int[5](0, 0, 0, 0, 0);
     float baz_1 = foo;
     foo = 1.0;
+    GlobalConst phony = msl_padding_global_const;
     test_matrix_within_struct_accesses();
     test_matrix_within_array_within_struct_accesses();
     mat4x3 _matrix = _group_0_binding_0_vs._matrix;
@@ -205,11 +226,11 @@ void main() {
     float b = _group_0_binding_0_vs._matrix[3u][0];
     int a_2 = _group_0_binding_0_vs.data[(uint(_group_0_binding_0_vs.data.length()) - 2u)].value;
     ivec2 c = _group_0_binding_2_vs;
-    float _e33 = read_from_private(foo);
+    float _e35 = read_from_private(foo);
     c2_ = int[5](a_2, int(b), 3, 4, 5);
     c2_[(vi + 1u)] = 42;
     int value_1 = c2_[vi];
-    float _e47 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
+    float _e49 = test_arr_as_arg(float[5][10](float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0), float[10](0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)));
     gl_Position = vec4((_matrix * vec4(ivec4(value_1))), 2.0);
     gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w);
     return;

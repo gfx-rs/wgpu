@@ -14,7 +14,6 @@ use super::parse::lexer::Token;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
-use codespan_reporting::term::termcolor::{ColorChoice, NoColor, StandardStream};
 use thiserror::Error;
 
 use alloc::{
@@ -68,11 +67,13 @@ impl ParseError {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "stderr")]
     pub fn emit_to_stderr(&self, source: &str) {
         self.emit_to_stderr_with_path(source, "wgsl")
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "stderr")]
     pub fn emit_to_stderr_with_path<P>(&self, source: &str, path: P)
     where
         P: AsRef<std::path::Path>,
@@ -80,7 +81,15 @@ impl ParseError {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
-        let writer = StandardStream::stderr(ColorChoice::Auto);
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "termcolor")] {
+                let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
+            } else {
+                let writer = std::io::stderr();
+            }
+        }
+
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
             .expect("cannot write error");
     }
@@ -98,9 +107,11 @@ impl ParseError {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
-        let mut writer = NoColor::new(Vec::new());
-        term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
-        String::from_utf8(writer.into_inner()).unwrap()
+
+        let mut writer = crate::error::DiagnosticBuffer::new();
+        term::emit(writer.inner_mut(), &config, &files, &self.diagnostic())
+            .expect("cannot write error");
+        writer.into_string()
     }
 
     /// Returns a [`SourceLocation`] for the first label in the error message.
@@ -176,6 +187,7 @@ pub(crate) enum Error<'a> {
         from_type: String,
         to_type: String,
     },
+    NotStorageTexture(Span),
     BadTextureSampleType {
         span: Span,
         scalar: Scalar,
@@ -387,6 +399,16 @@ pub(crate) enum Error<'a> {
         on_what: DiagnosticAttributeNotSupportedPosition,
         spans: Vec<Span>,
     },
+    SelectUnexpectedArgumentType {
+        arg_span: Span,
+        arg_type: String,
+    },
+    SelectRejectAndAcceptHaveNoCommonType {
+        reject_span: Span,
+        reject_type: String,
+        accept_span: Span,
+        accept_type: String,
+    },
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -457,6 +479,8 @@ impl<'a> Error<'a> {
                         Token::Arrow => "->".to_string(),
                         Token::Unknown(c) => format!("unknown (`{c}`)"),
                         Token::Trivia => "trivia".to_string(),
+                        Token::DocComment(s) => format!("doc comment ('{s}')"),
+                        Token::ModuleDocComment(s) => format!("module doc comment ('{s}')"),
                         Token::End => "end".to_string(),
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),
@@ -535,6 +559,11 @@ impl<'a> Error<'a> {
                 message: format!("unknown scalar type: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown scalar type".into())],
                 notes: vec!["Valid scalar types are f32, f64, i32, u32, bool".into()],
+            },
+            Error::NotStorageTexture(bad_span) => ParseError {
+                message: "textureStore can only be applied to storage textures".to_string(),
+                labels: vec![(bad_span, "not a storage texture".into())],
+                notes: vec![],
             },
             Error::BadTextureSampleType { span, scalar } => ParseError {
                 message: format!(
@@ -1323,6 +1352,24 @@ impl<'a> Error<'a> {
                     ],
                 }
             }
+            Error::SelectUnexpectedArgumentType { arg_span, ref arg_type } => ParseError {
+                message: "unexpected argument type for `select` call".into(),
+                labels: vec![(arg_span, format!("this value of type {arg_type}").into())],
+                notes: vec!["expected a scalar or a `vecN` of scalars".into()],
+            },
+            Error::SelectRejectAndAcceptHaveNoCommonType {
+                reject_span,
+                ref reject_type,
+                accept_span,
+                ref accept_type,
+            } => ParseError {
+                message: "type mismatch for reject and accept values in `select` call".into(),
+                labels: vec![
+                    (reject_span, format!("reject value of type {reject_type}").into()),
+                    (accept_span, format!("accept value of type {accept_type}").into()),
+                ],
+                notes: vec![],
+            },
         }
     }
 }

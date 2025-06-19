@@ -1,0 +1,9 @@
+# Turn on optimizations for `dot4I8Packed` and `dot4U8Packed` by enabling the
+# required capabilities on a SPIR-V version where these capabilities are only
+# available via the extension "SPV_KHR_integer_dot_product".
+
+targets = "SPIRV"
+
+[spv]
+capabilities = ["DotProduct", "DotProductInput4x8BitPacked"]
+version = [1, 0]

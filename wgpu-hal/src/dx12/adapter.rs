@@ -1,4 +1,6 @@
-use std::{ptr, string::String, sync::Arc, thread, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
+use core::ptr;
+use std::thread;
 
 use parking_lot::Mutex;
 use windows::{
@@ -54,7 +56,8 @@ impl super::Adapter {
         adapter: DxgiAdapter,
         library: &Arc<D3D12Lib>,
         instance_flags: wgt::InstanceFlags,
-        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+        memory_budget_thresholds: wgt::MemoryBudgetThresholds,
+        compiler_container: Arc<shader_compilation::CompilerContainer>,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
@@ -221,8 +224,8 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if let Some(ref dxc_container) = dxc_container {
-            let max_shader_model = match dxc_container.max_shader_model {
+        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
+            let max_shader_model = match max_shader_model {
                 wgt::DxcShaderModel::V6_0 => Direct3D12::D3D_SHADER_MODEL_6_0,
                 wgt::DxcShaderModel::V6_1 => Direct3D12::D3D_SHADER_MODEL_6_1,
                 wgt::DxcShaderModel::V6_2 => Direct3D12::D3D_SHADER_MODEL_6_2,
@@ -471,7 +474,8 @@ impl super::Adapter {
         // Once ray tracing pipelines are supported they also will go here
         features.set(
             wgt::Features::EXPERIMENTAL_RAY_QUERY
-                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                | wgt::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
             features5.RaytracingTier == Direct3D12::D3D12_RAYTRACING_TIER_1_1
                 && shader_model >= naga::back::hlsl::ShaderModel::V6_5
                 && has_features5,
@@ -500,10 +504,7 @@ impl super::Adapter {
 
         let base = wgt::Limits::default();
 
-        let mut downlevel = wgt::DownlevelCapabilities::default();
-        // https://github.com/gfx-rs/wgpu/issues/2471
-        downlevel.flags -=
-            wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
+        let downlevel = wgt::DownlevelCapabilities::default();
 
         // See https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-feature-levels#feature-level-support
         let max_color_attachments = 8;
@@ -518,7 +519,8 @@ impl super::Adapter {
                 private_caps,
                 presentation_timer,
                 workarounds,
-                dxc_container,
+                memory_budget_thresholds,
+                compiler_container,
             },
             info,
             features,
@@ -588,7 +590,8 @@ impl super::Adapter {
                     max_inter_stage_shader_components: base.max_inter_stage_shader_components,
                     max_color_attachments,
                     max_color_attachment_bytes_per_sample,
-                    max_compute_workgroup_storage_size: base.max_compute_workgroup_storage_size, //TODO?
+                    // From: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.6%20Inter-Thread%20Data%20Sharing
+                    max_compute_workgroup_storage_size: 32768,
                     max_compute_invocations_per_workgroup:
                         Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP,
                     max_compute_workgroup_size_x: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_X,
@@ -648,6 +651,7 @@ impl crate::Adapter for super::Adapter {
         };
 
         let device = super::Device::new(
+            self.raw.clone(),
             self.device.clone(),
             queue.clone(),
             features,
@@ -655,7 +659,8 @@ impl crate::Adapter for super::Adapter {
             memory_hints,
             self.private_caps,
             &self.library,
-            self.dxc_container.clone(),
+            self.memory_budget_thresholds,
+            self.compiler_container.clone(),
         )?;
         Ok(crate::OpenDevice {
             device,

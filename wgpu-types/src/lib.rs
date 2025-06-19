@@ -39,10 +39,12 @@ mod env;
 mod features;
 pub mod instance;
 pub mod math;
+mod transfers;
 
 pub use counters::*;
 pub use features::*;
 pub use instance::*;
+pub use transfers::*;
 
 /// Integral type used for [`Buffer`] offsets and sizes.
 ///
@@ -613,9 +615,56 @@ impl Default for Limits {
 }
 
 impl Limits {
-    // Rust doesn't allow const in trait implementations, so we break this out
-    // to allow reusing these defaults in const contexts like `downlevel_defaults`
-    const fn defaults() -> Self {
+    /// These default limits are guaranteed to to work on all modern
+    /// backends and guaranteed to be supported by WebGPU
+    ///
+    /// Those limits are as follows:
+    /// ```rust
+    /// # use wgpu_types::Limits;
+    /// assert_eq!(Limits::defaults(), Limits {
+    ///     max_texture_dimension_1d: 8192,
+    ///     max_texture_dimension_2d: 8192,
+    ///     max_texture_dimension_3d: 2048,
+    ///     max_texture_array_layers: 256,
+    ///     max_bind_groups: 4,
+    ///     max_bindings_per_bind_group: 1000,
+    ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+    ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
+    ///     max_sampled_textures_per_shader_stage: 16,
+    ///     max_samplers_per_shader_stage: 16,
+    ///     max_storage_buffers_per_shader_stage: 8,
+    ///     max_storage_textures_per_shader_stage: 4,
+    ///     max_uniform_buffers_per_shader_stage: 12,
+    ///     max_binding_array_elements_per_shader_stage: 0,
+    ///     max_binding_array_sampler_elements_per_shader_stage: 0,
+    ///     max_uniform_buffer_binding_size: 64 << 10, // (64 KiB)
+    ///     max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
+    ///     max_vertex_buffers: 8,
+    ///     max_buffer_size: 256 << 20, // (256 MiB)
+    ///     max_vertex_attributes: 16,
+    ///     max_vertex_buffer_array_stride: 2048,
+    ///     min_uniform_buffer_offset_alignment: 256,
+    ///     min_storage_buffer_offset_alignment: 256,
+    ///     max_inter_stage_shader_components: 60,
+    ///     max_color_attachments: 8,
+    ///     max_color_attachment_bytes_per_sample: 32,
+    ///     max_compute_workgroup_storage_size: 16384,
+    ///     max_compute_invocations_per_workgroup: 256,
+    ///     max_compute_workgroup_size_x: 256,
+    ///     max_compute_workgroup_size_y: 256,
+    ///     max_compute_workgroup_size_z: 64,
+    ///     max_compute_workgroups_per_dimension: 65535,
+    ///     min_subgroup_size: 0,
+    ///     max_subgroup_size: 0,
+    ///     max_push_constant_size: 0,
+    ///     max_non_sampler_bindings: 1_000_000,
+    /// });
+    /// ```
+    ///
+    /// Rust doesn't allow const in trait implementations, so we break this out
+    /// to allow reusing these defaults in const contexts
+    #[must_use]
+    pub const fn defaults() -> Self {
         Self {
             max_texture_dimension_1d: 8192,
             max_texture_dimension_2d: 8192,
@@ -1079,34 +1128,6 @@ bitflags::bitflags! {
         /// Not Supported by:
         /// - GL ES / WebGL
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
-
-        /// If this is true, use of `@builtin(vertex_index)` and `@builtin(instance_index)` will properly take into consideration
-        /// the `first_vertex` and `first_instance` parameters of indirect draw calls.
-        ///
-        /// If this is false, `@builtin(vertex_index)` and `@builtin(instance_index)` will start by counting from 0, ignoring the
-        /// `first_vertex` and `first_instance` parameters.
-        ///
-        /// For example, if you had a draw call like this:
-        /// - `first_vertex: 4,`
-        /// - `vertex_count: 12,`
-        ///
-        /// When this flag is present, `@builtin(vertex_index)` will start at 4 and go up to 15 (12 invocations).
-        ///
-        /// When this flag is not present, `@builtin(vertex_index)` will start at 0 and go up to 11 (12 invocations).
-        ///
-        /// This only affects the builtins in the shaders,
-        /// vertex buffers and instance rate vertex buffers will behave like expected with this flag disabled.
-        ///
-        /// See also [`Features::`]
-        ///
-        /// Supported By:
-        /// - Vulkan
-        /// - Metal
-        /// - OpenGL
-        ///
-        /// Will be implemented in the future by:
-        /// - DX12 ([#2471](https://github.com/gfx-rs/wgpu/issues/2471))
-        const VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW = 1 << 23;
     }
 }
 
@@ -2746,6 +2767,13 @@ impl TextureFormat {
     #[must_use]
     pub fn is_bcn(&self) -> bool {
         self.required_features() == Features::TEXTURE_COMPRESSION_BC
+    }
+
+    /// Returns `true` for ASTC compressed formats.
+    #[must_use]
+    pub fn is_astc(&self) -> bool {
+        self.required_features() == Features::TEXTURE_COMPRESSION_ASTC
+            || self.required_features() == Features::TEXTURE_COMPRESSION_ASTC_HDR
     }
 
     /// Returns the required features (if any) in order to use the texture.
@@ -4946,6 +4974,36 @@ impl VertexFormat {
             Self::Float64x4 => 32,
         }
     }
+
+    /// Returns the size read by an acceleration structure build of the vertex format. This is
+    /// slightly different from [`Self::size`] because the alpha component of 4-component formats
+    /// are not read in an acceleration structure build, allowing for a smaller stride.
+    #[must_use]
+    pub const fn min_acceleration_structure_vertex_stride(&self) -> u64 {
+        match self {
+            Self::Float16x2 | Self::Snorm16x2 => 4,
+            Self::Float32x3 => 12,
+            Self::Float32x2 => 8,
+            // This is the minimum value from DirectX
+            // > A16 component is ignored, other data can be packed there, such as setting vertex stride to 6 bytes
+            //
+            // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_raytracing_geometry_triangles_desc
+            //
+            // Vulkan does not express a minimum stride.
+            Self::Float16x4 | Self::Snorm16x4 => 6,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Returns the alignment required for `wgpu::BlasTriangleGeometry::vertex_stride`
+    #[must_use]
+    pub const fn acceleration_structure_stride_alignment(&self) -> u64 {
+        match self {
+            Self::Float16x4 | Self::Float16x2 | Self::Snorm16x4 | Self::Snorm16x2 => 2,
+            Self::Float32x2 | Self::Float32x3 => 4,
+            _ => unreachable!(),
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -4968,7 +5026,7 @@ bitflags::bitflags! {
         /// may have is COPY_DST.
         const MAP_READ = 1 << 0;
         /// Allow a buffer to be mapped for writing using [`Buffer::map_async`] + [`Buffer::get_mapped_range_mut`].
-        /// This does not include creating a buffer with `mapped_at_creation` set.
+        /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
         ///
         /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] feature isn't enabled, the only other usage a buffer
         /// may have is COPY_SRC.
@@ -6348,13 +6406,6 @@ pub struct TexelCopyBufferLayout {
     pub rows_per_image: Option<u32>,
 }
 
-/// Old name for a [`TexelCopyBufferLayout`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyBufferLayout`, and will be removed in 25.0.0."
-)]
-pub type ImageDataLayout = TexelCopyBufferLayout;
-
 /// Specific type of a buffer binding.
 ///
 /// Corresponds to [WebGPU `GPUBufferBindingType`](
@@ -6748,6 +6799,20 @@ pub enum BindingType {
         /// If enabled requires [`Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`]
         vertex_return: bool,
     },
+
+    /// An external texture binding.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_external;
+    /// ```
+    ///
+    /// Corresponds to [WebGPU `GPUExternalTextureBindingLayout`](
+    /// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturebindinglayout).
+    ///
+    /// Requires [`Features::EXTERNAL_TEXTURE`]
+    ExternalTexture,
 }
 
 impl BindingType {
@@ -6807,13 +6872,6 @@ pub struct TexelCopyBufferInfo<B> {
     pub layout: TexelCopyBufferLayout,
 }
 
-/// Old name for a [`TexelCopyBufferInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyBufferInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyBuffer<B> = TexelCopyBufferInfo<B>;
-
 /// View of a texture which can be used to copy to/from a buffer/texture.
 ///
 /// Corresponds to [WebGPU `GPUTexelCopyTextureInfo`](
@@ -6855,18 +6913,11 @@ impl<T> TexelCopyTextureInfo<T> {
     }
 }
 
-/// Old name for a [`TexelCopyTextureInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyTextureInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyTexture<T> = TexelCopyTextureInfo<T>;
-
 /// View of an external texture that can be used to copy to a texture.
 ///
 /// Corresponds to [WebGPU `GPUCopyExternalImageSourceInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopyexternalimage).
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "web"))]
 #[derive(Clone, Debug)]
 pub struct CopyExternalImageSourceInfo {
     /// The texture to be copied from. The copy source data is captured at the moment
@@ -6885,19 +6936,11 @@ pub struct CopyExternalImageSourceInfo {
     pub flip_y: bool,
 }
 
-/// Old name for a [`CopyExternalImageSourceInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `CopyExternalImageSourceInfo`, and will be removed in 25.0.0."
-)]
-#[cfg(target_arch = "wasm32")]
-pub type ImageCopyExternalImage = CopyExternalImageSourceInfo;
-
 /// Source of an external texture copy.
 ///
 /// Corresponds to the [implicit union type on WebGPU `GPUCopyExternalImageSourceInfo.source`](
 /// https://gpuweb.github.io/gpuweb/#dom-gpuimagecopyexternalimage-source).
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "web"))]
 #[derive(Clone, Debug)]
 pub enum ExternalImageSource {
     /// Copy from a previously-decoded image bitmap.
@@ -6919,7 +6962,7 @@ pub enum ExternalImageSource {
     VideoFrame(web_sys::VideoFrame),
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "web"))]
 impl ExternalImageSource {
     /// Gets the pixel, not css, width of the source.
     pub fn width(&self) -> u32 {
@@ -6950,7 +6993,7 @@ impl ExternalImageSource {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "web"))]
 impl core::ops::Deref for ExternalImageSource {
     type Target = js_sys::Object;
 
@@ -6970,12 +7013,14 @@ impl core::ops::Deref for ExternalImageSource {
 
 #[cfg(all(
     target_arch = "wasm32",
+    feature = "web",
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
 ))]
 unsafe impl Send for ExternalImageSource {}
 #[cfg(all(
     target_arch = "wasm32",
+    feature = "web",
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
 ))]
@@ -7028,13 +7073,6 @@ impl<T> CopyExternalImageDestInfo<T> {
         }
     }
 }
-
-/// Old name for a [`CopyExternalImageDestInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `CopyExternalImageDestInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyTextureTagged<T> = CopyExternalImageDestInfo<T>;
 
 /// Subresource range within an image
 #[repr(C)]
@@ -7406,7 +7444,7 @@ impl Default for ShaderRuntimeChecks {
 pub struct BlasTriangleGeometrySizeDescriptor {
     /// Format of a vertex position, must be [`VertexFormat::Float32x3`]
     /// with just [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
-    /// but later features may add more formats.
+    /// but [`Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS`] adds more.
     pub vertex_format: VertexFormat,
     /// Number of vertices.
     pub vertex_count: u32,
@@ -7505,8 +7543,8 @@ bitflags::bitflags!(
         /// Allow for incremental updates (no change in size), currently this is unimplemented
         /// and will build as normal (this is fine, update vs build should be unnoticeable)
         const ALLOW_UPDATE = 1 << 0;
-        /// Allow the acceleration structure to be compacted in a copy operation, the function
-        /// to compact is not currently implemented.
+        /// Allow the acceleration structure to be compacted in a copy operation
+        /// (`Blas::prepare_for_compaction`, `CommandEncoder::compact_blas`).
         const ALLOW_COMPACTION = 1 << 1;
         /// Optimize for fast ray tracing performance, recommended if the geometry is unlikely
         /// to change (e.g. in a game: non-interactive scene geometry)

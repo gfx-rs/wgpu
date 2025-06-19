@@ -3,15 +3,20 @@
 //! Nothing in this module is a part of the WebGPU API specification;
 //! they are unique to the `wgpu` library.
 
+// TODO: For [`belt::StagingBelt`] to be available in `no_std` its usage of [`std::sync::mpsc`]
+// must be replaced with an appropriate alternative.
+#[cfg(std)]
 mod belt;
 mod device;
 mod encoder;
 mod init;
+mod mutex;
 mod texture_blitter;
 
 use alloc::{borrow::Cow, format, string::String, vec};
 use core::ptr::copy_nonoverlapping;
 
+#[cfg(std)]
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
@@ -21,6 +26,8 @@ pub use texture_blitter::{TextureBlitter, TextureBlitterBuilder};
 pub use wgt::{
     math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs, TextureDataOrder,
 };
+
+pub(crate) use mutex::Mutex;
 
 use crate::dispatch;
 
@@ -98,10 +105,7 @@ impl DownloadBuffer {
         buffer: &super::BufferSlice<'_>,
         callback: impl FnOnce(Result<Self, super::BufferAsyncError>) + Send + 'static,
     ) {
-        let size = match buffer.size {
-            Some(size) => size.into(),
-            None => buffer.buffer.map_context.lock().total_size - buffer.offset,
-        };
+        let size = buffer.size.into();
 
         let download = device.create_buffer(&super::BufferDescriptor {
             size,

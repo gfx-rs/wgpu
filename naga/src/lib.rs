@@ -100,26 +100,15 @@ void main() {
 )]
 #![no_std]
 
-#[cfg(any(
-    test,
-    spv_out,
-
-    // Need OnceLock
-    hlsl_out,
-    msl_out,
-    wgsl_out,
-
-    feature = "spv-in",
-    feature = "wgsl-in"
-))]
+#[cfg(std)]
 extern crate std;
 
 extern crate alloc;
 
 mod arena;
+mod as_diagnostic_file_path;
 pub mod back;
 pub mod common;
-#[cfg(feature = "compact")]
 pub mod compact;
 pub mod diagnostic_filter;
 pub mod error;
@@ -128,6 +117,7 @@ pub mod ir;
 pub mod keywords;
 mod non_max_u32;
 pub mod proc;
+mod racy_lock;
 mod span;
 pub mod valid;
 

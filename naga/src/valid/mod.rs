@@ -29,7 +29,7 @@ pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, Uniformi
 pub use compose::ComposeError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
-pub use function::{CallError, FunctionError, LocalVariableError};
+pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, PushConstantError, TypeError, TypeFlags, WidthError};
 
@@ -195,8 +195,8 @@ bitflags::bitflags! {
         // We don't support these operations yet
         // /// Clustered
         // const CLUSTERED = 1 << 6;
-        // /// Quad supported
-        // const QUAD_FRAGMENT_COMPUTE = 1 << 7;
+        /// Quad supported
+        const QUAD_FRAGMENT_COMPUTE = 1 << 7;
         // /// Quad supported in all stages
         // const QUAD_ALL_STAGES = 1 << 8;
     }
@@ -221,6 +221,7 @@ impl super::GatherMode {
             Self::BroadcastFirst | Self::Broadcast(_) => S::BALLOT,
             Self::Shuffle(_) | Self::ShuffleXor(_) => S::SHUFFLE,
             Self::ShuffleUp(_) | Self::ShuffleDown(_) => S::SHUFFLE_RELATIVE,
+            Self::QuadBroadcast(_) | Self::QuadSwap(_) => S::QUAD_FRAGMENT_COMPUTE,
         }
     }
 }
@@ -457,7 +458,13 @@ impl Validator {
     pub fn new(flags: ValidationFlags, capabilities: Capabilities) -> Self {
         let subgroup_operations = if capabilities.contains(Capabilities::SUBGROUP) {
             use SubgroupOperationSet as S;
-            S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
+            S::BASIC
+                | S::VOTE
+                | S::ARITHMETIC
+                | S::BALLOT
+                | S::SHUFFLE
+                | S::SHUFFLE_RELATIVE
+                | S::QUAD_FRAGMENT_COMPUTE
         } else {
             SubgroupOperationSet::empty()
         };

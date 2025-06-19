@@ -9,10 +9,6 @@ struct DirectionalLight {
     color: vec4<f32>,
 }
 
-struct CameraViewProj {
-    ViewProj: mat4x4<f32>,
-}
-
 struct CameraPosition {
     CameraPos: vec4<f32>,
 }
@@ -57,28 +53,26 @@ var<private> v_WorldNormal_1: vec3<f32>;
 var<private> v_Uv_1: vec2<f32>;
 var<private> v_WorldTangent_1: vec4<f32>;
 var<private> o_Target: vec4<f32>;
-@group(0) @binding(0) 
-var<uniform> global: CameraViewProj;
 @group(0) @binding(1) 
-var<uniform> global_1: CameraPosition;
+var<uniform> global: CameraPosition;
 @group(1) @binding(0) 
-var<uniform> global_2: Lights;
+var<uniform> global_1: Lights;
 @group(3) @binding(0) 
-var<uniform> global_3: StandardMaterial_base_color;
+var<uniform> global_2: StandardMaterial_base_color;
 @group(3) @binding(1) 
 var StandardMaterial_base_color_texture: texture_2d<f32>;
 @group(3) @binding(2) 
 var StandardMaterial_base_color_texture_sampler: sampler;
 @group(3) @binding(3) 
-var<uniform> global_4: StandardMaterial_roughness;
+var<uniform> global_3: StandardMaterial_roughness;
 @group(3) @binding(4) 
-var<uniform> global_5: StandardMaterial_metallic;
+var<uniform> global_4: StandardMaterial_metallic;
 @group(3) @binding(5) 
 var StandardMaterial_metallic_roughness_texture: texture_2d<f32>;
 @group(3) @binding(6) 
 var StandardMaterial_metallic_roughness_texture_sampler: sampler;
 @group(3) @binding(7) 
-var<uniform> global_6: StandardMaterial_reflectance;
+var<uniform> global_5: StandardMaterial_reflectance;
 @group(3) @binding(8) 
 var StandardMaterial_normal_map: texture_2d<f32>;
 @group(3) @binding(9) 
@@ -88,7 +82,7 @@ var StandardMaterial_occlusion_texture: texture_2d<f32>;
 @group(3) @binding(11) 
 var StandardMaterial_occlusion_texture_sampler: sampler;
 @group(3) @binding(12) 
-var<uniform> global_7: StandardMaterial_emissive;
+var<uniform> global_6: StandardMaterial_emissive;
 @group(3) @binding(13) 
 var StandardMaterial_emissive_texture: texture_2d<f32>;
 @group(3) @binding(14) 
@@ -353,32 +347,6 @@ fn perceptualRoughnessToRoughness(perceptualRoughness: f32) -> f32 {
     return (_e7 * _e8);
 }
 
-fn reinhard(color: vec3<f32>) -> vec3<f32> {
-    var color_1: vec3<f32>;
-
-    color_1 = color;
-    let _e2 = color_1;
-    let _e5 = color_1;
-    return (_e2 / (vec3(1f) + _e5));
-}
-
-fn reinhard_extended(color_2: vec3<f32>, max_white: f32) -> vec3<f32> {
-    var color_3: vec3<f32>;
-    var max_white_1: f32;
-    var numerator: vec3<f32>;
-
-    color_3 = color_2;
-    max_white_1 = max_white;
-    let _e4 = color_3;
-    let _e7 = color_3;
-    let _e8 = max_white_1;
-    let _e9 = max_white_1;
-    numerator = (_e4 * (vec3(1f) + (_e7 / vec3((_e8 * _e9)))));
-    let _e16 = numerator;
-    let _e19 = color_3;
-    return (_e16 / (vec3(1f) + _e19));
-}
-
 fn luminance(v_1: vec3<f32>) -> f32 {
     var v_2: vec3<f32>;
 
@@ -403,48 +371,22 @@ fn change_luminance(c_in: vec3<f32>, l_out: f32) -> vec3<f32> {
     return (_e7 * (_e8 / _e9));
 }
 
-fn reinhard_luminance(color_4: vec3<f32>) -> vec3<f32> {
-    var color_5: vec3<f32>;
+fn reinhard_luminance(color: vec3<f32>) -> vec3<f32> {
+    var color_1: vec3<f32>;
     var l_old: f32;
     var l_new: f32;
 
-    color_5 = color_4;
-    let _e2 = color_5;
+    color_1 = color;
+    let _e2 = color_1;
     let _e3 = luminance(_e2);
     l_old = _e3;
     let _e5 = l_old;
     let _e7 = l_old;
     l_new = (_e5 / (1f + _e7));
-    let _e11 = color_5;
+    let _e11 = color_1;
     let _e12 = l_new;
     let _e13 = change_luminance(_e11, _e12);
     return _e13;
-}
-
-fn reinhard_extended_luminance(color_6: vec3<f32>, max_white_l: f32) -> vec3<f32> {
-    var color_7: vec3<f32>;
-    var max_white_l_1: f32;
-    var l_old_1: f32;
-    var numerator_1: f32;
-    var l_new_1: f32;
-
-    color_7 = color_6;
-    max_white_l_1 = max_white_l;
-    let _e4 = color_7;
-    let _e5 = luminance(_e4);
-    l_old_1 = _e5;
-    let _e7 = l_old_1;
-    let _e9 = l_old_1;
-    let _e10 = max_white_l_1;
-    let _e11 = max_white_l_1;
-    numerator_1 = (_e7 * (1f + (_e9 / (_e10 * _e11))));
-    let _e17 = numerator_1;
-    let _e19 = l_old_1;
-    l_new_1 = (_e17 / (1f + _e19));
-    let _e23 = color_7;
-    let _e24 = l_new_1;
-    let _e25 = change_luminance(_e23, _e24);
-    return _e25;
 }
 
 fn point_light(light: PointLight, roughness_8: f32, NdotV: f32, N: vec3<f32>, V_1: vec3<f32>, R: vec3<f32>, F0_: vec3<f32>, diffuseColor: vec3<f32>) -> vec3<f32> {
@@ -662,7 +604,7 @@ fn main_1() {
     var diffuse_ambient: vec3<f32>;
     var specular_ambient: vec3<f32>;
 
-    let _e37 = global_3.base_color;
+    let _e37 = global_2.base_color;
     output_color = _e37;
     let _e39 = output_color;
     let _e40 = v_Uv_1;
@@ -671,10 +613,10 @@ fn main_1() {
     let _e43 = v_Uv_1;
     let _e44 = textureSample(StandardMaterial_metallic_roughness_texture, StandardMaterial_metallic_roughness_texture_sampler, _e43);
     metallic_roughness = _e44;
-    let _e46 = global_5.metallic;
+    let _e46 = global_4.metallic;
     let _e47 = metallic_roughness;
     metallic = (_e46 * _e47.z);
-    let _e51 = global_4.perceptual_roughness;
+    let _e51 = global_3.perceptual_roughness;
     let _e52 = metallic_roughness;
     perceptual_roughness_2 = (_e51 * _e52.y);
     let _e56 = perceptual_roughness_2;
@@ -729,7 +671,7 @@ fn main_1() {
     let _e120 = v_Uv_1;
     let _e121 = textureSample(StandardMaterial_occlusion_texture, StandardMaterial_occlusion_texture_sampler, _e120);
     occlusion = _e121.x;
-    let _e124 = global_7.emissive;
+    let _e124 = global_6.emissive;
     emissive = _e124;
     let _e126 = emissive;
     let _e128 = v_Uv_1;
@@ -738,14 +680,14 @@ fn main_1() {
     emissive.x = _e131.x;
     emissive.y = _e131.y;
     emissive.z = _e131.z;
-    let _e138 = global_1.CameraPos;
+    let _e138 = global.CameraPos;
     let _e140 = v_WorldPosition_1;
     V_3 = normalize((_e138.xyz - _e140.xyz));
     let _e145 = N_2;
     let _e146 = V_3;
     NdotV_4 = max(dot(_e145, _e146), 0.001f);
-    let _e152 = global_6.reflectance;
-    let _e154 = global_6.reflectance;
+    let _e152 = global_5.reflectance;
+    let _e154 = global_5.reflectance;
     let _e157 = metallic;
     let _e161 = output_color;
     let _e163 = metallic;
@@ -758,7 +700,7 @@ fn main_1() {
     R_4 = reflect(-(_e176), _e178);
     loop {
         let _e186 = i;
-        let _e187 = global_2.NumLights;
+        let _e187 = global_1.NumLights;
         let _e191 = i;
         if !(((_e186 < i32(_e187.x)) && (_e191 < MAX_POINT_LIGHTS))) {
             break;
@@ -766,7 +708,7 @@ fn main_1() {
         {
             let _e198 = light_accum;
             let _e199 = i;
-            let _e201 = global_2.PointLights[_e199];
+            let _e201 = global_1.PointLights[_e199];
             let _e202 = roughness_12;
             let _e203 = NdotV_4;
             let _e204 = N_2;
@@ -784,7 +726,7 @@ fn main_1() {
     }
     loop {
         let _e213 = i_1;
-        let _e214 = global_2.NumLights;
+        let _e214 = global_1.NumLights;
         let _e218 = i_1;
         if !(((_e213 < i32(_e214.y)) && (_e218 < MAX_DIRECTIONAL_LIGHTS))) {
             break;
@@ -792,7 +734,7 @@ fn main_1() {
         {
             let _e225 = light_accum;
             let _e226 = i_1;
-            let _e228 = global_2.DirectionalLights[_e226];
+            let _e228 = global_1.DirectionalLights[_e226];
             let _e229 = roughness_12;
             let _e230 = NdotV_4;
             let _e231 = N_2;
@@ -824,7 +766,7 @@ fn main_1() {
     let _e255 = output_color;
     let _e257 = diffuse_ambient;
     let _e258 = specular_ambient;
-    let _e260 = global_2.AmbientColor;
+    let _e260 = global_1.AmbientColor;
     let _e263 = occlusion;
     let _e265 = (_e255.xyz + (((_e257 + _e258) * _e260.xyz) * _e263));
     output_color.x = _e265.x;

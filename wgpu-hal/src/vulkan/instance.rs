@@ -1,14 +1,10 @@
-use std::{
-    borrow::ToOwned as _,
-    boxed::Box,
-    ffi::{c_void, CStr, CString},
+use alloc::{borrow::ToOwned as _, boxed::Box, ffi::CString, string::String, sync::Arc, vec::Vec};
+use core::{
+    ffi::{c_void, CStr},
     slice,
     str::FromStr,
-    string::{String, ToString as _},
-    sync::Arc,
-    thread,
-    vec::Vec,
 };
+use std::thread;
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
@@ -20,7 +16,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     callback_data_ptr: *const vk::DebugUtilsMessengerCallbackDataEXT,
     user_data: *mut c_void,
 ) -> vk::Bool32 {
-    use std::borrow::Cow;
+    use alloc::borrow::Cow;
 
     if thread::panicking() {
         return vk::FALSE;
@@ -70,6 +66,15 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     // https://github.com/KhronosGroup/Vulkan-ValidationLayers/issues/9276
     const VUID_VKCMDCOPYIMAGETOBUFFER_PREGIONS_00184: i32 = 0x45ef177c;
     if cd.message_id_number == VUID_VKCMDCOPYIMAGETOBUFFER_PREGIONS_00184 {
+        return vk::FALSE;
+    }
+
+    // Silence Vulkan Validation error "VUID-StandaloneSpirv-None-10684".
+    //
+    // This is a bug. To prevent massive noise in the tests, lets suppress it for now.
+    // https://github.com/gfx-rs/wgpu/issues/7696
+    const VUID_STANDALONESPIRV_NONE_10684: i32 = 0xb210f7c2_u32 as i32;
+    if cd.message_id_number == VUID_STANDALONESPIRV_NONE_10684 {
         return vk::FALSE;
     }
 
@@ -142,7 +147,10 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         });
     }
 
+    #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && level == log::Level::Error {
+        use alloc::string::ToString as _;
+
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());
     }
@@ -347,6 +355,7 @@ impl super::Instance {
         debug_utils_create_info: Option<super::DebugUtilsCreateInfo>,
         extensions: Vec<&'static CStr>,
         flags: wgt::InstanceFlags,
+        memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         has_nv_optimus: bool,
         drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
@@ -397,6 +406,7 @@ impl super::Instance {
                 extensions,
                 drop_guard,
                 flags,
+                memory_budget_thresholds,
                 debug_utils,
                 get_physical_device_properties,
                 entry,
@@ -537,7 +547,7 @@ impl super::Instance {
     #[cfg(metal)]
     fn create_surface_from_view(
         &self,
-        view: std::ptr::NonNull<c_void>,
+        view: core::ptr::NonNull<c_void>,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&ext::metal_surface::NAME) {
             return Err(crate::InstanceError::new(String::from(
@@ -860,6 +870,7 @@ impl crate::Instance for super::Instance {
                 debug_utils,
                 extensions,
                 desc.flags,
+                desc.memory_budget_thresholds,
                 has_nv_optimus,
                 None,
             )
@@ -1013,7 +1024,7 @@ impl crate::Surface for super::Surface {
 
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<core::time::Duration>,
         fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let mut swapchain = self.swapchain.write();
@@ -1102,16 +1113,6 @@ impl crate::Surface for super::Surface {
             return Err(crate::SurfaceError::Outdated);
         }
 
-        // https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkRenderPassBeginInfo.html#VUID-VkRenderPassBeginInfo-framebuffer-03209
-        let raw_flags = if swapchain
-            .raw_flags
-            .contains(vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT)
-        {
-            vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE
-        } else {
-            vk::ImageCreateFlags::empty()
-        };
-
         let texture = super::SurfaceTexture {
             index,
             texture: super::Texture {
@@ -1119,15 +1120,12 @@ impl crate::Surface for super::Surface {
                 drop_guard: None,
                 block: None,
                 external_memory: None,
-                usage: swapchain.config.usage,
                 format: swapchain.config.format,
-                raw_flags,
                 copy_size: crate::CopyExtent {
                     width: swapchain.config.extent.width,
                     height: swapchain.config.extent.height,
                     depth: 1,
                 },
-                view_formats: swapchain.view_formats.clone(),
             },
             surface_semaphores: swapchain_semaphores_arc,
         };

@@ -50,5 +50,13 @@ metal::float2 return_vec2f32_const_ai(
 
 kernel void main_(
 ) {
+    int _e0 = return_i32_ai();
+    uint _e1 = return_u32_ai();
+    float _e2 = return_f32_ai();
+    float _e3 = return_f32_af();
+    metal::float2 _e4 = return_vec2f32_ai();
+    type_4 _e5 = return_arrf32_ai();
+    float _e6 = return_const_f32_const_ai();
+    metal::float2 _e7 = return_vec2f32_const_ai();
     return;
 }

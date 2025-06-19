@@ -19,6 +19,22 @@ static_assertions::assert_impl_all!(Queue: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(Queue => .inner);
 
+impl Queue {
+    #[cfg(custom)]
+    /// Returns custom implementation of Queue (if custom backend and is internally T)
+    pub fn as_custom<T: custom::QueueInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+
+    #[cfg(custom)]
+    /// Creates Queue from custom implementation
+    pub fn from_custom<T: custom::QueueInterface>(queue: T) -> Self {
+        Self {
+            inner: dispatch::DispatchQueue::custom(queue),
+        }
+    }
+}
+
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
 /// as part of an argument to [`Device::poll`] to block for a particular
 /// submission to finish.
@@ -27,7 +43,6 @@ crate::cmp::impl_eq_ord_hash_proxy!(Queue => .inner);
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex {
-    #[cfg_attr(not(wgpu_core), expect(dead_code))]
     pub(crate) index: u64,
 }
 #[cfg(send_sync)]
@@ -51,6 +66,14 @@ pub struct QueueWriteBufferView<'a> {
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(QueueWriteBufferView<'_>: Send, Sync);
+
+impl QueueWriteBufferView<'_> {
+    #[cfg(custom)]
+    /// Returns custom implementation of QueueWriteBufferView (if custom backend and is internally T)
+    pub fn as_custom<T: custom::QueueWriteBufferInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+}
 
 impl Deref for QueueWriteBufferView<'_> {
     type Target = [u8];
@@ -82,14 +105,6 @@ impl Drop for QueueWriteBufferView<'_> {
 }
 
 impl Queue {
-    #[cfg(custom)]
-    /// Creates Queue from custom implementation
-    pub fn from_custom<T: custom::QueueInterface>(queue: T) -> Self {
-        Self {
-            inner: dispatch::DispatchQueue::custom(queue),
-        }
-    }
-
     /// Copies the bytes of `data` into `buffer` starting at `offset`.
     ///
     /// The data must be written fully in-bounds, that is, `offset + data.len() <= buffer.len()`.
@@ -217,7 +232,7 @@ impl Queue {
     }
 
     /// Schedule a copy of data from `image` into `texture`.
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     pub fn copy_external_image_to_texture(
         &self,
         source: &wgt::CopyExternalImageSourceInfo,
@@ -284,6 +299,19 @@ impl Queue {
             }
         } else {
             hal_queue_callback(None)
+        }
+    }
+
+    /// Compact a BLAS, it must have had [`Blas::prepare_compaction_async`] called on it and had the
+    /// callback provided called.
+    ///
+    /// The returned BLAS is more restricted than a normal BLAS because it may not be rebuilt or
+    /// compacted.
+    pub fn compact_blas(&self, blas: &Blas) -> Blas {
+        let (handle, dispatch) = self.inner.compact_blas(&blas.inner);
+        Blas {
+            handle,
+            inner: dispatch,
         }
     }
 }

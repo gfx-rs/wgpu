@@ -1,0 +1,15 @@
+# Turn on optimizations for `dot4I8Packed` and `dot4U8Packed` on SPIR-V, HLSL, and Metal
+# by using a language version / shader model that supports these (without any extensions).
+
+targets = "SPIRV | HLSL | METAL"
+
+[spv]
+# We also need to provide the corresponding capabilities (which are part of SPIR-V >= 1.6).
+capabilities = ["DotProduct", "DotProductInput4x8BitPacked"]
+version = [1, 6]
+
+[hlsl]
+shader_model = "V6_4"
+
+[msl]
+lang_version = [2, 1]

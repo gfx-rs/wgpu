@@ -1,6 +1,6 @@
 use alloc::{boxed::Box, vec::Vec};
 
-use wgt::WasmNotSendSync;
+use wgt::{WasmNotSend, WasmNotSendSync};
 
 use crate::dispatch;
 use crate::{Buffer, Label};
@@ -31,7 +31,7 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 
 /// Safe instance for a [Tlas].
 ///
-/// A TlasInstance may be made invalid, if a TlasInstance is invalid, any attempt to build a [TlasPackage] containing an
+/// A TlasInstance may be made invalid, if a TlasInstance is invalid, any attempt to build a [Tlas] containing an
 /// invalid TlasInstance will generate a validation error
 ///
 /// Each one contains:
@@ -42,7 +42,6 @@ static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 /// - A user accessible custom index
 ///
 /// [Tlas]: crate::Tlas
-/// [TlasPackage]: crate::TlasPackage
 #[derive(Debug, Clone)]
 pub struct TlasInstance {
     pub(crate) blas: dispatch::DispatchBlas,
@@ -100,7 +99,8 @@ pub struct BlasTriangleGeometry<'a> {
     pub vertex_buffer: &'a Buffer,
     /// Offset into the vertex buffer as a factor of the vertex stride.
     pub first_vertex: u32,
-    /// Vertex stride.
+    /// Vertex stride, must be greater than [`wgpu_types::VertexFormat::min_acceleration_structure_vertex_stride`]
+    /// of the format and must be a multiple of [`wgpu_types::VertexFormat::acceleration_structure_stride_alignment`].
     pub vertex_stride: wgt::BufferAddress,
     /// Index buffer (optional).
     pub index_buffer: Option<&'a Buffer>,
@@ -174,6 +174,12 @@ impl Blas {
             hal_blas_callback(None)
         }
     }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of Blas (if custom backend and is internally T)
+    pub fn as_custom<T: crate::custom::BlasInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
 }
 
 /// Context version of [BlasTriangleGeometry].
@@ -208,4 +214,50 @@ pub struct ContextBlasBuildEntry<'a> {
     pub(crate) blas: &'a dispatch::DispatchBlas,
     #[expect(dead_code)]
     pub(crate) geometries: ContextBlasGeometries<'a>,
+}
+
+/// Error occurred when trying to asynchronously prepare a blas for compaction.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BlasAsyncError;
+static_assertions::assert_impl_all!(BlasAsyncError: Send, Sync);
+
+impl core::fmt::Display for BlasAsyncError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "Error occurred when trying to asynchronously prepare a blas for compaction"
+        )
+    }
+}
+
+impl core::error::Error for BlasAsyncError {}
+
+impl Blas {
+    /// Asynchronously prepares this BLAS for compaction. The callback is called once all builds
+    /// using this BLAS are finished and the BLAS is compactable. This can be checked using
+    /// [`Blas::ready_for_compaction`]. Rebuilding this BLAS will reset its compacted state, and it
+    /// will need to be prepared again.
+    ///
+    /// ### Interaction with other functions
+    /// On native, `queue.submit(..)` and polling devices (that is calling `instance.poll_all` or
+    /// `device.poll`) with [`PollType::Poll`] may call the callback. On native, polling devices with
+    /// [`PollType::Wait`] (or [`PollType::WaitForSubmissionIndex`] with a submission index greater
+    /// than the last submit the BLAS was used in) will guarantee callback is called.
+    ///
+    /// [`PollType::Poll`]: wgpu_types::PollType::Poll
+    /// [`PollType::Wait`]: wgpu_types::PollType::Wait
+    /// [`PollType::WaitForSubmissionIndex`]: wgpu_types::PollType::WaitForSubmissionIndex
+    pub fn prepare_compaction_async(
+        &self,
+        callback: impl FnOnce(Result<(), BlasAsyncError>) + WasmNotSend + 'static,
+    ) {
+        self.inner.prepare_compact_async(Box::new(callback));
+    }
+
+    /// Checks whether this BLAS is ready for compaction. The returned value is `true` if
+    /// [`Blas::prepare_compaction_async`]'s callback was called with a non-error value, otherwise
+    /// this is `false`.
+    pub fn ready_for_compaction(&self) -> bool {
+        self.inner.ready_for_compaction()
+    }
 }

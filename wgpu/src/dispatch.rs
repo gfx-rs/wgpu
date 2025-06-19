@@ -54,8 +54,25 @@ pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>)
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
 
+#[cfg(send_sync)]
+pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + 'static>;
+
+// remove when rust 1.86
+#[cfg_attr(not(custom), expect(dead_code))]
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: 'static> AsAny for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 // Common traits on all the interface traits
-trait_alias!(CommonTraits: Any + Debug + WasmNotSendSync);
+trait_alias!(CommonTraits: AsAny + Any + Debug + WasmNotSendSync);
 
 pub trait InstanceInterface: CommonTraits {
     fn new(desc: &crate::InstanceDescriptor) -> Self
@@ -166,7 +183,7 @@ pub trait DeviceInterface: CommonTraits {
     unsafe fn start_graphics_debugger_capture(&self);
     unsafe fn stop_graphics_debugger_capture(&self);
 
-    fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError>;
+    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError>;
 
     fn get_internal_counters(&self) -> crate::InternalCounters;
     fn generate_allocator_report(&self) -> Option<crate::AllocatorReport>;
@@ -198,7 +215,7 @@ pub trait QueueInterface: CommonTraits {
         data_layout: crate::TexelCopyBufferLayout,
         size: crate::Extent3d,
     );
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     fn copy_external_image_to_texture(
         &self,
         source: &crate::CopyExternalImageSourceInfo,
@@ -210,6 +227,8 @@ pub trait QueueInterface: CommonTraits {
 
     fn get_timestamp_period(&self) -> f32;
     fn on_submitted_work_done(&self, callback: BoxSubmittedWorkDoneCallback);
+
+    fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
 }
 
 pub trait ShaderModuleInterface: CommonTraits {
@@ -228,11 +247,6 @@ pub trait BufferInterface: CommonTraits {
     );
     fn get_mapped_range(&self, sub_range: Range<crate::BufferAddress>)
         -> DispatchBufferMappedRange;
-    #[cfg(webgpu)]
-    fn get_mapped_range_as_array_buffer(
-        &self,
-        sub_range: Range<crate::BufferAddress>,
-    ) -> Option<js_sys::ArrayBuffer>;
 
     fn unmap(&self);
 
@@ -243,7 +257,10 @@ pub trait TextureInterface: CommonTraits {
 
     fn destroy(&self);
 }
-pub trait BlasInterface: CommonTraits {}
+pub trait BlasInterface: CommonTraits {
+    fn prepare_compact_async(&self, callback: BlasCompactCallback);
+    fn ready_for_compaction(&self) -> bool;
+}
 pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {}
 pub trait PipelineLayoutInterface: CommonTraits {}
@@ -263,7 +280,7 @@ pub trait CommandEncoderInterface: CommonTraits {
         source_offset: crate::BufferAddress,
         destination: &DispatchBuffer,
         destination_offset: crate::BufferAddress,
-        copy_size: crate::BufferAddress,
+        copy_size: Option<crate::BufferAddress>,
     );
     fn copy_buffer_to_texture(
         &self,
@@ -319,15 +336,10 @@ pub trait CommandEncoderInterface: CommonTraits {
         tlas: &mut dyn Iterator<Item = &'a Tlas>,
     );
 
-    fn build_acceleration_structures_unsafe_tlas<'a>(
-        &self,
-        blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasBuildEntry<'a>>,
-    );
     fn build_acceleration_structures<'a>(
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
+        tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
     );
 
     fn transition_resources<'a>(
@@ -527,6 +539,9 @@ pub trait QueueWriteBufferInterface: CommonTraits {
 pub trait BufferMappedRangeInterface: CommonTraits {
     fn slice(&self) -> &[u8];
     fn slice_mut(&mut self) -> &mut [u8];
+
+    #[cfg(webgpu)]
+    fn as_uint8array(&self) -> &js_sys::Uint8Array;
 }
 
 /// Generates Dispatch types for each of the interfaces. Each type is a wrapper around the
@@ -571,6 +586,16 @@ macro_rules! dispatch_types {
             pub fn as_core_opt(&self) -> Option<&$core_type> {
                 match self {
                     Self::Core(value) => Some(value),
+                    _ => None,
+                }
+            }
+
+            #[cfg(custom)]
+            #[inline]
+            #[allow(clippy::allow_attributes, unused)]
+            pub fn as_custom<T: $interface>(&self) -> Option<&T> {
+                match self {
+                    Self::Custom(value) => value.downcast(),
                     _ => None,
                 }
             }
@@ -689,6 +714,16 @@ macro_rules! dispatch_types {
             ) -> Option<&mut $core_type> {
                 match self {
                     Self::Core(value) => Some(value),
+                    _ => None,
+                }
+            }
+
+            #[cfg(custom)]
+            #[inline]
+            #[allow(clippy::allow_attributes, unused)]
+            pub fn as_custom<T: $interface>(&self) -> Option<&T> {
+                match self {
+                    Self::Custom(value) => value.downcast(),
                     _ => None,
                 }
             }

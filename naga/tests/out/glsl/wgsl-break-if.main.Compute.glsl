@@ -75,6 +75,10 @@ void breakIfSeparateVariable() {
 }
 
 void main() {
+    breakIfEmpty();
+    breakIfEmptyBody(false);
+    breakIf(false);
+    breakIfSeparateVariable();
     return;
 }
 
