@@ -7839,7 +7839,7 @@ pub struct ShaderModuleDescriptorMsl<'a, L> {
     /// Number of workgroups in each dimension x, y and z.
     pub num_workgroups: (u32, u32, u32),
     /// Shader MSL source.
-    pub source: Cow<'a, str>,
+    pub source: &'a str,
 }
 
 /// Descriptor for a shader module given by DirectX DXIL source.

@@ -1796,7 +1796,7 @@ impl Device {
             pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => {
                 self.require_features(wgt::Features::MSL_SHADER_PASSTHROUGH)?;
                 hal::ShaderInput::Msl {
-                    shader: inner.source.to_string(),
+                    shader: inner.source,
                     entry_point: inner.entry_point.to_string(),
                     num_workgroups: inner.num_workgroups,
                 }
