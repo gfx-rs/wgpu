@@ -283,12 +283,14 @@ impl<E> WithSpan<E> {
 
     /// Emits a summary of the error to standard error stream.
     #[cfg(feature = "stderr")]
-    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str)
+    pub fn emit_to_stderr_with_path<P>(&self, source: &str, path: P)
     where
+        P: AsRef<std::path::Path>,
         E: Error,
     {
         use codespan_reporting::{files, term};
 
+        let path = path.as_ref().display().to_string();
         let files = files::SimpleFile::new(path, source);
         let config = term::Config::default();
 
