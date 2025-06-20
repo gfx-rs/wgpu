@@ -1817,6 +1817,16 @@ impl Device {
                     num_workgroups: inner.num_workgroups,
                 }
             }
+            pipeline::ShaderModuleDescriptorPassthrough::Generic(inner) => {
+                self.require_features(wgt::Features::EXPERIMENTAL_PRECOMPILED_SHADERS)?;
+                hal::ShaderInput::Generic {
+                    entry_point: inner.entry_point.clone(),
+                    num_workgroups: inner.num_workgroups,
+                    spirv: inner.spirv.as_deref(),
+                    dxil: inner.dxil.as_deref(),
+                    msl: inner.msl.as_deref(),
+                }
+            }
         };
 
         let hal_desc = hal::ShaderModuleDescriptor {

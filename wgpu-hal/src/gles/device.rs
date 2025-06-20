@@ -1349,6 +1349,9 @@ impl crate::Device for super::Device {
                 crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
                     panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
                 }
+                crate::ShaderInput::Generic { .. } => {
+                    panic!("`Features::EXPERIMENTAL_PRECOMPILED_SHADERS` is not enabled")
+                }
             },
             label: desc.label.map(|str| str.to_string()),
             id: self.shared.next_shader_id.fetch_add(1, Ordering::Relaxed),

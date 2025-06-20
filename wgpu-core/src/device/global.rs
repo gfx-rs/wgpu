@@ -996,6 +996,12 @@ impl Global {
                                 runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
                             }
                         }
+                        pipeline::ShaderModuleDescriptorPassthrough::Generic(inner) => {
+                            pipeline::ShaderModuleDescriptor {
+                                label: inner.label.clone(),
+                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                            }
+                        }
                     },
                     data,
                 });

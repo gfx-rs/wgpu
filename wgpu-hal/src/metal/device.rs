@@ -1012,6 +1012,11 @@ impl crate::Device for super::Device {
                 shader: source,
                 entry_point,
                 num_workgroups,
+            }
+            | crate::ShaderInput::Generic {
+                msl: Some(source),
+                entry_point,
+                num_workgroups,
             } => {
                 let options = metal::CompileOptions::new();
                 // Obtain the locked device from shared
@@ -1041,6 +1046,9 @@ impl crate::Device for super::Device {
             }
             crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
                 panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled for this backend")
+            }
+            crate::ShaderInput::Generic { .. } => {
+                panic!("Generic passthrough was given to metal backend without MSL data")
             }
         }
     }

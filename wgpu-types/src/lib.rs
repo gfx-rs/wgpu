@@ -7708,6 +7708,8 @@ pub enum CreateShaderModuleDescriptorPassthrough<'a, L> {
     Dxil(ShaderModuleDescriptorDxil<'a, L>),
     /// Passthrough for HLSL
     Hlsl(ShaderModuleDescriptorHlsl<'a, L>),
+    /// Passthrough for multiple types of sources, with optional reflection
+    Generic(ShaderModuleDescriptorGeneric<'a, L>),
 }
 
 impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
@@ -7749,6 +7751,20 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
                     source: inner.source,
                 })
             }
+            CreateShaderModuleDescriptorPassthrough::Generic(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Generic(
+                    ShaderModuleDescriptorGeneric {
+                        entry_point: inner.entry_point.clone(),
+                        label: fun(&inner.label),
+                        num_workgroups: inner.num_workgroups,
+                        reflection: inner.reflection.clone(),
+                        spirv: inner.spirv.clone(),
+                        dxil: inner.dxil.clone(),
+                        msl: inner.msl.clone(),
+                        runtime_checks: inner.runtime_checks,
+                    },
+                )
+            }
         }
     }
 
@@ -7759,6 +7775,7 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
             CreateShaderModuleDescriptorPassthrough::Msl(inner) => &inner.label,
             CreateShaderModuleDescriptorPassthrough::Dxil(inner) => &inner.label,
             CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => &inner.label,
+            CreateShaderModuleDescriptorPassthrough::Generic(inner) => &inner.label,
         }
     }
 
@@ -7772,6 +7789,17 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
             CreateShaderModuleDescriptorPassthrough::Msl(inner) => inner.source.as_bytes(),
             CreateShaderModuleDescriptorPassthrough::Dxil(inner) => inner.source,
             CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => inner.source.as_bytes(),
+            CreateShaderModuleDescriptorPassthrough::Generic(inner) => {
+                if let Some(spirv) = &inner.spirv {
+                    bytemuck::cast_slice(spirv)
+                } else if let Some(msl) = &inner.msl {
+                    msl.as_bytes()
+                } else if let Some(dxil) = &inner.dxil {
+                    dxil
+                } else {
+                    panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
+                }
+            }
         }
     }
 
@@ -7783,6 +7811,17 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
             CreateShaderModuleDescriptorPassthrough::Msl(..) => "msl",
             CreateShaderModuleDescriptorPassthrough::Dxil(..) => "dxil",
             CreateShaderModuleDescriptorPassthrough::Hlsl(..) => "hlsl",
+            CreateShaderModuleDescriptorPassthrough::Generic(inner) => {
+                if inner.spirv.is_some() {
+                    "spv"
+                } else if inner.msl.is_some() {
+                    "msl"
+                } else if inner.dxil.is_some() {
+                    "dxil"
+                } else {
+                    panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
+                }
+            }
         }
     }
 }
@@ -7844,4 +7883,34 @@ pub struct ShaderModuleDescriptorSpirV<'a, L> {
     pub label: L,
     /// Binary SPIR-V data, in 4-byte words.
     pub source: Cow<'a, [u32]>,
+}
+
+/// Descriptor for a shader module given by any of several sources, with optional reflection information.
+/// All shader types that may be used by the backend must be `Some`, otherwise usage is undefined behavior
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorGeneric<'a, L> {
+    /// Entrypoint.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
+    /// Reflection information
+    pub reflection: Option<ShaderModuleReflection>,
+    /// Runtime checks that should be enabled.
+    pub runtime_checks: ShaderRuntimeChecks,
+
+    /// Binary SPIR-V data, in 4-byte words.
+    pub spirv: Option<Cow<'a, [u32]>>,
+    /// Binary DXIL data
+    pub dxil: Option<Cow<'a, [u8]>>,
+    /// Shader MSL source.
+    pub msl: Option<Cow<'a, str>>,
+}
+
+/// Reflection information for a shader compiled with `naga`
+#[derive(Debug, Clone)]
+pub struct ShaderModuleReflection {
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
 }

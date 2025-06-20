@@ -259,3 +259,17 @@ pub type ShaderModuleDescriptorHlsl<'a> = wgt::ShaderModuleDescriptorHlsl<'a, La
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
 pub type ShaderModuleDescriptorDxil<'a> = wgt::ShaderModuleDescriptorDxil<'a, Label<'a>>;
+
+/// Descriptor for a shader module given by any of several sources, with optional reflection information.
+/// All shader types that may be used by the backend must be `Some`, otherwise usage is undefined behavior
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+pub type ShaderModuleDescriptorGeneric<'a> = wgt::ShaderModuleDescriptorGeneric<'a, Label<'a>>;
+
+/// Reflection info for a shader module, created by compiling a shader with naga,
+/// either at compile-time or run-time.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+pub type ShaderModuleReflection = wgt::ShaderModuleReflection;

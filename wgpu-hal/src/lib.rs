@@ -2114,6 +2114,14 @@ pub enum ShaderInput<'a> {
         entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
+    Generic {
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+
+        spirv: Option<&'a [u32]>,
+        dxil: Option<&'a [u8]>,
+        msl: Option<&'a str>,
+    },
 }
 
 pub struct ShaderModuleDescriptor<'a> {
