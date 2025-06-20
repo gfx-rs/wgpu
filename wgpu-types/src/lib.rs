@@ -7732,7 +7732,7 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
                     entry_point: inner.entry_point.clone(),
                     label: fun(&inner.label),
                     num_workgroups: inner.num_workgroups,
-                    source: inner.source.clone(),
+                    source: inner.source,
                 })
             }
             CreateShaderModuleDescriptorPassthrough::Dxil(inner) => {
