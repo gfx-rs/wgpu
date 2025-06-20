@@ -1254,6 +1254,18 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const HLSL_DXIL_SHADER_PASSTHROUGH = 1 << 53;
+        /// Enables creating shaders from passthrough with reflection info (unsafe)
+        ///
+        /// Shader code isn't parsed or interpreted in any way. It is the user's
+        /// responsibility to ensure the reflection is correct.
+        ///
+        /// Supported platforms
+        /// - Vulkan
+        /// - DX12
+        ///
+        /// Ideally, in the future, all platforms will be supported. For more info, see
+        /// [my comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
+        const EXPERIMENTAL_PRECOMPILED_SHADERS = 1 << 54;
     }
 
     /// Features that are not guaranteed to be supported.
