@@ -147,5 +147,6 @@ impl deno_web::TimersPermission for Permissions {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    env_logger::init();
     unwrap_or_exit(run().await)
 }

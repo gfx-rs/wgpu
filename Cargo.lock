@@ -1002,6 +1002,7 @@ dependencies = [
  "deno_web",
  "deno_webgpu",
  "deno_webidl",
+ "env_logger",
  "termcolor",
  "tokio",
 ]
