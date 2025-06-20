@@ -248,7 +248,7 @@ pub type ShaderModuleDescriptorMsl<'a> = wgt::ShaderModuleDescriptorMsl<'a, Labe
 /// only WGSL source code strings are accepted.
 pub type ShaderModuleDescriptorSpirV<'a> = wgt::ShaderModuleDescriptorSpirV<'a, Label<'a>>;
 
-/// Descriptor for a shader module given by DirectX HLSl source.
+/// Descriptor for a shader module given by DirectX HLSL source.
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.

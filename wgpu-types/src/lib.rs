@@ -7815,10 +7815,10 @@ pub struct ShaderModuleDescriptorDxil<'a, L> {
     pub label: L,
     /// Number of workgroups in each dimension x, y and z.
     pub num_workgroups: (u32, u32, u32),
-    /// Shader MSL source.
+    /// Shader DXIL source.
     pub source: &'a [u8],
 }
-/// Descriptor for a shader module given by DirectX DXIL source.
+/// Descriptor for a shader module given by DirectX HLSL source.
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
@@ -7830,7 +7830,7 @@ pub struct ShaderModuleDescriptorHlsl<'a, L> {
     pub label: L,
     /// Number of workgroups in each dimension x, y and z.
     pub num_workgroups: (u32, u32, u32),
-    /// Shader MSL source.
+    /// Shader HLSL source.
     pub source: &'a str,
 }
 
