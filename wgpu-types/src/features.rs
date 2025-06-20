@@ -1250,7 +1250,7 @@ bitflags_array! {
         /// HLSL/DXIL data is not parsed or interpreted in any way
         ///
         /// Supported platforms:
-        /// - DirectX
+        /// - DX12
         ///
         /// This is a native only feature.
         const HLSL_DXIL_SHADER_PASSTHROUGH = 1 << 53;
