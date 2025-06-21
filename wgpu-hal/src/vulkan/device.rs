@@ -3019,6 +3019,12 @@ impl super::Device {
     ) -> Result<<<Self as crate::Device>::A as crate::Api>::Buffer, crate::DeviceError> {
         let buffer_usage = conv::map_buffer_usage(desc.usage);
 
+        let handle_type = if is_win32 {
+            vk::ExternalMemoryHandleTypeFlagsKHR::OPAQUE_WIN32_KHR
+        } else {
+            vk::ExternalMemoryHandleTypeFlagsKHR::OPAQUE_FD_KHR
+        };
+
         let mut external_properties = vk::ExternalBufferProperties::default();
         unsafe {
             let caps = self
@@ -3028,11 +3034,7 @@ impl super::Device {
                 .unwrap();
             let info = vk::PhysicalDeviceExternalBufferInfoKHR::default()
                 .usage(buffer_usage)
-                .handle_type(if is_win32 {
-                    vk::ExternalMemoryHandleTypeFlagsKHR::OPAQUE_WIN32_KHR
-                } else {
-                    vk::ExternalMemoryHandleTypeFlagsKHR::OPAQUE_FD_KHR
-                });
+                .handle_type(handle_type);
             (caps.fp().get_physical_device_external_buffer_properties_khr)(
                 self.raw_physical_device(),
                 &info,
@@ -3051,10 +3053,13 @@ impl super::Device {
             .external_memory_features
             .contains(vk::ExternalMemoryFeatureFlags::DEDICATED_ONLY_KHR);
 
+        let mut external_vk_info =
+            vk::ExternalMemoryBufferCreateInfoKHR::default().handle_types(handle_type);
         let vk_info = vk::BufferCreateInfo::default()
             .size(desc.size)
             .usage(buffer_usage)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .push_next(&mut external_vk_info);
 
         let raw = unsafe {
             self.shared
