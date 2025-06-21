@@ -1525,8 +1525,12 @@ impl dispatch::DeviceInterface for CoreDevice {
         );
 
         if let Some(cause) = error {
-            self.context
-                .handle_error(&self.error_sink, cause, desc.label, "Device::create_buffer");
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                desc.label,
+                "Device::create_buffer_external_memory_fd",
+            );
         }
 
         CoreBuffer {

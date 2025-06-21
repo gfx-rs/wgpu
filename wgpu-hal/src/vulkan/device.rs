@@ -3027,7 +3027,12 @@ impl super::Device {
                 .as_ref()
                 .unwrap();
             let info = vk::PhysicalDeviceExternalBufferInfoKHR::default()
-                .flags(vk::BufferCreateFlags::empty());
+                .usage(buffer_usage)
+                .handle_type(if is_win32 {
+                    vk::ExternalMemoryHandleTypeFlagsKHR::OPAQUE_WIN32_KHR
+                } else {
+                    vk::ExternalMemoryHandleTypeFlagsKHR::OPAQUE_FD_KHR
+                });
             (caps.fp().get_physical_device_external_buffer_properties_khr)(
                 self.raw_physical_device(),
                 &info,
@@ -3086,7 +3091,9 @@ impl super::Device {
             let mut import_info = vk::ImportMemoryWin32HandleInfoKHR::default()
                 .handle(handle as isize)
                 .handle_type(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KHR);
-            let mut allocate_info = vk::MemoryAllocateInfo::default().push_next(&mut import_info);
+            let mut allocate_info = vk::MemoryAllocateInfo::default()
+                .allocation_size(desc.size)
+                .push_next(&mut import_info);
             if needs_dedicated {
                 allocate_info = allocate_info.push_next(&mut dedicated_alloc_info);
             }
@@ -3095,7 +3102,9 @@ impl super::Device {
             let mut import_info = vk::ImportMemoryFdInfoKHR::default()
                 .fd(handle as i32)
                 .handle_type(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD_KHR);
-            let mut allocate_info = vk::MemoryAllocateInfo::default().push_next(&mut import_info);
+            let mut allocate_info = vk::MemoryAllocateInfo::default()
+                .allocation_size(desc.size)
+                .push_next(&mut import_info);
             if needs_dedicated {
                 allocate_info = allocate_info.push_next(&mut dedicated_alloc_info);
             }
