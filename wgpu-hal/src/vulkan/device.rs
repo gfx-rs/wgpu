@@ -3090,6 +3090,7 @@ impl super::Device {
             gpu_alloc::UsageFlags::TRANSIENT,
             desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
         );
+        let reqs = unsafe { self.raw_device().get_buffer_memory_requirements(raw) };
 
         let mut dedicated_alloc_info = vk::MemoryDedicatedAllocateInfoKHR::default().buffer(raw);
         let memory = if is_win32 {
@@ -3097,7 +3098,8 @@ impl super::Device {
                 .handle(handle as isize)
                 .handle_type(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KHR);
             let mut allocate_info = vk::MemoryAllocateInfo::default()
-                .allocation_size(desc.size)
+                .allocation_size(reqs.size)
+                .memory_type_index(reqs.memory_type_bits.leading_zeros())
                 .push_next(&mut import_info);
             if needs_dedicated {
                 allocate_info = allocate_info.push_next(&mut dedicated_alloc_info);
@@ -3108,7 +3110,8 @@ impl super::Device {
                 .fd(handle as i32)
                 .handle_type(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD_KHR);
             let mut allocate_info = vk::MemoryAllocateInfo::default()
-                .allocation_size(desc.size)
+                .allocation_size(reqs.size)
+                .memory_type_index(reqs.memory_type_bits.leading_zeros())
                 .push_next(&mut import_info);
             if needs_dedicated {
                 allocate_info = allocate_info.push_next(&mut dedicated_alloc_info);
