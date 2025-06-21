@@ -905,15 +905,14 @@ impl Device {
         let indirect_validation_bind_groups =
             self.create_indirect_validation_bind_groups(buffer.as_ref(), desc.size, desc.usage)?;
 
+        let mut init_tracker = BufferInitTracker::new(aligned_size);
+        init_tracker.drain(0..aligned_size);
         let buffer = Buffer {
             raw: Snatchable::new(buffer),
             device: self.clone(),
             usage: desc.usage,
             size: desc.size,
-            initialization_status: RwLock::new(
-                rank::BUFFER_INITIALIZATION_STATUS,
-                BufferInitTracker::new(aligned_size),
-            ),
+            initialization_status: RwLock::new(rank::BUFFER_INITIALIZATION_STATUS, init_tracker),
             map_state: Mutex::new(rank::BUFFER_MAP_STATE, resource::BufferMapState::Idle),
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
@@ -924,43 +923,12 @@ impl Device {
 
         let buffer = Arc::new(buffer);
 
-        let buffer_use = if !desc.mapped_at_creation {
-            wgt::BufferUses::empty()
-        } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
-            // buffer is mappable, so we are just doing that at start
-            let map_size = buffer.size;
-            let mapping = if map_size == 0 {
-                hal::BufferMapping {
-                    ptr: core::ptr::NonNull::dangling(),
-                    is_coherent: true,
-                }
-            } else {
-                let snatch_guard: SnatchGuard = self.snatchable_lock.read();
-                map_buffer(&buffer, 0, map_size, HostMap::Write, &snatch_guard)?
-            };
-            *buffer.map_state.lock() = resource::BufferMapState::Active {
-                mapping,
-                range: 0..map_size,
-                host: HostMap::Write,
-            };
-            wgt::BufferUses::MAP_WRITE
-        } else {
-            let mut staging_buffer =
-                StagingBuffer::new(self, wgt::BufferSize::new(aligned_size).unwrap())?;
-
-            // Zero initialize memory and then mark the buffer as initialized
-            // (it's guaranteed that this is the case by the time the buffer is usable)
-            staging_buffer.write_zeros();
-            buffer.initialization_status.write().drain(0..aligned_size);
-
-            *buffer.map_state.lock() = resource::BufferMapState::Init { staging_buffer };
-            wgt::BufferUses::COPY_DST
-        };
+        // Don't zero initialize the memory
 
         self.trackers
             .lock()
             .buffers
-            .insert_single(&buffer, buffer_use);
+            .insert_single(&buffer, wgt::BufferUses::empty());
 
         Ok(buffer)
     }
