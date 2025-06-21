@@ -3099,7 +3099,7 @@ impl super::Device {
                 .handle_type(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KHR);
             let mut allocate_info = vk::MemoryAllocateInfo::default()
                 .allocation_size(reqs.size)
-                .memory_type_index(reqs.memory_type_bits.leading_zeros())
+                .memory_type_index(reqs.memory_type_bits.trailing_zeros())
                 .push_next(&mut import_info);
             if needs_dedicated {
                 allocate_info = allocate_info.push_next(&mut dedicated_alloc_info);
@@ -3111,7 +3111,7 @@ impl super::Device {
                 .handle_type(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD_KHR);
             let mut allocate_info = vk::MemoryAllocateInfo::default()
                 .allocation_size(reqs.size)
-                .memory_type_index(reqs.memory_type_bits.leading_zeros())
+                .memory_type_index(reqs.memory_type_bits.trailing_zeros())
                 .push_next(&mut import_info);
             if needs_dedicated {
                 allocate_info = allocate_info.push_next(&mut dedicated_alloc_info);
