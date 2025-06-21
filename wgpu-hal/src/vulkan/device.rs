@@ -3135,7 +3135,14 @@ impl super::Device {
         self.counters.buffers.add(1);
 
         // Block is none because wgpu doesn't actually own the memory
-        Ok(super::Buffer { raw, block: None })
+        Ok(super::Buffer {
+            raw,
+            block: Some(Mutex::new(super::BufferMemoryBacking::VulkanMemory {
+                memory,
+                offset,
+                size: reqs.size,
+            })),
+        })
     }
 }
 
