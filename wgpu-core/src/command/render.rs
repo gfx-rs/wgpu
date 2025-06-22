@@ -499,13 +499,10 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     pipeline: Option<Arc<RenderPipeline>>,
     index: IndexState,
     vertex: VertexState,
-    debug_scope_depth: u32,
 
     info: RenderPassInfo,
 
     general: pass::BaseState<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder>,
-
-    string_offset: usize,
 
     active_occlusion_query: Option<(Arc<QuerySet>, u32)>,
     active_pipeline_statistics_query: Option<(Arc<QuerySet>, u32)>,
@@ -721,8 +718,8 @@ pub enum RenderPassErrorInner {
         end_count_offset: u64,
         count_buffer_size: u64,
     },
-    #[error("Cannot pop debug group, because number of pushed debug groups is zero")]
-    InvalidPopDebugGroup,
+    #[error(transparent)]
+    InvalidPopDebugGroup(#[from] pass::InvalidPopDebugGroup),
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error("Render bundle has incompatible targets, {0}")]
@@ -1829,7 +1826,6 @@ impl Global {
                     pipeline: None,
                     index: IndexState::default(),
                     vertex: VertexState::default(),
-                    debug_scope_depth: 0,
 
                     info,
 
@@ -1848,8 +1844,10 @@ impl Global {
 
                         temp_offsets: Vec::new(),
                         dynamic_offset_count: 0,
+
+                        debug_scope_depth: 0,
+                        string_offset: 0,
                     },
-                    string_offset: 0,
 
                     active_occlusion_query: None,
                     active_pipeline_statistics_query: None,
@@ -2036,14 +2034,15 @@ impl Global {
                             .map_pass_err(scope)?;
                         }
                         ArcRenderCommand::PushDebugGroup { color: _, len } => {
-                            push_debug_group(&mut state, &base.string_data, len);
+                            pass::push_debug_group(&mut state.general, &base.string_data, len);
                         }
                         ArcRenderCommand::PopDebugGroup => {
                             let scope = PassErrorScope::PopDebugGroup;
-                            pop_debug_group(&mut state).map_pass_err(scope)?;
+                            pass::pop_debug_group::<RenderPassErrorInner>(&mut state.general)
+                                .map_pass_err(scope)?;
                         }
                         ArcRenderCommand::InsertDebugMarker { color: _, len } => {
-                            insert_debug_marker(&mut state, &base.string_data, len);
+                            pass::insert_debug_marker(&mut state.general, &base.string_data, len);
                         }
                         ArcRenderCommand::WriteTimestamp {
                             query_set,
@@ -2834,62 +2833,6 @@ fn multi_draw_indirect_count(
         },
     }
     Ok(())
-}
-
-fn push_debug_group(state: &mut State, string_data: &[u8], len: usize) {
-    state.debug_scope_depth += 1;
-    if !state
-        .general
-        .device
-        .instance_flags
-        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-    {
-        let label =
-            str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
-
-        api_log!("RenderPass::push_debug_group {label:?}");
-        unsafe {
-            state.general.raw_encoder.begin_debug_marker(label);
-        }
-    }
-    state.string_offset += len;
-}
-
-fn pop_debug_group(state: &mut State) -> Result<(), RenderPassErrorInner> {
-    api_log!("RenderPass::pop_debug_group");
-
-    if state.debug_scope_depth == 0 {
-        return Err(RenderPassErrorInner::InvalidPopDebugGroup);
-    }
-    state.debug_scope_depth -= 1;
-    if !state
-        .general
-        .device
-        .instance_flags
-        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-    {
-        unsafe {
-            state.general.raw_encoder.end_debug_marker();
-        }
-    }
-    Ok(())
-}
-
-fn insert_debug_marker(state: &mut State, string_data: &[u8], len: usize) {
-    if !state
-        .general
-        .device
-        .instance_flags
-        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-    {
-        let label =
-            str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
-        api_log!("RenderPass::insert_debug_marker {label:?}");
-        unsafe {
-            state.general.raw_encoder.insert_debug_marker(label);
-        }
-    }
-    state.string_offset += len;
 }
 
 fn execute_bundle(

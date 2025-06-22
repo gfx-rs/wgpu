@@ -14,6 +14,7 @@ use crate::track::{ResourceUsageCompatibilityError, Tracker, UsageScope};
 use crate::{api_log, binding_model};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::str;
 use thiserror::Error;
 use wgt::DynamicOffset;
 
@@ -33,6 +34,10 @@ pub struct MissingPipeline;
 #[derive(Clone, Debug, Error)]
 #[error("Setting `values_offset` to be `None` is only for internal use in render bundles")]
 pub struct InvalidValuesOffset;
+
+#[derive(Clone, Debug, Error)]
+#[error("Cannot pop debug group, because number of pushed debug groups is zero")]
+pub struct InvalidPopDebugGroup;
 
 pub(crate) struct BaseState<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     pub(crate) device: &'cmd_buf Arc<Device>,
@@ -57,6 +62,9 @@ pub(crate) struct BaseState<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     pub(crate) dynamic_offset_count: usize,
 
     pub(crate) snatch_guard: &'snatch_guard SnatchGuard<'snatch_guard>,
+
+    pub(crate) debug_scope_depth: u32,
+    pub(crate) string_offset: usize,
 }
 
 pub(crate) fn set_bind_group<E>(
@@ -289,4 +297,60 @@ where
 
     query_set.validate_and_write_timestamp(state.raw_encoder, query_index, pending_query_resets)?;
     Ok(())
+}
+
+pub(crate) fn push_debug_group(state: &mut BaseState, string_data: &[u8], len: usize) {
+    state.debug_scope_depth += 1;
+    if !state
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        let label =
+            str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
+
+        api_log!("Pass::push_debug_group {label:?}");
+        unsafe {
+            state.raw_encoder.begin_debug_marker(label);
+        }
+    }
+    state.string_offset += len;
+}
+
+pub(crate) fn pop_debug_group<E>(state: &mut BaseState) -> Result<(), E>
+where
+    E: From<InvalidPopDebugGroup>,
+{
+    api_log!("Pass::pop_debug_group");
+
+    if state.debug_scope_depth == 0 {
+        return Err(InvalidPopDebugGroup.into());
+    }
+    state.debug_scope_depth -= 1;
+    if !state
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        unsafe {
+            state.raw_encoder.end_debug_marker();
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn insert_debug_marker(state: &mut BaseState, string_data: &[u8], len: usize) {
+    if !state
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        let label =
+            str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
+        api_log!("Pass::insert_debug_marker {label:?}");
+        unsafe {
+            state.raw_encoder.insert_debug_marker(label);
+        }
+    }
+    state.string_offset += len;
 }

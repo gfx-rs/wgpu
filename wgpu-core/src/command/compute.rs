@@ -150,8 +150,8 @@ pub enum ComputePassErrorInner {
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
-    #[error("Cannot pop debug group, because number of pushed debug groups is zero")]
-    InvalidPopDebugGroup,
+    #[error(transparent)]
+    InvalidPopDebugGroup(#[from] pass::InvalidPopDebugGroup),
     #[error(transparent)]
     Dispatch(#[from] DispatchError),
     #[error(transparent)]
@@ -211,11 +211,9 @@ where
 
 struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     pipeline: Option<Arc<ComputePipeline>>,
-    debug_scope_depth: u32,
 
     general: pass::BaseState<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder>,
 
-    string_offset: usize,
     active_query: Option<(Arc<resource::QuerySet>, u32)>,
 
     push_constants: Vec<u32>,
@@ -493,7 +491,6 @@ impl Global {
 
             let mut state = State {
                 pipeline: None,
-                debug_scope_depth: 0,
 
                 general: pass::BaseState {
                     device,
@@ -510,9 +507,10 @@ impl Global {
 
                     snatch_guard: &snatch_guard,
                     scope: device.new_usage_scope(),
-                },
 
-                string_offset: 0,
+                    debug_scope_depth: 0,
+                    string_offset: 0,
+                },
                 active_query: None,
 
                 push_constants: Vec::new(),
@@ -637,14 +635,15 @@ impl Global {
                             .map_pass_err(scope)?;
                     }
                     ArcComputeCommand::PushDebugGroup { color: _, len } => {
-                        push_debug_group(&mut state, &base.string_data, len);
+                        pass::push_debug_group(&mut state.general, &base.string_data, len);
                     }
                     ArcComputeCommand::PopDebugGroup => {
                         let scope = PassErrorScope::PopDebugGroup;
-                        pop_debug_group(&mut state).map_pass_err(scope)?;
+                        pass::pop_debug_group::<ComputePassErrorInner>(&mut state.general)
+                            .map_pass_err(scope)?;
                     }
                     ArcComputeCommand::InsertDebugMarker { color: _, len } => {
-                        insert_debug_marker(&mut state, &base.string_data, len);
+                        pass::insert_debug_marker(&mut state.general, &base.string_data, len);
                     }
                     ArcComputeCommand::WriteTimestamp {
                         query_set,
@@ -998,55 +997,6 @@ fn dispatch_indirect(
     }
 
     Ok(())
-}
-
-fn push_debug_group(state: &mut State, string_data: &[u8], len: usize) {
-    state.debug_scope_depth += 1;
-    if !state
-        .general
-        .device
-        .instance_flags
-        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-    {
-        let label =
-            str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
-        unsafe {
-            state.general.raw_encoder.begin_debug_marker(label);
-        }
-    }
-    state.string_offset += len;
-}
-
-fn pop_debug_group(state: &mut State) -> Result<(), ComputePassErrorInner> {
-    if state.debug_scope_depth == 0 {
-        return Err(ComputePassErrorInner::InvalidPopDebugGroup);
-    }
-    state.debug_scope_depth -= 1;
-    if !state
-        .general
-        .device
-        .instance_flags
-        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-    {
-        unsafe {
-            state.general.raw_encoder.end_debug_marker();
-        }
-    }
-    Ok(())
-}
-
-fn insert_debug_marker(state: &mut State, string_data: &[u8], len: usize) {
-    if !state
-        .general
-        .device
-        .instance_flags
-        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-    {
-        let label =
-            str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
-        unsafe { state.general.raw_encoder.insert_debug_marker(label) }
-    }
-    state.string_offset += len;
 }
 
 // Recording a compute pass.
