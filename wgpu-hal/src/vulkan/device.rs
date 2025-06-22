@@ -3058,7 +3058,7 @@ impl super::Device {
         let vk_info = vk::BufferCreateInfo::default()
             .size(desc.size)
             .usage(buffer_usage)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .sharing_mode(vk::SharingMode::CONCURRENT)
             .push_next(&mut external_vk_info);
 
         let raw = unsafe {
@@ -3134,7 +3134,6 @@ impl super::Device {
         self.counters.buffer_memory.add(desc.size as isize);
         self.counters.buffers.add(1);
 
-        // Block is none because wgpu doesn't actually own the memory
         Ok(super::Buffer {
             raw,
             block: Some(Mutex::new(super::BufferMemoryBacking::VulkanMemory {
