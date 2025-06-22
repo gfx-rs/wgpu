@@ -114,7 +114,7 @@ type ArcComputePassDescriptor<'a> = ComputePassDescriptor<'a, ArcPassTimestampWr
 #[non_exhaustive]
 pub enum DispatchError {
     #[error("Compute pipeline must be set")]
-    MissingPipeline,
+    MissingPipeline(pass::MissingPipeline),
     #[error(transparent)]
     IncompatibleBindGroup(#[from] Box<BinderError>),
     #[error(
@@ -176,6 +176,9 @@ pub enum ComputePassErrorInner {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     TimestampWrites(#[from] TimestampWritesError),
+    // This one is unreachable, but required for generic pass support
+    #[error(transparent)]
+    InvalidValuesOffset(#[from] pass::InvalidValuesOffset),
 }
 
 /// Error encountered when performing a compute pass, stored for later reporting
@@ -186,6 +189,12 @@ pub struct ComputePassError {
     pub scope: PassErrorScope,
     #[source]
     pub(super) inner: ComputePassErrorInner,
+}
+
+impl From<pass::MissingPipeline> for ComputePassErrorInner {
+    fn from(value: pass::MissingPipeline) -> Self {
+        Self::Dispatch(DispatchError::MissingPipeline(value))
+    }
 }
 
 impl<E> MapPassErr<ComputePassError> for E
@@ -223,7 +232,7 @@ impl<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder>
             self.general.binder.check_late_buffer_bindings()?;
             Ok(())
         } else {
-            Err(DispatchError::MissingPipeline)
+            Err(DispatchError::MissingPipeline(pass::MissingPipeline))
         }
     }
 
@@ -600,12 +609,21 @@ impl Global {
                         values_offset,
                     } => {
                         let scope = PassErrorScope::SetPushConstant;
-                        set_push_constant(
-                            &mut state,
+                        pass::set_push_constant::<ComputePassErrorInner, _>(
+                            &mut state.general,
                             &base.push_constant_data,
+                            wgt::ShaderStages::COMPUTE,
                             offset,
                             size_bytes,
-                            values_offset,
+                            Some(values_offset),
+                            |data_slice| {
+                                let offset_in_elements =
+                                    (offset / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
+                                let size_in_elements =
+                                    (size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
+                                state.push_constants[offset_in_elements..][..size_in_elements]
+                                    .copy_from_slice(data_slice);
+                            },
                         )
                         .map_pass_err(scope)?;
                     }
@@ -735,7 +753,6 @@ fn set_pipeline(
     pass::rebind_resources::<ComputePassErrorInner, _>(
         &mut state.general,
         &pipeline.layout,
-        wgt::ShaderStages::COMPUTE,
         &pipeline.late_sized_buffer_groups,
         || {
             // This only needs to be here for compute pipelines because they use push constants for
@@ -755,48 +772,6 @@ fn set_pipeline(
             }
         },
     )
-}
-
-fn set_push_constant(
-    state: &mut State,
-    push_constant_data: &[u32],
-    offset: u32,
-    size_bytes: u32,
-    values_offset: u32,
-) -> Result<(), ComputePassErrorInner> {
-    let end_offset_bytes = offset + size_bytes;
-    let values_end_offset = (values_offset + size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-    let data_slice = &push_constant_data[(values_offset as usize)..values_end_offset];
-
-    let pipeline_layout = state
-        .general
-        .binder
-        .pipeline_layout
-        .as_ref()
-        // TODO: don't error here, lazily update the push constants using `state.push_constants`
-        .ok_or(ComputePassErrorInner::Dispatch(
-            DispatchError::MissingPipeline,
-        ))?;
-
-    pipeline_layout.validate_push_constant_ranges(
-        wgt::ShaderStages::COMPUTE,
-        offset,
-        end_offset_bytes,
-    )?;
-
-    let offset_in_elements = (offset / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-    let size_in_elements = (size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-    state.push_constants[offset_in_elements..][..size_in_elements].copy_from_slice(data_slice);
-
-    unsafe {
-        state.general.raw_encoder.set_push_constants(
-            pipeline_layout.raw(),
-            wgt::ShaderStages::COMPUTE,
-            offset,
-            data_slice,
-        );
-    }
-    Ok(())
 }
 
 fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorInner> {

@@ -20,7 +20,7 @@ pub enum DrawError {
     #[error("Blend constant needs to be set")]
     MissingBlendConstant,
     #[error("Render pipeline must be set")]
-    MissingPipeline,
+    MissingPipeline(#[from] pass::MissingPipeline),
     #[error("Currently set {pipeline} requires vertex buffer {index} to be set")]
     MissingVertexBuffer {
         pipeline: ResourceErrorIdent,

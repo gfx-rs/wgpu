@@ -1,6 +1,6 @@
 //! Generic pass functions that both compute and render passes need.
 
-use crate::binding_model::{BindError, BindGroup};
+use crate::binding_model::{BindError, BindGroup, PushConstantUploadError};
 use crate::command::bind::Binder;
 use crate::command::memory_init::{CommandBufferTextureMemoryActions, SurfacesInDiscardState};
 use crate::command::CommandBuffer;
@@ -25,6 +25,14 @@ pub struct BindGroupIndexOutOfRange {
     pub index: u32,
     pub max: u32,
 }
+
+#[derive(Clone, Debug, Error)]
+#[error("Pipeline must be set")]
+pub struct MissingPipeline;
+
+#[derive(Clone, Debug, Error)]
+#[error("Setting `values_offset` to be `None` is only for internal use in render bundles")]
+pub struct InvalidValuesOffset;
 
 pub(crate) struct BaseState<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     pub(crate) device: &'cmd_buf Arc<Device>,
@@ -163,7 +171,6 @@ where
 pub(crate) fn rebind_resources<E, F: FnOnce()>(
     state: &mut BaseState,
     pipeline_layout: &Arc<binding_model::PipelineLayout>,
-    stages: wgt::ShaderStages,
     late_sized_buffer_groups: &[LateSizedBufferGroup],
     f: F,
 ) -> Result<(), E>
@@ -209,12 +216,50 @@ where
             super::push_constant_clear(offset, size_bytes, |clear_offset, clear_data| unsafe {
                 state.raw_encoder.set_push_constants(
                     pipeline_layout.raw(),
-                    stages,
+                    range.stages,
                     clear_offset,
                     clear_data,
                 );
             });
         }
+    }
+    Ok(())
+}
+
+pub(crate) fn set_push_constant<E, F: FnOnce(&[u32])>(
+    state: &mut BaseState,
+    push_constant_data: &[u32],
+    stages: wgt::ShaderStages,
+    offset: u32,
+    size_bytes: u32,
+    values_offset: Option<u32>,
+    f: F,
+) -> Result<(), E>
+where
+    E: From<PushConstantUploadError> + From<InvalidValuesOffset> + From<MissingPipeline>,
+{
+    api_log!("Pass::set_push_constants");
+
+    let values_offset = values_offset.ok_or(InvalidValuesOffset)?;
+
+    let end_offset_bytes = offset + size_bytes;
+    let values_end_offset = (values_offset + size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
+    let data_slice = &push_constant_data[(values_offset as usize)..values_end_offset];
+
+    let pipeline_layout = state
+        .binder
+        .pipeline_layout
+        .as_ref()
+        .ok_or(MissingPipeline)?;
+
+    pipeline_layout.validate_push_constant_ranges(stages, offset, end_offset_bytes)?;
+
+    f(data_slice);
+
+    unsafe {
+        state
+            .raw_encoder
+            .set_push_constants(pipeline_layout.raw(), stages, offset, data_slice)
     }
     Ok(())
 }

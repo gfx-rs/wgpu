@@ -1315,7 +1315,7 @@ impl State {
     fn pipeline(&self) -> Result<&PipelineState, RenderBundleErrorInner> {
         self.pipeline
             .as_ref()
-            .ok_or(DrawError::MissingPipeline.into())
+            .ok_or(DrawError::MissingPipeline(pass::MissingPipeline).into())
     }
 
     /// Mark all non-empty bind group table entries from `index` onwards as dirty.

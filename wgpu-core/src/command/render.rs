@@ -54,7 +54,7 @@ use super::{
 };
 use super::{DrawKind, Rect};
 
-use crate::binding_model::BindError;
+use crate::binding_model::{BindError, PushConstantUploadError};
 pub use wgt::{LoadOp, StoreOp};
 
 fn load_hal_ops<V>(load: LoadOp<V>) -> hal::AttachmentOps {
@@ -559,7 +559,7 @@ impl<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder>
             }
             Ok(())
         } else {
-            Err(DrawError::MissingPipeline)
+            Err(DrawError::MissingPipeline(pass::MissingPipeline))
         }
     }
 
@@ -700,8 +700,8 @@ pub enum RenderPassErrorInner {
     InvalidDepthOps,
     #[error("Unable to clear non-present/read-only stencil")]
     InvalidStencilOps,
-    #[error("Setting `values_offset` to be `None` is only for internal use in render bundles")]
-    InvalidValuesOffset,
+    #[error(transparent)]
+    InvalidValuesOffset(#[from] pass::InvalidValuesOffset),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
@@ -786,6 +786,18 @@ impl From<MissingTextureUsageError> for RenderPassErrorInner {
 impl From<pass::BindGroupIndexOutOfRange> for RenderPassErrorInner {
     fn from(error: pass::BindGroupIndexOutOfRange) -> Self {
         Self::RenderCommand(RenderCommandError::BindGroupIndexOutOfRange(error))
+    }
+}
+
+impl From<pass::MissingPipeline> for RenderPassErrorInner {
+    fn from(error: pass::MissingPipeline) -> Self {
+        Self::Draw(DrawError::MissingPipeline(error))
+    }
+}
+
+impl From<PushConstantUploadError> for RenderPassErrorInner {
+    fn from(error: PushConstantUploadError) -> Self {
+        Self::RenderCommand(error.into())
     }
 }
 
@@ -1915,13 +1927,14 @@ impl Global {
                             values_offset,
                         } => {
                             let scope = PassErrorScope::SetPushConstant;
-                            set_push_constant(
-                                &mut state,
+                            pass::set_push_constant::<RenderPassErrorInner, _>(
+                                &mut state.general,
                                 &base.push_constant_data,
                                 stages,
                                 offset,
                                 size_bytes,
                                 values_offset,
+                                |_| {},
                             )
                             .map_pass_err(scope)?;
                         }
@@ -2238,7 +2251,6 @@ fn set_pipeline(
     pass::rebind_resources::<RenderPassErrorInner, _>(
         &mut state.general,
         &pipeline.layout,
-        ShaderStages::VERTEX_FRAGMENT,
         &pipeline.late_sized_buffer_groups,
         || {},
     )?;
@@ -2434,44 +2446,6 @@ fn set_viewport(
             .general
             .raw_encoder
             .set_viewport(&r, depth_min..depth_max);
-    }
-    Ok(())
-}
-
-fn set_push_constant(
-    state: &mut State,
-    push_constant_data: &[u32],
-    stages: ShaderStages,
-    offset: u32,
-    size_bytes: u32,
-    values_offset: Option<u32>,
-) -> Result<(), RenderPassErrorInner> {
-    api_log!("RenderPass::set_push_constants");
-
-    let values_offset = values_offset.ok_or(RenderPassErrorInner::InvalidValuesOffset)?;
-
-    let end_offset_bytes = offset + size_bytes;
-    let values_end_offset = (values_offset + size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-    let data_slice = &push_constant_data[(values_offset as usize)..values_end_offset];
-
-    let pipeline_layout = state
-        .general
-        .binder
-        .pipeline_layout
-        .as_ref()
-        .ok_or(DrawError::MissingPipeline)?;
-
-    pipeline_layout
-        .validate_push_constant_ranges(stages, offset, end_offset_bytes)
-        .map_err(RenderCommandError::from)?;
-
-    unsafe {
-        state.general.raw_encoder.set_push_constants(
-            pipeline_layout.raw(),
-            stages,
-            offset,
-            data_slice,
-        )
     }
     Ok(())
 }
