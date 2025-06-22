@@ -2050,10 +2050,10 @@ impl Global {
                             query_index,
                         } => {
                             let scope = PassErrorScope::WriteTimestamp;
-                            write_timestamp(
-                                &mut state,
+                            pass::write_timestamp::<RenderPassErrorInner>(
+                                &mut state.general,
                                 cmd_buf.as_ref(),
-                                &mut cmd_buf_data.pending_query_resets,
+                                Some(&mut cmd_buf_data.pending_query_resets),
                                 query_set,
                                 query_index,
                             )
@@ -2890,35 +2890,6 @@ fn insert_debug_marker(state: &mut State, string_data: &[u8], len: usize) {
         }
     }
     state.string_offset += len;
-}
-
-fn write_timestamp(
-    state: &mut State,
-    cmd_buf: &CommandBuffer,
-    pending_query_resets: &mut QueryResetMap,
-    query_set: Arc<QuerySet>,
-    query_index: u32,
-) -> Result<(), RenderPassErrorInner> {
-    api_log!(
-        "RenderPass::write_timestamps {query_index} {}",
-        query_set.error_ident()
-    );
-
-    query_set.same_device_as(cmd_buf)?;
-
-    state
-        .general
-        .device
-        .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)?;
-
-    let query_set = state.general.tracker.query_sets.insert_single(query_set);
-
-    query_set.validate_and_write_timestamp(
-        state.general.raw_encoder,
-        query_index,
-        Some(pending_query_resets),
-    )?;
-    Ok(())
 }
 
 fn execute_bundle(

@@ -651,8 +651,14 @@ impl Global {
                         query_index,
                     } => {
                         let scope = PassErrorScope::WriteTimestamp;
-                        write_timestamp(&mut state, cmd_buf.as_ref(), query_set, query_index)
-                            .map_pass_err(scope)?;
+                        pass::write_timestamp::<ComputePassErrorInner>(
+                            &mut state.general,
+                            cmd_buf.as_ref(),
+                            None,
+                            query_set,
+                            query_index,
+                        )
+                        .map_pass_err(scope)?;
                     }
                     ArcComputeCommand::BeginPipelineStatisticsQuery {
                         query_set,
@@ -1041,25 +1047,6 @@ fn insert_debug_marker(state: &mut State, string_data: &[u8], len: usize) {
         unsafe { state.general.raw_encoder.insert_debug_marker(label) }
     }
     state.string_offset += len;
-}
-
-fn write_timestamp(
-    state: &mut State,
-    cmd_buf: &CommandBuffer,
-    query_set: Arc<resource::QuerySet>,
-    query_index: u32,
-) -> Result<(), ComputePassErrorInner> {
-    query_set.same_device_as(cmd_buf)?;
-
-    state
-        .general
-        .device
-        .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)?;
-
-    let query_set = state.general.tracker.query_sets.insert_single(query_set);
-
-    query_set.validate_and_write_timestamp(state.general.raw_encoder, query_index, None)?;
-    Ok(())
 }
 
 // Recording a compute pass.

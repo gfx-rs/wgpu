@@ -3,12 +3,12 @@
 use crate::binding_model::{BindError, BindGroup, PushConstantUploadError};
 use crate::command::bind::Binder;
 use crate::command::memory_init::{CommandBufferTextureMemoryActions, SurfacesInDiscardState};
-use crate::command::CommandBuffer;
-use crate::device::{Device, DeviceError};
+use crate::command::{CommandBuffer, QueryResetMap, QueryUseError};
+use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::LateSizedBufferGroup;
 use crate::ray_tracing::AsAction;
-use crate::resource::{DestroyedResourceError, Labeled, ParentDevice};
+use crate::resource::{DestroyedResourceError, Labeled, ParentDevice, QuerySet};
 use crate::snatch::SnatchGuard;
 use crate::track::{ResourceUsageCompatibilityError, Tracker, UsageScope};
 use crate::{api_log, binding_model};
@@ -261,5 +261,32 @@ where
             .raw_encoder
             .set_push_constants(pipeline_layout.raw(), stages, offset, data_slice)
     }
+    Ok(())
+}
+
+pub(crate) fn write_timestamp<E>(
+    state: &mut BaseState,
+    cmd_buf: &CommandBuffer,
+    pending_query_resets: Option<&mut QueryResetMap>,
+    query_set: Arc<QuerySet>,
+    query_index: u32,
+) -> Result<(), E>
+where
+    E: From<MissingFeatures> + From<QueryUseError> + From<DeviceError>,
+{
+    api_log!(
+        "Pass::write_timestamps {query_index} {}",
+        query_set.error_ident()
+    );
+
+    query_set.same_device_as(cmd_buf)?;
+
+    state
+        .device
+        .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)?;
+
+    let query_set = state.tracker.query_sets.insert_single(query_set);
+
+    query_set.validate_and_write_timestamp(state.raw_encoder, query_index, pending_query_resets)?;
     Ok(())
 }
