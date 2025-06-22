@@ -118,6 +118,7 @@ use crate::{
 };
 
 use super::{
+    pass,
     render_command::{ArcRenderCommand, RenderCommand},
     DrawKind,
 };
@@ -527,11 +528,13 @@ fn set_bind_group(
 
     let max_bind_groups = state.device.limits.max_bind_groups;
     if index >= max_bind_groups {
-        return Err(RenderCommandError::BindGroupIndexOutOfRange {
-            index,
-            max: max_bind_groups,
-        }
-        .into());
+        return Err(
+            RenderCommandError::BindGroupIndexOutOfRange(pass::BindGroupIndexOutOfRange {
+                index,
+                max: max_bind_groups,
+            })
+            .into(),
+        );
     }
 
     // Identify the next `num_dynamic_offsets` entries from `dynamic_offsets`.
