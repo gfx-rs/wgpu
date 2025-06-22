@@ -1,16 +1,17 @@
 //! Generic pass functions that both compute and render passes need.
 
-use crate::api_log;
 use crate::binding_model::{BindError, BindGroup};
 use crate::command::bind::Binder;
 use crate::command::memory_init::{CommandBufferTextureMemoryActions, SurfacesInDiscardState};
 use crate::command::CommandBuffer;
 use crate::device::{Device, DeviceError};
 use crate::init_tracker::BufferInitTrackerAction;
+use crate::pipeline::LateSizedBufferGroup;
 use crate::ray_tracing::AsAction;
 use crate::resource::{DestroyedResourceError, Labeled, ParentDevice};
 use crate::snatch::SnatchGuard;
 use crate::track::{ResourceUsageCompatibilityError, Tracker, UsageScope};
+use crate::{api_log, binding_model};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use thiserror::Error;
@@ -153,6 +154,66 @@ where
                     );
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+/// After a pipeline has been changed, resources must be rebound
+pub(crate) fn rebind_resources<E, F: FnOnce()>(
+    state: &mut BaseState,
+    pipeline_layout: &Arc<binding_model::PipelineLayout>,
+    stages: wgt::ShaderStages,
+    late_sized_buffer_groups: &[LateSizedBufferGroup],
+    f: F,
+) -> Result<(), E>
+where
+    E: From<DestroyedResourceError>,
+{
+    if state.binder.pipeline_layout.is_none()
+        || !state
+            .binder
+            .pipeline_layout
+            .as_ref()
+            .unwrap()
+            .is_equal(pipeline_layout)
+    {
+        let (start_index, entries) = state
+            .binder
+            .change_pipeline_layout(pipeline_layout, late_sized_buffer_groups);
+        if !entries.is_empty() {
+            for (i, e) in entries.iter().enumerate() {
+                if let Some(group) = e.group.as_ref() {
+                    let raw_bg = group.try_raw(state.snatch_guard)?;
+                    unsafe {
+                        state.raw_encoder.set_bind_group(
+                            pipeline_layout.raw(),
+                            start_index as u32 + i as u32,
+                            Some(raw_bg),
+                            &e.dynamic_offsets,
+                        );
+                    }
+                }
+            }
+        }
+
+        f();
+
+        let non_overlapping =
+            super::bind::compute_nonoverlapping_ranges(&pipeline_layout.push_constant_ranges);
+
+        // Clear push constant ranges
+        for range in non_overlapping {
+            let offset = range.range.start;
+            let size_bytes = range.range.end - offset;
+            super::push_constant_clear(offset, size_bytes, |clear_offset, clear_data| unsafe {
+                state.raw_encoder.set_push_constants(
+                    pipeline_layout.raw(),
+                    stages,
+                    clear_offset,
+                    clear_data,
+                );
+            });
         }
     }
     Ok(())

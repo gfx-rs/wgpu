@@ -2194,7 +2194,8 @@ fn set_pipeline(
         .general
         .tracker
         .render_pipelines
-        .insert_single(pipeline);
+        .insert_single(pipeline)
+        .clone();
 
     pipeline.same_device_as(cmd_buf.as_ref())?;
 
@@ -2234,51 +2235,13 @@ fn set_pipeline(
     }
 
     // Rebind resource
-    if state.general.binder.pipeline_layout.is_none()
-        || !state
-            .general
-            .binder
-            .pipeline_layout
-            .as_ref()
-            .unwrap()
-            .is_equal(&pipeline.layout)
-    {
-        let (start_index, entries) = state
-            .general
-            .binder
-            .change_pipeline_layout(&pipeline.layout, &pipeline.late_sized_buffer_groups);
-        if !entries.is_empty() {
-            for (i, e) in entries.iter().enumerate() {
-                if let Some(group) = e.group.as_ref() {
-                    let raw_bg = group.try_raw(state.general.snatch_guard)?;
-                    unsafe {
-                        state.general.raw_encoder.set_bind_group(
-                            pipeline.layout.raw(),
-                            start_index as u32 + i as u32,
-                            Some(raw_bg),
-                            &e.dynamic_offsets,
-                        );
-                    }
-                }
-            }
-        }
-
-        // Clear push constant ranges
-        let non_overlapping =
-            super::bind::compute_nonoverlapping_ranges(&pipeline.layout.push_constant_ranges);
-        for range in non_overlapping {
-            let offset = range.range.start;
-            let size_bytes = range.range.end - offset;
-            super::push_constant_clear(offset, size_bytes, |clear_offset, clear_data| unsafe {
-                state.general.raw_encoder.set_push_constants(
-                    pipeline.layout.raw(),
-                    range.stages,
-                    clear_offset,
-                    clear_data,
-                );
-            });
-        }
-    }
+    pass::rebind_resources::<RenderPassErrorInner, _>(
+        &mut state.general,
+        &pipeline.layout,
+        ShaderStages::VERTEX_FRAGMENT,
+        &pipeline.late_sized_buffer_groups,
+        || {},
+    )?;
 
     // Update vertex buffer limits.
     state.vertex.update_limits(&pipeline.vertex_steps);
