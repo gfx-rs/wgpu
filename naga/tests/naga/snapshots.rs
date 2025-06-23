@@ -837,7 +837,8 @@ fn convert_snapshots_wgsl() {
             Ok(mut module) => check_targets(&input, &mut module, Some(&source)),
             Err(e) => panic!(
                 "{}",
-                e.emit_to_string_with_path(&source, input.input_path())
+                e.as_parse_error(&source)
+                    .emit_to_string_with_path(&source, input.input_path())
             ),
         }
     }
