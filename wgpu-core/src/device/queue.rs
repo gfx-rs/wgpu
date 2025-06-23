@@ -1279,7 +1279,11 @@ impl Queue {
                                     .unwrap()
                             };
                         }
-                        Err(e) => break 'error Err(e.into()),
+                        // The texture must not have been destroyed when its usage here was
+                        // encoded. If it was destroyed after that, then it was transferred
+                        // to `pending_writes.temp_resources` at the time of destruction, so
+                        // we are still okay to use it.
+                        Err(DestroyedResourceError(_)) => {}
                     }
                 }
 
