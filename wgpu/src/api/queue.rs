@@ -33,6 +33,15 @@ impl Queue {
             inner: dispatch::DispatchQueue::custom(queue),
         }
     }
+
+    #[cfg(custom)]
+    /// Convert Queue into custom implementation.
+    ///
+    /// This is useful for wrapping the an existing queue implementation to
+    /// implement a new custom queue interface
+    pub fn into_custom<T: custom::QueueInterface>(self) -> crate::dispatch::DispatchQueue {
+        self.inner
+    }
 }
 
 /// Identifier for a particular call to [`Queue::submit`]. Can be used

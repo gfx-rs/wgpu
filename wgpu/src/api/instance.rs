@@ -207,6 +207,15 @@ impl Instance {
     }
 
     #[cfg(custom)]
+    /// Convert Instance into custom implementation.
+    ///
+    /// This is useful for wrapping the an existing instance implementation to
+    /// implement a new custom instance interface
+    pub fn into_custom<T: custom::InstanceInterface>(self) -> crate::dispatch::DispatchInstance {
+        self.inner
+    }
+
+    #[cfg(custom)]
     /// Returns custom implementation of Instance (if custom backend and is internally T)
     pub fn as_custom<T: custom::InstanceInterface>(&self) -> Option<&T> {
         self.inner.as_custom()

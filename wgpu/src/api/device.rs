@@ -47,6 +47,15 @@ impl Device {
         }
     }
 
+    #[cfg(custom)]
+    /// Convert Device into custom implementation.
+    ///
+    /// This is useful for wrapping the an existing device implementation to
+    /// implement a new custom device interface
+    pub fn into_custom<T: custom::DeviceInterface>(self) -> crate::dispatch::DispatchDevice {
+        self.inner
+    }
+
     /// Constructs a stub device for testing using [`Backend::Noop`].
     ///
     /// This is a convenience function which avoids the configuration, `async`, and fallibility
