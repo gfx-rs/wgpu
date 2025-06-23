@@ -92,6 +92,10 @@ Bottom level categories:
 
 - Remove extraneous main thread warning in `fn surface_capabilities()`. By @jamesordner in [#7692](https://github.com/gfx-rs/wgpu/pull/7692)
 
+#### WebGPU
+
+- Fix setting unclipped_depth. By @atlv24 in [#7841](https://github.com/gfx-rs/wgpu/pull/7841)
+
 ### Changes
 
 - Loosen Viewport validation requirements to match the [new specs](https://github.com/gpuweb/gpuweb/pull/5025). By @ebbdrop in [#7564](https://github.com/gfx-rs/wgpu/pull/7564)
