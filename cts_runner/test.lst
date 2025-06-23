@@ -5,6 +5,8 @@ webgpu:api,operation,compute,basic:memcpy:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute_pipeline,overrides:*
 webgpu:api,operation,device,lost:*
+webgpu:api,validation,encoding,beginComputePass:*
+webgpu:api,validation,encoding,beginRenderPass:*
 webgpu:api,validation,encoding,cmds,clearBuffer:*
 webgpu:api,validation,encoding,cmds,compute_pass:set_pipeline:*
 webgpu:api,validation,encoding,cmds,compute_pass:dispatch_sizes:*
@@ -31,13 +33,22 @@ webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:*
 //FAIL: webgpu:api,validation,encoding,encoder_open_state:render_bundle_commands:*
 // https://github.com/gfx-rs/wgpu/issues/7857
 webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:*
-webgpu:api,validation,encoding,beginComputePass:*
-webgpu:api,validation,encoding,beginRenderPass:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:encoderType="compute%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:encoderType="render%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:encoderType="compute%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:encoderType="render%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:encoderType="compute%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:encoderType="render%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:encoderType="compute%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:encoderType="render%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:buffer_binding,render_pipeline:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:sampler_binding,render_pipeline:*
 webgpu:api,validation,queue,submit:command_buffer,device_mismatch:*
 webgpu:api,validation,queue,submit:command_buffer,duplicate_buffers:*
 webgpu:api,validation,queue,submit:command_buffer,submit_invalidates:*
 //FAIL: webgpu:api,validation,queue,submit:command_buffer,invalid_submit_invalidates:*
 // https://github.com/gfx-rs/wgpu/issues/3911#issuecomment-2972995675
+webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*
 webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
