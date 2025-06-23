@@ -11,7 +11,7 @@ mod parse;
 #[cfg(test)]
 mod tests;
 
-pub use crate::front::wgsl::error::ParseError;
+pub use crate::front::wgsl::error::{Error, ParseError};
 pub use crate::front::wgsl::parse::directive::language_extension::{
     ImplementedLanguageExtension, LanguageExtension, UnimplementedLanguageExtension,
 };
@@ -20,7 +20,6 @@ pub use crate::front::wgsl::parse::Options;
 use alloc::boxed::Box;
 use thiserror::Error;
 
-use crate::front::wgsl::error::Error;
 use crate::front::wgsl::lower::Lowerer;
 use crate::front::wgsl::parse::Parser;
 use crate::Scalar;
@@ -49,11 +48,7 @@ impl Frontend {
         }
     }
 
-    pub fn parse(&mut self, source: &str) -> core::result::Result<crate::Module, ParseError> {
-        self.inner(source).map_err(|x| x.as_parse_error(source))
-    }
-
-    fn inner<'a>(&mut self, source: &'a str) -> Result<'a, crate::Module> {
+    pub fn parse<'a>(&mut self, source: &'a str) -> Result<'a, crate::Module> {
         let tu = self.parser.parse(source, &self.options)?;
         let index = index::Index::generate(&tu)?;
         let module = Lowerer::new(&index).lower(tu)?;
@@ -74,7 +69,9 @@ impl Frontend {
 ///
 /// </div>
 pub fn parse_str(source: &str) -> core::result::Result<crate::Module, ParseError> {
-    Frontend::new().parse(source)
+    Frontend::new()
+        .parse(source)
+        .map_err(|e| e.as_parse_error(source))
 }
 
 #[cfg(test)]

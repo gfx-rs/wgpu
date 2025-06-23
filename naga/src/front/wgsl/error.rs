@@ -174,7 +174,7 @@ pub enum InvalidAssignmentType {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum Error<'a> {
+pub enum Error<'a> {
     Unexpected(Span, ExpectedToken<'a>),
     UnexpectedComponents(Span),
     UnexpectedOperationInConstContext(Span),
@@ -419,7 +419,7 @@ impl From<ConflictingDiagnosticRuleError> for Error<'_> {
 
 /// Used for diagnostic refinement in [`Error::DiagnosticAttributeNotSupported`].
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum DiagnosticAttributeNotSupportedPosition {
+pub enum DiagnosticAttributeNotSupportedPosition {
     SemicolonInModulePosition,
     Other { display_plural: &'static str },
 }
@@ -431,7 +431,7 @@ impl From<&'static str> for DiagnosticAttributeNotSupportedPosition {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct AutoConversionError {
+pub struct AutoConversionError {
     pub dest_span: Span,
     pub dest_type: String,
     pub source_span: Span,
@@ -439,7 +439,7 @@ pub(crate) struct AutoConversionError {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct AutoConversionLeafScalarError {
+pub struct AutoConversionLeafScalarError {
     pub dest_span: Span,
     pub dest_scalar: String,
     pub source_span: Span,
@@ -447,7 +447,7 @@ pub(crate) struct AutoConversionLeafScalarError {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct ConcretizationFailedError {
+pub struct ConcretizationFailedError {
     pub expr_span: Span,
     pub expr_type: String,
     pub scalar: String,
