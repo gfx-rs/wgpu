@@ -380,8 +380,7 @@ fn map_primitive_state(primitive: &wgt::PrimitiveState) -> webgpu_sys::GpuPrimit
         PrimitiveTopology::TriangleStrip => pt::TriangleStrip,
     });
 
-    //TODO:
-    //mapped.unclipped_depth(primitive.unclipped_depth);
+    mapped.set_unclipped_depth(primitive.unclipped_depth);
 
     match primitive.polygon_mode {
         wgt::PolygonMode::Fill => {}
