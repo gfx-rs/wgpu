@@ -457,7 +457,7 @@ pub struct ConcretizationFailedError {
 impl<'a> Error<'a> {
     #[cold]
     #[inline(never)]
-    pub(crate) fn as_parse_error(&self, source: &'a str) -> ParseError {
+    pub fn as_parse_error(&self, source: &'a str) -> ParseError {
         match *self {
             Error::Unexpected(unexpected_span, expected) => {
                 let expected_str = match expected {
