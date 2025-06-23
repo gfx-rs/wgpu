@@ -52,7 +52,7 @@ impl Device {
     ///
     /// This is useful for wrapping the an existing device implementation to
     /// implement a new custom device interface
-    pub fn into_custom<T: custom::DeviceInterface>(self) -> crate::dispatch::DispatchDevice {
+    pub fn into_custom(self) -> crate::dispatch::DispatchDevice {
         self.inner
     }
 

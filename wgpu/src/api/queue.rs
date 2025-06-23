@@ -39,7 +39,7 @@ impl Queue {
     ///
     /// This is useful for wrapping the an existing queue implementation to
     /// implement a new custom queue interface
-    pub fn into_custom<T: custom::QueueInterface>(self) -> crate::dispatch::DispatchQueue {
+    pub fn into_custom(self) -> crate::dispatch::DispatchQueue {
         self.inner
     }
 }

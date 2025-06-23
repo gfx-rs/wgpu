@@ -211,7 +211,7 @@ impl Instance {
     ///
     /// This is useful for wrapping the an existing instance implementation to
     /// implement a new custom instance interface
-    pub fn into_custom<T: custom::InstanceInterface>(self) -> crate::dispatch::DispatchInstance {
+    pub fn into_custom(self) -> crate::dispatch::DispatchInstance {
         self.inner
     }
 
