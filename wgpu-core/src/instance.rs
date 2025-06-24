@@ -868,18 +868,6 @@ pub enum RequestDeviceError {
     UnsupportedFeature(wgt::Features),
 }
 
-impl WebGpuError for RequestDeviceError {
-    fn webgpu_error_type(&self) -> ErrorType {
-        let e: &dyn WebGpuError = match self {
-            Self::Device(e) => e,
-            Self::LimitsExceeded(e) => e,
-            Self::TimestampNormalizerInitFailed(e) => e,
-            Self::UnsupportedFeature(_) => return ErrorType::Validation,
-        };
-        e.webgpu_error_type()
-    }
-}
-
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateSurfaceError {

@@ -449,12 +449,6 @@ impl fmt::Display for RequestAdapterError {
     }
 }
 
-impl error::WebGpuError for RequestAdapterError {
-    fn webgpu_error_type(&self) -> error::ErrorType {
-        error::ErrorType::Validation
-    }
-}
-
 /// Represents the sets of limits an adapter/device supports.
 ///
 /// We provide three different defaults.
