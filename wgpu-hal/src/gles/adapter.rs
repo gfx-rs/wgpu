@@ -1232,7 +1232,10 @@ impl crate::Adapter for super::Adapter {
                 } else {
                     vec![wgt::PresentMode::Fifo] //TODO
                 },
-                composite_alpha_modes: vec![wgt::CompositeAlphaMode::Opaque], //TODO
+                composite_alpha_modes: vec![
+                    wgt::CompositeAlphaMode::Opaque,
+                    wgt::CompositeAlphaMode::PreMultiplied,
+                ], //TODO
                 maximum_frame_latency: 2..=2, //TODO, unused currently
                 current_extent: None,
                 usage: wgt::TextureUses::COLOR_TARGET,

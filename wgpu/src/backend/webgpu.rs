@@ -3735,7 +3735,10 @@ impl dispatch::SurfaceInterface for WebSurface {
             formats,
             // Doesn't really have meaning on the web.
             present_modes: vec![wgt::PresentMode::Fifo],
-            alpha_modes: vec![wgt::CompositeAlphaMode::Opaque],
+            alpha_modes: vec![
+                wgt::CompositeAlphaMode::Opaque,
+                wgt::CompositeAlphaMode::PreMultiplied,
+            ],
             // Statically set to RENDER_ATTACHMENT for now. See https://gpuweb.github.io/gpuweb/#dom-gpucanvasconfiguration-usage
             usages: wgt::TextureUsages::RENDER_ATTACHMENT,
         }
