@@ -7749,9 +7749,9 @@ mod send_sync {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DeviceLostReason {
-    /// Triggered by driver
+    /// The device was lost for an unspecific reason, including driver errors.
     Unknown = 0,
-    /// After `Device::destroy`
+    /// The device's `destroy` method was called.
     Destroyed = 1,
 }
 
