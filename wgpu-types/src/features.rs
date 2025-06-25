@@ -1244,6 +1244,16 @@ bitflags_array! {
         ///
         /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor
         const EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS = 1 << 51;
+
+        /// Enables creating shader modules from DirectX HLSL or DXIL shaders (unsafe)
+        ///
+        /// HLSL/DXIL data is not parsed or interpreted in any way
+        ///
+        /// Supported platforms:
+        /// - DX12
+        ///
+        /// This is a native only feature.
+        const HLSL_DXIL_SHADER_PASSTHROUGH = 1 << 53;
     }
 
     /// Features that are not guaranteed to be supported.

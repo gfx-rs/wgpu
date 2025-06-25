@@ -2104,6 +2104,16 @@ pub enum ShaderInput<'a> {
         num_workgroups: (u32, u32, u32),
     },
     SpirV(&'a [u32]),
+    Dxil {
+        shader: &'a [u8],
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+    },
+    Hlsl {
+        shader: &'a str,
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+    },
 }
 
 pub struct ShaderModuleDescriptor<'a> {
