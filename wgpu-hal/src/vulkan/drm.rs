@@ -5,6 +5,15 @@ use core::mem::MaybeUninit;
 
 use ash::{ext, khr, vk};
 
+macro_rules! to_u64 {
+    ($expr:expr) => {{
+        #[allow(trivial_numeric_casts)]
+        let expr = $expr as u64;
+        assert!(size_of_val(&expr) <= size_of::<u64>());
+        expr
+    }};
+}
+
 impl super::Instance {
     /// Creates a new surface from the given drm configuration.
     ///
@@ -77,12 +86,18 @@ impl super::Instance {
             let render_devid =
                 libc::makedev(drm_props.render_major as _, drm_props.render_minor as _);
 
-            // Various platforms use different widths between `dev_t` and `c_int`, so just
-            // force-convert to `u64` to keep things portable.
+            // On most platforms, both `*_devid`s and `st_rdev` are `dev_t`s (which is generally
+            // observed to be an unsigned integral type no greater than 64 bits). However, on some
+            // platforms, there divergences from this pattern:
+            //
+            // - `armv7-linux-androideabi`: `dev_t` is `c_ulong`, and `*_devid`s are `dev_t`, but
+            //   `st_rdev` is `c_ulonglong`. So, we can't just do a `==` comparison.
+            // - OpenBSD has `dev_t` on both sides, but is `i32` (N.B., unsigned). Therefore, we
+            //   can't just use `u64::from`.
             #[allow(clippy::useless_conversion)]
             if [primary_devid, render_devid]
-                .map(u64::from)
-                .contains(&drm_stat.st_rdev)
+                .map(|devid| to_u64!(devid))
+                .contains(&to_u64!(drm_stat.st_rdev))
             {
                 physical_device = Some(device)
             }
