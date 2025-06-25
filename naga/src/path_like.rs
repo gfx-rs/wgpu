@@ -51,7 +51,13 @@ impl fmt::Debug for PathLikeRef<'_> {
 
 impl<'a> From<&'a str> for PathLikeRef<'a> {
     fn from(value: &'a str) -> Self {
-        Self(value.into())
+        cfg_if::cfg_if! {
+            if #[cfg(std)] {
+                Self(std::path::Path::new(value))
+            } else {
+                Self(value)
+            }
+        }
     }
 }
 
@@ -170,7 +176,7 @@ mod path_like_owned_std_impls {
     //! Traits which can only be implemented for [`PathLikeOwned`] with `std`.
 
     use alloc::string::String;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use super::PathLikeOwned;
 
