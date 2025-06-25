@@ -181,7 +181,6 @@ mod path_like_impls {
 mod path_like_owned_std_impls {
     //! Traits which can only be implemented for [`PathLikeOwned`] with `std`.
 
-    use alloc::string::String;
     use std::path::{Path, PathBuf};
 
     use super::PathLikeOwned;
