@@ -3,7 +3,7 @@ Tests for the WGSL front end.
 */
 #![cfg(feature = "wgsl-in")]
 
-use naga::valid::Capabilities;
+use naga::{compact::KeepUnused, valid::Capabilities};
 
 #[track_caller]
 fn check(input: &str, snapshot: &str) {
@@ -2012,8 +2012,9 @@ fn invalid_runtime_sized_arrays() {
 
 #[test]
 fn select() {
-    check_validation! {
-        "
+    let snapshots = [
+        (
+            "
         fn select_pointers(which: bool) -> i32 {
             var x: i32 = 1;
             var y: i32 = 2;
@@ -2021,7 +2022,19 @@ fn select() {
             return *p;
         }
         ",
-        "
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:5:28
+  │
+5 │             let p = select(&x, &y, which);
+  │                            ^^ this value of type `ptr<function, i32>`
+  │
+  = note: expected a scalar or a `vecN` of scalars
+
+",
+        ),
+        (
+            "
         fn select_arrays(which: bool) -> i32 {
             var x: array<i32, 4>;
             var y: array<i32, 4>;
@@ -2029,7 +2042,19 @@ fn select() {
             return s[0];
         }
         ",
-        "
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:5:28
+  │
+5 │             let s = select(x, y, which);
+  │                            ^ this value of type `array<i32, 4>`
+  │
+  = note: expected a scalar or a `vecN` of scalars
+
+",
+        ),
+        (
+            "
         struct S { member: i32 }
         fn select_structs(which: bool) -> S {
             var x: S = S(1);
@@ -2037,18 +2062,58 @@ fn select() {
             let s = select(x, y, which);
             return s;
         }
-        ":
-        Err(
-            naga::valid::ValidationError::Function {
-                name,
-                source: naga::valid::FunctionError::Expression {
-                    source: naga::valid::ExpressionError::SelectConditionNotABool { .. },
-                    ..
-                },
-                ..
-            },
-        )
-        if name.starts_with("select_")
+        ",
+            "\
+error: unexpected argument type for `select` call
+  ┌─ wgsl:6:28
+  │
+6 │             let s = select(x, y, which);
+  │                            ^ this value of type `S`
+  │
+  = note: expected a scalar or a `vecN` of scalars
+
+",
+        ),
+        (
+            "
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `9001` isn't a `bool`.
+            _ = select(1, 2, 9001);
+        }
+        ",
+            "\
+error: Expected boolean expression for condition argument of `select`, got something else
+  ┌─ wgsl:5:17
+  │
+5 │             _ = select(1, 2, 9001);
+  │                 ^^^^^^ see msg
+
+",
+        ),
+        (
+            "
+        @compute @workgroup_size(1, 1)
+        fn main() {
+            // Bad: `bool` and abstract int args. don't match.
+            _ = select(true, 1, false);
+        }
+        ",
+            "\
+error: type mismatch for reject and accept values in `select` call
+  ┌─ wgsl:5:24
+  │
+5 │             _ = select(true, 1, false);
+  │                        ^^^^  ^ accept value of type `{AbstractInt}`
+  │                        │      
+  │                        reject value of type `bool`
+
+",
+        ),
+    ];
+
+    for (input, snapshot) in snapshots {
+        check(input, snapshot);
     }
 }
 
@@ -2837,7 +2902,7 @@ fn compaction_preserves_spans() {
     "#;
     // The error span should be on `x[1.0]`, which is at characters 108..114.
     let mut module = naga::front::wgsl::parse_str(source).expect("source ought to parse");
-    naga::compact::compact(&mut module);
+    naga::compact::compact(&mut module, KeepUnused::No);
     let err = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::default(),
@@ -3600,5 +3665,80 @@ fn subgroup_invalid_broadcast() {
             ..
         }),
         naga::valid::Capabilities::SUBGROUP
+    }
+}
+
+#[test]
+fn invalid_clip_distances() {
+    // Missing capability.
+    check_validation! {
+        r#"
+            enable clip_distances;
+            struct VertexOutput {
+                @builtin(position) pos: vec4f,
+                @builtin(clip_distances) clip_distances: array<f32, 8>,
+            }
+
+            @vertex
+            fn vs_main() -> VertexOutput {
+                var out: VertexOutput;
+                return out;
+            }
+        "#:
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Vertex,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCE),
+                ),
+                ..
+            },
+        )
+    }
+
+    // Missing enable directive.
+    // Note that this is a parsing error, not a validation error.
+    check(
+        r#"
+            @vertex
+            fn vs_main() -> @builtin(clip_distances) array<f32, 8> {
+                var out: array<f32, 8>;
+                return out;
+            }
+        "#,
+        r###"error: the `clip_distances` enable extension is not enabled
+  ┌─ wgsl:3:38
+  │
+3 │             fn vs_main() -> @builtin(clip_distances) array<f32, 8> {
+  │                                      ^^^^^^^^^^^^^^ the `clip_distances` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable clip_distances;` at the top of the shader, before any other items.
+
+"###,
+    );
+
+    // Maximum clip distances exceeded
+    check_validation! {
+        r#"
+            enable clip_distances;
+            struct VertexOutput {
+                @builtin(position) pos: vec4f,
+                @builtin(clip_distances) clip_distances: array<f32, 9>,
+            }
+
+            @vertex
+            fn vs_main() -> VertexOutput {
+                var out: VertexOutput;
+                return out;
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            source: naga::valid::EntryPointError::Result(
+                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance)
+            ),
+            ..
+        }),
+        naga::valid::Capabilities::CLIP_DISTANCE
     }
 }

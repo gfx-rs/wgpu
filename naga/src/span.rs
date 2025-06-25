@@ -6,7 +6,7 @@ use alloc::{
 };
 use core::{error::Error, fmt, ops::Range};
 
-use crate::{Arena, Handle, UniqueArena};
+use crate::{as_diagnostic_file_path::AsDiagnosticFilePath, Arena, Handle, UniqueArena};
 
 /// A source code span, used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -283,12 +283,14 @@ impl<E> WithSpan<E> {
 
     /// Emits a summary of the error to standard error stream.
     #[cfg(feature = "stderr")]
-    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str)
+    pub fn emit_to_stderr_with_path<P>(&self, source: &str, path: P)
     where
         E: Error,
+        P: AsDiagnosticFilePath,
     {
         use codespan_reporting::{files, term};
 
+        let path = path.to_string_lossy();
         let files = files::SimpleFile::new(path, source);
         let config = term::Config::default();
 
@@ -313,12 +315,14 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to a string.
-    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String
+    pub fn emit_to_string_with_path<P>(&self, source: &str, path: P) -> String
     where
         E: Error,
+        P: AsDiagnosticFilePath,
     {
         use codespan_reporting::{files, term};
 
+        let path = path.to_string_lossy();
         let files = files::SimpleFile::new(path, source);
         let config = term::Config::default();
 

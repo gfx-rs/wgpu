@@ -3,6 +3,16 @@ struct Struct {
     int atomic_arr[2];
 };
 
+struct _atomic_compare_exchange_resultUint4_ {
+    uint old_value;
+    bool exchanged;
+};
+
+struct _atomic_compare_exchange_resultSint4_ {
+    int old_value;
+    bool exchanged;
+};
+
 RWByteAddressBuffer storage_atomic_scalar : register(u0);
 RWByteAddressBuffer storage_atomic_arr : register(u1);
 RWByteAddressBuffer storage_struct : register(u2);
@@ -107,5 +117,21 @@ void cs_main(uint3 id : SV_GroupThreadID, uint3 __local_invocation_id : SV_Group
     int _e295; InterlockedExchange(workgroup_atomic_arr[1], int(1), _e295);
     uint _e299; InterlockedExchange(workgroup_struct.atomic_scalar, 1u, _e299);
     int _e304; InterlockedExchange(workgroup_struct.atomic_arr[1], int(1), _e304);
+    _atomic_compare_exchange_resultUint4_ _e308; storage_atomic_scalar.InterlockedCompareExchange(0, 1u, 2u, _e308.old_value);
+    _e308.exchanged = (_e308.old_value == 1u);
+    _atomic_compare_exchange_resultSint4_ _e313; storage_atomic_arr.InterlockedCompareExchange(4, int(1), int(2), _e313.old_value);
+    _e313.exchanged = (_e313.old_value == int(1));
+    _atomic_compare_exchange_resultUint4_ _e318; storage_struct.InterlockedCompareExchange(0, 1u, 2u, _e318.old_value);
+    _e318.exchanged = (_e318.old_value == 1u);
+    _atomic_compare_exchange_resultSint4_ _e324; storage_struct.InterlockedCompareExchange(4+4, int(1), int(2), _e324.old_value);
+    _e324.exchanged = (_e324.old_value == int(1));
+    _atomic_compare_exchange_resultUint4_ _e328; InterlockedCompareExchange(workgroup_atomic_scalar, 1u, 2u, _e328.old_value);
+    _e328.exchanged = (_e328.old_value == 1u);
+    _atomic_compare_exchange_resultSint4_ _e333; InterlockedCompareExchange(workgroup_atomic_arr[1], int(1), int(2), _e333.old_value);
+    _e333.exchanged = (_e333.old_value == int(1));
+    _atomic_compare_exchange_resultUint4_ _e338; InterlockedCompareExchange(workgroup_struct.atomic_scalar, 1u, 2u, _e338.old_value);
+    _e338.exchanged = (_e338.old_value == 1u);
+    _atomic_compare_exchange_resultSint4_ _e344; InterlockedCompareExchange(workgroup_struct.atomic_arr[1], int(1), int(2), _e344.old_value);
+    _e344.exchanged = (_e344.old_value == int(1));
     return;
 }

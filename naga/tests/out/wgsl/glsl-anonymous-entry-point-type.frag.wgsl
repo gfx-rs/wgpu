@@ -1,8 +1,4 @@
 struct FragmentOutput {
-    x: f32,
-}
-
-struct FragmentOutput_1 {
     @location(0) o_Target: vec4<f32>,
 }
 
@@ -14,8 +10,8 @@ fn main_1() {
 }
 
 @fragment 
-fn main() -> FragmentOutput_1 {
+fn main() -> FragmentOutput {
     main_1();
     let _e1 = o_Target;
-    return FragmentOutput_1(_e1);
+    return FragmentOutput(_e1);
 }

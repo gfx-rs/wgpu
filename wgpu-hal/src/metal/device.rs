@@ -137,6 +137,7 @@ impl super::Device {
         let (module, module_info) = naga::back::pipeline_constants::process_overrides(
             &naga_shader.module,
             &naga_shader.info,
+            Some((naga_stage, stage.entry_point)),
             stage.constants,
         )
         .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {:?}", e)))?;
@@ -746,6 +747,7 @@ impl crate::Device for super::Device {
                                 };
                             }
                             wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                            wgt::BindingType::ExternalTexture => unimplemented!(),
                         }
                     }
 
@@ -978,6 +980,7 @@ impl crate::Device for super::Device {
                                 counter.textures += 1;
                             }
                             wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                            wgt::BindingType::ExternalTexture => unimplemented!(),
                         }
                     }
                 }
@@ -1035,6 +1038,9 @@ impl crate::Device for super::Device {
             }
             crate::ShaderInput::SpirV(_) => {
                 panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
+            }
+            crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
+                panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled for this backend")
             }
         }
     }

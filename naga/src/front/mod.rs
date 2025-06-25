@@ -14,7 +14,7 @@ pub mod spv;
 #[cfg(feature = "wgsl-in")]
 pub mod wgsl;
 
-use alloc::{vec, vec::Vec};
+use alloc::{boxed::Box, vec, vec::Vec};
 use core::ops;
 
 use crate::{
@@ -328,5 +328,12 @@ impl<Name: fmt::Debug, Var: fmt::Debug> fmt::Debug for SymbolTable<Name, Var> {
         f.debug_list()
             .entries(self.scopes[..self.cursor].iter())
             .finish()
+    }
+}
+
+impl crate::Module {
+    pub fn get_or_insert_default_doc_comments(&mut self) -> &mut Box<crate::DocComments> {
+        self.doc_comments
+            .get_or_insert_with(|| Box::new(crate::DocComments::default()))
     }
 }

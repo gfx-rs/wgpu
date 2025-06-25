@@ -13,7 +13,7 @@ metal::float4 builtins(
 ) {
     int s1_ = true ? 1 : 0;
     metal::float4 s2_ = true ? v_f32_one : v_f32_zero;
-    metal::float4 s3_ = metal::select(v_f32_one, v_f32_zero, metal::bool4(false, false, false, false));
+    metal::float4 s3_ = metal::float4(1.0, 1.0, 1.0, 1.0);
     metal::float4 m1_ = metal::mix(v_f32_zero, v_f32_one, v_f32_half);
     metal::float4 m2_ = metal::mix(v_f32_zero, v_f32_one, 0.1);
     float b1_ = as_type<float>(1);

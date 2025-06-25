@@ -5,6 +5,7 @@ use crate::{
     binding_model,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
+    ray_tracing::BlasCompactReadyPendingClosure,
     resource::{
         Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
         ResourceErrorIdent,
@@ -156,6 +157,7 @@ pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 #[derive(Default)]
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
+    pub blas_compact_ready: Vec<BlasCompactReadyPendingClosure>,
     pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
     pub device_lost_invocations: SmallVec<[DeviceLostInvocation; 1]>,
 }
@@ -163,6 +165,7 @@ pub struct UserClosures {
 impl UserClosures {
     fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
+        self.blas_compact_ready.extend(other.blas_compact_ready);
         self.submissions.extend(other.submissions);
         self.device_lost_invocations
             .extend(other.device_lost_invocations);
@@ -176,6 +179,11 @@ impl UserClosures {
         // a on_submitted_work_done callback to be fired before the on_submitted_work_done callback.
         for (mut operation, status) in self.mappings {
             if let Some(callback) = operation.callback.take() {
+                callback(status);
+            }
+        }
+        for (mut operation, status) in self.blas_compact_ready {
+            if let Some(callback) = operation.take() {
                 callback(status);
             }
         }
@@ -452,6 +460,10 @@ pub fn create_validator(
     caps.set(
         Caps::DUAL_SOURCE_BLENDING,
         features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
+    );
+    caps.set(
+        Caps::CLIP_DISTANCE,
+        features.contains(wgt::Features::CLIP_DISTANCES),
     );
     caps.set(
         Caps::CUBE_ARRAY_TEXTURES,

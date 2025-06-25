@@ -72,7 +72,6 @@ impl<T> UniqueArena<T> {
             .unwrap_or(&Span::default())
     }
 
-    #[cfg(feature = "compact")]
     pub(crate) fn drain_all(&mut self) -> UniqueArenaDrain<T> {
         UniqueArenaDrain {
             inner_elts: self.set.drain(..),
@@ -82,14 +81,12 @@ impl<T> UniqueArena<T> {
     }
 }
 
-#[cfg(feature = "compact")]
 pub struct UniqueArenaDrain<'a, T> {
     inner_elts: indexmap::set::Drain<'a, T>,
     inner_spans: alloc::vec::Drain<'a, Span>,
     index: Index,
 }
 
-#[cfg(feature = "compact")]
 impl<T> Iterator for UniqueArenaDrain<'_, T> {
     type Item = (Handle<T>, T, Span);
 

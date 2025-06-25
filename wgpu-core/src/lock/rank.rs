@@ -148,6 +148,7 @@ define_lock_ranks! {
     rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }
     rank BLAS_BUILT_INDEX "Blas::built_index" followed by { }
+    rank BLAS_COMPACTION_STATE "Blas::compaction_size" followed by { }
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
     rank BUFFER_POOL "BufferPool::buffers" followed by { }

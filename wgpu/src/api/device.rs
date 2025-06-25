@@ -1,10 +1,9 @@
-use alloc::{boxed::Box, string::String, sync::Arc};
+use alloc::{boxed::Box, string::String, sync::Arc, vec};
 use core::{error, fmt, future::Future};
-
-use parking_lot::Mutex;
 
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
+use crate::util::Mutex;
 use crate::*;
 
 /// Open connection to a graphics and/or compute device.
@@ -604,10 +603,9 @@ impl Device {
         let tlas = self.inner.create_tlas(desc);
 
         Tlas {
-            shared: Arc::new(TlasShared {
-                inner: tlas,
-                max_instances: desc.max_instances,
-            }),
+            inner: tlas,
+            instances: vec![None; desc.max_instances as usize],
+            lowest_unmodified: 0,
         }
     }
 }

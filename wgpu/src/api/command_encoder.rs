@@ -1,10 +1,7 @@
 use core::ops::Range;
 
 use crate::{
-    api::{
-        blas::BlasBuildEntry,
-        tlas::{TlasBuildEntry, TlasPackage},
-    },
+    api::{blas::BlasBuildEntry, tlas::Tlas},
     *,
 };
 
@@ -341,32 +338,10 @@ impl CommandEncoder {
     pub fn build_acceleration_structures<'a>(
         &mut self,
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
-        tlas: impl IntoIterator<Item = &'a TlasPackage>,
+        tlas: impl IntoIterator<Item = &'a Tlas>,
     ) {
         self.inner
             .build_acceleration_structures(&mut blas.into_iter(), &mut tlas.into_iter());
-    }
-
-    /// Build bottom and top level acceleration structures.
-    /// See [`CommandEncoder::build_acceleration_structures`] for the safe version and more details. All validation in [`CommandEncoder::build_acceleration_structures`] except that
-    /// listed under tlas applies here as well.
-    ///
-    /// # Safety
-    ///
-    ///    - The contents of the raw instance buffer must be valid for the underling api.
-    ///    - All bottom level acceleration structures, referenced in the raw instance buffer must be valid and built,
-    ///      when the corresponding top level acceleration structure is built. (builds may happen in the same invocation of this function).
-    ///    - At the time when the top level acceleration structure is used in a bind group, all associated bottom level acceleration structures must be valid,
-    ///      and built (no later than the time when the top level acceleration structure was built).
-    pub unsafe fn build_acceleration_structures_unsafe_tlas<'a>(
-        &mut self,
-        blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,
-        tlas: impl IntoIterator<Item = &'a TlasBuildEntry<'a>>,
-    ) {
-        self.inner.build_acceleration_structures_unsafe_tlas(
-            &mut blas.into_iter(),
-            &mut tlas.into_iter(),
-        );
     }
 
     /// Transition resources to an underlying hal resource state.

@@ -466,6 +466,10 @@ impl super::Adapter {
                 || extensions.contains("GL_ARB_blend_func_extended"),
         );
         features.set(
+            wgt::Features::CLIP_DISTANCES,
+            full_ver.is_some() || extensions.contains("GL_EXT_clip_cull_distance"),
+        );
+        features.set(
             wgt::Features::SHADER_PRIMITIVE_INDEX,
             supported((3, 2), (3, 2))
                 || extensions.contains("OES_geometry_shader")
@@ -797,6 +801,10 @@ impl super::Adapter {
             max_compute_workgroups_per_dimension,
             max_buffer_size: i32::MAX as u64,
             max_non_sampler_bindings: u32::MAX,
+            max_blas_primitive_count: 0,
+            max_blas_geometry_count: 0,
+            max_tlas_instance_count: 0,
+            max_acceleration_structures_per_shader_stage: 0,
         };
 
         let mut workarounds = super::Workarounds::empty();

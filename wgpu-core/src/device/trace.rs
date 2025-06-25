@@ -202,10 +202,6 @@ pub enum Command {
         timestamp_writes: Option<crate::command::PassTimestampWrites>,
         occlusion_query_set_id: Option<id::QuerySetId>,
     },
-    BuildAccelerationStructuresUnsafeTlas {
-        blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
-        tlas: Vec<crate::ray_tracing::TlasBuildEntry>,
-    },
     BuildAccelerationStructures {
         blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
         tlas: Vec<crate::ray_tracing::TraceTlasPackage>,

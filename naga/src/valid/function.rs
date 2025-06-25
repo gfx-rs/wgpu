@@ -1006,7 +1006,7 @@ impl super::Validator {
                 S::Kill => {
                     stages &= super::ShaderStages::FRAGMENT;
                 }
-                S::Barrier(barrier) => {
+                S::ControlBarrier(barrier) | S::MemoryBarrier(barrier) => {
                     stages &= super::ShaderStages::COMPUTE;
                     if barrier.contains(crate::Barrier::SUB_GROUP) {
                         if !self.capabilities.contains(

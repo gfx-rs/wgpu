@@ -606,6 +606,22 @@ pub struct Limits {
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
+    /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
+    /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_blas_primitive_count: u32,
+    /// The maximum number of geometry descriptors a BLAS is allowed to have. Requesting
+    /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_blas_geometry_count: u32,
+    /// The maximum number of instances a TLAS is allowed to have. Requesting more than 0 during
+    /// device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_tlas_instance_count: u32,
+    /// The maximum number of acceleration structures allowed to be used in a shader stage.
+    /// Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_acceleration_structures_per_shader_stage: u32,
 }
 
 impl Default for Limits {
@@ -658,6 +674,10 @@ impl Limits {
     ///     max_subgroup_size: 0,
     ///     max_push_constant_size: 0,
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_blas_primitive_count: 0,
+    ///     max_blas_geometry_count: 0,
+    ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
     /// });
     /// ```
     ///
@@ -702,6 +722,10 @@ impl Limits {
             max_subgroup_size: 0,
             max_push_constant_size: 0,
             max_non_sampler_bindings: 1_000_000,
+            max_blas_primitive_count: 0,
+            max_blas_geometry_count: 0,
+            max_tlas_instance_count: 0,
+            max_acceleration_structures_per_shader_stage: 0,
         }
     }
 
@@ -747,6 +771,10 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_blas_primitive_count: 0,
+    ///     max_blas_geometry_count: 0,
+    ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
     /// });
     /// ```
     #[must_use]
@@ -807,6 +835,10 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 0, // +
     ///     max_buffer_size: 256 << 20, // (256 MiB),
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_blas_primitive_count: 0,
+    ///     max_blas_geometry_count: 0,
+    ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
     /// });
     /// ```
     #[must_use]
@@ -858,6 +890,32 @@ impl Limits {
         Self {
             min_uniform_buffer_offset_alignment: other.min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment: other.min_storage_buffer_offset_alignment,
+            ..self
+        }
+    }
+
+    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    #[must_use]
+    pub const fn using_minimum_supported_acceleration_structure_values(self) -> Self {
+        Self {
+            max_blas_geometry_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
+            max_tlas_instance_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
+            max_blas_primitive_count: 1 << 28,      // 2^28: Metal's minimum
+            max_acceleration_structures_per_shader_stage: 16, // Vulkan's minimum
+            ..self
+        }
+    }
+
+    /// Modify the current limits to use the acceleration structure limits of `other` (`other` could
+    /// be the limits of the adapter).
+    #[must_use]
+    pub const fn using_acceleration_structure_values(self, other: Self) -> Self {
+        Self {
+            max_blas_geometry_count: other.max_blas_geometry_count,
+            max_tlas_instance_count: other.max_tlas_instance_count,
+            max_blas_primitive_count: other.max_blas_primitive_count,
+            max_acceleration_structures_per_shader_stage: other
+                .max_acceleration_structures_per_shader_stage,
             ..self
         }
     }
@@ -941,6 +999,9 @@ impl Limits {
         }
         compare!(max_push_constant_size, Less);
         compare!(max_non_sampler_bindings, Less);
+        compare!(max_blas_primitive_count, Less);
+        compare!(max_blas_geometry_count, Less);
+        compare!(max_tlas_instance_count, Less);
     }
 }
 
@@ -4974,6 +5035,36 @@ impl VertexFormat {
             Self::Float64x4 => 32,
         }
     }
+
+    /// Returns the size read by an acceleration structure build of the vertex format. This is
+    /// slightly different from [`Self::size`] because the alpha component of 4-component formats
+    /// are not read in an acceleration structure build, allowing for a smaller stride.
+    #[must_use]
+    pub const fn min_acceleration_structure_vertex_stride(&self) -> u64 {
+        match self {
+            Self::Float16x2 | Self::Snorm16x2 => 4,
+            Self::Float32x3 => 12,
+            Self::Float32x2 => 8,
+            // This is the minimum value from DirectX
+            // > A16 component is ignored, other data can be packed there, such as setting vertex stride to 6 bytes
+            //
+            // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_raytracing_geometry_triangles_desc
+            //
+            // Vulkan does not express a minimum stride.
+            Self::Float16x4 | Self::Snorm16x4 => 6,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Returns the alignment required for `wgpu::BlasTriangleGeometry::vertex_stride`
+    #[must_use]
+    pub const fn acceleration_structure_stride_alignment(&self) -> u64 {
+        match self {
+            Self::Float16x4 | Self::Float16x2 | Self::Snorm16x4 | Self::Snorm16x2 => 2,
+            Self::Float32x2 | Self::Float32x3 => 4,
+            _ => unreachable!(),
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -4996,7 +5087,7 @@ bitflags::bitflags! {
         /// may have is COPY_DST.
         const MAP_READ = 1 << 0;
         /// Allow a buffer to be mapped for writing using [`Buffer::map_async`] + [`Buffer::get_mapped_range_mut`].
-        /// This does not include creating a buffer with `mapped_at_creation` set.
+        /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
         ///
         /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] feature isn't enabled, the only other usage a buffer
         /// may have is COPY_SRC.
@@ -6376,13 +6467,6 @@ pub struct TexelCopyBufferLayout {
     pub rows_per_image: Option<u32>,
 }
 
-/// Old name for a [`TexelCopyBufferLayout`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyBufferLayout`, and will be removed in 25.0.0."
-)]
-pub type ImageDataLayout = TexelCopyBufferLayout;
-
 /// Specific type of a buffer binding.
 ///
 /// Corresponds to [WebGPU `GPUBufferBindingType`](
@@ -6776,6 +6860,20 @@ pub enum BindingType {
         /// If enabled requires [`Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`]
         vertex_return: bool,
     },
+
+    /// An external texture binding.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_external;
+    /// ```
+    ///
+    /// Corresponds to [WebGPU `GPUExternalTextureBindingLayout`](
+    /// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturebindinglayout).
+    ///
+    /// Requires [`Features::EXTERNAL_TEXTURE`]
+    ExternalTexture,
 }
 
 impl BindingType {
@@ -6835,13 +6933,6 @@ pub struct TexelCopyBufferInfo<B> {
     pub layout: TexelCopyBufferLayout,
 }
 
-/// Old name for a [`TexelCopyBufferInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyBufferInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyBuffer<B> = TexelCopyBufferInfo<B>;
-
 /// View of a texture which can be used to copy to/from a buffer/texture.
 ///
 /// Corresponds to [WebGPU `GPUTexelCopyTextureInfo`](
@@ -6883,13 +6974,6 @@ impl<T> TexelCopyTextureInfo<T> {
     }
 }
 
-/// Old name for a [`TexelCopyTextureInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyTextureInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyTexture<T> = TexelCopyTextureInfo<T>;
-
 /// View of an external texture that can be used to copy to a texture.
 ///
 /// Corresponds to [WebGPU `GPUCopyExternalImageSourceInfo`](
@@ -6912,14 +6996,6 @@ pub struct CopyExternalImageSourceInfo {
     /// true, `origin` is still relative to the top left.
     pub flip_y: bool,
 }
-
-/// Old name for a [`CopyExternalImageSourceInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `CopyExternalImageSourceInfo`, and will be removed in 25.0.0."
-)]
-#[cfg(all(target_arch = "wasm32", feature = "web"))]
-pub type ImageCopyExternalImage = CopyExternalImageSourceInfo;
 
 /// Source of an external texture copy.
 ///
@@ -7058,13 +7134,6 @@ impl<T> CopyExternalImageDestInfo<T> {
         }
     }
 }
-
-/// Old name for a [`CopyExternalImageDestInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `CopyExternalImageDestInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyTextureTagged<T> = CopyExternalImageDestInfo<T>;
 
 /// Subresource range within an image
 #[repr(C)]
@@ -7436,7 +7505,7 @@ impl Default for ShaderRuntimeChecks {
 pub struct BlasTriangleGeometrySizeDescriptor {
     /// Format of a vertex position, must be [`VertexFormat::Float32x3`]
     /// with just [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
-    /// but later features may add more formats.
+    /// but [`Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS`] adds more.
     pub vertex_format: VertexFormat,
     /// Number of vertices.
     pub vertex_count: u32,
@@ -7535,8 +7604,8 @@ bitflags::bitflags!(
         /// Allow for incremental updates (no change in size), currently this is unimplemented
         /// and will build as normal (this is fine, update vs build should be unnoticeable)
         const ALLOW_UPDATE = 1 << 0;
-        /// Allow the acceleration structure to be compacted in a copy operation, the function
-        /// to compact is not currently implemented.
+        /// Allow the acceleration structure to be compacted in a copy operation
+        /// (`Blas::prepare_for_compaction`, `CommandEncoder::compact_blas`).
         const ALLOW_COMPACTION = 1 << 1;
         /// Optimize for fast ray tracing performance, recommended if the geometry is unlikely
         /// to change (e.g. in a game: non-interactive scene geometry)
@@ -7696,6 +7765,10 @@ pub enum CreateShaderModuleDescriptorPassthrough<'a, L> {
     SpirV(ShaderModuleDescriptorSpirV<'a, L>),
     /// Passthrough for MSL source code.
     Msl(ShaderModuleDescriptorMsl<'a, L>),
+    /// Passthrough for DXIL compiled with DXC
+    Dxil(ShaderModuleDescriptorDxil<'a, L>),
+    /// Passthrough for HLSL
+    Hlsl(ShaderModuleDescriptorHlsl<'a, L>),
 }
 
 impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
@@ -7721,6 +7794,22 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
                     source: inner.source.clone(),
                 })
             }
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Dxil(ShaderModuleDescriptorDxil {
+                    entry_point: inner.entry_point.clone(),
+                    label: fun(&inner.label),
+                    num_workgroups: inner.num_workgroups,
+                    source: inner.source,
+                })
+            }
+            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Hlsl(ShaderModuleDescriptorHlsl {
+                    entry_point: inner.entry_point.clone(),
+                    label: fun(&inner.label),
+                    num_workgroups: inner.num_workgroups,
+                    source: inner.source,
+                })
+            }
         }
     }
 
@@ -7729,6 +7818,8 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         match self {
             CreateShaderModuleDescriptorPassthrough::SpirV(inner) => &inner.label,
             CreateShaderModuleDescriptorPassthrough::Msl(inner) => &inner.label,
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => &inner.label,
+            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => &inner.label,
         }
     }
 
@@ -7740,6 +7831,8 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
                 bytemuck::cast_slice(&inner.source)
             }
             CreateShaderModuleDescriptorPassthrough::Msl(inner) => inner.source.as_bytes(),
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => inner.source,
+            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => inner.source.as_bytes(),
         }
     }
 
@@ -7749,6 +7842,8 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         match self {
             CreateShaderModuleDescriptorPassthrough::SpirV(..) => "spv",
             CreateShaderModuleDescriptorPassthrough::Msl(..) => "msl",
+            CreateShaderModuleDescriptorPassthrough::Dxil(..) => "dxil",
+            CreateShaderModuleDescriptorPassthrough::Hlsl(..) => "hlsl",
         }
     }
 }
@@ -7767,6 +7862,38 @@ pub struct ShaderModuleDescriptorMsl<'a, L> {
     pub num_workgroups: (u32, u32, u32),
     /// Shader MSL source.
     pub source: Cow<'a, str>,
+}
+
+/// Descriptor for a shader module given by DirectX DXIL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorDxil<'a, L> {
+    /// Entrypoint.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
+    /// Shader DXIL source.
+    pub source: &'a [u8],
+}
+
+/// Descriptor for a shader module given by DirectX HLSL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorHlsl<'a, L> {
+    /// Entrypoint.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
+    /// Shader HLSL source.
+    pub source: &'a str,
 }
 
 /// Descriptor for a shader module given by SPIR-V binary.

@@ -1,0 +1,16 @@
+(
+    vertex:[
+    ],
+    fragment:[
+    ],
+    compute:[
+        (
+            entry_point:"test_atomic_compare_exchange_i32_",
+            target_profile:"cs_5_1",
+        ),
+        (
+            entry_point:"test_atomic_compare_exchange_u32_",
+            target_profile:"cs_5_1",
+        ),
+    ],
+)

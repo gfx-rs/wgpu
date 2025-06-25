@@ -7,6 +7,7 @@ use std::time::Duration;
 use deno_core::cppgc::Ptr;
 use deno_core::futures::channel::oneshot;
 use deno_core::op2;
+use deno_core::v8;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
@@ -53,21 +54,13 @@ impl GPUQueue {
     #[required(1)]
     fn submit(
         &self,
+        scope: &mut v8::HandleScope,
         #[webidl] command_buffers: Vec<Ptr<GPUCommandBuffer>>,
-    ) -> Result<(), JsErrorBox> {
+    ) -> Result<v8::Local<v8::Value>, JsErrorBox> {
         let ids = command_buffers
             .into_iter()
-            .enumerate()
-            .map(|(i, cb)| {
-                if cb.consumed.set(()).is_err() {
-                    Err(JsErrorBox::type_error(format!(
-                        "The command buffer at position {i} has already been submitted."
-                    )))
-                } else {
-                    Ok(cb.id)
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            .map(|cb| cb.id)
+            .collect::<Vec<_>>();
 
         let err = self.instance.queue_submit(self.id, &ids).err();
 
@@ -75,7 +68,7 @@ impl GPUQueue {
             self.error_handler.push_error(Some(err));
         }
 
-        Ok(())
+        Ok(v8::undefined(scope).into())
     }
 
     #[async_method]

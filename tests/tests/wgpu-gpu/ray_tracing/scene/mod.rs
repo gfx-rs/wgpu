@@ -4,6 +4,7 @@ use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, Tes
 
 use wgpu::util::DeviceExt;
 
+use crate::ray_tracing::acceleration_structure_limits;
 use glam::{Affine3A, Quat, Vec3};
 
 mod mesh_gen;
@@ -48,17 +49,15 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
         },
     );
 
-    let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
+    let mut tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
         label: None,
         flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: wgpu::AccelerationStructureUpdateMode::Build,
         max_instances,
     });
 
-    let mut tlas_package = wgpu::TlasPackage::new(tlas);
-
     for j in 0..max_instances {
-        tlas_package[j as usize] = Some(wgpu::TlasInstance::new(
+        tlas[j as usize] = Some(wgpu::TlasInstance::new(
             &blas,
             mesh_gen::affine_to_rows(&Affine3A::from_rotation_translation(
                 Quat::from_rotation_y(45.9_f32.to_radians()),
@@ -90,7 +89,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
                 transform_buffer_offset: None,
             }]),
         }),
-        iter::once(&tlas_package),
+        iter::once(&tlas),
     );
 
     ctx.queue.submit(Some(encoder.finish()));
@@ -103,6 +102,7 @@ static ACCELERATION_STRUCTURE_BUILD_NO_INDEX: GpuTestConfiguration = GpuTestConf
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
             .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
@@ -116,6 +116,7 @@ static ACCELERATION_STRUCTURE_BUILD_WITH_INDEX: GpuTestConfiguration = GpuTestCo
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
             // https://github.com/gfx-rs/wgpu/issues/6727
             .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),

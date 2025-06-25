@@ -1,3 +1,7 @@
+// Cargo-metadata doesn't compile on wasm due to old cargo-util-schemas dependency.
+// Since this test isn't dependent on the current architecture, we can just skip it on wasm without any issues.
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::process::Command;
 
 #[derive(Debug)]
@@ -84,7 +88,7 @@ fn get_all_wgpu_features() -> Vec<String> {
     metadata
         .packages
         .iter()
-        .find(|p| p.name == "wgpu")
+        .find(|p| p.name.as_str() == "wgpu")
         .unwrap()
         .features
         .keys()

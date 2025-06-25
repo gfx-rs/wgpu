@@ -31,9 +31,12 @@ mod device;
 mod drm;
 mod instance;
 mod sampler;
+mod semaphore_list;
+
+pub use adapter::PhysicalDeviceFeatures;
 
 use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
-use core::{borrow::Borrow, ffi::CStr, fmt, mem, num::NonZeroU32, ops::DerefMut};
+use core::{borrow::Borrow, ffi::CStr, fmt, mem, num::NonZeroU32};
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
@@ -43,6 +46,8 @@ use parking_lot::{Mutex, RwLock};
 
 use naga::FastHashMap;
 use wgt::InternalCounter;
+
+use semaphore_list::SemaphoreList;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
@@ -455,7 +460,7 @@ pub struct Adapter {
     //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
     phd_capabilities: adapter::PhysicalDeviceProperties,
-    phd_features: adapter::PhysicalDeviceFeatures,
+    phd_features: PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
@@ -757,7 +762,7 @@ pub struct Queue {
     device: Arc<DeviceShared>,
     family_index: u32,
     relay_semaphores: Mutex<RelaySemaphores>,
-    signal_semaphores: Mutex<(Vec<vk::Semaphore>, Vec<u64>)>,
+    signal_semaphores: Mutex<SemaphoreList>,
 }
 
 impl Queue {
@@ -1200,8 +1205,7 @@ impl crate::Queue for Queue {
 
         let mut wait_stage_masks = Vec::new();
         let mut wait_semaphores = Vec::new();
-        let mut signal_semaphores = Vec::new();
-        let mut signal_values = Vec::new();
+        let mut signal_semaphores = SemaphoreList::default();
 
         // Double check that the same swapchain image isn't being given to us multiple times,
         // as that will deadlock when we try to lock them all.
@@ -1240,17 +1244,12 @@ impl crate::Queue for Queue {
             // Get a semaphore to signal when we're done writing to this surface
             // image. Presentation of this image will wait for this.
             let signal_semaphore = swapchain_semaphore.get_submit_signal_semaphore(&self.device)?;
-            signal_semaphores.push(signal_semaphore);
-            signal_values.push(!0);
+            signal_semaphores.push_binary(signal_semaphore);
         }
 
-        let mut guards = self.signal_semaphores.lock();
-        let (ref mut pending_signal_semaphores, ref mut pending_signal_semaphore_values) =
-            guards.deref_mut();
-        assert!(pending_signal_semaphores.len() == pending_signal_semaphore_values.len());
-        if !pending_signal_semaphores.is_empty() {
-            signal_semaphores.append(pending_signal_semaphores);
-            signal_values.append(pending_signal_semaphore_values);
+        let mut guard = self.signal_semaphores.lock();
+        if !guard.is_empty() {
+            signal_semaphores.append(&mut guard);
         }
 
         // In order for submissions to be strictly ordered, we encode a dependency between each submission
@@ -1262,15 +1261,13 @@ impl crate::Queue for Queue {
             wait_semaphores.push(sem);
         }
 
-        signal_semaphores.push(semaphore_state.signal);
-        signal_values.push(!0);
+        signal_semaphores.push_binary(semaphore_state.signal);
 
         // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
         signal_fence.maintain(&self.device.raw)?;
         match *signal_fence {
             Fence::TimelineSemaphore(raw) => {
-                signal_semaphores.push(raw);
-                signal_values.push(signal_value);
+                signal_semaphores.push_timeline(raw, signal_value);
             }
             Fence::FencePool {
                 ref mut active,
@@ -1299,16 +1296,10 @@ impl crate::Queue for Queue {
 
         vk_info = vk_info
             .wait_semaphores(&wait_semaphores)
-            .wait_dst_stage_mask(&wait_stage_masks)
-            .signal_semaphores(&signal_semaphores);
+            .wait_dst_stage_mask(&wait_stage_masks);
 
-        let mut vk_timeline_info;
-
-        if self.device.private_caps.timeline_semaphores {
-            vk_timeline_info =
-                vk::TimelineSemaphoreSubmitInfo::default().signal_semaphore_values(&signal_values);
-            vk_info = vk_info.push_next(&mut vk_timeline_info);
-        }
+        let mut vk_timeline_info = mem::MaybeUninit::uninit();
+        vk_info = signal_semaphores.add_to_submit(vk_info, &mut vk_timeline_info);
 
         profiling::scope!("vkQueueSubmit");
         unsafe {
@@ -1387,10 +1378,12 @@ impl Queue {
     }
 
     pub fn add_signal_semaphore(&self, semaphore: vk::Semaphore, semaphore_value: Option<u64>) {
-        let mut guards = self.signal_semaphores.lock();
-        let (ref mut semaphores, ref mut semaphore_values) = guards.deref_mut();
-        semaphores.push(semaphore);
-        semaphore_values.push(semaphore_value.unwrap_or(!0));
+        let mut guard = self.signal_semaphores.lock();
+        if let Some(value) = semaphore_value {
+            guard.push_timeline(semaphore, value);
+        } else {
+            guard.push_binary(semaphore);
+        }
     }
 }
 

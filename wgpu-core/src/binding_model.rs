@@ -173,6 +173,13 @@ pub enum CreateBindGroupError {
     },
     #[error("Storage texture bindings must have a single mip level, but given a view with mip_level_count = {mip_level_count:?} at binding {binding}")]
     InvalidStorageTextureMipLevelCount { binding: u32, mip_level_count: u32 },
+    #[error("External texture bindings must have a single mip level, but given a view with mip_level_count = {mip_level_count:?} at binding {binding}")]
+    InvalidExternalTextureMipLevelCount { binding: u32, mip_level_count: u32 },
+    #[error("External texture bindings must have a format of `rgba8unorm`, `bgra8unorm`, or `rgba16float, but given a view with format = {format:?} at binding {binding}")]
+    InvalidExternalTextureFormat {
+        binding: u32,
+        format: wgt::TextureFormat,
+    },
     #[error("Sampler binding {binding} expects comparison = {layout_cmp}, but given a sampler with comparison = {sampler_cmp}")]
     WrongSamplerComparison {
         binding: u32,
@@ -231,6 +238,7 @@ pub enum BindingTypeMaxCountErrorKind {
     UniformBuffers,
     BindingArrayElements,
     BindingArraySamplerElements,
+    AccelerationStructures,
 }
 
 impl BindingTypeMaxCountErrorKind {
@@ -256,6 +264,9 @@ impl BindingTypeMaxCountErrorKind {
             }
             BindingTypeMaxCountErrorKind::BindingArraySamplerElements => {
                 "max_binding_array_sampler_elements_per_shader_stage"
+            }
+            BindingTypeMaxCountErrorKind::AccelerationStructures => {
+                "max_acceleration_structures_per_shader_stage"
             }
         }
     }
@@ -382,6 +393,19 @@ impl BindingTypeMaxCountValidator {
                 wgt::BindingType::AccelerationStructure { .. } => {
                     self.acceleration_structures.add(binding.visibility, count);
                 }
+                wgt::BindingType::ExternalTexture => {
+                    // https://www.w3.org/TR/webgpu/#gpuexternaltexture
+                    // In order to account for many possible representations,
+                    // the binding conservatively uses the following, for each
+                    // external texture:
+                    // * Three sampled textures for up to 3 planes
+                    // * One additional sampled texture for a 3D LUT
+                    // * One sampler to sample the LUT
+                    // * One uniform buffer for metadata
+                    self.sampled_textures.add(binding.visibility, count * 4);
+                    self.samplers.add(binding.visibility, count);
+                    self.uniform_buffers.add(binding.visibility, count);
+                }
             }
         }
     }
@@ -446,6 +470,10 @@ impl BindingTypeMaxCountValidator {
         self.binding_array_sampler_elements.validate(
             limits.max_binding_array_sampler_elements_per_shader_stage,
             BindingTypeMaxCountErrorKind::BindingArraySamplerElements,
+        )?;
+        self.acceleration_structures.validate(
+            limits.max_acceleration_structures_per_shader_stage,
+            BindingTypeMaxCountErrorKind::AccelerationStructures,
         )?;
         Ok(())
     }

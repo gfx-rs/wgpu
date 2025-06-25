@@ -301,25 +301,9 @@ impl Writer {
         self.get_pointer_type_id(base_id, class)
     }
 
-    pub(super) fn get_ray_query_pointer_id(&mut self, module: &crate::Module) -> Word {
-        let rq_ty = module
-            .types
-            .get(&crate::Type {
-                name: None,
-                inner: crate::TypeInner::RayQuery {
-                    vertex_return: false,
-                },
-            })
-            .or_else(|| {
-                module.types.get(&crate::Type {
-                    name: None,
-                    inner: crate::TypeInner::RayQuery {
-                        vertex_return: true,
-                    },
-                })
-            })
-            .expect("ray_query type should have been populated by the variable passed into this!");
-        self.get_handle_pointer_type_id(rq_ty, spirv::StorageClass::Function)
+    pub(super) fn get_ray_query_pointer_id(&mut self) -> Word {
+        let rq_id = self.get_type_id(LookupType::Local(LocalType::RayQuery));
+        self.get_pointer_type_id(rq_id, spirv::StorageClass::Function)
     }
 
     /// Return a SPIR-V type for a pointer to `resolution`.
@@ -351,6 +335,13 @@ impl Writer {
         self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Bi,
             scalar: crate::Scalar::U32,
+        })
+    }
+
+    pub(super) fn get_vec2f_type_id(&mut self) -> Word {
+        self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::F32,
         })
     }
 
@@ -1711,9 +1702,11 @@ impl Writer {
         Ok(id)
     }
 
-    pub(super) fn write_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
+    pub(super) fn write_control_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
         let memory_scope = if flags.contains(crate::Barrier::STORAGE) {
             spirv::Scope::Device
+        } else if flags.contains(crate::Barrier::SUB_GROUP) {
+            spirv::Scope::Subgroup
         } else {
             spirv::Scope::Workgroup
         };
@@ -1725,6 +1718,10 @@ impl Writer {
         semantics.set(
             spirv::MemorySemantics::WORKGROUP_MEMORY,
             flags.contains(crate::Barrier::WORK_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::SUBGROUP_MEMORY,
+            flags.contains(crate::Barrier::SUB_GROUP),
         );
         semantics.set(
             spirv::MemorySemantics::IMAGE_MEMORY,
@@ -1742,6 +1739,37 @@ impl Writer {
             mem_scope_id,
             semantics_id,
         ));
+    }
+
+    pub(super) fn write_memory_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
+        let mut semantics = spirv::MemorySemantics::ACQUIRE_RELEASE;
+        semantics.set(
+            spirv::MemorySemantics::UNIFORM_MEMORY,
+            flags.contains(crate::Barrier::STORAGE),
+        );
+        semantics.set(
+            spirv::MemorySemantics::WORKGROUP_MEMORY,
+            flags.contains(crate::Barrier::WORK_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::SUBGROUP_MEMORY,
+            flags.contains(crate::Barrier::SUB_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::IMAGE_MEMORY,
+            flags.contains(crate::Barrier::TEXTURE),
+        );
+        let mem_scope_id = if flags.contains(crate::Barrier::STORAGE) {
+            self.get_index_constant(spirv::Scope::Device as u32)
+        } else if flags.contains(crate::Barrier::SUB_GROUP) {
+            self.get_index_constant(spirv::Scope::Subgroup as u32)
+        } else {
+            self.get_index_constant(spirv::Scope::Workgroup as u32)
+        };
+        let semantics_id = self.get_index_constant(semantics.bits());
+        block
+            .body
+            .push(Instruction::memory_barrier(mem_scope_id, semantics_id));
     }
 
     fn generate_workgroup_vars_init_block(
@@ -1844,7 +1872,7 @@ impl Writer {
 
         let mut post_if_block = Block::new(merge_id);
 
-        self.write_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block);
+        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block);
 
         let next_id = self.id_gen.next();
         function.consume(post_if_block, Instruction::branch(next_id));

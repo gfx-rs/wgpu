@@ -43,11 +43,6 @@ impl Adapter {
     /// [`Adapter`].
     /// However, `wgpu` does not currently enforce this restriction.
     ///
-    /// # Arguments
-    ///
-    /// - `desc` - Description of the features and limits requested from the given device.
-    /// - `trace` - Can be used for API call tracing, if the feature is enabled.
-    ///
     /// # Panics
     ///
     /// - `request_device()` was already called on this `Adapter`.

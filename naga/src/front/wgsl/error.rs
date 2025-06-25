@@ -399,6 +399,16 @@ pub(crate) enum Error<'a> {
         on_what: DiagnosticAttributeNotSupportedPosition,
         spans: Vec<Span>,
     },
+    SelectUnexpectedArgumentType {
+        arg_span: Span,
+        arg_type: String,
+    },
+    SelectRejectAndAcceptHaveNoCommonType {
+        reject_span: Span,
+        reject_type: String,
+        accept_span: Span,
+        accept_type: String,
+    },
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -469,6 +479,8 @@ impl<'a> Error<'a> {
                         Token::Arrow => "->".to_string(),
                         Token::Unknown(c) => format!("unknown (`{c}`)"),
                         Token::Trivia => "trivia".to_string(),
+                        Token::DocComment(s) => format!("doc comment ('{s}')"),
+                        Token::ModuleDocComment(s) => format!("module doc comment ('{s}')"),
                         Token::End => "end".to_string(),
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),
@@ -1340,6 +1352,24 @@ impl<'a> Error<'a> {
                     ],
                 }
             }
+            Error::SelectUnexpectedArgumentType { arg_span, ref arg_type } => ParseError {
+                message: "unexpected argument type for `select` call".into(),
+                labels: vec![(arg_span, format!("this value of type {arg_type}").into())],
+                notes: vec!["expected a scalar or a `vecN` of scalars".into()],
+            },
+            Error::SelectRejectAndAcceptHaveNoCommonType {
+                reject_span,
+                ref reject_type,
+                accept_span,
+                ref accept_type,
+            } => ParseError {
+                message: "type mismatch for reject and accept values in `select` call".into(),
+                labels: vec![
+                    (reject_span, format!("reject value of type {reject_type}").into()),
+                    (accept_span, format!("accept value of type {accept_type}").into()),
+                ],
+                notes: vec![],
+            },
         }
     }
 }

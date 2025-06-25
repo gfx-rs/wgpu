@@ -18,6 +18,7 @@ const INDEXING_FEATURES: wgt::Features = wgt::Features::TEXTURE_BINDING_ARRAY
     .union(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS)
     .union(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
 
+#[expect(rustdoc::private_intra_doc_links)]
 /// Features supported by a [`vk::PhysicalDevice`] and its extensions.
 ///
 /// This is used in two phases:
@@ -307,7 +308,7 @@ impl PhysicalDeviceFeatures {
                         | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY,
                 ))
                 //.shader_storage_image_array_dynamic_indexing(
-                //.shader_clip_distance(requested_features.contains(wgt::Features::SHADER_CLIP_DISTANCE))
+                .shader_clip_distance(requested_features.contains(wgt::Features::CLIP_DISTANCES))
                 //.shader_cull_distance(requested_features.contains(wgt::Features::SHADER_CULL_DISTANCE))
                 .shader_float64(requested_features.contains(wgt::Features::SHADER_F64))
                 .shader_int64(requested_features.contains(wgt::Features::SHADER_INT64))
@@ -708,6 +709,7 @@ impl PhysicalDeviceFeatures {
 
         features.set(F::DEPTH_CLIP_CONTROL, self.core.depth_clamp != 0);
         features.set(F::DUAL_SOURCE_BLENDING, self.core.dual_src_blend != 0);
+        features.set(F::CLIP_DISTANCES, self.core.shader_clip_distance != 0);
 
         if let Some(ref multiview) = self.multiview {
             features.set(F::MULTIVIEW, multiview.multiview != 0);
@@ -798,7 +800,8 @@ impl PhysicalDeviceFeatures {
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
         features.set(
-            F::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+            F::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
             caps.supports_extension(khr::deferred_host_operations::NAME)
                 && caps.supports_extension(khr::acceleration_structure::NAME)
                 && caps.supports_extension(khr::buffer_device_address::NAME),
@@ -1201,6 +1204,18 @@ impl PhysicalDeviceProperties {
         let max_color_attachment_bytes_per_sample =
             limits.max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
+        let mut max_blas_geometry_count = 0;
+        let mut max_blas_primitive_count = 0;
+        let mut max_tlas_instance_count = 0;
+        let mut max_acceleration_structures_per_shader_stage = 0;
+        if let Some(properties) = self.acceleration_structure {
+            max_blas_geometry_count = properties.max_geometry_count as u32;
+            max_blas_primitive_count = properties.max_primitive_count as u32;
+            max_tlas_instance_count = properties.max_instance_count as u32;
+            max_acceleration_structures_per_shader_stage =
+                properties.max_per_stage_descriptor_acceleration_structures;
+        }
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -1258,6 +1273,10 @@ impl PhysicalDeviceProperties {
             max_compute_workgroups_per_dimension,
             max_buffer_size,
             max_non_sampler_bindings: u32::MAX,
+            max_blas_primitive_count,
+            max_blas_geometry_count,
+            max_tlas_instance_count,
+            max_acceleration_structures_per_shader_stage,
         }
     }
 
@@ -2021,6 +2040,10 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::AtomicFloat32AddEXT);
             }
 
+            if features.contains(wgt::Features::CLIP_DISTANCES) {
+                capabilities.push(spv::Capability::ClipDistance);
+            }
+
             let mut flags = spv::WriterFlags::empty();
             flags.set(
                 spv::WriterFlags::DEBUG,
@@ -2155,7 +2178,7 @@ impl super::Adapter {
             device: Arc::clone(&shared),
             family_index,
             relay_semaphores: Mutex::new(relay_semaphores),
-            signal_semaphores: Mutex::new((Vec::new(), Vec::new())),
+            signal_semaphores: Default::default(),
         };
 
         let mem_allocator = {
