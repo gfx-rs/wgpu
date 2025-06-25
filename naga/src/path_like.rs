@@ -1,9 +1,21 @@
 //! [`PathLike`] and its supporting items, such as [`PathLikeRef`] and [`PathLikeOwned`].
+//! This trait and these types provide a common denominator API for `Path`-like
+//! types and operations in `std` and `no_std` contexts.
+//!
+//! # Usage
+//!
+//! - Store a [`PathLikeRef<'a>`] instead of a `&'a Path` in structs and enums.
+//! - Store a [`PathLikeOwned`] instead of a `PathBuf` in structs and enums.
+//! - Accept `impl PathLike` instead of `impl AsRef<Path>` for methods which directly
+//!   work with `Path`-like values.
+//! - Accept `Into<PathLikeRef<'_>>` and/or `Into<PathLikeOwned>` in methods which
+//!   will store a `Path`-like value.
 
-use alloc::borrow::Cow;
+use alloc::{borrow::Cow, string::String};
 use core::fmt;
 
 mod sealed {
+    /// Seal for [`PathLike`](super::PathLike).
     pub trait Sealed {}
 }
 
@@ -12,7 +24,7 @@ mod sealed {
 ///
 /// - When `no_std` is active, this is implemented for:
 ///   - [`str`],
-///   - [`String`](alloc::string::String),
+///   - [`String`],
 ///   - [`Cow<'_, str>`], and
 ///   - [`PathLikeRef`]
 /// - Otherwise, types that implement `AsRef<Path>` (to extract a `&Path`).
@@ -26,9 +38,10 @@ pub trait PathLike: sealed::Sealed {
 /// Abstraction over `Path` which falls back to [`str`] for `no_std` compatibility.
 ///
 /// This type should be used for _storing_ a reference to a [`PathLike`].
-/// Functions which accept a `Path` should prefer to use `impl PathLike`.
+/// Functions which accept a `Path` should prefer to use `impl PathLike`
+/// or `impl Into<PathLikeRef<'_>>`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PathLikeRef<'a>(&'a impls::PathInner);
+pub struct PathLikeRef<'a>(&'a path_like_impls::PathInner);
 
 impl fmt::Debug for PathLikeRef<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -36,13 +49,19 @@ impl fmt::Debug for PathLikeRef<'_> {
     }
 }
 
-/// Abstraction over `PathBuf` which falls back to [`String`](alloc::string::String)
-/// for `no_std` compatibility.
+impl<'a> From<&'a str> for PathLikeRef<'a> {
+    fn from(value: &'a str) -> Self {
+        Self(value.into())
+    }
+}
+
+/// Abstraction over `PathBuf` which falls back to [`String`] for `no_std` compatibility.
 ///
 /// This type should be used for _storing_ an owned [`PathLike`].
-/// Functions which accept a `PathBuf` should prefer to use `impl PathLike`.
+/// Functions which accept a `PathBuf` should prefer to use `impl PathLike`
+/// or `impl Into<PathLikeOwned>`.
 #[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PathLikeOwned(<impls::PathInner as alloc::borrow::ToOwned>::Owned);
+pub struct PathLikeOwned(<path_like_impls::PathInner as alloc::borrow::ToOwned>::Owned);
 
 impl fmt::Debug for PathLikeOwned {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -50,12 +69,23 @@ impl fmt::Debug for PathLikeOwned {
     }
 }
 
-#[cfg(std)]
-mod impls {
-    use alloc::{borrow::Cow, string::String};
-    use std::path::{Path, PathBuf};
+impl From<String> for PathLikeOwned {
+    fn from(value: String) -> Self {
+        Self(value.into())
+    }
+}
 
-    use super::{sealed, PathLike, PathLikeOwned, PathLikeRef};
+#[cfg(std)]
+mod path_like_impls {
+    //! Implementations of [`PathLike`] within an `std` context.
+    //!
+    //! Since `std` is available, we blanket implement [`PathLike`] for all types
+    //! implementing [`AsRef<Path>`].
+
+    use alloc::borrow::Cow;
+    use std::path::Path;
+
+    use super::{sealed, PathLike};
 
     pub(super) type PathInner = Path;
 
@@ -66,64 +96,19 @@ mod impls {
     }
 
     impl<T: AsRef<Path> + ?Sized> sealed::Sealed for T {}
-
-    impl AsRef<Path> for PathLikeRef<'_> {
-        fn as_ref(&self) -> &Path {
-            self.0
-        }
-    }
-
-    impl AsRef<Path> for PathLikeOwned {
-        fn as_ref(&self) -> &Path {
-            self.0.as_ref()
-        }
-    }
-
-    impl<'a> From<&'a str> for PathLikeRef<'a> {
-        fn from(value: &'a str) -> Self {
-            Self(Path::new(value))
-        }
-    }
-
-    impl<'a> From<&'a Path> for PathLikeRef<'a> {
-        fn from(value: &'a Path) -> Self {
-            Self(value)
-        }
-    }
-
-    impl<'a> From<PathLikeRef<'a>> for &'a Path {
-        fn from(value: PathLikeRef<'a>) -> Self {
-            value.0
-        }
-    }
-
-    impl From<String> for PathLikeOwned {
-        fn from(value: String) -> Self {
-            Self(PathBuf::from(value))
-        }
-    }
-
-    impl From<PathBuf> for PathLikeOwned {
-        fn from(value: PathBuf) -> Self {
-            Self(value)
-        }
-    }
-
-    impl From<PathLikeOwned> for PathBuf {
-        fn from(value: PathLikeOwned) -> Self {
-            value.0
-        }
-    }
-
-    impl AsRef<PathBuf> for PathLikeOwned {
-        fn as_ref(&self) -> &PathBuf {
-            &self.0
-        }
-    }
 }
 
 #[cfg(no_std)]
-mod impls {
+mod path_like_impls {
+    //! Implementations of [`PathLike`] within a `no_std` context.
+    //!
+    //! Without `std`, we cannot blanket implement on [`AsRef<Path>`].
+    //! Instead, we manually implement for a subset of types which are known
+    //! to implement [`AsRef<Path>`] when `std` is available.
+    //!
+    //! Implementing [`PathLike`] for a type which does _not_ implement [`AsRef<Path>`]
+    //! with `std` enabled breaks the additive requirement of Cargo features.
+
     use alloc::{borrow::Cow, string::String};
     use core::borrow::Borrow;
 
@@ -178,16 +163,65 @@ mod impls {
     }
 
     impl sealed::Sealed for PathLikeOwned {}
+}
 
-    impl<'a> From<&'a str> for PathLikeRef<'a> {
-        fn from(value: &'a str) -> Self {
+#[cfg(std)]
+mod path_like_owned_std_impls {
+    //! Traits which can only be implemented for [`PathLikeOwned`] with `std`.
+
+    use alloc::string::String;
+    use std::path::PathBuf;
+
+    use super::PathLikeOwned;
+
+    impl AsRef<Path> for PathLikeOwned {
+        fn as_ref(&self) -> &Path {
+            self.0.as_ref()
+        }
+    }
+
+    impl From<PathBuf> for PathLikeOwned {
+        fn from(value: PathBuf) -> Self {
             Self(value)
         }
     }
 
-    impl From<String> for PathLikeOwned {
-        fn from(value: String) -> Self {
+    impl From<PathLikeOwned> for PathBuf {
+        fn from(value: PathLikeOwned) -> Self {
+            value.0
+        }
+    }
+
+    impl AsRef<PathBuf> for PathLikeOwned {
+        fn as_ref(&self) -> &PathBuf {
+            &self.0
+        }
+    }
+}
+
+#[cfg(std)]
+mod path_like_ref_std_impls {
+    //! Traits which can only be implemented for [`PathLikeRef`] with `std`.
+
+    use std::path::Path;
+
+    use super::PathLikeRef;
+
+    impl AsRef<Path> for PathLikeRef<'_> {
+        fn as_ref(&self) -> &Path {
+            self.0
+        }
+    }
+
+    impl<'a> From<&'a Path> for PathLikeRef<'a> {
+        fn from(value: &'a Path) -> Self {
             Self(value)
+        }
+    }
+
+    impl<'a> From<PathLikeRef<'a>> for &'a Path {
+        fn from(value: PathLikeRef<'a>) -> Self {
+            value.0
         }
     }
 }
