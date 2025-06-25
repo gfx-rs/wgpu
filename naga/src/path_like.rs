@@ -77,7 +77,13 @@ impl fmt::Debug for PathLikeOwned {
 
 impl From<String> for PathLikeOwned {
     fn from(value: String) -> Self {
-        Self(value.into())
+        cfg_if::cfg_if! {
+            if #[cfg(std)] {
+                Self(value.into())
+            } else {
+                Self(value)
+            }
+        }
     }
 }
 
