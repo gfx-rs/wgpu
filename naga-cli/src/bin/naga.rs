@@ -44,11 +44,13 @@ struct Args {
 
     /// the shader entrypoint.
     ///
-    /// This is used by the GLSL and SPIR-V backends.
+    /// When specified along with the `--compact` option, anything not reachable
+    /// from the selected entry point will not appear in the output module.
     ///
-    /// When `--compact` is specified, the entrypoint is passed to
-    /// `process_overrides`, and anything not reachable from the entry point will
-    /// not appear in the output module.
+    /// When specified without the `--compact` option, alternate entry points
+    /// will not appear in the output module, and other declarations referenced
+    /// by alternate entrypoints may or may not appear, depending on whether
+    /// the module contains overrides.
     #[argh(option)]
     entry_point: Option<String>,
 
@@ -97,6 +99,9 @@ struct Args {
     ///
     /// Output files will reflect the compacted IR. If you want to see the IR as
     /// it was before compaction, use the `--before-compaction` option.
+    ///
+    /// Even when this option is not active, compaction may still occur as part
+    /// of override processing.
     #[argh(switch)]
     compact: bool,
 
@@ -812,12 +817,14 @@ fn write_output(
             };
 
             let (ep_stage, ep_name) = match entry_point {
-                Some((stage, name)) if stage != file_ext_stage => {
-                    eprintln!(
-                        "warning: the shader stage `{stage:?}` of the selected entry point \
-                            `{name}` in the input file does not match the shader stage \
-                            implied by the file name",
-                    );
+                Some((stage, name)) => {
+                    if stage != file_ext_stage {
+                        eprintln!(
+                            "warning: the shader stage `{stage:?}` of the selected entry point \
+                                `{name}` in the input file does not match the shader stage \
+                                implied by the file name",
+                        );
+                    }
                     (stage, name.to_string())
                 }
                 _ => (file_ext_stage, "main".to_string()),
