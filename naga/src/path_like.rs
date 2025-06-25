@@ -10,19 +10,23 @@ mod sealed {
 /// A trait that abstracts over types accepted for conversion to the most
 /// featureful path representation possible; that is:
 ///
-/// - When `no_std` is active, this is implemented for [`String`], [`str`], and [`Cow`] (i.e.,
-///   `Cow<'_, str>`).
+/// - When `no_std` is active, this is implemented for:
+///   - [`str`],
+///   - [`String`](alloc::string::String),
+///   - [`Cow<'_, str>`], and
+///   - [`PathLikeRef`]
 /// - Otherwise, types that implement `AsRef<Path>` (to extract a `&Path`).
 ///
 /// This type is used as the type bounds for various diagnostic rendering methods, i.e.,
 /// [`WithSpan::emit_to_string_with_path`](crate::span::WithSpan::emit_to_string_with_path).
-///
-/// [`String`]: alloc::string::String
 pub trait PathLike: sealed::Sealed {
     fn to_string_lossy(&self) -> Cow<'_, str>;
 }
 
 /// Abstraction over `Path` which falls back to [`str`] for `no_std` compatibility.
+///
+/// This type should be used for _storing_ a reference to a [`PathLike`].
+/// Functions which accept a `Path` should prefer to use `impl PathLike`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PathLikeRef<'a>(&'a impls::PathInner);
 
@@ -32,9 +36,11 @@ impl fmt::Debug for PathLikeRef<'_> {
     }
 }
 
-/// Abstraction over `PathBuf` which falls back to [`String`] for `no_std` compatibility.
+/// Abstraction over `PathBuf` which falls back to [`String`](alloc::string::String)
+/// for `no_std` compatibility.
 ///
-/// [`String`]: alloc::string::String
+/// This type should be used for _storing_ an owned [`PathLike`].
+/// Functions which accept a `PathBuf` should prefer to use `impl PathLike`.
 #[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PathLikeOwned(<impls::PathInner as alloc::borrow::ToOwned>::Owned);
 
