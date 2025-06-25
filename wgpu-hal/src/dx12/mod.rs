@@ -1496,12 +1496,14 @@ pub struct DxilPassthroughShader {
     pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
+
 #[derive(Debug)]
 pub struct HlslPassthroughShader {
     pub shader: String,
     pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
+
 #[derive(Debug)]
 pub enum ShaderModuleSource {
     Naga(crate::NagaShader),

@@ -7818,6 +7818,7 @@ pub struct ShaderModuleDescriptorDxil<'a, L> {
     /// Shader DXIL source.
     pub source: &'a [u8],
 }
+
 /// Descriptor for a shader module given by DirectX HLSL source.
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
