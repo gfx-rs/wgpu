@@ -3991,14 +3991,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     // sample from them. We don't know which backend will
                     // consume the `Module` we're building, but in case it's not
                     // WGSL, populate `SpecialTypes::external_texture_params`
-                    // with the type the backend will use for the parameter
+                    // and `SpecialTypes::external_texture_transfer_function`
+                    // with the types the backend will use for the parameter
                     // buffer.
                     //
-                    // This is *not* the type we are lowering here: that's an
-                    // ordinary `TypeInner::Image`. But the fact we are
-                    // lowering a `texture_external` implies the backends may
-                    // need `SpecialTypes::external_texture_params` too.
-                    ctx.module.generate_external_texture_params_type();
+                    // Neither of these are the type we are lowering here:
+                    // that's an ordinary `TypeInner::Image`. But the fact we
+                    // are lowering a `texture_external` implies the backends
+                    // may need these additional types too.
+                    ctx.module.generate_external_texture_types();
                 }
                 ir::TypeInner::Image {
                     dim,

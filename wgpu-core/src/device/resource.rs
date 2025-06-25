@@ -76,8 +76,12 @@ pub(crate) struct CommandIndices {
     pub(crate) next_acceleration_structure_build_command_index: u64,
 }
 
-/// Parameters provided to shaders via a uniform buffer, describing a
-/// [`binding_model::BindingResource::ExternalTexture`] resource binding.
+/// Parameters provided to shaders via a uniform buffer of the type
+/// [`NagaExternalTextureParams`], describing an [`ExternalTexture`] resource
+/// binding.
+///
+/// [`NagaExternalTextureParams`]: naga::SpecialTypes::external_texture_params
+/// [`ExternalTexture`]: binding_model::BindingResource::ExternalTexture
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct ExternalTextureParams {
@@ -86,6 +90,29 @@ pub struct ExternalTextureParams {
     ///
     /// This is ignored when `num_planes` is 1.
     pub yuv_conversion_matrix: [f32; 16],
+
+    /// 3x3 column-major matrix to transform linear RGB values in the source
+    /// color space to linear RGB values in the destination color space. In
+    /// combination with [`Self::src_transfer_function`] and
+    /// [`Self::dst_transfer_function`] this can be used to ensure that
+    /// [`ImageSample`] and [`ImageLoad`] operations return values in the
+    /// desired destination color space rather than the source color space of
+    /// the underlying planes.
+    ///
+    /// Includes a padding element after each column.
+    ///
+    /// [`ImageSample`]: naga::ir::Expression::ImageSample
+    /// [`ImageLoad`]: naga::ir::Expression::ImageLoad
+    pub gamut_conversion_matrix: [f32; 12],
+
+    /// Transfer function for the source color space. The *inverse* of this
+    /// will be applied to decode non-linear RGB to linear RGB in the source
+    /// color space.
+    pub src_transfer_function: wgt::ExternalTextureTransferFunction,
+
+    /// Transfer function for the destination color space. This will be applied
+    /// to encode linear RGB to non-linear RGB in the destination color space.
+    pub dst_transfer_function: wgt::ExternalTextureTransferFunction,
 
     /// Transform to apply to [`ImageSample`] coordinates.
     ///
@@ -140,8 +167,26 @@ pub struct ExternalTextureParams {
 
 impl ExternalTextureParams {
     pub fn from_desc<L>(desc: &wgt::ExternalTextureDescriptor<L>) -> Self {
+        let gamut_conversion_matrix = [
+            desc.gamut_conversion_matrix[0],
+            desc.gamut_conversion_matrix[1],
+            desc.gamut_conversion_matrix[2],
+            0.0, // padding
+            desc.gamut_conversion_matrix[3],
+            desc.gamut_conversion_matrix[4],
+            desc.gamut_conversion_matrix[5],
+            0.0, // padding
+            desc.gamut_conversion_matrix[6],
+            desc.gamut_conversion_matrix[7],
+            desc.gamut_conversion_matrix[8],
+            0.0, // padding
+        ];
+
         Self {
             yuv_conversion_matrix: desc.yuv_conversion_matrix,
+            gamut_conversion_matrix,
+            src_transfer_function: desc.src_transfer_function,
+            dst_transfer_function: desc.dst_transfer_function,
             size: [desc.width, desc.height],
             sample_transform: desc.sample_transform,
             load_transform: desc.load_transform,
@@ -445,6 +490,14 @@ impl Device {
                 0.0, 0.0, 1.0, 0.0,
                 0.0, 0.0, 0.0, 1.0,
             ],
+            #[rustfmt::skip]
+            gamut_conversion_matrix: [
+                1.0, 0.0, 0.0, /* padding */ 0.0,
+                0.0, 1.0, 0.0, /* padding */ 0.0,
+                0.0, 0.0, 1.0, /* padding */ 0.0,
+            ],
+            src_transfer_function: Default::default(),
+            dst_transfer_function: Default::default(),
             size: [0, 0],
             #[rustfmt::skip]
             sample_transform: [

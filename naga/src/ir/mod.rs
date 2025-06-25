@@ -2369,18 +2369,41 @@ pub struct SpecialTypes {
     /// In WGSL, this type would be:
     ///
     /// ```ignore
-    /// struct NagaExternalTextureParams {      // align size offset
-    ///     yuv_conversion_matrix: mat4x4<f32>, //    16   64      0
-    ///     sample_transform: mat3x2<f32>,      //     8   24     64
-    ///     load_transform: mat3x2<f32>,        //     8   24     88
-    ///     size: vec2<u32>,                    //     8    8    112
-    ///     num_planes: u32,                    //     4    4    120
-    /// }                         // whole struct:    16  128
+    /// struct NagaExternalTextureParams {         // align size offset
+    ///     yuv_conversion_matrix: mat4x4<f32>,    //    16   64      0
+    ///     gamut_conversion_matrix: mat3x3<f32>,  //    16   48     64
+    ///     src_tf: NagaExternalTextureTransferFn, //     4   16    112
+    ///     dst_tf: NagaExternalTextureTransferFn, //     4   16    128
+    ///     sample_transform: mat3x2<f32>,         //     8   24    144
+    ///     load_transform: mat3x2<f32>,           //     8   24    168
+    ///     size: vec2<u32>,                       //     8    8    192
+    ///     num_planes: u32,                       //     4    4    200
+    /// }                            // whole struct:    16  208
     /// ```
     ///
-    /// Call [`Module::generate_external_texture_params_type`] to populate this
-    /// if needed and return the handle.
+    /// Call [`Module::generate_external_texture_types`] to populate this if
+    /// needed.
     pub external_texture_params: Option<Handle<Type>>,
+
+    /// Struct describing a gamma encoding transfer function. Member of
+    /// `NagaExternalTextureParams`, describing how the backend should perform
+    /// color space conversion when sampling from [`ImageClass::External`]
+    /// textures.
+    ///
+    /// In WGSL, this type would be:
+    ///
+    /// ```ignore
+    /// struct NagaExternalTextureTransferFn { // align size offset
+    ///     a: f32,                            //     4    4      0
+    ///     b: f32,                            //     4    4      4
+    ///     g: f32,                            //     4    4      8
+    ///     k: f32,                            //     4    4     12
+    /// }                         // whole struct:    4   16
+    /// ```
+    ///
+    /// Call [`Module::generate_external_texture_types`] to populate this if
+    /// needed.
+    pub external_texture_transfer_function: Option<Handle<Type>>,
 
     /// Types for predeclared wgsl types instantiated on demand.
     ///

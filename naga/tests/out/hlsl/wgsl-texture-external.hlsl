@@ -1,5 +1,16 @@
+struct NagaExternalTextureTransferFn {
+    float a;
+    float b;
+    float g;
+    float k;
+};
+
 struct NagaExternalTextureParams {
     row_major float4x4 yuv_conversion_matrix;
+    row_major float3x3 gamut_conversion_matrix;
+    int _pad2_0;
+    NagaExternalTextureTransferFn src_tf;
+    NagaExternalTextureTransferFn dst_tf;
     float2 sample_transform_0; float2 sample_transform_1; float2 sample_transform_2;
     float2 load_transform_0; float2 load_transform_1; float2 load_transform_2;
     uint2 size;
@@ -55,7 +66,15 @@ float4 nagaTextureSampleBaseClampToEdge(
             float2 plane2_coords = clamp(coords, bounds.xy + plane2_half_texel, bounds.zw - plane2_half_texel);
             uv = float2(plane1.SampleLevel(samp, plane1_coords, 0.0f).x, plane2.SampleLevel(samp, plane2_coords, 0.0f).x);
         }
-        return mul(float4(y, uv, 1.0), params.yuv_conversion_matrix);
+        float3 srcGammaRgb = mul(float4(y, uv, 1.0), params.yuv_conversion_matrix).rgb;
+        float3 srcLinearRgb = srcGammaRgb < params.src_tf.k * params.src_tf.b ?
+            srcGammaRgb / params.src_tf.k :
+            pow((srcGammaRgb + params.src_tf.a - 1.0) / params.src_tf.a, params.src_tf.g);
+        float3 dstLinearRgb = mul(srcLinearRgb, params.gamut_conversion_matrix);
+        float3 dstGammaRgb = dstLinearRgb < params.dst_tf.b ?
+            params.dst_tf.k * dstLinearRgb :
+            params.dst_tf.a * pow(dstLinearRgb, 1.0 / params.dst_tf.g) - (params.dst_tf.a - 1);
+        return float4(dstGammaRgb, 1.0);
     }
 }
 
@@ -92,7 +111,15 @@ float4 nagaTextureLoadExternal(
             uint2 plane2_coords = uint2(floor(float2(plane0_coords) * float2(plane2_size) / float2(plane0_size)));
             uv = float2(plane1.Load(uint3(plane1_coords, 0u)).x, plane2.Load(uint3(plane2_coords, 0u)).x);
         }
-        return mul(float4(y, uv, 1.0), params.yuv_conversion_matrix);
+        float3 srcGammaRgb = mul(float4(y, uv, 1.0), params.yuv_conversion_matrix).rgb;
+        float3 srcLinearRgb = srcGammaRgb < params.src_tf.k * params.src_tf.b ?
+            srcGammaRgb / params.src_tf.k :
+            pow((srcGammaRgb + params.src_tf.a - 1.0) / params.src_tf.a, params.src_tf.g);
+        float3 dstLinearRgb = mul(srcLinearRgb, params.gamut_conversion_matrix);
+        float3 dstGammaRgb = dstLinearRgb < params.dst_tf.b ?
+            params.dst_tf.k * dstLinearRgb :
+            params.dst_tf.a * pow(dstLinearRgb, 1.0 / params.dst_tf.g) - (params.dst_tf.a - 1);
+        return float4(dstGammaRgb, 1.0);
     }
 }
 
