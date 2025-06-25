@@ -1,6 +1,7 @@
 use alloc::{borrow::ToOwned as _, boxed::Box, ffi::CString, string::String, sync::Arc, vec::Vec};
 use core::{
     ffi::{c_void, CStr},
+    marker::PhantomData,
     slice,
     str::FromStr,
 };
@@ -596,7 +597,7 @@ impl super::Instance {
     /// - Callback must not change anything to what the instance does not support.
     pub unsafe fn init_with_callback(
         desc: &crate::InstanceDescriptor,
-        callback: Option<super::CreateInstanceCallback>,
+        callback: Option<Box<super::CreateInstanceCallback>>,
     ) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init Vulkan Backend");
 
@@ -650,7 +651,12 @@ impl super::Instance {
         let mut create_info = vk::InstanceCreateInfo::default();
 
         if let Some(callback) = callback {
-            callback(&mut extensions, &mut create_info, &entry)
+            callback(super::CreateInstanceCallbackArgs {
+                extensions: &mut extensions,
+                create_info: &mut create_info,
+                entry: &entry,
+                _phantom: PhantomData,
+            });
         }
 
         let instance_layers = {

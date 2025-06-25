@@ -1,5 +1,5 @@
-use alloc::{borrow::ToOwned as _, collections::BTreeMap, sync::Arc, vec::Vec};
-use core::ffi::CStr;
+use alloc::{borrow::ToOwned as _, boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
+use core::{ffi::CStr, marker::PhantomData};
 
 use ash::{ext, google, khr, vk};
 use parking_lot::Mutex;
@@ -2280,7 +2280,7 @@ impl super::Adapter {
         &self,
         features: wgt::Features,
         memory_hints: &wgt::MemoryHints,
-        callback: Option<super::CreateDeviceCallback<'a>>,
+        callback: Option<Box<super::CreateDeviceCallback<'a>>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let mut enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
@@ -2294,12 +2294,13 @@ impl super::Adapter {
         let mut pre_info = vk::DeviceCreateInfo::default();
 
         if let Some(callback) = callback {
-            callback(
-                &mut enabled_extensions,
-                &mut enabled_phd_features,
-                &mut family_infos,
-                &mut pre_info,
-            )
+            callback(super::CreateDeviceCallbackArgs {
+                extensions: &mut enabled_extensions,
+                device_features: &mut enabled_phd_features,
+                queue_create_infos: &mut family_infos,
+                create_info: &mut pre_info,
+                _phantom: PhantomData,
+            })
         }
 
         let str_pointers = enabled_extensions
