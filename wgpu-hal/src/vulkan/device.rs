@@ -1175,7 +1175,7 @@ impl crate::Device for super::Device {
         if let Some(ref block) = buffer.block {
             let size = range.end - range.start;
             let mut block = block.lock();
-            if let super::BufferMemoryBacking::Managed(block) = &mut *block {
+            if let super::BufferMemoryBacking::Managed(ref mut block) = *block {
                 let ptr = unsafe { block.map(&*self.shared, range.start, size as usize)? };
                 let is_coherent = block
                     .props()
