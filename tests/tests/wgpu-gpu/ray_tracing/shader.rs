@@ -1,4 +1,4 @@
-use crate::ray_tracing::AsBuildContext;
+use crate::ray_tracing::{acceleration_structure_limits, AsBuildContext};
 use wgpu::{
     include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
     CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
@@ -11,10 +11,15 @@ const STRUCT_SIZE: wgpu::BufferAddress = 176;
 
 #[gpu_test]
 static ACCESS_ALL_STRUCT_MEMBERS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits().features(
-        wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-            | wgpu::Features::EXPERIMENTAL_RAY_QUERY,
-    ))
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(
+                wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                    | wgpu::Features::EXPERIMENTAL_RAY_QUERY,
+            ),
+    )
     .run_sync(access_all_struct_members);
 
 fn access_all_struct_members(ctx: TestingContext) {

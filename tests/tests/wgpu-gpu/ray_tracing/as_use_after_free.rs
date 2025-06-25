@@ -1,3 +1,4 @@
+use crate::ray_tracing::acceleration_structure_limits;
 use std::{iter, mem};
 use wgpu::{
     include_wgsl,
@@ -145,6 +146,7 @@ static ACCELERATION_STRUCTURE_USE_AFTER_FREE: GpuTestConfiguration = GpuTestConf
     .parameters(
         TestParameters::default()
             .test_features_limits()
+            .limits(acceleration_structure_limits())
             .features(required_features())
             // https://github.com/gfx-rs/wgpu/issues/6727
             .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
