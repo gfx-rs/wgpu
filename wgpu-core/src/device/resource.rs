@@ -1801,6 +1801,22 @@ impl Device {
                     num_workgroups: inner.num_workgroups,
                 }
             }
+            pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
+                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::Dxil {
+                    shader: inner.source,
+                    entry_point: inner.entry_point.clone(),
+                    num_workgroups: inner.num_workgroups,
+                }
+            }
+            pipeline::ShaderModuleDescriptorPassthrough::Hlsl(inner) => {
+                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::Hlsl {
+                    shader: inner.source,
+                    entry_point: inner.entry_point.clone(),
+                    num_workgroups: inner.num_workgroups,
+                }
+            }
         };
 
         let hal_desc = hal::ShaderModuleDescriptor {

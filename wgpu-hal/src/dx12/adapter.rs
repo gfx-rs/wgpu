@@ -511,6 +511,21 @@ impl super::Adapter {
         let max_color_attachment_bytes_per_sample =
             max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
+        let max_srv_count = match options.ResourceBindingTier {
+            Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
+            _ => full_heap_count,
+        };
+
+        // If we also support acceleration structures these are shared so we must halve it.
+        // It's unlikely that this affects anything because most devices that support ray tracing
+        // probably have a higher binding tier than one.
+        let max_sampled_textures_per_shader_stage =
+            if !features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
+                max_srv_count
+            } else {
+                max_srv_count / 2
+            };
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 raw: adapter,
@@ -538,10 +553,7 @@ impl super::Adapter {
                         .max_dynamic_uniform_buffers_per_pipeline_layout,
                     max_dynamic_storage_buffers_per_pipeline_layout: base
                         .max_dynamic_storage_buffers_per_pipeline_layout,
-                    max_sampled_textures_per_shader_stage: match options.ResourceBindingTier {
-                        Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
-                        _ => full_heap_count,
-                    },
+                    max_sampled_textures_per_shader_stage,
                     max_samplers_per_shader_stage: match options.ResourceBindingTier {
                         Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
                         _ => Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
@@ -604,6 +616,34 @@ impl super::Adapter {
                     // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
                     max_buffer_size: i32::MAX as u64,
                     max_non_sampler_bindings: 1_000_000,
+                    max_blas_primitive_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 29 // 2^29
+                    } else {
+                        0
+                    },
+                    max_blas_geometry_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 24 // 2^24
+                    } else {
+                        0
+                    },
+                    max_tlas_instance_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 24 // 2^24
+                    } else {
+                        0
+                    },
+                    max_acceleration_structures_per_shader_stage: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        max_srv_count / 2
+                    } else {
+                        0
+                    },
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(

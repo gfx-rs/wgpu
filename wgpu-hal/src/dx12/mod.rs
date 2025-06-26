@@ -465,6 +465,11 @@ pub struct Instance {
 }
 
 impl Instance {
+    /// Get the raw DXGI factory associated with this instance.
+    pub unsafe fn raw_factory4(&self) -> &Dxgi::IDXGIFactory4 {
+        self.factory.deref()
+    }
+
     pub unsafe fn create_surface_from_visual(&self, visual: *mut ffi::c_void) -> Surface {
         let visual = unsafe { DirectComposition::IDCompositionVisual::from_raw_borrowed(&visual) }
             .expect("COM pointer should not be NULL");
@@ -1072,7 +1077,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    naga: crate::NagaShader,
+    source: ShaderModuleSource,
     raw_name: Option<alloc::ffi::CString>,
     runtime_checks: wgt::ShaderRuntimeChecks,
 }
@@ -1104,6 +1109,7 @@ pub(super) struct ShaderCacheValue {
 pub(super) enum CompiledShader {
     Dxc(Direct3D::Dxc::IDxcBlob),
     Fxc(Direct3D::ID3DBlob),
+    Precompiled(Vec<u8>),
 }
 
 impl CompiledShader {
@@ -1116,6 +1122,10 @@ impl CompiledShader {
             CompiledShader::Fxc(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
                 pShaderBytecode: unsafe { shader.GetBufferPointer() },
                 BytecodeLength: unsafe { shader.GetBufferSize() },
+            },
+            CompiledShader::Precompiled(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
+                pShaderBytecode: shader.as_ptr().cast(),
+                BytecodeLength: shader.len(),
             },
         }
     }
@@ -1484,4 +1494,24 @@ impl crate::Queue for Queue {
         let frequency = unsafe { self.raw.GetTimestampFrequency() }.expect("GetTimestampFrequency");
         (1_000_000_000.0 / frequency as f64) as f32
     }
+}
+#[derive(Debug)]
+pub struct DxilPassthroughShader {
+    pub shader: Vec<u8>,
+    pub entry_point: String,
+    pub num_workgroups: (u32, u32, u32),
+}
+
+#[derive(Debug)]
+pub struct HlslPassthroughShader {
+    pub shader: String,
+    pub entry_point: String,
+    pub num_workgroups: (u32, u32, u32),
+}
+
+#[derive(Debug)]
+pub enum ShaderModuleSource {
+    Naga(crate::NagaShader),
+    DxilPassthrough(DxilPassthroughShader),
+    HlslPassthrough(HlslPassthroughShader),
 }

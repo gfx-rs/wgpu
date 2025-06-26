@@ -1204,6 +1204,18 @@ impl PhysicalDeviceProperties {
         let max_color_attachment_bytes_per_sample =
             limits.max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
+        let mut max_blas_geometry_count = 0;
+        let mut max_blas_primitive_count = 0;
+        let mut max_tlas_instance_count = 0;
+        let mut max_acceleration_structures_per_shader_stage = 0;
+        if let Some(properties) = self.acceleration_structure {
+            max_blas_geometry_count = properties.max_geometry_count as u32;
+            max_blas_primitive_count = properties.max_primitive_count as u32;
+            max_tlas_instance_count = properties.max_instance_count as u32;
+            max_acceleration_structures_per_shader_stage =
+                properties.max_per_stage_descriptor_acceleration_structures;
+        }
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -1261,6 +1273,10 @@ impl PhysicalDeviceProperties {
             max_compute_workgroups_per_dimension,
             max_buffer_size,
             max_non_sampler_bindings: u32::MAX,
+            max_blas_primitive_count,
+            max_blas_geometry_count,
+            max_tlas_instance_count,
+            max_acceleration_structures_per_shader_stage,
         }
     }
 

@@ -380,8 +380,7 @@ fn map_primitive_state(primitive: &wgt::PrimitiveState) -> webgpu_sys::GpuPrimit
         PrimitiveTopology::TriangleStrip => pt::TriangleStrip,
     });
 
-    //TODO:
-    //mapped.unclipped_depth(primitive.unclipped_depth);
+    mapped.set_unclipped_depth(primitive.unclipped_depth);
 
     match primitive.polygon_mode {
         wgt::PolygonMode::Fill => {}
@@ -828,6 +827,11 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_push_constant_size: wgt::Limits::default().max_push_constant_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
         max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
+        max_blas_primitive_count: wgt::Limits::default().max_blas_primitive_count,
+        max_blas_geometry_count: wgt::Limits::default().max_blas_geometry_count,
+        max_tlas_instance_count: wgt::Limits::default().max_tlas_instance_count,
+        max_acceleration_structures_per_shader_stage: wgt::Limits::default()
+            .max_acceleration_structures_per_shader_stage,
     }
 }
 

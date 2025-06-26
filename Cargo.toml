@@ -159,7 +159,8 @@ pico-args = { version = "0.5", features = [
 ] }
 png = "0.17.6"
 pollster = "0.4"
-portable-atomic = "1.2"
+portable-atomic = "1.8"
+portable-atomic-util = "0.2.4"
 pp-rs = "0.2.1"
 profiling = { version = "1", default-features = false }
 quote = "1.0.38"
