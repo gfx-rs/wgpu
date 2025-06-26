@@ -207,6 +207,8 @@ impl Global {
         offset: BufferAddress,
         data: &[u8],
     ) -> BufferAccessResult {
+        use crate::resource::RawResourceAccess;
+
         let hub = &self.hub;
 
         let buffer = hub.buffers.get(buffer_id).get()?;

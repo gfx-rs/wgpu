@@ -40,7 +40,7 @@ use crate::{
     pipeline,
     pool::ResourcePool,
     resource::{
-        self, AccelerationStructure, Buffer, Fallible, Labeled, ParentDevice, QuerySet, Sampler,
+        self, Buffer, Fallible, Labeled, ParentDevice, QuerySet, RawResourceAccess, Sampler,
         StagingBuffer, Texture, TextureView, TextureViewNotRenderableReason, Tlas, TrackingData,
     },
     resource_log,

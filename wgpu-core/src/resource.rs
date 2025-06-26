@@ -135,6 +135,29 @@ macro_rules! impl_parent_device {
     };
 }
 
+/// Allow access to the hal resource as guarded by the `SnatchGuard`.
+pub trait RawResourceAccess: ParentDevice {
+    type DynResource: hal::DynResource + ?Sized;
+
+    /// Get access to the raw resource if it is not destroyed.
+    ///
+    /// Returns `None` if the resource has been destroyed. This method
+    /// does not allocate in either case.
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource>;
+
+    /// Get access to the raw resource if it is not destroyed.
+    ///
+    /// Returns a full error if the resource has been destroyed. This
+    /// method allocates a label in the error case.
+    fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a Self::DynResource, DestroyedResourceError> {
+        self.raw(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    }
+}
+
 pub trait ResourceType {
     const TYPE: &'static str;
 }
@@ -435,21 +458,15 @@ impl Drop for Buffer {
     }
 }
 
-impl Buffer {
-    pub(crate) fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynBuffer> {
+impl RawResourceAccess for Buffer {
+    type DynResource = dyn hal::DynBuffer;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
         self.raw.get(guard).map(|b| b.as_ref())
     }
+}
 
-    pub(crate) fn try_raw<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynBuffer, DestroyedResourceError> {
-        self.raw
-            .get(guard)
-            .map(|raw| raw.as_ref())
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
-    }
-
+impl Buffer {
     pub(crate) fn check_destroyed(
         &self,
         guard: &SnatchGuard,
@@ -1182,6 +1199,14 @@ impl Drop for Texture {
     }
 }
 
+impl RawResourceAccess for Texture {
+    type DynResource = dyn hal::DynTexture;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
+        self.inner.get(guard).map(|t| t.raw())
+    }
+}
+
 impl Texture {
     pub(crate) fn try_inner<'a>(
         &'a self,
@@ -1189,23 +1214,6 @@ impl Texture {
     ) -> Result<&'a TextureInner, DestroyedResourceError> {
         self.inner
             .get(guard)
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
-    }
-
-    pub(crate) fn raw<'a>(
-        &'a self,
-        snatch_guard: &'a SnatchGuard,
-    ) -> Option<&'a dyn hal::DynTexture> {
-        Some(self.inner.get(snatch_guard)?.raw())
-    }
-
-    pub(crate) fn try_raw<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynTexture, DestroyedResourceError> {
-        self.inner
-            .get(guard)
-            .map(|t| t.raw())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
@@ -1570,25 +1578,25 @@ impl Drop for TextureView {
     }
 }
 
-impl TextureView {
-    pub(crate) fn raw<'a>(
-        &'a self,
-        snatch_guard: &'a SnatchGuard,
-    ) -> Option<&'a dyn hal::DynTextureView> {
-        self.raw.get(snatch_guard).map(|it| it.as_ref())
+impl RawResourceAccess for TextureView {
+    type DynResource = dyn hal::DynTextureView;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
+        self.raw.get(guard).map(|it| it.as_ref())
     }
 
-    pub(crate) fn try_raw<'a>(
+    fn try_raw<'a>(
         &'a self,
         guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynTextureView, DestroyedResourceError> {
+    ) -> Result<&'a Self::DynResource, DestroyedResourceError> {
         self.parent.check_destroyed(guard)?;
-        self.raw
-            .get(guard)
-            .map(|it| it.as_ref())
+
+        self.raw(guard)
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
+}
 
+impl TextureView {
     /// Checks that the given texture usage contains the required texture usage,
     /// returns an error otherwise.
     pub(crate) fn check_usage(
@@ -1888,13 +1896,6 @@ impl QuerySet {
 pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 
-pub(crate) trait AccelerationStructure: Trackable {
-    fn try_raw<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynAccelerationStructure, DestroyedResourceError>;
-}
-
 pub type BlasPrepareCompactResult = Result<(), BlasPrepareCompactError>;
 
 #[cfg(send_sync)]
@@ -1970,15 +1971,11 @@ impl Drop for Blas {
     }
 }
 
-impl AccelerationStructure for Blas {
-    fn try_raw<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynAccelerationStructure, DestroyedResourceError> {
-        self.raw
-            .get(guard)
-            .map(|raw| raw.as_ref())
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+impl RawResourceAccess for Blas {
+    type DynResource = dyn hal::DynAccelerationStructure;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
+        self.raw.get(guard).map(|it| it.as_ref())
     }
 }
 
@@ -2118,15 +2115,11 @@ impl Drop for Tlas {
     }
 }
 
-impl AccelerationStructure for Tlas {
-    fn try_raw<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynAccelerationStructure, DestroyedResourceError> {
-        self.raw
-            .get(guard)
-            .map(|raw| raw.as_ref())
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+impl RawResourceAccess for Tlas {
+    type DynResource = dyn hal::DynAccelerationStructure;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
+        self.raw.get(guard).map(|raw| raw.as_ref())
     }
 }
 

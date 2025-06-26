@@ -15,6 +15,7 @@ use crate::command::{
     TimestampWritesError,
 };
 use crate::pipeline::{RenderPipeline, VertexStep};
+use crate::resource::RawResourceAccess;
 use crate::resource::{InvalidResourceError, ResourceErrorIdent};
 use crate::snatch::SnatchGuard;
 use crate::{

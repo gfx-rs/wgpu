@@ -5,7 +5,7 @@ use crate::{
         AdapterId, BlasId, BufferId, CommandEncoderId, DeviceId, QueueId, SurfaceId, TextureId,
         TextureViewId, TlasId,
     },
-    resource::AccelerationStructure,
+    resource::RawResourceAccess,
 };
 
 impl Global {

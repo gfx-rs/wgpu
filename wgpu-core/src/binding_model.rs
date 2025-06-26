@@ -26,7 +26,8 @@ use crate::{
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
         Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        MissingTextureUsageError, ResourceErrorIdent, Sampler, TextureView, Tlas, TrackingData,
+        MissingTextureUsageError, RawResourceAccess, ResourceErrorIdent, Sampler, TextureView,
+        Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},

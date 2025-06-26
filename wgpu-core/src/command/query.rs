@@ -11,7 +11,7 @@ use crate::{
     init_tracker::MemoryInitKind,
     resource::{
         DestroyedResourceError, InvalidResourceError, MissingBufferUsageError, ParentDevice,
-        QuerySet, Trackable,
+        QuerySet, RawResourceAccess, Trackable,
     },
     track::{StatelessTracker, TrackerIndex},
     FastHashMap,
