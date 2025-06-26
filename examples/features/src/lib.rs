@@ -4,6 +4,7 @@
 pub mod framework;
 pub mod utils;
 
+pub mod api_interop;
 pub mod big_compute_buffers;
 pub mod boids;
 pub mod bunnymark;

@@ -4964,6 +4964,7 @@ dependencies = [
 name = "wgpu-examples"
 version = "25.0.0"
 dependencies = [
+ "ash",
  "bytemuck",
  "cfg-if",
  "console_error_panic_hook",
@@ -4973,6 +4974,7 @@ dependencies = [
  "fern",
  "flume",
  "glam",
+ "glow",
  "ktx2",
  "log",
  "nanorand 0.8.0",
@@ -4988,6 +4990,7 @@ dependencies = [
  "wgpu",
  "wgpu-test",
  "wgpu-types",
+ "windows 0.58.0",
  "winit 0.29.15",
 ]
 
