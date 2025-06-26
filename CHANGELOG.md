@@ -89,6 +89,7 @@ Bottom level categories:
 #### Vulkan
 
 - Fix OpenBSD compilation of `wgpu_hal::vulkan::drm`. By @ErichDonGubler in [#7810](https://github.com/gfx-rs/wgpu/pull/7810).
+- Fix warnings for unrecognized present mode. By @Wumpf in [#7850](https://github.com/gfx-rs/wgpu/pull/7850).
 
 #### Metal
 
