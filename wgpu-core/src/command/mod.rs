@@ -897,27 +897,53 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
     }
 }
 
+/// Checks the state of a [`compute::ComputePass`] or [`render::RenderPass`] and
+/// evaluates to a mutable reference to the [`BasePass`], if the pass is open and
+/// valid.
+///
+/// If the pass is ended or not valid, **returns from the invoking function**,
+/// like the `?` operator.
+///
+/// If the pass is ended (i.e. the application is attempting to record a command
+/// on a finished pass), returns `Err(EncoderStateError::Ended)` from the
+/// invoking function, for immediate propagation as a validation error.
+///
+/// If the pass is open but invalid (i.e. a previous command encountered an
+/// error), returns `Ok(())` from the invoking function. The pass should already
+/// have stored the previous error, which will be transferred to the parent
+/// encoder when the pass is ended, and then raised as a validation error when
+/// `finish()` is called for the parent).
+///
+/// Although in many cases the functionality of `pass_base!` could be achieved
+/// by combining a helper method on the passes with the `pass_try!` macro,
+/// taking the mutable reference to the base pass in a macro avoids borrowing
+/// conflicts when a reference to some other member of the pass struct is
+/// needed simultaneously with the base pass reference.
 macro_rules! pass_base {
     ($pass:expr, $scope:expr $(,)?) => {
         match (&$pass.parent, &$pass.base.error) {
-            // Attempting to record a command on a finished encoder raises a
-            // validation error.
+            // Pass is ended
             (&None, _) => return Err(EncoderStateError::Ended).map_pass_err($scope),
-
-            // Attempting to record a command on an open but invalid pass (i.e.
-            // a pass with a stored error) fails silently. (The stored error
-            // will be transferred to the parent encoder when the pass is ended,
-            // and then raised as a validation error when `finish()` is called
-            // for the parent).
+            // Pass is invalid
             (&Some(_), &Some(_)) => return Ok(()),
-
-            // Happy path
+            // Pass is open and valid
             (&Some(_), &None) => &mut $pass.base,
         }
     };
 }
 pub(crate) use pass_base;
 
+/// Handles the error case in an expression of type `Result<T, E>`.
+///
+/// This macro operates like the `?` operator (or, in early Rust versions, the
+/// `try!` macro, hence the name `pass_try`). **When there is an error, the
+/// macro returns from the invoking function.** However, `Ok(())`, and not the
+/// error itself, is returned. The error is stored in the pass and will later be
+/// transferred to the parent encoder when the pass ends, and then raised as a
+/// validation error when `finish()` is called for the parent.
+///
+/// `pass_try!` also calls [`MapPassErr::map_pass_err`] to annotate the error
+/// with the command being encoded at the time it occurred.
 macro_rules! pass_try {
     ($base:expr, $scope:expr, $res:expr $(,)?) => {
         match $res.map_pass_err($scope) {
@@ -1302,6 +1328,7 @@ impl Default for BindGroupStateChange {
     }
 }
 
+/// Helper to attach [`PassErrorScope`] to errors.
 trait MapPassErr<T> {
     fn map_pass_err(self, scope: PassErrorScope) -> T;
 }
@@ -1329,6 +1356,15 @@ pub enum DrawKind {
     MultiDrawIndirectCount,
 }
 
+/// A command that can be recorded in a pass or bundle.
+///
+/// This is used to provide context for errors during command recording.
+/// [`MapPassErr`] is used as a helper to attach a `PassErrorScope` to
+/// an error.
+///
+/// The [`PassErrorScope::Bundle`] and [`PassErrorScope::Pass`] variants
+/// are used when the error occurs during the opening or closing of the
+/// pass or bundle.
 #[derive(Clone, Copy, Debug, Error)]
 pub enum PassErrorScope {
     // TODO: Extract out the 2 error variants below so that we can always

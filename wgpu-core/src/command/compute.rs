@@ -1162,6 +1162,17 @@ fn write_timestamp(
 }
 
 // Recording a compute pass.
+//
+// The only error that should be returned from these methods is
+// `EncoderStateError::Ended`, when the pass has already ended and an immediate
+// validation error is raised.
+//
+// All other errors should be stored in the pass for later reporting when
+// `CommandEncoder.finish()` is called.
+//
+// The `pass_try!` macro should be used to handle errors appropriately. Note
+// that the `pass_try!` and `pass_base!` macros may return early from the
+// function that invokes them, like the `?` operator.
 impl Global {
     pub fn compute_pass_set_bind_group(
         &self,
