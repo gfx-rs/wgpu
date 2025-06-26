@@ -138,8 +138,6 @@ Bottom level categories:
 
 - Added initial `no_std` support to `wgpu-hal`. By @bushrat011899 in [#7599](https://github.com/gfx-rs/wgpu/pull/7599)
 
-### Bug Fixes
-
 ### Documentation
 
 #### General
