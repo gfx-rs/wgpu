@@ -76,8 +76,28 @@ pub enum CreateBindGroupLayoutError {
     InvalidVisibility(wgt::ShaderStages),
 }
 
-//TODO: refactor this to move out `enum BindingError`.
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum BindingError {
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
+    #[error("Buffer {buffer}: Binding with size {binding_size} at offset {offset} would overflow buffer size of {buffer_size}")]
+    BindingRangeTooLarge {
+        buffer: ResourceErrorIdent,
+        offset: wgt::BufferAddress,
+        binding_size: u64,
+        buffer_size: u64,
+    },
+    #[error("Buffer {buffer}: Binding offset {offset} is greater than or equal to buffer size {buffer_size}")]
+    BindingOffsetTooLarge {
+        buffer: ResourceErrorIdent,
+        offset: wgt::BufferAddress,
+        buffer_size: u64,
+    },
+}
 
+// TODO: there may be additional variants here that can be extracted into
+// `BindingError`.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateBindGroupError {
@@ -85,6 +105,8 @@ pub enum CreateBindGroupError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
+    #[error(transparent)]
+    BindingError(#[from] BindingError),
     #[error(
         "Binding count declared with at most {expected} items, but {actual} items were provided"
     )]
@@ -95,12 +117,6 @@ pub enum CreateBindGroupError {
     BindingArrayLengthMismatch { actual: usize, expected: usize },
     #[error("Array binding provided zero elements")]
     BindingArrayZeroLength,
-    #[error("The bound range {range:?} of {buffer} overflows its size ({size})")]
-    BindingRangeTooLarge {
-        buffer: ResourceErrorIdent,
-        range: Range<wgt::BufferAddress>,
-        size: u64,
-    },
     #[error("Binding size {actual} of {buffer} is less than minimum {min}")]
     BindingSizeTooSmall {
         buffer: ResourceErrorIdent,

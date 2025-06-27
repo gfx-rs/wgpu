@@ -1,5 +1,5 @@
 use alloc::{borrow::Cow, sync::Arc, vec::Vec};
-use core::{fmt, num::NonZeroU32, ops::Range, str};
+use core::{fmt, num::NonZeroU32, str};
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
@@ -357,13 +357,17 @@ struct IndexState {
 }
 
 impl IndexState {
-    fn update_buffer(&mut self, range: Range<BufferAddress>, format: IndexFormat) {
+    fn update_buffer<B: hal::DynBuffer + ?Sized>(
+        &mut self,
+        binding: &hal::BufferBinding<'_, B>,
+        format: IndexFormat,
+    ) {
         self.buffer_format = Some(format);
         let shift = match format {
             IndexFormat::Uint16 => 1,
             IndexFormat::Uint32 => 2,
         };
-        self.limit = (range.end - range.start) >> shift;
+        self.limit = binding.size.get() >> shift;
     }
 
     fn reset(&mut self) {
@@ -2288,6 +2292,7 @@ fn set_pipeline(
     Ok(())
 }
 
+// This function is duplicative of `bundle::set_index_buffer`.
 fn set_index_buffer(
     state: &mut State,
     cmd_buf: &Arc<CommandBuffer>,
@@ -2307,33 +2312,27 @@ fn set_index_buffer(
     buffer.same_device_as(cmd_buf.as_ref())?;
 
     buffer.check_usage(BufferUsages::INDEX)?;
-    let buf_raw = buffer.try_raw(state.snatch_guard)?;
 
-    let end = match size {
-        Some(s) => offset + s.get(),
-        None => buffer.size,
-    };
-    state.index.update_buffer(offset..end, index_format);
+    let binding = buffer
+        .binding(offset, size, state.snatch_guard)
+        .map_err(RenderCommandError::from)?;
+    state.index.update_buffer(&binding, index_format);
 
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
             &buffer,
-            offset..end,
+            offset..(offset + binding.size.get()),
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-    let bb = hal::BufferBinding {
-        buffer: buf_raw,
-        offset,
-        size,
-    };
     unsafe {
-        hal::DynCommandEncoder::set_index_buffer(state.raw_encoder, bb, index_format);
+        hal::DynCommandEncoder::set_index_buffer(state.raw_encoder, binding, index_format);
     }
     Ok(())
 }
 
+// This function is duplicative of `render::set_vertex_buffer`.
 fn set_vertex_buffer(
     state: &mut State,
     cmd_buf: &Arc<CommandBuffer>,
@@ -2365,30 +2364,22 @@ fn set_vertex_buffer(
     }
 
     buffer.check_usage(BufferUsages::VERTEX)?;
-    let buf_raw = buffer.try_raw(state.snatch_guard)?;
 
-    //TODO: where are we checking that the offset is in bound?
-    let buffer_size = match size {
-        Some(s) => s.get(),
-        None => buffer.size - offset,
-    };
-    state.vertex.buffer_sizes[slot as usize] = Some(buffer_size);
+    let binding = buffer
+        .binding(offset, size, state.snatch_guard)
+        .map_err(RenderCommandError::from)?;
+    state.vertex.buffer_sizes[slot as usize] = Some(binding.size.get());
 
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
             &buffer,
-            offset..(offset + buffer_size),
+            offset..(offset + binding.size.get()),
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-    let bb = hal::BufferBinding {
-        buffer: buf_raw,
-        offset,
-        size,
-    };
     unsafe {
-        hal::DynCommandEncoder::set_vertex_buffer(state.raw_encoder, slot, bb);
+        hal::DynCommandEncoder::set_vertex_buffer(state.raw_encoder, slot, binding);
     }
     if let Some(pipeline) = state.pipeline.as_ref() {
         state.vertex.update_limits(&pipeline.vertex_steps);
