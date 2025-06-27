@@ -606,6 +606,22 @@ pub struct Limits {
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
+    /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
+    /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_blas_primitive_count: u32,
+    /// The maximum number of geometry descriptors a BLAS is allowed to have. Requesting
+    /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_blas_geometry_count: u32,
+    /// The maximum number of instances a TLAS is allowed to have. Requesting more than 0 during
+    /// device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_tlas_instance_count: u32,
+    /// The maximum number of acceleration structures allowed to be used in a shader stage.
+    /// Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_acceleration_structures_per_shader_stage: u32,
 }
 
 impl Default for Limits {
@@ -658,6 +674,10 @@ impl Limits {
     ///     max_subgroup_size: 0,
     ///     max_push_constant_size: 0,
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_blas_primitive_count: 0,
+    ///     max_blas_geometry_count: 0,
+    ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
     /// });
     /// ```
     ///
@@ -702,6 +722,10 @@ impl Limits {
             max_subgroup_size: 0,
             max_push_constant_size: 0,
             max_non_sampler_bindings: 1_000_000,
+            max_blas_primitive_count: 0,
+            max_blas_geometry_count: 0,
+            max_tlas_instance_count: 0,
+            max_acceleration_structures_per_shader_stage: 0,
         }
     }
 
@@ -747,6 +771,10 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_blas_primitive_count: 0,
+    ///     max_blas_geometry_count: 0,
+    ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
     /// });
     /// ```
     #[must_use]
@@ -807,6 +835,10 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 0, // +
     ///     max_buffer_size: 256 << 20, // (256 MiB),
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_blas_primitive_count: 0,
+    ///     max_blas_geometry_count: 0,
+    ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
     /// });
     /// ```
     #[must_use]
@@ -858,6 +890,32 @@ impl Limits {
         Self {
             min_uniform_buffer_offset_alignment: other.min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment: other.min_storage_buffer_offset_alignment,
+            ..self
+        }
+    }
+
+    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    #[must_use]
+    pub const fn using_minimum_supported_acceleration_structure_values(self) -> Self {
+        Self {
+            max_blas_geometry_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
+            max_tlas_instance_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
+            max_blas_primitive_count: 1 << 28,      // 2^28: Metal's minimum
+            max_acceleration_structures_per_shader_stage: 16, // Vulkan's minimum
+            ..self
+        }
+    }
+
+    /// Modify the current limits to use the acceleration structure limits of `other` (`other` could
+    /// be the limits of the adapter).
+    #[must_use]
+    pub const fn using_acceleration_structure_values(self, other: Self) -> Self {
+        Self {
+            max_blas_geometry_count: other.max_blas_geometry_count,
+            max_tlas_instance_count: other.max_tlas_instance_count,
+            max_blas_primitive_count: other.max_blas_primitive_count,
+            max_acceleration_structures_per_shader_stage: other
+                .max_acceleration_structures_per_shader_stage,
             ..self
         }
     }
@@ -941,6 +999,9 @@ impl Limits {
         }
         compare!(max_push_constant_size, Less);
         compare!(max_non_sampler_bindings, Less);
+        compare!(max_blas_primitive_count, Less);
+        compare!(max_blas_geometry_count, Less);
+        compare!(max_tlas_instance_count, Less);
     }
 }
 
@@ -7704,6 +7765,10 @@ pub enum CreateShaderModuleDescriptorPassthrough<'a, L> {
     SpirV(ShaderModuleDescriptorSpirV<'a, L>),
     /// Passthrough for MSL source code.
     Msl(ShaderModuleDescriptorMsl<'a, L>),
+    /// Passthrough for DXIL compiled with DXC
+    Dxil(ShaderModuleDescriptorDxil<'a, L>),
+    /// Passthrough for HLSL
+    Hlsl(ShaderModuleDescriptorHlsl<'a, L>),
 }
 
 impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
@@ -7729,6 +7794,22 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
                     source: inner.source.clone(),
                 })
             }
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Dxil(ShaderModuleDescriptorDxil {
+                    entry_point: inner.entry_point.clone(),
+                    label: fun(&inner.label),
+                    num_workgroups: inner.num_workgroups,
+                    source: inner.source,
+                })
+            }
+            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Hlsl(ShaderModuleDescriptorHlsl {
+                    entry_point: inner.entry_point.clone(),
+                    label: fun(&inner.label),
+                    num_workgroups: inner.num_workgroups,
+                    source: inner.source,
+                })
+            }
         }
     }
 
@@ -7737,6 +7818,8 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         match self {
             CreateShaderModuleDescriptorPassthrough::SpirV(inner) => &inner.label,
             CreateShaderModuleDescriptorPassthrough::Msl(inner) => &inner.label,
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => &inner.label,
+            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => &inner.label,
         }
     }
 
@@ -7748,6 +7831,8 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
                 bytemuck::cast_slice(&inner.source)
             }
             CreateShaderModuleDescriptorPassthrough::Msl(inner) => inner.source.as_bytes(),
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => inner.source,
+            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => inner.source.as_bytes(),
         }
     }
 
@@ -7757,6 +7842,8 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         match self {
             CreateShaderModuleDescriptorPassthrough::SpirV(..) => "spv",
             CreateShaderModuleDescriptorPassthrough::Msl(..) => "msl",
+            CreateShaderModuleDescriptorPassthrough::Dxil(..) => "dxil",
+            CreateShaderModuleDescriptorPassthrough::Hlsl(..) => "hlsl",
         }
     }
 }
@@ -7775,6 +7862,38 @@ pub struct ShaderModuleDescriptorMsl<'a, L> {
     pub num_workgroups: (u32, u32, u32),
     /// Shader MSL source.
     pub source: Cow<'a, str>,
+}
+
+/// Descriptor for a shader module given by DirectX DXIL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorDxil<'a, L> {
+    /// Entrypoint.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
+    /// Shader DXIL source.
+    pub source: &'a [u8],
+}
+
+/// Descriptor for a shader module given by DirectX HLSL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorHlsl<'a, L> {
+    /// Entrypoint.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
+    /// Shader HLSL source.
+    pub source: &'a str,
 }
 
 /// Descriptor for a shader module given by SPIR-V binary.

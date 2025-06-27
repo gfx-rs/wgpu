@@ -468,17 +468,25 @@ pub fn map_present_mode(mode: wgt::PresentMode) -> vk::PresentModeKHR {
 }
 
 pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> Option<wgt::PresentMode> {
-    if mode == vk::PresentModeKHR::IMMEDIATE {
-        Some(wgt::PresentMode::Immediate)
-    } else if mode == vk::PresentModeKHR::MAILBOX {
-        Some(wgt::PresentMode::Mailbox)
-    } else if mode == vk::PresentModeKHR::FIFO {
-        Some(wgt::PresentMode::Fifo)
-    } else if mode == vk::PresentModeKHR::FIFO_RELAXED {
-        Some(wgt::PresentMode::FifoRelaxed)
-    } else {
-        log::warn!("Unrecognized present mode {:?}", mode);
-        None
+    // Not exposed in Ash yet.
+    const FIFO_LATEST_READY: vk::PresentModeKHR = vk::PresentModeKHR::from_raw(1_000_361_000);
+
+    // See https://registry.khronos.org/vulkan/specs/latest/man/html/VkPresentModeKHR.html
+    match mode {
+        vk::PresentModeKHR::IMMEDIATE => Some(wgt::PresentMode::Immediate),
+        vk::PresentModeKHR::MAILBOX => Some(wgt::PresentMode::Mailbox),
+        vk::PresentModeKHR::FIFO => Some(wgt::PresentMode::Fifo),
+        vk::PresentModeKHR::FIFO_RELAXED => Some(wgt::PresentMode::FifoRelaxed),
+
+        // Modes that aren't exposed yet.
+        vk::PresentModeKHR::SHARED_DEMAND_REFRESH => None,
+        vk::PresentModeKHR::SHARED_CONTINUOUS_REFRESH => None,
+        FIFO_LATEST_READY => None,
+
+        _ => {
+            log::debug!("Unrecognized present mode {:?}", mode);
+            None
+        }
     }
 }
 

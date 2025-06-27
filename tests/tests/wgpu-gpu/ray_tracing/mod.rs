@@ -14,8 +14,13 @@ use wgpu_test::TestingContext;
 mod as_build;
 mod as_create;
 mod as_use_after_free;
+mod limits;
 mod scene;
 mod shader;
+
+fn acceleration_structure_limits() -> wgpu::Limits {
+    wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()
+}
 
 pub struct AsBuildContext {
     vertices: Buffer,

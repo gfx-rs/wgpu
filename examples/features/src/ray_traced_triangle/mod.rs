@@ -34,7 +34,7 @@ impl crate::framework::Example for Example {
     }
 
     fn required_limits() -> wgpu::Limits {
-        wgpu::Limits::default()
+        wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
