@@ -90,14 +90,22 @@ pub fn fail_if<T>(
     }
 }
 
-/// Returns true if the provided callback fails validation.
-pub fn did_fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool, T) {
-    device.push_error_scope(wgpu::ErrorFilter::Validation);
+fn did_fill_error_scope<T>(
+    device: &wgpu::Device,
+    callback: impl FnOnce() -> T,
+    filter: wgpu::ErrorFilter,
+) -> (bool, T) {
+    device.push_error_scope(filter);
     let result = callback();
     let validation_error = pollster::block_on(device.pop_error_scope());
     let failed = validation_error.is_some();
 
     (failed, result)
+}
+
+/// Returns true if the provided callback fails validation.
+pub fn did_fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool, T) {
+    did_fill_error_scope(device, callback, wgpu::ErrorFilter::Validation)
 }
 
 /// Adds the necessary main function for our gpu test harness.
