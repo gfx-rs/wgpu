@@ -5,10 +5,7 @@ webgpu:api,operation,compute,basic:memcpy:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute_pipeline,overrides:*
 webgpu:api,operation,device,lost:*
-webgpu:api,validation,encoding,cmds,clearBuffer:buffer_state:bufferState="valid"
-//FAIL: webgpu:api,validation,encoding,cmds,clearBuffer:buffer_state:bufferState="invalid"
-// https://github.com/gfx-rs/wgpu/issues/7796 (Mac only)
-webgpu:api,validation,encoding,cmds,clearBuffer:buffer_state:bufferState="destroyed"
+webgpu:api,validation,encoding,cmds,clearBuffer:buffer_state:*
 webgpu:api,validation,encoding,cmds,clearBuffer:buffer,device_mismatch:*
 webgpu:api,validation,encoding,cmds,clearBuffer:default_args:*
 webgpu:api,validation,encoding,cmds,clearBuffer:buffer_usage:*
