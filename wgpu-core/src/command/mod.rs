@@ -189,8 +189,9 @@ impl CommandEncoderStatus {
 
     /// Locks the encoder by putting it in the [`Self::Locked`] state.
     ///
-    /// Call [`Self::unlock_encoder`] to put the [`CommandBuffer`] back into the
-    /// [`Self::Recording`] state.
+    /// Render or compute passes call this on start. At the end of the pass,
+    /// they call [`Self::unlock_and_record`] to put the [`CommandBuffer`] back
+    /// into the [`Self::Recording`] state.
     fn lock_encoder(&mut self) -> Result<(), EncoderStateError> {
         match mem::replace(self, Self::Transitioning) {
             Self::Recording(inner) => {
@@ -213,28 +214,47 @@ impl CommandEncoderStatus {
         }
     }
 
-    /// Unlocks the [`CommandBuffer`] and puts it back into the [`Self::Recording`] state.
+    /// Unlocks the [`CommandBuffer`] and puts it back into the
+    /// [`Self::Recording`] state, then records commands using the supplied
+    /// closure.
     ///
-    /// This function is the unlocking counterpart to [`Self::lock_encoder`].
+    /// This function is the unlocking counterpart to [`Self::lock_encoder`]. It
+    /// is only valid to call this function if the encoder is in the
+    /// [`Self::Locked`] state.
     ///
-    /// It is only valid to call this function if the encoder is in the [`Self::Locked`] state.
-    fn unlock_encoder(&mut self) -> Result<RecordingGuard<'_>, EncoderStateError> {
+    /// If the closure returns an error, stores that error in the encoder for
+    /// later reporting when `finish()` is called. Returns `Ok(())` even if the
+    /// closure returned an error.
+    ///
+    /// If the encoder is not in the [`Self::Locked`] state, the closure will
+    /// not be called and nothing will be recorded. If a validation error should
+    /// be raised immediately, returns it in `Err`, otherwise, returns `Ok(())`.
+    fn unlock_and_record<
+        F: FnOnce(&mut CommandBufferMutable) -> Result<(), E>,
+        E: Clone + Into<CommandEncoderError>,
+    >(
+        &mut self,
+        f: F,
+    ) -> Result<(), EncoderStateError> {
         match mem::replace(self, Self::Transitioning) {
             Self::Locked(inner) => {
                 *self = Self::Recording(inner);
-                Ok(RecordingGuard { inner: self })
+                RecordingGuard { inner: self }.record(f);
+                Ok(())
             }
             st @ Self::Finished(_) => {
-                // Attempting to end a pass on a finished encoder raises a
-                // validation error but does not invalidate the encoder. This is
-                // related to https://github.com/gpuweb/gpuweb/issues/5207.
                 *self = st;
                 Err(EncoderStateError::Ended)
             }
-            Self::Recording(_) => Err(self.invalidate(EncoderStateError::Unlocked)),
+            Self::Recording(_) => {
+                *self = Self::Error(EncoderStateError::Unlocked.into());
+                Err(EncoderStateError::Unlocked)
+            }
             st @ Self::Error(_) => {
+                // Encoder is invalid. Do not record anything, but do not
+                // return an immediate validation error.
                 *self = st;
-                Err(EncoderStateError::Invalid)
+                Ok(())
             }
             Self::Transitioning => unreachable!(),
         }
@@ -783,15 +803,16 @@ impl CommandBuffer {
 }
 
 impl CommandBuffer {
-    pub fn take_finished<'a>(&'a self) -> Result<CommandBufferMutable, InvalidResourceError> {
+    pub fn take_finished(&self) -> Result<CommandBufferMutable, CommandEncoderError> {
         use CommandEncoderStatus as St;
         match mem::replace(
             &mut *self.data.lock(),
             CommandEncoderStatus::Error(EncoderStateError::Submitted.into()),
         ) {
             St::Finished(command_buffer_mutable) => Ok(command_buffer_mutable),
-            St::Recording(_) | St::Locked(_) | St::Error(_) => {
-                Err(InvalidResourceError(self.error_ident()))
+            St::Error(err) => Err(err),
+            St::Recording(_) | St::Locked(_) => {
+                Err(InvalidResourceError(self.error_ident()).into())
             }
             St::Transitioning => unreachable!(),
         }
@@ -817,8 +838,18 @@ crate::impl_storage_item!(CommandBuffer);
 #[doc(hidden)]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct BasePass<C> {
+pub struct BasePass<C, E> {
     pub label: Option<String>,
+
+    /// If the pass is invalid, contains the error that caused the invalidation.
+    ///
+    /// If the pass is valid, this is `None`.
+    ///
+    /// Passes are serialized into traces. but we don't support doing so for
+    /// passes containing errors. These serde attributes allow `E` to be
+    /// `Infallible`.
+    #[cfg_attr(feature = "serde", serde(skip, default = "Option::default"))]
+    pub error: Option<E>,
 
     /// The stream of commands.
     pub commands: Vec<C>,
@@ -842,10 +873,22 @@ pub struct BasePass<C> {
     pub push_constant_data: Vec<u32>,
 }
 
-impl<C: Clone> BasePass<C> {
+impl<C: Clone, E: Clone> BasePass<C, E> {
     fn new(label: &Label) -> Self {
         Self {
             label: label.as_deref().map(str::to_owned),
+            error: None,
+            commands: Vec::new(),
+            dynamic_offsets: Vec::new(),
+            string_data: Vec::new(),
+            push_constant_data: Vec::new(),
+        }
+    }
+
+    fn new_invalid(label: &Label, err: E) -> Self {
+        Self {
+            label: label.as_deref().map(str::to_owned),
+            error: Some(err),
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
@@ -853,6 +896,66 @@ impl<C: Clone> BasePass<C> {
         }
     }
 }
+
+/// Checks the state of a [`compute::ComputePass`] or [`render::RenderPass`] and
+/// evaluates to a mutable reference to the [`BasePass`], if the pass is open and
+/// valid.
+///
+/// If the pass is ended or not valid, **returns from the invoking function**,
+/// like the `?` operator.
+///
+/// If the pass is ended (i.e. the application is attempting to record a command
+/// on a finished pass), returns `Err(EncoderStateError::Ended)` from the
+/// invoking function, for immediate propagation as a validation error.
+///
+/// If the pass is open but invalid (i.e. a previous command encountered an
+/// error), returns `Ok(())` from the invoking function. The pass should already
+/// have stored the previous error, which will be transferred to the parent
+/// encoder when the pass is ended, and then raised as a validation error when
+/// `finish()` is called for the parent).
+///
+/// Although in many cases the functionality of `pass_base!` could be achieved
+/// by combining a helper method on the passes with the `pass_try!` macro,
+/// taking the mutable reference to the base pass in a macro avoids borrowing
+/// conflicts when a reference to some other member of the pass struct is
+/// needed simultaneously with the base pass reference.
+macro_rules! pass_base {
+    ($pass:expr, $scope:expr $(,)?) => {
+        match (&$pass.parent, &$pass.base.error) {
+            // Pass is ended
+            (&None, _) => return Err(EncoderStateError::Ended).map_pass_err($scope),
+            // Pass is invalid
+            (&Some(_), &Some(_)) => return Ok(()),
+            // Pass is open and valid
+            (&Some(_), &None) => &mut $pass.base,
+        }
+    };
+}
+pub(crate) use pass_base;
+
+/// Handles the error case in an expression of type `Result<T, E>`.
+///
+/// This macro operates like the `?` operator (or, in early Rust versions, the
+/// `try!` macro, hence the name `pass_try`). **When there is an error, the
+/// macro returns from the invoking function.** However, `Ok(())`, and not the
+/// error itself, is returned. The error is stored in the pass and will later be
+/// transferred to the parent encoder when the pass ends, and then raised as a
+/// validation error when `finish()` is called for the parent.
+///
+/// `pass_try!` also calls [`MapPassErr::map_pass_err`] to annotate the error
+/// with the command being encoded at the time it occurred.
+macro_rules! pass_try {
+    ($base:expr, $scope:expr, $res:expr $(,)?) => {
+        match $res.map_pass_err($scope) {
+            Ok(val) => val,
+            Err(err) => {
+                $base.error.get_or_insert(err);
+                return Ok(());
+            }
+        }
+    };
+}
+pub(crate) use pass_try;
 
 /// Errors related to the state of a command or pass encoder.
 ///
@@ -904,10 +1007,6 @@ pub enum CommandEncoderError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    InvalidColorAttachment(#[from] ColorAttachmentError),
-    #[error(transparent)]
-    InvalidAttachment(#[from] AttachmentError),
-    #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
@@ -925,14 +1024,40 @@ pub enum CommandEncoderError {
     BuildAccelerationStructure(#[from] BuildAccelerationStructureError),
     #[error(transparent)]
     TransitionResources(#[from] TransitionResourcesError),
+    #[error(transparent)]
+    ComputePass(#[from] ComputePassError),
+    #[error(transparent)]
+    RenderPass(#[from] RenderPassError),
+}
+
+impl CommandEncoderError {
+    fn is_destroyed_error(&self) -> bool {
+        matches!(
+            self,
+            Self::DestroyedResource(_)
+                | Self::Clear(ClearError::DestroyedResource(_))
+                | Self::Query(QueryError::DestroyedResource(_))
+                | Self::ComputePass(ComputePassError {
+                    inner: ComputePassErrorInner::DestroyedResource(_),
+                    ..
+                })
+                | Self::RenderPass(RenderPassError {
+                    inner: RenderPassErrorInner::DestroyedResource(_),
+                    ..
+                })
+        )
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum TimestampWritesError {
     #[error(
         "begin and end indices of pass timestamp writes are both set to {idx}, which is not allowed"
     )]
-    TimestampWriteIndicesEqual { idx: u32 },
-    #[error(transparent)]
-    TimestampWritesInvalid(#[from] QueryUseError),
+    IndicesEqual { idx: u32 },
     #[error("no begin or end indices were specified for pass timestamp writes, expected at least one to be set")]
-    TimestampWriteIndicesMissing,
+    IndicesMissing,
 }
 
 impl Global {
@@ -947,9 +1072,11 @@ impl Global {
 
         let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
 
+        // Errors related to destroyed resources are not reported until the
+        // command buffer is submitted.
         let error = match cmd_buf.data.lock().finish() {
-            Ok(_) => None,
-            Err(e) => Some(e),
+            Err(e) if !e.is_destroyed_error() => Some(e),
+            _ => None,
         };
 
         (encoder_id.into_command_buffer_id(), error)
@@ -1053,11 +1180,18 @@ impl Global {
         })
     }
 
-    fn validate_pass_timestamp_writes(
+    fn validate_pass_timestamp_writes<E>(
         device: &Device,
         query_sets: &Storage<Fallible<QuerySet>>,
         timestamp_writes: &PassTimestampWrites,
-    ) -> Result<ArcPassTimestampWrites, CommandEncoderError> {
+    ) -> Result<ArcPassTimestampWrites, E>
+    where
+        E: From<TimestampWritesError>
+            + From<QueryUseError>
+            + From<DeviceError>
+            + From<MissingFeatures>
+            + From<InvalidResourceError>,
+    {
         let &PassTimestampWrites {
             query_set,
             beginning_of_pass_write_index,
@@ -1079,7 +1213,7 @@ impl Global {
 
         if let Some((begin, end)) = beginning_of_pass_write_index.zip(end_of_pass_write_index) {
             if begin == end {
-                return Err(CommandEncoderError::TimestampWriteIndicesEqual { idx: begin });
+                return Err(TimestampWritesError::IndicesEqual { idx: begin }.into());
             }
         }
 
@@ -1087,7 +1221,7 @@ impl Global {
             .or(end_of_pass_write_index)
             .is_none()
         {
-            return Err(CommandEncoderError::TimestampWriteIndicesMissing);
+            return Err(TimestampWritesError::IndicesMissing.into());
         }
 
         Ok(ArcPassTimestampWrites {
@@ -1194,6 +1328,7 @@ impl Default for BindGroupStateChange {
     }
 }
 
+/// Helper to attach [`PassErrorScope`] to errors.
 trait MapPassErr<T> {
     fn map_pass_err(self, scope: PassErrorScope) -> T;
 }
@@ -1207,6 +1342,12 @@ where
     }
 }
 
+impl MapPassErr<PassStateError> for EncoderStateError {
+    fn map_pass_err(self, scope: PassErrorScope) -> PassStateError {
+        PassStateError { scope, inner: self }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum DrawKind {
     Draw,
@@ -1215,6 +1356,15 @@ pub enum DrawKind {
     MultiDrawIndirectCount,
 }
 
+/// A command that can be recorded in a pass or bundle.
+///
+/// This is used to provide context for errors during command recording.
+/// [`MapPassErr`] is used as a helper to attach a `PassErrorScope` to
+/// an error.
+///
+/// The [`PassErrorScope::Bundle`] and [`PassErrorScope::Pass`] variants
+/// are used when the error occurs during the opening or closing of the
+/// pass or bundle.
 #[derive(Clone, Copy, Debug, Error)]
 pub enum PassErrorScope {
     // TODO: Extract out the 2 error variants below so that we can always
@@ -1265,4 +1415,13 @@ pub enum PassErrorScope {
     PopDebugGroup,
     #[error("In a insert_debug_marker command")]
     InsertDebugMarker,
+}
+
+/// Variant of `EncoderStateError` that includes the pass scope.
+#[derive(Clone, Debug, Error)]
+#[error("{scope}")]
+pub struct PassStateError {
+    pub scope: PassErrorScope,
+    #[source]
+    pub(super) inner: EncoderStateError,
 }

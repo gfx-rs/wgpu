@@ -238,6 +238,7 @@ pub enum BindingTypeMaxCountErrorKind {
     UniformBuffers,
     BindingArrayElements,
     BindingArraySamplerElements,
+    AccelerationStructures,
 }
 
 impl BindingTypeMaxCountErrorKind {
@@ -263,6 +264,9 @@ impl BindingTypeMaxCountErrorKind {
             }
             BindingTypeMaxCountErrorKind::BindingArraySamplerElements => {
                 "max_binding_array_sampler_elements_per_shader_stage"
+            }
+            BindingTypeMaxCountErrorKind::AccelerationStructures => {
+                "max_acceleration_structures_per_shader_stage"
             }
         }
     }
@@ -466,6 +470,10 @@ impl BindingTypeMaxCountValidator {
         self.binding_array_sampler_elements.validate(
             limits.max_binding_array_sampler_elements_per_shader_stage,
             BindingTypeMaxCountErrorKind::BindingArraySamplerElements,
+        )?;
+        self.acceleration_structures.validate(
+            limits.max_acceleration_structures_per_shader_stage,
+            BindingTypeMaxCountErrorKind::AccelerationStructures,
         )?;
         Ok(())
     }

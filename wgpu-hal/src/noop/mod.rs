@@ -177,6 +177,10 @@ const CAPABILITIES: crate::Capabilities = {
             max_subgroup_size: ALLOC_MAX_U32,
             max_push_constant_size: ALLOC_MAX_U32,
             max_non_sampler_bindings: ALLOC_MAX_U32,
+            max_blas_primitive_count: ALLOC_MAX_U32,
+            max_blas_geometry_count: ALLOC_MAX_U32,
+            max_tlas_instance_count: ALLOC_MAX_U32,
+            max_acceleration_structures_per_shader_stage: ALLOC_MAX_U32,
         },
         alignments: crate::Alignments {
             // All maximally permissive

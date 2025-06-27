@@ -1060,6 +1060,16 @@ impl super::PrivateCapabilities {
                 max_compute_workgroups_per_dimension: 0xFFFF,
                 max_buffer_size: self.max_buffer_size,
                 max_non_sampler_bindings: u32::MAX,
+                max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
+                max_blas_geometry_count: 0,  // When added: 2^24
+                max_tlas_instance_count: 0,  // When added: 2^24
+                // Unsure what this will be when added: acceleration structures count as a buffer so
+                // it may be worth using argument buffers for this all acceleration structures, then
+                // there will be no limit.
+                // From 2.17.7 in https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+                // > [Acceleration structures] are opaque objects that can be bound directly using
+                // buffer binding points or via argument buffers
+                max_acceleration_structures_per_shader_stage: 0,
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

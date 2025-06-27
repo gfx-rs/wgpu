@@ -121,6 +121,7 @@ impl crate::framework::Example for Example {
             max_push_constant_size: 12,
             ..wgpu::Limits::default()
         }
+        .using_minimum_supported_acceleration_structure_values()
     }
 
     fn init(

@@ -1,6 +1,7 @@
 use alloc::{borrow::ToOwned as _, boxed::Box, ffi::CString, string::String, sync::Arc, vec::Vec};
 use core::{
     ffi::{c_void, CStr},
+    marker::PhantomData,
     slice,
     str::FromStr,
 };
@@ -585,27 +586,19 @@ impl super::Instance {
             swapchain: RwLock::new(None),
         }
     }
-}
 
-impl Drop for super::InstanceShared {
-    fn drop(&mut self) {
-        unsafe {
-            // Keep du alive since destroy_instance may also log
-            let _du = self.debug_utils.take().inspect(|du| {
-                du.extension
-                    .destroy_debug_utils_messenger(du.messenger, None);
-            });
-            if self.drop_guard.is_none() {
-                self.raw.destroy_instance(None);
-            }
-        }
-    }
-}
-
-impl crate::Instance for super::Instance {
-    type A = super::Api;
-
-    unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+    /// `Instance::init` but with a callback.
+    /// If you want to add extensions, add the to the `Vec<'static CStr>` not the create info, otherwise
+    /// it will be overwritten
+    ///
+    /// # Safety:
+    /// Same as `init` but additionally
+    /// - Callback must not remove features.
+    /// - Callback must not change anything to what the instance does not support.
+    pub unsafe fn init_with_callback(
+        desc: &crate::InstanceDescriptor,
+        callback: Option<Box<super::CreateInstanceCallback>>,
+    ) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init Vulkan Backend");
 
         let entry = unsafe {
@@ -654,7 +647,17 @@ impl crate::Instance for super::Instance {
                 },
             );
 
-        let extensions = Self::desired_extensions(&entry, instance_api_version, desc.flags)?;
+        let mut extensions = Self::desired_extensions(&entry, instance_api_version, desc.flags)?;
+        let mut create_info = vk::InstanceCreateInfo::default();
+
+        if let Some(callback) = callback {
+            callback(super::CreateInstanceCallbackArgs {
+                extensions: &mut extensions,
+                create_info: &mut create_info,
+                entry: &entry,
+                _phantom: PhantomData,
+            });
+        }
 
         let instance_layers = {
             profiling::scope!("vkEnumerateInstanceLayerProperties");
@@ -814,7 +817,7 @@ impl crate::Instance for super::Instance {
                 })
                 .collect::<Vec<_>>();
 
-            let mut create_info = vk::InstanceCreateInfo::default()
+            create_info = create_info
                 .flags(flags)
                 .application_info(&app_info)
                 .enabled_layer_names(&str_pointers[..layers.len()])
@@ -875,6 +878,29 @@ impl crate::Instance for super::Instance {
                 None,
             )
         }
+    }
+}
+
+impl Drop for super::InstanceShared {
+    fn drop(&mut self) {
+        unsafe {
+            // Keep du alive since destroy_instance may also log
+            let _du = self.debug_utils.take().inspect(|du| {
+                du.extension
+                    .destroy_debug_utils_messenger(du.messenger, None);
+            });
+            if self.drop_guard.is_none() {
+                self.raw.destroy_instance(None);
+            }
+        }
+    }
+}
+
+impl crate::Instance for super::Instance {
+    type A = super::Api;
+
+    unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+        unsafe { Self::init_with_callback(desc, None) }
     }
 
     unsafe fn create_surface(
