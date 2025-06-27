@@ -1254,7 +1254,7 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const HLSL_DXIL_SHADER_PASSTHROUGH = 1 << 53;
-      
+
         /// Enables creating shaders from passthrough with reflection info (unsafe)
         ///
         /// Shader code isn't parsed or interpreted in any way. It is the user's

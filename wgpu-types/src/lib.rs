@@ -7825,7 +7825,7 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
                         runtime_checks: inner.runtime_checks,
                     },
                 )
-            
+            }
         }
     }
 
@@ -7931,38 +7931,6 @@ pub struct ShaderModuleDescriptorHlsl<'a, L> {
     /// Number of workgroups in each dimension x, y and z.
     pub num_workgroups: (u32, u32, u32),
     /// Shader MSL source.
-    pub source: &'a str,
-}
-
-/// Descriptor for a shader module given by DirectX DXIL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorDxil<'a, L> {
-    /// Entrypoint.
-    pub entry_point: String,
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-    /// Shader DXIL source.
-    pub source: &'a [u8],
-}
-
-/// Descriptor for a shader module given by DirectX HLSL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorHlsl<'a, L> {
-    /// Entrypoint.
-    pub entry_point: String,
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-    /// Shader HLSL source.
     pub source: &'a str,
 }
 
