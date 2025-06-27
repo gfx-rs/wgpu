@@ -106,7 +106,6 @@ extern crate std;
 extern crate alloc;
 
 mod arena;
-mod as_diagnostic_file_path;
 pub mod back;
 pub mod common;
 pub mod compact;
@@ -116,6 +115,7 @@ pub mod front;
 pub mod ir;
 pub mod keywords;
 mod non_max_u32;
+mod path_like;
 pub mod proc;
 mod racy_lock;
 mod span;

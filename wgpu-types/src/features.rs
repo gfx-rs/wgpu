@@ -1254,6 +1254,16 @@ bitflags_array! {
         ///
         /// [VK_KHR_external_memory_fd]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_external_memory_fd.html
         const VULKAN_EXTERNAL_MEMORY_FD = 1 << 45;
+      
+        /// Enables creating shader modules from DirectX HLSL or DXIL shaders (unsafe)
+        ///
+        /// HLSL/DXIL data is not parsed or interpreted in any way
+        ///
+        /// Supported platforms:
+        /// - DX12
+        ///
+        /// This is a native only feature.
+        const HLSL_DXIL_SHADER_PASSTHROUGH = 1 << 53;
     }
 
     /// Features that are not guaranteed to be supported.

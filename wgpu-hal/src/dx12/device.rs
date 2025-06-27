@@ -1,3 +1,4 @@
+use alloc::borrow::ToOwned;
 use alloc::{
     borrow::Cow,
     string::{String, ToString as _},
@@ -264,26 +265,7 @@ impl super::Device {
         naga_stage: naga::ShaderStage,
         fragment_stage: Option<&crate::ProgrammableStage<super::ShaderModule>>,
     ) -> Result<super::CompiledShader, crate::PipelineError> {
-        use naga::back::hlsl;
-
-        let frag_ep = fragment_stage
-            .map(|fs_stage| {
-                hlsl::FragmentEntryPoint::new(&fs_stage.module.naga.module, fs_stage.entry_point)
-                    .ok_or(crate::PipelineError::EntryPoint(
-                        naga::ShaderStage::Fragment,
-                    ))
-            })
-            .transpose()?;
-
         let stage_bit = auxil::map_naga_stage(naga_stage);
-
-        let (module, info) = naga::back::pipeline_constants::process_overrides(
-            &stage.module.naga.module,
-            &stage.module.naga.info,
-            Some((naga_stage, stage.entry_point)),
-            stage.constants,
-        )
-        .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}")))?;
 
         let needs_temp_options = stage.zero_initialize_workgroup_memory
             != layout.naga_options.zero_initialize_workgroup_memory
@@ -301,43 +283,90 @@ impl super::Device {
             &layout.naga_options
         };
 
-        let pipeline_options = hlsl::PipelineOptions {
-            entry_point: Some((naga_stage, stage.entry_point.to_string())),
-        };
+        let key = match &stage.module.source {
+            super::ShaderModuleSource::Naga(naga_shader) => {
+                use naga::back::hlsl;
 
-        //TODO: reuse the writer
-        let (source, entry_point) = {
-            let mut source = String::new();
-            let mut writer = hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
+                let frag_ep = match fragment_stage {
+                    Some(crate::ProgrammableStage {
+                        module:
+                            super::ShaderModule {
+                                source: super::ShaderModuleSource::Naga(naga_shader),
+                                ..
+                            },
+                        entry_point,
+                        ..
+                    }) => Some(
+                        hlsl::FragmentEntryPoint::new(&naga_shader.module, entry_point).ok_or(
+                            crate::PipelineError::EntryPoint(naga::ShaderStage::Fragment),
+                        ),
+                    ),
+                    _ => None,
+                }
+                .transpose()?;
+                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                    &naga_shader.module,
+                    &naga_shader.info,
+                    Some((naga_stage, stage.entry_point)),
+                    stage.constants,
+                )
+                .map_err(|e| {
+                    crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}"))
+                })?;
 
-            profiling::scope!("naga::back::hlsl::write");
-            let mut reflection_info = writer
-                .write(&module, &info, frag_ep.as_ref())
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?;
+                let pipeline_options = hlsl::PipelineOptions {
+                    entry_point: Some((naga_stage, stage.entry_point.to_string())),
+                };
 
-            assert_eq!(reflection_info.entry_point_names.len(), 1);
+                //TODO: reuse the writer
+                let (source, entry_point) = {
+                    let mut source = String::new();
+                    let mut writer =
+                        hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
 
-            let entry_point = reflection_info
-                .entry_point_names
-                .pop()
-                .unwrap()
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
+                    profiling::scope!("naga::back::hlsl::write");
+                    let mut reflection_info = writer
+                        .write(&module, &info, frag_ep.as_ref())
+                        .map_err(|e| {
+                            crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}"))
+                        })?;
 
-            (source, entry_point)
-        };
+                    assert_eq!(reflection_info.entry_point_names.len(), 1);
 
-        log::info!(
-            "Naga generated shader for {:?} at {:?}:\n{}",
-            entry_point,
-            naga_stage,
-            source
-        );
+                    let entry_point = reflection_info
+                        .entry_point_names
+                        .pop()
+                        .unwrap()
+                        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
 
-        let key = ShaderCacheKey {
-            source,
-            entry_point,
-            stage: naga_stage,
-            shader_model: naga_options.shader_model,
+                    (source, entry_point)
+                };
+                log::info!(
+                    "Naga generated shader for {:?} at {:?}:\n{}",
+                    entry_point,
+                    naga_stage,
+                    source
+                );
+
+                ShaderCacheKey {
+                    source,
+                    entry_point,
+                    stage: naga_stage,
+                    shader_model: naga_options.shader_model,
+                }
+            }
+            super::ShaderModuleSource::HlslPassthrough(passthrough) => ShaderCacheKey {
+                source: passthrough.shader.clone(),
+                entry_point: passthrough.entry_point.clone(),
+                stage: naga_stage,
+                shader_model: naga_options.shader_model,
+            },
+
+            super::ShaderModuleSource::DxilPassthrough(passthrough) => {
+                return Ok(super::CompiledShader::Precompiled(
+                    passthrough.shader.clone(),
+                ))
+            }
         };
 
         {
@@ -351,11 +380,7 @@ impl super::Device {
 
         let source_name = stage.module.raw_name.as_deref();
 
-        let full_stage = format!(
-            "{}_{}",
-            naga_stage.to_hlsl_str(),
-            naga_options.shader_model.to_str()
-        );
+        let full_stage = format!("{}_{}", naga_stage.to_hlsl_str(), key.shader_model.to_str());
 
         let compiled_shader = self.compiler_container.compile(
             self,
@@ -1671,7 +1696,7 @@ impl crate::Device for super::Device {
             .and_then(|label| alloc::ffi::CString::new(label).ok());
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
-                naga,
+                source: super::ShaderModuleSource::Naga(naga),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
@@ -1681,6 +1706,32 @@ impl crate::Device for super::Device {
             crate::ShaderInput::Msl { .. } => {
                 panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
             }
+            crate::ShaderInput::Dxil {
+                shader,
+                entry_point,
+                num_workgroups,
+            } => Ok(super::ShaderModule {
+                source: super::ShaderModuleSource::DxilPassthrough(super::DxilPassthroughShader {
+                    shader: shader.to_vec(),
+                    entry_point,
+                    num_workgroups,
+                }),
+                raw_name,
+                runtime_checks: desc.runtime_checks,
+            }),
+            crate::ShaderInput::Hlsl {
+                shader,
+                entry_point,
+                num_workgroups,
+            } => Ok(super::ShaderModule {
+                source: super::ShaderModuleSource::HlslPassthrough(super::HlslPassthroughShader {
+                    shader: shader.to_owned(),
+                    entry_point,
+                    num_workgroups,
+                }),
+                raw_name,
+                runtime_checks: desc.runtime_checks,
+            }),
         }
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {

@@ -874,7 +874,7 @@ impl super::Device {
                     if let Some(ref debug) = naga_shader.debug_source {
                         temp_options.debug_info = Some(naga::back::spv::DebugInfo {
                             source_code: &debug.source_code,
-                            file_name: debug.file_name.as_ref().as_ref(),
+                            file_name: debug.file_name.as_ref().into(),
                             language: naga::back::spv::SourceLanguage::WGSL,
                         })
                     }
@@ -1889,7 +1889,7 @@ impl crate::Device for super::Device {
                         .as_ref()
                         .map(|d| naga::back::spv::DebugInfo {
                             source_code: d.source_code.as_ref(),
-                            file_name: d.file_name.as_ref().as_ref(),
+                            file_name: d.file_name.as_ref().into(),
                             language: naga::back::spv::SourceLanguage::WGSL,
                         });
                 if !desc.runtime_checks.bounds_checks {
@@ -1912,6 +1912,9 @@ impl crate::Device for super::Device {
             }
             crate::ShaderInput::Msl { .. } => {
                 panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
+            }
+            crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
+                panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
             }
             crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
         };

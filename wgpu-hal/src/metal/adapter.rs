@@ -10,7 +10,24 @@ use alloc::sync::Arc;
 
 use super::TimestampQuerySupport;
 
-const MAX_COMMAND_BUFFERS: u64 = 2048;
+/// Maximum number of command buffers for `MTLCommandQueue`s that we create.
+///
+/// If a [new command buffer] is requested when Metal has run out of command
+/// buffers, it waits indefinitely for one to become available. If the
+/// outstanding command buffers are actively executing on the GPU, this will
+/// happen relatively quickly. But if the outstanding command buffers will only
+/// be recovered upon GC, and attempting to get a new command buffer prevents
+/// forward progress towards that GC, there is a deadlock.
+///
+/// This is mostly a problem for the CTS, which frequently creates command
+/// buffers that it does not submit. It is unclear how likely command buffer
+/// exhaustion is in real applications.
+///
+/// This limit was increased from a previous value of 2048 for
+/// <https://bugzilla.mozilla.org/show_bug.cgi?id=1971452>.
+///
+/// [new command buffer]: https://developer.apple.com/documentation/metal/mtlcommandqueue/makecommandbuffer()?language=objc
+const MAX_COMMAND_BUFFERS: u64 = 4096;
 
 unsafe impl Send for super::Adapter {}
 unsafe impl Sync for super::Adapter {}

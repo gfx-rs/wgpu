@@ -107,7 +107,6 @@ gles = [
     "naga/glsl-out",
     "dep:arrayvec",
     "dep:bytemuck",
-    "dep:cfg-if",
     "dep:glow",
     "dep:glutin_wgl_sys",
     "dep:hashbrown",
@@ -165,7 +164,7 @@ renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
-portable-atomic = ["dep:portable-atomic"]
+portable-atomic = ["dep:portable-atomic", "dep:portable-atomic-util"]
 
 ###################################
 ### Internal Debugging Features ###
@@ -207,6 +206,7 @@ wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
+cfg-if.workspace = true
 raw-window-handle.workspace = true
 parking_lot = { workspace = true, optional = true }
 thiserror.workspace = true
@@ -216,14 +216,12 @@ arrayvec = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true, features = ["derive"] }
 hashbrown = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
-once_cell = { workspace = true, optional = true }
 ordered-float = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
 rustc-hash = { workspace = true, optional = true }
 
 # Backend: GLES
 glow = { workspace = true, optional = true }
-cfg-if = { workspace = true, optional = true }
 
 ########################
 ### Platform: Native ###
@@ -318,14 +316,18 @@ khronos-egl = { workspace = true, optional = true, features = [
 # Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
 libloading = { workspace = true, optional = true }
 
-[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
+[target.'cfg(any(not(target_has_atomic = "64"), not(target_has_atomic = "ptr")))'.dependencies]
 portable-atomic = { workspace = true, optional = true }
+
+[target.'cfg(not(target_has_atomic = "ptr"))'.dependencies]
+portable-atomic-util = { workspace = true, features = [
+    "alloc",
+], optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true
 
 [dev-dependencies]
-cfg-if.workspace = true
 env_logger.workspace = true
 glam.workspace = true                                            # for ray-traced-triangle example
 naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
