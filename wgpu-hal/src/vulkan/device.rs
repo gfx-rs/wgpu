@@ -1802,9 +1802,7 @@ impl crate::Device for super::Device {
                                 vk::DescriptorBufferInfo::default()
                                     .buffer(binding.buffer.raw)
                                     .offset(binding.offset)
-                                    .range(
-                                        binding.size.map_or(vk::WHOLE_SIZE, wgt::BufferSize::get),
-                                    )
+                                    .range(binding.size.get())
                             },
                         ));
                     write.buffer_info(local_buffer_infos)

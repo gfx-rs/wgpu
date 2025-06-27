@@ -534,7 +534,6 @@ impl crate::Device for super::Device {
             return Ok(super::Buffer {
                 raw: None,
                 target,
-                size: desc.size,
                 map_flags: 0,
                 data: Some(Arc::new(MaybeMutex::new(vec![0; desc.size as usize]))),
                 offset_of_current_mapping: Arc::new(MaybeMutex::new(0)),
@@ -634,7 +633,6 @@ impl crate::Device for super::Device {
         Ok(super::Buffer {
             raw,
             target,
-            size: desc.size,
             map_flags,
             data,
             offset_of_current_mapping: Arc::new(MaybeMutex::new(0)),
@@ -1265,11 +1263,8 @@ impl crate::Device for super::Device {
                     let bb = &desc.buffers[entry.resource_index as usize];
                     super::RawBinding::Buffer {
                         raw: bb.buffer.raw.unwrap(),
-                        offset: bb.offset as i32,
-                        size: match bb.size {
-                            Some(s) => s.get() as i32,
-                            None => (bb.buffer.size - bb.offset) as i32,
-                        },
+                        offset: bb.offset.try_into().unwrap(),
+                        size: bb.size.get().try_into().unwrap(),
                     }
                 }
                 wgt::BindingType::Sampler { .. } => {

@@ -502,7 +502,6 @@ impl crate::Queue for Queue {
 #[derive(Debug)]
 pub struct Buffer {
     raw: metal::Buffer,
-    size: wgt::BufferAddress,
 }
 
 unsafe impl Send for Buffer {}
@@ -513,15 +512,6 @@ impl crate::DynBuffer for Buffer {}
 impl Buffer {
     fn as_raw(&self) -> BufferPtr {
         unsafe { NonNull::new_unchecked(self.raw.as_ptr()) }
-    }
-}
-
-impl crate::BufferBinding<'_, Buffer> {
-    fn resolve_size(&self) -> wgt::BufferAddress {
-        match self.size {
-            Some(size) => size.get(),
-            None => self.buffer.size - self.offset,
-        }
     }
 }
 
