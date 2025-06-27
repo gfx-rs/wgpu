@@ -808,6 +808,17 @@ impl super::Device {
         })
     }
 
+    /// # Safety
+    ///
+    /// - `vk_buffer`'s memory must be managed by the caller
+    /// - Externally imported buffers can't be mapped by `wgpu`
+    pub unsafe fn buffer_from_raw(vk_buffer: vk::Buffer) -> super::Buffer {
+        super::Buffer {
+            raw: vk_buffer,
+            block: None,
+        }
+    }
+
     fn create_shader_module_impl(
         &self,
         spv: &[u32],
@@ -1142,7 +1153,7 @@ impl crate::Device for super::Device {
 
         Ok(super::Buffer {
             raw,
-            block: Some(Mutex::new(super::BufferMemoryBacking::Managed(block))),
+            block: Some(Mutex::new(block)),
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -1150,14 +1161,7 @@ impl crate::Device for super::Device {
         if let Some(block) = buffer.block {
             let block = block.into_inner();
             self.counters.buffer_memory.sub(block.size() as isize);
-            match block {
-                super::BufferMemoryBacking::Managed(block) => unsafe {
-                    self.mem_allocator.lock().dealloc(&*self.shared, block)
-                },
-                super::BufferMemoryBacking::VulkanMemory { memory, .. } => unsafe {
-                    self.shared.raw.free_memory(memory, None);
-                },
-            }
+            unsafe { self.mem_allocator.lock().dealloc(&*self.shared, block) };
         }
 
         self.counters.buffers.sub(1);
@@ -1175,27 +1179,18 @@ impl crate::Device for super::Device {
         if let Some(ref block) = buffer.block {
             let size = range.end - range.start;
             let mut block = block.lock();
-            if let super::BufferMemoryBacking::Managed(block) = &mut *block {
-                let ptr = unsafe { block.map(&*self.shared, range.start, size as usize)? };
-                let is_coherent = block
-                    .props()
-                    .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT);
-                Ok(crate::BufferMapping { ptr, is_coherent })
-            } else {
-                crate::hal_usage_error("tried to map externally created buffer")
-            }
+            let ptr = unsafe { block.map(&*self.shared, range.start, size as usize)? };
+            let is_coherent = block
+                .props()
+                .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT);
+            Ok(crate::BufferMapping { ptr, is_coherent })
         } else {
             crate::hal_usage_error("tried to map external buffer")
         }
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         if let Some(ref block) = buffer.block {
-            match &mut *block.lock() {
-                super::BufferMemoryBacking::Managed(block) => unsafe { block.unmap(&*self.shared) },
-                super::BufferMemoryBacking::VulkanMemory { .. } => {
-                    crate::hal_usage_error("tried to unmap externally created buffer")
-                }
-            };
+            unsafe { block.lock().unmap(&*self.shared) };
         } else {
             crate::hal_usage_error("tried to unmap external buffer")
         }
