@@ -1,4 +1,6 @@
 use core::future::Future;
+#[cfg(wgpu_core)]
+use core::ops::Deref;
 
 use crate::*;
 
@@ -93,39 +95,35 @@ impl Adapter {
         ))
     }
 
-    /// Apply a callback to this `Adapter`'s underlying backend adapter.
+    /// Get the [`wgpu_hal`] adapter from this `Adapter`.
     ///
-    /// If this `Adapter` is implemented by the backend API given by `A` (Vulkan,
-    /// Dx12, etc.), then apply `hal_adapter_callback` to `Some(&adapter)`, where
-    /// `adapter` is the underlying backend adapter type, [`A::Adapter`].
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
     ///
-    /// If this `Adapter` uses a different backend, apply `hal_adapter_callback`
-    /// to `None`.
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Adapter`].
     ///
-    /// The adapter is locked for reading while `hal_adapter_callback` runs. If
-    /// the callback attempts to perform any `wgpu` operations that require
-    /// write access to the adapter, deadlock will occur. The locks are
-    /// automatically released when the callback returns.
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The adapter is not from the backend specified by `A`.
+    /// - The adapter is from the `webgpu` or `custom` backend.
     ///
     /// # Safety
     ///
-    /// - The raw handle passed to the callback must not be manually destroyed.
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
     ///
     /// [`A::Adapter`]: hal::Api::Adapter
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
         &self,
-        hal_adapter_callback: F,
-    ) -> R {
-        if let Some(adapter) = self.inner.as_core_opt() {
-            unsafe {
-                adapter
-                    .context
-                    .adapter_as_hal::<A, F, R>(adapter, hal_adapter_callback)
-            }
-        } else {
-            hal_adapter_callback(None)
-        }
+    ) -> Option<impl Deref<Target = A::Adapter> + WasmNotSendSync> {
+        let adapter = self.inner.as_core_opt()?;
+
+        unsafe { adapter.context.adapter_as_hal::<A>(adapter) }
     }
 
     #[cfg(custom)]

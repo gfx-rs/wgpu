@@ -7,7 +7,15 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::{error::Error, fmt, future::ready, ops::Range, pin::Pin, ptr::NonNull, slice};
+use core::{
+    error::Error,
+    fmt,
+    future::ready,
+    ops::{Deref, Range},
+    pin::Pin,
+    ptr::NonNull,
+    slice,
+};
 
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
@@ -79,30 +87,18 @@ impl ContextWgpuCore {
         unsafe { self.0.create_adapter_from_hal(hal_adapter.into(), None) }
     }
 
-    pub unsafe fn adapter_as_hal<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&A::Adapter>) -> R,
-        R,
-    >(
+    pub unsafe fn adapter_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         adapter: &CoreAdapter,
-        hal_adapter_callback: F,
-    ) -> R {
-        unsafe {
-            self.0
-                .adapter_as_hal::<A, F, R>(adapter.id, hal_adapter_callback)
-        }
+    ) -> Option<impl Deref<Target = A::Adapter> + WasmNotSendSync> {
+        unsafe { self.0.adapter_as_hal::<A>(adapter.id) }
     }
 
-    pub unsafe fn buffer_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
+    pub unsafe fn buffer_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         buffer: &CoreBuffer,
-        hal_buffer_callback: F,
-    ) -> R {
-        unsafe {
-            self.0
-                .buffer_as_hal::<A, F, R>(buffer.id, hal_buffer_callback)
-        }
+    ) -> Option<impl Deref<Target = A::Buffer>> {
+        unsafe { self.0.buffer_as_hal::<A>(buffer.id) }
     }
 
     pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
@@ -199,60 +195,32 @@ impl ContextWgpuCore {
         }
     }
 
-    pub unsafe fn device_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+    pub unsafe fn device_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         device: &CoreDevice,
-        hal_device_callback: F,
-    ) -> R {
-        unsafe {
-            self.0
-                .device_as_hal::<A, F, R>(device.id, hal_device_callback)
-        }
+    ) -> Option<impl Deref<Target = A::Device>> {
+        unsafe { self.0.device_as_hal::<A>(device.id) }
     }
 
-    pub unsafe fn surface_as_hal<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&A::Surface>) -> R,
-        R,
-    >(
+    pub unsafe fn surface_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         surface: &CoreSurface,
-        hal_surface_callback: F,
-    ) -> R {
-        unsafe {
-            self.0
-                .surface_as_hal::<A, F, R>(surface.id, hal_surface_callback)
-        }
+    ) -> Option<impl Deref<Target = A::Surface>> {
+        unsafe { self.0.surface_as_hal::<A>(surface.id) }
     }
 
-    pub unsafe fn texture_as_hal<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&A::Texture>) -> R,
-        R,
-    >(
+    pub unsafe fn texture_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         texture: &CoreTexture,
-        hal_texture_callback: F,
-    ) -> R {
-        unsafe {
-            self.0
-                .texture_as_hal::<A, F, R>(texture.id, hal_texture_callback)
-        }
+    ) -> Option<impl Deref<Target = A::Texture>> {
+        unsafe { self.0.texture_as_hal::<A>(texture.id) }
     }
 
-    pub unsafe fn texture_view_as_hal<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&A::TextureView>) -> R,
-        R,
-    >(
+    pub unsafe fn texture_view_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         texture_view: &CoreTextureView,
-        hal_texture_view_callback: F,
-    ) -> R {
-        unsafe {
-            self.0
-                .texture_view_as_hal::<A, F, R>(texture_view.id, hal_texture_view_callback)
-        }
+    ) -> Option<impl Deref<Target = A::TextureView>> {
+        unsafe { self.0.texture_view_as_hal::<A>(texture_view.id) }
     }
 
     /// This method will start the wgpu_core level command recording.
@@ -273,28 +241,18 @@ impl ContextWgpuCore {
         }
     }
 
-    pub unsafe fn blas_as_hal<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&A::AccelerationStructure>) -> R,
-        R,
-    >(
+    pub unsafe fn blas_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         blas: &CoreBlas,
-        hal_blas_callback: F,
-    ) -> R {
-        unsafe { self.0.blas_as_hal::<A, F, R>(blas.id, hal_blas_callback) }
+    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
+        unsafe { self.0.blas_as_hal::<A>(blas.id) }
     }
 
-    pub unsafe fn tlas_as_hal<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&A::AccelerationStructure>) -> R,
-        R,
-    >(
+    pub unsafe fn tlas_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         tlas: &CoreTlas,
-        hal_tlas_callback: F,
-    ) -> R {
-        unsafe { self.0.tlas_as_hal::<A, F, R>(tlas.id, hal_tlas_callback) }
+    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
+        unsafe { self.0.tlas_as_hal::<A>(tlas.id) }
     }
 
     pub fn generate_report(&self) -> wgc::global::GlobalReport {
@@ -405,12 +363,11 @@ impl ContextWgpuCore {
         format!("Validation Error\n\nCaused by:\n{output}")
     }
 
-    pub unsafe fn queue_as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Queue>) -> R, R>(
+    pub unsafe fn queue_as_hal<A: wgc::hal_api::HalApi>(
         &self,
         queue: &CoreQueue,
-        hal_queue_callback: F,
-    ) -> R {
-        unsafe { self.0.queue_as_hal::<A, F, R>(queue.id, hal_queue_callback) }
+    ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
+        unsafe { self.0.queue_as_hal::<A>(queue.id) }
     }
 }
 

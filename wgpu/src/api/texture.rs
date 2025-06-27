@@ -1,3 +1,6 @@
+#[cfg(wgpu_core)]
+use core::ops::Deref;
+
 use crate::*;
 
 /// Handle to a texture on the GPU.
@@ -16,25 +19,41 @@ static_assertions::assert_impl_all!(Texture: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(Texture => .inner);
 
 impl Texture {
-    /// Returns the inner hal Texture using a callback. The hal texture will be `None` if the
-    /// backend type argument does not match with this wgpu Texture
+    /// Get the [`wgpu_hal`] texture from this `Texture`.
+    ///
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Texture`].
+    ///
+    /// # Deadlocks
+    ///
+    /// - The returned guard holds a read-lock on a device-local "destruction"
+    ///   lock, which will cause all calls to `destroy` to block until the
+    ///   guard is released.
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The texture is not from the backend specified by `A`.
+    /// - The texture is from the `webgpu` or `custom` backend.
+    /// - The texture has had [`Self::destroy()`] called on it.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Texture must not be manually destroyed
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
+    ///
+    /// [`A::Texture`]: hal::Api::Texture
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
         &self,
-        hal_texture_callback: F,
-    ) -> R {
-        if let Some(tex) = self.inner.as_core_opt() {
-            unsafe {
-                tex.context
-                    .texture_as_hal::<A, F, R>(tex, hal_texture_callback)
-            }
-        } else {
-            hal_texture_callback(None)
-        }
+    ) -> Option<impl Deref<Target = A::Texture>> {
+        let texture = self.inner.as_core_opt()?;
+        unsafe { texture.context.texture_as_hal::<A>(texture) }
     }
 
     #[cfg(custom)]

@@ -160,7 +160,6 @@ impl SnatchLock {
     }
 
     #[track_caller]
-    #[expect(unused)]
     pub unsafe fn force_unlock_read(&self, data: RankData) {
         // This is unsafe because it can cause deadlocks if the lock is held.
         // It should only be used in very specific cases, like when a resource

@@ -1,4 +1,6 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
+#[cfg(wgpu_core)]
+use core::ops::Deref;
 use core::{error, fmt};
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -148,28 +150,35 @@ impl Surface<'_> {
             .ok_or(SurfaceError::Lost)
     }
 
-    /// Returns the inner hal Surface using a callback. The hal surface will be `None` if the
-    /// backend type argument does not match with this wgpu Surface
+    /// Get the [`wgpu_hal`] surface from this `Surface`.
+    ///
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Surface`].
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The surface is not from the backend specified by `A`.
+    /// - The surface is from the `webgpu` or `custom` backend.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Surface must not be manually destroyed
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
+    ///
+    /// [`A::Surface`]: hal::Api::Surface
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
         &self,
-        hal_surface_callback: F,
-    ) -> R {
-        let core_surface = self.inner.as_core_opt();
+    ) -> Option<impl Deref<Target = A::Surface> + WasmNotSendSync> {
+        let core_surface = self.inner.as_core_opt()?;
 
-        if let Some(core_surface) = core_surface {
-            unsafe {
-                core_surface
-                    .context
-                    .surface_as_hal::<A, F, R>(core_surface, hal_surface_callback)
-            }
-        } else {
-            hal_surface_callback(None)
-        }
+        unsafe { core_surface.context.surface_as_hal::<A>(core_surface) }
     }
 
     #[cfg(custom)]
