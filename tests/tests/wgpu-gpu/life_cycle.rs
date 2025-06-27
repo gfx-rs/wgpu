@@ -1,5 +1,5 @@
-use wgpu::util::DeviceExt;
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
+use wgpu::{util::DeviceExt, Backends};
+use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
 static BUFFER_DESTROY: GpuTestConfiguration =
@@ -104,8 +104,12 @@ static TEXTURE_DESTROY: GpuTestConfiguration =
 // Test that destroying a buffer between command buffer recording and
 // submission fails gracefully.
 #[gpu_test]
-static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
+static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        // https://github.com/gfx-rs/wgpu/issues/7854
+        TestParameters::default().skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+    )
+    .run_sync(|ctx| {
         let buffer_source = ctx
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -140,8 +144,12 @@ static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration =
 // Test that destroying a texture between command buffer recording and
 // submission fails gracefully.
 #[gpu_test]
-static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
+static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        // https://github.com/gfx-rs/wgpu/issues/7854
+        TestParameters::default().skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+    )
+    .run_sync(|ctx| {
         let descriptor = wgpu::TextureDescriptor {
             label: None,
             size: wgpu::Extent3d {
