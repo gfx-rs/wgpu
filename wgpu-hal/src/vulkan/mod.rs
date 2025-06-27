@@ -822,7 +822,7 @@ impl Buffer {
         }
     }
     /// # Safety
-    /// - `memory` must not be used further by the caller
+    /// - We will use this buffer and the buffer's backing memory range as if we have exclusive ownership over it, until the wgpu resource is dropped and the wgpu-hal object is cleaned up
     /// - Externally imported buffers can't be mapped by `wgpu`
     /// - `offset` and `size` must be valid with the allocation of `memory`
     pub unsafe fn from_raw_managed(
