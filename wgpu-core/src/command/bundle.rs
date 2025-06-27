@@ -85,6 +85,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{
+    convert::Infallible,
     num::{NonZeroU32, NonZeroU64},
     ops::Range,
 };
@@ -153,7 +154,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
-    base: BasePass<RenderCommand>,
+    base: BasePass<RenderCommand, Infallible>,
     parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
     pub(crate) is_depth_read_only: bool,
@@ -170,7 +171,7 @@ impl RenderBundleEncoder {
     pub fn new(
         desc: &RenderBundleEncoderDescriptor,
         parent_id: id::DeviceId,
-        base: Option<BasePass<RenderCommand>>,
+        base: Option<BasePass<RenderCommand, Infallible>>,
     ) -> Result<Self, CreateRenderBundleError> {
         let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
             Some(ds) => {
@@ -248,7 +249,7 @@ impl RenderBundleEncoder {
     }
 
     #[cfg(feature = "trace")]
-    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand> {
+    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand, Infallible> {
         self.base.clone()
     }
 
@@ -466,6 +467,7 @@ impl RenderBundleEncoder {
         let render_bundle = RenderBundle {
             base: BasePass {
                 label: desc.label.as_deref().map(str::to_owned),
+                error: None,
                 commands,
                 dynamic_offsets: flat_dynamic_offsets,
                 string_data: self.base.string_data,
@@ -863,7 +865,7 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 pub struct RenderBundle {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
-    base: BasePass<ArcRenderCommand>,
+    base: BasePass<ArcRenderCommand, Infallible>,
     pub(super) is_depth_read_only: bool,
     pub(super) is_stencil_read_only: bool,
     pub(crate) device: Arc<Device>,

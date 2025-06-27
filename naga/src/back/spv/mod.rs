@@ -25,6 +25,7 @@ use spirv::Word;
 use thiserror::Error;
 
 use crate::arena::{Handle, HandleVec};
+use crate::path_like::PathLikeRef;
 use crate::proc::{BoundsCheckPolicies, TypeResolution};
 
 #[derive(Clone)]
@@ -92,7 +93,7 @@ impl IdGenerator {
 #[derive(Debug, Clone)]
 pub struct DebugInfo<'a> {
     pub source_code: &'a str,
-    pub file_name: &'a std::path::Path,
+    pub file_name: PathLikeRef<'a>,
     pub language: SourceLanguage,
 }
 

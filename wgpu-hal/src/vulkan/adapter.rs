@@ -1,5 +1,5 @@
-use alloc::{borrow::ToOwned as _, collections::BTreeMap, sync::Arc, vec::Vec};
-use core::ffi::CStr;
+use alloc::{borrow::ToOwned as _, boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
+use core::{ffi::CStr, marker::PhantomData};
 
 use ash::{ext, google, khr, vk};
 use parking_lot::Mutex;
@@ -2287,25 +2287,37 @@ impl super::Adapter {
     pub fn texture_format_as_raw(&self, texture_format: wgt::TextureFormat) -> vk::Format {
         self.private_caps.map_texture_format(texture_format)
     }
-}
 
-impl crate::Adapter for super::Adapter {
-    type A = super::Api;
-
-    unsafe fn open(
+    /// # Safety:
+    /// - Same as `open` plus
+    /// - The callback may not change anything that the device does not support.
+    /// - The callback may not remove features.
+    pub unsafe fn open_with_callback<'a>(
         &self,
         features: wgt::Features,
-        _limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        callback: Option<Box<super::CreateDeviceCallback<'a>>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let enabled_extensions = self.required_device_extensions(features);
+        let mut enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
 
         let family_index = 0; //TODO
         let family_info = vk::DeviceQueueCreateInfo::default()
             .queue_family_index(family_index)
             .queue_priorities(&[1.0]);
-        let family_infos = [family_info];
+        let mut family_infos = Vec::from([family_info]);
+
+        let mut pre_info = vk::DeviceCreateInfo::default();
+
+        if let Some(callback) = callback {
+            callback(super::CreateDeviceCallbackArgs {
+                extensions: &mut enabled_extensions,
+                device_features: &mut enabled_phd_features,
+                queue_create_infos: &mut family_infos,
+                create_info: &mut pre_info,
+                _phantom: PhantomData,
+            })
+        }
 
         let str_pointers = enabled_extensions
             .iter()
@@ -2315,7 +2327,7 @@ impl crate::Adapter for super::Adapter {
             })
             .collect::<Vec<_>>();
 
-        let pre_info = vk::DeviceCreateInfo::default()
+        let pre_info = pre_info
             .queue_create_infos(&family_infos)
             .enabled_extension_names(&str_pointers);
         let info = enabled_phd_features.add_to_device_create(pre_info);
@@ -2350,6 +2362,19 @@ impl crate::Adapter for super::Adapter {
                 0,
             )
         }
+    }
+}
+
+impl crate::Adapter for super::Adapter {
+    type A = super::Api;
+
+    unsafe fn open(
+        &self,
+        features: wgt::Features,
+        _limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
+    ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        unsafe { self.open_with_callback(features, memory_hints, None) }
     }
 
     unsafe fn texture_format_capabilities(

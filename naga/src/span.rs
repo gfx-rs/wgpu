@@ -6,7 +6,7 @@ use alloc::{
 };
 use core::{error::Error, fmt, ops::Range};
 
-use crate::{as_diagnostic_file_path::AsDiagnosticFilePath, Arena, Handle, UniqueArena};
+use crate::{path_like::PathLike, Arena, Handle, UniqueArena};
 
 /// A source code span, used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -286,7 +286,7 @@ impl<E> WithSpan<E> {
     pub fn emit_to_stderr_with_path<P>(&self, source: &str, path: P)
     where
         E: Error,
-        P: AsDiagnosticFilePath,
+        P: PathLike,
     {
         use codespan_reporting::{files, term};
 
@@ -318,7 +318,7 @@ impl<E> WithSpan<E> {
     pub fn emit_to_string_with_path<P>(&self, source: &str, path: P) -> String
     where
         E: Error,
-        P: AsDiagnosticFilePath,
+        P: PathLike,
     {
         use codespan_reporting::{files, term};
 

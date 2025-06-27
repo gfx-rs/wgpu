@@ -60,6 +60,15 @@ pub fn process_overrides<'a>(
     pipeline_constants: &PipelineConstants,
 ) -> Result<(Cow<'a, Module>, Cow<'a, ModuleInfo>), PipelineConstantError> {
     if (entry_point.is_none() || module.entry_points.len() <= 1) && module.overrides.is_empty() {
+        // We skip compacting the module here mostly to reduce the risk of
+        // hitting corner cases like https://github.com/gfx-rs/wgpu/issues/7793.
+        // Compaction doesn't cost very much [1], so it would also be reasonable
+        // to do it unconditionally. Even when there is a single entry point or
+        // when no entry point is specified, it is still possible that there
+        // are unreferenced items in the module that would be removed by this
+        // compaction.
+        //
+        // [1]: https://github.com/gfx-rs/wgpu/pull/7703#issuecomment-2902153760
         return Ok((Cow::Borrowed(module), Cow::Borrowed(module_info)));
     }
 

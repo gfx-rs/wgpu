@@ -292,7 +292,7 @@ pub use dynamic::{
 
 #[allow(unused)]
 use alloc::boxed::Box;
-use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
+use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::{
     borrow::Borrow,
     error::Error,
@@ -305,6 +305,14 @@ use core::{
 use bitflags::bitflags;
 use thiserror::Error;
 use wgt::WasmNotSendSync;
+
+cfg_if::cfg_if! {
+    if #[cfg(supports_ptr_atomics)] {
+        use alloc::sync::Arc;
+    } else if #[cfg(feature = "portable-atomic")] {
+        use portable_atomic_util::Arc;
+    }
+}
 
 // - Vertex + Fragment
 // - Compute
@@ -450,9 +458,18 @@ impl InstanceError {
     }
     #[allow(dead_code)] // may be unused on some platforms
     pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(supports_ptr_atomics)] {
+                let source = Arc::new(source);
+            } else {
+                // TODO(https://github.com/rust-lang/rust/issues/18598): avoid indirection via Box once arbitrary types support unsized coercion
+                let source: Box<dyn Error + Send + Sync + 'static> = Box::new(source);
+                let source = Arc::from(source);
+            }
+        }
         Self {
             message,
-            source: Some(Arc::new(source)),
+            source: Some(source),
         }
     }
 }

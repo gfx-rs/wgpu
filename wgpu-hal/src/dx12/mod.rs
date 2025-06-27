@@ -604,6 +604,12 @@ pub struct Adapter {
 unsafe impl Send for Adapter {}
 unsafe impl Sync for Adapter {}
 
+impl Adapter {
+    pub fn as_raw(&self) -> &Dxgi::IDXGIAdapter3 {
+        &self.raw
+    }
+}
+
 struct Event(pub Foundation::HANDLE);
 impl Event {
     pub fn create(manual_reset: bool, initial_state: bool) -> Result<Self, crate::DeviceError> {

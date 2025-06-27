@@ -476,7 +476,7 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
             if let Some(source_code) = source_code {
                 debug_info = Some(naga::back::spv::DebugInfo {
                     source_code,
-                    file_name: name,
+                    file_name: name.as_path().into(),
                     // wgpu#6266: we technically know all the information here to
                     // produce the valid language but it's not too important for
                     // validation purposes
@@ -883,7 +883,7 @@ fn convert_snapshots_spv() {
             &naga::front::spv::Options {
                 adjust_coordinate_space,
                 strict_capabilities: true,
-                block_ctx_dump_prefix: None,
+                ..Default::default()
             },
         )
         .unwrap();

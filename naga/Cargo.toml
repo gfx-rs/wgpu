@@ -23,7 +23,6 @@ default = []
 dot-out = []
 glsl-in = ["dep:pp-rs"]
 glsl-out = []
-std = []
 
 ## Enables outputting to the Metal Shading Language (MSL).
 ##
@@ -78,6 +77,9 @@ termcolor = ["codespan-reporting/termcolor"]
 
 ## Enables writing output to stderr.
 stderr = ["codespan-reporting/std"]
+
+## Enables integration with the underlying filesystem.
+fs = []
 
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"], optional = true }
