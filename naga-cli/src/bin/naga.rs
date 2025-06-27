@@ -42,7 +42,15 @@ struct Args {
     #[argh(option)]
     block_ctx_dir: Option<String>,
 
-    /// the shader entrypoint to use when compiling to GLSL
+    /// the shader entrypoint.
+    ///
+    /// When specified along with the `--compact` option, anything not reachable
+    /// from the selected entry point will not appear in the output module.
+    ///
+    /// When specified without the `--compact` option, alternate entry points
+    /// will not appear in the output module, and other declarations referenced
+    /// by alternate entrypoints may or may not appear, depending on whether
+    /// the module contains overrides.
     #[argh(option)]
     entry_point: Option<String>,
 
@@ -91,6 +99,9 @@ struct Args {
     ///
     /// Output files will reflect the compacted IR. If you want to see the IR as
     /// it was before compaction, use the `--before-compaction` option.
+    ///
+    /// Even when this option is not active, compaction may still occur as part
+    /// of override processing.
     #[argh(switch)]
     compact: bool,
 
@@ -319,6 +330,14 @@ struct Parameters<'a> {
     input_kind: Option<InputKind>,
     shader_stage: Option<ShaderStage>,
     defines: FastHashMap<String, String>,
+
+    /// We use this copy of `args.compact` to know whether we should pass the
+    /// entrypoint to `process_overrides`, which will result in removal from
+    /// the module of anything not reachable from that entry point.
+    ///
+    /// When we don't know an entrypoint, we still compact the module as a whole
+    /// if `args.compact` is set, but we don't use this copy for anything.
+    compact: bool,
 }
 
 trait PrettyResult {
@@ -381,7 +400,16 @@ fn run() -> anyhow::Result<()> {
         .init();
 
     // Parse commandline arguments
-    let args: Args = argh::from_env();
+    let args = {
+        let mut args: Args = argh::from_env();
+
+        if args.before_compaction.is_some() {
+            args.compact = true;
+        }
+
+        args
+    };
+
     if args.version {
         println!("{}", env!("CARGO_PKG_VERSION"));
         return Ok(());
@@ -424,7 +452,7 @@ fn run() -> anyhow::Result<()> {
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
-        block_ctx_dump_prefix: args.block_ctx_dir.clone().map(std::path::PathBuf::from),
+        block_ctx_dump_prefix: args.block_ctx_dir.clone().map(Into::into),
     };
 
     params.entry_point.clone_from(&args.entry_point);
@@ -450,6 +478,8 @@ fn run() -> anyhow::Result<()> {
         naga::back::glsl::WriterFlags::ADJUST_COORDINATE_SPACE,
         !params.keep_coordinate_space,
     );
+
+    params.compact = args.compact;
 
     if args.bulk_validate {
         return bulk_validate(args, &params);
@@ -486,7 +516,7 @@ fn run() -> anyhow::Result<()> {
                 .set(naga::back::spv::WriterFlags::DEBUG, true);
             params.spv_out.debug_info = Some(naga::back::spv::DebugInfo {
                 source_code: input_text,
-                file_name: input_path,
+                file_name: input_path.into(),
                 language,
             })
         } else {
@@ -534,7 +564,11 @@ fn run() -> anyhow::Result<()> {
     };
 
     // Compact the module, if requested.
-    let info = if args.compact || args.before_compaction.is_some() {
+    //
+    // Note that when output is to a non-WGSL shader language, we will call
+    // `process_overrides`, which does its own compaction even if it is not
+    // explicitly requested on the command line.
+    let info = if args.compact {
         // Compact only if validation succeeded. Otherwise, compaction may panic.
         if info.is_some() {
             // Write out the module state before compaction, if requested.
@@ -686,6 +720,16 @@ fn write_output(
     params: &Parameters,
     output_path: &str,
 ) -> anyhow::Result<()> {
+    let entry_point = params.entry_point.as_deref().map(|name| {
+        let ep_index = module
+            .entry_points
+            .iter()
+            .position(|ep| ep.name == *name)
+            .expect("Unable to find the entry point");
+
+        (module.entry_points[ep_index].stage, name)
+    });
+
     match Path::new(&output_path)
         .extension()
         .ok_or(CliError("Output filename has no extension"))?
@@ -720,7 +764,7 @@ fn write_output(
             let (module, info) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
-                None,
+                entry_point.filter(|_| params.compact),
                 &params.overrides,
             )
             .unwrap_pretty();
@@ -733,22 +777,10 @@ fn write_output(
         "spv" => {
             use naga::back::spv;
 
-            let pipeline_options_owned;
-            let pipeline_options = match params.entry_point {
-                Some(ref name) => {
-                    let ep_index = module
-                        .entry_points
-                        .iter()
-                        .position(|ep| ep.name == *name)
-                        .expect("Unable to find the entry point");
-                    pipeline_options_owned = spv::PipelineOptions {
-                        entry_point: name.clone(),
-                        shader_stage: module.entry_points[ep_index].stage,
-                    };
-                    Some(&pipeline_options_owned)
-                }
-                None => None,
-            };
+            let pipeline_options = entry_point.map(|(shader_stage, name)| spv::PipelineOptions {
+                entry_point: name.to_owned(),
+                shader_stage,
+            });
 
             let info = info.as_ref().ok_or(CliError(
                 "Generating SPIR-V output requires validation to \
@@ -758,13 +790,13 @@ fn write_output(
             let (module, info) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
-                None,
+                entry_point.filter(|_| params.compact),
                 &params.overrides,
             )
             .unwrap_pretty();
 
-            let spv =
-                spv::write_vec(&module, &info, &params.spv_out, pipeline_options).unwrap_pretty();
+            let spv = spv::write_vec(&module, &info, &params.spv_out, pipeline_options.as_ref())
+                .unwrap_pretty();
             let bytes = spv
                 .iter()
                 .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
@@ -777,17 +809,30 @@ fn write_output(
         stage @ ("vert" | "frag" | "comp") => {
             use naga::back::glsl;
 
+            let file_ext_stage = match stage {
+                "vert" => naga::ShaderStage::Vertex,
+                "frag" => naga::ShaderStage::Fragment,
+                "comp" => naga::ShaderStage::Compute,
+                _ => unreachable!(),
+            };
+
+            let (ep_stage, ep_name) = match entry_point {
+                Some((stage, name)) => {
+                    if stage != file_ext_stage {
+                        eprintln!(
+                            "warning: the shader stage `{stage:?}` of the selected entry point \
+                                `{name}` in the input file does not match the shader stage \
+                                implied by the file name",
+                        );
+                    }
+                    (stage, name.to_string())
+                }
+                _ => (file_ext_stage, "main".to_string()),
+            };
+
             let pipeline_options = glsl::PipelineOptions {
-                entry_point: match params.entry_point {
-                    Some(ref name) => name.clone(),
-                    None => "main".to_string(),
-                },
-                shader_stage: match stage {
-                    "vert" => naga::ShaderStage::Vertex,
-                    "frag" => naga::ShaderStage::Fragment,
-                    "comp" => naga::ShaderStage::Compute,
-                    _ => unreachable!(),
-                },
+                entry_point: ep_name,
+                shader_stage: ep_stage,
                 multiview: None,
             };
 
@@ -799,7 +844,7 @@ fn write_output(
             let (module, info) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
-                None,
+                entry_point.filter(|_| params.compact),
                 &params.overrides,
             )
             .unwrap_pretty();
@@ -834,7 +879,7 @@ fn write_output(
             let (module, info) = naga::back::pipeline_constants::process_overrides(
                 module,
                 info,
-                None,
+                entry_point.filter(|_| params.compact),
                 &params.overrides,
             )
             .unwrap_pretty();

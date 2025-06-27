@@ -604,6 +604,12 @@ pub struct Adapter {
 unsafe impl Send for Adapter {}
 unsafe impl Sync for Adapter {}
 
+impl Adapter {
+    pub fn as_raw(&self) -> &Dxgi::IDXGIAdapter3 {
+        &self.raw
+    }
+}
+
 struct Event(pub Foundation::HANDLE);
 impl Event {
     pub fn create(manual_reset: bool, initial_state: bool) -> Result<Self, crate::DeviceError> {
@@ -1501,12 +1507,14 @@ pub struct DxilPassthroughShader {
     pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
+
 #[derive(Debug)]
 pub struct HlslPassthroughShader {
     pub shader: String,
     pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
+
 #[derive(Debug)]
 pub enum ShaderModuleSource {
     Naga(crate::NagaShader),

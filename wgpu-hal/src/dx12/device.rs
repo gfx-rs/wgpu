@@ -347,7 +347,7 @@ impl super::Device {
                     naga_stage,
                     source
                 );
-
+              
                 ShaderCacheKey {
                     source,
                     entry_point,

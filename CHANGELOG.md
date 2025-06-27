@@ -59,6 +59,10 @@ Bottom level categories:
 - Add acceleration structure limits. By @Vecvec in [#7845](https://github.com/gfx-rs/wgpu/pull/7845).
 - Add support for clip-distances feature for Vulkan and GL backends. By @dzamkov in [#7730](https://github.com/gfx-rs/wgpu/pull/7730)
 
+#### Vulkan
+
+- Add ways to initialise the instance and open the adapter with callbacks to add extensions. By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829). 
+
 ### Bug Fixes
 
 #### General
@@ -85,10 +89,12 @@ Bottom level categories:
 #### DX12
 
 - Get `vertex_index` & `instance_index` builtins working for indirect draws. By @teoxoy in [#7535](https://github.com/gfx-rs/wgpu/pull/7535)
+- Added `wgpu_hal::dx12::Adapter::as_raw()`. By @tronical in [##7852](https://github.com/gfx-rs/wgpu/pull/7852)
 
 #### Vulkan
 
 - Fix OpenBSD compilation of `wgpu_hal::vulkan::drm`. By @ErichDonGubler in [#7810](https://github.com/gfx-rs/wgpu/pull/7810).
+- Fix warnings for unrecognized present mode. By @Wumpf in [#7850](https://github.com/gfx-rs/wgpu/pull/7850).
 
 #### Metal
 
@@ -133,6 +139,12 @@ Bottom level categories:
 #### WebGPU
 
 - The type of the `size` parameter to `copy_buffer_to_buffer` has changed from `BufferAddress` to `impl Into<Option<BufferAddress>>`. This achieves the spec-defined behavior of the value being optional, while still accepting existing calls without changes. By @andyleiserson in [#7659](https://github.com/gfx-rs/wgpu/pull/7659).
+- To bring wgpu's error reporting into compliance with the WebGPU specification, the error type returned from some functions has changed, and some errors may be raised at a different time than they were previously.
+  - The error type returned by many methods on `CommandEncoder`, `RenderPassEncoder`, `ComputePassEncoder`, and `RenderBundleEncoder` has changed to `EncoderStateError` or `PassStateError`. These functions will return the `Ended` variant of these errors if called on an encoder that is no longer active. Reporting of all other errors is deferred until a call to `finish()`.
+  - Variants holding a `CommandEncoderError` in the error enums `ClearError`, `ComputePassErrorInner`, `QueryError`, and `RenderPassErrorInner` have been replaced with variants holding an `EncoderStateError`.
+  - The definition of `enum CommandEncoderError` has changed significantly, to reflect which errors can be raised by `CommandEncoder.finish()`. There are also some errors that no longer appear directly in `CommandEncoderError`, and instead appear nested within the `RenderPass` or `ComputePass` variants.
+  - `CopyError` has been removed. Errors that were previously a `CopyError` are now a `CommandEncoderError` returned by `finish()`. (The detailed reasons for copies to fail were and still are described by `TransferError`, which was previously a variant of `CopyError`, and is now a variant of `CommandEncoderError`).
+
 
 #### HAL
 
