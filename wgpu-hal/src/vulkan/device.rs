@@ -3058,7 +3058,7 @@ impl super::Device {
         let vk_info = vk::BufferCreateInfo::default()
             .size(desc.size)
             .usage(buffer_usage)
-            .sharing_mode(vk::SharingMode::CONCURRENT)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .push_next(&mut external_vk_info);
 
         let raw = unsafe {
