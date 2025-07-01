@@ -58,6 +58,9 @@ Bottom level categories:
 - Add extra acceleration structure vertex formats. By @Vecvec in [#7580](https://github.com/gfx-rs/wgpu/pull/7580).
 - Add acceleration structure limits. By @Vecvec in [#7845](https://github.com/gfx-rs/wgpu/pull/7845).
 - Add support for clip-distances feature for Vulkan and GL backends. By @dzamkov in [#7730](https://github.com/gfx-rs/wgpu/pull/7730)
+- Added `wgpu_types::error::{ErrorType, WebGpuError}` for classification of errors according to WebGPU's [`GPUError`]'s classification scheme, and implement `WebGpuError` for existing errors. This allows users of `wgpu-core` to offload error classification onto the WGPU ecosystem, rather than having to do it themselves without sufficient information. By @ErichDonGubler in [#6547](https://github.com/gfx-rs/wgpu/pull/6547).
+
+[`GPUError`]: https://www.w3.org/TR/webgpu/#gpuerror
 
 #### Vulkan
 
@@ -107,6 +110,7 @@ Bottom level categories:
 ### Changes
 
 - Loosen Viewport validation requirements to match the [new specs](https://github.com/gpuweb/gpuweb/pull/5025). By @ebbdrop in [#7564](https://github.com/gfx-rs/wgpu/pull/7564)
+- `wgpu` and `deno_webgpu` now use `wgpu-types::error::WebGpuError` to classify errors. Any changes here are likely to be regressions; please report them if you find them! By @ErichDonGubler in [#6547](https://github.com/gfx-rs/wgpu/pull/6547).
 
 #### General
 

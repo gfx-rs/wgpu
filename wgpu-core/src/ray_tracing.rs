@@ -11,7 +11,10 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use thiserror::Error;
-use wgt::{AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat};
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat,
+};
 
 use crate::{
     command::EncoderStateError,
@@ -43,6 +46,20 @@ pub enum CreateBlasError {
     TooManyPrimitives(u32, u32),
 }
 
+impl WebGpuError for CreateBlasError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::MissingFeatures(e) => e,
+            Self::MissingIndexData
+            | Self::InvalidVertexFormat(..)
+            | Self::TooManyGeometries(..)
+            | Self::TooManyPrimitives(..) => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum CreateTlasError {
     #[error(transparent)]
@@ -53,6 +70,17 @@ pub enum CreateTlasError {
     DisallowedFlag(wgt::AccelerationStructureFlags),
     #[error("Limit `max_tlas_instance_count` is {0}, but the TLAS had a maximum of {1} instances")]
     TooManyInstances(u32, u32),
+}
+
+impl WebGpuError for CreateTlasError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::MissingFeatures(e) => e,
+            Self::DisallowedFlag(..) | Self::TooManyInstances(..) => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 /// Error encountered while attempting to do a copy on a command encoder.
@@ -153,6 +181,41 @@ pub enum BuildAccelerationStructureError {
     TlasDependentMissingVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
 }
 
+impl WebGpuError for BuildAccelerationStructureError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::EncoderState(e) => e,
+            Self::Device(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::DestroyedResource(e) => e,
+            Self::MissingBufferUsage(e) => e,
+            Self::MissingFeatures(e) => e,
+            Self::InsufficientBufferSize(..)
+            | Self::UnalignedIndexBufferOffset(..)
+            | Self::UnalignedTransformBufferOffset(..)
+            | Self::InvalidIndexCount(..)
+            | Self::MissingAssociatedData(..)
+            | Self::IncompatibleBlasBuildSizes(..)
+            | Self::IncompatibleBlasFlags(..)
+            | Self::IncompatibleBlasVertexCount(..)
+            | Self::DifferentBlasVertexFormats(..)
+            | Self::VertexStrideTooSmall(..)
+            | Self::VertexStrideUnaligned(..)
+            | Self::BlasIndexCountProvidedMismatch(..)
+            | Self::IncompatibleBlasIndexCount(..)
+            | Self::DifferentBlasIndexFormats(..)
+            | Self::CompactedBlas(..)
+            | Self::MissingIndexBuffer(..)
+            | Self::TlasInvalidCustomIndex(..)
+            | Self::TlasInstanceCountExceeded(..)
+            | Self::TransformMissing(..)
+            | Self::UseTransformMissing(..)
+            | Self::TlasDependentMissingVertexReturn(..) => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum ValidateAsActionsError {
     #[error(transparent)]
@@ -166,6 +229,18 @@ pub enum ValidateAsActionsError {
 
     #[error("Blas {0:?} is newer than the containing Tlas {1:?}")]
     BlasNewerThenTlas(ResourceErrorIdent, ResourceErrorIdent),
+}
+
+impl WebGpuError for ValidateAsActionsError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::DestroyedResource(e) => e,
+            Self::UsedUnbuiltTlas(..) | Self::UsedUnbuiltBlas(..) | Self::BlasNewerThenTlas(..) => {
+                return ErrorType::Validation
+            }
+        };
+        e.webgpu_error_type()
+    }
 }
 
 #[derive(Debug)]
@@ -288,6 +363,20 @@ pub enum BlasPrepareCompactError {
     CompactionUnsupported,
 }
 
+impl WebGpuError for BlasPrepareCompactError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::CompactionPreparingAlready
+            | Self::DoubleCompaction
+            | Self::NotBuilt
+            | Self::CompactionUnsupported => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum CompactBlasError {
     #[error(transparent)]
@@ -307,6 +396,20 @@ pub enum CompactBlasError {
 
     #[error("BLAS was not prepared for compaction")]
     BlasNotReady,
+}
+
+impl WebGpuError for CompactBlasError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Encoder(e) => e,
+            Self::Device(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::DestroyedResource(e) => e,
+            Self::MissingFeatures(e) => e,
+            Self::BlasNotReady => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 pub type BlasCompactReadyPendingClosure = (Option<BlasCompactCallback>, BlasPrepareCompactResult);

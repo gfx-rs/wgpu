@@ -841,6 +841,15 @@ pub enum GPUDeviceLostReason {
     Destroyed,
 }
 
+impl From<wgpu_types::DeviceLostReason> for GPUDeviceLostReason {
+    fn from(value: wgpu_types::DeviceLostReason) -> Self {
+        match value {
+            wgpu_types::DeviceLostReason::Unknown => Self::Unknown,
+            wgpu_types::DeviceLostReason::Destroyed => Self::Destroyed,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct GPUDeviceLostInfo {
     pub reason: GPUDeviceLostReason,
