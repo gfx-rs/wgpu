@@ -78,7 +78,7 @@ wgpu-core = { version = "25.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "25.0.0", path = "./wgpu-hal" }
 wgpu-macros = { version = "25.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "25.0.0", path = "./tests" }
-wgpu-types = { version = "25.0.0", path = "./wgpu-types" }
+wgpu-types = { version = "25.0.0", path = "./wgpu-types", default-features = false }
 
 # These _cannot_ have a version specified. If it does, crates.io will look
 # for a version of the package on crates when we publish naga. Path dependencies
@@ -103,10 +103,10 @@ bytemuck = { version = "1.22", features = [
     "extern_crate_alloc",
     "min_const_generics",
 ] }
-cargo_metadata = "0.19"
+cargo_metadata = "0.20"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
-criterion = "0.5"
+criterion = "0.6"
 codespan-reporting = { version = "0.12", default-features = false }
 ctor = "0.4"
 diff = "0.1"
@@ -135,10 +135,11 @@ libc = { version = "0.2.168", default-features = false }
 # See https://github.com/rust-fuzz/libfuzzer/issues/126
 libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
+libm = { version = "0.2.6", default-features = false }
 libtest-mimic = "0.8"
 log = "0.4.21"
 nanoserde = "0.2"
-nanorand = { version = "0.7", default-features = false, features = ["wyrand"] }
+nanorand = { version = "0.8", default-features = false, features = ["wyrand"] }
 noise = "0.9"
 num_cpus = "1"
 # `half` requires 0.2.16 for `FromBytes` and `ToBytes`.
@@ -158,7 +159,8 @@ pico-args = { version = "0.5", features = [
 ] }
 png = "0.17.6"
 pollster = "0.4"
-portable-atomic = "1.2"
+portable-atomic = "1.8"
+portable-atomic-util = "0.2.4"
 pp-rs = "0.2.1"
 profiling = { version = "1", default-features = false }
 quote = "1.0.38"
@@ -181,15 +183,15 @@ spirv = "0.3"
 static_assertions = "1.1"
 strum = { version = "0.27", default-features = false, features = ["derive"] }
 syn = "2.0.98"
-toml = "0.8"
+toml = "0.8.9"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.3", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.29", features = ["android-native-activity"] }
-which = "7"
-xshell = "0.2"
+which = "8"
+xshell = "0.2.2"
 
 # Metal dependencies
 metal = "0.32"
@@ -201,7 +203,7 @@ objc = "0.2.5"
 android_system_properties = "0.1.1"
 ash = "0.38"
 gpu-alloc = "0.6"
-gpu-descriptor = "0.3"
+gpu-descriptor = "0.3.2"
 
 # DX12 dependencies
 gpu-allocator = { version = "0.27", default-features = false }
@@ -230,11 +232,11 @@ web-sys = { version = "0.3.77", default-features = false }
 web-time = "1"
 
 # deno dependencies
-deno_console = "0.190.0"
-deno_core = "0.336.0"
-deno_url = "0.190.0"
-deno_web = "0.221.0"
-deno_webidl = "0.190.0"
+deno_console = "0.192.0"
+deno_core = "0.338.0"
+deno_url = "0.192.0"
+deno_web = "0.224.0"
+deno_webidl = "0.192.0"
 deno_webgpu = { version = "0.157.0", path = "./deno_webgpu" }
 deno_unsync = "0.4.2"
 deno_error = "0.5.5"

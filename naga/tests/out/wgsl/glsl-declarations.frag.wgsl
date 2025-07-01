@@ -43,6 +43,7 @@ fn main_1() {
     var from_input_array: vec4<f32>;
     var a_1: f32;
     var b: f32;
+    var light_scattering_params: LightScatteringParams;
 
     let _e17 = in_array_2[1];
     from_input_array = _e17;

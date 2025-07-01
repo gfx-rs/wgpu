@@ -159,6 +159,27 @@ void testSwizzleWrites(vec3 a) {
 
 out vec4 o_color;
 void main() {
+    testBinOpVecFloat(vec4(0), 1.0);
+    testBinOpFloatVec(vec4(0), 1.0);
+    testBinOpIVecInt(ivec4(0), 1);
+    testBinOpIntIVec(1, ivec4(0));
+    testBinOpUVecUint(uvec4(0), 1);
+    testBinOpUintUVec(1, uvec4(0));
+    testBinOpMatMat(mat3(0), mat3(1));
+    testBinOpMatFloat(1, mat3(1));
+    testUnaryOpMat(mat3(1));
+    testStructConstructor();
+    testNonScalarToScalarConstructor();
+    testArrayConstructor();
+    testFreestandingConstructor();
+    testNonImplicitCastVectorCast();
     privatePointer(global);
+    ternary(false);
+    testMatrixMultiplication(mat4x3(0), mat4x4(1));
+    testLength();
+    testConstantLength(float[4](0.0, 1.0, 2.0, 3.0));
+    indexConstantNonConstantIndex(1);
+    testSwizzleWrites(vec3(0));
+
     o_color.rgba = vec4(1.0);
 }

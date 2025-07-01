@@ -34,4 +34,9 @@ fn main(
     subgroupShuffleDown(subgroup_invocation_id, 1u);
     subgroupShuffleUp(subgroup_invocation_id, 1u);
     subgroupShuffleXor(subgroup_invocation_id, sizes.subgroup_size - 1u);
+
+    quadBroadcast(subgroup_invocation_id, 4u);
+    quadSwapX(subgroup_invocation_id);
+    quadSwapY(subgroup_invocation_id);
+    quadSwapDiagonal(subgroup_invocation_id);
 }

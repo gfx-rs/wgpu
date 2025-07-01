@@ -70,4 +70,13 @@ void testImgWriteReadOnly(in ivec2 coord) {
     vec2 size = imageSize(imgWriteReadOnly);
 }
 
-void main() {}
+void main() {
+    testImg1D(1);
+    testImg1DArray(ivec2(0));
+    testImg2D(ivec2(0));
+    testImg2DArray(ivec3(0));
+    testImg3D(ivec3(0));
+    testImgReadOnly(ivec2(0));
+    testImgWriteOnly(ivec2(0));
+    testImgWriteReadOnly(ivec2(0));
+}

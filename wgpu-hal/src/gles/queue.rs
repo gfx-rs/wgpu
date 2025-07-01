@@ -158,6 +158,10 @@ impl super::Queue {
             super::TextureInner::ExternalFramebuffer { ref inner } => unsafe {
                 gl.bind_external_framebuffer(glow::FRAMEBUFFER, inner);
             },
+            #[cfg(native)]
+            super::TextureInner::ExternalNativeFramebuffer { ref inner } => unsafe {
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(*inner));
+            },
         }
     }
 
@@ -1818,6 +1822,20 @@ impl super::Queue {
                         unsafe { gl.uniform_matrix_4_f32_slice(location, false, data) };
                     }
                     _ => panic!("Unsupported uniform datatype: {:?}!", uniform.ty),
+                }
+            }
+            C::SetClipDistances {
+                old_count,
+                new_count,
+            } => {
+                // Disable clip planes that are no longer active
+                for i in new_count..old_count {
+                    unsafe { gl.disable(glow::CLIP_DISTANCE0 + i) };
+                }
+
+                // Enable clip planes that are now active
+                for i in old_count..new_count {
+                    unsafe { gl.enable(glow::CLIP_DISTANCE0 + i) };
                 }
             }
         }

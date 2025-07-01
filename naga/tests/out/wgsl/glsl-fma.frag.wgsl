@@ -32,6 +32,11 @@ fn Fma(d: ptr<function, Mat4x3_>, m: Mat4x3_, s: f32) {
 }
 
 fn main_1() {
+    var m1_: Mat4x3_ = Mat4x3_(vec4(0f), vec4(1f), vec4(2f));
+    var m2_: Mat4x3_ = Mat4x3_(vec4(0f), vec4(1f), vec4(2f));
+
+    let _e17 = m2_;
+    Fma((&m1_), _e17, 2f);
     o_color.x = 1f;
     o_color.y = 1f;
     o_color.z = 1f;

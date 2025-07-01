@@ -44,4 +44,10 @@ void btest(bvec4 a, bvec4 b) {
 	bvec4 g = not(a);
 }
 
-void main() {}
+void main() {
+    ftest(vec4(0), vec4(0));
+    dtest(dvec4(0), dvec4(0));
+    itest(ivec4(0), ivec4(0));
+    utest(uvec4(0), uvec4(0));
+    btest(bvec4(false), bvec4(false));
+}

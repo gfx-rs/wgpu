@@ -25,7 +25,6 @@ test = false
 
 [dependencies]
 naga = { workspace = true, features = [
-    "compact",
     "wgsl-in",
     "wgsl-out",
     "glsl-in",
@@ -39,6 +38,7 @@ naga = { workspace = true, features = [
     "deserialize",
     "termcolor",
     "stderr",
+    "fs",
 ] }
 
 bincode.workspace = true

@@ -377,6 +377,8 @@ pub struct ReflectionInfo {
     pub varying: crate::FastHashMap<String, VaryingLocation>,
     /// List of push constant items in the shader.
     pub push_constant_items: Vec<PushConstantItem>,
+    /// Number of user-defined clip planes. Only applicable to vertex shaders.
+    pub clip_distance_count: u32,
 }
 
 /// Mapping between a texture and its sampler, if it exists.
@@ -475,7 +477,7 @@ impl VaryingOptions {
 /// Helper wrapper used to get a name for a varying
 ///
 /// Varying have different naming schemes depending on their binding:
-/// - Varyings with builtin bindings get the from [`glsl_built_in`].
+/// - Varyings with builtin bindings get their name from [`glsl_built_in`].
 /// - Varyings with location bindings are named `_S_location_X` where `S` is a
 ///   prefix identifying which pipeline stage the varying connects, and `X` is
 ///   the location.
@@ -621,6 +623,8 @@ pub struct Writer<'a, W> {
     multiview: Option<core::num::NonZeroU32>,
     /// Mapping of varying variables to their location. Needed for reflections.
     varying: crate::FastHashMap<String, VaryingLocation>,
+    /// Number of user-defined clip planes. Only non-zero for vertex shaders.
+    clip_distance_count: u32,
 }
 
 impl<'a, W: Write> Writer<'a, W> {
@@ -688,6 +692,7 @@ impl<'a, W: Write> Writer<'a, W> {
             need_bake_expressions: Default::default(),
             continue_ctx: back::continue_forward::ContinueCtx::default(),
             varying: Default::default(),
+            clip_distance_count: 0,
         };
 
         // Find all features required to print this module
@@ -750,22 +755,23 @@ impl<'a, W: Write> Writer<'a, W> {
         }
 
         // Enable early depth tests if needed
-        if let Some(depth_test) = self.entry_point.early_depth_test {
+        if let Some(early_depth_test) = self.entry_point.early_depth_test {
             // If early depth test is supported for this version of GLSL
             if self.options.version.supports_early_depth_test() {
-                writeln!(self.out, "layout(early_fragment_tests) in;")?;
-
-                if let Some(conservative) = depth_test.conservative {
-                    use crate::ConservativeDepth as Cd;
-
-                    let depth = match conservative {
-                        Cd::GreaterEqual => "greater",
-                        Cd::LessEqual => "less",
-                        Cd::Unchanged => "unchanged",
-                    };
-                    writeln!(self.out, "layout (depth_{depth}) out float gl_FragDepth;")?;
+                match early_depth_test {
+                    crate::EarlyDepthTest::Force => {
+                        writeln!(self.out, "layout(early_fragment_tests) in;")?;
+                    }
+                    crate::EarlyDepthTest::Allow { conservative, .. } => {
+                        use crate::ConservativeDepth as Cd;
+                        let depth = match conservative {
+                            Cd::GreaterEqual => "greater",
+                            Cd::LessEqual => "less",
+                            Cd::Unchanged => "unchanged",
+                        };
+                        writeln!(self.out, "layout (depth_{depth}) out float gl_FragDepth;")?;
+                    }
                 }
-                writeln!(self.out)?;
             } else {
                 log::warn!(
                     "Early depth testing is not supported for this version of GLSL: {}",
@@ -787,6 +793,8 @@ impl<'a, W: Write> Writer<'a, W> {
         // you can't make a struct without adding all of its members first.
         for (handle, ty) in self.module.types.iter() {
             if let TypeInner::Struct { ref members, .. } = ty.inner {
+                let struct_name = &self.names[&NameKey::Type(handle)];
+
                 // Structures ending with runtime-sized arrays can only be
                 // rendered as shader storage blocks in GLSL, not stand-alone
                 // struct types.
@@ -794,19 +802,19 @@ impl<'a, W: Write> Writer<'a, W> {
                     .inner
                     .is_dynamically_sized(&self.module.types)
                 {
-                    let name = &self.names[&NameKey::Type(handle)];
-                    write!(self.out, "struct {name} ")?;
+                    write!(self.out, "struct {struct_name} ")?;
                     self.write_struct_body(handle, members)?;
                     writeln!(self.out, ";")?;
                 }
             }
         }
 
-        // Write functions to create special types.
+        // Write functions for special types.
         for (type_key, struct_ty) in self.module.special_types.predeclared_types.iter() {
             match type_key {
                 &crate::PredeclaredType::ModfResult { size, scalar }
                 | &crate::PredeclaredType::FrexpResult { size, scalar } => {
+                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
                     let arg_type_name_owner;
                     let arg_type_name = if let Some(size) = size {
                         arg_type_name_owner = format!(
@@ -835,8 +843,6 @@ impl<'a, W: Write> Writer<'a, W> {
                             (FREXP_FUNCTION, "frexp", other_type_name)
                         };
 
-                    let struct_name = &self.names[&NameKey::Type(*struct_ty)];
-
                     writeln!(self.out)?;
                     if !self.options.version.supports_frexp_function()
                         && matches!(type_key, &crate::PredeclaredType::FrexpResult { .. })
@@ -860,7 +866,9 @@ impl<'a, W: Write> Writer<'a, W> {
                         )?;
                     }
                 }
-                &crate::PredeclaredType::AtomicCompareExchangeWeakResult { .. } => {}
+                &crate::PredeclaredType::AtomicCompareExchangeWeakResult(_) => {
+                    // Handled by the general struct writing loop earlier.
+                }
             }
         }
 
@@ -1481,6 +1489,18 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
             }
         }
+
+        for statement in func.body.iter() {
+            match *statement {
+                crate::Statement::Atomic {
+                    fun: crate::AtomicFunction::Exchange { compare: Some(cmp) },
+                    ..
+                } => {
+                    self.need_bake_expressions.insert(cmp);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Helper method used to get a name for a global
@@ -1595,31 +1615,47 @@ impl<'a, W: Write> Writer<'a, W> {
                 blend_src,
             } => (location, interpolation, sampling, blend_src),
             crate::Binding::BuiltIn(built_in) => {
-                if let crate::BuiltIn::Position { invariant: true } = built_in {
-                    match (self.options.version, self.entry_point.stage) {
-                        (
-                            Version::Embedded {
-                                version: 300,
-                                is_webgl: true,
-                            },
-                            ShaderStage::Fragment,
-                        ) => {
-                            // `invariant gl_FragCoord` is not allowed in WebGL2 and possibly
-                            // OpenGL ES in general (waiting on confirmation).
-                            //
-                            // See https://github.com/KhronosGroup/WebGL/issues/3518
-                        }
-                        _ => {
-                            writeln!(
-                                self.out,
-                                "invariant {};",
-                                glsl_built_in(
-                                    built_in,
-                                    VaryingOptions::from_writer_options(self.options, output)
-                                )
-                            )?;
+                match built_in {
+                    crate::BuiltIn::Position { invariant: true } => {
+                        match (self.options.version, self.entry_point.stage) {
+                            (
+                                Version::Embedded {
+                                    version: 300,
+                                    is_webgl: true,
+                                },
+                                ShaderStage::Fragment,
+                            ) => {
+                                // `invariant gl_FragCoord` is not allowed in WebGL2 and possibly
+                                // OpenGL ES in general (waiting on confirmation).
+                                //
+                                // See https://github.com/KhronosGroup/WebGL/issues/3518
+                            }
+                            _ => {
+                                writeln!(
+                                    self.out,
+                                    "invariant {};",
+                                    glsl_built_in(
+                                        built_in,
+                                        VaryingOptions::from_writer_options(self.options, output)
+                                    )
+                                )?;
+                            }
                         }
                     }
+                    crate::BuiltIn::ClipDistance => {
+                        // Re-declare `gl_ClipDistance` with number of clip planes.
+                        let TypeInner::Array { size, .. } = self.module.types[ty].inner else {
+                            unreachable!();
+                        };
+                        let proc::IndexableLength::Known(size) =
+                            size.resolve(self.module.to_ctx())?
+                        else {
+                            unreachable!();
+                        };
+                        self.clip_distance_count = size;
+                        writeln!(self.out, "out float gl_ClipDistance[{size}];")?;
+                    }
+                    _ => {}
                 }
                 return Ok(());
             }
@@ -1953,7 +1989,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
 
             writeln!(self.out, "{level}}}")?;
-            self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+            self.write_control_barrier(crate::Barrier::WORK_GROUP, level)?;
         }
 
         Ok(())
@@ -2497,8 +2533,11 @@ impl<'a, W: Write> Writer<'a, W> {
             // keyword which ceases all further processing in a fragment shader, it's called OpKill
             // in spir-v that's why it's called `Statement::Kill`
             Statement::Kill => writeln!(self.out, "{level}discard;")?,
-            Statement::Barrier(flags) => {
-                self.write_barrier(flags, level)?;
+            Statement::ControlBarrier(flags) => {
+                self.write_control_barrier(flags, level)?;
+            }
+            Statement::MemoryBarrier(flags) => {
+                self.write_memory_barrier(flags, level)?;
             }
             // Stores in glsl are just variable assignments written as `pointer = value;`
             Statement::Store { pointer, value } => {
@@ -2512,14 +2551,14 @@ impl<'a, W: Write> Writer<'a, W> {
                 // GLSL doesn't have pointers, which means that this backend needs to ensure that
                 // the actual "loading" is happening between the two barriers.
                 // This is done in `Emit` by never emitting a variable name for pointer variables
-                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+                self.write_control_barrier(crate::Barrier::WORK_GROUP, level)?;
 
                 let result_name = Baked(result).to_string();
                 write!(self.out, "{level}")?;
                 // Expressions cannot have side effects, so just writing the expression here is fine.
                 self.write_named_expr(pointer, result_name, result, ctx)?;
 
-                self.write_barrier(crate::Barrier::WORK_GROUP, level)?;
+                self.write_control_barrier(crate::Barrier::WORK_GROUP, level)?;
             }
             // Stores a value into an image.
             Statement::ImageStore {
@@ -2572,33 +2611,50 @@ impl<'a, W: Write> Writer<'a, W> {
                 result,
             } => {
                 write!(self.out, "{level}")?;
-                if let Some(result) = result {
-                    let res_name = Baked(result).to_string();
-                    let res_ty = ctx.resolve_type(result, &self.module.types);
-                    self.write_value_type(res_ty)?;
-                    write!(self.out, " {res_name} = ")?;
-                    self.named_expressions.insert(result, res_name);
-                }
 
-                let fun_str = fun.to_glsl();
-                write!(self.out, "atomic{fun_str}(")?;
-                self.write_expr(pointer, ctx)?;
-                write!(self.out, ", ")?;
-                // handle the special cases
                 match *fun {
-                    crate::AtomicFunction::Subtract => {
-                        // we just wrote `InterlockedAdd`, so negate the argument
-                        write!(self.out, "-")?;
+                    crate::AtomicFunction::Exchange {
+                        compare: Some(compare_expr),
+                    } => {
+                        let result_handle = result.expect("CompareExchange must have a result");
+                        let res_name = Baked(result_handle).to_string();
+                        self.write_type(ctx.info[result_handle].ty.handle().unwrap())?;
+                        write!(self.out, " {res_name};")?;
+                        write!(self.out, " {res_name}.old_value = atomicCompSwap(")?;
+                        self.write_expr(pointer, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(compare_expr, ctx)?;
+                        write!(self.out, ", ")?;
+                        self.write_expr(value, ctx)?;
+                        writeln!(self.out, ");")?;
+
+                        write!(
+                            self.out,
+                            "{level}{res_name}.exchanged = ({res_name}.old_value == "
+                        )?;
+                        self.write_expr(compare_expr, ctx)?;
+                        writeln!(self.out, ");")?;
+                        self.named_expressions.insert(result_handle, res_name);
                     }
-                    crate::AtomicFunction::Exchange { compare: Some(_) } => {
-                        return Err(Error::Custom(
-                            "atomic CompareExchange is not implemented".to_string(),
-                        ));
+                    _ => {
+                        if let Some(result) = result {
+                            let res_name = Baked(result).to_string();
+                            self.write_type(ctx.info[result].ty.handle().unwrap())?;
+                            write!(self.out, " {res_name} = ")?;
+                            self.named_expressions.insert(result, res_name);
+                        }
+                        let fun_str = fun.to_glsl();
+                        write!(self.out, "atomic{fun_str}(")?;
+                        self.write_expr(pointer, ctx)?;
+                        write!(self.out, ", ")?;
+                        if let crate::AtomicFunction::Subtract = *fun {
+                            // Emulate `atomicSub` with `atomicAdd` by negating the value.
+                            write!(self.out, "-")?;
+                        }
+                        self.write_expr(value, ctx)?;
+                        writeln!(self.out, ");")?;
                     }
-                    _ => {}
                 }
-                self.write_expr(value, ctx)?;
-                writeln!(self.out, ");")?;
             }
             // Stores a value into an image.
             Statement::ImageAtomic {
@@ -2716,6 +2772,20 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::GatherMode::ShuffleXor(_) => {
                         write!(self.out, "subgroupShuffleXor(")?;
                     }
+                    crate::GatherMode::QuadBroadcast(_) => {
+                        write!(self.out, "subgroupQuadBroadcast(")?;
+                    }
+                    crate::GatherMode::QuadSwap(direction) => match direction {
+                        crate::Direction::X => {
+                            write!(self.out, "subgroupQuadSwapHorizontal(")?;
+                        }
+                        crate::Direction::Y => {
+                            write!(self.out, "subgroupQuadSwapVertical(")?;
+                        }
+                        crate::Direction::Diagonal => {
+                            write!(self.out, "subgroupQuadSwapDiagonal(")?;
+                        }
+                    },
                 }
                 self.write_expr(argument, ctx)?;
                 match mode {
@@ -2724,10 +2794,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     | crate::GatherMode::Shuffle(index)
                     | crate::GatherMode::ShuffleDown(index)
                     | crate::GatherMode::ShuffleUp(index)
-                    | crate::GatherMode::ShuffleXor(index) => {
+                    | crate::GatherMode::ShuffleXor(index)
+                    | crate::GatherMode::QuadBroadcast(index) => {
                         write!(self.out, ", ")?;
                         self.write_expr(index, ctx)?;
                     }
+                    crate::GatherMode::QuadSwap(_) => {}
                 }
                 writeln!(self.out, ");")?;
             }
@@ -2984,6 +3056,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 let (dim, class, arrayed) = match *ctx.resolve_type(image, &self.module.types) {
                     TypeInner::Image {
@@ -3041,6 +3114,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_expr(image, ctx)?;
                 // The space here isn't required but it helps with readability
                 write!(self.out, ", ")?;
+
+                // TODO: handle clamp_to_edge
+                // https://github.com/gfx-rs/wgpu/issues/7791
 
                 // We need to get the coordinates vector size to later build a vector that's `size + 1`
                 // if `depth_ref` is some, if it isn't a vector we panic as that's not a valid expression
@@ -4864,9 +4940,19 @@ impl<'a, W: Write> Writer<'a, W> {
         Ok(())
     }
 
-    /// Issue a memory barrier. Please note that to ensure visibility,
-    /// OpenGL always requires a call to the `barrier()` function after a `memoryBarrier*()`
-    fn write_barrier(&mut self, flags: crate::Barrier, level: back::Level) -> BackendResult {
+    /// Issue a control barrier.
+    fn write_control_barrier(
+        &mut self,
+        flags: crate::Barrier,
+        level: back::Level,
+    ) -> BackendResult {
+        self.write_memory_barrier(flags, level)?;
+        writeln!(self.out, "{level}barrier();")?;
+        Ok(())
+    }
+
+    /// Issue a memory barrier.
+    fn write_memory_barrier(&mut self, flags: crate::Barrier, level: back::Level) -> BackendResult {
         if flags.contains(crate::Barrier::STORAGE) {
             writeln!(self.out, "{level}memoryBarrierBuffer();")?;
         }
@@ -4879,7 +4965,6 @@ impl<'a, W: Write> Writer<'a, W> {
         if flags.contains(crate::Barrier::TEXTURE) {
             writeln!(self.out, "{level}memoryBarrierImage();")?;
         }
-        writeln!(self.out, "{level}barrier();")?;
         Ok(())
     }
 
@@ -4989,6 +5074,7 @@ impl<'a, W: Write> Writer<'a, W> {
             uniforms,
             varying: mem::take(&mut self.varying),
             push_constant_items,
+            clip_distance_count: self.clip_distance_count,
         })
     }
 

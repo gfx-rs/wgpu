@@ -13,6 +13,9 @@ use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
 /// Backends for which OOM detection is implemented
 const OOM_DETECTION_IMPL: Backends = Backends::DX12.union(Backends::VULKAN);
 
+/// Backends for which query set OOM detection is implemented
+const QUERY_SET_OOM_DETECTION_IMPL: Backends = Backends::DX12;
+
 // All tests skip llvmpipe.
 // Even though llvmpipe supports VK_EXT_memory_budget it's happy to continue creating resources until
 // the process crashes with SIGABRT "memory allocation of X bytes failed" or the test times out.
@@ -125,7 +128,8 @@ static MAPPING_BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new
 static QUERY_SET_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
+            // Vulkan: https://github.com/gfx-rs/wgpu/issues/7817
+            .skip(FailureCase::backend(!QUERY_SET_OOM_DETECTION_IMPL))
             // see comment at the top of the file
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )

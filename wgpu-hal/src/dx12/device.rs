@@ -1,3 +1,4 @@
+use alloc::borrow::ToOwned;
 use alloc::{
     borrow::Cow,
     string::{String, ToString as _},
@@ -26,7 +27,7 @@ use crate::{
     },
     dx12::{
         borrow_optional_interface_temporarily, shader_compilation, suballocation,
-        DynamicStorageBufferOffsets, Event,
+        DynamicStorageBufferOffsets, Event, ShaderCacheKey, ShaderCacheValue,
     },
     AccelerationStructureEntries, TlasInstance,
 };
@@ -46,7 +47,7 @@ impl super::Device {
         private_caps: super::PrivateCapabilities,
         library: &Arc<D3D12Lib>,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+        compiler_container: Arc<shader_compilation::CompilerContainer>,
     ) -> Result<Self, crate::DeviceError> {
         if private_caps
             .instance_flags
@@ -202,7 +203,8 @@ impl super::Device {
             render_doc: Default::default(),
             null_rtv_handle,
             mem_allocator,
-            dxc_container,
+            compiler_container,
+            shader_cache: Default::default(),
             counters: Default::default(),
         })
     }
@@ -263,25 +265,7 @@ impl super::Device {
         naga_stage: naga::ShaderStage,
         fragment_stage: Option<&crate::ProgrammableStage<super::ShaderModule>>,
     ) -> Result<super::CompiledShader, crate::PipelineError> {
-        use naga::back::hlsl;
-
-        let frag_ep = fragment_stage
-            .map(|fs_stage| {
-                hlsl::FragmentEntryPoint::new(&fs_stage.module.naga.module, fs_stage.entry_point)
-                    .ok_or(crate::PipelineError::EntryPoint(
-                        naga::ShaderStage::Fragment,
-                    ))
-            })
-            .transpose()?;
-
         let stage_bit = auxil::map_naga_stage(naga_stage);
-
-        let (module, info) = naga::back::pipeline_constants::process_overrides(
-            &stage.module.naga.module,
-            &stage.module.naga.info,
-            stage.constants,
-        )
-        .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}")))?;
 
         let needs_temp_options = stage.zero_initialize_workgroup_memory
             != layout.naga_options.zero_initialize_workgroup_memory
@@ -299,68 +283,133 @@ impl super::Device {
             &layout.naga_options
         };
 
-        let pipeline_options = hlsl::PipelineOptions {
-            entry_point: Some((naga_stage, stage.entry_point.to_string())),
+        let key = match &stage.module.source {
+            super::ShaderModuleSource::Naga(naga_shader) => {
+                use naga::back::hlsl;
+
+                let frag_ep = match fragment_stage {
+                    Some(crate::ProgrammableStage {
+                        module:
+                            super::ShaderModule {
+                                source: super::ShaderModuleSource::Naga(naga_shader),
+                                ..
+                            },
+                        entry_point,
+                        ..
+                    }) => Some(
+                        hlsl::FragmentEntryPoint::new(&naga_shader.module, entry_point).ok_or(
+                            crate::PipelineError::EntryPoint(naga::ShaderStage::Fragment),
+                        ),
+                    ),
+                    _ => None,
+                }
+                .transpose()?;
+                let (module, info) = naga::back::pipeline_constants::process_overrides(
+                    &naga_shader.module,
+                    &naga_shader.info,
+                    Some((naga_stage, stage.entry_point)),
+                    stage.constants,
+                )
+                .map_err(|e| {
+                    crate::PipelineError::PipelineConstants(stage_bit, format!("HLSL: {e:?}"))
+                })?;
+
+                let pipeline_options = hlsl::PipelineOptions {
+                    entry_point: Some((naga_stage, stage.entry_point.to_string())),
+                };
+
+                //TODO: reuse the writer
+                let (source, entry_point) = {
+                    let mut source = String::new();
+                    let mut writer =
+                        hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
+
+                    profiling::scope!("naga::back::hlsl::write");
+                    let mut reflection_info = writer
+                        .write(&module, &info, frag_ep.as_ref())
+                        .map_err(|e| {
+                            crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}"))
+                        })?;
+
+                    assert_eq!(reflection_info.entry_point_names.len(), 1);
+
+                    let entry_point = reflection_info
+                        .entry_point_names
+                        .pop()
+                        .unwrap()
+                        .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
+
+                    (source, entry_point)
+                };
+                log::info!(
+                    "Naga generated shader for {:?} at {:?}:\n{}",
+                    entry_point,
+                    naga_stage,
+                    source
+                );
+
+                ShaderCacheKey {
+                    source,
+                    entry_point,
+                    stage: naga_stage,
+                    shader_model: naga_options.shader_model,
+                }
+            }
+            super::ShaderModuleSource::HlslPassthrough(passthrough) => ShaderCacheKey {
+                source: passthrough.shader.clone(),
+                entry_point: passthrough.entry_point.clone(),
+                stage: naga_stage,
+                shader_model: naga_options.shader_model,
+            },
+
+            super::ShaderModuleSource::DxilPassthrough(passthrough) => {
+                return Ok(super::CompiledShader::Precompiled(
+                    passthrough.shader.clone(),
+                ))
+            }
         };
 
-        //TODO: reuse the writer
-        let mut source = String::new();
-        let mut writer = hlsl::Writer::new(&mut source, naga_options, &pipeline_options);
-        let reflection_info = {
-            profiling::scope!("naga::back::hlsl::write");
-            writer
-                .write(&module, &info, frag_ep.as_ref())
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("HLSL: {e:?}")))?
-        };
-
-        let full_stage = format!(
-            "{}_{}",
-            naga_stage.to_hlsl_str(),
-            naga_options.shader_model.to_str()
-        );
-
-        let raw_ep = reflection_info.entry_point_names[0]
-            .as_ref()
-            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
+        {
+            let mut shader_cache = self.shader_cache.lock();
+            let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
+            if let Some(value) = shader_cache.entries.get_mut(&key) {
+                value.last_used = nr_of_shaders_compiled;
+                return Ok(value.shader.clone());
+            }
+        }
 
         let source_name = stage.module.raw_name.as_deref();
 
-        // Compile with DXC if available, otherwise fall back to FXC
-        let result = if let Some(ref dxc_container) = self.dxc_container {
-            shader_compilation::compile_dxc(
-                self,
-                &source,
-                source_name,
-                raw_ep,
-                stage_bit,
-                &full_stage,
-                dxc_container,
-            )
-        } else {
-            shader_compilation::compile_fxc(
-                self,
-                &source,
-                source_name,
-                raw_ep,
-                stage_bit,
-                &full_stage,
-            )
-        };
+        let full_stage = format!("{}_{}", naga_stage.to_hlsl_str(), key.shader_model.to_str());
 
-        let log_level = if result.is_ok() {
-            log::Level::Info
-        } else {
-            log::Level::Error
-        };
+        let compiled_shader = self.compiler_container.compile(
+            self,
+            &key.source,
+            source_name,
+            &key.entry_point,
+            stage_bit,
+            &full_stage,
+        )?;
 
-        log::log!(
-            log_level,
-            "Naga generated shader for {:?} at {:?}:\n{}",
-            raw_ep,
-            naga_stage,
-            source
-        );
-        result
+        {
+            let mut shader_cache = self.shader_cache.lock();
+            shader_cache.nr_of_shaders_compiled += 1;
+            let nr_of_shaders_compiled = shader_cache.nr_of_shaders_compiled;
+            let value = ShaderCacheValue {
+                last_used: nr_of_shaders_compiled,
+                shader: compiled_shader.clone(),
+            };
+            shader_cache.entries.insert(key, value);
+
+            // Retain all entries that have been used since we compiled the last 100 shaders.
+            if shader_cache.entries.len() > 200 {
+                shader_cache
+                    .entries
+                    .retain(|_, v| v.last_used >= nr_of_shaders_compiled - 100);
+            }
+        }
+
+        Ok(compiled_shader)
     }
 
     pub fn raw_device(&self) -> &Direct3D12::ID3D12Device {
@@ -761,6 +810,7 @@ impl crate::Device for super::Device {
                 | wgt::BindingType::StorageTexture { .. }
                 | wgt::BindingType::AccelerationStructure { .. } => num_views += count,
                 wgt::BindingType::Sampler { .. } => has_sampler_in_group = true,
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             }
         }
 
@@ -1526,6 +1576,7 @@ impl crate::Device for super::Device {
                         inner.stage.push(handle);
                     }
                 }
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             }
         }
 
@@ -1645,7 +1696,7 @@ impl crate::Device for super::Device {
             .and_then(|label| alloc::ffi::CString::new(label).ok());
         match shader {
             crate::ShaderInput::Naga(naga) => Ok(super::ShaderModule {
-                naga,
+                source: super::ShaderModuleSource::Naga(naga),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
@@ -1655,6 +1706,32 @@ impl crate::Device for super::Device {
             crate::ShaderInput::Msl { .. } => {
                 panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
             }
+            crate::ShaderInput::Dxil {
+                shader,
+                entry_point,
+                num_workgroups,
+            } => Ok(super::ShaderModule {
+                source: super::ShaderModuleSource::DxilPassthrough(super::DxilPassthroughShader {
+                    shader: shader.to_vec(),
+                    entry_point,
+                    num_workgroups,
+                }),
+                raw_name,
+                runtime_checks: desc.runtime_checks,
+            }),
+            crate::ShaderInput::Hlsl {
+                shader,
+                entry_point,
+                num_workgroups,
+            } => Ok(super::ShaderModule {
+                source: super::ShaderModuleSource::HlslPassthrough(super::HlslPassthroughShader {
+                    shader: shader.to_owned(),
+                    entry_point,
+                    num_workgroups,
+                }),
+                raw_name,
+                runtime_checks: desc.runtime_checks,
+            }),
         }
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {
@@ -1831,11 +1908,6 @@ impl crate::Device for super::Device {
         }
         .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.to_string()))?;
 
-        unsafe { blob_vs.destroy() };
-        if let Some(blob_fs) = blob_fs {
-            unsafe { blob_fs.destroy() };
-        };
-
         if let Some(label) = desc.label {
             raw.set_name(label)?;
         }
@@ -1892,8 +1964,6 @@ impl crate::Device for super::Device {
                 )
             }
         };
-
-        unsafe { blob_cs.destroy() };
 
         let raw: Direct3D12::ID3D12PipelineState = pair.map_err(|err| {
             crate::PipelineError::Linkage(wgt::ShaderStages::COMPUTE, err.to_string())

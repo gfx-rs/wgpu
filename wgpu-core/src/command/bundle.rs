@@ -85,12 +85,15 @@ use alloc::{
     vec::Vec,
 };
 use core::{
+    convert::Infallible,
     num::{NonZeroU32, NonZeroU64},
     ops::Range,
 };
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
+
+use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     binding_model::{BindError, BindGroup, PipelineLayout},
@@ -117,6 +120,7 @@ use crate::{
 };
 
 use super::{
+    pass,
     render_command::{ArcRenderCommand, RenderCommand},
     DrawKind,
 };
@@ -153,7 +157,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
-    base: BasePass<RenderCommand>,
+    base: BasePass<RenderCommand, Infallible>,
     parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
     pub(crate) is_depth_read_only: bool,
@@ -170,7 +174,7 @@ impl RenderBundleEncoder {
     pub fn new(
         desc: &RenderBundleEncoderDescriptor,
         parent_id: id::DeviceId,
-        base: Option<BasePass<RenderCommand>>,
+        base: Option<BasePass<RenderCommand, Infallible>>,
     ) -> Result<Self, CreateRenderBundleError> {
         let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
             Some(ds) => {
@@ -248,7 +252,7 @@ impl RenderBundleEncoder {
     }
 
     #[cfg(feature = "trace")]
-    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand> {
+    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand, Infallible> {
         self.base.clone()
     }
 
@@ -466,6 +470,7 @@ impl RenderBundleEncoder {
         let render_bundle = RenderBundle {
             base: BasePass {
                 label: desc.label.as_deref().map(str::to_owned),
+                error: None,
                 commands,
                 dynamic_offsets: flat_dynamic_offsets,
                 string_data: self.base.string_data,
@@ -525,11 +530,13 @@ fn set_bind_group(
 
     let max_bind_groups = state.device.limits.max_bind_groups;
     if index >= max_bind_groups {
-        return Err(RenderCommandError::BindGroupIndexOutOfRange {
-            index,
-            max: max_bind_groups,
-        }
-        .into());
+        return Err(
+            RenderCommandError::BindGroupIndexOutOfRange(pass::BindGroupIndexOutOfRange {
+                index,
+                max: max_bind_groups,
+            })
+            .into(),
+        );
     }
 
     // Identify the next `num_dynamic_offsets` entries from `dynamic_offsets`.
@@ -842,6 +849,15 @@ pub enum CreateRenderBundleError {
     InvalidSampleCount(u32),
 }
 
+impl WebGpuError for CreateRenderBundleError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::ColorAttachment(e) => e.webgpu_error_type(),
+            Self::InvalidSampleCount(_) => ErrorType::Validation,
+        }
+    }
+}
+
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -863,7 +879,7 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 pub struct RenderBundle {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
-    base: BasePass<ArcRenderCommand>,
+    base: BasePass<ArcRenderCommand, Infallible>,
     pub(super) is_depth_read_only: bool,
     pub(super) is_stencil_read_only: bool,
     pub(crate) device: Arc<Device>,
@@ -1310,7 +1326,7 @@ impl State {
     fn pipeline(&self) -> Result<&PipelineState, RenderBundleErrorInner> {
         self.pipeline
             .as_ref()
-            .ok_or(DrawError::MissingPipeline.into())
+            .ok_or(DrawError::MissingPipeline(pass::MissingPipeline).into())
     }
 
     /// Mark all non-empty bind group table entries from `index` onwards as dirty.
@@ -1510,6 +1526,21 @@ pub struct RenderBundleError {
     inner: RenderBundleErrorInner,
 }
 
+impl WebGpuError for RenderBundleError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let Self { scope: _, inner } = self;
+        let e: &dyn WebGpuError = match inner {
+            RenderBundleErrorInner::Device(e) => e,
+            RenderBundleErrorInner::RenderCommand(e) => e,
+            RenderBundleErrorInner::Draw(e) => e,
+            RenderBundleErrorInner::MissingDownlevelFlags(e) => e,
+            RenderBundleErrorInner::Bind(e) => e,
+            RenderBundleErrorInner::InvalidResource(e) => e,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 impl RenderBundleError {
     pub fn from_device_error(e: DeviceError) -> Self {
         Self {
@@ -1519,15 +1550,15 @@ impl RenderBundleError {
     }
 }
 
-impl<T, E> MapPassErr<T, RenderBundleError> for Result<T, E>
+impl<E> MapPassErr<RenderBundleError> for E
 where
     E: Into<RenderBundleErrorInner>,
 {
-    fn map_pass_err(self, scope: PassErrorScope) -> Result<T, RenderBundleError> {
-        self.map_err(|inner| RenderBundleError {
+    fn map_pass_err(self, scope: PassErrorScope) -> RenderBundleError {
+        RenderBundleError {
             scope,
-            inner: inner.into(),
-        })
+            inner: self.into(),
+        }
     }
 }
 

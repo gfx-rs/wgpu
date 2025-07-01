@@ -42,58 +42,136 @@ Bottom level categories:
 
 ### New Features
 
-#### General
-
-- Add support for rendering to slices of 3D texture views and single layered 2D-Array texture views (this requires `VK_KHR_maintenance1` which should be widely available on newer drivers). By @teoxoy in [#7596](https://github.com/gfx-rs/wgpu/pull/7596)
-
 #### Naga
 
+- Added `no_std` support with default features disabled. By @Bushrat011899 in [#7585](https://github.com/gfx-rs/wgpu/pull/7585).
+- [wgsl-in,ir] Add support for parsing rust-style doc comments via `naga::front::glsl::Frontend::new_with_options`. By @Vrixyz in [#6364](https://github.com/gfx-rs/wgpu/pull/6364).
 - When emitting GLSL, Uniform and Storage Buffer memory layouts are now emitted even if no explicit binding is given. By @cloone8 in [#7579](https://github.com/gfx-rs/wgpu/pull/7579).
+- Diagnostic rendering methods (i.e., `naga::{front::wgsl::ParseError,WithSpan}::emit_error_to_string_with_path`) now accept more types for their `path` argument via a new sealed `AsDiagnosticFilePath` trait. By @atlv24, @bushrat011899, and @ErichDonGubler in [#7643](https://github.com/gfx-rs/wgpu/pull/7643).
+- Add support for [quad operations](https://www.w3.org/TR/WGSL/#quad-builtin-functions) (requires `SUBGROUP` feature to be enabled). By @dzamkov and @valaphee in [#7683](https://github.com/gfx-rs/wgpu/pull/7683).
+- Add support for `atomicCompareExchangeWeak` in HLSL and GLSL backends. By @cryvosh in [#7658](https://github.com/gfx-rs/wgpu/pull/7658)
+
+#### General
+
+- Add support for astc-sliced-3d feature. By @mehmetoguzderin in [#7577](https://github.com/gfx-rs/wgpu/issues/7577)
+- Add support for rendering to slices of 3D texture views and single layered 2D-Array texture views (this requires `VK_KHR_maintenance1` which should be widely available on newer drivers). By @teoxoy in [#7596](https://github.com/gfx-rs/wgpu/pull/7596)
+- Add extra acceleration structure vertex formats. By @Vecvec in [#7580](https://github.com/gfx-rs/wgpu/pull/7580).
+- Add acceleration structure limits. By @Vecvec in [#7845](https://github.com/gfx-rs/wgpu/pull/7845).
+- Add support for clip-distances feature for Vulkan and GL backends. By @dzamkov in [#7730](https://github.com/gfx-rs/wgpu/pull/7730)
+- Added `wgpu_types::error::{ErrorType, WebGpuError}` for classification of errors according to WebGPU's [`GPUError`]'s classification scheme, and implement `WebGpuError` for existing errors. This allows users of `wgpu-core` to offload error classification onto the WGPU ecosystem, rather than having to do it themselves without sufficient information. By @ErichDonGubler in [#6547](https://github.com/gfx-rs/wgpu/pull/6547).
+
+[`GPUError`]: https://www.w3.org/TR/webgpu/#gpuerror
+
+#### Vulkan
+
+- Add ways to initialise the instance and open the adapter with callbacks to add extensions. By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829). 
 
 ### Bug Fixes
 
+#### General
+
+- Fix error message for sampler array limit. By @LPGhatguy in [#7704](https://github.com/gfx-rs/wgpu/pull/7704).
+- Fix bug where using `BufferSlice::get_mapped_range_as_array_buffer()` on a buffer would prevent you from ever unmapping it. Note that this API has changed and is now `BufferView::as_uint8array()`.
+
 #### Naga
 
-Naga now infers the correct binding layout when a resource appears only in an assignment to `_`. By @andyleiserson in [#7540](https://github.com/gfx-rs/wgpu/pull/7540).
-
-- Implement `dot4U8Packed` and `dot4I8Packed` for all backends, using specialized intrinsics on SPIR-V and HSLS if available, and polyfills everywhere else. By @robamler in [#7494](https://github.com/gfx-rs/wgpu/pull/7494) and [#7574](https://github.com/gfx-rs/wgpu/pull/7574).
+- Naga now infers the correct binding layout when a resource appears only in an assignment to `_`. By @andyleiserson in [#7540](https://github.com/gfx-rs/wgpu/pull/7540).
+- Implement `dot4U8Packed` and `dot4I8Packed` for all backends, using specialized intrinsics on SPIR-V, HSLS, and Metal if available, and polyfills everywhere else. By @robamler in [#7494](https://github.com/gfx-rs/wgpu/pull/7494), [#7574](https://github.com/gfx-rs/wgpu/pull/7574), and [#7653](https://github.com/gfx-rs/wgpu/pull/7653).
 - Add polyfilled `pack4x{I,U}8Clamped` built-ins to all backends and WGSL frontend. By @ErichDonGubler in [#7546](https://github.com/gfx-rs/wgpu/pull/7546).
 - Allow textureLoad's sample index arg to be unsigned. By @jimblandy in [#7625](https://github.com/gfx-rs/wgpu/pull/7625).
 - Properly convert arguments to atomic operations. By @jimblandy in [#7573](https://github.com/gfx-rs/wgpu/pull/7573).
 - Apply necessary automatic conversions to the `value` argument of `textureStore`. By @jimblandy in [#7567](https://github.com/gfx-rs/wgpu/pull/7567).
 - Properly apply WGSL's automatic conversions to the arguments to texture sampling functions. By @jimblandy in [#7548](https://github.com/gfx-rs/wgpu/pull/7548).
 - Properly evaluate `abs(most negative abstract int)`. By @jimblandy in [#7507](https://github.com/gfx-rs/wgpu/pull/7507).
+- Generate vectorized code for `[un]pack4x{I,U}8[Clamp]` on SPIR-V and MSL 2.1+. By @robamler in [#7664](https://github.com/gfx-rs/wgpu/pull/7664).
+- Fix typing for `select`, which had issues particularly with a lack of automatic type conversion. By @ErichDonGubler in [#7572](https://github.com/gfx-rs/wgpu/pull/7572).
+- Allow scalars as the first argument of the `distance` built-in function. By @bernhl in [#7530](https://github.com/gfx-rs/wgpu/pull/7530).
+- Don't panic when handling `f16` for pipeline constants, i.e., `override`s in WGSL. By @ErichDonGubler in [#7801](https://github.com/gfx-rs/wgpu/pull/7801).
+- Prevent aliased ray queries crashing naga when writing SPIR-V out. By @Vecvec in [#7759](https://github.com/gfx-rs/wgpu/pull/7759).
 
 #### DX12
 
 - Get `vertex_index` & `instance_index` builtins working for indirect draws. By @teoxoy in [#7535](https://github.com/gfx-rs/wgpu/pull/7535)
+- Added `wgpu_hal::dx12::Adapter::as_raw()`. By @tronical in [##7852](https://github.com/gfx-rs/wgpu/pull/7852)
+
+#### Vulkan
+
+- Fix OpenBSD compilation of `wgpu_hal::vulkan::drm`. By @ErichDonGubler in [#7810](https://github.com/gfx-rs/wgpu/pull/7810).
+- Fix warnings for unrecognized present mode. By @Wumpf in [#7850](https://github.com/gfx-rs/wgpu/pull/7850).
+
+#### Metal
+
+- Remove extraneous main thread warning in `fn surface_capabilities()`. By @jamesordner in [#7692](https://github.com/gfx-rs/wgpu/pull/7692)
+
+#### WebGPU
+
+- Fix setting unclipped_depth. By @atlv24 in [#7841](https://github.com/gfx-rs/wgpu/pull/7841)
 
 ### Changes
 
 - Loosen Viewport validation requirements to match the [new specs](https://github.com/gpuweb/gpuweb/pull/5025). By @ebbdrop in [#7564](https://github.com/gfx-rs/wgpu/pull/7564)
+- `wgpu` and `deno_webgpu` now use `wgpu-types::error::WebGpuError` to classify errors. Any changes here are likely to be regressions; please report them if you find them! By @ErichDonGubler in [#6547](https://github.com/gfx-rs/wgpu/pull/6547).
 
 #### General
 
+- Support BLAS compaction in wgpu. By @Vecvec in [#7285](https://github.com/gfx-rs/wgpu/pull/7285).
 - Removed `MaintainBase` in favor of using `PollType`. By @waywardmonkeys in [#7508](https://github.com/gfx-rs/wgpu/pull/7508).
+- The `destroy` functions for buffers and textures in wgpu-core are now infallible. Previously, they returned an error if called multiple times for the same object. This only affects the wgpu-core API; the wgpu API already allowed multiple `destroy` calls. By @andyleiserson in [#7686](https://github.com/gfx-rs/wgpu/pull/7686) and [#7720](https://github.com/gfx-rs/wgpu/pull/7720).
+- Remove `CommandEncoder::build_acceleration_structures_unsafe_tlas` in favour of `as_hal` and apply
+  simplifications allowed by this. By @Vecvec in [#7513](https://github.com/gfx-rs/wgpu/pull/7513)
 
 #### Naga
 
 - Mark `readonly_and_readwrite_storage_textures` & `packed_4x8_integer_dot_product` language extensions as implemented. By @teoxoy in [#7543](https://github.com/gfx-rs/wgpu/pull/7543)
 - `naga::back::hlsl::Writer::new` has a new `pipeline_options` argument. `hlsl::PipelineOptions::default()` can be passed as a default. The `shader_stage` and `entry_point` members of `pipeline_options` can be used to write only a single entry point when using the HLSL and MSL backends (GLSL and SPIR-V already had this functionality). The Metal and DX12 HALs now write only a single entry point when loading shaders. By @andyleiserson in [#7626](https://github.com/gfx-rs/wgpu/pull/7626).
+- Implemented `early_depth_test` for SPIR-V backend, enabling `SHADER_EARLY_DEPTH_TEST` for Vulkan. Additionally, fixed conservative depth optimizations when using `early_depth_test`. The syntax for forcing early depth tests is now `@early_depth_test(force)` instead of `@early_depth_test`. By @dzamkov in [#7676](https://github.com/gfx-rs/wgpu/pull/7676).
+- `ImplementedLanguageExtension::VARIANTS` is now implemented manually rather than derived using `strum` (allowing `strum` to become a dev-only dependency) so it is no longer a member of the `strum::VARIANTS` trait. Unless you are using this trait as a bound this should have no effect.
+- Compaction changes, by @andyleiserson in [#7703](https://github.com/gfx-rs/wgpu/pull/7703):
+  - [`process_overrides`](https://docs.rs/naga/latest/naga/back/pipeline_constants/fn.process_overrides.html) now compacts the module to remove unused items. It is no longer necessary to supply values for overrides that are not used by the active entry point.
+  - The `compact` Cargo feature has been removed. It is no longer possible to exclude compaction support from the build.
+  - [`compact`](https://docs.rs/naga/latest/naga/compact/fn.compact.html) now has an additional argument that specifies whether to remove unused functions, globals, and named types and overrides. For the previous behavior, pass `KeepUnused::Yes`.
 
 #### D3D12
 
 - Remove the need for dxil.dll. By @teoxoy in [#7566](https://github.com/gfx-rs/wgpu/pull/7566)
+- Ability to get the raw `IDXGIFactory4` from `Instance`. By @MendyBerger in [#7827](https://github.com/gfx-rs/wgpu/pull/7827)
 
 #### Vulkan
 
 - Use highest SPIR-V version supported by Vulkan API version. By @robamler in [#7595](https://github.com/gfx-rs/wgpu/pull/7595)
 
+#### WebGPU
+
+- The type of the `size` parameter to `copy_buffer_to_buffer` has changed from `BufferAddress` to `impl Into<Option<BufferAddress>>`. This achieves the spec-defined behavior of the value being optional, while still accepting existing calls without changes. By @andyleiserson in [#7659](https://github.com/gfx-rs/wgpu/pull/7659).
+- To bring wgpu's error reporting into compliance with the WebGPU specification, the error type returned from some functions has changed, and some errors may be raised at a different time than they were previously.
+  - The error type returned by many methods on `CommandEncoder`, `RenderPassEncoder`, `ComputePassEncoder`, and `RenderBundleEncoder` has changed to `EncoderStateError` or `PassStateError`. These functions will return the `Ended` variant of these errors if called on an encoder that is no longer active. Reporting of all other errors is deferred until a call to `finish()`.
+  - Variants holding a `CommandEncoderError` in the error enums `ClearError`, `ComputePassErrorInner`, `QueryError`, and `RenderPassErrorInner` have been replaced with variants holding an `EncoderStateError`.
+  - The definition of `enum CommandEncoderError` has changed significantly, to reflect which errors can be raised by `CommandEncoder.finish()`. There are also some errors that no longer appear directly in `CommandEncoderError`, and instead appear nested within the `RenderPass` or `ComputePass` variants.
+  - `CopyError` has been removed. Errors that were previously a `CopyError` are now a `CommandEncoderError` returned by `finish()`. (The detailed reasons for copies to fail were and still are described by `TransferError`, which was previously a variant of `CopyError`, and is now a variant of `CommandEncoderError`).
+
+
+#### HAL
+
+- Added initial `no_std` support to `wgpu-hal`. By @bushrat011899 in [#7599](https://github.com/gfx-rs/wgpu/pull/7599)
+
+### Documentation
+
+#### General
+
+- Remove outdated information about `Adapter::request_device`. By @tesselode in [#7768](https://github.com/gfx-rs/wgpu/pull/7768)
+
+## v25.0.2 (2025-05-24)
+
 ### Bug Fixes
 
-#### Naga
+#### General
 
-- Allow scalars as the first argument of the `distance` built-in function. By @bernhl in [#7530](https://github.com/gfx-rs/wgpu/pull/7530).
+- Fix a possible deadlock within `Queue::write_buffer`. By @RedMindZ in [#7582](https://github.com/gfx-rs/wgpu/pull/7582)
+- Fix `raw-window-handle` dependency being too lenient. By @kpreid in [#7526](https://github.com/gfx-rs/wgpu/pull/7526)
+
+#### WebGPU
+
+- Insert fragment pipeline constants into fragment descriptor instead of vertex descriptor. By @DerSchmale in [#7621](https://github.com/gfx-rs/wgpu/pull/7621)
 
 ## v25.0.1 (2025-04-11)
 
@@ -443,6 +521,18 @@ By @cwfitzgerald in [#6811](https://github.com/gfx-rs/wgpu/pull/6811), [#6815](h
 ### Examples
 
 - Call `pre_present_notify()` before presenting. By @kjarosh in [#7074](https://github.com/gfx-rs/wgpu/pull/7074).
+
+## v24.0.5 (2025-05-24)
+
+### Bug Fixes
+
+#### General
+
+- Fix a possible deadlock within `Queue::write_buffer`. By @RedMindZ in [#7582](https://github.com/gfx-rs/wgpu/pull/7582)
+
+#### WebGPU
+
+- Insert fragment pipeline constants into fragment descriptor instead of vertex descriptor. By @DerSchmale in [#7621](https://github.com/gfx-rs/wgpu/pull/7621)
 
 ## v24.0.4 (2025-04-03)
 

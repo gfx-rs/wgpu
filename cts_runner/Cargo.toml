@@ -7,6 +7,9 @@ description = "CTS runner for wgpu"
 license.workspace = true
 publish = false
 
+[dependencies]
+env_logger.workspace = true
+
 # We make all dependencies conditional on not being wasm,
 # so the whole workspace can built as wasm.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

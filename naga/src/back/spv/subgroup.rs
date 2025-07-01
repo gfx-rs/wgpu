@@ -125,10 +125,6 @@ impl BlockContext<'_> {
         result: Handle<crate::Expression>,
         block: &mut Block,
     ) -> Result<(), Error> {
-        self.writer.require_any(
-            "GroupNonUniformBallot",
-            &[spirv::Capability::GroupNonUniformBallot],
-        )?;
         match *mode {
             crate::GatherMode::BroadcastFirst => {
                 self.writer.require_any(
@@ -148,6 +144,12 @@ impl BlockContext<'_> {
                 self.writer.require_any(
                     "GroupNonUniformShuffleRelative",
                     &[spirv::Capability::GroupNonUniformShuffleRelative],
+                )?;
+            }
+            crate::GatherMode::QuadBroadcast(_) | crate::GatherMode::QuadSwap(_) => {
+                self.writer.require_any(
+                    "GroupNonUniformQuad",
+                    &[spirv::Capability::GroupNonUniformQuad],
                 )?;
             }
         }
@@ -174,7 +176,8 @@ impl BlockContext<'_> {
             | crate::GatherMode::Shuffle(index)
             | crate::GatherMode::ShuffleDown(index)
             | crate::GatherMode::ShuffleUp(index)
-            | crate::GatherMode::ShuffleXor(index) => {
+            | crate::GatherMode::ShuffleXor(index)
+            | crate::GatherMode::QuadBroadcast(index) => {
                 let index_id = self.cached[index];
                 let op = match *mode {
                     crate::GatherMode::BroadcastFirst => unreachable!(),
@@ -187,6 +190,8 @@ impl BlockContext<'_> {
                     crate::GatherMode::ShuffleDown(_) => spirv::Op::GroupNonUniformShuffleDown,
                     crate::GatherMode::ShuffleUp(_) => spirv::Op::GroupNonUniformShuffleUp,
                     crate::GatherMode::ShuffleXor(_) => spirv::Op::GroupNonUniformShuffleXor,
+                    crate::GatherMode::QuadBroadcast(_) => spirv::Op::GroupNonUniformQuadBroadcast,
+                    crate::GatherMode::QuadSwap(_) => unreachable!(),
                 };
                 block.body.push(Instruction::group_non_uniform_gather(
                     op,
@@ -195,6 +200,20 @@ impl BlockContext<'_> {
                     exec_scope_id,
                     arg_id,
                     index_id,
+                ));
+            }
+            crate::GatherMode::QuadSwap(direction) => {
+                let direction = self.get_index_constant(match direction {
+                    crate::Direction::X => 0,
+                    crate::Direction::Y => 1,
+                    crate::Direction::Diagonal => 2,
+                });
+                block.body.push(Instruction::group_non_uniform_quad_swap(
+                    result_type_id,
+                    id,
+                    exec_scope_id,
+                    arg_id,
+                    direction,
                 ));
             }
         }

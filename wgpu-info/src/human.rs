@@ -160,6 +160,10 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_subgroup_size,
         max_push_constant_size,
         max_non_sampler_bindings,
+        max_blas_primitive_count,
+        max_blas_geometry_count,
+        max_tlas_instance_count,
+        max_acceleration_structures_per_shader_stage,
     } = limits;
     writeln!(output, "\t\t                           Max Texture Dimension 1d: {max_texture_dimension_1d}")?;
     writeln!(output, "\t\t                           Max Texture Dimension 2d: {max_texture_dimension_2d}")?;
@@ -196,7 +200,10 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                       Max Compute Workgroup Size Y: {max_compute_workgroup_size_y}")?;
     writeln!(output, "\t\t                       Max Compute Workgroup Size Z: {max_compute_workgroup_size_z}")?;
     writeln!(output, "\t\t               Max Compute Workgroups Per Dimension: {max_compute_workgroups_per_dimension}")?;
-
+    writeln!(output, "\t\t                           Max BLAS Primitive count: {max_blas_primitive_count}")?;
+    writeln!(output, "\t\t                            Max BLAS Geometry count: {max_blas_geometry_count}")?;
+    writeln!(output, "\t\t                            Max TLAS Instance count: {max_tlas_instance_count}")?;
+    writeln!(output, "\t\t       Max Acceleration Structures Per Shader Stage: {max_acceleration_structures_per_shader_stage}")?;
     // This one reflects more of a wgpu implementation limitations than a hardware limit
     // so don't show it here.
     let _ = max_non_sampler_bindings;

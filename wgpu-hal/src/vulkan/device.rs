@@ -761,9 +761,19 @@ impl super::Device {
         let image =
             self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
 
+        // Some external memory types require dedicated allocation
+        // https://docs.vulkan.org/guide/latest/extensions/external.html#_importing_memory
+        let mut dedicated_allocate_info =
+            vk::MemoryDedicatedAllocateInfo::default().image(image.raw);
+
         let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::default()
             .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE)
             .handle(d3d11_shared_handle.0 as _);
+        // TODO: We should use `push_next` instead, but currently ash does not provide this method for the `ImportMemoryWin32HandleInfoKHR` type.
+        #[allow(clippy::unnecessary_mut_passed)]
+        {
+            import_memory_info.p_next = <*const _>::cast(&mut dedicated_allocate_info);
+        }
 
         let mem_type_index = self
             .find_memory_type_index(
@@ -875,7 +885,7 @@ impl super::Device {
                     if let Some(ref debug) = naga_shader.debug_source {
                         temp_options.debug_info = Some(naga::back::spv::DebugInfo {
                             source_code: &debug.source_code,
-                            file_name: debug.file_name.as_ref().as_ref(),
+                            file_name: debug.file_name.as_ref().into(),
                             language: naga::back::spv::SourceLanguage::WGSL,
                         })
                     }
@@ -892,6 +902,7 @@ impl super::Device {
                 let (module, info) = naga::back::pipeline_constants::process_overrides(
                     &naga_shader.module,
                     &naga_shader.info,
+                    Some((naga_stage, stage.entry_point)),
                     stage.constants,
                 )
                 .map_err(|e| {
@@ -1482,6 +1493,7 @@ impl crate::Device for super::Device {
                 wgt::BindingType::AccelerationStructure { .. } => {
                     desc_count.acceleration_structure += count;
                 }
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             }
         }
 
@@ -1872,7 +1884,7 @@ impl crate::Device for super::Device {
                         .as_ref()
                         .map(|d| naga::back::spv::DebugInfo {
                             source_code: d.source_code.as_ref(),
-                            file_name: d.file_name.as_ref().as_ref(),
+                            file_name: d.file_name.as_ref().into(),
                             language: naga::back::spv::SourceLanguage::WGSL,
                         });
                 if !desc.runtime_checks.bounds_checks {
@@ -1895,6 +1907,9 @@ impl crate::Device for super::Device {
             }
             crate::ShaderInput::Msl { .. } => {
                 panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
+            }
+            crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
+                panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
             }
             crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
         };

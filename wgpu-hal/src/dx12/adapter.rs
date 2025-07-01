@@ -57,7 +57,7 @@ impl super::Adapter {
         library: &Arc<D3D12Lib>,
         instance_flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+        compiler_container: Arc<shader_compilation::CompilerContainer>,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
@@ -224,8 +224,8 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if let Some(ref dxc_container) = dxc_container {
-            let max_shader_model = match dxc_container.max_shader_model {
+        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
+            let max_shader_model = match max_shader_model {
                 wgt::DxcShaderModel::V6_0 => Direct3D12::D3D_SHADER_MODEL_6_0,
                 wgt::DxcShaderModel::V6_1 => Direct3D12::D3D_SHADER_MODEL_6_1,
                 wgt::DxcShaderModel::V6_2 => Direct3D12::D3D_SHADER_MODEL_6_2,
@@ -474,7 +474,8 @@ impl super::Adapter {
         // Once ray tracing pipelines are supported they also will go here
         features.set(
             wgt::Features::EXPERIMENTAL_RAY_QUERY
-                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                | wgt::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
             features5.RaytracingTier == Direct3D12::D3D12_RAYTRACING_TIER_1_1
                 && shader_model >= naga::back::hlsl::ShaderModel::V6_5
                 && has_features5,
@@ -510,6 +511,21 @@ impl super::Adapter {
         let max_color_attachment_bytes_per_sample =
             max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
+        let max_srv_count = match options.ResourceBindingTier {
+            Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
+            _ => full_heap_count,
+        };
+
+        // If we also support acceleration structures these are shared so we must halve it.
+        // It's unlikely that this affects anything because most devices that support ray tracing
+        // probably have a higher binding tier than one.
+        let max_sampled_textures_per_shader_stage =
+            if !features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
+                max_srv_count
+            } else {
+                max_srv_count / 2
+            };
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 raw: adapter,
@@ -519,7 +535,7 @@ impl super::Adapter {
                 presentation_timer,
                 workarounds,
                 memory_budget_thresholds,
-                dxc_container,
+                compiler_container,
             },
             info,
             features,
@@ -537,10 +553,7 @@ impl super::Adapter {
                         .max_dynamic_uniform_buffers_per_pipeline_layout,
                     max_dynamic_storage_buffers_per_pipeline_layout: base
                         .max_dynamic_storage_buffers_per_pipeline_layout,
-                    max_sampled_textures_per_shader_stage: match options.ResourceBindingTier {
-                        Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
-                        _ => full_heap_count,
-                    },
+                    max_sampled_textures_per_shader_stage,
                     max_samplers_per_shader_stage: match options.ResourceBindingTier {
                         Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
                         _ => Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
@@ -589,7 +602,8 @@ impl super::Adapter {
                     max_inter_stage_shader_components: base.max_inter_stage_shader_components,
                     max_color_attachments,
                     max_color_attachment_bytes_per_sample,
-                    max_compute_workgroup_storage_size: base.max_compute_workgroup_storage_size, //TODO?
+                    // From: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.6%20Inter-Thread%20Data%20Sharing
+                    max_compute_workgroup_storage_size: 32768,
                     max_compute_invocations_per_workgroup:
                         Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP,
                     max_compute_workgroup_size_x: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_X,
@@ -602,6 +616,34 @@ impl super::Adapter {
                     // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
                     max_buffer_size: i32::MAX as u64,
                     max_non_sampler_bindings: 1_000_000,
+                    max_blas_primitive_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 29 // 2^29
+                    } else {
+                        0
+                    },
+                    max_blas_geometry_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 24 // 2^24
+                    } else {
+                        0
+                    },
+                    max_tlas_instance_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 24 // 2^24
+                    } else {
+                        0
+                    },
+                    max_acceleration_structures_per_shader_stage: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        max_srv_count / 2
+                    } else {
+                        0
+                    },
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
@@ -658,7 +700,7 @@ impl crate::Adapter for super::Adapter {
             self.private_caps,
             &self.library,
             self.memory_budget_thresholds,
-            self.dxc_container.clone(),
+            self.compiler_container.clone(),
         )?;
         Ok(crate::OpenDevice {
             device,

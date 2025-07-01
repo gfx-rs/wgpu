@@ -113,10 +113,8 @@ impl GPUTexture {
         self.usage
     }
     #[fast]
-    fn destroy(&self) -> Result<(), JsErrorBox> {
-        self.instance
-            .texture_destroy(self.id)
-            .map_err(|e| JsErrorBox::generic(e.to_string()))
+    fn destroy(&self) {
+        self.instance.texture_destroy(self.id);
     }
 
     #[cppgc]
@@ -552,7 +550,7 @@ impl From<GPUTextureFormat> for TextureFormat {
                 channel: AstcChannel::Unorm,
             },
             GPUTextureFormat::Astc4x4UnormSrgb => Self::Astc {
-                block: AstcBlock::B5x4,
+                block: AstcBlock::B4x4,
                 channel: AstcChannel::UnormSrgb,
             },
             GPUTextureFormat::Astc5x4Unorm => Self::Astc {
@@ -662,3 +660,14 @@ impl From<GPUTextureFormat> for TextureFormat {
         }
     }
 }
+
+pub struct GPUExternalTexture {}
+
+impl WebIdlInterfaceConverter for GPUExternalTexture {
+    const NAME: &'static str = "GPUExternalTexture";
+}
+
+impl GarbageCollected for GPUExternalTexture {}
+
+#[op2]
+impl GPUExternalTexture {}

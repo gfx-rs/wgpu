@@ -147,7 +147,7 @@ gles = [
 ]
 
 ## WebGL backend, only available on Emscripten
-webgl = ["wgpu-core-deps-wasm/webgl"]
+webgl = ["wgpu-core-deps-wasm/webgl", "wgpu-types/web"]
 ## OpenGL backend, on macOS only
 angle = ["wgpu-core-deps-apple/angle"]
 ## Vulkan portability backend, only available on macOS

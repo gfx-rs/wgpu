@@ -427,11 +427,31 @@ fn testSwizzleWrites(a_27: vec3<f32>) {
 fn main_1() {
     var local_6: f32;
 
-    let _e2 = global;
-    local_6 = _e2;
+    testBinOpVecFloat(vec4(0f), 1f);
+    testBinOpFloatVec(vec4(0f), 1f);
+    testBinOpIVecInt(vec4(0i), 1i);
+    testBinOpIntIVec(1i, vec4(0i));
+    testBinOpUVecUint(vec4(0u), 1u);
+    testBinOpUintUVec(1u, vec4(0u));
+    testBinOpMatMat(mat3x3<f32>(vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f)), mat3x3<f32>(vec3<f32>(1f, 0f, 0f), vec3<f32>(0f, 1f, 0f), vec3<f32>(0f, 0f, 1f)));
+    testBinOpMatFloat(1f, mat3x3<f32>(vec3<f32>(1f, 0f, 0f), vec3<f32>(0f, 1f, 0f), vec3<f32>(0f, 0f, 1f)));
+    testUnaryOpMat(mat3x3<f32>(vec3<f32>(1f, 0f, 0f), vec3<f32>(0f, 1f, 0f), vec3<f32>(0f, 0f, 1f)));
+    testStructConstructor();
+    testNonScalarToScalarConstructor();
+    testArrayConstructor();
+    testFreestandingConstructor();
+    testNonImplicitCastVectorCast();
+    let _e45 = global;
+    local_6 = _e45;
     privatePointer((&local_6));
-    let _e4 = local_6;
-    global = _e4;
+    let _e47 = local_6;
+    global = _e47;
+    ternary(false);
+    testMatrixMultiplication(mat4x3<f32>(vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f), vec3<f32>(0f, 0f, 0f)), mat4x4<f32>(vec4<f32>(1f, 0f, 0f, 0f), vec4<f32>(0f, 1f, 0f, 0f), vec4<f32>(0f, 0f, 1f, 0f), vec4<f32>(0f, 0f, 0f, 1f)));
+    testLength();
+    testConstantLength(array<f32, 4>(0f, 1f, 2f, 3f));
+    indexConstantNonConstantIndex(1i);
+    testSwizzleWrites(vec3(0f));
     o_color.x = 1f;
     o_color.y = 1f;
     o_color.z = 1f;

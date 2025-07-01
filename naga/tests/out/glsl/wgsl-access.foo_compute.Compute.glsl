@@ -52,6 +52,14 @@ void assign_array_through_ptr_fn(inout vec4 foo_2[2]) {
     return;
 }
 
+void assign_through_ptr() {
+    uint val = 33u;
+    vec4 arr[2] = vec4[2](vec4(6.0), vec4(7.0));
+    assign_through_ptr_fn(val);
+    assign_array_through_ptr_fn(arr);
+    return;
+}
+
 uint fetch_arg_ptr_member(inout AssignToMember p_1) {
     uint _e2 = p_1.x;
     return _e2;
@@ -69,6 +77,16 @@ uint fetch_arg_ptr_array_element(inout uint p_3[4]) {
 
 void assign_to_arg_ptr_array_element(inout uint p_4[4]) {
     p_4[1] = 10u;
+    return;
+}
+
+void assign_to_ptr_components() {
+    AssignToMember s1_ = AssignToMember(0u);
+    uint a1_[4] = uint[4](0u, 0u, 0u, 0u);
+    assign_to_arg_ptr_member(s1_);
+    uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    uint _e3 = fetch_arg_ptr_array_element(a1_);
     return;
 }
 
@@ -110,10 +128,12 @@ int var_members_of_members() {
 }
 
 void main() {
-    uint val = 33u;
-    vec4 arr[2] = vec4[2](vec4(6.0), vec4(7.0));
-    assign_through_ptr_fn(val);
-    assign_array_through_ptr_fn(arr);
+    assign_through_ptr();
+    assign_to_ptr_components();
+    bool _e1 = index_ptr(true);
+    int _e2 = member_ptr();
+    int _e3 = let_members_of_members();
+    int _e4 = var_members_of_members();
     return;
 }
 

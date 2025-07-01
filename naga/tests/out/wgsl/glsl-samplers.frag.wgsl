@@ -26,8 +26,6 @@ var tex2DArrayShadow: texture_depth_2d_array;
 var texCubeShadow: texture_depth_cube;
 @group(1) @binding(15) 
 var texCubeArrayShadow: texture_depth_cube_array;
-@group(1) @binding(16) 
-var tex3DShadow: texture_3d<f32>;
 @group(1) @binding(17) 
 var sampShadow: sampler_comparison;
 @group(0) @binding(18) 
@@ -628,6 +626,19 @@ fn testTex2DMSArray(coord_24: vec3<f32>) {
 }
 
 fn main_1() {
+    testTex1D(1f);
+    testTex1DArray(vec2(3f));
+    testTex2D(vec2(1f));
+    testTex2DShadow(vec2(1f));
+    testTex2DArray(vec3(1f));
+    testTex2DArrayShadow(vec3(1f));
+    testTexCube(vec3(1f));
+    testTexCubeShadow(vec3(1f));
+    testTexCubeArray(vec4(1f));
+    testTexCubeArrayShadow(vec4(1f));
+    testTex3D(vec3(1f));
+    testTex2DMS(vec2(1f));
+    testTex2DMSArray(vec3(1f));
     return;
 }
 

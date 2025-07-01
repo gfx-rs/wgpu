@@ -1,3 +1,70 @@
+void control_flow()
+{
+    int pos = (int)0;
+
+    DeviceMemoryBarrierWithGroupSync();
+    GroupMemoryBarrierWithGroupSync();
+    DeviceMemoryBarrierWithGroupSync();
+    do {
+        pos = int(1);
+    } while(false);
+    int _e3 = pos;
+    switch(_e3) {
+        case 1: {
+            pos = int(0);
+            break;
+        }
+        case 2: {
+            pos = int(1);
+            break;
+        }
+        case 3:
+        case 4: {
+            pos = int(2);
+            break;
+        }
+        case 5: {
+            pos = int(3);
+            break;
+        }
+        default:
+        case 6: {
+            pos = int(4);
+            break;
+        }
+    }
+    switch(0u) {
+        case 0u: {
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    int _e10 = pos;
+    switch(_e10) {
+        case 1: {
+            pos = int(0);
+            break;
+        }
+        case 2: {
+            pos = int(1);
+            return;
+        }
+        case 3: {
+            pos = int(2);
+            return;
+        }
+        case 4: {
+            return;
+        }
+        default: {
+            pos = int(3);
+            return;
+        }
+    }
+}
+
 void switch_default_break(int i)
 {
     do {
@@ -231,69 +298,15 @@ void loop_switch_omit_continue_variable_checks(int x_2, int y_1, int z_1, int w)
 }
 
 [numthreads(1, 1, 1)]
-void main(uint3 global_id : SV_DispatchThreadID)
+void main()
 {
-    int pos = (int)0;
-
-    DeviceMemoryBarrierWithGroupSync();
-    GroupMemoryBarrierWithGroupSync();
-    DeviceMemoryBarrierWithGroupSync();
-    do {
-        pos = int(1);
-    } while(false);
-    int _e4 = pos;
-    switch(_e4) {
-        case 1: {
-            pos = int(0);
-            break;
-        }
-        case 2: {
-            pos = int(1);
-            break;
-        }
-        case 3:
-        case 4: {
-            pos = int(2);
-            break;
-        }
-        case 5: {
-            pos = int(3);
-            break;
-        }
-        default:
-        case 6: {
-            pos = int(4);
-            break;
-        }
-    }
-    switch(0u) {
-        case 0u: {
-            break;
-        }
-        default: {
-            break;
-        }
-    }
-    int _e11 = pos;
-    switch(_e11) {
-        case 1: {
-            pos = int(0);
-            break;
-        }
-        case 2: {
-            pos = int(1);
-            return;
-        }
-        case 3: {
-            pos = int(2);
-            return;
-        }
-        case 4: {
-            return;
-        }
-        default: {
-            pos = int(3);
-            return;
-        }
-    }
+    control_flow();
+    switch_default_break(int(1));
+    switch_case_break();
+    switch_selector_type_conversion();
+    switch_const_expr_case_selectors();
+    loop_switch_continue(int(1));
+    loop_switch_continue_nesting(int(1), int(2), int(3));
+    loop_switch_omit_continue_variable_checks(int(1), int(2), int(3), int(4));
+    return;
 }

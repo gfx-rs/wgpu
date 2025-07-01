@@ -23,6 +23,7 @@ struct CompilationContext<'a> {
     name_binding_map: &'a mut NameBindingMap,
     push_constant_items: &'a mut Vec<naga::back::glsl::PushConstantItem>,
     multiview: Option<NonZeroU32>,
+    clip_distance_count: &'a mut u32,
 }
 
 impl CompilationContext<'_> {
@@ -103,6 +104,10 @@ impl CompilationContext<'_> {
         }
 
         *self.push_constant_items = reflection_info.push_constant_items;
+
+        if naga_stage == naga::ShaderStage::Vertex {
+            *self.clip_distance_count = reflection_info.clip_distance_count;
+        }
     }
 }
 
@@ -219,6 +224,7 @@ impl super::Device {
         let (module, info) = naga::back::pipeline_constants::process_overrides(
             &stage.module.naga.module,
             &stage.module.naga.info,
+            Some((naga_stage, stage.entry_point)),
             stage.constants,
         )
         .map_err(|e| {
@@ -371,6 +377,7 @@ impl super::Device {
         let mut sampler_map = [None; super::MAX_TEXTURE_SLOTS];
         let mut has_stages = wgt::ShaderStages::empty();
         let mut shaders_to_delete = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
+        let mut clip_distance_count = 0;
 
         for &(naga_stage, stage) in &shaders {
             has_stages |= map_naga_stage(naga_stage);
@@ -384,6 +391,7 @@ impl super::Device {
                 name_binding_map: &mut name_binding_map,
                 push_constant_items: pc_item,
                 multiview,
+                clip_distance_count: &mut clip_distance_count,
             };
 
             let shader = Self::create_shader(gl, naga_stage, stage, context, program)?;
@@ -495,6 +503,7 @@ impl super::Device {
             sampler_map,
             first_instance_location,
             push_constant_descs: uniforms,
+            clip_distance_count,
         }))
     }
 }
@@ -969,6 +978,8 @@ impl crate::Device for super::Device {
                 }
                 #[cfg(webgl)]
                 super::TextureInner::ExternalFramebuffer { .. } => {}
+                #[cfg(native)]
+                super::TextureInner::ExternalNativeFramebuffer { .. } => {}
             }
         }
 
@@ -1192,6 +1203,7 @@ impl crate::Device for super::Device {
                         ..
                     } => &mut num_storage_buffers,
                     wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                    wgt::BindingType::ExternalTexture => unimplemented!(),
                 };
 
                 binding_to_slot[entry.binding as usize] = *counter;
@@ -1302,6 +1314,7 @@ impl crate::Device for super::Device {
                     })
                 }
                 wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             };
             contents.push(binding);
         }
@@ -1333,6 +1346,9 @@ impl crate::Device for super::Device {
                     panic!("`Features::MSL_SHADER_PASSTHROUGH` is not enabled")
                 }
                 crate::ShaderInput::Naga(naga) => naga,
+                crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
+                    panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
+                }
             },
             label: desc.label.map(|str| str.to_string()),
             id: self.shared.next_shader_id.fetch_add(1, Ordering::Relaxed),

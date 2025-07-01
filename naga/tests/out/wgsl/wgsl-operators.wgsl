@@ -6,7 +6,7 @@ const v_i32_one: vec4<i32> = vec4<i32>(1i, 1i, 1i, 1i);
 fn builtins() -> vec4<f32> {
     let s1_ = select(0i, 1i, true);
     let s2_ = select(v_f32_zero, v_f32_one, true);
-    let s3_ = select(v_f32_one, v_f32_zero, vec4<bool>(false, false, false, false));
+    let s3_ = vec4<f32>(1f, 1f, 1f, 1f);
     let m1_ = mix(v_f32_zero, v_f32_one, v_f32_half);
     let m2_ = mix(v_f32_zero, v_f32_one, 0.1f);
     let b1_ = bitcast<f32>(1i);
@@ -262,11 +262,13 @@ fn negation_avoids_prefix_decrement() {
 fn main(@builtin(workgroup_id) id: vec3<u32>) {
     let _e1 = builtins();
     let _e6 = splat(f32(id.x), i32(id.y));
-    let _e11 = bool_cast(vec3<f32>(1f, 1f, 1f));
+    let _e7 = splat_assignment();
+    let _e12 = bool_cast(vec3<f32>(1f, 1f, 1f));
     logical();
     arithmetic();
     bit();
     comparison();
     assignment();
+    negation_avoids_prefix_decrement();
     return;
 }

@@ -108,7 +108,6 @@ extern crate alloc;
 mod arena;
 pub mod back;
 pub mod common;
-#[cfg(feature = "compact")]
 pub mod compact;
 pub mod diagnostic_filter;
 pub mod error;
@@ -116,6 +115,7 @@ pub mod front;
 pub mod ir;
 pub mod keywords;
 mod non_max_u32;
+mod path_like;
 pub mod proc;
 mod racy_lock;
 mod span;

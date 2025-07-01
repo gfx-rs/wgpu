@@ -61,6 +61,8 @@ pub(crate) const F2I32_FUNCTION: &str = "naga_f2i32";
 pub(crate) const F2U32_FUNCTION: &str = "naga_f2u32";
 pub(crate) const F2I64_FUNCTION: &str = "naga_f2i64";
 pub(crate) const F2U64_FUNCTION: &str = "naga_f2u64";
+pub(crate) const IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION: &str =
+    "nagaTextureSampleBaseClampToEdge";
 /// For some reason, Metal does not let you have `metal::texture<..>*` as a buffer argument.
 /// However, if you put that texture inside a struct, everything is totally fine. This
 /// baffles me to no end.
@@ -121,6 +123,9 @@ const fn scalar_is_int(scalar: crate::Scalar) -> bool {
 /// Prefix for cached clamped level-of-detail values for `ImageLoad` expressions.
 const CLAMPED_LOD_LOAD_PREFIX: &str = "clamped_lod_e";
 
+/// Prefix for reinterpreted expressions using `as_type<T>(...)`.
+const REINTERPRET_PREFIX: &str = "reinterpreted_";
+
 /// Wrapper for identifier names for clamped level-of-detail values
 ///
 /// Values of this type implement [`core::fmt::Display`], formatting as
@@ -153,6 +158,30 @@ struct ArraySizeMember(Handle<crate::GlobalVariable>);
 impl Display for ArraySizeMember {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "size")
+    }
+}
+
+/// Wrapper for reinterpreted variables using `as_type<target_type>(orig)`.
+///
+/// Implements [`core::fmt::Display`], formatting as a name derived from
+/// `target_type` and the variable name of `orig`.
+#[derive(Clone, Copy)]
+struct Reinterpreted<'a> {
+    target_type: &'a str,
+    orig: Handle<crate::Expression>,
+}
+
+impl<'a> Reinterpreted<'a> {
+    const fn new(target_type: &'a str, orig: Handle<crate::Expression>) -> Self {
+        Self { target_type, orig }
+    }
+}
+
+impl Display for Reinterpreted<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        f.write_str(REINTERPRET_PREFIX)?;
+        f.write_str(self.target_type)?;
+        self.orig.write_prefixed(f, "_e")
     }
 }
 
@@ -418,6 +447,9 @@ enum WrappedFunction {
         src_scalar: crate::Scalar,
         vector_size: Option<crate::VectorSize>,
         dst_scalar: crate::Scalar,
+    },
+    ImageSample {
+        clamp_to_edge: bool,
     },
 }
 
@@ -1470,14 +1502,14 @@ impl<W: Write> Writer<W> {
 
     /// Emit code for the arithmetic expression of the dot product.
     ///
-    /// The argument `extractor` is a function that accepts a `Writer`, a handle to a vector,
-    /// and an index. writes out the expression for the component at that index.
-    fn put_dot_product(
+    /// The argument `extractor` is a function that accepts a `Writer`, a vector, and
+    /// an index. It writes out the expression for the vector component at that index.
+    fn put_dot_product<T: Copy>(
         &mut self,
-        arg: Handle<crate::Expression>,
-        arg1: Handle<crate::Expression>,
+        arg: T,
+        arg1: T,
         size: usize,
-        extractor: impl Fn(&mut Self, Handle<crate::Expression>, usize) -> BackendResult,
+        extractor: impl Fn(&mut Self, T, usize) -> BackendResult,
     ) -> BackendResult {
         // Write parentheses around the dot product expression to prevent operators
         // with different precedences from applying earlier.
@@ -1494,6 +1526,58 @@ impl<W: Write> Writer<W> {
         }
 
         write!(self.out, ")")?;
+        Ok(())
+    }
+
+    /// Emit code for the WGSL functions `pack4x{I, U}8[Clamp]`.
+    fn put_pack4x8(
+        &mut self,
+        arg: Handle<crate::Expression>,
+        context: &ExpressionContext<'_>,
+        was_signed: bool,
+        clamp_bounds: Option<(&str, &str)>,
+    ) -> Result<(), Error> {
+        let write_arg = |this: &mut Self| -> BackendResult {
+            if let Some((min, max)) = clamp_bounds {
+                // Clamping with scalar bounds works (component-wise) even for packed_[u]char4.
+                write!(this.out, "{NAMESPACE}::clamp(")?;
+                this.put_expression(arg, context, true)?;
+                write!(this.out, ", {min}, {max})")?;
+            } else {
+                this.put_expression(arg, context, true)?;
+            }
+            Ok(())
+        };
+
+        if context.lang_version >= (2, 1) {
+            let packed_type = if was_signed {
+                "packed_char4"
+            } else {
+                "packed_uchar4"
+            };
+            // Metal uses little endian byte order, which matches what WGSL expects here.
+            write!(self.out, "as_type<uint>({packed_type}(")?;
+            write_arg(self)?;
+            write!(self.out, "))")?;
+        } else {
+            // MSL < 2.1 doesn't support `as_type` casting between packed chars and scalars.
+            if was_signed {
+                write!(self.out, "uint(")?;
+            }
+            write!(self.out, "(")?;
+            write_arg(self)?;
+            write!(self.out, "[0] & 0xFF) | ((")?;
+            write_arg(self)?;
+            write!(self.out, "[1] & 0xFF) << 8) | ((")?;
+            write_arg(self)?;
+            write!(self.out, "[2] & 0xFF) << 16) | ((")?;
+            write_arg(self)?;
+            write!(self.out, "[3] & 0xFF) << 24)")?;
+            if was_signed {
+                write!(self.out, ")")?;
+            }
+        }
+
         Ok(())
     }
 
@@ -1862,6 +1946,25 @@ impl<W: Write> Writer<W> {
             }
             crate::Expression::Load { pointer } => self.put_load(pointer, context, is_scoped)?,
             crate::Expression::ImageSample {
+                coordinate,
+                image,
+                sampler,
+                clamp_to_edge: true,
+                gather: None,
+                array_index: None,
+                offset: None,
+                level: crate::SampleLevel::Zero,
+                depth_ref: None,
+            } => {
+                write!(self.out, "{IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}(")?;
+                self.put_expression(image, context, true)?;
+                write!(self.out, ", ")?;
+                self.put_expression(sampler, context, true)?;
+                write!(self.out, ", ")?;
+                self.put_expression(coordinate, context, true)?;
+                write!(self.out, ")")?;
+            }
+            crate::Expression::ImageSample {
                 image,
                 sampler,
                 gather,
@@ -1870,7 +1973,14 @@ impl<W: Write> Writer<W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
+                if clamp_to_edge {
+                    return Err(Error::GenericValidation(
+                        "ImageSample::clamp_to_edge should have been validated out".to_string(),
+                    ));
+                }
+
                 let main_op = match gather {
                     Some(_) => "gather",
                     None => "sample",
@@ -2206,27 +2316,53 @@ impl<W: Write> Writer<W> {
                         ),
                     },
                     fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed) => {
-                        let conversion = match fun {
-                            Mf::Dot4I8Packed => "int",
-                            Mf::Dot4U8Packed => "",
-                            _ => unreachable!(),
-                        };
+                        if context.lang_version >= (2, 1) {
+                            // Write potentially optimizable code using `packed_(u?)char4`.
+                            // The two function arguments were already reinterpreted as packed (signed
+                            // or unsigned) chars in `Self::put_block`.
+                            let packed_type = match fun {
+                                Mf::Dot4I8Packed => "packed_char4",
+                                Mf::Dot4U8Packed => "packed_uchar4",
+                                _ => unreachable!(),
+                            };
 
-                        return self.put_dot_product(
-                            arg,
-                            arg1.unwrap(),
-                            4,
-                            |writer, arg, index| {
-                                write!(writer.out, "({}(", conversion)?;
-                                writer.put_expression(arg, context, true)?;
-                                if index == 3 {
-                                    write!(writer.out, ") >> 24)")?;
-                                } else {
-                                    write!(writer.out, ") << {} >> 24)", (3 - index) * 8)?;
-                                }
-                                Ok(())
-                            },
-                        );
+                            return self.put_dot_product(
+                                Reinterpreted::new(packed_type, arg),
+                                Reinterpreted::new(packed_type, arg1.unwrap()),
+                                4,
+                                |writer, arg, index| {
+                                    // MSL implicitly promotes these (signed or unsigned) chars to
+                                    // `int` or `uint` in the multiplication, so no overflow can occur.
+                                    write!(writer.out, "{arg}[{index}]")?;
+                                    Ok(())
+                                },
+                            );
+                        } else {
+                            // Fall back to a polyfill since MSL < 2.1 doesn't seem to support
+                            // bitcasting from uint to `packed_char4` or `packed_uchar4`.
+                            // See <https://github.com/gfx-rs/wgpu/pull/7574#issuecomment-2835464472>.
+                            let conversion = match fun {
+                                Mf::Dot4I8Packed => "int",
+                                Mf::Dot4U8Packed => "",
+                                _ => unreachable!(),
+                            };
+
+                            return self.put_dot_product(
+                                arg,
+                                arg1.unwrap(),
+                                4,
+                                |writer, arg, index| {
+                                    write!(writer.out, "({}(", conversion)?;
+                                    writer.put_expression(arg, context, true)?;
+                                    if index == 3 {
+                                        write!(writer.out, ") >> 24)")?;
+                                    } else {
+                                        write!(writer.out, ") << {} >> 24)", (3 - index) * 8)?;
+                                    }
+                                    Ok(())
+                                },
+                            );
+                        }
                     }
                     Mf::Outer => return Err(Error::UnsupportedCall(format!("{fun:?}"))),
                     Mf::Cross => "cross",
@@ -2437,53 +2573,41 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "{fun_name}")?;
                         self.put_call_parameters(iter::once(arg), context)?;
                     }
-                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8 | Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp) => {
-                        let was_signed = matches!(fun, Mf::Pack4xI8 | Mf::Pack4xI8Clamp);
-                        let clamp_bounds = match fun {
-                            Mf::Pack4xI8Clamp => Some(("-128", "127")),
-                            Mf::Pack4xU8Clamp => Some(("0", "255")),
-                            _ => None,
-                        };
-                        if was_signed {
-                            write!(self.out, "uint(")?;
-                        }
-                        let write_arg = |this: &mut Self| -> BackendResult {
-                            if let Some((min, max)) = clamp_bounds {
-                                write!(this.out, "{NAMESPACE}::clamp(")?;
-                                this.put_expression(arg, context, true)?;
-                                write!(this.out, ", {min}, {max})")?;
-                            } else {
-                                this.put_expression(arg, context, true)?;
-                            }
-                            Ok(())
-                        };
-                        write!(self.out, "(")?;
-                        write_arg(self)?;
-                        write!(self.out, "[0] & 0xFF) | ((")?;
-                        write_arg(self)?;
-                        write!(self.out, "[1] & 0xFF) << 8) | ((")?;
-                        write_arg(self)?;
-                        write!(self.out, "[2] & 0xFF) << 16) | ((")?;
-                        write_arg(self)?;
-                        write!(self.out, "[3] & 0xFF) << 24)")?;
-                        if was_signed {
-                            write!(self.out, ")")?;
-                        }
+                    Mf::Pack4xI8 => self.put_pack4x8(arg, context, true, None)?,
+                    Mf::Pack4xU8 => self.put_pack4x8(arg, context, false, None)?,
+                    Mf::Pack4xI8Clamp => {
+                        self.put_pack4x8(arg, context, true, Some(("-128", "127")))?
+                    }
+                    Mf::Pack4xU8Clamp => {
+                        self.put_pack4x8(arg, context, false, Some(("0", "255")))?
                     }
                     fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
-                        write!(self.out, "(")?;
-                        if matches!(fun, Mf::Unpack4xU8) {
-                            write!(self.out, "u")?;
+                        let sign_prefix = if matches!(fun, Mf::Unpack4xU8) {
+                            "u"
+                        } else {
+                            ""
+                        };
+
+                        if context.lang_version >= (2, 1) {
+                            // Metal uses little endian byte order, which matches what WGSL expects here.
+                            write!(
+                                self.out,
+                                "{sign_prefix}int4(as_type<packed_{sign_prefix}char4>("
+                            )?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, "))")?;
+                        } else {
+                            // MSL < 2.1 doesn't support `as_type` casting between packed chars and scalars.
+                            write!(self.out, "({sign_prefix}int4(")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, ", ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " >> 8, ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " >> 16, ")?;
+                            self.put_expression(arg, context, true)?;
+                            write!(self.out, " >> 24) << 24 >> 24)")?;
                         }
-                        write!(self.out, "int4(")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, ", ")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, " >> 8, ")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, " >> 16, ")?;
-                        self.put_expression(arg, context, true)?;
-                        write!(self.out, " >> 24) << 24 >> 24)")?;
                     }
                     Mf::QuantizeToF16 => {
                         match *context.resolve_type(arg) {
@@ -3226,14 +3350,20 @@ impl<W: Write> Writer<W> {
                         self.need_bake_expressions.insert(arg);
                         self.need_bake_expressions.insert(arg1.unwrap());
                     }
-                    crate::MathFunction::FirstLeadingBit
-                    | crate::MathFunction::Pack4xI8
+                    crate::MathFunction::FirstLeadingBit => {
+                        self.need_bake_expressions.insert(arg);
+                    }
+                    crate::MathFunction::Pack4xI8
                     | crate::MathFunction::Pack4xU8
                     | crate::MathFunction::Pack4xI8Clamp
                     | crate::MathFunction::Pack4xU8Clamp
                     | crate::MathFunction::Unpack4xI8
                     | crate::MathFunction::Unpack4xU8 => {
-                        self.need_bake_expressions.insert(arg);
+                        // On MSL < 2.1, we emit a polyfill for these functions that uses the
+                        // argument multiple times. This is no longer necessary on MSL >= 2.1.
+                        if context.lang_version < (2, 1) {
+                            self.need_bake_expressions.insert(arg);
+                        }
                     }
                     crate::MathFunction::ExtractBits => {
                         // Only argument 1 is re-used.
@@ -3346,6 +3476,38 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Convert the arguments of `Dot4{I, U}Packed` to `packed_(u?)char4`.
+    ///
+    /// Caches the results in temporary variables (whose names are derived from
+    /// the original variable names). This caching avoids the need to redo the
+    /// casting for each vector component when emitting the dot product.
+    fn put_casting_to_packed_chars(
+        &mut self,
+        fun: crate::MathFunction,
+        arg0: Handle<crate::Expression>,
+        arg1: Handle<crate::Expression>,
+        indent: back::Level,
+        context: &StatementContext<'_>,
+    ) -> Result<(), Error> {
+        let packed_type = match fun {
+            crate::MathFunction::Dot4I8Packed => "packed_char4",
+            crate::MathFunction::Dot4U8Packed => "packed_uchar4",
+            _ => unreachable!(),
+        };
+
+        for arg in [arg0, arg1] {
+            write!(
+                self.out,
+                "{indent}{packed_type} {0} = as_type<{packed_type}>(",
+                Reinterpreted::new(packed_type, arg)
+            )?;
+            self.put_expression(arg, &context.expression, true)?;
+            writeln!(self.out, ");")?;
+        }
+
+        Ok(())
+    }
+
     fn put_block(
         &mut self,
         level: back::Level,
@@ -3362,17 +3524,45 @@ impl<W: Write> Writer<W> {
             match *statement {
                 crate::Statement::Emit(ref range) => {
                     for handle in range.clone() {
-                        // `ImageLoad` expressions covered by the `Restrict` bounds check policy
-                        // may need to cache a clamped version of their level-of-detail argument.
-                        if let crate::Expression::ImageLoad {
-                            image,
-                            level: mip_level,
-                            ..
-                        } = context.expression.function.expressions[handle]
-                        {
-                            self.put_cache_restricted_level(
-                                handle, image, mip_level, level, context,
-                            )?;
+                        use crate::MathFunction as Mf;
+
+                        match context.expression.function.expressions[handle] {
+                            // `ImageLoad` expressions covered by the `Restrict` bounds check policy
+                            // may need to cache a clamped version of their level-of-detail argument.
+                            crate::Expression::ImageLoad {
+                                image,
+                                level: mip_level,
+                                ..
+                            } => {
+                                self.put_cache_restricted_level(
+                                    handle, image, mip_level, level, context,
+                                )?;
+                            }
+
+                            // If we are going to write a `Dot4I8Packed` or `Dot4U8Packed` on Metal
+                            // 2.1+ then we introduce two intermediate variables that recast the two
+                            // arguments as packed (signed or unsigned) chars. The actual dot product
+                            // is implemented in `Self::put_expression`, and it uses both of these
+                            // intermediate variables multiple times. There's no danger that the
+                            // original arguments get modified between the definition of these
+                            // intermediate variables and the implementation of the actual dot
+                            // product since we require the inputs of `Dot4{I, U}Packed` to be baked.
+                            crate::Expression::Math {
+                                fun: fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed),
+                                arg,
+                                arg1,
+                                ..
+                            } if context.expression.lang_version >= (2, 1) => {
+                                self.put_casting_to_packed_chars(
+                                    fun,
+                                    arg,
+                                    arg1.unwrap(),
+                                    level,
+                                    context,
+                                )?;
+                            }
+
+                            _ => (),
                         }
 
                         let ptr_class = context.expression.resolve_type(handle).pointer_space();
@@ -3541,7 +3731,8 @@ impl<W: Write> Writer<W> {
                 crate::Statement::Kill => {
                     writeln!(self.out, "{level}{NAMESPACE}::discard_fragment();")?;
                 }
-                crate::Statement::Barrier(flags) => {
+                crate::Statement::ControlBarrier(flags)
+                | crate::Statement::MemoryBarrier(flags) => {
                     self.write_barrier(flags, level)?;
                 }
                 crate::Statement::Store { pointer, value } => {
@@ -3931,6 +4122,12 @@ impl<W: Write> Writer<W> {
                         crate::GatherMode::ShuffleXor(_) => {
                             write!(self.out, "{NAMESPACE}::simd_shuffle_xor(")?;
                         }
+                        crate::GatherMode::QuadBroadcast(_) => {
+                            write!(self.out, "{NAMESPACE}::quad_broadcast(")?;
+                        }
+                        crate::GatherMode::QuadSwap(_) => {
+                            write!(self.out, "{NAMESPACE}::quad_shuffle_xor(")?;
+                        }
                     }
                     self.put_expression(argument, &context.expression, true)?;
                     match mode {
@@ -3939,9 +4136,24 @@ impl<W: Write> Writer<W> {
                         | crate::GatherMode::Shuffle(index)
                         | crate::GatherMode::ShuffleDown(index)
                         | crate::GatherMode::ShuffleUp(index)
-                        | crate::GatherMode::ShuffleXor(index) => {
+                        | crate::GatherMode::ShuffleXor(index)
+                        | crate::GatherMode::QuadBroadcast(index) => {
                             write!(self.out, ", ")?;
                             self.put_expression(index, &context.expression, true)?;
+                        }
+                        crate::GatherMode::QuadSwap(direction) => {
+                            write!(self.out, ", ")?;
+                            match direction {
+                                crate::Direction::X => {
+                                    write!(self.out, "1u")?;
+                                }
+                                crate::Direction::Y => {
+                                    write!(self.out, "2u")?;
+                                }
+                                crate::Direction::Diagonal => {
+                                    write!(self.out, "3u")?;
+                                }
+                            }
                         }
                     }
                     writeln!(self.out, ");")?;
@@ -4288,6 +4500,16 @@ impl<W: Write> Writer<W> {
                                 }
                             }
                         }
+                    }
+                    if last_offset < span {
+                        let pad = span - last_offset;
+                        writeln!(
+                            self.out,
+                            "{}char _pad{}[{}];",
+                            back::INDENT,
+                            members.len(),
+                            pad
+                        )?;
                     }
                     writeln!(self.out, "}};")?;
                 }
@@ -5636,6 +5858,27 @@ template <typename A>
                     write!(self.out, ", ")?;
                     self.put_literal(max)?;
                     writeln!(self.out, "));")?;
+                    writeln!(self.out, "}}")?;
+                    writeln!(self.out)?;
+                }
+                crate::Expression::ImageSample {
+                    clamp_to_edge: true,
+                    ..
+                } => {
+                    let wrapped = WrappedFunction::ImageSample {
+                        clamp_to_edge: true,
+                    };
+                    if !self.wrapped_functions.insert(wrapped) {
+                        continue;
+                    }
+
+                    writeln!(self.out, "{NAMESPACE}::float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}({NAMESPACE}::texture2d<float, {NAMESPACE}::access::sample> tex, {NAMESPACE}::sampler samp, {NAMESPACE}::float2 coords) {{")?;
+                    let l1 = back::Level(1);
+                    writeln!(self.out, "{l1}{NAMESPACE}::float2 half_texel = 0.5 / {NAMESPACE}::float2(tex.get_width(0u), tex.get_height(0u));")?;
+                    writeln!(
+                        self.out,
+                        "{l1}return tex.sample(samp, {NAMESPACE}::clamp(coords, half_texel, 1.0 - half_texel), {NAMESPACE}::level(0.0));"
+                    )?;
                     writeln!(self.out, "}}")?;
                     writeln!(self.out)?;
                 }
@@ -7027,79 +7270,6 @@ mod workgroup_mem_init {
             }
 
             Ok(())
-        }
-    }
-}
-
-#[test]
-fn test_stack_size() {
-    use crate::valid::{Capabilities, ValidationFlags};
-    // create a module with at least one expression nested
-    let mut module = crate::Module::default();
-    let mut fun = crate::Function::default();
-    let const_expr = fun.expressions.append(
-        crate::Expression::Literal(crate::Literal::F32(1.0)),
-        Default::default(),
-    );
-    let nested_expr = fun.expressions.append(
-        crate::Expression::Unary {
-            op: crate::UnaryOperator::Negate,
-            expr: const_expr,
-        },
-        Default::default(),
-    );
-    fun.body.push(
-        crate::Statement::Emit(fun.expressions.range_from(1)),
-        Default::default(),
-    );
-    fun.body.push(
-        crate::Statement::If {
-            condition: nested_expr,
-            accept: crate::Block::new(),
-            reject: crate::Block::new(),
-        },
-        Default::default(),
-    );
-    let _ = module.functions.append(fun, Default::default());
-    // analyse the module
-    let info = valid::Validator::new(ValidationFlags::empty(), Capabilities::empty())
-        .validate(&module)
-        .unwrap();
-    // process the module
-    let mut writer = Writer::new(String::new());
-    writer
-        .write(&module, &info, &Default::default(), &Default::default())
-        .unwrap();
-
-    {
-        // check expression stack
-        let mut addresses_start = usize::MAX;
-        let mut addresses_end = 0usize;
-        for pointer in writer.put_expression_stack_pointers {
-            addresses_start = addresses_start.min(pointer as usize);
-            addresses_end = addresses_end.max(pointer as usize);
-        }
-        let stack_size = addresses_end - addresses_start;
-        // check the size (in debug only)
-        // last observed macOS value: 25904 (CI), 2025-04-29
-        if !(11000..=27000).contains(&stack_size) {
-            panic!("`put_expression` stack size {stack_size} has changed!");
-        }
-    }
-
-    {
-        // check block stack
-        let mut addresses_start = usize::MAX;
-        let mut addresses_end = 0usize;
-        for pointer in writer.put_block_stack_pointers {
-            addresses_start = addresses_start.min(pointer as usize);
-            addresses_end = addresses_end.max(pointer as usize);
-        }
-        let stack_size = addresses_end - addresses_start;
-        // check the size (in debug only)
-        // last observed macOS value: 22256 (CI)
-        if !(15000..=25000).contains(&stack_size) {
-            panic!("`put_block` stack size {stack_size} has changed!");
         }
     }
 }

@@ -1,9 +1,9 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
 use core::{error, fmt};
 
-use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
+use crate::util::Mutex;
 use crate::*;
 
 /// Describes a [`Surface`].
@@ -243,7 +243,7 @@ pub enum SurfaceTarget<'window> {
     ///
     /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
     ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     Canvas(web_sys::HtmlCanvasElement),
 
     /// Surface from a `web_sys::OffscreenCanvas`.
@@ -255,7 +255,7 @@ pub enum SurfaceTarget<'window> {
     ///
     /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
     ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     OffscreenCanvas(web_sys::OffscreenCanvas),
 }
 
@@ -413,7 +413,10 @@ impl error::Error for CreateSurfaceError {
             #[cfg(wgpu_core)]
             CreateSurfaceErrorKind::Hal(e) => e.source(),
             CreateSurfaceErrorKind::Web(_) => None,
+            #[cfg(feature = "std")]
             CreateSurfaceErrorKind::RawHandle(e) => e.source(),
+            #[cfg(not(feature = "std"))]
+            CreateSurfaceErrorKind::RawHandle(_) => None,
         }
     }
 }

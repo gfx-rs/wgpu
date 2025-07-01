@@ -1,5 +1,5 @@
 use alloc::{string::String, vec::Vec};
-use core::ops::Range;
+use core::{convert::Infallible, ops::Range};
 
 #[cfg(feature = "trace")]
 use {alloc::borrow::Cow, std::io::Write as _};
@@ -109,7 +109,7 @@ pub enum Action<'a> {
     CreateRenderBundle {
         id: id::RenderBundleId,
         desc: crate::command::RenderBundleEncoderDescriptor<'a>,
-        base: crate::command::BasePass<crate::command::RenderCommand>,
+        base: crate::command::BasePass<crate::command::RenderCommand, Infallible>,
     },
     DestroyRenderBundle(id::RenderBundleId),
     CreateQuerySet {
@@ -151,7 +151,7 @@ pub enum Command {
         src_offset: wgt::BufferAddress,
         dst: id::BufferId,
         dst_offset: wgt::BufferAddress,
-        size: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
     },
     CopyBufferToTexture {
         src: crate::command::TexelCopyBufferInfo,
@@ -192,19 +192,15 @@ pub enum Command {
     PopDebugGroup,
     InsertDebugMarker(String),
     RunComputePass {
-        base: crate::command::BasePass<crate::command::ComputeCommand>,
+        base: crate::command::BasePass<crate::command::ComputeCommand, Infallible>,
         timestamp_writes: Option<crate::command::PassTimestampWrites>,
     },
     RunRenderPass {
-        base: crate::command::BasePass<crate::command::RenderCommand>,
+        base: crate::command::BasePass<crate::command::RenderCommand, Infallible>,
         target_colors: Vec<Option<crate::command::RenderPassColorAttachment>>,
         target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<crate::command::PassTimestampWrites>,
         occlusion_query_set_id: Option<id::QuerySetId>,
-    },
-    BuildAccelerationStructuresUnsafeTlas {
-        blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
-        tlas: Vec<crate::ray_tracing::TlasBuildEntry>,
     },
     BuildAccelerationStructures {
         blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,

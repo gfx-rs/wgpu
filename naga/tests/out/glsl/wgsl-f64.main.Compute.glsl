@@ -4,10 +4,13 @@ layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 const double k = 2.0LF;
 
+double v = 1.0LF;
+
 
 double f(double x) {
     double z = 0.0;
     double w = -1.0LF;
+    double phony = v;
     double y = (30.0LF + 400.0LF);
     z = (y + 5.0LF);
     return (((x + y) + k) + 5.0LF);

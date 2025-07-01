@@ -1,5 +1,5 @@
-use alloc::{borrow::ToOwned as _, collections::BTreeMap, sync::Arc, vec::Vec};
-use core::ffi::CStr;
+use alloc::{borrow::ToOwned as _, boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
+use core::{ffi::CStr, marker::PhantomData};
 
 use ash::{ext, google, khr, vk};
 use parking_lot::Mutex;
@@ -18,6 +18,7 @@ const INDEXING_FEATURES: wgt::Features = wgt::Features::TEXTURE_BINDING_ARRAY
     .union(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS)
     .union(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
 
+#[expect(rustdoc::private_intra_doc_links)]
 /// Features supported by a [`vk::PhysicalDevice`] and its extensions.
 ///
 /// This is used in two phases:
@@ -62,13 +63,11 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_EXT_texture_compression_astc_hdr`, promoted to Vulkan 1.3.
     astc_hdr: Option<vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT<'static>>,
 
-    /// Features provided by `VK_KHR_shader_float16_int8` (promoted to Vulkan
-    /// 1.2) and `VK_KHR_16bit_storage` (promoted to Vulkan 1.1). We use these
-    /// features together, or not at all.
-    shader_float16: Option<(
-        vk::PhysicalDeviceShaderFloat16Int8Features<'static>,
-        vk::PhysicalDevice16BitStorageFeatures<'static>,
-    )>,
+    /// Features provided by `VK_KHR_shader_float16_int8`, promoted to Vulkan 1.2
+    shader_float16_int8: Option<vk::PhysicalDeviceShaderFloat16Int8Features<'static>>,
+
+    /// Features provided by `VK_KHR_16bit_storage`, promoted to Vulkan 1.1
+    _16bit_storage: Option<vk::PhysicalDevice16BitStorageFeatures<'static>>,
 
     /// Features provided by `VK_KHR_acceleration_structure`.
     acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR<'static>>,
@@ -154,9 +153,11 @@ impl PhysicalDeviceFeatures {
         if let Some(ref mut feature) = self.astc_hdr {
             info = info.push_next(feature);
         }
-        if let Some((ref mut f16_i8_feature, ref mut _16bit_feature)) = self.shader_float16 {
-            info = info.push_next(f16_i8_feature);
-            info = info.push_next(_16bit_feature);
+        if let Some(ref mut feature) = self.shader_float16_int8 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self._16bit_storage {
+            info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.zero_initialize_workgroup_memory {
             info = info.push_next(feature);
@@ -307,7 +308,7 @@ impl PhysicalDeviceFeatures {
                         | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY,
                 ))
                 //.shader_storage_image_array_dynamic_indexing(
-                //.shader_clip_distance(requested_features.contains(wgt::Features::SHADER_CLIP_DISTANCE))
+                .shader_clip_distance(requested_features.contains(wgt::Features::CLIP_DISTANCES))
                 //.shader_cull_distance(requested_features.contains(wgt::Features::SHADER_CULL_DISTANCE))
                 .shader_float64(requested_features.contains(wgt::Features::SHADER_F64))
                 .shader_int64(requested_features.contains(wgt::Features::SHADER_INT64))
@@ -386,24 +387,21 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
-            shader_float16: if requested_features.contains(wgt::Features::SHADER_F16) {
-                let supported_f16_features = _phd_features
-                    .shader_float16
-                    .map(|(_, s)| s)
-                    .unwrap_or_default();
-
-                Some((
-                    vk::PhysicalDeviceShaderFloat16Int8Features::default().shader_float16(true),
-                    // Only enable the 16bit storage features that are actually supported by the hardware
+            shader_float16_int8: match requested_features.contains(wgt::Features::SHADER_F16) {
+                shader_float16 if shader_float16 || private_caps.shader_int8 => Some(
+                    vk::PhysicalDeviceShaderFloat16Int8Features::default()
+                        .shader_float16(shader_float16)
+                        .shader_int8(private_caps.shader_int8),
+                ),
+                _ => None,
+            },
+            _16bit_storage: if requested_features.contains(wgt::Features::SHADER_F16) {
+                Some(
                     vk::PhysicalDevice16BitStorageFeatures::default()
-                        .storage_buffer16_bit_access(
-                            supported_f16_features.storage_buffer16_bit_access != 0,
-                        )
-                        .uniform_and_storage_buffer16_bit_access(
-                            supported_f16_features.uniform_and_storage_buffer16_bit_access != 0,
-                        )
-                        .storage_input_output16(supported_f16_features.storage_input_output16 != 0),
-                ))
+                        .storage_buffer16_bit_access(true)
+                        .storage_input_output16(true)
+                        .uniform_and_storage_buffer16_bit_access(true),
+                )
             } else {
                 None
             },
@@ -556,6 +554,7 @@ impl PhysicalDeviceFeatures {
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE
             | F::PIPELINE_CACHE
+            | F::SHADER_EARLY_DEPTH_TEST
             | F::TEXTURE_ATOMIC;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
@@ -710,6 +709,7 @@ impl PhysicalDeviceFeatures {
 
         features.set(F::DEPTH_CLIP_CONTROL, self.core.depth_clamp != 0);
         features.set(F::DUAL_SOURCE_BLENDING, self.core.dual_src_blend != 0);
+        features.set(F::CLIP_DISTANCES, self.core.shader_clip_distance != 0);
 
         if let Some(ref multiview) = self.multiview {
             features.set(F::MULTIVIEW, multiview.multiview != 0);
@@ -727,12 +727,21 @@ impl PhysicalDeviceFeatures {
             );
         }
 
-        if let Some((ref f16_i8, ref bit16)) = self.shader_float16 {
+        if self.core.texture_compression_astc_ldr != 0 {
+            features.set(
+                F::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+                supports_astc_3d(instance, phd),
+            );
+        }
+
+        if let (Some(ref f16_i8), Some(ref bit16)) = (self.shader_float16_int8, self._16bit_storage)
+        {
             features.set(
                 F::SHADER_F16,
                 f16_i8.shader_float16 != 0
                     && bit16.storage_buffer16_bit_access != 0
-                    && bit16.uniform_and_storage_buffer16_bit_access != 0,
+                    && bit16.uniform_and_storage_buffer16_bit_access != 0
+                    && bit16.storage_input_output16 != 0,
             );
         }
 
@@ -745,7 +754,8 @@ impl PhysicalDeviceFeatures {
                         | vk::SubgroupFeatureFlags::ARITHMETIC
                         | vk::SubgroupFeatureFlags::BALLOT
                         | vk::SubgroupFeatureFlags::SHUFFLE
-                        | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE,
+                        | vk::SubgroupFeatureFlags::SHUFFLE_RELATIVE
+                        | vk::SubgroupFeatureFlags::QUAD,
                 )
             {
                 features.set(
@@ -790,7 +800,8 @@ impl PhysicalDeviceFeatures {
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
         features.set(
-            F::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+            F::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
             caps.supports_extension(khr::deferred_host_operations::NAME)
                 && caps.supports_extension(khr::acceleration_structure::NAME)
                 && caps.supports_extension(khr::buffer_device_address::NAME),
@@ -978,6 +989,15 @@ impl PhysicalDeviceProperties {
             if requested_features.contains(wgt::Features::TEXTURE_FORMAT_NV12) {
                 extensions.push(khr::sampler_ycbcr_conversion::NAME);
             }
+
+            // Require `VK_KHR_16bit_storage` if the feature `SHADER_F16` was requested
+            if requested_features.contains(wgt::Features::SHADER_F16) {
+                // - Feature `SHADER_F16` also requires `VK_KHR_shader_float16_int8`, but we always
+                //   require that anyway (if it is available) below.
+                // - `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however
+                //   we require that one already.
+                extensions.push(khr::_16bit_storage::NAME);
+            }
         }
 
         if self.device_api_version < vk::API_VERSION_1_2 {
@@ -1001,13 +1021,13 @@ impl PhysicalDeviceProperties {
                 extensions.push(ext::descriptor_indexing::NAME);
             }
 
-            // Require `VK_KHR_shader_float16_int8` and `VK_KHR_16bit_storage` if the associated feature was requested
-            if requested_features.contains(wgt::Features::SHADER_F16) {
+            // Always require `VK_KHR_shader_float16_int8` if available as it enables
+            // Int8 optimizations. Also require it even if it's not available but
+            // requested so that we get a corresponding error message.
+            if requested_features.contains(wgt::Features::SHADER_F16)
+                || self.supports_extension(khr::shader_float16_int8::NAME)
+            {
                 extensions.push(khr::shader_float16_int8::NAME);
-                // `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however we require that one already
-                if self.device_api_version < vk::API_VERSION_1_1 {
-                    extensions.push(khr::_16bit_storage::NAME);
-                }
             }
 
             if requested_features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
@@ -1184,6 +1204,18 @@ impl PhysicalDeviceProperties {
         let max_color_attachment_bytes_per_sample =
             limits.max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
+        let mut max_blas_geometry_count = 0;
+        let mut max_blas_primitive_count = 0;
+        let mut max_tlas_instance_count = 0;
+        let mut max_acceleration_structures_per_shader_stage = 0;
+        if let Some(properties) = self.acceleration_structure {
+            max_blas_geometry_count = properties.max_geometry_count as u32;
+            max_blas_primitive_count = properties.max_primitive_count as u32;
+            max_tlas_instance_count = properties.max_instance_count as u32;
+            max_acceleration_structures_per_shader_stage =
+                properties.max_per_stage_descriptor_acceleration_structures;
+        }
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -1241,6 +1273,10 @@ impl PhysicalDeviceProperties {
             max_compute_workgroups_per_dimension,
             max_buffer_size,
             max_non_sampler_bindings: u32::MAX,
+            max_blas_primitive_count,
+            max_blas_geometry_count,
+            max_tlas_instance_count,
+            max_acceleration_structures_per_shader_stage,
         }
     }
 
@@ -1476,15 +1512,22 @@ impl super::InstanceShared {
                     .insert(vk::PhysicalDeviceTextureCompressionASTCHDRFeaturesEXT::default());
                 features2 = features2.push_next(next);
             }
-            if capabilities.supports_extension(khr::shader_float16_int8::NAME)
-                && capabilities.supports_extension(khr::_16bit_storage::NAME)
+
+            // `VK_KHR_shader_float16_int8` is promoted to 1.2
+            if capabilities.device_api_version >= vk::API_VERSION_1_2
+                || capabilities.supports_extension(khr::shader_float16_int8::NAME)
             {
-                let next = features.shader_float16.insert((
-                    vk::PhysicalDeviceShaderFloat16Int8FeaturesKHR::default(),
-                    vk::PhysicalDevice16BitStorageFeaturesKHR::default(),
-                ));
-                features2 = features2.push_next(&mut next.0);
-                features2 = features2.push_next(&mut next.1);
+                let next = features
+                    .shader_float16_int8
+                    .insert(vk::PhysicalDeviceShaderFloat16Int8FeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+
+            if capabilities.supports_extension(khr::_16bit_storage::NAME) {
+                let next = features
+                    ._16bit_storage
+                    .insert(vk::PhysicalDevice16BitStorageFeaturesKHR::default());
+                features2 = features2.push_next(next);
             }
             if capabilities.supports_extension(khr::acceleration_structure::NAME) {
                 let next = features
@@ -1723,6 +1766,9 @@ impl super::Instance {
             shader_integer_dot_product: phd_features
                 .shader_integer_dot_product
                 .is_some_and(|ext| ext.shader_integer_dot_product != 0),
+            shader_int8: phd_features
+                .shader_float16_int8
+                .is_some_and(|features| features.shader_int8 != 0),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1952,6 +1998,7 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::GroupNonUniformBallot);
                 capabilities.push(spv::Capability::GroupNonUniformShuffle);
                 capabilities.push(spv::Capability::GroupNonUniformShuffleRelative);
+                capabilities.push(spv::Capability::GroupNonUniformQuad);
             }
 
             if features.intersects(
@@ -1993,6 +2040,10 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::AtomicFloat32AddEXT);
             }
 
+            if features.contains(wgt::Features::CLIP_DISTANCES) {
+                capabilities.push(spv::Capability::ClipDistance);
+            }
+
             let mut flags = spv::WriterFlags::empty();
             flags.set(
                 spv::WriterFlags::DEBUG,
@@ -2023,6 +2074,10 @@ impl super::Adapter {
                     spv::Capability::DotProductInput4x8BitPackedKHR,
                     spv::Capability::DotProductKHR,
                 ]);
+            }
+            if self.private_caps.shader_int8 {
+                // See <https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceShaderFloat16Int8Features.html#extension-features-shaderInt8>.
+                capabilities.extend(&[spv::Capability::Int8]);
             }
             spv::Options {
                 lang_version: match self.phd_capabilities.device_api_version {
@@ -2123,7 +2178,7 @@ impl super::Adapter {
             device: Arc::clone(&shared),
             family_index,
             relay_semaphores: Mutex::new(relay_semaphores),
-            signal_semaphores: Mutex::new((Vec::new(), Vec::new())),
+            signal_semaphores: Default::default(),
         };
 
         let mem_allocator = {
@@ -2232,25 +2287,37 @@ impl super::Adapter {
     pub fn texture_format_as_raw(&self, texture_format: wgt::TextureFormat) -> vk::Format {
         self.private_caps.map_texture_format(texture_format)
     }
-}
 
-impl crate::Adapter for super::Adapter {
-    type A = super::Api;
-
-    unsafe fn open(
+    /// # Safety:
+    /// - Same as `open` plus
+    /// - The callback may not change anything that the device does not support.
+    /// - The callback may not remove features.
+    pub unsafe fn open_with_callback<'a>(
         &self,
         features: wgt::Features,
-        _limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        callback: Option<Box<super::CreateDeviceCallback<'a>>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let enabled_extensions = self.required_device_extensions(features);
+        let mut enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
 
         let family_index = 0; //TODO
         let family_info = vk::DeviceQueueCreateInfo::default()
             .queue_family_index(family_index)
             .queue_priorities(&[1.0]);
-        let family_infos = [family_info];
+        let mut family_infos = Vec::from([family_info]);
+
+        let mut pre_info = vk::DeviceCreateInfo::default();
+
+        if let Some(callback) = callback {
+            callback(super::CreateDeviceCallbackArgs {
+                extensions: &mut enabled_extensions,
+                device_features: &mut enabled_phd_features,
+                queue_create_infos: &mut family_infos,
+                create_info: &mut pre_info,
+                _phantom: PhantomData,
+            })
+        }
 
         let str_pointers = enabled_extensions
             .iter()
@@ -2260,7 +2327,7 @@ impl crate::Adapter for super::Adapter {
             })
             .collect::<Vec<_>>();
 
-        let pre_info = vk::DeviceCreateInfo::default()
+        let pre_info = pre_info
             .queue_create_infos(&family_infos)
             .enabled_extension_names(&str_pointers);
         let info = enabled_phd_features.add_to_device_create(pre_info);
@@ -2295,6 +2362,19 @@ impl crate::Adapter for super::Adapter {
                 0,
             )
         }
+    }
+}
+
+impl crate::Adapter for super::Adapter {
+    type A = super::Api;
+
+    unsafe fn open(
+        &self,
+        features: wgt::Features,
+        _limits: &wgt::Limits,
+        memory_hints: &wgt::MemoryHints,
+    ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        unsafe { self.open_with_callback(features, memory_hints, None) }
     }
 
     unsafe fn texture_format_capabilities(
@@ -2611,6 +2691,60 @@ fn supports_format(
         vk::ImageTiling::OPTIMAL => properties.optimal_tiling_features.contains(features),
         _ => false,
     }
+}
+
+fn supports_astc_3d(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {
+    let mut supports = true;
+
+    let astc_formats = [
+        vk::Format::ASTC_4X4_UNORM_BLOCK,
+        vk::Format::ASTC_4X4_SRGB_BLOCK,
+        vk::Format::ASTC_5X4_UNORM_BLOCK,
+        vk::Format::ASTC_5X4_SRGB_BLOCK,
+        vk::Format::ASTC_5X5_UNORM_BLOCK,
+        vk::Format::ASTC_5X5_SRGB_BLOCK,
+        vk::Format::ASTC_6X5_UNORM_BLOCK,
+        vk::Format::ASTC_6X5_SRGB_BLOCK,
+        vk::Format::ASTC_6X6_UNORM_BLOCK,
+        vk::Format::ASTC_6X6_SRGB_BLOCK,
+        vk::Format::ASTC_8X5_UNORM_BLOCK,
+        vk::Format::ASTC_8X5_SRGB_BLOCK,
+        vk::Format::ASTC_8X6_UNORM_BLOCK,
+        vk::Format::ASTC_8X6_SRGB_BLOCK,
+        vk::Format::ASTC_8X8_UNORM_BLOCK,
+        vk::Format::ASTC_8X8_SRGB_BLOCK,
+        vk::Format::ASTC_10X5_UNORM_BLOCK,
+        vk::Format::ASTC_10X5_SRGB_BLOCK,
+        vk::Format::ASTC_10X6_UNORM_BLOCK,
+        vk::Format::ASTC_10X6_SRGB_BLOCK,
+        vk::Format::ASTC_10X8_UNORM_BLOCK,
+        vk::Format::ASTC_10X8_SRGB_BLOCK,
+        vk::Format::ASTC_10X10_UNORM_BLOCK,
+        vk::Format::ASTC_10X10_SRGB_BLOCK,
+        vk::Format::ASTC_12X10_UNORM_BLOCK,
+        vk::Format::ASTC_12X10_SRGB_BLOCK,
+        vk::Format::ASTC_12X12_UNORM_BLOCK,
+        vk::Format::ASTC_12X12_SRGB_BLOCK,
+    ];
+
+    for &format in &astc_formats {
+        let result = unsafe {
+            instance.get_physical_device_image_format_properties(
+                phd,
+                format,
+                vk::ImageType::TYPE_3D,
+                vk::ImageTiling::OPTIMAL,
+                vk::ImageUsageFlags::SAMPLED,
+                vk::ImageCreateFlags::empty(),
+            )
+        };
+        if result.is_err() {
+            supports = false;
+            break;
+        }
+    }
+
+    supports
 }
 
 fn supports_bgra8unorm_storage(

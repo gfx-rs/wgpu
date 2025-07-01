@@ -3,9 +3,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use wgpu::custom::{
-    AdapterInterface, ComputePipelineInterface, DeviceInterface, DispatchAdapter, DispatchDevice,
-    DispatchQueue, DispatchShaderModule, DispatchSurface, InstanceInterface, QueueInterface,
-    RequestAdapterFuture, ShaderModuleInterface,
+    AdapterInterface, ComputePipelineInterface, DeviceInterface, DispatchAdapter, DispatchBlas,
+    DispatchDevice, DispatchQueue, DispatchShaderModule, DispatchSurface, InstanceInterface,
+    QueueInterface, RequestAdapterFuture, ShaderModuleInterface,
 };
 
 #[derive(Debug, Clone)]
@@ -337,13 +337,17 @@ impl QueueInterface for CustomQueue {
         unimplemented!()
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", feature = "web"))]
     fn copy_external_image_to_texture(
         &self,
         _source: &wgpu::CopyExternalImageSourceInfo,
         _dest: wgpu::CopyExternalImageDestInfo<&wgpu::Texture>,
         _size: wgpu::Extent3d,
     ) {
+        unimplemented!()
+    }
+
+    fn compact_blas(&self, _blas: &DispatchBlas) -> (Option<u64>, DispatchBlas) {
         unimplemented!()
     }
 }

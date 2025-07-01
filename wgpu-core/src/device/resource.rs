@@ -541,6 +541,7 @@ impl Device {
             (
                 user_closures.submissions,
                 user_closures.mappings,
+                user_closures.blas_compact_ready,
                 queue_empty,
             ) = queue_result
         };
@@ -978,6 +979,9 @@ impl Device {
                 // Only BCn formats with Sliced 3D feature can be used for 3D textures
                 if desc.format.is_bcn() {
                     self.require_features(wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D)
+                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+                } else if desc.format.is_astc() {
+                    self.require_features(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
                         .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
                 } else {
                     return Err(CreateTextureError::InvalidCompressedDimension(
@@ -1797,6 +1801,22 @@ impl Device {
                     num_workgroups: inner.num_workgroups,
                 }
             }
+            pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
+                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::Dxil {
+                    shader: inner.source,
+                    entry_point: inner.entry_point.clone(),
+                    num_workgroups: inner.num_workgroups,
+                }
+            }
+            pipeline::ShaderModuleDescriptorPassthrough::Hlsl(inner) => {
+                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::Hlsl {
+                    shader: inner.source,
+                    entry_point: inner.entry_point.clone(),
+                    num_workgroups: inner.num_workgroups,
+                }
+            }
         };
 
         let hal_desc = hal::ShaderModuleDescriptor {
@@ -2007,6 +2027,14 @@ impl Device {
                     )
                 }
                 Bt::AccelerationStructure { .. } => (None, WritableStorage::No),
+                Bt::ExternalTexture => {
+                    self.require_features(wgt::Features::EXTERNAL_TEXTURE)
+                        .map_err(|e| binding_model::CreateBindGroupLayoutError::Entry {
+                            binding: entry.binding,
+                            error: e.into(),
+                        })?;
+                    (None, WritableStorage::No)
+                }
             };
 
             // Validate the count parameter
@@ -2756,6 +2784,41 @@ impl Device {
                 };
                 view.check_usage(wgt::TextureUsages::STORAGE_BINDING)?;
                 Ok(internal_use)
+            }
+            wgt::BindingType::ExternalTexture => {
+                if view.desc.dimension != TextureViewDimension::D2 {
+                    return Err(Error::InvalidTextureDimension {
+                        binding,
+                        layout_dimension: TextureViewDimension::D2,
+                        view_dimension: view.desc.dimension,
+                    });
+                }
+                let mip_level_count = view.selector.mips.end - view.selector.mips.start;
+                if mip_level_count != 1 {
+                    return Err(Error::InvalidExternalTextureMipLevelCount {
+                        binding,
+                        mip_level_count,
+                    });
+                }
+                if view.desc.format != TextureFormat::Rgba8Unorm
+                    && view.desc.format != TextureFormat::Bgra8Unorm
+                    && view.desc.format != TextureFormat::Rgba16Float
+                {
+                    return Err(Error::InvalidExternalTextureFormat {
+                        binding,
+                        format: view.desc.format,
+                    });
+                }
+                if view.samples != 1 {
+                    return Err(Error::InvalidTextureMultisample {
+                        binding,
+                        layout_multisampled: false,
+                        view_samples: view.samples,
+                    });
+                }
+
+                view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
+                Ok(wgt::TextureUses::RESOURCE)
             }
             _ => Err(Error::WrongBindingType {
                 binding,
@@ -3911,12 +3974,12 @@ impl Device {
         let trackers = self.trackers.lock();
         for buffer in trackers.buffers.used_resources() {
             if let Some(buffer) = Weak::upgrade(buffer) {
-                let _ = buffer.destroy();
+                buffer.destroy();
             }
         }
         for texture in trackers.textures.used_resources() {
             if let Some(texture) = Weak::upgrade(texture) {
-                let _ = texture.destroy();
+                texture.destroy();
             }
         }
     }

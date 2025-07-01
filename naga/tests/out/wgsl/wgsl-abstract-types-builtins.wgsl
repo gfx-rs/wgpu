@@ -1,3 +1,4 @@
+@compute @workgroup_size(1, 1, 1) 
 fn f() {
     var clamp_aiaiai: i32 = 1i;
     var clamp_aiaiaf: f32 = 1f;
@@ -57,4 +58,3 @@ fn f() {
 
     return;
 }
-

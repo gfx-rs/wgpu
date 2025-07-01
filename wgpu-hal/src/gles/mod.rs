@@ -366,8 +366,20 @@ pub enum TextureInner {
         target: BindTarget,
     },
     #[cfg(webgl)]
+    /// Render to a `WebGLFramebuffer`
+    ///
+    /// This is a web feature
     ExternalFramebuffer {
         inner: web_sys::WebGlFramebuffer,
+    },
+    #[cfg(native)]
+    /// Render to a `glow::NativeFramebuffer`
+    /// Useful when the framebuffer to draw to
+    /// has a non-zero framebuffer ID
+    ///
+    /// This is a native feature
+    ExternalNativeFramebuffer {
+        inner: glow::NativeFramebuffer,
     },
 }
 
@@ -385,6 +397,8 @@ impl TextureInner {
             Self::Texture { raw, target } => (raw, target),
             #[cfg(webgl)]
             Self::ExternalFramebuffer { .. } => panic!("Unexpected external framebuffer"),
+            #[cfg(native)]
+            Self::ExternalNativeFramebuffer { .. } => panic!("unexpected external framebuffer"),
         }
     }
 }
@@ -655,6 +669,7 @@ struct PipelineInner {
     sampler_map: SamplerBindMap,
     first_instance_location: Option<glow::UniformLocation>,
     push_constant_descs: ArrayVec<PushConstantDesc, MAX_PUSH_CONSTANT_COMMANDS>,
+    clip_distance_count: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -992,6 +1007,10 @@ enum Command {
         /// Offset from the start of the `data_bytes`
         offset: u32,
     },
+    SetClipDistances {
+        old_count: u32,
+        new_count: u32,
+    },
 }
 
 #[derive(Default)]
@@ -1087,6 +1106,7 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
         );
     });
 
+    #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && log_severity == log::Level::Error {
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());

@@ -3,7 +3,6 @@
 use alloc::borrow::ToOwned as _;
 use core::mem::ManuallyDrop;
 use core::ptr::NonNull;
-use std::thread;
 
 use core_graphics_types::{
     base::CGFloat,
@@ -29,7 +28,6 @@ impl super::Surface {
             render_layer: Mutex::new(layer),
             swapchain_format: RwLock::new(None),
             extent: RwLock::new(wgt::Extent3d::default()),
-            main_thread_id: thread::current().id(),
             present_with_transaction: false,
         }
     }
@@ -109,6 +107,13 @@ impl super::Surface {
         }
     }
 
+    /// Gets the current dimensions of the `Surface`.
+    ///
+    /// This function is safe to call off of the main thread. However, note that
+    /// `bounds` and `contentsScale` may be modified by the main thread while
+    /// this function is running, possibly resulting in the two values being out
+    /// of sync. This is sound, as these properties are accessed atomically.
+    /// See: <https://github.com/gfx-rs/wgpu/pull/7692>
     pub(super) fn dimensions(&self) -> wgt::Extent3d {
         let (size, scale): (CGSize, CGFloat) = unsafe {
             let render_layer_borrow = self.render_layer.lock();

@@ -1,5 +1,4 @@
-@compute @workgroup_size(1)
-fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+fn control_flow() {
     //TODO: execution-only barrier?
     storageBarrier();
     workgroupBarrier();
@@ -216,4 +215,16 @@ fn loop_switch_omit_continue_variable_checks(x: i32, y: i32, z: i32, w: i32) {
         }
         // check needs to be generated here
     }
+}
+
+@compute @workgroup_size(1)
+fn main() {
+    control_flow();
+    switch_default_break(1);
+    switch_case_break();
+    switch_selector_type_conversion();
+    switch_const_expr_case_selectors();
+    loop_switch_continue(1);
+    loop_switch_continue_nesting(1, 2, 3);
+    loop_switch_omit_continue_variable_checks(1, 2, 3, 4);
 }

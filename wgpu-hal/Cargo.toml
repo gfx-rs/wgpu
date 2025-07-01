@@ -81,6 +81,7 @@ metal = [
     "dep:log",
     "dep:metal",
     "dep:objc",
+    "dep:parking_lot",
     "dep:profiling",
 ]
 vulkan = [
@@ -96,6 +97,7 @@ vulkan = [
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:smallvec",
     "dep:windows",
@@ -105,7 +107,6 @@ gles = [
     "naga/glsl-out",
     "dep:arrayvec",
     "dep:bytemuck",
-    "dep:cfg-if",
     "dep:glow",
     "dep:glutin_wgl_sys",
     "dep:hashbrown",
@@ -115,9 +116,11 @@ gles = [
     "dep:log",
     "dep:ndk-sys",
     "dep:objc",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:wasm-bindgen",
     "dep:web-sys",
+    "wgpu-types/web",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_System_LibraryLoader",
@@ -133,6 +136,7 @@ dx12 = [
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:range-alloc",
     "dep:windows-core",
@@ -160,7 +164,7 @@ renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
-portable-atomic = ["dep:portable-atomic"]
+portable-atomic = ["dep:portable-atomic", "dep:portable-atomic-util"]
 
 ###################################
 ### Internal Debugging Features ###
@@ -174,6 +178,8 @@ device_lost_panic = []
 #
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
+# Tracks validation errors in a `VALIDATION_CANARY` static.
+validation_canary = ["dep:parking_lot"]
 
 ###################
 ### Workarounds ###
@@ -196,12 +202,13 @@ required-features = ["gles"]
 
 [dependencies]
 naga.workspace = true
-wgpu-types.workspace = true
+wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
+cfg-if.workspace = true
 raw-window-handle.workspace = true
-parking_lot.workspace = true
+parking_lot = { workspace = true, optional = true }
 thiserror.workspace = true
 
 # Target agnostic dependencies used only in backends.
@@ -209,14 +216,12 @@ arrayvec = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true, features = ["derive"] }
 hashbrown = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
-once_cell = { workspace = true, optional = true }
 ordered-float = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
 rustc-hash = { workspace = true, optional = true }
 
 # Backend: GLES
 glow = { workspace = true, optional = true }
-cfg-if = { workspace = true, optional = true }
 
 ########################
 ### Platform: Native ###
@@ -311,14 +316,18 @@ khronos-egl = { workspace = true, optional = true, features = [
 # Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
 libloading = { workspace = true, optional = true }
 
-[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
+[target.'cfg(any(not(target_has_atomic = "64"), not(target_has_atomic = "ptr")))'.dependencies]
 portable-atomic = { workspace = true, optional = true }
+
+[target.'cfg(not(target_has_atomic = "ptr"))'.dependencies]
+portable-atomic-util = { workspace = true, features = [
+    "alloc",
+], optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true
 
 [dev-dependencies]
-cfg-if.workspace = true
 env_logger.workspace = true
 glam.workspace = true                                            # for ray-traced-triangle example
 naga = { workspace = true, features = ["wgsl-in", "termcolor"] }

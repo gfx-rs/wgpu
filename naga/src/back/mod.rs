@@ -46,6 +46,13 @@ pub type NeedBakeExpressions = crate::FastHashSet<crate::Handle<crate::Expressio
 ///
 /// [`Expression`]: crate::Expression
 /// [`Handle`]: crate::Handle
+#[cfg_attr(
+    not(any(glsl_out, hlsl_out, msl_out, wgsl_out)),
+    allow(
+        dead_code,
+        reason = "shared helpers can be dead if none of the enabled backends need it"
+    )
+)]
 struct Baked(crate::Handle<crate::Expression>);
 
 impl core::fmt::Display for Baked {

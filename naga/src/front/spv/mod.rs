@@ -37,7 +37,6 @@ pub use error::Error;
 
 use alloc::{borrow::ToOwned, format, string::String, vec, vec::Vec};
 use core::{convert::TryInto, mem, num::NonZeroU32};
-use std::path::PathBuf;
 
 use half::f16;
 use petgraph::graphmap::GraphMap;
@@ -45,6 +44,7 @@ use petgraph::graphmap::GraphMap;
 use super::atomic_upgrade::Upgrades;
 use crate::{
     arena::{Arena, Handle, UniqueArena},
+    path_like::PathLikeOwned,
     proc::{Alignment, Layouter},
     FastHashMap, FastHashSet, FastIndexMap,
 };
@@ -381,7 +381,7 @@ pub struct Options {
     pub adjust_coordinate_space: bool,
     /// Only allow shaders with the known set of capabilities.
     pub strict_capabilities: bool,
-    pub block_ctx_dump_prefix: Option<PathBuf>,
+    pub block_ctx_dump_prefix: Option<PathLikeOwned>,
 }
 
 impl Default for Options {
@@ -3850,7 +3850,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let semantics = resolve_constant(ctx.gctx(), &semantics_const.inner)
                         .ok_or(Error::InvalidBarrierMemorySemantics(semantics_id))?;
 
-                    if exec_scope == spirv::Scope::Workgroup as u32 {
+                    if exec_scope == spirv::Scope::Workgroup as u32
+                        || exec_scope == spirv::Scope::Subgroup as u32
+                    {
                         let mut flags = crate::Barrier::empty();
                         flags.set(
                             crate::Barrier::STORAGE,
@@ -3858,20 +3860,59 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         );
                         flags.set(
                             crate::Barrier::WORK_GROUP,
-                            semantics
-                                & (spirv::MemorySemantics::SUBGROUP_MEMORY
-                                    | spirv::MemorySemantics::WORKGROUP_MEMORY)
-                                    .bits()
-                                != 0,
+                            semantics & (spirv::MemorySemantics::WORKGROUP_MEMORY).bits() != 0,
+                        );
+                        flags.set(
+                            crate::Barrier::SUB_GROUP,
+                            semantics & spirv::MemorySemantics::SUBGROUP_MEMORY.bits() != 0,
                         );
                         flags.set(
                             crate::Barrier::TEXTURE,
                             semantics & spirv::MemorySemantics::IMAGE_MEMORY.bits() != 0,
                         );
-                        block.push(crate::Statement::Barrier(flags), span);
+                        block.push(crate::Statement::ControlBarrier(flags), span);
                     } else {
                         log::warn!("Unsupported barrier execution scope: {}", exec_scope);
                     }
+                }
+                Op::MemoryBarrier => {
+                    inst.expect(3)?;
+                    let mem_scope_id = self.next()?;
+                    let semantics_id = self.next()?;
+                    let mem_scope_const = self.lookup_constant.lookup(mem_scope_id)?;
+                    let semantics_const = self.lookup_constant.lookup(semantics_id)?;
+
+                    let mem_scope = resolve_constant(ctx.gctx(), &mem_scope_const.inner)
+                        .ok_or(Error::InvalidBarrierScope(mem_scope_id))?;
+                    let semantics = resolve_constant(ctx.gctx(), &semantics_const.inner)
+                        .ok_or(Error::InvalidBarrierMemorySemantics(semantics_id))?;
+
+                    let mut flags = if mem_scope == spirv::Scope::Device as u32 {
+                        crate::Barrier::STORAGE
+                    } else if mem_scope == spirv::Scope::Workgroup as u32 {
+                        crate::Barrier::WORK_GROUP
+                    } else if mem_scope == spirv::Scope::Subgroup as u32 {
+                        crate::Barrier::SUB_GROUP
+                    } else {
+                        crate::Barrier::empty()
+                    };
+                    flags.set(
+                        crate::Barrier::STORAGE,
+                        semantics & spirv::MemorySemantics::UNIFORM_MEMORY.bits() != 0,
+                    );
+                    flags.set(
+                        crate::Barrier::WORK_GROUP,
+                        semantics & (spirv::MemorySemantics::WORKGROUP_MEMORY).bits() != 0,
+                    );
+                    flags.set(
+                        crate::Barrier::SUB_GROUP,
+                        semantics & spirv::MemorySemantics::SUBGROUP_MEMORY.bits() != 0,
+                    );
+                    flags.set(
+                        crate::Barrier::TEXTURE,
+                        semantics & spirv::MemorySemantics::IMAGE_MEMORY.bits() != 0,
+                    );
+                    block.push(crate::Statement::MemoryBarrier(flags), span);
                 }
                 Op::CopyObject => {
                     inst.expect(4)?;
@@ -4064,7 +4105,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | Op::GroupNonUniformShuffle
                 | Op::GroupNonUniformShuffleDown
                 | Op::GroupNonUniformShuffleUp
-                | Op::GroupNonUniformShuffleXor => {
+                | Op::GroupNonUniformShuffleXor
+                | Op::GroupNonUniformQuadBroadcast => {
                     inst.expect(if matches!(inst.op, Op::GroupNonUniformBroadcastFirst) {
                         5
                     } else {
@@ -4104,6 +4146,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             Op::GroupNonUniformShuffleXor => {
                                 crate::GatherMode::ShuffleXor(index_handle)
                             }
+                            Op::GroupNonUniformQuadBroadcast => {
+                                crate::GatherMode::QuadBroadcast(index_handle)
+                            }
                             _ => unreachable!(),
                         }
                     };
@@ -4129,6 +4174,60 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         crate::Statement::SubgroupGather {
                             result: result_handle,
                             mode,
+                            argument: argument_handle,
+                        },
+                        span,
+                    );
+                    emitter.start(ctx.expressions);
+                }
+                Op::GroupNonUniformQuadSwap => {
+                    inst.expect(6)?;
+                    block.extend(emitter.finish(ctx.expressions));
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let exec_scope_id = self.next()?;
+                    let argument_id = self.next()?;
+                    let direction_id = self.next()?;
+
+                    let argument_lookup = self.lookup_expression.lookup(argument_id)?;
+                    let argument_handle = get_expr_handle!(argument_id, argument_lookup);
+
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
+                        .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
+
+                    let direction_const = self.lookup_constant.lookup(direction_id)?;
+                    let direction_const = resolve_constant(ctx.gctx(), &direction_const.inner)
+                        .ok_or(Error::InvalidOperand)?;
+                    let direction = match direction_const {
+                        0 => crate::Direction::X,
+                        1 => crate::Direction::Y,
+                        2 => crate::Direction::Diagonal,
+                        _ => unreachable!(),
+                    };
+
+                    let result_type = self.lookup_type.lookup(result_type_id)?;
+
+                    let result_handle = ctx.expressions.append(
+                        crate::Expression::SubgroupOperationResult {
+                            ty: result_type.handle,
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: result_handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
+                    block.push(
+                        crate::Statement::SubgroupGather {
+                            mode: crate::GatherMode::QuadSwap(direction),
+                            result: result_handle,
                             argument: argument_handle,
                         },
                         span,
@@ -4508,7 +4607,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::Continue
                 | S::Return { .. }
                 | S::Kill
-                | S::Barrier(_)
+                | S::ControlBarrier(_)
+                | S::MemoryBarrier(_)
                 | S::Store { .. }
                 | S::ImageStore { .. }
                 | S::Atomic { .. }
@@ -4825,24 +4925,49 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         match mode {
             ExecutionMode::EarlyFragmentTests => {
-                if ep.early_depth_test.is_none() {
-                    ep.early_depth_test = Some(crate::EarlyDepthTest { conservative: None });
-                }
+                ep.early_depth_test = Some(crate::EarlyDepthTest::Force);
             }
             ExecutionMode::DepthUnchanged => {
-                ep.early_depth_test = Some(crate::EarlyDepthTest {
-                    conservative: Some(crate::ConservativeDepth::Unchanged),
-                });
+                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
+                    if let &mut crate::EarlyDepthTest::Allow {
+                        ref mut conservative,
+                    } = early_depth_test
+                    {
+                        *conservative = crate::ConservativeDepth::Unchanged;
+                    }
+                } else {
+                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
+                        conservative: crate::ConservativeDepth::Unchanged,
+                    });
+                }
             }
             ExecutionMode::DepthGreater => {
-                ep.early_depth_test = Some(crate::EarlyDepthTest {
-                    conservative: Some(crate::ConservativeDepth::GreaterEqual),
-                });
+                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
+                    if let &mut crate::EarlyDepthTest::Allow {
+                        ref mut conservative,
+                    } = early_depth_test
+                    {
+                        *conservative = crate::ConservativeDepth::GreaterEqual;
+                    }
+                } else {
+                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
+                        conservative: crate::ConservativeDepth::GreaterEqual,
+                    });
+                }
             }
             ExecutionMode::DepthLess => {
-                ep.early_depth_test = Some(crate::EarlyDepthTest {
-                    conservative: Some(crate::ConservativeDepth::LessEqual),
-                });
+                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
+                    if let &mut crate::EarlyDepthTest::Allow {
+                        ref mut conservative,
+                    } = early_depth_test
+                    {
+                        *conservative = crate::ConservativeDepth::LessEqual;
+                    }
+                } else {
+                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
+                        conservative: crate::ConservativeDepth::LessEqual,
+                    });
+                }
             }
             ExecutionMode::DepthReplacing => {
                 // Ignored because it can be deduced from the IR.

@@ -12,6 +12,7 @@ struct PushConstants {
 struct FragmentIn {
     metal::float4 color;
     uint primitive_index;
+    char _pad2[12];
 };
 
 struct main_Input {

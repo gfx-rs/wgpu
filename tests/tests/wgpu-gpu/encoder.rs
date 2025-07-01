@@ -18,7 +18,8 @@ static DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER: GpuTestConfiguration =
         .parameters(TestParameters::default().expect_fail(FailureCase::always()))
         .run_sync(|ctx| {
             // Use the device after the queue is dropped. Currently this panics
-            // but it probably shouldn't
+            // but it probably shouldn't.
+            // TODO(https://github.com/gfx-rs/wgpu/issues/7781) revisit this
             let TestingContext { device, queue, .. } = ctx;
             drop(queue);
             let _encoder =
@@ -62,20 +63,11 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
             occlusion_query_set: None,
         });
 
-        // Set a bad viewport on renderpass, triggering an error.
-        fail(
-            &ctx.device,
-            || {
-                renderpass.set_viewport(0.0, 0.0, -1.0, -1.0, 0.0, 1.0);
-                drop(renderpass);
-            },
-            Some("less than zero"),
-        );
+        // This viewport is invalid because it has negative size.
+        renderpass.set_viewport(0.0, 0.0, -1.0, -1.0, 0.0, 1.0);
+        drop(renderpass);
 
-        // This is the actual interesting error condition. We've created
-        // a CommandEncoder which errored out when processing a command.
-        // The encoder is still open!
-        drop(encoder);
+        fail(&ctx.device, || encoder.finish(), Some("less than zero"));
     });
 
 #[gpu_test]
@@ -299,6 +291,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
 
     for &pass_type in [PassType::Compute, PassType::Render].iter() {
         for (op_name, op) in recording_ops.iter() {
+            // Test the case where the pass is not ended before calling finish()
             let mut encoder = ctx
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
@@ -308,42 +301,25 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
             log::info!("Testing operation {op_name:?} on a locked command encoder while a {pass_type:?} pass is active");
-            fail(
-                &ctx.device,
-                || op(&mut encoder),
-                Some("Command encoder is locked"),
-            );
+            op(&mut encoder);
 
-            // Drop the pass - this also fails now since the encoder is invalid:
-            fail(
-                &ctx.device,
-                || drop(pass),
-                Some("Command encoder is invalid"),
-            );
-            // Also, it's not possible to create a new pass on the encoder:
-            fail(
-                &ctx.device,
-                || encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default()),
-                Some("Command encoder is invalid"),
-            );
-        }
+            fail(&ctx.device, || encoder.finish(), Some("encoder is locked"));
 
-        // Test encoder finishing separately since it consumes the encoder and doesn't fit above pattern.
-        {
+            drop(pass);
+
+            // ...and the case where the pass is ended before calling finish()
             let mut encoder = ctx
                 .device
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
             let pass = create_pass(&mut encoder, pass_type);
-            fail(
-                &ctx.device,
-                || encoder.finish(),
-                Some("Command encoder is locked"),
-            );
-            fail(
-                &ctx.device,
-                || drop(pass),
-                Some("Command encoder is invalid"),
-            );
+
+            log::info!("Testing operation {op_name:?} on a locked command encoder while a {pass_type:?} pass is active");
+            op(&mut encoder);
+
+            drop(pass);
+
+            fail(&ctx.device, || encoder.finish(), Some("encoder is locked"));
         }
     }
 }
