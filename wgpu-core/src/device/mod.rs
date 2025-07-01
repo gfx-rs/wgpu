@@ -332,8 +332,6 @@ impl WebGpuError for DeviceMismatch {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum DeviceError {
-    #[error("{0} is invalid.")]
-    Invalid(ResourceErrorIdent),
     #[error("Parent device is lost")]
     Lost,
     #[error("Not enough memory left.")]
@@ -348,7 +346,6 @@ impl WebGpuError for DeviceError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
             DeviceError::DeviceMismatch(e) => e.webgpu_error_type(),
-            Self::Invalid(_) => ErrorType::Validation,
             Self::ResourceCreationFailed => ErrorType::OutOfMemory,
             Self::Lost => ErrorType::DeviceLost {
                 reason: DeviceLostReason::Unknown,
