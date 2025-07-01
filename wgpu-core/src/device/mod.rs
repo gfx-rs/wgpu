@@ -347,9 +347,7 @@ impl WebGpuError for DeviceError {
         match self {
             DeviceError::DeviceMismatch(e) => e.webgpu_error_type(),
             Self::ResourceCreationFailed => ErrorType::OutOfMemory,
-            Self::Lost => ErrorType::DeviceLost {
-                reason: DeviceLostReason::Unknown,
-            },
+            Self::Lost => ErrorType::DeviceLost,
             Self::OutOfMemory => ErrorType::OutOfMemory,
         }
     }
