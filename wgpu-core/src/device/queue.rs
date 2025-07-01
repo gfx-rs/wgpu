@@ -221,7 +221,6 @@ impl Drop for Queue {
                         self.device.handle_hal_error(e); // will lose the device
                         break;
                     }
-                    hal::DeviceError::ResourceCreationFailed => unreachable!(),
                     hal::DeviceError::Unexpected => {
                         panic!(
                             "We ran into an unexpected error while waiting on the last successful submission to complete!"

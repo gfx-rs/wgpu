@@ -336,8 +336,6 @@ pub enum DeviceError {
     Lost,
     #[error("Not enough memory left.")]
     OutOfMemory,
-    #[error("Creation of a resource failed for a reason other than running out of memory.")]
-    ResourceCreationFailed,
     #[error(transparent)]
     DeviceMismatch(#[from] Box<DeviceMismatch>),
 }
@@ -345,8 +343,7 @@ pub enum DeviceError {
 impl WebGpuError for DeviceError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
-            DeviceError::DeviceMismatch(e) => e.webgpu_error_type(),
-            Self::ResourceCreationFailed => ErrorType::OutOfMemory,
+            Self::DeviceMismatch(e) => e.webgpu_error_type(),
             Self::Lost => ErrorType::DeviceLost,
             Self::OutOfMemory => ErrorType::OutOfMemory,
         }
@@ -361,7 +358,6 @@ impl DeviceError {
         match error {
             hal::DeviceError::Lost => Self::Lost,
             hal::DeviceError::OutOfMemory => Self::OutOfMemory,
-            hal::DeviceError::ResourceCreationFailed => Self::ResourceCreationFailed,
             hal::DeviceError::Unexpected => Self::Lost,
         }
     }

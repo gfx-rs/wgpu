@@ -378,7 +378,6 @@ impl Device {
         match error {
             hal::DeviceError::OutOfMemory
             | hal::DeviceError::Lost
-            | hal::DeviceError::ResourceCreationFailed
             | hal::DeviceError::Unexpected => {
                 self.lose(&error.to_string());
             }
