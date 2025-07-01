@@ -24,7 +24,10 @@ use crate::{
 };
 
 use thiserror::Error;
-use wgt::SurfaceStatus as Status;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    SurfaceStatus as Status,
+};
 
 const FRAME_TIMEOUT_MS: u32 = 1000;
 
@@ -48,6 +51,19 @@ pub enum SurfaceError {
     AlreadyAcquired,
     #[error("Texture has been destroyed")]
     TextureDestroyed,
+}
+
+impl WebGpuError for SurfaceError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::Invalid
+            | Self::NotConfigured
+            | Self::AlreadyAcquired
+            | Self::TextureDestroyed => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -104,6 +120,27 @@ impl From<WaitIdleError> for ConfigureSurfaceError {
             WaitIdleError::WrongSubmissionIndex(..) => unreachable!(),
             WaitIdleError::Timeout => ConfigureSurfaceError::GpuWaitTimeout,
         }
+    }
+}
+
+impl WebGpuError for ConfigureSurfaceError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::MissingDownlevelFlags(e) => e,
+            Self::InvalidSurface
+            | Self::InvalidViewFormat(..)
+            | Self::PreviousOutputExists
+            | Self::GpuWaitTimeout
+            | Self::ZeroArea
+            | Self::TooLarge { .. }
+            | Self::UnsupportedQueueFamily
+            | Self::UnsupportedFormat { .. }
+            | Self::UnsupportedPresentMode { .. }
+            | Self::UnsupportedAlphaMode { .. }
+            | Self::UnsupportedUsage { .. } => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
     }
 }
 

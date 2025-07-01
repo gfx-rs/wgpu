@@ -1,4 +1,5 @@
 use thiserror::Error;
+use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     command::{CommandBuffer, CommandEncoderError, EncoderStateError},
@@ -85,4 +86,16 @@ pub enum TransitionResourcesError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     ResourceUsage(#[from] ResourceUsageCompatibilityError),
+}
+
+impl WebGpuError for TransitionResourcesError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::EncoderState(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::ResourceUsage(e) => e,
+        };
+        e.webgpu_error_type()
+    }
 }

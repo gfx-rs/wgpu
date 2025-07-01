@@ -93,6 +93,8 @@ use core::{
 use arrayvec::ArrayVec;
 use thiserror::Error;
 
+use wgt::error::{ErrorType, WebGpuError};
+
 use crate::{
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
@@ -118,6 +120,7 @@ use crate::{
 };
 
 use super::{
+    pass,
     render_command::{ArcRenderCommand, RenderCommand},
     DrawKind,
 };
@@ -527,11 +530,13 @@ fn set_bind_group(
 
     let max_bind_groups = state.device.limits.max_bind_groups;
     if index >= max_bind_groups {
-        return Err(RenderCommandError::BindGroupIndexOutOfRange {
-            index,
-            max: max_bind_groups,
-        }
-        .into());
+        return Err(
+            RenderCommandError::BindGroupIndexOutOfRange(pass::BindGroupIndexOutOfRange {
+                index,
+                max: max_bind_groups,
+            })
+            .into(),
+        );
     }
 
     // Identify the next `num_dynamic_offsets` entries from `dynamic_offsets`.
@@ -842,6 +847,15 @@ pub enum CreateRenderBundleError {
     ColorAttachment(#[from] ColorAttachmentError),
     #[error("Invalid number of samples {0}")]
     InvalidSampleCount(u32),
+}
+
+impl WebGpuError for CreateRenderBundleError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::ColorAttachment(e) => e.webgpu_error_type(),
+            Self::InvalidSampleCount(_) => ErrorType::Validation,
+        }
+    }
 }
 
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
@@ -1312,7 +1326,7 @@ impl State {
     fn pipeline(&self) -> Result<&PipelineState, RenderBundleErrorInner> {
         self.pipeline
             .as_ref()
-            .ok_or(DrawError::MissingPipeline.into())
+            .ok_or(DrawError::MissingPipeline(pass::MissingPipeline).into())
     }
 
     /// Mark all non-empty bind group table entries from `index` onwards as dirty.
@@ -1510,6 +1524,21 @@ pub struct RenderBundleError {
     pub scope: PassErrorScope,
     #[source]
     inner: RenderBundleErrorInner,
+}
+
+impl WebGpuError for RenderBundleError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let Self { scope: _, inner } = self;
+        let e: &dyn WebGpuError = match inner {
+            RenderBundleErrorInner::Device(e) => e,
+            RenderBundleErrorInner::RenderCommand(e) => e,
+            RenderBundleErrorInner::Draw(e) => e,
+            RenderBundleErrorInner::MissingDownlevelFlags(e) => e,
+            RenderBundleErrorInner::Bind(e) => e,
+            RenderBundleErrorInner::InvalidResource(e) => e,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 impl RenderBundleError {
