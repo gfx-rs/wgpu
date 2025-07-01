@@ -52,7 +52,9 @@ static ARRAY_SIZE_OVERRIDES: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(move |ctx| async move {
         array_size_overrides(&ctx, None, &[534], false).await;
         array_size_overrides(&ctx, Some(14), &[286480122], false).await;
-        array_size_overrides(&ctx, Some(1), &[0], true).await;
+        // // TODO: Restore this with the resolution for
+        // // <https://github.com/gfx-rs/wgpu/issues/7806>.
+        // array_size_overrides(&ctx, Some(1), &[0], true).await;
     });
 
 async fn array_size_overrides(

@@ -17,7 +17,10 @@ use crate::{
     FastHashMap,
 };
 use thiserror::Error;
-use wgt::BufferAddress;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    BufferAddress,
+};
 
 #[derive(Debug)]
 pub(crate) struct QueryResetMap {
@@ -109,6 +112,21 @@ pub enum QueryError {
     InvalidResource(#[from] InvalidResourceError),
 }
 
+impl WebGpuError for QueryError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::EncoderState(e) => e,
+            Self::Use(e) => e,
+            Self::Resolve(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::Device(e) => e,
+            Self::MissingFeature(e) => e,
+            Self::DestroyedResource(e) => e,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 /// Error encountered while trying to use queries
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -136,6 +154,19 @@ pub enum QueryUseError {
     },
 }
 
+impl WebGpuError for QueryUseError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+            Self::OutOfBounds { .. }
+            | Self::UsedTwiceInsideRenderpass { .. }
+            | Self::AlreadyStarted { .. }
+            | Self::AlreadyStopped
+            | Self::IncompatibleType { .. } => ErrorType::Validation,
+        }
+    }
+}
+
 /// Error encountered while trying to resolve a query.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -159,6 +190,17 @@ pub enum ResolveError {
         buffer_start_offset: BufferAddress,
         bytes_used: BufferAddress,
     },
+}
+
+impl WebGpuError for ResolveError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::MissingBufferUsage(e) => e.webgpu_error_type(),
+            Self::BufferOffsetAlignment
+            | Self::QueryOverrun { .. }
+            | Self::BufferOverrun { .. } => ErrorType::Validation,
+        }
+    }
 }
 
 impl QuerySet {

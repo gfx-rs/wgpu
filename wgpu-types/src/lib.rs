@@ -36,6 +36,7 @@ pub mod assertions;
 mod cast_utils;
 mod counters;
 mod env;
+pub mod error;
 mod features;
 pub mod instance;
 pub mod math;
@@ -7742,16 +7743,17 @@ mod send_sync {
     impl<T> WasmNotSync for T {}
 }
 
-/// Reason for "lose the device".
+/// Corresponds to a [`GPUDeviceLostReason`]; usually seen by implementers of WebGPU with
+/// [`error::ErrorType::DeviceLost::reason`].
 ///
-/// Corresponds to [WebGPU `GPUDeviceLostReason`](https://gpuweb.github.io/gpuweb/#enumdef-gpudevicelostreason).
+/// [`GPUDeviceLostReason`]: https://www.w3.org/TR/webgpu/#enumdef-gpudevicelostreason
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DeviceLostReason {
-    /// Triggered by driver
+    /// The device was lost for an unspecific reason, including driver errors.
     Unknown = 0,
-    /// After `Device::destroy`
+    /// The device's `destroy` method was called.
     Destroyed = 1,
 }
 

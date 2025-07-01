@@ -36,6 +36,7 @@ use wgpu_core::resource::CreateQuerySetError;
 use wgpu_core::resource::CreateSamplerError;
 use wgpu_core::resource::CreateTextureError;
 use wgpu_core::resource::CreateTextureViewError;
+use wgpu_types::error::{ErrorType, WebGpuError};
 
 use crate::device::GPUDeviceLostInfo;
 use crate::device::GPUDeviceLostReason;
@@ -183,6 +184,17 @@ impl Display for GPUError {
 
 impl std::error::Error for GPUError {}
 
+impl GPUError {
+    fn from_webgpu(e: impl WebGpuError) -> Self {
+        match e.webgpu_error_type() {
+            ErrorType::Internal => GPUError::Internal,
+            ErrorType::DeviceLost { reason } => GPUError::Lost(reason.into()),
+            ErrorType::OutOfMemory => GPUError::OutOfMemory,
+            ErrorType::Validation => GPUError::Validation(fmt_err(&e)),
+        }
+    }
+}
+
 fn fmt_err(err: &(dyn std::error::Error + 'static)) -> String {
     let mut output = err.to_string();
 
@@ -201,7 +213,7 @@ fn fmt_err(err: &(dyn std::error::Error + 'static)) -> String {
 
 impl From<EncoderStateError> for GPUError {
     fn from(err: EncoderStateError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
 
@@ -213,188 +225,144 @@ impl From<PassStateError> for GPUError {
 
 impl From<CreateBufferError> for GPUError {
     fn from(err: CreateBufferError) -> Self {
-        match err {
-            CreateBufferError::Device(err) => err.into(),
-            CreateBufferError::AccessError(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<DeviceError> for GPUError {
     fn from(err: DeviceError) -> Self {
-        match err {
-            DeviceError::Lost => GPUError::Lost(GPUDeviceLostReason::Unknown),
-            DeviceError::OutOfMemory => GPUError::OutOfMemory,
-            _ => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<BufferAccessError> for GPUError {
     fn from(err: BufferAccessError) -> Self {
-        match err {
-            BufferAccessError::Device(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreateBindGroupLayoutError> for GPUError {
     fn from(err: CreateBindGroupLayoutError) -> Self {
-        match err {
-            CreateBindGroupLayoutError::Device(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreatePipelineLayoutError> for GPUError {
     fn from(err: CreatePipelineLayoutError) -> Self {
-        match err {
-            CreatePipelineLayoutError::Device(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreateBindGroupError> for GPUError {
     fn from(err: CreateBindGroupError) -> Self {
-        match err {
-            CreateBindGroupError::Device(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<RenderBundleError> for GPUError {
     fn from(err: RenderBundleError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreateRenderBundleError> for GPUError {
     fn from(err: CreateRenderBundleError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CommandEncoderError> for GPUError {
     fn from(err: CommandEncoderError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<QueryError> for GPUError {
     fn from(err: QueryError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<ComputePassError> for GPUError {
     fn from(err: ComputePassError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreateComputePipelineError> for GPUError {
     fn from(err: CreateComputePipelineError) -> Self {
-        match err {
-            CreateComputePipelineError::Device(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<GetBindGroupLayoutError> for GPUError {
     fn from(err: GetBindGroupLayoutError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreateRenderPipelineError> for GPUError {
     fn from(err: CreateRenderPipelineError) -> Self {
-        match err {
-            CreateRenderPipelineError::Device(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<RenderPassError> for GPUError {
     fn from(err: RenderPassError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreateSamplerError> for GPUError {
     fn from(err: CreateSamplerError) -> Self {
-        match err {
-            CreateSamplerError::Device(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreateShaderModuleError> for GPUError {
     fn from(err: CreateShaderModuleError) -> Self {
-        match err {
-            CreateShaderModuleError::Device(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreateTextureError> for GPUError {
     fn from(err: CreateTextureError) -> Self {
-        match err {
-            CreateTextureError::Device(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreateTextureViewError> for GPUError {
     fn from(err: CreateTextureViewError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<CreateQuerySetError> for GPUError {
     fn from(err: CreateQuerySetError) -> Self {
-        match err {
-            CreateQuerySetError::Device(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<QueueSubmitError> for GPUError {
     fn from(err: QueueSubmitError) -> Self {
-        match err {
-            QueueSubmitError::Queue(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<QueueWriteError> for GPUError {
     fn from(err: QueueWriteError) -> Self {
-        match err {
-            QueueWriteError::Queue(err) => err.into(),
-            err => GPUError::Validation(fmt_err(&err)),
-        }
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<ClearError> for GPUError {
     fn from(err: ClearError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
 
 impl From<ConfigureSurfaceError> for GPUError {
     fn from(err: ConfigureSurfaceError) -> Self {
-        GPUError::Validation(fmt_err(&err))
+        GPUError::from_webgpu(err)
     }
 }
