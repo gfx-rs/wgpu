@@ -447,11 +447,7 @@ impl<A: hal::Api> Example<A> {
         let global_group = {
             let global_buffer_binding = unsafe {
                 // SAFETY: This is the same size that was specified for buffer creation.
-                hal::BufferBinding::new_unchecked(
-                    &global_buffer,
-                    0,
-                    global_buffer_desc.size.try_into().unwrap(),
-                )
+                hal::BufferBinding::new_unchecked(&global_buffer, 0, global_buffer_desc.size)
             };
             let texture_binding = hal::TextureBinding {
                 view: &texture_view,
