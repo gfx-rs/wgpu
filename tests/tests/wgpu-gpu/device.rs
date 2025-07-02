@@ -1,8 +1,6 @@
 use std::sync::atomic::AtomicBool;
 
-use wgpu_test::{
-    fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
-};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
 
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -138,8 +136,8 @@ async fn request_device_error_message() {
     assert!(device_error.contains(expected), "{device_error}");
 }
 
-// This is a test of device behavior after device.destroy. Specifically, all operations
-// should trigger errors since the device is lost.
+// This is a test of device behavior after `device.destroy()`. Specifically, all operations
+// should turn into no-ops, per spec.
 #[gpu_test]
 static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE))
@@ -213,14 +211,6 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             mapped_at_creation: true,
         });
 
-        // Create a bind group layout.
-        let bind_group_layout =
-            ctx.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[],
-                });
-
         // Create a shader module.
         let shader_module = ctx
             .device
@@ -258,146 +248,92 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
-        // Destroy the device. This will cause all other requests to return some variation of
-        // a device invalid error.
+        // Destroy the device. This will cause all further operations to become no-ops.
         ctx.device.destroy();
 
-        // TODO: verify the following operations will return an invalid device error:
-        // * Run a compute or render pass
-        // * Finish a render bundle encoder
-        // * Create a texture from HAL
-        // * Create a buffer from HAL
-        // * Create a sampler
-        // * Validate a surface configuration
-        // * Start or stop capture
-        // * Get or set buffer sub data
+        // The following operations should fail if the device was not lost.
+        // Since the device is lost, we check that they succeed.
 
-        // TODO: figure out how to structure a test around these operations which panic when
-        // the device is invalid:
-        // * device.features()
-        // * device.limits()
-        // * device.downlevel_properties()
-        // * device.create_query_set()
+        let _ = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: ctx.device.limits().max_buffer_size * 2,
+            usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
 
-        // TODO: change these fail calls to check for the specific errors which indicate that
-        // the device is not valid.
-
-        // Creating a command encoder should fail.
-        fail(
-            &ctx.device,
-            || {
-                let _ = ctx
-                    .device
-                    .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: ctx.device.limits().max_texture_dimension_2d * 2,
+                height: ctx.device.limits().max_texture_dimension_2d * 2,
+                depth_or_array_layers: 1,
             },
-            Some("device with '' label is invalid"),
-        );
+            mip_level_count: 2,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rg8Uint,
+            usage: wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
 
-        // Creating a buffer should fail.
-        fail(
-            &ctx.device,
-            || {
-                let _ = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: None,
-                    size: 256,
-                    usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
-                    mapped_at_creation: false,
-                });
-            },
-            Some("device with '' label is invalid"),
-        );
-
-        // Creating a texture should fail.
-        fail(
-            &ctx.device,
-            || {
-                let _ = ctx.device.create_texture(&wgpu::TextureDescriptor {
-                    label: None,
-                    size: wgpu::Extent3d {
-                        width: 512,
-                        height: 512,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: 2,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rg8Uint,
-                    usage: wgpu::TextureUsages::COPY_SRC,
-                    view_formats: &[],
-                });
-            },
-            Some("device with '' label is invalid"),
-        );
-
-        // Texture clear should fail.
         encoder_for_clear.clear_texture(
             &texture_for_write,
             &wgpu::ImageSubresourceRange {
-                aspect: wgpu::TextureAspect::All,
+                aspect: wgpu::TextureAspect::StencilOnly, // texture has no stencil component
                 base_mip_level: 0,
                 mip_level_count: None,
                 base_array_layer: 0,
                 array_layer_count: None,
             },
         );
-        fail(
-            &ctx.device,
-            || encoder_for_clear.finish(),
-            Some("device with '' label is invalid"),
-        );
+        ctx.queue.submit([encoder_for_clear.finish()]);
 
-        // Creating a compute pass should fail.
+        let query_set = ctx.device.create_query_set(&wgpu::QuerySetDescriptor {
+            label: None,
+            ty: wgpu::QueryType::Occlusion,
+            count: u32::MAX, // can be at most 4096
+        });
+
         let pass = encoder_for_compute_pass.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
-            timestamp_writes: None,
+            timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
+                query_set: &query_set,
+                beginning_of_pass_write_index: None,
+                end_of_pass_write_index: None,
+            }),
         });
         drop(pass);
-        fail(
-            &ctx.device,
-            || encoder_for_compute_pass.finish(),
-            Some("device with '' label is invalid"),
-        );
+        ctx.queue.submit([encoder_for_compute_pass.finish()]);
 
-        // Creating a render pass should fail.
         let pass = encoder_for_render_pass.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 ops: wgpu::Operations::default(),
                 resolve_target: None,
                 view: &target_view,
-                depth_slice: None,
+                depth_slice: Some(u32::MAX), // should not be provided for 2D views
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
         });
         drop(pass);
-        fail(
-            &ctx.device,
-            || encoder_for_render_pass.finish(),
-            Some("device with '' label is invalid"),
-        );
+        ctx.queue.submit([encoder_for_render_pass.finish()]);
 
-        // Copying a buffer to a buffer should fail.
         encoder_for_buffer_buffer_copy.copy_buffer_to_buffer(
             &buffer_source,
             0,
             &buffer_dest,
             0,
-            256,
+            u64::MAX, // out of bounds for both buffers
         );
-        fail(
-            &ctx.device,
-            || encoder_for_buffer_buffer_copy.finish(),
-            Some("device with '' label is invalid"),
-        );
+        ctx.queue.submit([encoder_for_buffer_buffer_copy.finish()]);
 
-        // Copying a buffer to a texture should fail.
         encoder_for_buffer_texture_copy.copy_buffer_to_texture(
             wgpu::TexelCopyBufferInfo {
                 buffer: &buffer_source,
                 layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
+                    offset: u64::MAX, // out of bounds for buffer
                     bytes_per_row: Some(4),
                     rows_per_image: None,
                 },
@@ -405,201 +341,113 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             texture_for_write.as_image_copy(),
             texture_extent,
         );
-        fail(
-            &ctx.device,
-            || encoder_for_buffer_texture_copy.finish(),
-            Some("device with '' label is invalid"),
-        );
+        ctx.queue.submit([encoder_for_buffer_texture_copy.finish()]);
 
-        // Copying a texture to a buffer should fail.
         encoder_for_texture_buffer_copy.copy_texture_to_buffer(
             texture_for_read.as_image_copy(),
             wgpu::TexelCopyBufferInfo {
                 buffer: &buffer_source,
                 layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
+                    offset: u64::MAX, // out of bounds for buffer
                     bytes_per_row: Some(4),
                     rows_per_image: None,
                 },
             },
             texture_extent,
         );
-        fail(
-            &ctx.device,
-            || encoder_for_texture_buffer_copy.finish(),
-            Some("device with '' label is invalid"),
-        );
+        ctx.queue.submit([encoder_for_texture_buffer_copy.finish()]);
 
-        // Copying a texture to a texture should fail.
         encoder_for_texture_texture_copy.copy_texture_to_texture(
             texture_for_read.as_image_copy(),
             texture_for_write.as_image_copy(),
-            texture_extent,
-        );
-        fail(
-            &ctx.device,
-            || encoder_for_texture_texture_copy.finish(),
-            Some("device with '' label is invalid"),
-        );
-
-        // Creating a bind group layout should fail.
-        fail(
-            &ctx.device,
-            || {
-                let _ = ctx
-                    .device
-                    .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                        label: None,
-                        entries: &[],
-                    });
+            wgpu::Extent3d {
+                width: 512,
+                height: 512,
+                depth_or_array_layers: u32::MAX, // out of bounds for both textures
             },
-            Some("device with '' label is invalid"),
         );
+        ctx.queue
+            .submit([encoder_for_texture_texture_copy.finish()]);
 
-        // Creating a bind group should fail.
-        fail(
-            &ctx.device,
-            || {
-                let _ = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let invalid_bind_group_layout =
+            ctx.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: None,
-                    layout: &bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
+                    entries: &[wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::Buffer(
-                            buffer_source.as_entire_buffer_binding(),
-                        ),
+                        visibility: wgpu::ShaderStages::all(),
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: std::num::NonZeroU64::new(
+                                (ctx.device.limits().max_uniform_buffer_binding_size * 2) as u64,
+                            ),
+                        },
+                        count: None,
                     }],
                 });
-            },
-            Some("device with '' label is invalid"),
-        );
 
-        // Creating a pipeline layout should fail.
-        fail(
-            &ctx.device,
-            || {
-                let _ = ctx
-                    .device
-                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                        label: None,
-                        bind_group_layouts: &[],
-                        push_constant_ranges: &[],
-                    });
-            },
-            Some("device with '' label is invalid"),
-        );
+        let _ = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &invalid_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(buffer_source.as_entire_buffer_binding()),
+            }],
+        });
 
-        // Creating a shader module should fail.
-        fail(
-            &ctx.device,
-            || {
-                let _ = ctx
-                    .device
-                    .create_shader_module(wgpu::ShaderModuleDescriptor {
-                        label: None,
-                        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed("")),
-                    });
-            },
-            Some("device with '' label is invalid"),
-        );
+        let invalid_pipeline_layout =
+            ctx.device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: None,
+                    bind_group_layouts: &[&invalid_bind_group_layout],
+                    push_constant_ranges: &[],
+                });
 
-        // Creating a shader module spirv should fail.
-        fail(
-            &ctx.device,
-            || unsafe {
-                let _ = ctx.device.create_shader_module_passthrough(
-                    wgpu::ShaderModuleDescriptorPassthrough::SpirV(
-                        wgpu::ShaderModuleDescriptorSpirV {
-                            label: None,
-                            source: std::borrow::Cow::Borrowed(&[]),
-                        },
-                    ),
-                );
-            },
-            Some("device with '' label is invalid"),
-        );
+        let _ = ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+                    "not a valid shader source",
+                )),
+            });
 
-        // Creating a render pipeline should fail.
-        fail(
-            &ctx.device,
-            || {
-                let _ = ctx
-                    .device
-                    .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                        label: None,
-                        layout: None,
-                        vertex: wgpu::VertexState {
-                            module: &shader_module,
-                            entry_point: Some(""),
-                            compilation_options: Default::default(),
-                            buffers: &[],
-                        },
-                        primitive: wgpu::PrimitiveState::default(),
-                        depth_stencil: None,
-                        multisample: wgpu::MultisampleState::default(),
-                        fragment: None,
-                        multiview: None,
-                        cache: None,
-                    });
-            },
-            Some("device with '' label is invalid"),
-        );
+        let _ = ctx
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: None,
+                layout: Some(&invalid_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader_module,
+                    entry_point: Some(""),
+                    compilation_options: Default::default(),
+                    buffers: &[],
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                fragment: None,
+                multiview: None,
+                cache: None,
+            });
 
-        // Creating a compute pipeline should fail.
-        fail(
-            &ctx.device,
-            || {
-                let _ = ctx
-                    .device
-                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                        label: None,
-                        layout: None,
-                        module: &shader_module,
-                        entry_point: None,
-                        compilation_options: Default::default(),
-                        cache: None,
-                    });
-            },
-            Some("device with '' label is invalid"),
-        );
+        let _ = ctx
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&invalid_pipeline_layout),
+                module: &shader_module,
+                entry_point: None,
+                compilation_options: Default::default(),
+                cache: None,
+            });
 
-        // Creating a compute pipeline should fail.
-        fail(
-            &ctx.device,
-            || {
-                let _ = ctx
-                    .device
-                    .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                        label: None,
-                        layout: None,
-                        module: &shader_module,
-                        entry_point: None,
-                        compilation_options: Default::default(),
-                        cache: None,
-                    });
-            },
-            Some("device with '' label is invalid"),
-        );
+        buffer_for_map
+            .slice(..)
+            .map_async(wgpu::MapMode::Write, |_| ());
 
-        // Buffer map should fail.
-        fail(
-            &ctx.device,
-            || {
-                buffer_for_map
-                    .slice(..)
-                    .map_async(wgpu::MapMode::Write, |_| ());
-            },
-            Some("device with '' label is invalid"),
-        );
-
-        // Buffer unmap should fail.
-        fail(
-            &ctx.device,
-            || {
-                buffer_for_unmap.unmap();
-            },
-            Some("device with '' label is invalid"),
-        );
+        buffer_for_unmap.unmap();
     });
 
 #[gpu_test]
