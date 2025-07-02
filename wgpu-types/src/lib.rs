@@ -61,6 +61,12 @@ pub type BufferAddress = u64;
 /// [`BufferSlice`]: ../wgpu/struct.BufferSlice.html
 pub type BufferSize = core::num::NonZeroU64;
 
+/// Integral type used for buffer sizes that may be zero.
+///
+/// Although the wgpu Rust API disallows zero-size `BufferSlice` and wgpu-hal
+/// disallows zero-size bindings, WebGPU permits zero-size buffers and bindings.
+pub type BufferSizeOrZero = u64;
+
 /// Integral type used for binding locations in shaders.
 ///
 /// Used in [`VertexAttribute`]s and errors.

@@ -1,12 +1,17 @@
 use alloc::{borrow::Cow, sync::Arc, vec::Vec};
-use core::{fmt, num::NonZeroU32, str};
+use core::{
+    fmt,
+    num::{NonZeroU32, NonZeroU64},
+    str,
+};
+use hal::ShouldBeNonZeroExt;
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
-    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
-    TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
+    BufferAddress, BufferSize, BufferSizeOrZero, BufferUsages, Color, DynamicOffset, IndexFormat,
+    ShaderStages, TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
 use crate::command::{
@@ -2331,7 +2336,7 @@ fn set_index_buffer(
     buffer: Arc<crate::resource::Buffer>,
     index_format: IndexFormat,
     offset: u64,
-    size: Option<BufferSize>,
+    size: Option<BufferSizeOrZero>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::set_index_buffer {}", buffer.error_ident());
 
@@ -2371,7 +2376,7 @@ fn set_vertex_buffer(
     slot: u32,
     buffer: Arc<crate::resource::Buffer>,
     offset: u64,
-    size: Option<BufferSize>,
+    size: Option<BufferSizeOrZero>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!(
         "RenderPass::set_vertex_buffer {slot} {}",
@@ -3082,7 +3087,7 @@ impl Global {
             buffer: pass_try!(base, scope, self.resolve_render_pass_buffer_id(buffer_id)),
             index_format,
             offset,
-            size,
+            size: size.map(NonZeroU64::get),
         });
 
         Ok(())
@@ -3103,7 +3108,7 @@ impl Global {
             slot,
             buffer: pass_try!(base, scope, self.resolve_render_pass_buffer_id(buffer_id)),
             offset,
-            size,
+            size: size.map(NonZeroU64::get),
         });
 
         Ok(())
