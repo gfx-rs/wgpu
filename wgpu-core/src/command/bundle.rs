@@ -92,6 +92,8 @@ use core::{
 use arrayvec::ArrayVec;
 use thiserror::Error;
 
+use wgpu_hal::ShouldBeNonZeroExt;
+
 use crate::{
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
@@ -499,7 +501,7 @@ impl RenderBundleEncoder {
             buffer_id,
             index_format,
             offset,
-            size,
+            size: size.map(NonZeroU64::get),
         });
     }
 }
@@ -602,7 +604,7 @@ fn set_index_buffer(
     buffer_id: id::Id<id::markers::Buffer>,
     index_format: wgt::IndexFormat,
     offset: u64,
-    size: Option<NonZeroU64>,
+    size: Option<wgt::BufferSizeOrZero>,
 ) -> Result<(), RenderBundleErrorInner> {
     let buffer = buffer_guard.get(buffer_id).get()?;
 
@@ -634,7 +636,7 @@ fn set_vertex_buffer(
     slot: u32,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
-    size: Option<NonZeroU64>,
+    size: Option<wgt::BufferSizeOrZero>,
 ) -> Result<(), RenderBundleErrorInner> {
     let max_vertex_buffers = state.device.limits.max_vertex_buffers;
     if slot >= max_vertex_buffers {
@@ -1150,11 +1152,8 @@ impl IndexState {
             .range
             .end
             .checked_sub(self.range.start)
-            .and_then(wgt::BufferSize::new);
-        assert!(
-            self.range.end <= self.buffer.size && binding_size.is_some(),
-            "index buffer range must have non-zero size and be contained in buffer",
-        );
+            .filter(|_| self.range.end <= self.buffer.size)
+            .expect("index range must be contained in buffer");
 
         if self.is_dirty {
             self.is_dirty = false;
@@ -1162,7 +1161,7 @@ impl IndexState {
                 buffer: self.buffer.clone(),
                 index_format: self.format,
                 offset: self.range.start,
-                size: binding_size,
+                size: Some(binding_size),
             })
         } else {
             None
@@ -1205,16 +1204,12 @@ impl VertexState {
     ///
     /// `slot` is the index of the vertex buffer slot that `self` tracks.
     fn flush(&mut self, slot: u32) -> Option<ArcRenderCommand> {
-        // This was all checked before, but let's check again just in case.
         let binding_size = self
             .range
             .end
             .checked_sub(self.range.start)
-            .and_then(wgt::BufferSize::new);
-        assert!(
-            self.range.end <= self.buffer.size && binding_size.is_some(),
-            "vertex buffer range must have non-zero size and be contained in buffer",
-        );
+            .filter(|_| self.range.end <= self.buffer.size)
+            .expect("vertex range must be contained in buffer");
 
         if self.is_dirty {
             self.is_dirty = false;
@@ -1222,7 +1217,7 @@ impl VertexState {
                 slot,
                 buffer: self.buffer.clone(),
                 offset: self.range.start,
-                size: binding_size,
+                size: Some(binding_size),
             })
         } else {
             None
@@ -1571,7 +1566,7 @@ where
 pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
     use crate::{id, RawString};
-    use core::{convert::TryInto, slice};
+    use core::{convert::TryInto, num::NonZeroU64, slice};
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
     /// # Safety
@@ -1630,7 +1625,7 @@ pub mod bundle_ffi {
             slot,
             buffer_id,
             offset,
-            size,
+            size: size.map(NonZeroU64::get),
         });
     }
 
