@@ -125,6 +125,8 @@ impl Global {
                 list.push(TraceCommand::ClearBuffer { dst, offset, size });
             }
 
+            cmd_buf.device.check_is_valid()?;
+
             let dst_buffer = hub.buffers.get(dst).get()?;
 
             dst_buffer.same_device_as(cmd_buf.as_ref())?;
@@ -212,6 +214,8 @@ impl Global {
                     subresource_range: *subresource_range,
                 });
             }
+
+            cmd_buf.device.check_is_valid()?;
 
             if !cmd_buf.support_clear_texture {
                 return Err(ClearError::MissingClearTextureFeature);

@@ -335,7 +335,7 @@ impl ContextWgpuCore {
                     description,
                 }
             }
-            ErrorType::DeviceLost { reason: _ } => return,
+            ErrorType::DeviceLost => return, // will be surfaced via callback
         };
         sink.handle_error(error);
     }

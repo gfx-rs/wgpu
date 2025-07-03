@@ -996,7 +996,7 @@ impl crate::Adapter for super::Adapter {
         {
             Some(unsafe {
                 Self::create_shader_clear_program(gl, self.shared.es)
-                    .ok_or(crate::DeviceError::ResourceCreationFailed)?
+                    .ok_or(crate::DeviceError::Lost)?
             })
         } else {
             // If we don't need the workaround, don't waste time and resources compiling the clear program

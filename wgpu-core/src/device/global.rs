@@ -654,6 +654,10 @@ impl Global {
                 trace.add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
             }
 
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
+            }
+
             let bind_group_layouts = {
                 let bind_group_layouts_guard = hub.bind_group_layouts.read();
                 desc.bind_group_layouts
@@ -720,6 +724,10 @@ impl Global {
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
+            }
+
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
             }
 
             let layout = match hub.bind_group_layouts.get(desc.layout).get() {
@@ -1250,6 +1258,10 @@ impl Global {
                 });
             }
 
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
+            }
+
             let layout = desc
                 .layout
                 .map(|layout| hub.pipeline_layouts.get(layout).get())
@@ -1483,6 +1495,10 @@ impl Global {
                     desc: desc.clone(),
                     implicit_context: implicit_context.clone(),
                 });
+            }
+
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
             }
 
             let layout = desc

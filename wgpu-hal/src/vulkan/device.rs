@@ -752,7 +752,7 @@ impl super::Device {
             .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_WIN32)
         {
             log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
-            return Err(crate::DeviceError::ResourceCreationFailed);
+            return Err(crate::DeviceError::Unexpected);
         }
 
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
@@ -780,7 +780,7 @@ impl super::Device {
                 image.requirements.memory_type_bits,
                 vk::MemoryPropertyFlags::DEVICE_LOCAL,
             )
-            .ok_or(crate::DeviceError::ResourceCreationFailed)?;
+            .ok_or(crate::DeviceError::Unexpected)?;
 
         let memory_allocate_info = vk::MemoryAllocateInfo::default()
             .allocation_size(image.requirements.size)

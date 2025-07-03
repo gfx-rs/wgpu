@@ -7743,8 +7743,7 @@ mod send_sync {
     impl<T> WasmNotSync for T {}
 }
 
-/// Corresponds to a [`GPUDeviceLostReason`]; usually seen by implementers of WebGPU with
-/// [`error::ErrorType::DeviceLost::reason`].
+/// Corresponds to a [`GPUDeviceLostReason`].
 ///
 /// [`GPUDeviceLostReason`]: https://www.w3.org/TR/webgpu/#enumdef-gpudevicelostreason
 #[repr(u8)]

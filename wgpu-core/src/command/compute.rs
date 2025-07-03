@@ -348,6 +348,13 @@ impl Global {
         match cmd_buf_data.lock_encoder() {
             Ok(()) => {
                 drop(cmd_buf_data);
+                if let Err(err) = cmd_buf.device.check_is_valid() {
+                    return (
+                        ComputePass::new_invalid(cmd_buf, &label, err.map_pass_err(scope)),
+                        None,
+                    );
+                }
+
                 match desc
                     .timestamp_writes
                     .as_ref()

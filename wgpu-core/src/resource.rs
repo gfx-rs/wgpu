@@ -458,9 +458,9 @@ impl Buffer {
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
-    pub(crate) fn check_destroyed<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
+    pub(crate) fn check_destroyed(
+        &self,
+        guard: &SnatchGuard,
     ) -> Result<(), DestroyedResourceError> {
         self.raw
             .get(guard)
@@ -1217,6 +1217,16 @@ impl Texture {
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
+    pub(crate) fn check_destroyed(
+        &self,
+        guard: &SnatchGuard,
+    ) -> Result<(), DestroyedResourceError> {
+        self.inner
+            .get(guard)
+            .map(|_| ())
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    }
+
     pub(crate) fn get_clear_view<'a>(
         clear_mode: &'a TextureClearMode,
         desc: &'a wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
@@ -1810,6 +1820,7 @@ impl TextureView {
         &'a self,
         guard: &'a SnatchGuard,
     ) -> Result<&'a dyn hal::DynTextureView, DestroyedResourceError> {
+        self.parent.check_destroyed(guard)?;
         self.raw
             .get(guard)
             .map(|it| it.as_ref())

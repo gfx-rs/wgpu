@@ -106,6 +106,7 @@ Bottom level categories:
 #### WebGPU
 
 - Fix setting unclipped_depth. By @atlv24 in [#7841](https://github.com/gfx-rs/wgpu/pull/7841)
+- Implement `on_submitted_work_done` for WebGPU backend. By @drewcrawford in [#7864](https://github.com/gfx-rs/wgpu/pull/7864)
 
 ### Changes
 
