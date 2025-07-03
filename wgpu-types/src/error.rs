@@ -1,8 +1,6 @@
 //! Shared types for WebGPU errors. See also:
 //! <https://gpuweb.github.io/gpuweb/#errors-and-debugging>
 
-use crate::DeviceLostReason;
-
 /// A classification of WebGPU error for implementers of the WebGPU API to use in their own error
 /// layer(s).
 ///
@@ -30,10 +28,7 @@ pub enum ErrorType {
     /// property should be `resolve`d.
     ///
     /// [`GPUDevice.lost`]: https://www.w3.org/TR/webgpu/#dom-gpudevice-lost
-    DeviceLost {
-        /// The reason the device was lost.
-        reason: DeviceLostReason,
-    },
+    DeviceLost,
 }
 
 /// A trait for querying the [`ErrorType`] classification of an error.

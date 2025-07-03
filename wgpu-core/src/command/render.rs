@@ -1548,6 +1548,8 @@ impl Global {
             arc_desc: &mut ArcRenderPassDescriptor,
             device: &Device,
         ) -> Result<(), RenderPassErrorInner> {
+            device.check_is_valid()?;
+
             let query_sets = hub.query_sets.read();
             let texture_views = hub.texture_views.read();
 

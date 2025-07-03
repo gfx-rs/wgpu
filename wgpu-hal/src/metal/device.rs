@@ -1463,7 +1463,7 @@ impl crate::Device for super::Device {
                             Some(counter) => counter,
                             None => {
                                 log::error!("Failed to obtain timestamp counter set.");
-                                return Err(crate::DeviceError::ResourceCreationFailed);
+                                return Err(crate::DeviceError::Unexpected);
                             }
                         };
                     csb_desc.set_counter_set(timestamp_counter);
@@ -1473,7 +1473,7 @@ impl crate::Device for super::Device {
                             Ok(buffer) => buffer,
                             Err(err) => {
                                 log::error!("Failed to create counter sample buffer: {:?}", err);
-                                return Err(crate::DeviceError::ResourceCreationFailed);
+                                return Err(crate::DeviceError::Unexpected);
                             }
                         };
 

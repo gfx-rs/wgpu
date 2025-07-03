@@ -2594,8 +2594,17 @@ impl dispatch::QueueInterface for WebQueue {
         1.0
     }
 
-    fn on_submitted_work_done(&self, _callback: dispatch::BoxSubmittedWorkDoneCallback) {
-        unimplemented!("on_submitted_work_done is not yet implemented");
+    fn on_submitted_work_done(&self, callback: dispatch::BoxSubmittedWorkDoneCallback) {
+        let promise = self.inner.on_submitted_work_done();
+        wasm_bindgen_futures::spawn_local(async move {
+            match wasm_bindgen_futures::JsFuture::from(promise).await {
+                Ok(_) => callback(),
+                Err(error) => {
+                    log::error!("on_submitted_work_done promise failed: {:?}", error);
+                    callback();
+                }
+            }
+        });
     }
 
     fn compact_blas(

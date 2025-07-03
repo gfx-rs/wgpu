@@ -1144,6 +1144,8 @@ impl Global {
                 list.push(TraceCommand::PushDebugGroup(label.to_owned()));
             }
 
+            cmd_buf.device.check_is_valid()?;
+
             let cmd_buf_raw = cmd_buf_data.encoder.open()?;
             if !cmd_buf
                 .device
@@ -1177,6 +1179,8 @@ impl Global {
                 list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
             }
 
+            cmd_buf.device.check_is_valid()?;
+
             if !cmd_buf
                 .device
                 .instance_flags
@@ -1208,6 +1212,8 @@ impl Global {
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::PopDebugGroup);
             }
+
+            cmd_buf.device.check_is_valid()?;
 
             let cmd_buf_raw = cmd_buf_data.encoder.open()?;
             if !cmd_buf
