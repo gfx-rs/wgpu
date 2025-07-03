@@ -367,10 +367,6 @@ impl Global {
             .get(command_encoder_id.into_command_buffer_id());
         let mut cmd_buf_data = cmd_buf.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
-            cmd_buf
-                .device
-                .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
-
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::WriteTimestamp {
@@ -379,9 +375,16 @@ impl Global {
                 });
             }
 
+            cmd_buf.device.check_is_valid()?;
+
+            cmd_buf
+                .device
+                .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
+
             let raw_encoder = cmd_buf_data.encoder.open()?;
 
             let query_set = hub.query_sets.get(query_set_id).get()?;
+            query_set.same_device_as(cmd_buf.as_ref())?;
 
             query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
 
@@ -417,6 +420,8 @@ impl Global {
                     destination_offset,
                 });
             }
+
+            cmd_buf.device.check_is_valid()?;
 
             if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
                 return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));

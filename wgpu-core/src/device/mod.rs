@@ -332,14 +332,10 @@ impl WebGpuError for DeviceMismatch {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum DeviceError {
-    #[error("{0} is invalid.")]
-    Invalid(ResourceErrorIdent),
     #[error("Parent device is lost")]
     Lost,
     #[error("Not enough memory left.")]
     OutOfMemory,
-    #[error("Creation of a resource failed for a reason other than running out of memory.")]
-    ResourceCreationFailed,
     #[error(transparent)]
     DeviceMismatch(#[from] Box<DeviceMismatch>),
 }
@@ -347,12 +343,8 @@ pub enum DeviceError {
 impl WebGpuError for DeviceError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
-            DeviceError::DeviceMismatch(e) => e.webgpu_error_type(),
-            Self::Invalid(_) => ErrorType::Validation,
-            Self::ResourceCreationFailed => ErrorType::OutOfMemory,
-            Self::Lost => ErrorType::DeviceLost {
-                reason: DeviceLostReason::Unknown,
-            },
+            Self::DeviceMismatch(e) => e.webgpu_error_type(),
+            Self::Lost => ErrorType::DeviceLost,
             Self::OutOfMemory => ErrorType::OutOfMemory,
         }
     }
@@ -366,7 +358,6 @@ impl DeviceError {
         match error {
             hal::DeviceError::Lost => Self::Lost,
             hal::DeviceError::OutOfMemory => Self::OutOfMemory,
-            hal::DeviceError::ResourceCreationFailed => Self::ResourceCreationFailed,
             hal::DeviceError::Unexpected => Self::Lost,
         }
     }

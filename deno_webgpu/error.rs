@@ -188,7 +188,7 @@ impl GPUError {
     fn from_webgpu(e: impl WebGpuError) -> Self {
         match e.webgpu_error_type() {
             ErrorType::Internal => GPUError::Internal,
-            ErrorType::DeviceLost { reason } => GPUError::Lost(reason.into()),
+            ErrorType::DeviceLost => GPUError::Lost(GPUDeviceLostReason::Unknown), // TODO: this variant should be ignored, register the lost callback instead.
             ErrorType::OutOfMemory => GPUError::OutOfMemory,
             ErrorType::Validation => GPUError::Validation(fmt_err(&e)),
         }

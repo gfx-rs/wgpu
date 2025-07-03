@@ -221,7 +221,6 @@ impl Drop for Queue {
                         self.device.handle_hal_error(e); // will lose the device
                         break;
                     }
-                    hal::DeviceError::ResourceCreationFailed => unreachable!(),
                     hal::DeviceError::Unexpected => {
                         panic!(
                             "We ran into an unexpected error while waiting on the last successful submission to complete!"
@@ -1446,6 +1445,7 @@ impl Queue {
         profiling::scope!("Queue::compact_blas");
         api_log!("Queue::compact_blas");
 
+        self.device.check_is_valid()?;
         self.same_device_as(blas.as_ref())?;
 
         let device = blas.device.clone();

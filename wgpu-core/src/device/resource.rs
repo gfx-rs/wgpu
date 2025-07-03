@@ -357,7 +357,7 @@ impl Device {
         if self.is_valid() {
             Ok(())
         } else {
-            Err(DeviceError::Invalid(self.error_ident()))
+            Err(DeviceError::Lost)
         }
     }
 
@@ -378,7 +378,6 @@ impl Device {
         match error {
             hal::DeviceError::OutOfMemory
             | hal::DeviceError::Lost
-            | hal::DeviceError::ResourceCreationFailed
             | hal::DeviceError::Unexpected => {
                 self.lose(&error.to_string());
             }
