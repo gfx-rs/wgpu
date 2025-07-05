@@ -1701,10 +1701,13 @@ impl crate::Device for super::Device {
                 runtime_checks: desc.runtime_checks,
             }),
             crate::ShaderInput::SpirV(_) => {
-                panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
+                panic!("Features::SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
             }
             crate::ShaderInput::Msl { .. } => {
-                panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
+                panic!("Features::MSL_SHADER_PASSTHROUGH is not enabled for this backend")
+            }
+            crate::ShaderInput::Glsl { .. } => {
+                panic!("Features::GLSL_SHADER_PASSTHROUGH is not enabled for this backend")
             }
             crate::ShaderInput::Dxil {
                 shader,

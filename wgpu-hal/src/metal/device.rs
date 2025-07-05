@@ -1037,13 +1037,13 @@ impl crate::Device for super::Device {
                 })
             }
             crate::ShaderInput::SpirV(_) => {
-                panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
+                panic!("Features::SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
             }
             crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
                 panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled for this backend")
             }
-            crate::ShaderInput::Generic { .. } => {
-                panic!("Generic passthrough was given to metal backend without MSL data")
+            crate::ShaderInput::Glsl { .. } => {
+                panic!("Features::GLSL_SHADER_PASSTHROUGH is not enabled for this backend")
             }
         }
     }

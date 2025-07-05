@@ -1909,11 +1909,11 @@ impl crate::Device for super::Device {
                 panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
             }
             crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
-                panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
+                panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled for this backend")
             }
             crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
             crate::ShaderInput::Glsl { .. } => {
-                panic!("GLSL_SHADER_PASSTHROUGH is not enabled for this backend")
+                panic!("Features::GLSL_SHADER_PASSTHROUGH is not enabled for this backend")
             }
         };
 
