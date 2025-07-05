@@ -15,10 +15,12 @@ fn compile_spv_asm(device: &wgpu::Device, data: &[u8]) -> wgpu::ShaderModule {
     let output = cmd.wait_with_output().expect("Error waiting for spirv-as");
     assert!(output.status.success());
     unsafe {
-        device.create_shader_module_spirv(&wgpu::ShaderModuleDescriptorSpirV {
-            label: None,
-            source: wgpu::util::make_spirv_raw(&output.stdout),
-        })
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
+            wgpu::ShaderModuleDescriptorSpirV {
+                label: None,
+                source: wgpu::util::make_spirv_raw(&output.stdout),
+            },
+        ))
     }
 }
 
