@@ -2958,11 +2958,12 @@ impl TextureFormat {
             storage | binding
         };
         let atomic = attachment | atomic_64;
-        let rg11b10f = if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
-            attachment
-        } else {
-            basic
-        };
+        let (rg11b10f_f, rg11b10f_u) =
+            if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
+                (msaa_resolve, attachment)
+            } else {
+                (msaa, basic)
+            };
         let (bgra8unorm_f, bgra8unorm) = if device_features.contains(Features::BGRA8UNORM_STORAGE) {
             (
                 msaa_resolve | TextureFormatFeatureFlags::STORAGE_WRITE_ONLY,
@@ -3003,7 +3004,7 @@ impl TextureFormat {
             Self::Bgra8UnormSrgb =>       (msaa_resolve, attachment),
             Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
-            Self::Rg11b10Ufloat =>        (        msaa,   rg11b10f),
+            Self::Rg11b10Ufloat =>        (  rg11b10f_f, rg11b10f_u),
             Self::R64Uint =>              (     s_ro_wo,  atomic_64),
             Self::Rg32Uint =>             (     s_ro_wo,  all_flags),
             Self::Rg32Sint =>             (     s_ro_wo,  all_flags),

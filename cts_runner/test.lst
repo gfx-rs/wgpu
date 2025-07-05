@@ -50,6 +50,8 @@ webgpu:api,validation,queue,submit:command_buffer,submit_invalidates:*
 //FAIL: webgpu:api,validation,queue,submit:command_buffer,invalid_submit_invalidates:*
 // https://github.com/gfx-rs/wgpu/issues/3911#issuecomment-2972995675
 webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*
+webgpu:api,validation,render_pass,render_pass_descriptor:resolveTarget,*
+webgpu:api,validation,texture,rg11b10ufloat_renderable:*
 webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
