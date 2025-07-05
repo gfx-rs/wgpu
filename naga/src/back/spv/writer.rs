@@ -1953,8 +1953,9 @@ impl Writer {
         let needs_polyfill = self.needs_f16_polyfill(ty_inner);
 
         let pointer_type_id = if needs_polyfill {
-            let f32_value_local = super::f16_polyfill::F16IoPolyfill::create_polyfill_type(ty_inner)
-                .expect("needs_polyfill returned true but create_polyfill_type returned None");
+            let f32_value_local =
+                super::f16_polyfill::F16IoPolyfill::create_polyfill_type(ty_inner)
+                    .expect("needs_polyfill returned true but create_polyfill_type returned None");
 
             let f32_type_id = self.get_localtype_id(f32_value_local);
             let ptr_id = self.get_pointer_type_id(f32_type_id, class);

@@ -5,12 +5,12 @@ Backend for [SPIR-V][spv] (Standard Portable Intermediate Representation).
 */
 
 mod block;
+mod f16_polyfill;
 mod helpers;
 mod image;
 mod index;
 mod instructions;
 mod layout;
-mod f16_polyfill;
 mod ray;
 mod recyclable;
 mod selection;
