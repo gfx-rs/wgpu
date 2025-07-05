@@ -104,6 +104,26 @@
         "deno_*"
       ],
       "enabled": false
+    },
+    {
+      "description": "CTS revision is pinned to a Git SHA.",
+      "matchPackageNames": [
+        "https://github.com/gpuweb/cts"
+      ],
+      "versioning": "git"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^cts_runner\\/revision\\.txt$/"],
+      "matchStrings": [
+        "(?<currentDigest>.{40})"
+      ],
+      "currentValueTemplate": "gh-pages",
+      "depNameTemplate": "cts",
+      "packageNameTemplate": "https://github.com/gpuweb/cts",
+      "datasourceTemplate": "git-refs"
     }
   ]
 }

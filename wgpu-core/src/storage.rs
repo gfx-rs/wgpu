@@ -96,7 +96,7 @@ where
         let (index, epoch) = id.unzip();
         match mem::replace(&mut self.map[index as usize], Element::Vacant) {
             Element::Occupied(value, storage_epoch) => {
-                assert_eq!(epoch, storage_epoch);
+                assert_eq!(epoch, storage_epoch, "id epoch mismatch");
                 value
             }
             Element::Vacant => panic!("Cannot remove a vacant resource"),
