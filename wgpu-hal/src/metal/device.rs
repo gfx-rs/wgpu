@@ -1012,12 +1012,6 @@ impl crate::Device for super::Device {
                 shader: source,
                 entry_point,
                 num_workgroups,
-            }
-            | crate::ShaderInput::Generic {
-                msl: Some(source),
-                entry_point,
-                num_workgroups,
-                ..
             } => {
                 let options = metal::CompileOptions::new();
                 // Obtain the locked device from shared

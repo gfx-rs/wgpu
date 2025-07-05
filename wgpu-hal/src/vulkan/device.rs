@@ -1912,9 +1912,9 @@ impl crate::Device for super::Device {
                 panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
             }
             crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
-            crate::ShaderInput::Generic { spirv, .. } => Cow::Borrowed(
-                spirv.expect("Generic passthrough was given to vulkan backend without SPIRV data"),
-            ),
+            crate::ShaderInput::Glsl { .. } => {
+                panic!("GLSL_SHADER_PASSTHROUGH is not enabled for this backend")
+            }
         };
 
         let raw = self.create_shader_module_impl(&spv)?;

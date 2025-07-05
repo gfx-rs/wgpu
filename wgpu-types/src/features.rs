@@ -1267,6 +1267,16 @@ bitflags_array! {
         /// Ideally, in the future, all platforms will be supported. For more info, see
         /// [my comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
         const EXPERIMENTAL_PRECOMPILED_SHADERS = 1 << 54;
+
+        /// Enables creating shader modules from OpenGL ES GLSL shaders (unsafe)
+        ///
+        /// GLSL data is not parsed or interpreted in any way
+        ///
+        /// Supported platforms:
+        /// - OpenGL ES
+        ///
+        /// This is a native only feature.
+        const GLSL_SHADER_PASSTHROUGH = 1 << 55;
     }
 
     /// Features that are not guaranteed to be supported.

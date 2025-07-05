@@ -1816,14 +1816,58 @@ impl Device {
                     num_workgroups: inner.num_workgroups,
                 }
             }
-            pipeline::ShaderModuleDescriptorPassthrough::Generic(inner) => {
-                self.require_features(wgt::Features::EXPERIMENTAL_PRECOMPILED_SHADERS)?;
-                hal::ShaderInput::Generic {
+            pipeline::ShaderModuleDescriptorPassthrough::Glsl(inner) => {
+                self.require_features(wgt::Features::GLSL_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::Glsl {
+                    shader: inner.source,
                     entry_point: inner.entry_point.clone(),
                     num_workgroups: inner.num_workgroups,
-                    spirv: inner.spirv.as_deref(),
-                    dxil: inner.dxil.as_deref(),
-                    msl: inner.msl.as_deref(),
+                }
+            }
+            pipeline::ShaderModuleDescriptorPassthrough::Generic(inner) => {
+                use wgt::Features;
+                self.require_features(Features::EXPERIMENTAL_PRECOMPILED_SHADERS)?;
+                let features = self.adapter.features();
+
+                // TODO: when we get to use if-let chains, this will be a little nicer!
+
+                // Some backends can take multiple kinds of passthrough. Currently, this only includes DirectX,
+                // and those are under the same feature anyway, but I figured I'd check for every feature anyway.
+                if features.contains(Features::SPIRV_SHADER_PASSTHROUGH) && inner.spirv.is_some() {
+                    hal::ShaderInput::SpirV(inner.spirv.as_ref().unwrap())
+                } else if features.contains(Features::HLSL_DXIL_SHADER_PASSTHROUGH)
+                    && inner.hlsl.is_some()
+                {
+                    hal::ShaderInput::Hlsl {
+                        shader: inner.hlsl.as_ref().unwrap(),
+                        entry_point: inner.entry_point.clone(),
+                        num_workgroups: inner.num_workgroups,
+                    }
+                } else if features.contains(Features::HLSL_DXIL_SHADER_PASSTHROUGH)
+                    && inner.dxil.is_some()
+                {
+                    hal::ShaderInput::Dxil {
+                        shader: inner.dxil.as_ref().unwrap(),
+                        entry_point: inner.entry_point.clone(),
+                        num_workgroups: inner.num_workgroups,
+                    }
+                } else if features.contains(Features::MSL_SHADER_PASSTHROUGH) && inner.msl.is_some()
+                {
+                    hal::ShaderInput::Msl {
+                        shader: inner.msl.as_ref().unwrap(),
+                        entry_point: inner.entry_point.clone(),
+                        num_workgroups: inner.num_workgroups,
+                    }
+                } else if features.contains(Features::GLSL_SHADER_PASSTHROUGH)
+                    && inner.glsl.is_some()
+                {
+                    hal::ShaderInput::Glsl {
+                        shader: inner.glsl.as_ref().unwrap(),
+                        entry_point: inner.entry_point.clone(),
+                        num_workgroups: inner.num_workgroups,
+                    }
+                } else {
+                    return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
                 }
             }
         };

@@ -603,7 +603,7 @@ type ShaderId = u32;
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    naga: crate::NagaShader,
+    source: crate::NagaShader,
     label: Option<String>,
     id: ShaderId,
 }

@@ -1732,22 +1732,6 @@ impl crate::Device for super::Device {
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
-            crate::ShaderInput::Generic {
-                dxil,
-                entry_point,
-                num_workgroups,
-                ..
-            } => Ok(super::ShaderModule {
-                source: super::ShaderModuleSource::DxilPassthrough(super::DxilPassthroughShader {
-                    shader: dxil
-                        .expect("Generic passthrough was given to dx12 backend without DXIL data")
-                        .to_vec(),
-                    entry_point,
-                    num_workgroups,
-                }),
-                raw_name,
-                runtime_checks: desc.runtime_checks,
-            }),
         }
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {
