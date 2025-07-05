@@ -63,6 +63,12 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
 
+### Bug Fixes
+
+#### Naga
+
+- Fix empty `if` statements causing errors on spirv 1.6+. By @Vecvec in [#7883](https://github.com/gfx-rs/wgpu/pull/7883).
+
 ## v26.0.2 (2025-07-23)
 
 ### Bug Fixes
