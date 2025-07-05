@@ -10,7 +10,7 @@ mod image;
 mod index;
 mod instructions;
 mod layout;
-mod polyfill;
+mod f16_polyfill;
 mod ray;
 mod recyclable;
 mod selection;
@@ -775,7 +775,7 @@ pub struct Writer {
 
     /// F16 I/O polyfill manager for handling f16 input/output variables
     /// when StorageInputOutput16 capability is not available.
-    io_f16_polyfills: polyfill::F16IoPolyfill,
+    io_f16_polyfills: f16_polyfill::F16IoPolyfill,
 }
 
 bitflags::bitflags! {

@@ -93,7 +93,7 @@ impl Writer {
             temp_list: Vec::new(),
             ray_get_committed_intersection_function: None,
             ray_get_candidate_intersection_function: None,
-            io_f16_polyfills: super::polyfill::F16IoPolyfill::new(
+            io_f16_polyfills: super::f16_polyfill::F16IoPolyfill::new(
                 options.use_storage_input_output_16,
             ),
         })
@@ -739,7 +739,7 @@ impl Writer {
                             .body
                             .push(Instruction::load(f32_ty, id, varying_id, None));
                         let converted = self.id_gen.next();
-                        super::polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
+                        super::f16_polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
                             id,
                             argument_type_id,
                             converted,
@@ -786,7 +786,7 @@ impl Writer {
                                 .body
                                 .push(Instruction::load(f32_ty, id, varying_id, None));
                             let converted = self.id_gen.next();
-                            super::polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
+                            super::f16_polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
                                 id,
                                 type_id,
                                 converted,
@@ -1953,7 +1953,7 @@ impl Writer {
         let needs_polyfill = self.needs_f16_polyfill(ty_inner);
 
         let pointer_type_id = if needs_polyfill {
-            let f32_value_local = super::polyfill::F16IoPolyfill::create_polyfill_type(ty_inner)
+            let f32_value_local = super::f16_polyfill::F16IoPolyfill::create_polyfill_type(ty_inner)
                 .expect("needs_polyfill returned true but create_polyfill_type returned None");
 
             let f32_type_id = self.get_localtype_id(f32_value_local);
