@@ -1,10 +1,14 @@
 use alloc::{
     borrow::Cow,
+    boxed::Box,
     format,
     string::{String, ToString},
     vec::Vec,
 };
 use core::hash::{Hash, Hasher};
+
+use hashbrown::HashSet;
+use once_cell::race::OnceBox;
 
 use crate::{arena::Handle, FastHashMap, FastHashSet};
 
@@ -20,20 +24,42 @@ pub enum NameKey {
     Function(Handle<crate::Function>),
     FunctionArgument(Handle<crate::Function>, u32),
     FunctionLocal(Handle<crate::Function>, Handle<crate::LocalVariable>),
+
+    /// A local variable used by ReadZeroSkipWrite bounds-check policy
+    /// when it needs to produce a pointer-typed result for an OOB access.
+    /// These are unique per accessed type, so the second element is a
+    /// type handle. See docs for [`crate::back::msl`].
+    FunctionOobLocal(Handle<crate::Function>, Handle<crate::Type>),
+
     EntryPoint(EntryPointIndex),
     EntryPointLocal(EntryPointIndex, Handle<crate::LocalVariable>),
     EntryPointArgument(EntryPointIndex, u32),
+
+    /// Entry point version of `FunctionOobLocal`.
+    EntryPointOobLocal(EntryPointIndex, Handle<crate::Type>),
 }
 
 /// This processor assigns names to all the things in a module
 /// that may need identifiers in a textual backend.
-#[derive(Default)]
 pub struct Namer {
     /// The last numeric suffix used for each base name. Zero means "no suffix".
     unique: FastHashMap<String, u32>,
-    keywords: FastHashSet<&'static str>,
+    keywords: &'static HashSet<&'static str>,
     keywords_case_insensitive: FastHashSet<AsciiUniCase<&'static str>>,
     reserved_prefixes: Vec<&'static str>,
+}
+
+impl Default for Namer {
+    fn default() -> Self {
+        static DEFAULT_KEYWORDS: OnceBox<HashSet<&'static str>> = OnceBox::new();
+
+        Self {
+            unique: Default::default(),
+            keywords: DEFAULT_KEYWORDS.get_or_init(|| Box::new(HashSet::default())),
+            keywords_case_insensitive: Default::default(),
+            reserved_prefixes: Default::default(),
+        }
+    }
 }
 
 impl Namer {
@@ -157,8 +183,7 @@ impl Namer {
     pub fn reset(
         &mut self,
         module: &crate::Module,
-        reserved_keywords: &[&'static str],
-        extra_reserved_keywords: &[&'static str],
+        reserved_keywords: &'static HashSet<&'static str>,
         reserved_keywords_case_insensitive: &[&'static str],
         reserved_prefixes: &[&'static str],
         output: &mut FastHashMap<NameKey, String>,
@@ -167,9 +192,7 @@ impl Namer {
         self.reserved_prefixes.extend(reserved_prefixes.iter());
 
         self.unique.clear();
-        self.keywords.clear();
-        self.keywords.extend(reserved_keywords.iter());
-        self.keywords.extend(extra_reserved_keywords.iter());
+        self.keywords = reserved_keywords;
 
         debug_assert!(reserved_keywords_case_insensitive
             .iter()

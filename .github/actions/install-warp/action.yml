@@ -1,0 +1,25 @@
+name: "Install WARP"
+description: "Install WARP"
+inputs:
+  target-dirs:
+    description: "Space-separated list of directories into which to install the WARP DLL."
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      run: |
+        set -e
+
+        export WARP_VERSION="1.0.13"
+
+        # Make sure dxc is in path.
+        dxc --version
+
+        curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/$WARP_VERSION -o warp.zip
+        7z.exe e warp.zip -owarp build/native/bin/x64/d3d10warp.dll
+
+        for dir in ${{ inputs.target-dirs }}; do
+          mkdir -p "$dir"
+          cp -v warp/d3d10warp.dll "$dir"
+        done

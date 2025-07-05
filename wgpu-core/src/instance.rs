@@ -9,6 +9,7 @@ use alloc::{
 
 use hashbrown::HashMap;
 use thiserror::Error;
+use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     api_log, api_log_debug,
@@ -19,7 +20,9 @@ use crate::{
     lock::{rank, Mutex},
     present::Presentation,
     resource::ResourceType,
-    resource_log, DOWNLEVEL_WARNING_MESSAGE,
+    resource_log,
+    timestamp_normalization::TimestampNormalizerInitError,
+    DOWNLEVEL_WARNING_MESSAGE,
 };
 
 use wgt::{Backend, Backends, PowerPreference};
@@ -33,6 +36,12 @@ pub struct FailedLimit {
     name: Cow<'static, str>,
     requested: u64,
     allowed: u64,
+}
+
+impl WebGpuError for FailedLimit {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLimit> {
@@ -80,7 +89,7 @@ pub struct Instance {
     /// `instance_per_backend` instead.
     supported_backends: Backends,
 
-    flags: wgt::InstanceFlags,
+    pub flags: wgt::InstanceFlags,
 }
 
 impl Instance {
@@ -121,6 +130,7 @@ impl Instance {
         let hal_desc = hal::InstanceDescriptor {
             name: "wgpu",
             flags: self.flags,
+            memory_budget_thresholds: instance_desc.memory_budget_thresholds,
             backend_options: instance_desc.backend_options.clone(),
         };
 
@@ -406,7 +416,7 @@ impl Instance {
         {
             // NOTE: We might be using `profiling` without any features. The empty backend of this
             // macro emits no code, so unused code linting changes depending on the backend.
-            profiling::scope!("enumerating", &*format!("{:?}", _backend));
+            profiling::scope!("enumerating", &*alloc::format!("{:?}", _backend));
 
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
             for raw in hal_adapters {
@@ -443,14 +453,23 @@ impl Instance {
             let mut backend_adapters =
                 unsafe { instance.enumerate_adapters(compatible_hal_surface) };
             if backend_adapters.is_empty() {
+                log::debug!("enabled backend `{:?}` has no adapters", backend);
                 no_adapter_backends |= Backends::from(backend);
                 // by continuing, we avoid setting the further error bits below
                 continue;
             }
 
             if desc.force_fallback_adapter {
-                backend_adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
+                log::debug!("Filtering `{backend:?}` for `force_fallback_adapter`");
+                backend_adapters.retain(|exposed| {
+                    let keep = exposed.info.device_type == wgt::DeviceType::Cpu;
+                    if !keep {
+                        log::debug!("* Eliminating adapter `{}`", exposed.info.name);
+                    }
+                    keep
+                });
                 if backend_adapters.is_empty() {
+                    log::debug!("* Backend `{:?}` has no fallback adapters", backend);
                     no_fallback_backends |= Backends::from(backend);
                     continue;
                 }
@@ -490,10 +509,8 @@ impl Instance {
         };
 
         fn sort(adapters: &mut [hal::DynExposedAdapter], prefer_integrated_gpu: bool) {
-            adapters.sort_by(|a, b| {
-                get_order(a.info.device_type, prefer_integrated_gpu)
-                    .cmp(&get_order(b.info.device_type, prefer_integrated_gpu))
-            });
+            adapters
+                .sort_by_key(|adapter| get_order(adapter.info.device_type, prefer_integrated_gpu));
         }
 
         fn get_order(device_type: wgt::DeviceType, prefer_integrated_gpu: bool) -> u8 {
@@ -766,6 +783,7 @@ impl Adapter {
         let queue = Arc::new(queue);
 
         device.set_queue(&queue);
+        device.late_init_resources_with_queue()?;
 
         Ok((device, queue))
     }
@@ -837,7 +855,6 @@ pub enum GetSurfaceSupportError {
 }
 
 #[derive(Clone, Debug, Error)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Error when requesting a device from the adapter
 #[non_exhaustive]
 pub enum RequestDeviceError {
@@ -845,6 +862,8 @@ pub enum RequestDeviceError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     LimitsExceeded(#[from] FailedLimit),
+    #[error("Failed to initialize Timestamp Normalizer")]
+    TimestampNormalizerInitFailed(#[from] TimestampNormalizerInitError),
     #[error("Unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
 }

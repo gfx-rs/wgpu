@@ -7,6 +7,7 @@ mod emitter;
 pub mod index;
 mod layouter;
 mod namer;
+mod overloads;
 mod terminator;
 mod type_methods;
 mod typifier;
@@ -18,9 +19,11 @@ pub use emitter::Emitter;
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
 pub use namer::{EntryPointIndex, NameKey, Namer};
+pub use overloads::{Conclusion, MissingSpecialType, OverloadSet, Rule};
 pub use terminator::ensure_block_returns;
 use thiserror::Error;
-pub use typifier::{ResolveContext, ResolveError, TypeResolution};
+pub use type_methods::min_max_float_representable_by;
+pub use typifier::{compare_types, ResolveContext, ResolveError, TypeResolution};
 
 impl From<super::StorageFormat> for super::Scalar {
     fn from(format: super::StorageFormat) -> Self {
@@ -80,6 +83,7 @@ impl From<super::StorageFormat> for super::Scalar {
 pub enum HashableLiteral {
     F64(u64),
     F32(u32),
+    F16(u16),
     U32(u32),
     I32(i32),
     U64(u64),
@@ -94,6 +98,7 @@ impl From<crate::Literal> for HashableLiteral {
         match l {
             crate::Literal::F64(v) => Self::F64(v.to_bits()),
             crate::Literal::F32(v) => Self::F32(v.to_bits()),
+            crate::Literal::F16(v) => Self::F16(v.to_bits()),
             crate::Literal::U32(v) => Self::U32(v),
             crate::Literal::I32(v) => Self::I32(v),
             crate::Literal::U64(v) => Self::U64(v),
@@ -116,6 +121,8 @@ impl crate::Literal {
             (value, crate::ScalarKind::Sint, 8) => Some(Self::I64(value as _)),
             (1, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(true)),
             (0, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(false)),
+            (value, crate::ScalarKind::AbstractInt, 8) => Some(Self::AbstractInt(value as _)),
+            (value, crate::ScalarKind::AbstractFloat, 8) => Some(Self::AbstractFloat(value as _)),
             _ => None,
         }
     }
@@ -132,6 +139,7 @@ impl crate::Literal {
         match *self {
             Self::F64(_) | Self::I64(_) | Self::U64(_) => 8,
             Self::F32(_) | Self::U32(_) | Self::I32(_) => 4,
+            Self::F16(_) => 2,
             Self::Bool(_) => crate::BOOL_WIDTH,
             Self::AbstractInt(_) | Self::AbstractFloat(_) => crate::ABSTRACT_WIDTH,
         }
@@ -140,6 +148,7 @@ impl crate::Literal {
         match *self {
             Self::F64(_) => crate::Scalar::F64,
             Self::F32(_) => crate::Scalar::F32,
+            Self::F16(_) => crate::Scalar::F16,
             Self::U32(_) => crate::Scalar::U32,
             Self::I32(_) => crate::Scalar::I32,
             Self::U64(_) => crate::Scalar::U64,
@@ -214,6 +223,8 @@ impl super::MathFunction {
             Self::Pow => 2,
             // geometry
             Self::Dot => 2,
+            Self::Dot4I8Packed => 2,
+            Self::Dot4U8Packed => 2,
             Self::Outer => 2,
             Self::Cross => 2,
             Self::Distance => 2,
@@ -251,6 +262,8 @@ impl super::MathFunction {
             Self::Pack2x16float => 1,
             Self::Pack4xI8 => 1,
             Self::Pack4xU8 => 1,
+            Self::Pack4xI8Clamp => 1,
+            Self::Pack4xU8Clamp => 1,
             // data unpacking
             Self::Unpack4x8snorm => 1,
             Self::Unpack4x8unorm => 1,
@@ -394,6 +407,10 @@ impl crate::Module {
             global_expressions: &self.global_expressions,
         }
     }
+
+    pub fn compare_types(&self, lhs: &TypeResolution, rhs: &TypeResolution) -> bool {
+        compare_types(lhs, rhs, &self.types)
+    }
 }
 
 #[derive(Debug)]
@@ -481,6 +498,10 @@ impl GlobalCtx<'_> {
             }
             _ => get(*self, handle, arena),
         }
+    }
+
+    pub fn compare_types(&self, lhs: &TypeResolution, rhs: &TypeResolution) -> bool {
+        compare_types(lhs, rhs, self.types)
     }
 }
 
@@ -586,7 +607,7 @@ pub fn flatten_compose<'arenas>(
                 count = size as usize;
             }
         }
-        core::iter::repeat(expr).take(count)
+        core::iter::repeat_n(expr, count)
     }
 
     // Expressions like `vec4(vec3(vec2(6, 7), 8), 9)` require us to

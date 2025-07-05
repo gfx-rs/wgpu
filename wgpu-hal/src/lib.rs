@@ -275,6 +275,11 @@ pub mod api {
 }
 
 mod dynamic;
+#[cfg(feature = "validation_canary")]
+mod validation_canary;
+
+#[cfg(feature = "validation_canary")]
+pub use validation_canary::{ValidationCanary, VALIDATION_CANARY};
 
 pub(crate) use dynamic::impl_dyn_resource;
 pub use dynamic::{
@@ -287,7 +292,7 @@ pub use dynamic::{
 
 #[allow(unused)]
 use alloc::boxed::Box;
-use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
+use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::{
     borrow::Borrow,
     error::Error,
@@ -298,9 +303,16 @@ use core::{
 };
 
 use bitflags::bitflags;
-use parking_lot::Mutex;
 use thiserror::Error;
 use wgt::WasmNotSendSync;
+
+cfg_if::cfg_if! {
+    if #[cfg(supports_ptr_atomics)] {
+        use alloc::sync::Arc;
+    } else if #[cfg(feature = "portable-atomic")] {
+        use portable_atomic_util::Arc;
+    }
+}
 
 // - Vertex + Fragment
 // - Compute
@@ -363,8 +375,6 @@ pub enum DeviceError {
     OutOfMemory,
     #[error("Device is lost")]
     Lost,
-    #[error("Creation of a resource failed for a reason other than running out of memory.")]
-    ResourceCreationFailed,
     #[error("Unexpected error variant (driver implementation is at fault)")]
     Unexpected,
 }
@@ -446,9 +456,18 @@ impl InstanceError {
     }
     #[allow(dead_code)] // may be unused on some platforms
     pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(supports_ptr_atomics)] {
+                let source = Arc::new(source);
+            } else {
+                // TODO(https://github.com/rust-lang/rust/issues/18598): avoid indirection via Box once arbitrary types support unsized coercion
+                let source: Box<dyn Error + Send + Sync + 'static> = Box::new(source);
+                let source = Arc::from(source);
+            }
+        }
         Self {
             message,
-            source: Some(Arc::new(source)),
+            source: Some(source),
         }
     }
 }
@@ -962,8 +981,23 @@ pub trait Device: WasmNotSendSync {
         timeout_ms: u32,
     ) -> Result<bool, DeviceError>;
 
-    unsafe fn start_capture(&self) -> bool;
-    unsafe fn stop_capture(&self);
+    /// Start a graphics debugger capture.
+    ///
+    /// # Safety
+    ///
+    /// See [`wgpu::Device::start_graphics_debugger_capture`][api] for more details.
+    ///
+    /// [api]: ../wgpu/struct.Device.html#method.start_graphics_debugger_capture
+    unsafe fn start_graphics_debugger_capture(&self) -> bool;
+
+    /// Stop a graphics debugger capture.
+    ///
+    /// # Safety
+    ///
+    /// See [`wgpu::Device::stop_graphics_debugger_capture`][api] for more details.
+    ///
+    /// [api]: ../wgpu/struct.Device.html#method.stop_graphics_debugger_capture
+    unsafe fn stop_graphics_debugger_capture(&self);
 
     #[allow(unused_variables)]
     unsafe fn pipeline_cache_get_data(
@@ -996,6 +1030,8 @@ pub trait Device: WasmNotSendSync {
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         None
     }
+
+    fn check_if_oom(&self) -> Result<(), DeviceError>;
 }
 
 pub trait Queue: WasmNotSendSync {
@@ -1385,7 +1421,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<<Self::A as Api>::QuerySet, <Self::A as Api>::TextureView>,
-    );
+    ) -> Result<(), DeviceError>;
 
     /// End the current render pass.
     ///
@@ -1715,6 +1751,7 @@ bitflags!(
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
     pub flags: wgt::InstanceFlags,
+    pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     pub backend_options: wgt::BackendOptions,
 }
 
@@ -2045,6 +2082,7 @@ pub struct CommandEncoderDescriptor<'a, Q: DynQueue + ?Sized> {
 }
 
 /// Naga shader module.
+#[derive(Default)]
 pub struct NagaShader {
     /// Shader module IR.
     pub module: Cow<'static, naga::Module>,
@@ -2066,7 +2104,22 @@ impl fmt::Debug for NagaShader {
 #[allow(clippy::large_enum_variant)]
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
+    Msl {
+        shader: String,
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+    },
     SpirV(&'a [u32]),
+    Dxil {
+        shader: &'a [u8],
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+    },
+    Hlsl {
+        shader: &'a str,
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+    },
 }
 
 pub struct ShaderModuleDescriptor<'a> {
@@ -2288,6 +2341,7 @@ pub struct Attachment<'a, T: DynTextureView + ?Sized> {
 #[derive(Clone, Debug)]
 pub struct ColorAttachment<'a, T: DynTextureView + ?Sized> {
     pub target: Attachment<'a, T>,
+    pub depth_slice: Option<u32>,
     pub resolve_target: Option<Attachment<'a, T>>,
     pub ops: AttachmentOps,
     pub clear_value: wgt::Color,
@@ -2324,42 +2378,6 @@ pub struct RenderPassDescriptor<'a, Q: DynQuerySet + ?Sized, T: DynTextureView +
 pub struct ComputePassDescriptor<'a, Q: DynQuerySet + ?Sized> {
     pub label: Label<'a>,
     pub timestamp_writes: Option<PassTimestampWrites<'a, Q>>,
-}
-
-/// Stores the text of any validation errors that have occurred since
-/// the last call to `get_and_reset`.
-///
-/// Each value is a validation error and a message associated with it,
-/// or `None` if the error has no message from the api.
-///
-/// This is used for internal wgpu testing only and _must not_ be used
-/// as a way to check for errors.
-///
-/// This works as a static because `cargo nextest` runs all of our
-/// tests in separate processes, so each test gets its own canary.
-///
-/// This prevents the issue of one validation error terminating the
-/// entire process.
-pub static VALIDATION_CANARY: ValidationCanary = ValidationCanary {
-    inner: Mutex::new(Vec::new()),
-};
-
-/// Flag for internal testing.
-pub struct ValidationCanary {
-    inner: Mutex<Vec<String>>,
-}
-
-impl ValidationCanary {
-    #[allow(dead_code)] // in some configurations this function is dead
-    fn add(&self, msg: String) {
-        self.inner.lock().push(msg);
-    }
-
-    /// Returns any API validation errors that have occurred in this process
-    /// since the last call to this function.
-    pub fn get_and_reset(&self) -> Vec<String> {
-        self.inner.lock().drain(..).collect()
-    }
 }
 
 #[test]

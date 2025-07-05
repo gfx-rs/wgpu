@@ -1,7 +1,7 @@
 fn f() {
-   var v: vec2<i32>;
-   let px = &v.x;
-   *px = 10;
+   var v: mat2x2<f32>;
+   let px = &v[0];
+   *px = vec2<f32>(10.0);
 }
 
 struct DynamicArray {
@@ -23,4 +23,11 @@ fn index_dynamic_array(i: i32, v: u32) {
 
    let val = (*p)[i];
    (*p)[i] = val + v;
+}
+
+@compute @workgroup_size(1)
+fn main() {
+    f();
+    index_unsized(1, 1);
+    index_dynamic_array(1, 1);
 }

@@ -119,7 +119,7 @@ use core::fmt::Error as FmtError;
 
 use thiserror::Error;
 
-use crate::{back, proc};
+use crate::{back, ir, proc};
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -151,6 +151,7 @@ pub struct OffsetsBindTarget {
     pub size: u32,
 }
 
+#[cfg(any(feature = "serialize", feature = "deserialize"))]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 struct BindingMapSerialization {
@@ -270,6 +271,7 @@ impl Default for SamplerHeapBindTargets {
     }
 }
 
+#[cfg(any(feature = "serialize", feature = "deserialize"))]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 struct SamplerIndexBufferBindingSerialization {
@@ -301,6 +303,7 @@ where
 pub type SamplerIndexBufferBindingMap =
     alloc::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
 
+#[cfg(any(feature = "serialize", feature = "deserialize"))]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 struct DynamicStorageBufferOffsetTargetSerialization {
@@ -431,6 +434,22 @@ pub struct ReflectionInfo {
     pub entry_point_names: Vec<Result<String, EntryPointError>>,
 }
 
+/// A subset of options that are meant to be changed per pipeline.
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "deserialize", serde(default))]
+pub struct PipelineOptions {
+    /// The entry point to write.
+    ///
+    /// Entry points are identified by a shader stage specification,
+    /// and a name.
+    ///
+    /// If `None`, all entry points will be written. If `Some` and the entry
+    /// point is not found, an error will be thrown while writing.
+    pub entry_point: Option<(ir::ShaderStage, String)>,
+}
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
@@ -445,12 +464,15 @@ pub enum Error {
     Override,
     #[error(transparent)]
     ResolveArraySizeError(#[from] proc::ResolveArraySizeError),
+    #[error("entry point with stage {0:?} and name '{1}' not found")]
+    EntryPointNotFound(ir::ShaderStage, String),
 }
 
 #[derive(PartialEq, Eq, Hash)]
 enum WrappedType {
     ZeroValue(help::WrappedZeroValue),
     ArrayLength(help::WrappedArrayLength),
+    ImageSample(help::WrappedImageSample),
     ImageQuery(help::WrappedImageQuery),
     ImageLoadScalar(crate::Scalar),
     Constructor(help::WrappedConstructor),
@@ -459,6 +481,7 @@ enum WrappedType {
     Math(help::WrappedMath),
     UnaryOp(help::WrappedUnaryOp),
     BinaryOp(help::WrappedBinaryOp),
+    Cast(help::WrappedCast),
 }
 
 #[derive(Default)]
@@ -515,8 +538,10 @@ pub struct Writer<'a, W> {
     namer: proc::Namer,
     /// HLSL backend options
     options: &'a Options,
+    /// Per-stage backend options
+    pipeline_options: &'a PipelineOptions,
     /// Information about entry point arguments and result types.
-    entry_point_io: Vec<writer::EntryPointInterface>,
+    entry_point_io: crate::FastHashMap<usize, writer::EntryPointInterface>,
     /// Set of expressions that have associated temporary variables
     named_expressions: crate::NamedExpressions,
     wrapped: Wrapped,

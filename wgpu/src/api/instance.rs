@@ -1,10 +1,8 @@
-#[cfg(native)]
+#[cfg(wgpu_core)]
 use alloc::vec::Vec;
 use core::future::Future;
 
-use parking_lot::Mutex;
-
-use crate::{dispatch::InstanceInterface, *};
+use crate::{dispatch::InstanceInterface, util::Mutex, *};
 
 bitflags::bitflags! {
     /// WGSL language extensions.
@@ -208,12 +206,18 @@ impl Instance {
         }
     }
 
+    #[cfg(custom)]
+    /// Returns custom implementation of Instance (if custom backend and is internally T)
+    pub fn as_custom<T: custom::InstanceInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(native)]
+    #[cfg(wgpu_core)]
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
         let Some(core_instance) = self.inner.as_core_opt() else {
             return Vec::new();
@@ -297,7 +301,7 @@ impl Instance {
                 surface
             }?,
 
-            #[cfg(any(webgpu, webgl))]
+            #[cfg(web)]
             SurfaceTarget::Canvas(canvas) => {
                 handle_source = None;
 
@@ -316,7 +320,7 @@ impl Instance {
                 }?
             }
 
-            #[cfg(any(webgpu, webgl))]
+            #[cfg(web)]
             SurfaceTarget::OffscreenCanvas(canvas) => {
                 handle_source = None;
 

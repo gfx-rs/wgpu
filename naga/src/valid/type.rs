@@ -169,8 +169,16 @@ pub enum WidthError {
     Abstract,
 }
 
+#[derive(Clone, Debug, thiserror::Error)]
+#[cfg_attr(test, derive(PartialEq))]
+pub enum PushConstantError {
+    #[error("The scalar type {0:?} is not supported in push constants")]
+    InvalidScalar(crate::Scalar),
+}
+
 // Only makes sense if `flags.contains(HOST_SHAREABLE)`
 type LayoutCompatibility = Result<Alignment, (Handle<crate::Type>, Disalignment)>;
+type PushConstantCompatibility = Result<(), PushConstantError>;
 
 fn check_member_layout(
     accum: &mut LayoutCompatibility,
@@ -221,6 +229,7 @@ pub(super) struct TypeInfo {
     pub flags: TypeFlags,
     pub uniform_layout: LayoutCompatibility,
     pub storage_layout: LayoutCompatibility,
+    pub push_constant_compatibility: PushConstantCompatibility,
 }
 
 impl TypeInfo {
@@ -229,6 +238,7 @@ impl TypeInfo {
             flags: TypeFlags::empty(),
             uniform_layout: Ok(Alignment::ONE),
             storage_layout: Ok(Alignment::ONE),
+            push_constant_compatibility: Ok(()),
         }
     }
 
@@ -237,6 +247,7 @@ impl TypeInfo {
             flags,
             uniform_layout: Ok(alignment),
             storage_layout: Ok(alignment),
+            push_constant_compatibility: Ok(()),
         }
     }
 }
@@ -250,11 +261,15 @@ impl super::Validator {
         }
     }
 
-    pub(super) const fn check_width(&self, scalar: crate::Scalar) -> Result<(), WidthError> {
+    pub(super) const fn check_width(
+        &self,
+        scalar: crate::Scalar,
+    ) -> Result<PushConstantCompatibility, WidthError> {
+        let mut push_constant_compatibility = Ok(());
         let good = match scalar.kind {
             crate::ScalarKind::Bool => scalar.width == crate::BOOL_WIDTH,
-            crate::ScalarKind::Float => {
-                if scalar.width == 8 {
+            crate::ScalarKind::Float => match scalar.width {
+                8 => {
                     if !self.capabilities.contains(Capabilities::FLOAT64) {
                         return Err(WidthError::MissingCapability {
                             name: "f64",
@@ -262,10 +277,21 @@ impl super::Validator {
                         });
                     }
                     true
-                } else {
-                    scalar.width == 4
                 }
-            }
+                2 => {
+                    if !self.capabilities.contains(Capabilities::SHADER_FLOAT16) {
+                        return Err(WidthError::MissingCapability {
+                            name: "f16",
+                            flag: "FLOAT16",
+                        });
+                    }
+
+                    push_constant_compatibility = Err(PushConstantError::InvalidScalar(scalar));
+
+                    true
+                }
+                _ => scalar.width == 4,
+            },
             crate::ScalarKind::Sint => {
                 if scalar.width == 8 {
                     if !self.capabilities.contains(Capabilities::SHADER_INT64) {
@@ -297,7 +323,7 @@ impl super::Validator {
             }
         };
         if good {
-            Ok(())
+            Ok(push_constant_compatibility)
         } else {
             Err(WidthError::Invalid(scalar.kind, scalar.width))
         }
@@ -317,13 +343,13 @@ impl super::Validator {
         use crate::TypeInner as Ti;
         Ok(match gctx.types[handle].inner {
             Ti::Scalar(scalar) => {
-                self.check_width(scalar)?;
+                let push_constant_compatibility = self.check_width(scalar)?;
                 let shareable = if scalar.kind.is_numeric() {
                     TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
                 } else {
                     TypeFlags::empty()
                 };
-                TypeInfo::new(
+                let mut type_info = TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
@@ -332,16 +358,18 @@ impl super::Validator {
                         | TypeFlags::CREATION_RESOLVED
                         | shareable,
                     Alignment::from_width(scalar.width),
-                )
+                );
+                type_info.push_constant_compatibility = push_constant_compatibility;
+                type_info
             }
             Ti::Vector { size, scalar } => {
-                self.check_width(scalar)?;
+                let push_constant_compatibility = self.check_width(scalar)?;
                 let shareable = if scalar.kind.is_numeric() {
                     TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
                 } else {
                     TypeFlags::empty()
                 };
-                TypeInfo::new(
+                let mut type_info = TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
@@ -350,7 +378,9 @@ impl super::Validator {
                         | TypeFlags::CREATION_RESOLVED
                         | shareable,
                     Alignment::from(size) * Alignment::from_width(scalar.width),
-                )
+                );
+                type_info.push_constant_compatibility = push_constant_compatibility;
+                type_info
             }
             Ti::Matrix {
                 columns: _,
@@ -360,8 +390,8 @@ impl super::Validator {
                 if scalar.kind != crate::ScalarKind::Float {
                     return Err(TypeError::MatrixElementNotFloat);
                 }
-                self.check_width(scalar)?;
-                TypeInfo::new(
+                let push_constant_compatibility = self.check_width(scalar)?;
+                let mut type_info = TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
                         | TypeFlags::COPY
@@ -370,7 +400,9 @@ impl super::Validator {
                         | TypeFlags::CONSTRUCTIBLE
                         | TypeFlags::CREATION_RESOLVED,
                     Alignment::from(rows) * Alignment::from_width(scalar.width),
-                )
+                );
+                type_info.push_constant_compatibility = push_constant_compatibility;
+                type_info
             }
             Ti::Atomic(scalar) => {
                 match scalar {
@@ -465,7 +497,7 @@ impl super::Validator {
                 // However, some cases are trivial: All our implicit base types
                 // are DATA and SIZED, so we can never return
                 // `InvalidPointerBase` or `InvalidPointerToUnsized`.
-                self.check_width(scalar)?;
+                let _ = self.check_width(scalar)?;
 
                 // `Validator::validate_function` actually checks the address
                 // space of pointer arguments explicitly before checking the
@@ -551,6 +583,7 @@ impl super::Validator {
                     flags: base_info.flags & type_info_mask,
                     uniform_layout,
                     storage_layout,
+                    push_constant_compatibility: base_info.push_constant_compatibility.clone(),
                 }
             }
             Ti::Struct { ref members, span } => {
@@ -631,6 +664,10 @@ impl super::Validator {
                         base_info.storage_layout,
                         handle,
                     );
+                    if base_info.push_constant_compatibility.is_err() {
+                        ti.push_constant_compatibility =
+                            base_info.push_constant_compatibility.clone();
+                    }
 
                     // Validate rule: If a structure member itself has a structure type S,
                     // then the number of bytes between the start of that member and

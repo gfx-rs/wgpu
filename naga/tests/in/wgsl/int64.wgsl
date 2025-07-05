@@ -39,6 +39,7 @@ var<storage, read_write> output: UniformCompatible;
 var<storage, read_write> output_arrays: StorageCompatible;
 
 fn int64_function(x: i64) -> i64 {
+   _ = private_variable;
    var val: i64 = i64(constant_variable);
    // A number too big for i32
    val += 31li - 1002003004005006li + -0x7fffffffffffffffli;
@@ -55,6 +56,8 @@ fn int64_function(x: i64) -> i64 {
    val += bitcast<vec2<i64>>(input_uniform.val_u64_2).y;
    val += bitcast<vec3<i64>>(input_uniform.val_u64_3).z;
    val += bitcast<vec4<i64>>(input_uniform.val_u64_4).w;
+   // Most negative i64
+   val += i64(-9223372036854775807 - 1);
 
    // Reading/writing to a uniform/storage buffer
    output.val_i64 = input_uniform.val_i64 + input_storage.val_i64;

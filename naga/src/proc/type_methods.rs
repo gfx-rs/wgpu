@@ -4,6 +4,8 @@
 //! [`Scalar`]: crate::Scalar
 //! [`ScalarKind`]: crate::ScalarKind
 
+use crate::ir;
+
 use super::TypeResolution;
 
 impl crate::ScalarKind {
@@ -27,6 +29,10 @@ impl crate::Scalar {
     pub const U32: Self = Self {
         kind: crate::ScalarKind::Uint,
         width: 4,
+    };
+    pub const F16: Self = Self {
+        kind: crate::ScalarKind::Float,
+        width: 2,
     };
     pub const F32: Self = Self {
         kind: crate::ScalarKind::Float,
@@ -98,6 +104,12 @@ impl crate::TypeInner {
     ///
     /// If `inner` is a scalar, vector, or matrix type, return
     /// its scalar type. Otherwise, return `None`.
+    ///
+    /// Note that this doesn't inspect [`Array`] types, as required
+    /// for automatic conversions. For that, see [`scalar_for_conversions`].
+    ///
+    /// [`Array`]: crate::TypeInner::Array
+    /// [`scalar_for_conversions`]: crate::TypeInner::scalar_for_conversions
     pub const fn scalar(&self) -> Option<crate::Scalar> {
         use crate::TypeInner as Ti;
         match *self {
@@ -116,10 +128,54 @@ impl crate::TypeInner {
         self.scalar().map(|scalar| scalar.width)
     }
 
+    /// Return the leaf scalar type of `self`, as needed for automatic conversions.
+    ///
+    /// Unlike the [`scalar`] method, which only retrieves scalars for
+    /// [`Scalar`], [`Vector`], and [`Matrix`] this also looks into
+    /// [`Array`] types to find the leaf scalar.
+    ///
+    /// [`scalar`]: crate::TypeInner::scalar
+    /// [`Scalar`]: crate::TypeInner::Scalar
+    /// [`Vector`]: crate::TypeInner::Vector
+    /// [`Matrix`]: crate::TypeInner::Matrix
+    /// [`Array`]: crate::TypeInner::Array
+    pub fn scalar_for_conversions(
+        &self,
+        types: &crate::UniqueArena<crate::Type>,
+    ) -> Option<crate::Scalar> {
+        use crate::TypeInner as Ti;
+        match *self {
+            Ti::Scalar(scalar) | Ti::Vector { scalar, .. } | Ti::Matrix { scalar, .. } => {
+                Some(scalar)
+            }
+            Ti::Array { base, .. } => types[base].inner.scalar_for_conversions(types),
+            _ => None,
+        }
+    }
+
     pub const fn pointer_space(&self) -> Option<crate::AddressSpace> {
         match *self {
             Self::Pointer { space, .. } => Some(space),
             Self::ValuePointer { space, .. } => Some(space),
+            _ => None,
+        }
+    }
+
+    /// If `self` is a pointer type, return its base type.
+    pub const fn pointer_base_type(&self) -> Option<TypeResolution> {
+        match *self {
+            crate::TypeInner::Pointer { base, .. } => Some(TypeResolution::Handle(base)),
+            crate::TypeInner::ValuePointer {
+                size: None, scalar, ..
+            } => Some(TypeResolution::Value(crate::TypeInner::Scalar(scalar))),
+            crate::TypeInner::ValuePointer {
+                size: Some(size),
+                scalar,
+                ..
+            } => Some(TypeResolution::Value(crate::TypeInner::Vector {
+                size,
+                scalar,
+            })),
             _ => None,
         }
     }
@@ -201,21 +257,38 @@ impl crate::TypeInner {
         }
     }
 
-    /// Compare `self` and `rhs` as types.
+    /// Compare value type `self` and `rhs` as types.
     ///
     /// This is mostly the same as `<TypeInner as Eq>::eq`, but it treats
-    /// `ValuePointer` and `Pointer` types as equivalent.
+    /// [`ValuePointer`] and [`Pointer`] types as equivalent. This method
+    /// cannot be used for structs, because it cannot distinguish two
+    /// structs with different names but the same members. For structs,
+    /// use [`compare_types`].
     ///
-    /// When you know that one side of the comparison is never a pointer, it's
-    /// fine to not bother with canonicalization, and just compare `TypeInner`
-    /// values with `==`.
-    pub fn equivalent(
+    /// When you know that one side of the comparison is never a pointer or
+    /// struct, it's fine to not bother with canonicalization, and just
+    /// compare `TypeInner` values with `==`.
+    ///
+    /// # Panics
+    ///
+    /// If both `self` and `rhs` are structs.
+    ///
+    /// [`compare_types`]: crate::proc::compare_types
+    /// [`ValuePointer`]: ir::TypeInner::ValuePointer
+    /// [`Pointer`]: ir::TypeInner::Pointer
+    pub fn non_struct_equivalent(
         &self,
-        rhs: &crate::TypeInner,
+        rhs: &ir::TypeInner,
         types: &crate::UniqueArena<crate::Type>,
     ) -> bool {
         let left = self.canonical_form(types);
         let right = rhs.canonical_form(types);
+
+        let left_struct = matches!(*self, ir::TypeInner::Struct { .. });
+        let right_struct = matches!(*rhs, ir::TypeInner::Struct { .. });
+
+        assert!(!left_struct || !right_struct);
+
         left.as_ref().unwrap_or(self) == right.as_ref().unwrap_or(rhs)
     }
 
@@ -302,5 +375,221 @@ impl crate::TypeInner {
             | crate::TypeInner::RayQuery { .. }
             | crate::TypeInner::BindingArray { .. } => false,
         }
+    }
+
+    /// Determine whether `self` automatically converts to `goal`.
+    ///
+    /// If Naga IR's automatic conversions will convert `self` to
+    /// `goal`, then return a pair `(from, to)`, where `from` and `to`
+    /// are the scalar types of the leaf values of `self` and `goal`.
+    ///
+    /// If `self` and `goal` are the same type, this will simply return
+    /// a pair `(S, S)`.
+    ///
+    /// If the automatic conversions cannot convert `self` to `goal`,
+    /// return `None`.
+    ///
+    /// Naga IR's automatic conversions will convert:
+    ///
+    /// - [`AbstractInt`] scalars to [`AbstractFloat`] or any numeric scalar type
+    ///
+    /// - [`AbstractFloat`] scalars to any floating-point scalar type
+    ///
+    /// - A [`Vector`] `{ size, scalar: S }` to `{ size, scalar: T }`
+    ///   if they would convert `S` to `T`
+    ///
+    /// - An [`Array`] `{ base: S, size, stride }` to `{ base: T, size, stride }`
+    ///   if they would convert `S` to `T`
+    ///
+    /// [`AbstractInt`]: crate::ScalarKind::AbstractInt
+    /// [`AbstractFloat`]: crate::ScalarKind::AbstractFloat
+    /// [`Vector`]: crate::TypeInner::Vector
+    /// [`Array`]: crate::TypeInner::Array
+    pub fn automatically_converts_to(
+        &self,
+        goal: &Self,
+        types: &crate::UniqueArena<crate::Type>,
+    ) -> Option<(crate::Scalar, crate::Scalar)> {
+        use crate::ScalarKind as Sk;
+        use crate::TypeInner as Ti;
+
+        // Automatic conversions only change the scalar type of a value's leaves
+        // (e.g., `vec4<AbstractFloat>` to `vec4<f32>`), never the type
+        // constructors applied to those scalar types (e.g., never scalar to
+        // `vec4`, or `vec2` to `vec3`). So first we check that the type
+        // constructors match, extracting the leaf scalar types in the process.
+        let expr_scalar;
+        let goal_scalar;
+        match (self, goal) {
+            (&Ti::Scalar(expr), &Ti::Scalar(goal)) => {
+                expr_scalar = expr;
+                goal_scalar = goal;
+            }
+            (
+                &Ti::Vector {
+                    size: expr_size,
+                    scalar: expr,
+                },
+                &Ti::Vector {
+                    size: goal_size,
+                    scalar: goal,
+                },
+            ) if expr_size == goal_size => {
+                expr_scalar = expr;
+                goal_scalar = goal;
+            }
+            (
+                &Ti::Matrix {
+                    rows: expr_rows,
+                    columns: expr_columns,
+                    scalar: expr,
+                },
+                &Ti::Matrix {
+                    rows: goal_rows,
+                    columns: goal_columns,
+                    scalar: goal,
+                },
+            ) if expr_rows == goal_rows && expr_columns == goal_columns => {
+                expr_scalar = expr;
+                goal_scalar = goal;
+            }
+            (
+                &Ti::Array {
+                    base: expr_base,
+                    size: expr_size,
+                    stride: _,
+                },
+                &Ti::Array {
+                    base: goal_base,
+                    size: goal_size,
+                    stride: _,
+                },
+            ) if expr_size == goal_size => {
+                return types[expr_base]
+                    .inner
+                    .automatically_converts_to(&types[goal_base].inner, types);
+            }
+            _ => return None,
+        }
+
+        match (expr_scalar.kind, goal_scalar.kind) {
+            (Sk::AbstractFloat, Sk::Float) => {}
+            (Sk::AbstractInt, Sk::Sint | Sk::Uint | Sk::AbstractFloat | Sk::Float) => {}
+            _ => return None,
+        }
+
+        log::trace!("      okay: expr {expr_scalar:?}, goal {goal_scalar:?}");
+        Some((expr_scalar, goal_scalar))
+    }
+}
+
+/// Helper trait for providing the min and max values exactly representable by
+/// the integer type `Self` and floating point type `F`.
+pub trait IntFloatLimits<F>
+where
+    F: num_traits::Float,
+{
+    /// Returns the minimum value exactly representable by the integer type
+    /// `Self` and floating point type `F`.
+    fn min_float() -> F;
+    /// Returns the maximum value exactly representable by the integer type
+    /// `Self` and floating point type `F`.
+    fn max_float() -> F;
+}
+
+macro_rules! define_int_float_limits {
+    ($int:ty, $float:ty, $min:expr, $max:expr) => {
+        impl IntFloatLimits<$float> for $int {
+            fn min_float() -> $float {
+                $min
+            }
+            fn max_float() -> $float {
+                $max
+            }
+        }
+    };
+}
+
+define_int_float_limits!(i32, half::f16, half::f16::MIN, half::f16::MAX);
+define_int_float_limits!(u32, half::f16, half::f16::ZERO, half::f16::MAX);
+define_int_float_limits!(i64, half::f16, half::f16::MIN, half::f16::MAX);
+define_int_float_limits!(u64, half::f16, half::f16::ZERO, half::f16::MAX);
+define_int_float_limits!(i32, f32, -2147483648.0f32, 2147483520.0f32);
+define_int_float_limits!(u32, f32, 0.0f32, 4294967040.0f32);
+define_int_float_limits!(
+    i64,
+    f32,
+    -9223372036854775808.0f32,
+    9223371487098961920.0f32
+);
+define_int_float_limits!(u64, f32, 0.0f32, 18446742974197923840.0f32);
+define_int_float_limits!(i32, f64, -2147483648.0f64, 2147483647.0f64);
+define_int_float_limits!(u32, f64, 0.0f64, 4294967295.0f64);
+define_int_float_limits!(
+    i64,
+    f64,
+    -9223372036854775808.0f64,
+    9223372036854774784.0f64
+);
+define_int_float_limits!(u64, f64, 0.0f64, 18446744073709549568.0f64);
+
+/// Returns a tuple of [`crate::Literal`]s representing the minimum and maximum
+/// float values exactly representable by the provided float and integer types.
+/// Panics if `float` is not one of `F16`, `F32`, or `F64`, or `int` is
+/// not one of `I32`, `U32`, `I64`, or `U64`.
+pub fn min_max_float_representable_by(
+    float: crate::Scalar,
+    int: crate::Scalar,
+) -> (crate::Literal, crate::Literal) {
+    match (float, int) {
+        (crate::Scalar::F16, crate::Scalar::I32) => (
+            crate::Literal::F16(i32::min_float()),
+            crate::Literal::F16(i32::max_float()),
+        ),
+        (crate::Scalar::F16, crate::Scalar::U32) => (
+            crate::Literal::F16(u32::min_float()),
+            crate::Literal::F16(u32::max_float()),
+        ),
+        (crate::Scalar::F16, crate::Scalar::I64) => (
+            crate::Literal::F16(i64::min_float()),
+            crate::Literal::F16(i64::max_float()),
+        ),
+        (crate::Scalar::F16, crate::Scalar::U64) => (
+            crate::Literal::F16(u64::min_float()),
+            crate::Literal::F16(u64::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::I32) => (
+            crate::Literal::F32(i32::min_float()),
+            crate::Literal::F32(i32::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::U32) => (
+            crate::Literal::F32(u32::min_float()),
+            crate::Literal::F32(u32::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::I64) => (
+            crate::Literal::F32(i64::min_float()),
+            crate::Literal::F32(i64::max_float()),
+        ),
+        (crate::Scalar::F32, crate::Scalar::U64) => (
+            crate::Literal::F32(u64::min_float()),
+            crate::Literal::F32(u64::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::I32) => (
+            crate::Literal::F64(i32::min_float()),
+            crate::Literal::F64(i32::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::U32) => (
+            crate::Literal::F64(u32::min_float()),
+            crate::Literal::F64(u32::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::I64) => (
+            crate::Literal::F64(i64::min_float()),
+            crate::Literal::F64(i64::max_float()),
+        ),
+        (crate::Scalar::F64, crate::Scalar::U64) => (
+            crate::Literal::F64(u64::min_float()),
+            crate::Literal::F64(u64::max_float()),
+        ),
+        _ => unreachable!(),
     }
 }

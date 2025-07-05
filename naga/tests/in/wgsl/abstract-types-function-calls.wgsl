@@ -22,6 +22,7 @@ const const_mat_af = mat2x2(vec2(0.0), vec2(0.0));
 const const_arr_af = array(0.0, 0.0);
 const const_arr_ai = array(0, 0);
 
+@compute @workgroup_size(1)
 fn main() {
     func_f(0.0);
     func_f(0);

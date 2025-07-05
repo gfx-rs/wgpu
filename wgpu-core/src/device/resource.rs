@@ -35,7 +35,7 @@ use crate::{
         BufferInitTracker, BufferInitTrackerAction, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
     },
-    instance::Adapter,
+    instance::{Adapter, RequestDeviceError},
     lock::{rank, Mutex, RwLock},
     pipeline,
     pool::ResourcePool,
@@ -45,6 +45,7 @@ use crate::{
     },
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
+    timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation::{self, validate_color_attachment_bytes_per_sample},
     weak_vec::WeakVec,
@@ -61,6 +62,18 @@ use core::sync::atomic::AtomicU64;
 #[cfg(not(supports_64bit_atomics))]
 use portable_atomic::AtomicU64;
 
+pub(crate) struct CommandIndices {
+    /// The index of the last command submission that was attempted.
+    ///
+    /// Note that `fence` may never be signalled with this value, if the command
+    /// submission failed. If you need to wait for everything running on a
+    /// `Queue` to complete, wait for [`last_successful_submission_index`].
+    ///
+    /// [`last_successful_submission_index`]: Device::last_successful_submission_index
+    pub(crate) active_submission_index: hal::FenceValue,
+    pub(crate) next_acceleration_structure_build_command_index: u64,
+}
+
 /// Structure describing a logical device. Some members are internally mutable,
 /// stored behind mutexes.
 pub struct Device {
@@ -73,14 +86,7 @@ pub struct Device {
 
     pub(crate) command_allocator: command::CommandAllocator,
 
-    /// The index of the last command submission that was attempted.
-    ///
-    /// Note that `fence` may never be signalled with this value, if the command
-    /// submission failed. If you need to wait for everything running on a
-    /// `Queue` to complete, wait for [`last_successful_submission_index`].
-    ///
-    /// [`last_successful_submission_index`]: Device::last_successful_submission_index
-    pub(crate) active_submission_index: hal::AtomicFenceValue,
+    pub(crate) command_indices: RwLock<CommandIndices>,
 
     /// The index of the last successful submission to this device's
     /// [`hal::Queue`].
@@ -90,7 +96,7 @@ pub struct Device {
     /// so waiting for this value won't hang waiting for work that was never
     /// submitted.
     ///
-    /// [`active_submission_index`]: Device::active_submission_index
+    /// [`active_submission_index`]: CommandIndices::active_submission_index
     pub(crate) last_successful_submission_index: hal::AtomicFenceValue,
 
     // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
@@ -128,9 +134,10 @@ pub struct Device {
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
-    pub(crate) last_acceleration_structure_build_command_index: AtomicU64,
-    #[cfg(feature = "indirect-validation")]
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+    // Optional so that we can late-initialize this after the queue is created.
+    pub(crate) timestamp_normalizer:
+        OnceCellOrLock<crate::timestamp_normalization::TimestampNormalizer>,
     // needs to be dropped last
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<trace::Trace>>,
@@ -160,9 +167,11 @@ impl Drop for Device {
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        #[cfg(feature = "indirect-validation")]
         if let Some(indirect_validation) = self.indirect_validation.take() {
             indirect_validation.dispose(self.raw.as_ref());
+        }
+        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
+            timestamp_normalizer.dispose(self.raw.as_ref());
         }
         unsafe {
             self.raw.destroy_buffer(zero_buffer);
@@ -248,21 +257,19 @@ impl Device {
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
 
-        #[cfg(feature = "indirect-validation")]
-        let indirect_validation = if downlevel
-            .flags
-            .contains(wgt::DownlevelFlags::INDIRECT_EXECUTION)
-        {
-            match crate::indirect_validation::IndirectValidation::new(
+        let enable_indirect_validation = instance_flags
+            .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
+            && downlevel
+                .flags
+                .contains(wgt::DownlevelFlags::INDIRECT_EXECUTION);
+
+        let indirect_validation = if enable_indirect_validation {
+            Some(crate::indirect_validation::IndirectValidation::new(
                 raw_device.as_ref(),
                 &desc.required_limits,
-            ) {
-                Ok(indirect_validation) => Some(indirect_validation),
-                Err(e) => {
-                    log::error!("indirect-validation error: {e:?}");
-                    return Err(DeviceError::Lost);
-                }
-            }
+                &desc.required_features,
+                adapter.backend(),
+            )?)
         } else {
             None
         };
@@ -274,7 +281,14 @@ impl Device {
             zero_buffer: ManuallyDrop::new(zero_buffer),
             label: desc.label.to_string(),
             command_allocator,
-            active_submission_index: AtomicU64::new(0),
+            command_indices: RwLock::new(
+                rank::DEVICE_COMMAND_INDICES,
+                CommandIndices {
+                    active_submission_index: 0,
+                    // By starting at one, we can put the result in a NonZeroU64.
+                    next_acceleration_structure_build_command_index: 1,
+                },
+            ),
             last_successful_submission_index: AtomicU64::new(0),
             fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
@@ -310,11 +324,24 @@ impl Device {
             instance_flags,
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-            // By starting at one, we can put the result in a NonZeroU64.
-            last_acceleration_structure_build_command_index: AtomicU64::new(1),
-            #[cfg(feature = "indirect-validation")]
+            timestamp_normalizer: OnceCellOrLock::new(),
             indirect_validation,
         })
+    }
+
+    pub fn late_init_resources_with_queue(&self) -> Result<(), RequestDeviceError> {
+        let queue = self.get_queue().unwrap();
+
+        let timestamp_normalizer = crate::timestamp_normalization::TimestampNormalizer::new(
+            self,
+            queue.get_timestamp_period(),
+        )?;
+
+        self.timestamp_normalizer
+            .set(timestamp_normalizer)
+            .unwrap_or_else(|_| panic!("Called late_init_resources_with_queue twice"));
+
+        Ok(())
     }
 
     /// Returns the backend this device is using.
@@ -330,20 +357,39 @@ impl Device {
         if self.is_valid() {
             Ok(())
         } else {
-            Err(DeviceError::Invalid(self.error_ident()))
+            Err(DeviceError::Lost)
         }
+    }
+
+    /// Checks that we are operating within the memory budget reported by the native APIs.
+    ///
+    /// If we are not, the device gets invalidated.
+    ///
+    /// The budget might fluctuate over the lifetime of the application, so it should be checked
+    /// somewhat frequently.
+    pub fn lose_if_oom(&self) {
+        let _ = self
+            .raw()
+            .check_if_oom()
+            .map_err(|e| self.handle_hal_error(e));
     }
 
     pub fn handle_hal_error(&self, error: hal::DeviceError) -> DeviceError {
         match error {
-            hal::DeviceError::OutOfMemory => {}
-            hal::DeviceError::Lost
-            | hal::DeviceError::ResourceCreationFailed
+            hal::DeviceError::OutOfMemory
+            | hal::DeviceError::Lost
             | hal::DeviceError::Unexpected => {
                 self.lose(&error.to_string());
             }
         }
         DeviceError::from_hal(error)
+    }
+
+    pub fn handle_hal_error_with_nonfatal_oom(&self, error: hal::DeviceError) -> DeviceError {
+        match error {
+            hal::DeviceError::OutOfMemory => DeviceError::from_hal(error),
+            error => self.handle_hal_error(error),
+        }
     }
 
     /// Run some destroy operations that were deferred.
@@ -494,6 +540,7 @@ impl Device {
             (
                 user_closures.submissions,
                 user_closures.mappings,
+                user_closures.blas_compact_ready,
                 queue_empty,
             ) = queue_result
         };
@@ -612,6 +659,10 @@ impl Device {
             usage |= wgt::BufferUses::STORAGE_READ_ONLY | wgt::BufferUses::STORAGE_READ_WRITE;
         }
 
+        if desc.usage.contains(wgt::BufferUsages::QUERY_RESOLVE) {
+            usage |= TIMESTAMP_NORMALIZATION_BUFFER_USES;
+        }
+
         if desc.mapped_at_creation {
             if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
                 return Err(resource::CreateBufferError::UnalignedSize);
@@ -648,12 +699,24 @@ impl Device {
             usage,
             memory_flags: hal::MemoryFlags::empty(),
         };
-        let buffer =
-            unsafe { self.raw().create_buffer(&hal_desc) }.map_err(|e| self.handle_hal_error(e))?;
+        let buffer = unsafe { self.raw().create_buffer(&hal_desc) }
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
-        #[cfg(feature = "indirect-validation")]
-        let raw_indirect_validation_bind_group =
-            self.create_indirect_validation_bind_group(buffer.as_ref(), desc.size, desc.usage)?;
+        let timestamp_normalization_bind_group = Snatchable::new(
+            self.timestamp_normalizer
+                .get()
+                .unwrap()
+                .create_normalization_bind_group(
+                    self,
+                    &*buffer,
+                    desc.label.as_deref(),
+                    desc.size,
+                    desc.usage,
+                )?,
+        );
+
+        let indirect_validation_bind_groups =
+            self.create_indirect_validation_bind_groups(buffer.as_ref(), desc.size, desc.usage)?;
 
         let buffer = Buffer {
             raw: Snatchable::new(buffer),
@@ -668,8 +731,8 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
-            #[cfg(feature = "indirect-validation")]
-            raw_indirect_validation_bind_group,
+            timestamp_normalization_bind_group,
+            indirect_validation_bind_groups,
         };
 
         let buffer = Arc::new(buffer);
@@ -751,8 +814,27 @@ impl Device {
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> (Fallible<Buffer>, Option<resource::CreateBufferError>) {
-        #[cfg(feature = "indirect-validation")]
-        let raw_indirect_validation_bind_group = match self.create_indirect_validation_bind_group(
+        let timestamp_normalization_bind_group = match self
+            .timestamp_normalizer
+            .get()
+            .unwrap()
+            .create_normalization_bind_group(
+                self,
+                &*hal_buffer,
+                desc.label.as_deref(),
+                desc.size,
+                desc.usage,
+            ) {
+            Ok(bg) => Snatchable::new(bg),
+            Err(e) => {
+                return (
+                    Fallible::Invalid(Arc::new(desc.label.to_string())),
+                    Some(e.into()),
+                )
+            }
+        };
+
+        let indirect_validation_bind_groups = match self.create_indirect_validation_bind_groups(
             hal_buffer.as_ref(),
             desc.size,
             desc.usage,
@@ -776,8 +858,8 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
-            #[cfg(feature = "indirect-validation")]
-            raw_indirect_validation_bind_group,
+            timestamp_normalization_bind_group,
+            indirect_validation_bind_groups,
         };
 
         let buffer = Arc::new(buffer);
@@ -790,22 +872,31 @@ impl Device {
         (Fallible::Valid(buffer), None)
     }
 
-    #[cfg(feature = "indirect-validation")]
-    fn create_indirect_validation_bind_group(
+    fn create_indirect_validation_bind_groups(
         &self,
         raw_buffer: &dyn hal::DynBuffer,
         buffer_size: u64,
         usage: wgt::BufferUsages,
-    ) -> Result<Snatchable<Box<dyn hal::DynBindGroup>>, resource::CreateBufferError> {
-        if usage.contains(wgt::BufferUsages::INDIRECT) {
-            let indirect_validation = self.indirect_validation.as_ref().unwrap();
-            let bind_group = indirect_validation
-                .create_src_bind_group(self.raw(), &self.limits, buffer_size, raw_buffer)
-                .map_err(resource::CreateBufferError::IndirectValidationBindGroup)?;
-            match bind_group {
-                Some(bind_group) => Ok(Snatchable::new(bind_group)),
-                None => Ok(Snatchable::empty()),
-            }
+    ) -> Result<Snatchable<crate::indirect_validation::BindGroups>, resource::CreateBufferError>
+    {
+        if !usage.contains(wgt::BufferUsages::INDIRECT) {
+            return Ok(Snatchable::empty());
+        }
+
+        let Some(ref indirect_validation) = self.indirect_validation else {
+            return Ok(Snatchable::empty());
+        };
+
+        let bind_groups = crate::indirect_validation::BindGroups::new(
+            indirect_validation,
+            self,
+            buffer_size,
+            raw_buffer,
+        )
+        .map_err(resource::CreateBufferError::IndirectValidationBindGroup)?;
+
+        if let Some(bind_groups) = bind_groups {
+            Ok(Snatchable::new(bind_groups))
         } else {
             Ok(Snatchable::empty())
         }
@@ -838,13 +929,6 @@ impl Device {
                     desc.format,
                 ));
             }
-            // Renderable textures can only be 2D
-            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
-                return Err(CreateTextureError::InvalidDimensionUsages(
-                    wgt::TextureUsages::RENDER_ATTACHMENT,
-                    desc.dimension,
-                ));
-            }
         }
 
         if desc.dimension != wgt::TextureDimension::D2
@@ -855,6 +939,14 @@ impl Device {
                 return Err(CreateTextureError::InvalidCompressedDimension(
                     desc.dimension,
                     desc.format,
+                ));
+            }
+
+            // Renderable textures can only be 2D or 3D
+            if desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::InvalidDimensionUsages(
+                    wgt::TextureUsages::RENDER_ATTACHMENT,
+                    desc.dimension,
                 ));
             }
         }
@@ -886,6 +978,9 @@ impl Device {
                 // Only BCn formats with Sliced 3D feature can be used for 3D textures
                 if desc.format.is_bcn() {
                     self.require_features(wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D)
+                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+                } else if desc.format.is_astc() {
+                    self.require_features(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D)
                         .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
                 } else {
                     return Err(CreateTextureError::InvalidCompressedDimension(
@@ -1029,20 +1124,16 @@ impl Device {
         };
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let clear_mode = if hal_usage
             .intersects(wgt::TextureUses::DEPTH_STENCIL_WRITE | wgt::TextureUses::COLOR_TARGET)
+            && desc.dimension == wgt::TextureDimension::D2
         {
             let (is_color, usage) = if desc.format.is_depth_stencil_format() {
                 (false, wgt::TextureUses::DEPTH_STENCIL_WRITE)
             } else {
                 (true, wgt::TextureUses::COLOR_TARGET)
-            };
-            let dimension = match desc.dimension {
-                wgt::TextureDimension::D1 => TextureViewDimension::D1,
-                wgt::TextureDimension::D2 => TextureViewDimension::D2,
-                wgt::TextureDimension::D3 => unreachable!(),
             };
 
             let clear_label = hal_label(
@@ -1058,7 +1149,7 @@ impl Device {
                             let desc = hal::TextureViewDescriptor {
                                 label: clear_label,
                                 format: $format,
-                                dimension,
+                                dimension: TextureViewDimension::D2,
                                 usage,
                                 range: wgt::ImageSubresourceRange {
                                     aspect: $aspect,
@@ -1329,10 +1420,12 @@ impl Device {
                 break 'error Err(TextureViewNotRenderableReason::Usage(resolved_usage));
             }
 
-            if !(resolved_dimension == TextureViewDimension::D2
-                || (self.features.contains(wgt::Features::MULTIVIEW)
-                    && resolved_dimension == TextureViewDimension::D2Array))
-            {
+            let allowed_view_dimensions = [
+                TextureViewDimension::D2,
+                TextureViewDimension::D2Array,
+                TextureViewDimension::D3,
+            ];
+            if !allowed_view_dimensions.contains(&resolved_dimension) {
                 break 'error Err(TextureViewNotRenderableReason::Dimension(
                     resolved_dimension,
                 ));
@@ -1542,7 +1635,7 @@ impl Device {
         };
 
         let raw = unsafe { self.raw().create_sampler(&hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let sampler = Sampler {
             raw: ManuallyDrop::new(raw),
@@ -1689,19 +1782,47 @@ impl Device {
     }
 
     #[allow(unused_unsafe)]
-    pub(crate) unsafe fn create_shader_module_spirv<'a>(
+    pub(crate) unsafe fn create_shader_module_passthrough<'a>(
         self: &Arc<Self>,
-        desc: &pipeline::ShaderModuleDescriptor<'a>,
-        source: &'a [u32],
+        descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
-
-        self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
-        let hal_desc = hal::ShaderModuleDescriptor {
-            label: desc.label.to_hal(self.instance_flags),
-            runtime_checks: desc.runtime_checks,
+        let hal_shader = match descriptor {
+            pipeline::ShaderModuleDescriptorPassthrough::SpirV(inner) => {
+                self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::SpirV(&inner.source)
+            }
+            pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => {
+                self.require_features(wgt::Features::MSL_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::Msl {
+                    shader: inner.source.to_string(),
+                    entry_point: inner.entry_point.to_string(),
+                    num_workgroups: inner.num_workgroups,
+                }
+            }
+            pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
+                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::Dxil {
+                    shader: inner.source,
+                    entry_point: inner.entry_point.clone(),
+                    num_workgroups: inner.num_workgroups,
+                }
+            }
+            pipeline::ShaderModuleDescriptorPassthrough::Hlsl(inner) => {
+                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
+                hal::ShaderInput::Hlsl {
+                    shader: inner.source,
+                    entry_point: inner.entry_point.clone(),
+                    num_workgroups: inner.num_workgroups,
+                }
+            }
         };
-        let hal_shader = hal::ShaderInput::SpirV(source);
+
+        let hal_desc = hal::ShaderModuleDescriptor {
+            label: descriptor.label().to_hal(self.instance_flags),
+            runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+        };
+
         let raw = match unsafe { self.raw().create_shader_module(&hal_desc, hal_shader) } {
             Ok(raw) => raw,
             Err(error) => {
@@ -1721,12 +1842,10 @@ impl Device {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),
             interface: None,
-            label: desc.label.to_string(),
+            label: descriptor.label().to_string(),
         };
 
-        let module = Arc::new(module);
-
-        Ok(module)
+        Ok(Arc::new(module))
     }
 
     pub(crate) fn create_command_encoder(
@@ -1888,17 +2007,6 @@ impl Device {
                                 error: BindGroupLayoutEntryError::StorageTextureAtomic,
                             });
                         }
-                        wgt::StorageTextureAccess::ReadOnly
-                        | wgt::StorageTextureAccess::ReadWrite
-                            if !self.features.contains(
-                                wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                            ) =>
-                        {
-                            return Err(binding_model::CreateBindGroupLayoutError::Entry {
-                                binding: entry.binding,
-                                error: BindGroupLayoutEntryError::StorageTextureReadWrite,
-                            });
-                        }
                         _ => (),
                     }
                     (
@@ -1908,16 +2016,8 @@ impl Device {
                         ),
                         match access {
                             wgt::StorageTextureAccess::WriteOnly => WritableStorage::Yes,
-                            wgt::StorageTextureAccess::ReadOnly => {
-                                required_features |=
-                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                                WritableStorage::No
-                            }
-                            wgt::StorageTextureAccess::ReadWrite => {
-                                required_features |=
-                                    wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
-                                WritableStorage::Yes
-                            }
+                            wgt::StorageTextureAccess::ReadOnly => WritableStorage::No,
+                            wgt::StorageTextureAccess::ReadWrite => WritableStorage::Yes,
                             wgt::StorageTextureAccess::Atomic => {
                                 required_features |= wgt::Features::TEXTURE_ATOMIC;
                                 WritableStorage::Yes
@@ -1926,6 +2026,14 @@ impl Device {
                     )
                 }
                 Bt::AccelerationStructure { .. } => (None, WritableStorage::No),
+                Bt::ExternalTexture => {
+                    self.require_features(wgt::Features::EXTERNAL_TEXTURE)
+                        .map_err(|e| binding_model::CreateBindGroupLayoutError::Entry {
+                            binding: entry.binding,
+                            error: e.into(),
+                        })?;
+                    (None, WritableStorage::No)
+                }
             };
 
             // Validate the count parameter
@@ -2676,6 +2784,41 @@ impl Device {
                 view.check_usage(wgt::TextureUsages::STORAGE_BINDING)?;
                 Ok(internal_use)
             }
+            wgt::BindingType::ExternalTexture => {
+                if view.desc.dimension != TextureViewDimension::D2 {
+                    return Err(Error::InvalidTextureDimension {
+                        binding,
+                        layout_dimension: TextureViewDimension::D2,
+                        view_dimension: view.desc.dimension,
+                    });
+                }
+                let mip_level_count = view.selector.mips.end - view.selector.mips.start;
+                if mip_level_count != 1 {
+                    return Err(Error::InvalidExternalTextureMipLevelCount {
+                        binding,
+                        mip_level_count,
+                    });
+                }
+                if view.desc.format != TextureFormat::Rgba8Unorm
+                    && view.desc.format != TextureFormat::Bgra8Unorm
+                    && view.desc.format != TextureFormat::Rgba16Float
+                {
+                    return Err(Error::InvalidExternalTextureFormat {
+                        binding,
+                        format: view.desc.format,
+                    });
+                }
+                if view.samples != 1 {
+                    return Err(Error::InvalidTextureMultisample {
+                        binding,
+                        layout_multisampled: false,
+                        view_samples: view.samples,
+                    });
+                }
+
+                view.check_usage(wgt::TextureUsages::TEXTURE_BINDING)?;
+                Ok(wgt::TextureUses::RESOURCE)
+            }
             _ => Err(Error::WrongBindingType {
                 binding,
                 actual: decl.ty,
@@ -2762,7 +2905,7 @@ impl Device {
             .map(|bgl| bgl.raw())
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
-        let additional_flags = if cfg!(feature = "indirect-validation") {
+        let additional_flags = if self.indirect_validation.is_some() {
             hal::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE
         } else {
             hal::PipelineLayoutFlags::empty()
@@ -3899,7 +4042,7 @@ impl Device {
         let hal_desc = desc.map_label(|label| label.to_hal(self.instance_flags));
 
         let raw = unsafe { self.raw().create_query_set(&hal_desc) }
-            .map_err(|e| self.handle_hal_error(e))?;
+            .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let query_set = QuerySet {
             raw: ManuallyDrop::new(raw),
@@ -3933,12 +4076,9 @@ impl Device {
         // since that will prevent any new work from being added to the queues.
         // Future calls to poll_devices will continue to check the work queues
         // until they are cleared, and then drop the device.
-
-        // Eagerly release GPU resources.
-        self.release_gpu_resources();
     }
 
-    pub(crate) fn release_gpu_resources(&self) {
+    fn release_gpu_resources(&self) {
         // This is called when the device is lost, which makes every associated
         // resource invalid and unusable. This is an opportunity to release all of
         // the underlying gpu resources, even though the objects remain visible to
@@ -3951,12 +4091,12 @@ impl Device {
         let trackers = self.trackers.lock();
         for buffer in trackers.buffers.used_resources() {
             if let Some(buffer) = Weak::upgrade(buffer) {
-                let _ = buffer.destroy();
+                buffer.destroy();
             }
         }
         for texture in trackers.textures.used_resources() {
             if let Some(texture) = Weak::upgrade(texture) {
-                let _ = texture.destroy();
+                texture.destroy();
             }
         }
     }

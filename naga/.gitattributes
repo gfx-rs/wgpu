@@ -1,1 +1,1 @@
-tests/out/**/* text eol=lf
+tests/naga/out/**/* text eol=lf

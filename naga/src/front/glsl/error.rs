@@ -9,12 +9,11 @@ use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
 use pp_rs::token::PreprocessorError;
-use termcolor::{NoColor, WriteColor};
 use thiserror::Error;
 
 use super::token::TokenValue;
 use crate::SourceLocation;
-use crate::{proc::ConstantEvaluatorError, Span};
+use crate::{error::ErrorWrite, proc::ConstantEvaluatorError, Span};
 
 fn join_with_comma(list: &[ExpectedToken]) -> String {
     let mut string = "".to_string();
@@ -109,9 +108,15 @@ pub enum ErrorKind {
     /// Unsupported matrix of the form matCx2
     ///
     /// Our IR expects matrices of the form matCx2 to have a stride of 8 however
-    /// matrices in the std140 layout have a stride of at least 16
-    #[error("unsupported matrix of the form matCx2 in std140 block layout")]
-    UnsupportedMatrixTypeInStd140,
+    /// matrices in the std140 layout have a stride of at least 16.
+    #[error("unsupported matrix of the form matCx2 (in this case mat{columns}x2) in std140 block layout. See https://github.com/gfx-rs/wgpu/issues/4375")]
+    UnsupportedMatrixWithTwoRowsInStd140 { columns: u8 },
+    /// Unsupported matrix of the form f16matCxR
+    ///
+    /// Our IR expects matrices of the form f16matCxR to have a stride of 4/8/8 depending on row-count,
+    /// however matrices in the std140 layout have a stride of at least 16.
+    #[error("unsupported matrix of the form f16matCxR (in this case f16mat{columns}x{rows}) in std140 block layout. See https://github.com/gfx-rs/wgpu/issues/4375")]
+    UnsupportedF16MatrixInStd140 { columns: u8, rows: u8 },
     /// A variable with the same name already exists in the current scope.
     #[error("Variable already declared: {0}")]
     VariableAlreadyDeclared(String),
@@ -160,11 +165,11 @@ pub struct ParseErrors {
 }
 
 impl ParseErrors {
-    pub fn emit_to_writer(&self, writer: &mut impl WriteColor, source: &str) {
+    pub fn emit_to_writer(&self, writer: &mut impl ErrorWrite, source: &str) {
         self.emit_to_writer_with_path(writer, source, "glsl");
     }
 
-    pub fn emit_to_writer_with_path(&self, writer: &mut impl WriteColor, source: &str, path: &str) {
+    pub fn emit_to_writer_with_path(&self, writer: &mut impl ErrorWrite, source: &str, path: &str) {
         let path = path.to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
@@ -181,9 +186,9 @@ impl ParseErrors {
     }
 
     pub fn emit_to_string(&self, source: &str) -> String {
-        let mut writer = NoColor::new(Vec::new());
-        self.emit_to_writer(&mut writer, source);
-        String::from_utf8(writer.into_inner()).unwrap()
+        let mut writer = crate::error::DiagnosticBuffer::new();
+        self.emit_to_writer(writer.inner_mut(), source);
+        writer.into_string()
     }
 }
 

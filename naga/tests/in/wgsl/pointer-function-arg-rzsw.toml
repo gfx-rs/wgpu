@@ -1,0 +1,4 @@
+targets = "METAL"
+
+[bounds_check_policies]
+index = "ReadZeroSkipWrite"

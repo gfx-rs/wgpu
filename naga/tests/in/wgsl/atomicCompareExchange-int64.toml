@@ -1,7 +1,8 @@
 god_mode = true
-targets = "SPIRV | WGSL"
+targets = "SPIRV | HLSL | WGSL"
 
 [hlsl]
+shader_model = "V6_6"
 fake_missing_bindings = true
 push_constants_target = { register = 0, space = 0 }
 restrict_indexing = true

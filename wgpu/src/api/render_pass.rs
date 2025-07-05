@@ -100,7 +100,7 @@ impl RenderPass<'_> {
             &buffer_slice.buffer.inner,
             index_format,
             buffer_slice.offset,
-            buffer_slice.size,
+            Some(buffer_slice.size),
         );
     }
 
@@ -121,7 +121,7 @@ impl RenderPass<'_> {
             slot,
             &buffer_slice.buffer.inner,
             buffer_slice.offset,
-            buffer_slice.size,
+            Some(buffer_slice.size),
         );
     }
 
@@ -236,15 +236,6 @@ impl RenderPass<'_> {
     ///
     /// This is like calling [`RenderPass::draw`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
-    ///
-    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
-    /// these and issue an error.
-    /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
-    ///   [`DrawIndirectArgs::first_instance`](crate::util::DrawIndirectArgs::first_instance) will be ignored.
-    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
-    ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
-    ///
-    /// See details on the individual flags for more information.
     pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         self.inner
             .draw_indirect(&indirect_buffer.inner, indirect_offset);
@@ -255,15 +246,6 @@ impl RenderPass<'_> {
     ///
     /// This is like calling [`RenderPass::draw_indexed`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
-    ///
-    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
-    /// these and issue an error.
-    /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
-    ///   [`DrawIndexedIndirectArgs::first_instance`](crate::util::DrawIndexedIndirectArgs::first_instance) will be ignored.
-    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
-    ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
-    ///
-    /// See details on the individual flags for more information.
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &Buffer,
@@ -365,6 +347,12 @@ impl RenderPass<'_> {
     ) {
         self.inner
             .multi_draw_mesh_tasks_indirect(&indirect_buffer.inner, indirect_offset, count);
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of RenderPass (if custom backend and is internally T)
+    pub fn as_custom<T: custom::RenderPassInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 }
 
@@ -604,6 +592,8 @@ static_assertions::assert_impl_all!(RenderPassTimestampWrites<'_>: Send, Sync);
 pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
     pub view: &'tex TextureView,
+    /// The depth slice index of a 3D view. It must not be provided if the view is not 3D.
+    pub depth_slice: Option<u32>,
     /// The view that will receive the resolved output if multisampling is used.
     ///
     /// If set, it is always written to, regardless of how [`Self::ops`] is configured.

@@ -1,0 +1,4841 @@
+(
+    type_flags: [
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | HOST_SHAREABLE | CREATION_RESOLVED"),
+        ("DATA | SIZED | HOST_SHAREABLE | CREATION_RESOLVED"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | COPY | HOST_SHAREABLE | CREATION_RESOLVED"),
+        ("DATA | HOST_SHAREABLE | CREATION_RESOLVED"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("SIZED | COPY | CREATION_RESOLVED | ARGUMENT"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("SIZED | COPY | CREATION_RESOLVED | ARGUMENT"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("SIZED | COPY | CREATION_RESOLVED | ARGUMENT"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("SIZED | COPY | CREATION_RESOLVED | ARGUMENT"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("SIZED | COPY | CREATION_RESOLVED | ARGUMENT"),
+        ("DATA | SIZED | COPY | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+    ],
+    functions: [
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                ("READ"),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 14,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 16,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(15),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 16,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 16,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 16,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 16,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 16,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 16,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(15),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(16),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 7,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 16,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(15),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 15,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(49),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                ("READ"),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 14,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 20,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(19),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 20,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(18),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 20,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 20,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 20,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 20,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 20,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 20,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(4),
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Uniform,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(19),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(20),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 8,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 20,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(19),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(18),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 19,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 18,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: Some(Bi),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(53),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: Some(0),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(21),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(5),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: Some(0),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(23),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(22),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(5),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(26),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(28),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(27),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 0,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(27),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 27,
+                        space: Function,
+                    )),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: Some(0),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(30),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 0,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(30),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 0,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: Some(0),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(32),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 0,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(32),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 0,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: Some(0),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 2,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 29,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 2,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 31,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: Some(2),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(33),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(34),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 2,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 34,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 33,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(33),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: Some(2),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(35),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 35,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 3,
+                    assignable_global: None,
+                    ty: Handle(37),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(36),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Bool,
+                        width: 1,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(36),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: Some(1),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(37),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 3,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 37,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 36,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(36),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(4),
+                        requirements: (""),
+                    ),
+                    ref_count: 2,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 36,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(4),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(4),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 2,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 0,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Bool,
+                        width: 1,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 36,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: Some(0),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                ("READ"),
+                ("READ | QUERY"),
+                ("READ"),
+                ("READ"),
+                ("READ"),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 2,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 3,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 5,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(5),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(5),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(0),
+                    ty: Value(Pointer(
+                        base: 3,
+                        space: Private,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(5),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(3),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 14,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 6,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(6),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(10),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 14,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(10),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 12,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(10),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(12),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(14),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 14,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(14),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 6,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(14),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(ValuePointer(
+                        size: Some(Tri),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(14),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(14),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(19),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 14,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(19),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 13,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(21),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 14,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(21),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 13,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(21),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(21),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(19),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 4,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(19),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(19),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(29),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(3),
+                    ty: Value(Pointer(
+                        base: 17,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(29),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(17),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(31),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 14,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(31),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 13,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(31),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 4,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(31),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(5),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(14),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(19),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(25),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(41),
+                        requirements: (""),
+                    ),
+                    ref_count: 3,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 25,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(41),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(41),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Function,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(41),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(23),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(5),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(41),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        scalar: (
+                            kind: Sint,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(41),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Tri,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(7),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(24),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                ("WRITE"),
+                (""),
+                ("WRITE"),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 14,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 6,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(ValuePointer(
+                        size: Some(Tri),
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(ValuePointer(
+                        size: None,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(5),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 14,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(5),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 6,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Tri,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Tri,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Tri,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Tri,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(6),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(16),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 14,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(16),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 12,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Uint,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Bi,
+                        scalar: (
+                            kind: Uint,
+                            width: 4,
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(12),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(23),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 14,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(23),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 13,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(23),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 4,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(23),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(1),
+                    ty: Value(Pointer(
+                        base: 2,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Sint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(28),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(3),
+                    ty: Value(Pointer(
+                        base: 17,
+                        space: Storage(
+                            access: ("LOAD | STORE"),
+                        ),
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(17),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Float,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Vector(
+                        size: Quad,
+                        scalar: (
+                            kind: Float,
+                            width: 4,
+                        ),
+                    )),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: Some(0),
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                (""),
+                (""),
+                (""),
+                (""),
+                (""),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Bool,
+                        width: 1,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(33),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(1),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(2),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    const_expression_types: [
+        Value(Scalar((
+            kind: Uint,
+            width: 4,
+        ))),
+        Value(Scalar((
+            kind: Uint,
+            width: 4,
+        ))),
+        Value(Scalar((
+            kind: Uint,
+            width: 4,
+        ))),
+        Value(Scalar((
+            kind: Uint,
+            width: 4,
+        ))),
+        Handle(1),
+        Value(Scalar((
+            kind: Sint,
+            width: 4,
+        ))),
+        Handle(3),
+    ],
+)

@@ -4,7 +4,7 @@ use bit_set::BitSet;
 
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
-    Capabilities, Disalignment, FunctionError, ModuleInfo,
+    Capabilities, Disalignment, FunctionError, ModuleInfo, PushConstantError,
 };
 use crate::arena::{Handle, UniqueArena};
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
@@ -41,6 +41,8 @@ pub enum GlobalVariableError {
     InitializerNotAllowed(crate::AddressSpace),
     #[error("Storage address space doesn't support write-only access")]
     StorageAddressSpaceWriteOnlyNotSupported,
+    #[error("Type is not valid for use as a push constant")]
+    InvalidPushConstantType(#[source] PushConstantError),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -210,8 +212,12 @@ impl VaryingContext<'_> {
                     Bi::ClipDistance | Bi::CullDistance => (
                         self.stage == St::Vertex && self.output,
                         match *ty_inner {
-                            Ti::Array { base, .. } => {
+                            Ti::Array { base, size, .. } => {
                                 self.types[base].inner == Ti::Scalar(crate::Scalar::F32)
+                                    && match size {
+                                        crate::ArraySize::Constant(non_zero) => non_zero.get() <= 8,
+                                        _ => false,
+                                    }
                             }
                             _ => false,
                         },
@@ -596,6 +602,9 @@ impl super::Validator {
                         Capabilities::PUSH_CONSTANT,
                     ));
                 }
+                if let Err(ref err) = type_info.push_constant_compatibility {
+                    return Err(GlobalVariableError::InvalidPushConstantType(err.clone()));
+                }
                 (
                     TypeFlags::DATA
                         | TypeFlags::COPY
@@ -631,9 +640,10 @@ impl super::Validator {
                 return Err(GlobalVariableError::InitializerExprType);
             }
 
-            let decl_ty = &gctx.types[var.ty].inner;
-            let init_ty = mod_info[init].inner_with(gctx.types);
-            if !decl_ty.equivalent(init_ty, gctx.types) {
+            if !gctx.compare_types(
+                &crate::proc::TypeResolution::Handle(var.ty),
+                &mod_info[init],
+            ) {
                 return Err(GlobalVariableError::InitializerType);
             }
         }

@@ -392,6 +392,7 @@ impl crate::framework::Example for Example {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -429,16 +430,6 @@ pub fn main() {
 }
 
 #[cfg(test)]
-fn test_parameters() -> wgpu_test::TestParameters {
-    wgpu_test::TestParameters::default()
-        // https://github.com/gfx-rs/wgpu/issues/7287
-        .expect_fail(wgpu_test::FailureCase::backend_adapter(
-            wgpu::Backends::METAL,
-            "Apple M",
-        ))
-}
-
-#[cfg(test)]
 #[wgpu_test::gpu_test]
 static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "texture-arrays",
@@ -446,7 +437,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::empty(),
-    base_test_parameters: test_parameters(),
+    base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
     _phantom: std::marker::PhantomData::<Example>,
 };
@@ -459,7 +450,7 @@ static TEST_UNIFORM: crate::framework::ExampleTestParams = crate::framework::Exa
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::empty(),
-    base_test_parameters: test_parameters(),
+    base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
     _phantom: std::marker::PhantomData::<Example>,
 };
@@ -474,7 +465,7 @@ static TEST_NON_UNIFORM: crate::framework::ExampleTestParams =
         height: 768,
         optional_features:
             wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        base_test_parameters: test_parameters(),
+        base_test_parameters: wgpu_test::TestParameters::default(),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
         _phantom: std::marker::PhantomData::<Example>,
     };

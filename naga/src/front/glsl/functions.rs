@@ -348,7 +348,7 @@ impl Frontend {
                 }
             }
             _ => {
-                components = iter::repeat(value).take(columns as usize).collect();
+                components = iter::repeat_n(value, columns as usize).collect();
             }
         }
 
@@ -1370,7 +1370,7 @@ impl Frontend {
         ctx.module.entry_points.push(EntryPoint {
             name: "main".to_string(),
             stage: self.meta.stage,
-            early_depth_test: Some(crate::EarlyDepthTest { conservative: None })
+            early_depth_test: Some(crate::EarlyDepthTest::Force)
                 .filter(|_| self.meta.early_fragment_tests),
             workgroup_size: self.meta.workgroup_size,
             workgroup_size_overrides: None,

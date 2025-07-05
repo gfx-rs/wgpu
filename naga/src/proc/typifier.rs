@@ -2,7 +2,11 @@ use alloc::{format, string::String};
 
 use thiserror::Error;
 
-use crate::arena::{Arena, Handle, UniqueArena};
+use crate::{
+    arena::{Arena, Handle, UniqueArena},
+    common::ForDebugWithTypes,
+    ir,
+};
 
 /// The result of computing an expression's type.
 ///
@@ -191,6 +195,14 @@ pub enum ResolveError {
     FunctionArgumentNotFound(u32),
     #[error("Special type is not registered within the module")]
     MissingSpecialType,
+    #[error("Call to builtin {0} has incorrect or ambiguous arguments")]
+    BuiltinArgumentsInvalid(String),
+}
+
+impl From<crate::proc::MissingSpecialType> for ResolveError {
+    fn from(_unit_struct: crate::proc::MissingSpecialType) -> Self {
+        ResolveError::MissingSpecialType
+    }
 }
 
 pub struct ResolveContext<'a> {
@@ -583,9 +595,8 @@ impl<'a> ResolveContext<'a> {
                 | crate::BinaryOperator::Less
                 | crate::BinaryOperator::LessEqual
                 | crate::BinaryOperator::Greater
-                | crate::BinaryOperator::GreaterEqual
-                | crate::BinaryOperator::LogicalAnd
-                | crate::BinaryOperator::LogicalOr => {
+                | crate::BinaryOperator::GreaterEqual => {
+                    // These accept scalars or vectors.
                     let scalar = crate::Scalar::BOOL;
                     let inner = match *past(left)?.inner_with(types) {
                         Ti::Scalar { .. } => Ti::Scalar(scalar),
@@ -597,6 +608,19 @@ impl<'a> ResolveContext<'a> {
                         }
                     };
                     TypeResolution::Value(inner)
+                }
+                crate::BinaryOperator::LogicalAnd | crate::BinaryOperator::LogicalOr => {
+                    // These accept scalars only.
+                    let bool = Ti::Scalar(crate::Scalar::BOOL);
+                    let ty = past(left)?.inner_with(types);
+                    if *ty == bool {
+                        TypeResolution::Value(bool)
+                    } else {
+                        return Err(ResolveError::IncompatibleOperands(format!(
+                            "{op:?}({:?}, _)",
+                            ty.for_debug(types),
+                        )));
+                    }
                 }
                 crate::BinaryOperator::And
                 | crate::BinaryOperator::ExclusiveOr
@@ -635,210 +659,46 @@ impl<'a> ResolveContext<'a> {
                 arg2: _,
                 arg3: _,
             } => {
-                use crate::MathFunction as Mf;
+                use crate::proc::OverloadSet as _;
+
+                let mut overloads = fun.overloads();
+                log::debug!(
+                    "initial overloads for {fun:?}, {:#?}",
+                    overloads.for_debug(types)
+                );
+
+                // If any argument is not a constant expression, then no
+                // overloads that accept abstract values should be considered.
+                // `OverloadSet::concrete_only` is supposed to help impose this
+                // restriction. However, no `MathFunction` accepts a mix of
+                // abstract and concrete arguments, so we don't need to worry
+                // about that here.
+
                 let res_arg = past(arg)?;
-                match fun {
-                    Mf::Abs
-                    | Mf::Min
-                    | Mf::Max
-                    | Mf::Clamp
-                    | Mf::Saturate
-                    | Mf::Cos
-                    | Mf::Cosh
-                    | Mf::Sin
-                    | Mf::Sinh
-                    | Mf::Tan
-                    | Mf::Tanh
-                    | Mf::Acos
-                    | Mf::Asin
-                    | Mf::Atan
-                    | Mf::Atan2
-                    | Mf::Asinh
-                    | Mf::Acosh
-                    | Mf::Atanh
-                    | Mf::Radians
-                    | Mf::Degrees
-                    | Mf::Ceil
-                    | Mf::Floor
-                    | Mf::Round
-                    | Mf::Fract
-                    | Mf::Trunc
-                    | Mf::Ldexp
-                    | Mf::Exp
-                    | Mf::Exp2
-                    | Mf::Log
-                    | Mf::Log2
-                    | Mf::Pow
-                    | Mf::QuantizeToF16 => res_arg.clone(),
-                    Mf::Modf | Mf::Frexp => {
-                        let (size, scalar) = match res_arg.inner_with(types) {
-                            &Ti::Scalar(scalar) => (None, scalar),
-                            &Ti::Vector { scalar, size } => (Some(size), scalar),
-                            ref other => {
-                                return Err(ResolveError::IncompatibleOperands(format!(
-                                    "{fun:?}({other:?}, _)"
-                                )))
-                            }
-                        };
-                        let result = self
-                            .special_types
-                            .predeclared_types
-                            .get(&if fun == Mf::Modf {
-                                crate::PredeclaredType::ModfResult { size, scalar }
-                            } else {
-                                crate::PredeclaredType::FrexpResult { size, scalar }
-                            })
-                            .ok_or(ResolveError::MissingSpecialType)?;
-                        TypeResolution::Handle(*result)
-                    }
-                    Mf::Dot => match *res_arg.inner_with(types) {
-                        Ti::Vector { size: _, scalar } => TypeResolution::Value(Ti::Scalar(scalar)),
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperands(format!(
-                                "{fun:?}({other:?}, _)"
-                            )))
-                        }
-                    },
-                    Mf::Outer => {
-                        let arg1 = arg1.ok_or_else(|| {
-                            ResolveError::IncompatibleOperands(format!("{fun:?}(_, None)"))
-                        })?;
-                        match (res_arg.inner_with(types), past(arg1)?.inner_with(types)) {
-                            (
-                                &Ti::Vector {
-                                    size: columns,
-                                    scalar,
-                                },
-                                &Ti::Vector { size: rows, .. },
-                            ) => TypeResolution::Value(Ti::Matrix {
-                                columns,
-                                rows,
-                                scalar,
-                            }),
-                            (left, right) => {
-                                return Err(ResolveError::IncompatibleOperands(format!(
-                                    "{fun:?}({left:?}, {right:?})"
-                                )))
-                            }
-                        }
-                    }
-                    Mf::Cross => res_arg.clone(),
-                    Mf::Distance | Mf::Length => match *res_arg.inner_with(types) {
-                        Ti::Scalar(scalar) | Ti::Vector { scalar, size: _ } => {
-                            TypeResolution::Value(Ti::Scalar(scalar))
-                        }
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperands(format!(
-                                "{fun:?}({other:?})"
-                            )))
-                        }
-                    },
-                    Mf::Normalize | Mf::FaceForward | Mf::Reflect | Mf::Refract => res_arg.clone(),
-                    // computational
-                    Mf::Sign
-                    | Mf::Fma
-                    | Mf::Mix
-                    | Mf::Step
-                    | Mf::SmoothStep
-                    | Mf::Sqrt
-                    | Mf::InverseSqrt => res_arg.clone(),
-                    Mf::Transpose => match *res_arg.inner_with(types) {
-                        Ti::Matrix {
-                            columns,
-                            rows,
-                            scalar,
-                        } => TypeResolution::Value(Ti::Matrix {
-                            columns: rows,
-                            rows: columns,
-                            scalar,
-                        }),
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperands(format!(
-                                "{fun:?}({other:?})"
-                            )))
-                        }
-                    },
-                    Mf::Inverse => match *res_arg.inner_with(types) {
-                        Ti::Matrix {
-                            columns,
-                            rows,
-                            scalar,
-                        } if columns == rows => TypeResolution::Value(Ti::Matrix {
-                            columns,
-                            rows,
-                            scalar,
-                        }),
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperands(format!(
-                                "{fun:?}({other:?})"
-                            )))
-                        }
-                    },
-                    Mf::Determinant => match *res_arg.inner_with(types) {
-                        Ti::Matrix { scalar, .. } => TypeResolution::Value(Ti::Scalar(scalar)),
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperands(format!(
-                                "{fun:?}({other:?})"
-                            )))
-                        }
-                    },
-                    // bits
-                    Mf::CountTrailingZeros
-                    | Mf::CountLeadingZeros
-                    | Mf::CountOneBits
-                    | Mf::ReverseBits
-                    | Mf::ExtractBits
-                    | Mf::InsertBits
-                    | Mf::FirstTrailingBit
-                    | Mf::FirstLeadingBit => match *res_arg.inner_with(types) {
-                        Ti::Scalar(
-                            scalar @ crate::Scalar {
-                                kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                                ..
-                            },
-                        ) => TypeResolution::Value(Ti::Scalar(scalar)),
-                        Ti::Vector {
-                            size,
-                            scalar:
-                                scalar @ crate::Scalar {
-                                    kind: crate::ScalarKind::Sint | crate::ScalarKind::Uint,
-                                    ..
-                                },
-                        } => TypeResolution::Value(Ti::Vector { size, scalar }),
-                        ref other => {
-                            return Err(ResolveError::IncompatibleOperands(format!(
-                                "{fun:?}({other:?})"
-                            )))
-                        }
-                    },
-                    // data packing
-                    Mf::Pack4x8snorm
-                    | Mf::Pack4x8unorm
-                    | Mf::Pack2x16snorm
-                    | Mf::Pack2x16unorm
-                    | Mf::Pack2x16float
-                    | Mf::Pack4xI8
-                    | Mf::Pack4xU8 => TypeResolution::Value(Ti::Scalar(crate::Scalar::U32)),
-                    // data unpacking
-                    Mf::Unpack4x8snorm | Mf::Unpack4x8unorm => TypeResolution::Value(Ti::Vector {
-                        size: crate::VectorSize::Quad,
-                        scalar: crate::Scalar::F32,
-                    }),
-                    Mf::Unpack2x16snorm | Mf::Unpack2x16unorm | Mf::Unpack2x16float => {
-                        TypeResolution::Value(Ti::Vector {
-                            size: crate::VectorSize::Bi,
-                            scalar: crate::Scalar::F32,
-                        })
-                    }
-                    Mf::Unpack4xI8 => TypeResolution::Value(Ti::Vector {
-                        size: crate::VectorSize::Quad,
-                        scalar: crate::Scalar::I32,
-                    }),
-                    Mf::Unpack4xU8 => TypeResolution::Value(Ti::Vector {
-                        size: crate::VectorSize::Quad,
-                        scalar: crate::Scalar::U32,
-                    }),
+                overloads = overloads.arg(0, res_arg.inner_with(types), types);
+                log::debug!(
+                    "overloads after arg 0 of type {:?}: {:#?}",
+                    res_arg.for_debug(types),
+                    overloads.for_debug(types)
+                );
+
+                if let Some(arg1) = arg1 {
+                    let res_arg1 = past(arg1)?;
+                    overloads = overloads.arg(1, res_arg1.inner_with(types), types);
+                    log::debug!(
+                        "overloads after arg 1 of type {:?}: {:#?}",
+                        res_arg1.for_debug(types),
+                        overloads.for_debug(types)
+                    );
                 }
+
+                if overloads.is_empty() {
+                    return Err(ResolveError::BuiltinArgumentsInvalid(format!("{fun:?}")));
+                }
+
+                let rule = overloads.most_preferred();
+
+                rule.conclusion.into_resolution(self.special_types)?
             }
             crate::Expression::As {
                 expr,
@@ -913,6 +773,44 @@ impl<'a> ResolveContext<'a> {
                 size: crate::VectorSize::Quad,
             }),
         })
+    }
+}
+
+/// Compare two types.
+///
+/// This is the most general way of comparing two types, as it can distinguish
+/// two structs with different names but the same members. For other ways, see
+/// [`TypeInner::non_struct_equivalent`] and [`TypeInner::eq`].
+///
+/// In Naga code, this is usually called via the like-named methods on [`Module`],
+/// [`GlobalCtx`], and `BlockContext`.
+///
+/// [`TypeInner::non_struct_equivalent`]: crate::ir::TypeInner::non_struct_equivalent
+/// [`TypeInner::eq`]: crate::ir::TypeInner
+/// [`Module`]: crate::ir::Module
+/// [`GlobalCtx`]: crate::proc::GlobalCtx
+pub fn compare_types(
+    lhs: &TypeResolution,
+    rhs: &TypeResolution,
+    types: &UniqueArena<crate::Type>,
+) -> bool {
+    match lhs {
+        &TypeResolution::Handle(lhs_handle)
+            if matches!(
+                types[lhs_handle],
+                ir::Type {
+                    inner: ir::TypeInner::Struct { .. },
+                    ..
+                }
+            ) =>
+        {
+            // Structs can only be in the arena, not in a TypeResolution::Value
+            rhs.handle()
+                .is_some_and(|rhs_handle| lhs_handle == rhs_handle)
+        }
+        _ => lhs
+            .inner_with(types)
+            .non_struct_equivalent(rhs.inner_with(types), types),
     }
 }
 

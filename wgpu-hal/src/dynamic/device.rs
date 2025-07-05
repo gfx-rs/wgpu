@@ -138,8 +138,8 @@ pub trait DynDevice: DynResource {
         timeout_ms: u32,
     ) -> Result<bool, DeviceError>;
 
-    unsafe fn start_capture(&self) -> bool;
-    unsafe fn stop_capture(&self);
+    unsafe fn start_graphics_debugger_capture(&self) -> bool;
+    unsafe fn stop_graphics_debugger_capture(&self);
 
     unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>>;
 
@@ -163,6 +163,8 @@ pub trait DynDevice: DynResource {
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
+
+    fn check_if_oom(&self) -> Result<(), DeviceError>;
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -484,12 +486,12 @@ impl<D: Device + DynResource> DynDevice for D {
         unsafe { D::wait(self, fence, value, timeout_ms) }
     }
 
-    unsafe fn start_capture(&self) -> bool {
-        unsafe { D::start_capture(self) }
+    unsafe fn start_graphics_debugger_capture(&self) -> bool {
+        unsafe { D::start_graphics_debugger_capture(self) }
     }
 
-    unsafe fn stop_capture(&self) {
-        unsafe { D::stop_capture(self) }
+    unsafe fn stop_graphics_debugger_capture(&self) {
+        unsafe { D::stop_graphics_debugger_capture(self) }
     }
 
     unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>> {
@@ -542,5 +544,9 @@ impl<D: Device + DynResource> DynDevice for D {
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         D::generate_allocator_report(self)
+    }
+
+    fn check_if_oom(&self) -> Result<(), DeviceError> {
+        D::check_if_oom(self)
     }
 }

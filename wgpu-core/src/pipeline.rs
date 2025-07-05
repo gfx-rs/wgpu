@@ -10,6 +10,7 @@ use core::{marker::PhantomData, mem::ManuallyDrop, num::NonZeroU32};
 use arrayvec::ArrayVec;
 use naga::error::ShaderError;
 use thiserror::Error;
+use wgt::error::{ErrorType, WebGpuError};
 
 pub use crate::pipeline_cache::PipelineCacheValidationError;
 use crate::{
@@ -52,6 +53,9 @@ pub struct ShaderModuleDescriptor<'a> {
     #[cfg_attr(feature = "serde", serde(default))]
     pub runtime_checks: wgt::ShaderRuntimeChecks,
 }
+
+pub type ShaderModuleDescriptorPassthrough<'a> =
+    wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
 
 #[derive(Debug)]
 pub struct ShaderModule {
@@ -101,7 +105,7 @@ impl ShaderModule {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateShaderModuleError {
-    #[cfg(any(feature = "wgsl", feature = "indirect-validation"))]
+    #[cfg(feature = "wgsl")]
     #[error(transparent)]
     Parsing(#[from] ShaderError<naga::front::wgsl::ParseError>),
     #[cfg(feature = "glsl")]
@@ -126,6 +130,26 @@ pub enum CreateShaderModuleError {
         group: u32,
         limit: u32,
     },
+}
+
+impl WebGpuError for CreateShaderModuleError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::MissingFeatures(e) => e,
+
+            Self::Generation => return ErrorType::Internal,
+
+            Self::Validation(..) | Self::InvalidGroupIndex { .. } => return ErrorType::Validation,
+            #[cfg(feature = "wgsl")]
+            Self::Parsing(..) => return ErrorType::Validation,
+            #[cfg(feature = "glsl")]
+            Self::ParsingGlsl(..) => return ErrorType::Validation,
+            #[cfg(feature = "spirv")]
+            Self::ParsingSpirV(..) => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 /// Describes a programmable pipeline stage.
@@ -178,6 +202,19 @@ pub enum ImplicitLayoutError {
     Pipeline(#[from] CreatePipelineLayoutError),
 }
 
+impl WebGpuError for ImplicitLayoutError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::MissingImplicitPipelineIds | Self::MissingIds(_) | Self::ReflectionError(_) => {
+                return ErrorType::Validation
+            }
+            Self::BindGroup(e) => e,
+            Self::Pipeline(e) => e,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 /// Describes a compute pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -217,6 +254,21 @@ pub enum CreateComputePipelineError {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+impl WebGpuError for CreateComputePipelineError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::MissingDownlevelFlags(e) => e,
+            Self::Implicit(e) => e,
+            Self::Stage(e) => e,
+            Self::Internal(_) => return ErrorType::Internal,
+            Self::PipelineConstants(_) => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 #[derive(Debug)]
@@ -263,6 +315,17 @@ pub enum CreatePipelineCacheError {
     Validation(#[from] PipelineCacheValidationError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+}
+
+impl WebGpuError for CreatePipelineCacheError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::Validation(e) => e,
+            Self::MissingFeatures(e) => e,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 #[derive(Debug)]
@@ -621,6 +684,42 @@ pub enum CreateRenderPipelineError {
     NoTargetSpecified,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+impl WebGpuError for CreateRenderPipelineError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::MissingFeatures(e) => e,
+            Self::MissingDownlevelFlags(e) => e,
+
+            Self::Internal { .. } => return ErrorType::Internal,
+
+            Self::ColorAttachment(_)
+            | Self::Implicit(_)
+            | Self::ColorState(_, _)
+            | Self::DepthStencilState(_)
+            | Self::InvalidSampleCount(_)
+            | Self::TooManyVertexBuffers { .. }
+            | Self::TooManyVertexAttributes { .. }
+            | Self::VertexStrideTooLarge { .. }
+            | Self::UnalignedVertexStride { .. }
+            | Self::InvalidVertexAttributeOffset { .. }
+            | Self::ShaderLocationClash(_)
+            | Self::StripIndexFormatForNonStripTopology { .. }
+            | Self::ConservativeRasterizationNonFillPolygonMode
+            | Self::Stage { .. }
+            | Self::UnalignedShader { .. }
+            | Self::BlendFactorOnUnsupportedTarget { .. }
+            | Self::PipelineExpectsShaderToUseDualSourceBlending
+            | Self::ShaderExpectsPipelineToUseDualSourceBlending
+            | Self::NoTargetSpecified
+            | Self::PipelineConstants { .. }
+            | Self::VertexAttributeStrideTooLarge { .. } => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 bitflags::bitflags! {

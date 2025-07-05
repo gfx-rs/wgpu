@@ -1,11 +1,15 @@
 /*!
 Backend functions that export shader [`Module`](super::Module)s into binary and text formats.
 */
-#![allow(dead_code)] // can be dead if none of the enabled backends need it
+#![cfg_attr(
+    not(any(dot_out, glsl_out, hlsl_out, msl_out, spv_out, wgsl_out)),
+    allow(
+        dead_code,
+        reason = "shared helpers can be dead if none of the enabled backends need it"
+    )
+)]
 
 use alloc::string::String;
-
-use crate::proc::ExpressionKindTracker;
 
 #[cfg(dot_out)]
 pub mod dot;
@@ -42,6 +46,13 @@ pub type NeedBakeExpressions = crate::FastHashSet<crate::Handle<crate::Expressio
 ///
 /// [`Expression`]: crate::Expression
 /// [`Handle`]: crate::Handle
+#[cfg_attr(
+    not(any(glsl_out, hlsl_out, msl_out, wgsl_out)),
+    allow(
+        dead_code,
+        reason = "shared helpers can be dead if none of the enabled backends need it"
+    )
+)]
 struct Baked(crate::Handle<crate::Expression>);
 
 impl core::fmt::Display for Baked {
@@ -64,7 +75,7 @@ pub type PipelineConstants = hashbrown::HashMap<String, f64>;
 pub struct Level(pub usize);
 
 impl Level {
-    const fn next(&self) -> Self {
+    pub const fn next(&self) -> Self {
         Level(self.0 + 1)
     }
 }
@@ -72,6 +83,33 @@ impl Level {
 impl core::fmt::Display for Level {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
         (0..self.0).try_for_each(|_| formatter.write_str(INDENT))
+    }
+}
+
+/// Locate the entry point(s) to write.
+///
+/// If `entry_point` is given, and the specified entry point exists, returns a
+/// length-1 `Range` containing the index of that entry point.  If no
+/// `entry_point` is given, returns the complete range of entry point indices.
+/// If `entry_point` is given but does not exist, returns an error.
+#[cfg(any(hlsl_out, msl_out))]
+fn get_entry_points(
+    module: &crate::ir::Module,
+    entry_point: Option<&(crate::ir::ShaderStage, String)>,
+) -> Result<core::ops::Range<usize>, (crate::ir::ShaderStage, String)> {
+    use alloc::borrow::ToOwned;
+
+    if let Some(&(stage, ref name)) = entry_point {
+        let Some(ep_index) = module
+            .entry_points
+            .iter()
+            .position(|ep| ep.stage == stage && ep.name == *name)
+        else {
+            return Err((stage, name.to_owned()));
+        };
+        Ok(ep_index..ep_index + 1)
+    } else {
+        Ok(0..module.entry_points.len())
     }
 }
 
@@ -122,8 +160,6 @@ pub struct FunctionCtx<'a> {
     pub expressions: &'a crate::Arena<crate::Expression>,
     /// Map of expressions that have associated variable names
     pub named_expressions: &'a crate::NamedExpressions,
-    /// For constness checks
-    pub expr_kind_tracker: ExpressionKindTracker,
 }
 
 impl FunctionCtx<'_> {

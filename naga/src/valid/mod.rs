@@ -29,9 +29,9 @@ pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, Uniformi
 pub use compose::ComposeError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
-pub use function::{CallError, FunctionError, LocalVariableError};
+pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
-pub use r#type::{Disalignment, TypeError, TypeFlags, WidthError};
+pub use r#type::{Disalignment, PushConstantError, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
 
@@ -163,6 +163,8 @@ bitflags::bitflags! {
         const TEXTURE_INT64_ATOMIC = 1 << 24;
         /// Support for ray queries returning vertex position
         const RAY_HIT_VERTEX_POSITION = 1 << 25;
+        /// Support for 16-bit floating-point types.
+        const SHADER_FLOAT16 = 1 << 26;
     }
 }
 
@@ -193,8 +195,8 @@ bitflags::bitflags! {
         // We don't support these operations yet
         // /// Clustered
         // const CLUSTERED = 1 << 6;
-        // /// Quad supported
-        // const QUAD_FRAGMENT_COMPUTE = 1 << 7;
+        /// Quad supported
+        const QUAD_FRAGMENT_COMPUTE = 1 << 7;
         // /// Quad supported in all stages
         // const QUAD_ALL_STAGES = 1 << 8;
     }
@@ -219,6 +221,7 @@ impl super::GatherMode {
             Self::BroadcastFirst | Self::Broadcast(_) => S::BALLOT,
             Self::Shuffle(_) | Self::ShuffleXor(_) => S::SHUFFLE,
             Self::ShuffleUp(_) | Self::ShuffleDown(_) => S::SHUFFLE_RELATIVE,
+            Self::QuadBroadcast(_) | Self::QuadSwap(_) => S::QUAD_FRAGMENT_COMPUTE,
         }
     }
 }
@@ -235,7 +238,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ModuleInfo {
@@ -455,7 +458,13 @@ impl Validator {
     pub fn new(flags: ValidationFlags, capabilities: Capabilities) -> Self {
         let subgroup_operations = if capabilities.contains(Capabilities::SUBGROUP) {
             use SubgroupOperationSet as S;
-            S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
+            S::BASIC
+                | S::VOTE
+                | S::ARITHMETIC
+                | S::BALLOT
+                | S::SHUFFLE
+                | S::SHUFFLE_RELATIVE
+                | S::QUAD_FRAGMENT_COMPUTE
         } else {
             SubgroupOperationSet::empty()
         };
@@ -530,9 +539,7 @@ impl Validator {
             return Err(ConstantError::InitializerExprType);
         }
 
-        let decl_ty = &gctx.types[con.ty].inner;
-        let init_ty = mod_info[con.init].inner_with(gctx.types);
-        if !decl_ty.equivalent(init_ty, gctx.types) {
+        if !gctx.compare_types(&TypeResolution::Handle(con.ty), &mod_info[con.init]) {
             return Err(ConstantError::InvalidType);
         }
 
@@ -558,12 +565,12 @@ impl Validator {
             return Err(OverrideError::NonConstructibleType);
         }
 
-        let decl_ty = &gctx.types[o.ty].inner;
-        match decl_ty {
-            &crate::TypeInner::Scalar(
+        match gctx.types[o.ty].inner {
+            crate::TypeInner::Scalar(
                 crate::Scalar::BOOL
                 | crate::Scalar::I32
                 | crate::Scalar::U32
+                | crate::Scalar::F16
                 | crate::Scalar::F32
                 | crate::Scalar::F64,
             ) => {}
@@ -571,8 +578,7 @@ impl Validator {
         }
 
         if let Some(init) = o.init {
-            let init_ty = mod_info[init].inner_with(gctx.types);
-            if !decl_ty.equivalent(init_ty, gctx.types) {
+            if !gctx.compare_types(&TypeResolution::Handle(o.ty), &mod_info[init]) {
                 return Err(OverrideError::InvalidType);
             }
         } else if self.overrides_resolved {

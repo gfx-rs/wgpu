@@ -1,0 +1,16 @@
+god_mode = true
+targets = "SPIRV | METAL | HLSL"
+
+[msl]
+fake_missing_bindings = true
+lang_version = [2, 4]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = false
+
+[hlsl]
+shader_model = "V6_5"
+fake_missing_bindings = true
+zero_initialize_workgroup_memory = true
+
+[spv]
+version = [1, 4]

@@ -1,8 +1,12 @@
+#![cfg_attr(target_arch = "wasm32", no_main)]
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::process::ExitCode;
 
 use anyhow::Context;
 use pico_args::Arguments;
 
+mod cts;
 mod run_wasm;
 mod test;
 mod util;
@@ -12,6 +16,12 @@ const HELP: &str = "\
 Usage: xtask <COMMAND>
 
 Commands:
+  cts [--skip-checkout] [<test selector> | -f <test list file>]...
+    Check out, build, and run CTS tests
+
+    --skip-checkout     Don't check out the pinned CTS version, use whatever is
+                        already checked out.
+
   run-wasm
     Build and run web examples
 
@@ -44,7 +54,7 @@ Options:
 #[macro_export]
 macro_rules! bad_arguments {
     ($($arg:tt)*) => {{
-        eprintln!("{}", crate::HELP);
+        eprintln!("{}", $crate::HELP);
         anyhow::bail!($($arg)*)
     }};
 }
@@ -58,7 +68,7 @@ fn main() -> anyhow::Result<ExitCode> {
 
     let mut args = Arguments::from_env();
 
-    if args.contains("--help") {
+    if args.contains(["-h", "--help"]) {
         eprint!("{HELP}");
         return Ok(ExitCode::FAILURE);
     }
@@ -73,6 +83,7 @@ fn main() -> anyhow::Result<ExitCode> {
     shell.change_dir(String::from(env!("CARGO_MANIFEST_DIR")) + "/..");
 
     match subcommand.as_deref() {
+        Some("cts") => cts::run_cts(shell, args)?,
         Some("run-wasm") => run_wasm::run_wasm(shell, args)?,
         Some("test") => test::run_tests(shell, args)?,
         Some("vendor-web-sys") => vendor_web_sys::run_vendor_web_sys(shell, args)?,

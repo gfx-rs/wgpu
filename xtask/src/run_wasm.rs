@@ -32,7 +32,7 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> 
 
     xshell::cmd!(
         shell,
-        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features webgpu {release_flag...}"
+        "cargo build --target wasm32-unknown-unknown -p wgpu-examples --no-default-features --features webgpu {release_flag...}"
     )
     .args(&cargo_args)
     .quiet()
@@ -53,7 +53,7 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> 
 
     xshell::cmd!(
         shell,
-        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features webgl {release_flag...}"
+        "cargo build --target wasm32-unknown-unknown -p wgpu-examples --no-default-features --features webgl {release_flag...}"
     )
     .args(&cargo_args)
     .quiet()

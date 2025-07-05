@@ -412,7 +412,6 @@ impl Binder {
             .map(move |index| payloads[index].group.as_ref().unwrap())
     }
 
-    #[cfg(feature = "indirect-validation")]
     pub(super) fn list_valid<'a>(&'a self) -> impl Iterator<Item = (usize, &'a EntryPayload)> + 'a {
         self.payloads
             .iter()

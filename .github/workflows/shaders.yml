@@ -3,8 +3,8 @@ name: Shaders
 on:
   push:
     branches-ignore: [
-        # We don't need to run on dependabot PRs.
-        "dependabot/**",
+        # We don't need to run on renovate PRs.
+        "renovate/**",
         # This is the branch the merge queue creates.
         "gh-readonly-queue/**",
       ]
@@ -16,13 +16,7 @@ env:
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
   #
   # We don't include the 4th version number, as it's not used in any URL.
-  VULKAN_SDK_VERSION: "1.4.304"
-
-  # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
-  #
-  # Must also be changed in ci.yaml
-  DXC_RELEASE: "v1.8.2407"
-  DXC_FILENAME: "dxc_2024_07_31_clang_cl.zip"
+  VULKAN_SDK_VERSION: "1.4.313"
 
 jobs:
   naga-validate-windows:
@@ -42,9 +36,6 @@ jobs:
           EOF
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            naga/xtask -> naga/xtask/target
 
       # We must have the FXC job before the DXC job, so the DXC PATH has priority
       # over the FXC PATH. This is because the windows kits also include an older
@@ -59,15 +50,7 @@ jobs:
         shell: powershell
 
       - name: Setup DXC
-        shell: bash
-        run: |
-          set -e
-
-          curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
-          7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
-
-          # We need to use cygpath to convert PWD to a windows path as we're using bash.
-          cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
+        uses: ./.github/actions/install-dxc
 
       - name: Validate
         shell: bash
@@ -97,9 +80,6 @@ jobs:
           EOF
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            naga/xtask -> naga/xtask/target
 
       - run: |
           cd naga
@@ -139,9 +119,6 @@ jobs:
           EOF
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            naga/xtask -> naga/xtask/target
 
       - run: cd naga; cargo xtask validate spv
 

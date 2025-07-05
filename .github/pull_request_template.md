@@ -31,7 +31,7 @@ person(s) who reviewed your changes. This will make sure it gets re-added to the
 
 - [ ] Run `cargo fmt`.
 - [ ] Run `taplo format`.
-- [ ] Run `cargo clippy`. If applicable, add:
+- [ ] Run `cargo clippy --tests`. If applicable, add:
   - [ ] `--target wasm32-unknown-unknown`
 - [ ] Run `cargo xtask test` to run tests.
 - [ ] If this contains user-facing changes, add a `CHANGELOG.md` entry. <!-- See instructions at the top of `CHANGELOG.md`. -->

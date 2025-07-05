@@ -28,6 +28,12 @@ impl RenderPipeline {
         let layout = self.inner.get_bind_group_layout(index);
         BindGroupLayout { inner: layout }
     }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of RenderPipeline (if custom backend and is internally T)
+    pub fn as_custom<T: custom::RenderPipelineInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
 }
 
 /// Specifies an interpretation of the bytes of a vertex buffer as vertex attributes.
@@ -105,7 +111,7 @@ pub struct VertexState<'a> {
     /// [`RenderPass::set_vertex_buffer()`].
     ///
     /// The attribute locations and types specified in this layout must match the
-    /// locations and types of the inputs to the `entry_point` function.`
+    /// locations and types of the inputs to the `entry_point` function.
     pub buffers: &'a [VertexBufferLayout<'a>],
 }
 #[cfg(send_sync)]

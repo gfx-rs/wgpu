@@ -1,13 +1,13 @@
 [package]
 name = "wgpu-core"
-version = "24.0.0"
-authors = ["gfx-rs developers"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "Core implementation logic of wgpu, the cross-platform, safe, pure-rust graphics API"
-homepage = "https://wgpu.rs/"
-repository = "https://github.com/gfx-rs/wgpu"
-keywords = ["graphics"]
-license = "MIT OR Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
 
 # Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
 # copy the crates it actually uses out of the workspace, so it's meaningful for
@@ -35,7 +35,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(wgpu_validate_locks)'] }
 [lib]
 
 [features]
-#! See docuemntation for the `wgpu` crate for more in-depth information on these features.
+#! See documentation for the `wgpu` crate for more in-depth information on these features.
 
 # TODO(https://github.com/gfx-rs/wgpu/issues/6826): "std" is a default feature for
 # compatibility with prior behavior only, and should be removed once we know how
@@ -55,10 +55,6 @@ resource_log_info = []
 #! ### Runtime Checks
 # --------------------------------------------------------------------
 
-## Validates indirect draw/dispatch calls. This will also enable naga's
-## WGSL frontend since we use a WGSL compute shader to do the validation.
-indirect-validation = ["naga/wgsl-in"]
-
 ## Apply run-time checks, even in release builds. These are in addition
 ## to the validation carried out at public APIs in all builds.
 strict_asserts = ["wgpu-types/strict_asserts"]
@@ -76,7 +72,14 @@ observe_locks = ["std", "dep:ron", "serde/serde_derive"]
 serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde"]
 
 ## Enable API tracing.
-trace = ["serde", "std", "dep:ron", "naga/serialize", "wgpu-types/trace"]
+trace = [
+    "serde",
+    "std",
+    "dep:ron",
+    "naga/serialize",
+    "wgpu-types/trace",
+    "dep:bytemuck",
+]
 
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
@@ -144,7 +147,7 @@ gles = [
 ]
 
 ## WebGL backend, only available on Emscripten
-webgl = ["wgpu-core-deps-wasm/webgl"]
+webgl = ["wgpu-core-deps-wasm/webgl", "wgpu-types/web"]
 ## OpenGL backend, on macOS only
 angle = ["wgpu-core-deps-apple/angle"]
 ## Vulkan portability backend, only available on macOS
@@ -175,6 +178,7 @@ wgpu-types.workspace = true
 
 arrayvec.workspace = true
 bit-vec.workspace = true
+bit-set.workspace = true
 bitflags.workspace = true
 bytemuck = { workspace = true, optional = true }
 document-features.workspace = true

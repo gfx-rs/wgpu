@@ -11,8 +11,14 @@ fn main() {
     non_constant_initializers();
     splat_of_constant();
     compose_of_constant();
+    map_texture_kind(1);
     compose_of_splat();
     test_local_const();
+    compose_vector_zero_val_binop();
+    relational();
+    packed_dot_product();
+    test_local_const();
+    abstract_access(1);
 }
 
 // Swizzle the value of nested Compose expressions.
@@ -109,6 +115,20 @@ fn relational() {
     var vec_any_true     = any(vec4(bool(), true, vec2(FALSE)));
     var vec_all_false    = all(vec4(vec3(vec2<bool>(), TRUE), false));
     var vec_all_true     = all(vec4(true));
+}
+
+fn packed_dot_product() {
+    // Test dot product of packed vectors on literals, constants, and
+    // combinations thereof.
+    var signed_four = dot4I8Packed(TWO, TWO);
+    var unsigned_four = dot4U8Packed(TWO, TWO);
+    var signed_twelve = dot4I8Packed(TWO + 1u, TWO + 2u);
+    var unsigned_twelve = dot4U8Packed(TWO + 1u, TWO + 2u);
+    var signed_seventy = dot4I8Packed(0x01020304u, 0x05060708u);
+    var unsigned_seventy = dot4U8Packed(0x01020304u, 0x05060708u);
+
+    // This is equivalent to `dot(vec4(-1, 2, -3, 4), vec4(5, 6, -7, -8))`.
+    var minus_four = dot4I8Packed(0xff02fd04u, 0x0506f9f8u);
 }
 
 fn test_local_const() {

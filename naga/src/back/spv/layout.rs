@@ -12,7 +12,8 @@ use alloc::format;
 const GENERATOR: Word = 28;
 
 impl PhysicalLayout {
-    pub(super) const fn new(version: Word) -> Self {
+    pub(super) const fn new(major_version: u8, minor_version: u8) -> Self {
+        let version = ((major_version as u32) << 16) | ((minor_version as u32) << 8);
         PhysicalLayout {
             magic_number: MAGIC_NUMBER,
             version,
@@ -28,6 +29,13 @@ impl PhysicalLayout {
         sink.extend(iter::once(self.generator));
         sink.extend(iter::once(self.bound));
         sink.extend(iter::once(self.instruction_schema));
+    }
+
+    /// Returns `(major, minor)`.
+    pub(super) const fn lang_version(&self) -> (u8, u8) {
+        let major = (self.version >> 16) as u8;
+        let minor = (self.version >> 8) as u8;
+        (major, minor)
     }
 }
 
@@ -150,10 +158,13 @@ impl Instruction {
 #[test]
 fn test_physical_layout_in_words() {
     let bound = 5;
-    let version = 0x10203;
+
+    // The least and most significant bytes of `version` must both be zero
+    // according to the SPIR-V spec.
+    let version = 0x0001_0200;
 
     let mut output = vec![];
-    let mut layout = PhysicalLayout::new(version);
+    let mut layout = PhysicalLayout::new(1, 2);
     layout.bound = bound;
 
     layout.in_words(&mut output);

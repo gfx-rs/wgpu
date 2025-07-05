@@ -39,8 +39,8 @@ impl PartialEq for HashableSamplerCreateInfo {
 
 impl Eq for HashableSamplerCreateInfo {}
 
-impl std::hash::Hash for HashableSamplerCreateInfo {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl core::hash::Hash for HashableSamplerCreateInfo {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.0.flags.hash(state);
         self.0.mag_filter.hash(state);
         self.0.min_filter.hash(state);

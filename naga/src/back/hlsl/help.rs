@@ -32,8 +32,9 @@ use core::fmt::Write;
 use super::{
     super::FunctionCtx,
     writer::{
-        ABS_FUNCTION, DIV_FUNCTION, EXTRACT_BITS_FUNCTION, INSERT_BITS_FUNCTION, MOD_FUNCTION,
-        NEG_FUNCTION,
+        ABS_FUNCTION, DIV_FUNCTION, EXTRACT_BITS_FUNCTION, F2I32_FUNCTION, F2I64_FUNCTION,
+        F2U32_FUNCTION, F2U64_FUNCTION, IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION,
+        INSERT_BITS_FUNCTION, MOD_FUNCTION, NEG_FUNCTION,
     },
     BackendResult, WrappedType,
 };
@@ -42,6 +43,11 @@ use crate::{arena::Handle, proc::NameKey, ScalarKind};
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedArrayLength {
     pub(super) writable: bool,
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedImageSample {
+    pub(super) clamp_to_edge: bool,
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -95,6 +101,15 @@ pub(super) struct WrappedBinaryOp {
     // binary ops with other types, we'll need a better representation.
     pub(super) left_ty: (Option<crate::VectorSize>, crate::Scalar),
     pub(super) right_ty: (Option<crate::VectorSize>, crate::Scalar),
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedCast {
+    // This can only represent scalar or vector types. If we ever need to wrap
+    // casts with other types, we'll need a better representation.
+    pub(super) vector_size: Option<crate::VectorSize>,
+    pub(super) src_scalar: crate::Scalar,
+    pub(super) dst_scalar: crate::Scalar,
 }
 
 /// HLSL backend requires its own `ImageQuery` enum.
@@ -234,6 +249,32 @@ impl<W: Write> super::Writer<'_, W> {
         writeln!(self.out, "}}")?;
         // Write extra new line
         writeln!(self.out)?;
+
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_image_sample_function(
+        &mut self,
+        sample: WrappedImageSample,
+    ) -> BackendResult {
+        match sample {
+            WrappedImageSample {
+                clamp_to_edge: true,
+            } => {
+                writeln!(self.out, "float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}(Texture2D<float4> tex, SamplerState samp, float2 coords) {{")?;
+                let l1 = crate::back::Level(1);
+                writeln!(self.out, "{l1}float2 size;")?;
+                writeln!(self.out, "{l1}tex.GetDimensions(size.x, size.y);")?;
+                writeln!(self.out, "{l1}float2 half_texel = float2(0.5, 0.5) / size;")?;
+                writeln!(
+                    self.out,
+                    "{l1}return tex.SampleLevel(samp, clamp(coords, half_texel, 1.0 - half_texel), 0.0);"
+                )?;
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+            _ => {}
+        }
 
         Ok(())
     }
@@ -1274,8 +1315,16 @@ impl<W: Write> super::Writer<'_, W> {
                         let level = crate::back::Level(1);
                         match scalar.kind {
                             ScalarKind::Sint => {
-                                let min = -1i64 << (scalar.width as u32 * 8 - 1);
-                                writeln!(self.out, "{level}return lhs / (((lhs == {min} & rhs == -1) | (rhs == 0)) ? 1 : rhs);")?
+                                let min_val = match scalar.width {
+                                    4 => crate::Literal::I32(i32::MIN),
+                                    8 => crate::Literal::I64(i64::MIN),
+                                    _ => {
+                                        return Err(super::Error::UnsupportedScalar(scalar));
+                                    }
+                                };
+                                write!(self.out, "{level}return lhs / (((lhs == ")?;
+                                self.write_literal(min_val)?;
+                                writeln!(self.out, " & rhs == -1) | (rhs == 0)) ? 1 : rhs);")?
                             }
                             ScalarKind::Uint => {
                                 writeln!(self.out, "{level}return lhs / (rhs == 0u ? 1u : rhs);")?
@@ -1301,7 +1350,7 @@ impl<W: Write> super::Writer<'_, W> {
                         crate::BinaryOperator::Modulo,
                         Some(
                             scalar @ crate::Scalar {
-                                kind: ScalarKind::Sint | ScalarKind::Uint,
+                                kind: ScalarKind::Sint | ScalarKind::Uint | ScalarKind::Float,
                                 ..
                             },
                         ),
@@ -1330,10 +1379,18 @@ impl<W: Write> super::Writer<'_, W> {
                         let level = crate::back::Level(1);
                         match scalar.kind {
                             ScalarKind::Sint => {
-                                let min = -1i64 << (scalar.width as u32 * 8 - 1);
+                                let min_val = match scalar.width {
+                                    4 => crate::Literal::I32(i32::MIN),
+                                    8 => crate::Literal::I64(i64::MIN),
+                                    _ => {
+                                        return Err(super::Error::UnsupportedScalar(scalar));
+                                    }
+                                };
                                 write!(self.out, "{level}")?;
                                 self.write_value_type(module, right_ty)?;
-                                writeln!(self.out, " divisor = ((lhs == {min} & rhs == -1) | (rhs == 0)) ? 1 : rhs;")?;
+                                write!(self.out, " divisor = ((lhs == ")?;
+                                self.write_literal(min_val)?;
+                                writeln!(self.out, " & rhs == -1) | (rhs == 0)) ? 1 : rhs;")?;
                                 writeln!(
                                     self.out,
                                     "{level}return lhs - (lhs / divisor) * divisor;"
@@ -1341,6 +1398,14 @@ impl<W: Write> super::Writer<'_, W> {
                             }
                             ScalarKind::Uint => {
                                 writeln!(self.out, "{level}return lhs % (rhs == 0u ? 1u : rhs);")?
+                            }
+                            // HLSL's fmod has the same definition as WGSL's % operator but due
+                            // to its implementation in DXC it is not as accurate as the WGSL spec
+                            // requires it to be. See:
+                            // - https://shader-playground.timjones.io/0c8572816dbb6fc4435cc5d016a978a7
+                            // - https://github.com/llvm/llvm-project/blob/50f9b8acafdca48e87e6b8e393c1f116a2d193ee/clang/lib/Headers/hlsl/hlsl_intrinsic_helpers.h#L78-L81
+                            ScalarKind::Float => {
+                                writeln!(self.out, "{level}return lhs - rhs * trunc(lhs / rhs);")?
                             }
                             _ => unreachable!(),
                         }
@@ -1355,6 +1420,97 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
+    fn write_wrapped_cast_functions(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &FunctionCtx,
+    ) -> BackendResult {
+        for (_, expression) in func_ctx.expressions.iter() {
+            if let crate::Expression::As {
+                expr,
+                kind,
+                convert: Some(width),
+            } = *expression
+            {
+                // Avoid undefined behaviour when casting from a float to integer
+                // when the value is out of range for the target type. Additionally
+                // ensure we clamp to the correct value as per the WGSL spec.
+                //
+                // https://www.w3.org/TR/WGSL/#floating-point-conversion:
+                // * If X is exactly representable in the target type T, then the
+                //   result is that value.
+                // * Otherwise, the result is the value in T closest to
+                //   truncate(X) and also exactly representable in the original
+                //   floating point type.
+                let src_ty = func_ctx.resolve_type(expr, &module.types);
+                let Some((vector_size, src_scalar)) = src_ty.vector_size_and_scalar() else {
+                    continue;
+                };
+                let dst_scalar = crate::Scalar { kind, width };
+                if src_scalar.kind != ScalarKind::Float
+                    || (dst_scalar.kind != ScalarKind::Sint && dst_scalar.kind != ScalarKind::Uint)
+                {
+                    continue;
+                }
+
+                let wrapped = WrappedCast {
+                    src_scalar,
+                    vector_size,
+                    dst_scalar,
+                };
+                if !self.wrapped.insert(WrappedType::Cast(wrapped)) {
+                    continue;
+                }
+
+                let (src_ty, dst_ty) = match vector_size {
+                    None => (
+                        crate::TypeInner::Scalar(src_scalar),
+                        crate::TypeInner::Scalar(dst_scalar),
+                    ),
+                    Some(vector_size) => (
+                        crate::TypeInner::Vector {
+                            scalar: src_scalar,
+                            size: vector_size,
+                        },
+                        crate::TypeInner::Vector {
+                            scalar: dst_scalar,
+                            size: vector_size,
+                        },
+                    ),
+                };
+                let (min, max) =
+                    crate::proc::min_max_float_representable_by(src_scalar, dst_scalar);
+                let cast_str = format!(
+                    "{}{}",
+                    dst_scalar.to_hlsl_str()?,
+                    vector_size
+                        .map(crate::common::vector_size_str)
+                        .unwrap_or(""),
+                );
+                let fun_name = match dst_scalar {
+                    crate::Scalar::I32 => F2I32_FUNCTION,
+                    crate::Scalar::U32 => F2U32_FUNCTION,
+                    crate::Scalar::I64 => F2I64_FUNCTION,
+                    crate::Scalar::U64 => F2U64_FUNCTION,
+                    _ => unreachable!(),
+                };
+                self.write_value_type(module, &dst_ty)?;
+                write!(self.out, " {fun_name}(")?;
+                self.write_value_type(module, &src_ty)?;
+                writeln!(self.out, " value) {{")?;
+                let level = crate::back::Level(1);
+                write!(self.out, "{level}return {cast_str}(clamp(value, ")?;
+                self.write_literal(min)?;
+                write!(self.out, ", ")?;
+                self.write_literal(max)?;
+                writeln!(self.out, "));",)?;
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Helper function that writes various wrapped functions
     pub(super) fn write_wrapped_functions(
         &mut self,
@@ -1366,6 +1522,7 @@ impl<W: Write> super::Writer<'_, W> {
         self.write_wrapped_binary_ops(module, func_ctx)?;
         self.write_wrapped_expression_functions(module, func_ctx.expressions, Some(func_ctx))?;
         self.write_wrapped_zero_value_functions(module, func_ctx.expressions)?;
+        self.write_wrapped_cast_functions(module, func_ctx)?;
 
         for (handle, _) in func_ctx.expressions.iter() {
             match func_ctx.expressions[handle] {
@@ -1395,6 +1552,12 @@ impl<W: Write> super::Writer<'_, W> {
 
                     if self.wrapped.insert(WrappedType::ArrayLength(wal)) {
                         self.write_wrapped_array_length_function(wal)?;
+                    }
+                }
+                crate::Expression::ImageSample { clamp_to_edge, .. } => {
+                    let wrapped = WrappedImageSample { clamp_to_edge };
+                    if self.wrapped.insert(WrappedType::ImageSample(wrapped)) {
+                        self.write_wrapped_image_sample_function(wrapped)?;
                     }
                 }
                 crate::Expression::ImageQuery { image, query } => {
@@ -1776,8 +1939,6 @@ impl<W: Write> super::Writer<'_, W> {
         zero_value: WrappedZeroValue,
     ) -> BackendResult {
         use crate::back::INDENT;
-
-        const RETURN_VARIABLE_NAME: &str = "ret";
 
         // Write function return type and name
         if let crate::TypeInner::Array { base, size, .. } = module.types[zero_value.ty].inner {

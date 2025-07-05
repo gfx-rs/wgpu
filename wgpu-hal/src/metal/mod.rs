@@ -13,8 +13,6 @@ end of the VS buffer table.
 
 !*/
 
-#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
-
 // `MTLFeatureSet` is superseded by `MTLGpuFamily`.
 // However, `MTLGpuFamily` is only supported starting MacOS 10.15, whereas our minimum target is MacOS 10.13,
 // See https://github.com/gpuweb/gpuweb/issues/1069 for minimum spec.
@@ -28,20 +26,18 @@ mod layer_observer;
 mod surface;
 mod time;
 
-use std::{
-    borrow::ToOwned as _,
-    fmt, iter, ops,
-    ptr::NonNull,
-    string::String,
-    sync::{atomic, Arc},
-    thread,
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
+use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use hashbrown::HashMap;
-use metal::foreign_types::ForeignTypeRef as _;
+use metal::{
+    foreign_types::ForeignTypeRef as _, MTLArgumentBuffersTier, MTLBuffer, MTLCommandBufferStatus,
+    MTLCullMode, MTLDepthClipMode, MTLIndexType, MTLLanguageVersion, MTLPrimitiveType,
+    MTLReadWriteTextureTier, MTLRenderStages, MTLResource, MTLResourceUsage, MTLSamplerState,
+    MTLSize, MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLWinding,
+};
 use naga::FastHashMap;
 use parking_lot::{Mutex, RwLock};
 
@@ -200,14 +196,14 @@ bitflags!(
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
     family_check: bool,
-    msl_version: metal::MTLLanguageVersion,
+    msl_version: MTLLanguageVersion,
     fragment_rw_storage: bool,
-    read_write_texture_tier: metal::MTLReadWriteTextureTier,
+    read_write_texture_tier: MTLReadWriteTextureTier,
     msaa_desktop: bool,
     msaa_apple3: bool,
     msaa_apple7: bool,
     resource_heaps: bool,
-    argument_buffers: metal::MTLArgumentBuffersTier,
+    argument_buffers: MTLArgumentBuffersTier,
     shared_textures: bool,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
@@ -230,6 +226,7 @@ struct PrivateCapabilities {
     format_eac_etc: bool,
     format_astc: bool,
     format_astc_hdr: bool,
+    format_astc_3d: bool,
     format_any8_unorm_srgb_all: bool,
     format_any8_unorm_srgb_no_write: bool,
     format_any8_snorm_all: bool,
@@ -312,9 +309,17 @@ struct PrivateDisabilities {
     broken_layered_clear_image: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Settings {
     retain_command_buffer_references: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            retain_command_buffer_references: true,
+        }
+    }
 }
 
 struct AdapterShared {
@@ -378,7 +383,6 @@ pub struct Surface {
     render_layer: Mutex<metal::MetalLayer>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
     extent: RwLock<wgt::Extent3d>,
-    main_thread_id: thread::ThreadId,
     // Useful for UI-intensive applications that are sensitive to
     // window resizing.
     pub present_with_transaction: bool,
@@ -396,13 +400,13 @@ pub struct SurfaceTexture {
 
 impl crate::DynSurfaceTexture for SurfaceTexture {}
 
-impl std::borrow::Borrow<Texture> for SurfaceTexture {
+impl core::borrow::Borrow<Texture> for SurfaceTexture {
     fn borrow(&self) -> &Texture {
         &self.texture
     }
 }
 
-impl std::borrow::Borrow<dyn crate::DynTexture> for SurfaceTexture {
+impl core::borrow::Borrow<dyn crate::DynTexture> for SurfaceTexture {
     fn borrow(&self) -> &dyn crate::DynTexture {
         &self.texture
     }
@@ -525,7 +529,7 @@ impl crate::BufferBinding<'_, Buffer> {
 pub struct Texture {
     raw: metal::Texture,
     format: wgt::TextureFormat,
-    raw_type: metal::MTLTextureType,
+    raw_type: MTLTextureType,
     array_layers: u32,
     mip_levels: u32,
     copy_size: crate::CopyExtent,
@@ -676,10 +680,10 @@ trait AsNative {
     fn as_native(&self) -> &Self::Native;
 }
 
-type ResourcePtr = NonNull<metal::MTLResource>;
-type BufferPtr = NonNull<metal::MTLBuffer>;
-type TexturePtr = NonNull<metal::MTLTexture>;
-type SamplerPtr = NonNull<metal::MTLSamplerState>;
+type ResourcePtr = NonNull<MTLResource>;
+type BufferPtr = NonNull<MTLBuffer>;
+type TexturePtr = NonNull<MTLTexture>;
+type SamplerPtr = NonNull<MTLSamplerState>;
 
 impl AsNative for ResourcePtr {
     type Native = metal::ResourceRef;
@@ -750,16 +754,16 @@ struct BufferResource {
 
 #[derive(Debug)]
 struct UseResourceInfo {
-    uses: metal::MTLResourceUsage,
-    stages: metal::MTLRenderStages,
+    uses: MTLResourceUsage,
+    stages: MTLRenderStages,
     visible_in_compute: bool,
 }
 
 impl Default for UseResourceInfo {
     fn default() -> Self {
         Self {
-            uses: metal::MTLResourceUsage::empty(),
-            stages: metal::MTLRenderStages::empty(),
+            uses: MTLResourceUsage::empty(),
+            stages: MTLRenderStages::empty(),
             visible_in_compute: false,
         }
     }
@@ -782,8 +786,22 @@ unsafe impl Send for BindGroup {}
 unsafe impl Sync for BindGroup {}
 
 #[derive(Debug)]
+pub enum ShaderModuleSource {
+    Naga(crate::NagaShader),
+    Passthrough(PassthroughShader),
+}
+
+#[derive(Debug)]
+pub struct PassthroughShader {
+    pub library: metal::Library,
+    pub function: metal::Function,
+    pub entry_point: String,
+    pub num_workgroups: (u32, u32, u32),
+}
+
+#[derive(Debug)]
 pub struct ShaderModule {
-    naga: crate::NagaShader,
+    source: ShaderModuleSource,
     bounds_checks: wgt::ShaderRuntimeChecks,
 }
 
@@ -835,11 +853,11 @@ pub struct RenderPipeline {
     fs_lib: Option<metal::Library>,
     vs_info: PipelineStageInfo,
     fs_info: Option<PipelineStageInfo>,
-    raw_primitive_type: metal::MTLPrimitiveType,
-    raw_triangle_fill_mode: metal::MTLTriangleFillMode,
-    raw_front_winding: metal::MTLWinding,
-    raw_cull_mode: metal::MTLCullMode,
-    raw_depth_clip_mode: Option<metal::MTLDepthClipMode>,
+    raw_primitive_type: MTLPrimitiveType,
+    raw_triangle_fill_mode: MTLTriangleFillMode,
+    raw_front_winding: MTLWinding,
+    raw_cull_mode: MTLCullMode,
+    raw_depth_clip_mode: Option<MTLDepthClipMode>,
     depth_stencil: Option<(metal::DepthStencilState, wgt::DepthBiasState)>,
 }
 
@@ -854,7 +872,7 @@ pub struct ComputePipeline {
     #[allow(dead_code)]
     cs_lib: metal::Library,
     cs_info: PipelineStageInfo,
-    work_group_size: metal::MTLSize,
+    work_group_size: MTLSize,
     work_group_memory_sizes: Vec<u32>,
 }
 
@@ -893,7 +911,7 @@ impl Fence {
     fn get_latest(&self) -> crate::FenceValue {
         let mut max_value = self.completed_value.load(atomic::Ordering::Acquire);
         for &(value, ref cmd_buf) in self.pending_command_buffers.iter() {
-            if cmd_buf.status() == metal::MTLCommandBufferStatus::Completed {
+            if cmd_buf.status() == MTLCommandBufferStatus::Completed {
                 max_value = value;
             }
         }
@@ -915,7 +933,7 @@ struct IndexState {
     buffer_ptr: BufferPtr,
     offset: wgt::BufferAddress,
     stride: wgt::BufferAddress,
-    raw_type: metal::MTLIndexType,
+    raw_type: MTLIndexType,
 }
 
 #[derive(Default)]
@@ -927,9 +945,9 @@ struct CommandState {
     blit: Option<metal::BlitCommandEncoder>,
     render: Option<metal::RenderCommandEncoder>,
     compute: Option<metal::ComputeCommandEncoder>,
-    raw_primitive_type: metal::MTLPrimitiveType,
+    raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
-    raw_wg_size: metal::MTLSize,
+    raw_wg_size: MTLSize,
     stage_infos: MultiStageData<PipelineStageInfo>,
 
     /// Sizes of currently bound [`wgt::BufferBindingType::Storage`] buffers.

@@ -27,6 +27,12 @@ impl ComputePipeline {
         let bind_group = self.inner.get_bind_group_layout(index);
         BindGroupLayout { inner: bind_group }
     }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of ComputePipeline (if custom backend and is internally T)
+    pub fn as_custom<T: custom::ComputePipelineInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
 }
 
 /// Describes a compute pipeline.

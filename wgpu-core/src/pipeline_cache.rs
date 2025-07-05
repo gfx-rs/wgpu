@@ -1,5 +1,8 @@
 use thiserror::Error;
-use wgt::AdapterInfo;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    AdapterInfo,
+};
 
 pub const HEADER_LENGTH: usize = size_of::<PipelineCacheHeader>();
 
@@ -34,6 +37,12 @@ impl PipelineCacheValidationError {
             | PipelineCacheValidationError::Outdated
             | PipelineCacheValidationError::Corrupted => false,
         }
+    }
+}
+
+impl WebGpuError for PipelineCacheValidationError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
     }
 }
 
@@ -483,7 +492,7 @@ mod tests {
         let cache = cache
             .into_iter()
             .flatten()
-            .chain(core::iter::repeat(0u8).take(100))
+            .chain(core::iter::repeat_n(0u8, 100))
             .collect::<Vec<u8>>();
         let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
         let expected: &[u8] = &[0; 100];
@@ -504,7 +513,7 @@ mod tests {
         let cache = cache
             .into_iter()
             .flatten()
-            .chain(core::iter::repeat(0u8).take(200))
+            .chain(core::iter::repeat_n(0u8, 200))
             .collect::<Vec<u8>>();
         let validation_result = super::validate_pipeline_cache(&cache, &ADAPTER, VALIDATION_KEY);
         assert_eq!(validation_result, Err(E::Extended));

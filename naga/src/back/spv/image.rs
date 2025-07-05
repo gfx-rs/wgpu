@@ -810,6 +810,7 @@ impl BlockContext<'_> {
         offset: Option<Handle<crate::Expression>>,
         level: crate::SampleLevel,
         depth_ref: Option<Handle<crate::Expression>>,
+        clamp_to_edge: bool,
         block: &mut Block,
     ) -> Result<Word, Error> {
         use super::instructions::SampleLod;
@@ -840,9 +841,99 @@ impl BlockContext<'_> {
             self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }));
 
         let sampler_id = self.get_handle_id(sampler);
-        let coordinates_id = self
-            .write_image_coordinates(coordinate, array_index, block)?
-            .value_id;
+
+        let coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
+        let coordinates_id = if clamp_to_edge {
+            self.writer.require_any(
+                "clamp sample coordinates to edge",
+                &[spirv::Capability::ImageQuery],
+            )?;
+
+            // clamp_to_edge can only be used with Level 0, and no array offset, offset,
+            // depth_ref or gather. This should have been caught by validation. Rather
+            // than entirely duplicate validation code here just ensure the level is
+            // zero, as we rely on that to query the texture size in order to calculate
+            // the clamped coordinates.
+            if level != crate::SampleLevel::Zero {
+                return Err(Error::Validation(
+                    "ImageSample::clamp_to_edge requires SampleLevel::Zero",
+                ));
+            }
+
+            // Query the size of level 0 of the texture.
+            let image_size_id = self.gen_id();
+            let vec2u_type_id = self.writer.get_vec2u_type_id();
+            let const_zero_uint_id = self.writer.get_constant_scalar(crate::Literal::U32(0));
+            let mut query_inst = Instruction::image_query(
+                spirv::Op::ImageQuerySizeLod,
+                vec2u_type_id,
+                image_size_id,
+                image_id,
+            );
+            query_inst.add_operand(const_zero_uint_id);
+            block.body.push(query_inst);
+
+            let image_size_f_id = self.gen_id();
+            let vec2f_type_id = self.writer.get_vec2f_type_id();
+            block.body.push(Instruction::unary(
+                spirv::Op::ConvertUToF,
+                vec2f_type_id,
+                image_size_f_id,
+                image_size_id,
+            ));
+
+            // Calculate the top-left and bottom-right margin for clamping to. I.e. a
+            // half-texel from each side.
+            let const_0_5_f32_id = self.writer.get_constant_scalar(crate::Literal::F32(0.5));
+            let const_0_5_vec2f_id = self.writer.get_constant_composite(
+                LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                    size: crate::VectorSize::Bi,
+                    scalar: crate::Scalar::F32,
+                })),
+                &[const_0_5_f32_id, const_0_5_f32_id],
+            );
+
+            let margin_left_id = self.gen_id();
+            block.body.push(Instruction::binary(
+                spirv::Op::FDiv,
+                vec2f_type_id,
+                margin_left_id,
+                const_0_5_vec2f_id,
+                image_size_f_id,
+            ));
+
+            let const_1_f32_id = self.writer.get_constant_scalar(crate::Literal::F32(1.0));
+            let const_1_vec2f_id = self.writer.get_constant_composite(
+                LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                    size: crate::VectorSize::Bi,
+                    scalar: crate::Scalar::F32,
+                })),
+                &[const_1_f32_id, const_1_f32_id],
+            );
+
+            let margin_right_id = self.gen_id();
+            block.body.push(Instruction::binary(
+                spirv::Op::FSub,
+                vec2f_type_id,
+                margin_right_id,
+                const_1_vec2f_id,
+                margin_left_id,
+            ));
+
+            // Clamp the coords to the calculated margins
+            let clamped_coords_id = self.gen_id();
+            block.body.push(Instruction::ext_inst(
+                self.writer.gl450_ext_inst_id,
+                spirv::GLOp::NClamp,
+                vec2f_type_id,
+                clamped_coords_id,
+                &[coordinates.value_id, margin_left_id, margin_right_id],
+            ));
+
+            clamped_coords_id
+        } else {
+            coordinates.value_id
+        };
 
         let sampled_image_id = self.gen_id();
         block.body.push(Instruction::sampled_image(

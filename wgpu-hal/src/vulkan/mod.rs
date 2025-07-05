@@ -24,8 +24,6 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 !*/
 
-#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
-
 mod adapter;
 mod command;
 mod conv;
@@ -33,25 +31,23 @@ mod device;
 mod drm;
 mod instance;
 mod sampler;
+mod semaphore_list;
 
-use std::{
-    borrow::Borrow,
-    boxed::Box,
-    ffi::{CStr, CString},
-    fmt, mem,
-    num::NonZeroU32,
-    ops::DerefMut,
-    sync::Arc,
-    vec::Vec,
-};
+pub use adapter::PhysicalDeviceFeatures;
+
+use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
+use core::{borrow::Borrow, ffi::CStr, fmt, marker::PhantomData, mem, num::NonZeroU32};
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
+use bytemuck::{Pod, Zeroable};
 use hashbrown::HashSet;
 use parking_lot::{Mutex, RwLock};
 
 use naga::FastHashMap;
 use wgt::InternalCounter;
+
+use semaphore_list::SemaphoreList;
 
 const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
@@ -161,6 +157,7 @@ pub struct InstanceShared {
     extensions: Vec<&'static CStr>,
     drop_guard: Option<crate::DropGuard>,
     flags: wgt::InstanceFlags,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     debug_utils: Option<DebugUtils>,
     get_physical_device_properties: Option<khr::get_physical_device_properties2::Instance>,
     entry: ash::Entry,
@@ -348,12 +345,10 @@ impl SwapchainImageSemaphores {
 
 struct Swapchain {
     raw: vk::SwapchainKHR,
-    raw_flags: vk::SwapchainCreateFlagsKHR,
     functor: khr::swapchain::Device,
     device: Arc<DeviceShared>,
     images: Vec<vk::Image>,
     config: crate::SurfaceConfiguration,
-    view_formats: Vec<wgt::TextureFormat>,
     /// One wait semaphore per swapchain image. This will be associated with the
     /// surface texture, and later collected during submission.
     ///
@@ -465,7 +460,7 @@ pub struct Adapter {
     //queue_families: Vec<vk::QueueFamilyProperties>,
     known_memory_flags: vk::MemoryPropertyFlags,
     phd_capabilities: adapter::PhysicalDeviceProperties,
-    phd_features: adapter::PhysicalDeviceFeatures,
+    phd_features: PhysicalDeviceFeatures,
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
@@ -496,11 +491,6 @@ struct RayTracingDeviceExtensionFunctions {
 /// device geometry, but affect the code paths taken internally.
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
-    /// Y-flipping is implemented with either `VK_AMD_negative_viewport_height` or `VK_KHR_maintenance1`/1.1+. The AMD extension for negative viewport height does not require a Y shift.
-    ///
-    /// This flag is `true` if the device has `VK_KHR_maintenance1`/1.1+ and `false` otherwise (i.e. in the case of `VK_AMD_negative_viewport_height`).
-    flip_y_requires_shift: bool,
-    imageless_framebuffers: bool,
     image_view_usage: bool,
     timeline_semaphores: bool,
     texture_d24: bool,
@@ -543,6 +533,29 @@ struct PrivateCapabilities {
     zero_initialize_workgroup_memory: bool,
     image_format_list: bool,
     maximum_samplers: u32,
+
+    /// True if this adapter supports the [`VK_KHR_shader_integer_dot_product`] extension
+    /// (promoted to Vulkan 1.3).
+    ///
+    /// This is used to generate optimized code for WGSL's `dot4{I, U}8Packed`.
+    ///
+    /// [`VK_KHR_shader_integer_dot_product`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_shader_integer_dot_product.html
+    shader_integer_dot_product: bool,
+
+    /// True if this adapter supports 8-bit integers provided by the
+    /// [`VK_KHR_shader_float16_int8`] extension (promoted to Vulkan 1.2).
+    ///
+    /// Allows shaders to declare the "Int8" capability. Note, however, that this
+    /// feature alone allows the use of 8-bit integers "only in the `Private`,
+    /// `Workgroup` (for non-Block variables), and `Function` storage classes"
+    /// ([see spec]). To use 8-bit integers in the interface storage classes (e.g.,
+    /// `StorageBuffer`), you also need to enable the corresponding feature in
+    /// `VkPhysicalDevice8BitStorageFeatures` and declare the corresponding SPIR-V
+    /// capability (e.g., `StorageBuffer8BitAccess`).
+    ///
+    /// [`VK_KHR_shader_float16_int8`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_shader_float16_int8.html
+    /// [see spec]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceShaderFloat16Int8Features.html#extension-features-shaderInt8
+    shader_int8: bool,
 }
 
 bitflags::bitflags!(
@@ -617,23 +630,6 @@ struct RenderPassKey {
     multiview: Option<NonZeroU32>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct FramebufferAttachment {
-    /// Can be NULL if the framebuffer is image-less
-    raw: vk::ImageView,
-    raw_image_flags: vk::ImageCreateFlags,
-    view_usage: wgt::TextureUses,
-    view_format: wgt::TextureFormat,
-    raw_view_formats: Vec<vk::Format>,
-}
-
-#[derive(Clone, Eq, Hash, PartialEq)]
-struct FramebufferKey {
-    attachments: ArrayVec<FramebufferAttachment, { MAX_TOTAL_ATTACHMENTS }>,
-    extent: wgt::Extent3d,
-    sample_count: u32,
-}
-
 struct DeviceShared {
     raw: ash::Device,
     family_index: u32,
@@ -651,7 +647,6 @@ struct DeviceShared {
     workarounds: Workarounds,
     features: wgt::Features,
     render_passes: Mutex<FastHashMap<RenderPassKey, vk::RenderPass>>,
-    framebuffers: Mutex<FastHashMap<FramebufferKey, vk::Framebuffer>>,
     sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
 }
@@ -660,9 +655,6 @@ impl Drop for DeviceShared {
     fn drop(&mut self) {
         for &raw in self.render_passes.lock().values() {
             unsafe { self.raw.destroy_render_pass(raw, None) };
-        }
-        for &raw in self.framebuffers.lock().values() {
-            unsafe { self.raw.destroy_framebuffer(raw, None) };
         }
         if self.drop_guard.is_none() {
             unsafe { self.raw.destroy_device(None) };
@@ -770,7 +762,7 @@ pub struct Queue {
     device: Arc<DeviceShared>,
     family_index: u32,
     relay_semaphores: Mutex<RelaySemaphores>,
-    signal_semaphores: Mutex<(Vec<vk::Semaphore>, Vec<u64>)>,
+    signal_semaphores: Mutex<SemaphoreList>,
 }
 
 impl Queue {
@@ -809,11 +801,8 @@ pub struct Texture {
     drop_guard: Option<crate::DropGuard>,
     external_memory: Option<vk::DeviceMemory>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
-    usage: wgt::TextureUses,
     format: wgt::TextureFormat,
-    raw_flags: vk::ImageCreateFlags,
     copy_size: crate::CopyExtent,
-    view_formats: Vec<wgt::TextureFormat>,
 }
 
 impl crate::DynTexture for Texture {}
@@ -829,9 +818,13 @@ impl Texture {
 
 #[derive(Debug)]
 pub struct TextureView {
+    raw_texture: vk::Image,
     raw: vk::ImageView,
     layers: NonZeroU32,
-    attachment: FramebufferAttachment,
+    format: wgt::TextureFormat,
+    raw_format: vk::Format,
+    base_mip_level: u32,
+    dimension: wgt::TextureViewDimension,
 }
 
 impl crate::DynTextureView for TextureView {}
@@ -902,6 +895,21 @@ impl Temp {
     }
 }
 
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct FramebufferKey {
+    raw_pass: vk::RenderPass,
+    attachments: ArrayVec<vk::ImageView, { MAX_TOTAL_ATTACHMENTS }>,
+    extent: wgt::Extent3d,
+}
+
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct TempTextureViewKey {
+    texture: vk::Image,
+    format: vk::Format,
+    mip_level: u32,
+    depth_slice: u32,
+}
+
 pub struct CommandEncoder {
     raw: vk::CommandPool,
     device: Arc<DeviceShared>,
@@ -938,6 +946,9 @@ pub struct CommandEncoder {
     /// the given pool & location.
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
 
+    framebuffers: FastHashMap<FramebufferKey, vk::Framebuffer>,
+    temp_texture_views: FastHashMap<TempTextureViewKey, vk::ImageView>,
+
     counters: Arc<wgt::HalCounters>,
 }
 
@@ -959,6 +970,15 @@ impl Drop for CommandEncoder {
             // fields.
             self.device.raw.destroy_command_pool(self.raw, None);
         }
+
+        for (_, fb) in self.framebuffers.drain() {
+            unsafe { self.device.raw.destroy_framebuffer(fb, None) };
+        }
+
+        for (_, view) in self.temp_texture_views.drain() {
+            unsafe { self.device.raw.destroy_image_view(view, None) };
+        }
+
         self.counters.command_encoders.sub(1);
     }
 }
@@ -1185,8 +1205,7 @@ impl crate::Queue for Queue {
 
         let mut wait_stage_masks = Vec::new();
         let mut wait_semaphores = Vec::new();
-        let mut signal_semaphores = Vec::new();
-        let mut signal_values = Vec::new();
+        let mut signal_semaphores = SemaphoreList::default();
 
         // Double check that the same swapchain image isn't being given to us multiple times,
         // as that will deadlock when we try to lock them all.
@@ -1225,17 +1244,12 @@ impl crate::Queue for Queue {
             // Get a semaphore to signal when we're done writing to this surface
             // image. Presentation of this image will wait for this.
             let signal_semaphore = swapchain_semaphore.get_submit_signal_semaphore(&self.device)?;
-            signal_semaphores.push(signal_semaphore);
-            signal_values.push(!0);
+            signal_semaphores.push_binary(signal_semaphore);
         }
 
-        let mut guards = self.signal_semaphores.lock();
-        let (ref mut pending_signal_semaphores, ref mut pending_signal_semaphore_values) =
-            guards.deref_mut();
-        assert!(pending_signal_semaphores.len() == pending_signal_semaphore_values.len());
-        if !pending_signal_semaphores.is_empty() {
-            signal_semaphores.append(pending_signal_semaphores);
-            signal_values.append(pending_signal_semaphore_values);
+        let mut guard = self.signal_semaphores.lock();
+        if !guard.is_empty() {
+            signal_semaphores.append(&mut guard);
         }
 
         // In order for submissions to be strictly ordered, we encode a dependency between each submission
@@ -1247,15 +1261,13 @@ impl crate::Queue for Queue {
             wait_semaphores.push(sem);
         }
 
-        signal_semaphores.push(semaphore_state.signal);
-        signal_values.push(!0);
+        signal_semaphores.push_binary(semaphore_state.signal);
 
         // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
         signal_fence.maintain(&self.device.raw)?;
         match *signal_fence {
             Fence::TimelineSemaphore(raw) => {
-                signal_semaphores.push(raw);
-                signal_values.push(signal_value);
+                signal_semaphores.push_timeline(raw, signal_value);
             }
             Fence::FencePool {
                 ref mut active,
@@ -1284,16 +1296,10 @@ impl crate::Queue for Queue {
 
         vk_info = vk_info
             .wait_semaphores(&wait_semaphores)
-            .wait_dst_stage_mask(&wait_stage_masks)
-            .signal_semaphores(&signal_semaphores);
+            .wait_dst_stage_mask(&wait_stage_masks);
 
-        let mut vk_timeline_info;
-
-        if self.device.private_caps.timeline_semaphores {
-            vk_timeline_info =
-                vk::TimelineSemaphoreSubmitInfo::default().signal_semaphore_values(&signal_values);
-            vk_info = vk_info.push_next(&mut vk_timeline_info);
-        }
+        let mut vk_timeline_info = mem::MaybeUninit::uninit();
+        vk_info = signal_semaphores.add_to_submit(vk_info, &mut vk_timeline_info);
 
         profiling::scope!("vkQueueSubmit");
         unsafe {
@@ -1372,10 +1378,12 @@ impl Queue {
     }
 
     pub fn add_signal_semaphore(&self, semaphore: vk::Semaphore, semaphore_value: Option<u64>) {
-        let mut guards = self.signal_semaphores.lock();
-        let (ref mut semaphores, ref mut semaphore_values) = guards.deref_mut();
-        semaphores.push(semaphore);
-        semaphore_values.push(semaphore_value.unwrap_or(!0));
+        let mut guard = self.signal_semaphores.lock();
+        if let Some(value) = semaphore_value {
+            guard.push_timeline(semaphore, value);
+        } else {
+            guard.push_binary(semaphore);
+        }
     }
 }
 
@@ -1469,13 +1477,8 @@ fn get_unexpected_err(_err: vk::Result) -> crate::DeviceError {
     crate::DeviceError::Unexpected
 }
 
-/// Returns [`crate::DeviceError::OutOfMemory`] or panics if the `oom_panic`
-/// feature flag is enabled.
+/// Returns [`crate::DeviceError::OutOfMemory`].
 fn get_oom_err(_err: vk::Result) -> crate::DeviceError {
-    #[cfg(feature = "oom_panic")]
-    panic!("Out of memory ({_err:?})");
-
-    #[allow(unreachable_code)]
     crate::DeviceError::OutOfMemory
 }
 
@@ -1489,7 +1492,7 @@ fn get_lost_err() -> crate::DeviceError {
     crate::DeviceError::Lost
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 struct RawTlasInstance {
     transform: [f32; 12],
@@ -1497,3 +1500,65 @@ struct RawTlasInstance {
     shader_binding_table_record_offset_and_flags: u32,
     acceleration_structure_reference: u64,
 }
+
+/// Arguments to the [`CreateDeviceCallback`].
+pub struct CreateDeviceCallbackArgs<'arg, 'pnext, 'this>
+where
+    'this: 'pnext,
+{
+    /// The extensions to enable for the device. You must not remove anything from this list,
+    /// but you may add to it.
+    pub extensions: &'arg mut Vec<&'static CStr>,
+    /// The physical device features to enable. You may enable features, but must not disable any.
+    pub device_features: &'arg mut PhysicalDeviceFeatures,
+    /// The queue create infos for the device. You may add or modify queue create infos as needed.
+    pub queue_create_infos: &'arg mut Vec<vk::DeviceQueueCreateInfo<'pnext>>,
+    /// The create info for the device. You may add or modify things in the pnext chain, but
+    /// do not turn features off. Additionally, do not add things to the list of extensions,
+    /// or to the feature set, as all changes to that member will be overwritten.
+    pub create_info: &'arg mut vk::DeviceCreateInfo<'pnext>,
+    /// We need to have `'this` in the struct, so we can declare that all lifetimes coming from
+    /// captures in the closure will live longer (and hence satisfy) `'pnext`. However, we
+    /// don't actually directly use `'this`
+    _phantom: PhantomData<&'this ()>,
+}
+
+/// Callback to allow changing the vulkan device creation parameters.
+///
+/// # Safety:
+/// - If you want to add extensions, add the to the `Vec<'static CStr>` not the create info,
+///   as the create info value will be overwritten.
+/// - Callback must not remove features.
+/// - Callback must not change anything to what the instance does not support.
+pub type CreateDeviceCallback<'this> =
+    dyn for<'arg, 'pnext> FnOnce(CreateDeviceCallbackArgs<'arg, 'pnext, 'this>) + 'this;
+
+/// Arguments to the [`CreateInstanceCallback`].
+pub struct CreateInstanceCallbackArgs<'arg, 'pnext, 'this>
+where
+    'this: 'pnext,
+{
+    /// The extensions to enable for the instance. You must not remove anything from this list,
+    /// but you may add to it.
+    pub extensions: &'arg mut Vec<&'static CStr>,
+    /// The create info for the instance. You may add or modify things in the pnext chain, but
+    /// do not turn features off. Additionally, do not add things to the list of extensions,
+    /// all changes to that member will be overwritten.
+    pub create_info: &'arg mut vk::InstanceCreateInfo<'pnext>,
+    /// Vulkan entry point.
+    pub entry: &'arg ash::Entry,
+    /// We need to have `'this` in the struct, so we can declare that all lifetimes coming from
+    /// captures in the closure will live longer (and hence satisfy) `'pnext`. However, we
+    /// don't actually directly use `'this`
+    _phantom: PhantomData<&'this ()>,
+}
+
+/// Callback to allow changing the vulkan instance creation parameters.
+///
+/// # Safety:
+/// - If you want to add extensions, add the to the `Vec<'static CStr>` not the create info,
+///   as the create info value will be overwritten.
+/// - Callback must not remove features.
+/// - Callback must not change anything to what the instance does not support.
+pub type CreateInstanceCallback<'this> =
+    dyn for<'arg, 'pnext> FnOnce(CreateInstanceCallbackArgs<'arg, 'pnext, 'this>) + 'this;

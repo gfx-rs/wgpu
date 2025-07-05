@@ -234,7 +234,6 @@ impl<T> Arena<T> {
         Ok(())
     }
 
-    #[cfg(feature = "compact")]
     pub(crate) fn retain_mut<P>(&mut self, mut predicate: P)
     where
         P: FnMut(Handle<T>, &mut T) -> bool,
@@ -271,9 +270,7 @@ where
         D: serde::Deserializer<'de>,
     {
         let data = Vec::deserialize(deserializer)?;
-        let span_info = core::iter::repeat(Span::default())
-            .take(data.len())
-            .collect();
+        let span_info = core::iter::repeat_n(Span::default(), data.len()).collect();
 
         Ok(Self { data, span_info })
     }

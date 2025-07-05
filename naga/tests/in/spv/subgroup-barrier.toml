@@ -1,0 +1,5 @@
+god_mode = true
+targets = "WGSL | SPIRV | GLSL | METAL"
+
+[msl]
+lang_version = [2, 0]

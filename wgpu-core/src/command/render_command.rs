@@ -347,6 +347,9 @@ impl RenderCommand {
                             offset,
                             count,
                             family,
+
+                            vertex_or_index_limit: 0,
+                            instance_limit: 0,
                         },
 
                         RenderCommand::MultiDrawIndirectCount {
@@ -483,6 +486,11 @@ pub enum ArcRenderCommand {
         offset: BufferAddress,
         count: u32,
         family: DrawCommandFamily,
+
+        /// This limit is only populated for commands in a [`RenderBundle`].
+        vertex_or_index_limit: u64,
+        /// This limit is only populated for commands in a [`RenderBundle`].
+        instance_limit: u64,
     },
     MultiDrawIndirectCount {
         buffer: Arc<Buffer>,

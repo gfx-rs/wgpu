@@ -1,10 +1,87 @@
 unittests:*
 webgpu:api,operation,command_buffer,basic:*
-webgpu:api,operation,compute,basic:*
+webgpu:api,operation,command_buffer,copyBufferToBuffer:*
+webgpu:api,operation,compute,basic:memcpy:*
+//FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
+webgpu:api,operation,compute_pipeline,overrides:*
+webgpu:api,operation,device,lost:*
+webgpu:api,validation,encoding,beginComputePass:*
+webgpu:api,validation,encoding,beginRenderPass:*
+webgpu:api,validation,encoding,cmds,clearBuffer:*
+webgpu:api,validation,encoding,cmds,compute_pass:set_pipeline:*
+webgpu:api,validation,encoding,cmds,compute_pass:dispatch_sizes:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_with_invalid_or_destroyed_texture:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture,device_mismatch:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:mipmap_level:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture_usage:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:sample_count:*
+//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:multisampled_copy_restrictions:*
+// texture_format_compatibility fails on Windows and Mac in CI.
+// It passes locally on Mac. It is also a relatively long test.
+//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture_format_compatibility:*
+//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:depth_stencil_copy_restrictions:*
+//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:*
+//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_within_same_texture:*
+//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_aspects:*
+// Fails on Windows, https://github.com/gfx-rs/wgpu/issues/7844.
+//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges_with_compressed_texture_formats:*
+webgpu:api,validation,encoding,cmds,index_access:*
+//FAIL: webgpu:api,validation,encoding,cmds,render,draw:*
+webgpu:api,validation,encoding,encoder_state:*
+webgpu:api,validation,encoding,encoder_open_state:non_pass_commands:*
+webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:*
+//FAIL: webgpu:api,validation,encoding,encoder_open_state:render_bundle_commands:*
+// https://github.com/gfx-rs/wgpu/issues/7857
+webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:encoderType="compute%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:encoderType="render%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:encoderType="compute%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:encoderType="render%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:encoderType="compute%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:encoderType="render%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:encoderType="compute%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:encoderType="render%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:buffer_binding,render_pipeline:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:sampler_binding,render_pipeline:*
+webgpu:api,validation,image_copy,texture_related:format:dimension="1d";*
+webgpu:api,validation,queue,submit:command_buffer,device_mismatch:*
+webgpu:api,validation,queue,submit:command_buffer,duplicate_buffers:*
+webgpu:api,validation,queue,submit:command_buffer,submit_invalidates:*
+//FAIL: webgpu:api,validation,queue,submit:command_buffer,invalid_submit_invalidates:*
+// https://github.com/gfx-rs/wgpu/issues/3911#issuecomment-2972995675
+webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*
+webgpu:api,validation,render_pass,render_pass_descriptor:resolveTarget,*
+webgpu:api,validation,texture,rg11b10ufloat_renderable:*
+webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
 //FAIL: webgpu:api,operation,rendering,basic:large_draw:*
-webgpu:api,operation,rendering,blending:*
-webgpu:api,operation,rendering,blending:GPUBlendComponent:*
+webgpu:api,operation,rendering,color_target_state:blending,GPUBlendComponent:*
+webgpu:api,operation,rendering,color_target_state:blending,formats:*
+webgpu:api,operation,rendering,color_target_state:blend_constant,setting:*
 webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
+webgpu:api,operation,shader_module,compilation_info:*
+webgpu:api,operation,uncapturederror:iff_uncaptured:*
+//FAIL: webgpu:shader,execution,expression,call,builtin,select:*
+// - Fails with `const`/abstract int cases on all platforms because of <https://github.com/gfx-rs/wgpu/issues/4507>.
+// - Fails with `vec3` & `f16` cases on macOS because of <https://github.com/gfx-rs/wgpu/issues/5262>.
+//FAIL: webgpu:api,operation,uncapturederror:onuncapturederror_order_wrt_addEventListener
+// There are also two unimplemented SKIPs in uncapturederror not enumerated here.
+webgpu:api,validation,encoding,queries,general:occlusion_query,query_type:*
+webgpu:shader,execution,expression,call,builtin,textureSample:sampled_1d_coords:*
+webgpu:shader,execution,expression,call,builtin,textureSampleBaseClampToEdge:2d_coords:stage="c";textureType="texture_2d<f32>";*
+webgpu:shader,execution,flow_control,return:*
+webgpu:shader,validation,expression,call,builtin,max:values:*
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break"
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break_if"
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="continue"
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="for3"
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="for4"
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="for5"
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="loop4"
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="loop5"
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="loop6"
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="loop8"
+webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="switch1"
+//FAIL: 9 invalid_statements subtests due to https://github.com/gfx-rs/wgpu/issues/7733

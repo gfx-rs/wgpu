@@ -3,15 +3,20 @@
 //! Nothing in this module is a part of the WebGPU API specification;
 //! they are unique to the `wgpu` library.
 
+// TODO: For [`belt::StagingBelt`] to be available in `no_std` its usage of [`std::sync::mpsc`]
+// must be replaced with an appropriate alternative.
+#[cfg(std)]
 mod belt;
 mod device;
 mod encoder;
 mod init;
+mod mutex;
 mod texture_blitter;
 
 use alloc::{borrow::Cow, format, string::String, vec};
 use core::ptr::copy_nonoverlapping;
 
+#[cfg(std)]
 pub use belt::StagingBelt;
 pub use device::{BufferInitDescriptor, DeviceExt};
 pub use encoder::RenderEncoder;
@@ -21,6 +26,8 @@ pub use texture_blitter::{TextureBlitter, TextureBlitterBuilder};
 pub use wgt::{
     math::*, DispatchIndirectArgs, DrawIndexedIndirectArgs, DrawIndirectArgs, TextureDataOrder,
 };
+
+pub(crate) use mutex::Mutex;
 
 use crate::dispatch;
 
@@ -39,10 +46,10 @@ pub fn make_spirv(data: &[u8]) -> super::ShaderSource<'_> {
     super::ShaderSource::SpirV(make_spirv_raw(data))
 }
 
-/// Version of `make_spirv` intended for use with [`Device::create_shader_module_spirv`].
+/// Version of `make_spirv` intended for use with [`Device::create_shader_module_passthrough`].
 /// Returns a raw slice instead of [`ShaderSource`](super::ShaderSource).
 ///
-/// [`Device::create_shader_module_spirv`]: crate::Device::create_shader_module_spirv
+/// [`Device::create_shader_module_passthrough`]: crate::Device::create_shader_module_passthrough
 pub fn make_spirv_raw(data: &[u8]) -> Cow<'_, [u32]> {
     const MAGIC_NUMBER: u32 = 0x0723_0203;
     assert_eq!(
@@ -98,10 +105,7 @@ impl DownloadBuffer {
         buffer: &super::BufferSlice<'_>,
         callback: impl FnOnce(Result<Self, super::BufferAsyncError>) + Send + 'static,
     ) {
-        let size = match buffer.size {
-            Some(size) => size.into(),
-            None => buffer.buffer.map_context.lock().total_size - buffer.offset,
-        };
+        let size = buffer.size.into();
 
         let download = device.create_buffer(&super::BufferDescriptor {
             size,

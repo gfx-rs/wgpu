@@ -1,6 +1,6 @@
 > [!NOTE]  
 > These are the examples for the development version of wgpu. If you want to see the examples for the latest crates.io release
-> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v24/examples#readme).
+> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v25/examples#readme).
 
 # Examples
 
@@ -14,14 +14,16 @@ be cloned out of the repository to serve as a starting point for your own projec
 
 | Name   | Description | Platforms |
 |--------|-------------|-----------|
-| [hello compute](standalone/01_hello_compute/) | Simplest example and shows how to run a compute shader on a given set of input data and get the results back. | Native-Only |
-| [hello window](standalone/02_hello_window/) | Shows how to create a window and render into it. | Native-Only |
-| [custom backend](standalone/03_custom_backend/) | Shows how to implement and use custom wgpu context | Any |
+| ---    | Introductory Examples | --- |
+| [1. hello compute](standalone/01_hello_compute/) | Simplest example and shows how to run a compute shader on a given set of input data and get the results back. | Native-Only |
+| [2. hello window](standalone/02_hello_window/) | Shows how to create a window and render into it. | Native-Only |
+| --- | Special Examples | --- |
+| [custom backend](standalone/custom_backend/) | Shows how to implement and use custom wgpu context | All |
 
 You can also use [`cargo-generate`](https://github.com/cargo-generate/cargo-generate) to easily use these as a basis for your own projects.
 
 ```sh
-cargo generate gfx-rs/wgpu --branch v24
+cargo generate gfx-rs/wgpu --branch v25
 ```
 
 ## Framework Examples
@@ -49,6 +51,7 @@ These examples use a common framework to handle wgpu init, window creation, and 
 - `hello_workgroups` - Teaches the user about the basics of compute workgroups; what they are and what they can do.
 - `hello_synchronization` - Teaches the user about synchronization in WGSL, the ability to force all invocations in a workgroup to synchronize with each other before continuing via a sort of barrier.
 - `storage_texture` - Demonstrates the use of storage textures as outputs to compute shaders. The example on the outside seems very similar to `render_to_texture` in that it outputs an image either to the file system or the web page, except displaying a grayscale render of the Mandelbrot Set. However, inside, the example dispatches a grid of compute workgroups, one for each pixel, which calculates the pixel value and stores it to the corresponding pixel of the output storage texture. This example either outputs an image file of your naming (pass command line arguments after specifying a `--` like `cargo run --bin wgpu-examples -- storage_texture "test.png"`) or adds an `img` element containing the image to the page in WASM.
+- `big_compute_buffers` - Demonstrates how you can split _large_ datasets across multiple buffers, using `binding_array` in your `wgsl` [NOTE: native only, no WASM support].
 
 #### Combined
 

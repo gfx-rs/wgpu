@@ -1,16 +1,23 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
+use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+
+#[cfg(target_arch = "wasm32")]
+fn get_content_div() -> web_sys::Element {
+    web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.get_element_by_id("content"))
+        .expect("Could not get document / content.")
+}
 
 /// Replaces the site body with a message telling the user to open the console and use that.
 #[cfg(target_arch = "wasm32")]
 pub fn add_web_nothing_to_see_msg() {
-    web_sys::window()
-        .and_then(|window| window.document())
-        .and_then(|document| document.body())
-        .expect("Could not get document / body.")
-        .set_inner_html("<h1>Nothing to see here! Open the console!</h1>");
+    get_content_div().set_inner_html(
+        "<h1>This is a compute example, so there's nothing to see here. Open the console!</h1>",
+    );
 }
 
 /// Outputs a vector of RGBA bytes as a png image with the given dimensions on the given path.
@@ -43,7 +50,7 @@ pub fn output_image_native(image_data: Vec<u8>, texture_dims: (usize, usize), pa
 #[cfg(target_arch = "wasm32")]
 pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
     let document = web_sys::window().unwrap().document().unwrap();
-    let body = document.body().unwrap();
+    let content_div = get_content_div();
 
     let canvas = if let Some(found_canvas) = document.get_element_by_id("staging-canvas") {
         match found_canvas.dyn_into::<web_sys::HtmlCanvasElement>() {
@@ -121,14 +128,15 @@ pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
         You can drag it to your desktop to download.",
         ));
         p.set_id("image-for-you-text");
-        body.append_child(&p)
-            .expect("Failed to append \"image for you text\" to document body.");
+        content_div
+            .append_child(&p)
+            .expect("Failed to append \"image for you text\" to document.");
     }
 }
 
 #[cfg(target_arch = "wasm32")]
 fn create_staging_canvas(document: &web_sys::Document) -> web_sys::HtmlCanvasElement {
-    let body = document.body().expect("Failed to get document body.");
+    let content_div = get_content_div();
     let new_canvas = document
         .create_element("canvas")
         .expect("Failed to create staging canvas.")
@@ -137,22 +145,21 @@ fn create_staging_canvas(document: &web_sys::Document) -> web_sys::HtmlCanvasEle
     // We don't want to show the canvas, we just want it to exist in the background.
     new_canvas.set_attribute("hidden", "true").unwrap();
     new_canvas.set_attribute("background-color", "red").unwrap();
-    body.append_child(&new_canvas).unwrap();
+    content_div.append_child(&new_canvas).unwrap();
     log::info!("Created new staging canvas: {:?}", &new_canvas);
     new_canvas
 }
 
 #[cfg(target_arch = "wasm32")]
 fn create_output_image_element(document: &web_sys::Document) -> web_sys::HtmlImageElement {
-    let body = document.body().expect("Failed to get document body.");
+    let content_div = get_content_div();
     let new_image = document
         .create_element("img")
         .expect("Failed to create output image element.")
         .dyn_into::<web_sys::HtmlImageElement>()
         .unwrap();
     new_image.set_id("output-image-target");
-    body.append_child(&new_image)
-        .expect("Failed to append output image target to document body.");
+    content_div.replace_children_with_node_1(&new_image);
     log::info!("Created new output target image: {:?}", &new_image);
     new_image
 }
@@ -257,4 +264,24 @@ pub(crate) async fn get_adapter_with_capabilities_or_from_env(
         required_downlevel_capabilities.flags - downlevel_capabilities.flags
     );
     adapter
+}
+
+/// A custom timer that only starts counting after the first call to get its time value.
+/// Useful because some examples have animations that would otherwise get started at initialization
+/// leading to random CI fails.
+#[derive(Default)]
+pub struct AnimationTimer {
+    start_time: Option<Instant>,
+}
+
+impl AnimationTimer {
+    pub fn time(&mut self) -> f32 {
+        match self.start_time {
+            None => {
+                self.start_time = Some(Instant::now());
+                0.0
+            }
+            Some(ref instant) => instant.elapsed().as_secs_f32(),
+        }
+    }
 }

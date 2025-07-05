@@ -15,7 +15,7 @@ use crate::{
         self,
         wgsl::{address_space_str, ToWgsl, TryToWgsl},
     },
-    proc::{self, ExpressionKindTracker, NameKey},
+    proc::{self, NameKey},
     valid, Handle, Module, ShaderStage, TypeInner,
 };
 
@@ -99,9 +99,8 @@ impl<W: Write> Writer<W> {
         self.names.clear();
         self.namer.reset(
             module,
-            crate::keywords::wgsl::RESERVED,
+            &crate::keywords::wgsl::RESERVED_SET,
             // an identifier must not start with two underscore
-            &[],
             &[],
             &["__", "_naga"],
             &mut self.names,
@@ -127,8 +126,8 @@ impl<W: Write> Writer<W> {
 
         self.reset(module);
 
-        // Write all needed directives.
-        self.write_enable_dual_source_blending_if_needed(module)?;
+        // Write all `enable` declarations
+        self.write_enable_declarations(module)?;
 
         // Write all structs
         for (handle, ty) in module.types.iter() {
@@ -175,7 +174,6 @@ impl<W: Write> Writer<W> {
                 info: fun_info,
                 expressions: &function.expressions,
                 named_expressions: &function.named_expressions,
-                expr_kind_tracker: ExpressionKindTracker::from_arena(&function.expressions),
             };
 
             // Write the function
@@ -204,7 +202,6 @@ impl<W: Write> Writer<W> {
                 info: info.get_entry_point(index),
                 expressions: &ep.function.expressions,
                 named_expressions: &ep.function.named_expressions,
-                expr_kind_tracker: ExpressionKindTracker::from_arena(&ep.function.expressions),
             };
             self.write_function(module, &ep.function, &func_ctx)?;
 
@@ -217,6 +214,62 @@ impl<W: Write> Writer<W> {
         for polyfill in &self.required_polyfills {
             writeln!(self.out)?;
             write!(self.out, "{}", polyfill.source)?;
+            writeln!(self.out)?;
+        }
+
+        Ok(())
+    }
+
+    /// Helper method which writes all the `enable` declarations
+    /// needed for a module.
+    fn write_enable_declarations(&mut self, module: &Module) -> BackendResult {
+        let mut needs_f16 = false;
+        let mut needs_dual_source_blending = false;
+        let mut needs_clip_distances = false;
+
+        // Determine which `enable` declarations are needed
+        for (_, ty) in module.types.iter() {
+            match ty.inner {
+                TypeInner::Scalar(scalar)
+                | TypeInner::Vector { scalar, .. }
+                | TypeInner::Matrix { scalar, .. } => {
+                    needs_f16 |= scalar == crate::Scalar::F16;
+                }
+                TypeInner::Struct { ref members, .. } => {
+                    for binding in members.iter().filter_map(|m| m.binding.as_ref()) {
+                        match *binding {
+                            crate::Binding::Location {
+                                blend_src: Some(_), ..
+                            } => {
+                                needs_dual_source_blending = true;
+                            }
+                            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistance) => {
+                                needs_clip_distances = true;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Write required declarations
+        let mut any_written = false;
+        if needs_f16 {
+            writeln!(self.out, "enable f16;")?;
+            any_written = true;
+        }
+        if needs_dual_source_blending {
+            writeln!(self.out, "enable dual_source_blending;")?;
+            any_written = true;
+        }
+        if needs_clip_distances {
+            writeln!(self.out, "enable clip_distances;")?;
+            any_written = true;
+        }
+        if any_written {
+            // Empty line for readability
             writeln!(self.out)?;
         }
 
@@ -368,32 +421,6 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    /// Writes all the necessary directives out
-    fn write_enable_dual_source_blending_if_needed(&mut self, module: &Module) -> BackendResult {
-        // Check for dual source blending.
-        if module.types.iter().any(|(_handle, ty)| {
-            if let TypeInner::Struct { ref members, .. } = ty.inner {
-                members.iter().any(|member| {
-                    member.binding.as_ref().is_some_and(|binding| {
-                        matches!(
-                            binding,
-                            &crate::Binding::Location {
-                                blend_src: Some(_),
-                                ..
-                            }
-                        )
-                    })
-                })
-            } else {
-                false
-            }
-        }) {
-            writeln!(self.out, "enable dual_source_blending;")?;
-        }
-
-        Ok(())
-    }
-
     /// Helper method used to write structs
     /// Write the full declaration of a struct type.
     ///
@@ -445,7 +472,11 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_type_inner(&mut self, module: &Module, inner: &TypeInner) -> BackendResult {
+    fn write_type_resolution(
+        &mut self,
+        module: &Module,
+        resolution: &proc::TypeResolution,
+    ) -> BackendResult {
         // This actually can't be factored out into a nice constructor method,
         // because the borrow checker needs to be able to see that the borrows
         // of `self.names` and `self.out` are disjoint.
@@ -453,7 +484,7 @@ impl<W: Write> Writer<W> {
             module,
             names: &self.names,
         };
-        type_context.write_type_inner(inner, &mut self.out)?;
+        type_context.write_type_resolution(resolution, &mut self.out)?;
 
         Ok(())
     }
@@ -790,7 +821,7 @@ impl<W: Write> Writer<W> {
             Statement::Continue => {
                 writeln!(self.out, "{level}continue;")?;
             }
-            Statement::Barrier(barrier) => {
+            Statement::ControlBarrier(barrier) | Statement::MemoryBarrier(barrier) => {
                 if barrier.contains(crate::Barrier::STORAGE) {
                     writeln!(self.out, "{level}storageBarrier();")?;
                 }
@@ -905,6 +936,20 @@ impl<W: Write> Writer<W> {
                     crate::GatherMode::ShuffleXor(_) => {
                         write!(self.out, "subgroupShuffleXor(")?;
                     }
+                    crate::GatherMode::QuadBroadcast(_) => {
+                        write!(self.out, "quadBroadcast(")?;
+                    }
+                    crate::GatherMode::QuadSwap(direction) => match direction {
+                        crate::Direction::X => {
+                            write!(self.out, "quadSwapX(")?;
+                        }
+                        crate::Direction::Y => {
+                            write!(self.out, "quadSwapY(")?;
+                        }
+                        crate::Direction::Diagonal => {
+                            write!(self.out, "quadSwapDiagonal(")?;
+                        }
+                    },
                 }
                 self.write_expr(module, argument, func_ctx)?;
                 match mode {
@@ -913,10 +958,12 @@ impl<W: Write> Writer<W> {
                     | crate::GatherMode::Shuffle(index)
                     | crate::GatherMode::ShuffleDown(index)
                     | crate::GatherMode::ShuffleUp(index)
-                    | crate::GatherMode::ShuffleXor(index) => {
+                    | crate::GatherMode::ShuffleXor(index)
+                    | crate::GatherMode::QuadBroadcast(index) => {
                         write!(self.out, ", ")?;
                         self.write_expr(module, index, func_ctx)?;
                     }
+                    crate::GatherMode::QuadSwap(_) => {}
                 }
                 writeln!(self.out, ");")?;
             }
@@ -991,26 +1038,12 @@ impl<W: Write> Writer<W> {
         func_ctx: &back::FunctionCtx,
         name: &str,
     ) -> BackendResult {
-        // Some functions are marked as const, but are not yet implemented as constant expression
-        let quantifier = if func_ctx.expr_kind_tracker.is_impl_const(handle) {
-            "const"
-        } else {
-            "let"
-        };
         // Write variable name
-        write!(self.out, "{quantifier} {name}")?;
+        write!(self.out, "let {name}")?;
         if self.flags.contains(WriterFlags::EXPLICIT_TYPES) {
             write!(self.out, ": ")?;
-            let ty = &func_ctx.info[handle].ty;
             // Write variable type
-            match *ty {
-                proc::TypeResolution::Handle(handle) => {
-                    self.write_type(module, handle)?;
-                }
-                proc::TypeResolution::Value(ref inner) => {
-                    self.write_type_inner(module, inner)?;
-                }
-            }
+            self.write_type_resolution(module, &func_ctx.info[handle].ty)?;
         }
 
         write!(self.out, " = ")?;
@@ -1093,6 +1126,7 @@ impl<W: Write> Writer<W> {
 
         match expressions[expr] {
             Expression::Literal(literal) => match literal {
+                crate::Literal::F16(value) => write!(self.out, "{value}h")?,
                 crate::Literal::F32(value) => write!(self.out, "{value}f")?,
                 crate::Literal::U32(value) => write!(self.out, "{value}u")?,
                 crate::Literal::I32(value) => {
@@ -1108,11 +1142,12 @@ impl<W: Write> Writer<W> {
                 crate::Literal::Bool(value) => write!(self.out, "{value}")?,
                 crate::Literal::F64(value) => write!(self.out, "{value:?}lf")?,
                 crate::Literal::I64(value) => {
-                    // `-9223372036854775808li` is not valid WGSL. The most negative `i64`
-                    // value can only be expressed in WGSL using AbstractInt and
-                    // a unary negation operator.
+                    // `-9223372036854775808li` is not valid WGSL. Nor can we simply use the
+                    // AbstractInt trick above, as AbstractInt also cannot represent
+                    // `9223372036854775808`. Instead construct the second most negative
+                    // AbstractInt, subtract one from it, then cast to i64.
                     if value == i64::MIN {
-                        write!(self.out, "i64({value})")?;
+                        write!(self.out, "i64({} - 1)", value + 1)?;
                     } else {
                         write!(self.out, "{value}li")?;
                     }
@@ -1268,6 +1303,7 @@ impl<W: Write> Writer<W> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => {
                 use crate::SampleLevel as Sl;
 
@@ -1277,6 +1313,7 @@ impl<W: Write> Writer<W> {
                 };
                 let suffix_level = match level {
                     Sl::Auto => "",
+                    Sl::Zero if clamp_to_edge => "BaseClampToEdge",
                     Sl::Zero | Sl::Exact(_) => "Level",
                     Sl::Bias(_) => "Bias",
                     Sl::Gradient { .. } => "Grad",
@@ -1302,8 +1339,8 @@ impl<W: Write> Writer<W> {
                 match level {
                     Sl::Auto => {}
                     Sl::Zero => {
-                        // Level 0 is implied for depth comparison
-                        if depth_ref.is_none() {
+                        // Level 0 is implied for depth comparison and BaseClampToEdge
+                        if depth_ref.is_none() && !clamp_to_edge {
                             write!(self.out, ", 0.0")?;
                         }
                     }
@@ -1340,6 +1377,7 @@ impl<W: Write> Writer<W> {
                 offset,
                 level: _,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 let suffix_cmp = match depth_ref {
                     Some(_) => "Compare",
@@ -1727,7 +1765,7 @@ struct WriterTypeContext<'m> {
     names: &'m crate::FastHashMap<NameKey, String>,
 }
 
-impl<W: Write> TypeContext<W> for WriterTypeContext<'_> {
+impl TypeContext for WriterTypeContext<'_> {
     fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
         &self.module.types[handle]
     }
@@ -1736,8 +1774,20 @@ impl<W: Write> TypeContext<W> for WriterTypeContext<'_> {
         self.names[&NameKey::Type(handle)].as_str()
     }
 
-    fn write_override(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
+    fn write_unnamed_struct<W: Write>(&self, _: &TypeInner, _: &mut W) -> core::fmt::Result {
+        unreachable!("the WGSL back end should always provide type handles");
+    }
+
+    fn write_override<W: Write>(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
         unreachable!("overrides should be validated out");
+    }
+
+    fn write_non_wgsl_inner<W: Write>(&self, _: &TypeInner, _: &mut W) -> core::fmt::Result {
+        unreachable!("backends should only be passed validated modules");
+    }
+
+    fn write_non_wgsl_scalar<W: Write>(&self, _: crate::Scalar, _: &mut W) -> core::fmt::Result {
+        unreachable!("backends should only be passed validated modules");
     }
 }
 

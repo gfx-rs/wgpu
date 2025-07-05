@@ -169,10 +169,18 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                 Some(ep) => format!("block_ctx.{:?}-{}.txt", ep.stage, ep.name),
                 None => format!("block_ctx.Fun-{}.txt", function_index),
             };
-            let dest = prefix.join(dump_suffix);
-            let dump = format!("{block_ctx:#?}");
-            if let Err(e) = std::fs::write(&dest, dump) {
-                log::error!("Unable to dump the block context into {:?}: {}", dest, e);
+
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "fs")] {
+                    let prefix: &std::path::Path = prefix.as_ref();
+                    let dest = prefix.join(dump_suffix);
+                    let dump = format!("{block_ctx:#?}");
+                    if let Err(e) = std::fs::write(&dest, dump) {
+                        log::error!("Unable to dump the block context into {:?}: {}", dest, e);
+                    }
+                } else {
+                    log::error!("Unable to dump the block context into {:?}/{}: file system integration was not enabled with the `fs` feature", prefix, dump_suffix);
+                }
             }
         }
 
@@ -374,7 +382,15 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         );
 
         // 3. copy the outputs from privates to the result
+        //
+        // It would be nice to share struct layout code here with `parse_type_struct`,
+        // but that case needs to take into account offset decorations, which makes an
+        // abstraction harder to follow than just writing out what we mean. `Layouter`
+        // and `Alignment` cover the worst parts already.
         let mut members = Vec::new();
+        self.layouter.update(module.to_ctx()).unwrap();
+        let mut next_member_offset = 0;
+        let mut struct_alignment = crate::proc::Alignment::ONE;
         let mut components = Vec::new();
         for &v_id in ep.variable_ids.iter() {
             let lvar = self.lookup_variable.lookup(v_id)?;
@@ -435,6 +451,11 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                                 }
                             }
 
+                            let member_alignment = self.layouter[sm.ty].alignment;
+                            next_member_offset = member_alignment.round_up(next_member_offset);
+                            sm.offset = next_member_offset;
+                            struct_alignment = struct_alignment.max(member_alignment);
+                            next_member_offset += self.layouter[sm.ty].size;
                             members.push(sm);
 
                             components.push(function.expressions.append(
@@ -454,12 +475,16 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                             }
                         }
 
+                        let member_alignment = self.layouter[result.ty].alignment;
+                        next_member_offset = member_alignment.round_up(next_member_offset);
                         members.push(crate::StructMember {
                             name: None,
                             ty: result.ty,
                             binding,
-                            offset: 0,
+                            offset: next_member_offset,
                         });
+                        struct_alignment = struct_alignment.max(member_alignment);
+                        next_member_offset += self.layouter[result.ty].size;
                         // populate just the globals first, then do `Load` in a
                         // separate step, so that we can get a range.
                         components.push(expr_handle);
@@ -545,7 +570,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                         name: None,
                         inner: crate::TypeInner::Struct {
                             members,
-                            span: 0xFFFF, // shouldn't matter
+                            span: struct_alignment.round_up(next_member_offset),
                         },
                     },
                     span,

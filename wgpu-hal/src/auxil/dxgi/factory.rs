@@ -1,8 +1,11 @@
-use std::{ops::Deref, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
+use core::ops::Deref;
 
 use windows::{core::Interface as _, Win32::Graphics::Dxgi};
 
 use crate::dx12::DxgiLib;
+
+use super::result::HResult as _;
 
 // We can rely on the presence of DXGI 1.4 since D3D12 requires WDDM 2.0, Windows 10 (1507), and so does DXGI 1.4.
 
@@ -46,11 +49,24 @@ fn should_keep_adapter(adapter: &Dxgi::IDXGIAdapter1) -> bool {
     true
 }
 
+#[derive(Clone, Debug)]
 pub enum DxgiAdapter {
     /// Provided by DXGI 1.4
     Adapter3(Dxgi::IDXGIAdapter3),
     /// Provided by DXGI 1.6
     Adapter4(Dxgi::IDXGIAdapter4),
+}
+
+impl DxgiAdapter {
+    pub fn query_video_memory_info(
+        &self,
+        group: Dxgi::DXGI_MEMORY_SEGMENT_GROUP,
+    ) -> Result<Dxgi::DXGI_QUERY_VIDEO_MEMORY_INFO, crate::DeviceError> {
+        let mut info = Dxgi::DXGI_QUERY_VIDEO_MEMORY_INFO::default();
+        unsafe { self.QueryVideoMemoryInfo(0, group, &mut info) }
+            .into_device_result("QueryVideoMemoryInfo")?;
+        Ok(info)
+    }
 }
 
 impl Deref for DxgiAdapter {

@@ -3,6 +3,7 @@ use alloc::{vec, vec::Vec};
 use super::functions::FunctionTracer;
 use super::FunctionMap;
 use crate::arena::Handle;
+use crate::compact::handle_set_map::HandleMap;
 
 impl FunctionTracer<'_> {
     pub fn trace_block(&mut self, block: &[crate::Statement]) {
@@ -100,10 +101,11 @@ impl FunctionTracer<'_> {
                         self.expressions_used.insert(result);
                     }
                     St::Call {
-                        function: _,
+                        function,
                         ref arguments,
                         result,
                     } => {
+                        self.trace_call(function);
                         for expr in arguments {
                             self.expressions_used.insert(*expr);
                         }
@@ -141,9 +143,11 @@ impl FunctionTracer<'_> {
                             | crate::GatherMode::Shuffle(index)
                             | crate::GatherMode::ShuffleDown(index)
                             | crate::GatherMode::ShuffleUp(index)
-                            | crate::GatherMode::ShuffleXor(index) => {
+                            | crate::GatherMode::ShuffleXor(index)
+                            | crate::GatherMode::QuadBroadcast(index) => {
                                 self.expressions_used.insert(index);
                             }
+                            crate::GatherMode::QuadSwap(_) => {}
                         }
                         self.expressions_used.insert(argument);
                         self.expressions_used.insert(result);
@@ -153,7 +157,8 @@ impl FunctionTracer<'_> {
                     St::Break
                     | St::Continue
                     | St::Kill
-                    | St::Barrier(_)
+                    | St::ControlBarrier(_)
+                    | St::MemoryBarrier(_)
                     | St::Return { value: None } => {}
                 }
             }
@@ -202,7 +207,15 @@ impl FunctionTracer<'_> {
 }
 
 impl FunctionMap {
-    pub fn adjust_body(&self, function: &mut crate::Function) {
+    /// Adjust statements in the body of `function`.
+    ///
+    /// Adjusts expressions using `self.expressions`, and adjusts calls to other
+    /// functions using `function_map`.
+    pub fn adjust_body(
+        &self,
+        function: &mut crate::Function,
+        function_map: &HandleMap<crate::Function>,
+    ) {
         let block = &mut function.body;
         let mut worklist: Vec<&mut [crate::Statement]> = vec![block];
         let adjust = |handle: &mut Handle<crate::Expression>| {
@@ -303,10 +316,11 @@ impl FunctionMap {
                         adjust(result);
                     }
                     St::Call {
-                        function: _,
+                        ref mut function,
                         ref mut arguments,
                         ref mut result,
                     } => {
+                        function_map.adjust(function);
                         for expr in arguments {
                             adjust(expr);
                         }
@@ -350,7 +364,9 @@ impl FunctionMap {
                             | crate::GatherMode::Shuffle(ref mut index)
                             | crate::GatherMode::ShuffleDown(ref mut index)
                             | crate::GatherMode::ShuffleUp(ref mut index)
-                            | crate::GatherMode::ShuffleXor(ref mut index) => adjust(index),
+                            | crate::GatherMode::ShuffleXor(ref mut index)
+                            | crate::GatherMode::QuadBroadcast(ref mut index) => adjust(index),
+                            crate::GatherMode::QuadSwap(_) => {}
                         }
                         adjust(argument);
                         adjust(result);
@@ -360,7 +376,8 @@ impl FunctionMap {
                     St::Break
                     | St::Continue
                     | St::Kill
-                    | St::Barrier(_)
+                    | St::ControlBarrier(_)
+                    | St::MemoryBarrier(_)
                     | St::Return { value: None } => {}
                 }
             }
