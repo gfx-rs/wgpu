@@ -237,7 +237,18 @@ impl Writer {
                 }
             };
 
-            body.push(Instruction::store(res_member.id, member_value_id, None));
+            if let Some((f32_ty, _)) = self.io_f16_polyfills.get_polyfill_info(res_member.id) {
+                let converted = self.id_gen.next();
+                super::f16_polyfill::F16IoPolyfill::emit_f16_to_f32_conversion(
+                    member_value_id,
+                    f32_ty,
+                    converted,
+                    body,
+                );
+                body.push(Instruction::store(res_member.id, converted, None));
+            } else {
+                body.push(Instruction::store(res_member.id, member_value_id, None));
+            }
 
             match res_member.built_in {
                 Some(crate::BuiltIn::Position { .. })
@@ -2313,6 +2324,23 @@ impl BlockContext<'_> {
         match self.write_access_chain(pointer, block, access_type_adjustment)? {
             ExpressionPointer::Ready { pointer_id } => {
                 let id = self.gen_id();
+
+                if let Some((f32_ty, _)) =
+                    self.writer.io_f16_polyfills.get_polyfill_info(pointer_id)
+                {
+                    block
+                        .body
+                        .push(Instruction::load(f32_ty, id, pointer_id, None));
+                    let converted = self.gen_id();
+                    super::f16_polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
+                        id,
+                        result_type_id,
+                        converted,
+                        &mut block.body,
+                    );
+                    return Ok(converted);
+                }
+
                 let atomic_space =
                     match *self.fun_info[pointer].ty.inner_with(&self.ir_module.types) {
                         crate::TypeInner::Pointer { base, space } => {
