@@ -226,7 +226,7 @@ impl PhysicalDeviceFeatures {
     /// [`Adapter::required_device_extensions`]: super::Adapter::required_device_extensions
     fn from_extensions_and_requested_features(
         phd_capabilities: &PhysicalDeviceProperties,
-        _phd_features: &PhysicalDeviceFeatures,
+        phd_features: &PhysicalDeviceFeatures,
         enabled_extensions: &[&'static CStr],
         requested_features: wgt::Features,
         downlevel_flags: wgt::DownlevelFlags,
@@ -396,10 +396,17 @@ impl PhysicalDeviceFeatures {
                 _ => None,
             },
             _16bit_storage: if requested_features.contains(wgt::Features::SHADER_F16) {
+                // Check if the device actually supports storage_input_output16
+                let storage_input_output16_supported = phd_features
+                    ._16bit_storage
+                    .as_ref()
+                    .map(|features| features.storage_input_output16 != 0)
+                    .unwrap_or(false);
+
                 Some(
                     vk::PhysicalDevice16BitStorageFeatures::default()
                         .storage_buffer16_bit_access(true)
-                        .storage_input_output16(true)
+                        .storage_input_output16(storage_input_output16_supported)
                         .uniform_and_storage_buffer16_bit_access(true),
                 )
             } else {
@@ -736,12 +743,12 @@ impl PhysicalDeviceFeatures {
 
         if let (Some(ref f16_i8), Some(ref bit16)) = (self.shader_float16_int8, self._16bit_storage)
         {
+            // Note storage_input_output16 is not required, we polyfill f16 I/O using f32 types when this capability is not available
             features.set(
                 F::SHADER_F16,
                 f16_i8.shader_float16 != 0
                     && bit16.storage_buffer16_bit_access != 0
-                    && bit16.uniform_and_storage_buffer16_bit_access != 0
-                    && bit16.storage_input_output16 != 0,
+                    && bit16.uniform_and_storage_buffer16_bit_access != 0,
             );
         }
 
@@ -2115,6 +2122,15 @@ impl super::Adapter {
                     spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
                 force_loop_bounding: true,
+                use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16) && {
+                    // Check if the device actually supports storage_input_output16
+                    let phd_features = self.physical_device_features(enabled_extensions, features);
+                    phd_features
+                        ._16bit_storage
+                        .as_ref()
+                        .map(|storage_features| storage_features.storage_input_output16 != 0)
+                        .unwrap_or(false)
+                },
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,
