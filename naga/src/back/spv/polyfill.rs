@@ -9,7 +9,7 @@ It works by:
 */
 
 use crate::back::spv::{Instruction, LocalType, NumericType, Word};
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 /// Manages f16 I/O polyfill state and operations.
 #[derive(Default)]
@@ -93,10 +93,6 @@ impl F16IoPolyfill {
             }
             _ => None,
         }
-    }
-
-    pub fn clear(&mut self) {
-        self.variable_map.clear();
     }
 }
 
