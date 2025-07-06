@@ -686,6 +686,10 @@ impl Limits {
     ///     max_subgroup_size: 0,
     ///     max_push_constant_size: 0,
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_task_workgroup_total_count: 0,
+    ///     max_task_workgroups_per_dimension: 0,
+    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_output_layers: 0,
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
@@ -955,7 +959,7 @@ impl Limits {
         }
     }
 
-    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_MESH_SHADER`]
+    /// The minimum guaranteed limits for mesh shaders if you enable [`Features::EXPERIMENTAL_MESH_SHADER`]
     #[must_use]
     pub const fn using_minimum_supported_mesh_shader_values(self) -> Self {
         Self {
@@ -963,7 +967,7 @@ impl Limits {
             // My GPU supports 2^22, and compute shaders don't have this kind of limit.
             // This very likely is never a real limiter
             max_task_workgroup_total_count: 65536,
-            max_task_workgroups_per_dimension: 65535,
+            max_task_workgroups_per_dimension: 256,
             max_mesh_multiview_count: 1,
             max_mesh_output_layers: 1024,
             ..self

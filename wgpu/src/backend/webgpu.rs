@@ -828,12 +828,10 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
         max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
 
-        max_mesh_invocations_per_workgroup: wgt::Limits::default()
-            .max_mesh_invocations_per_workgroup,
-        max_mesh_workgroup_size_x: wgt::Limits::default().max_mesh_workgroup_size_x,
-        max_mesh_workgroup_size_y: wgt::Limits::default().max_mesh_workgroup_size_y,
-        max_mesh_workgroup_size_z: wgt::Limits::default().max_mesh_workgroup_size_z,
-        max_mesh_workgroups_per_dimension: wgt::Limits::default().max_mesh_workgroups_per_dimension,
+        max_task_workgroup_total_count: wgt::Limits::default().max_task_workgroup_total_count,
+        max_task_workgroups_per_dimension: wgt::Limits::default().max_task_workgroups_per_dimension,
+        max_mesh_output_layers: wgt::Limits::default().max_mesh_output_layers,
+        max_mesh_multiview_count: wgt::Limits::default().max_mesh_multiview_count,
 
         max_blas_primitive_count: wgt::Limits::default().max_blas_primitive_count,
         max_blas_geometry_count: wgt::Limits::default().max_blas_geometry_count,

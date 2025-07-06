@@ -113,7 +113,7 @@ impl crate::framework::Example for Example {
         wgpu::Features::EXPERIMENTAL_MESH_SHADER | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
     }
     fn required_limits() -> wgpu::Limits {
-        Default::default()
+        wgpu::Limits::defaults().using_minimum_supported_mesh_shader_values()
     }
     fn resize(
         &mut self,
