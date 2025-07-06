@@ -62,3 +62,113 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 * ❌ MSL
 
 ## `WGSL` extension specification
+
+The majority of changes relating to mesh shaders will be in `WGSL` and `naga`.
+
+Using any of these features in a `wgsl` program will require adding the `enable mesh_shading` directive to the top of a program.
+
+Two new shader stages will be added to `WGSL`. Fragment shaders are also modified slightly. Both task shaders and mesh shaders are allowed to use any compute-specific functionality, such as subgroup operations.
+
+### Task shader
+This shader stage can be selected by marking a function with `@task`. Task shaders must return a `vec3<u32>` as their output type. Similar to compute shaders, task shaders run in a workgroup. The output must be uniform across all threads in a workgroup.
+
+The output of this determines how many workgroups of mesh shaders will be dispatched. Once dispatched, global id variables will be local to the task shader workgroup dispatch, and mesh shaders won't know the position of their dispatch among all mesh shader dispatches unless this is passed through the payload. The output may be zero to skip dispatching any mesh shader workgroups for the task shader workgroup.
+
+If task shaders are marked with `@payload(someVar)`, where `someVar` is global variable declared like `var<workgroup> someVar: <type>`, task shaders may write to `someVar`. This payload is passed to the mesh shader workgroup that is invoked. The mesh shader can skip declaring `@payload` to ignore this input.
+
+### Mesh shader
+This shader stage can be selected by marking a function with `@mesh`. Mesh shaders must not return anything.
+
+Mesh shaders can be marked with `@payload(someVar)` similar to task shaders. Unlike task shaders, mesh shaders cannot write to this workgroup memory. Declaring `@payload` in a pipeline with no task shader, in a pipeline with a task shader that doesn't declare `@payload`, or in a task shader with an `@payload` that is statically sized and smaller than the mesh shader payload is illegal.
+
+Mesh shaders must be marked with `@vertex_output(OutputType, numOutputs)`, where `numOutputs` is the maximum number of vertices to be output by a mesh shader, and `OutputType` is the data associated with vertices, similar to a standard vertex shader output.
+
+Mesh shaders must also be marked with `@primitive_output(OutputType, numOutputs)`, which is similar to `@vertex_output` except it describes the primitive outputs.
+
+### Mesh shader outputs
+
+Primitive outputs from mesh shaders have some additional builtins they can set. These include `@builtin(cull_primitive)`, which must be a boolean value. If this is set to true, then the primitive is skipped during rendering. Additionally, mesh shader primitive outputs must specify exactly one of `@builtin(triangle_indices)`, `@builtin(line_indices)`, or `@builtin(point_index)`. This determines the output topology of the mesh shader, and must match the output topology of the pipeline descriptor the mesh shader is used with. These must be of type `vec3<u32>`, `vec2<u32>`, and `u32` respectively. When setting this, each of the indices must be less than the number of vertices declared in `setMeshOutputs`.
+
+Before setting any vertices or indices, or exiting, the mesh shader must call `setMeshOutputs(numVertices: u32, numIndices: u32)`, which declares the number of vertices and indices that will be written to. These must be less than the corresponding maximums set in `@vertex_output` and `@primitive_output`. The mesh shader must then write to exactly these numbers of vertices and primitives.
+
+The mesh shader can write to vertices using the `setVertex(idx: u32, vertex: VertexOutput)` where `VertexOutput` is replaced with the vertex type declared in `@vertex_output`, and `idx` is the index of the vertex to write. Similarly, the mesh shader can write to vertices using `setPrimitive(idx: u32, primitive: PrimitiveOutput)`. These can be written to multiple times, however unsynchronized writes are undefined behavior. The primitives and indices are shared across the entire mesh shader workgroup.
+
+### Fragment shader
+
+Fragment shaders may now be passed the primitive info from a mesh shader by using the `@builtin(primitive)` on a parameter, for example `fn fs_main(vertex: VertexOutput, @builtin(primitive) primitive: PrimitiveOutput)`. The primitive state much match that of the mesh shader in the pipeline. If the pipeline has no mesh shader or the mesh shader declares no primitive output, this must be omitted. This can also be omitted if the mesh shader in the pipeline doesn't write output any non-builtin fields.
+
+### Full example
+
+The following is a full example of WGSL shaders that could be used to create a mesh shader pipeline, showing off many of the features.
+
+```wgsl
+enable mesh_shading;
+
+const positions = array(
+	vec4(0.,-1.,0.,1.),
+	vec4(-1.,1.,0.,1.),
+	vec4(1.,1.,0.,1.)
+);
+const colors = array(
+	vec4(0.,1.,0.,1.),
+	vec4(0.,0.,1.,1.),
+	vec4(1.,0.,0.,1.)
+);
+
+struct TaskPayload {
+	colorMask: vec4<f32>,
+	visible: bool,
+}
+var<workgroup> taskPayload: TaskPayload;
+var<workgroup> workgroupData: f32;
+
+struct VertexOutput {
+	@builtin(position) position: vec4<f32>,
+	@location(0) color: vec4<f32>,
+}
+struct PrimitiveOutput {
+	@builtin(triangle_indices) index: vec3<f32>,
+	@builtin(cull_primitive) cull: bool,
+	@location(1) colorMask: vec4<f32>,
+}
+
+@task
+@payload(taskPayload)
+@workgroup_size(1)
+fn ts_main() -> vec3<u32> {
+	workgroupData = 1.0;
+	taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
+	taskPayload.visible = true;
+	return vec3(3, 1, 1);
+}
+
+@mesh
+@payload(taskPayload)
+@vertex_output(VertexOutput, 3) @primitive_output(PrimitiveOutput, 1)
+@workgroup_size(1)
+fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocation_id) id: vec3<u32>) {
+	setMeshOutputs(3u, 1u);
+	workgroupData = 2.0;
+	setVertex(0, VertexOutput {
+		position: positions[0],
+		color: colors[0] * taskPayload.colorMask,
+	});
+	setVertex(1, VertexOutput {
+		position: positions[1],
+		color: colors[1] * taskPayload.colorMask,
+	});
+	setVertex(2, VertexOutput {
+		position: positions[2],
+		color: colors[2] * taskPayload.colorMask,
+	});
+	setPrimitive(0, PrimitiveOutput {
+		index: vec3<u32>(0, 1, 2),
+		cull: !taskPayload.visible,
+		colorMask: vec4<f32>(1.0, 0.0, 1.0, 1.0),
+	});
+}
+@fragment
+fn fs_main(vertex: VertexOutput, primitive: @builtin(primitive) PrimitiveOutput) -> @location(0) vec4<f32> {
+	return vertex.color * primitive.colorMask;
+}
+```
