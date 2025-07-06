@@ -248,7 +248,7 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
                         DrawType::MultiIndirectCount => wgpu::Features::MULTI_DRAW_INDIRECT_COUNT,
                     },
             )
-            .limits(wgpu::Limits::default().using_minimum_supported_mesh_shader_values()),
+            .limits(wgpu::Limits::default().using_recommended_minimum_mesh_shader_values()),
     )
 }
 

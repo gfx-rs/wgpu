@@ -959,9 +959,12 @@ impl Limits {
         }
     }
 
-    /// The minimum guaranteed limits for mesh shaders if you enable [`Features::EXPERIMENTAL_MESH_SHADER`]
+    /// The recommended minimum limits for mesh shaders if you enable [`Features::EXPERIMENTAL_MESH_SHADER`]
+    ///
+    /// These are chosen somewhat arbitrarily. They are small enough that they should cover all physical devices,
+    /// but not necessarily all use cases.
     #[must_use]
-    pub const fn using_minimum_supported_mesh_shader_values(self) -> Self {
+    pub const fn using_recommended_minimum_mesh_shader_values(self) -> Self {
         Self {
             // Literally just made this up as 256^2 or 2^16.
             // My GPU supports 2^22, and compute shaders don't have this kind of limit.
