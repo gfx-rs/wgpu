@@ -87,7 +87,11 @@ Mesh shaders must also be marked with `@primitive_output(OutputType, numOutputs)
 
 ### Mesh shader outputs
 
-Primitive outputs from mesh shaders have some additional builtins they can set. These include `@builtin(cull_primitive)`, which must be a boolean value. If this is set to true, then the primitive is skipped during rendering. Additionally, mesh shader primitive outputs must specify exactly one of `@builtin(triangle_indices)`, `@builtin(line_indices)`, or `@builtin(point_index)`. This determines the output topology of the mesh shader, and must match the output topology of the pipeline descriptor the mesh shader is used with. These must be of type `vec3<u32>`, `vec2<u32>`, and `u32` respectively. When setting this, each of the indices must be less than the number of vertices declared in `setMeshOutputs`.
+Primitive outputs from mesh shaders have some additional builtins they can set. These include `@builtin(cull_primitive)`, which must be a boolean value. If this is set to true, then the primitive is skipped during rendering.
+
+Mesh shader primitive outputs must also specify exactly one of `@builtin(triangle_indices)`, `@builtin(line_indices)`, or `@builtin(point_index)`. This determines the output topology of the mesh shader, and must match the output topology of the pipeline descriptor the mesh shader is used with. These must be of type `vec3<u32>`, `vec2<u32>`, and `u32` respectively. When setting this, each of the indices must be less than the number of vertices declared in `setMeshOutputs`.
+
+Additionally, the `@location` attributes from the vertex and primitive outputs can't overlap.
 
 Before setting any vertices or indices, or exiting, the mesh shader must call `setMeshOutputs(numVertices: u32, numIndices: u32)`, which declares the number of vertices and indices that will be written to. These must be less than the corresponding maximums set in `@vertex_output` and `@primitive_output`. The mesh shader must then write to exactly these numbers of vertices and primitives.
 
@@ -95,7 +99,7 @@ The mesh shader can write to vertices using the `setVertex(idx: u32, vertex: Ver
 
 ### Fragment shader
 
-Fragment shaders may now be passed the primitive info from a mesh shader by using the `@builtin(primitive)` on a parameter, for example `fn fs_main(vertex: VertexOutput, @builtin(primitive) primitive: PrimitiveOutput)`. The primitive state much match that of the mesh shader in the pipeline. If the pipeline has no mesh shader or the mesh shader declares no primitive output, this must be omitted. This can also be omitted if the mesh shader in the pipeline doesn't write output any non-builtin fields.
+Fragment shaders may now be passed the primitive info from a mesh shader the same was as they are passed vertex inputs, for example `fn fs_main(vertex: VertexOutput, primitive: PrimitiveOutput)`. The primitive state is part of the fragment input and must match the output of the mesh shader in the pipeline.
 
 ### Full example
 
