@@ -735,13 +735,10 @@ impl Limits {
             max_push_constant_size: 0,
             max_non_sampler_bindings: 1_000_000,
 
-            // Literally just made this up as 1024^2.
-            // My GPU supports 4 times this, and compute shaders don't have this kind of limit.
-            // This very likely is never a real limiter
-            max_task_workgroup_total_count: 1048576,
-            max_task_workgroups_per_dimension: 65535,
-            max_mesh_multiview_count: 1,
-            max_mesh_output_layers: 1024,
+            max_task_workgroup_total_count: 0,
+            max_task_workgroups_per_dimension: 0,
+            max_mesh_multiview_count: 0,
+            max_mesh_output_layers: 0,
 
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
@@ -900,11 +897,6 @@ impl Limits {
             // Value supported by Intel Celeron B830 on Windows (OpenGL 3.1)
             max_inter_stage_shader_components: 31,
 
-            max_task_workgroups_per_dimension: 0,
-            max_task_workgroup_total_count: 0,
-            max_mesh_multiview_count: 0,
-            max_mesh_output_layers: 0,
-
             // Most of the values should be the same as the downlevel defaults
             ..Self::downlevel_defaults()
         }
@@ -959,6 +951,21 @@ impl Limits {
             max_blas_primitive_count: other.max_blas_primitive_count,
             max_acceleration_structures_per_shader_stage: other
                 .max_acceleration_structures_per_shader_stage,
+            ..self
+        }
+    }
+
+    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_MESH_SHADER`]
+    #[must_use]
+    pub const fn using_minimum_supported_mesh_shader_values(self) -> Self {
+        Self {
+            // Literally just made this up as 256^2 or 2^16.
+            // My GPU supports 2^22, and compute shaders don't have this kind of limit.
+            // This very likely is never a real limiter
+            max_task_workgroup_total_count: 65536,
+            max_task_workgroups_per_dimension: 65535,
+            max_mesh_multiview_count: 1,
+            max_mesh_output_layers: 1024,
             ..self
         }
     }
