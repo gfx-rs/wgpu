@@ -2778,12 +2778,15 @@ impl Parser {
         // read attributes
         let mut binding = None;
         let mut stage = ParsedAttribute::default();
-        let mut compute_span = Span::new(0, 0);
+        let mut compute_like_span = Span::new(0, 0);
         let mut workgroup_size = ParsedAttribute::default();
         let mut early_depth_test = ParsedAttribute::default();
         let (mut bind_index, mut bind_group) =
             (ParsedAttribute::default(), ParsedAttribute::default());
         let mut id = ParsedAttribute::default();
+        let mut payload = ParsedAttribute::default();
+        let mut vertex_output = ParsedAttribute::default();
+        let mut primitive_output = ParsedAttribute::default();
 
         let mut must_use: ParsedAttribute<Span> = ParsedAttribute::default();
 
@@ -2842,7 +2845,33 @@ impl Parser {
                 }
                 "compute" => {
                     stage.set(ShaderStage::Compute, name_span)?;
-                    compute_span = name_span;
+                    compute_like_span = name_span;
+                }
+                "task" => {
+                    stage.set(ShaderStage::Task, name_span)?;
+                    compute_like_span = name_span;
+                }
+                "mesh" => {
+                    stage.set(ShaderStage::Mesh, name_span)?;
+                    compute_like_span = name_span;
+                }
+                "payload" => {
+                    lexer.expect(Token::Paren('('))?;
+                    payload.set(lexer.next_ident_with_span()?, name_span)?;
+                    lexer.expect(Token::Paren(')'))?;
+                }
+                "vertex_output" | "primitive_output" => {
+                    lexer.expect(Token::Paren('('))?;
+                    let type_ident = lexer.next_ident_with_span()?;
+                    lexer.expect(Token::Separator(','))?;
+                    let max_output = self.general_expression(lexer, &mut ctx)?;
+                    let end_span = lexer.expect_span(Token::Paren(')'))?;
+                    let total_span = name_span.until(&end_span);
+                    if name == "vertex_output" {
+                        vertex_output.set((type_ident, max_output), total_span)?;
+                    } else if name == "primitive_output" {
+                        primitive_output.set((type_ident, max_output), total_span)?;
+                    }
                 }
                 "workgroup_size" => {
                     lexer.expect(Token::Paren('('))?;
@@ -3008,8 +3037,8 @@ impl Parser {
                 )?;
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {
-                        if stage == ShaderStage::Compute && workgroup_size.value.is_none() {
-                            return Err(Box::new(Error::MissingWorkgroupSize(compute_span)));
+                        if stage.compute_like() && workgroup_size.value.is_none() {
+                            return Err(Box::new(Error::MissingWorkgroupSize(compute_like_span)));
                         }
                         Some(ast::EntryPoint {
                             stage,

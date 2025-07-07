@@ -49,6 +49,10 @@ pub fn map_built_in(
         "subgroup_id" => crate::BuiltIn::SubgroupId,
         "subgroup_size" => crate::BuiltIn::SubgroupSize,
         "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
+        // mesh
+        "cull_primitive" => crate::BuiltIn::CullPrimitive,
+        "line_indices" => crate::BuiltIn::LineIndices,
+        "triangle_indices" => crate::BuiltIn::TriangleIndices,
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     };
     match built_in {
