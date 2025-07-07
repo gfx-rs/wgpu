@@ -190,7 +190,6 @@ impl<W: Write> Writer<W> {
                     Attribute::Stage(ep.stage),
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
-                ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
             };
 
             self.write_attributes(&attributes)?;

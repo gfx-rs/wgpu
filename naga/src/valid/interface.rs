@@ -298,7 +298,6 @@ impl VaryingContext<'_> {
                         match self.stage {
                             St::Compute | St::Fragment | St::Task | St::Mesh => !self.output,
                             St::Vertex => false,
-                            St::Task | St::Mesh => unreachable!(),
                         },
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),

@@ -188,7 +188,10 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::PointSize
             | Bi::DrawID
             | Bi::PointCoord
-            | Bi::WorkGroupSize => return None,
+            | Bi::WorkGroupSize
+            | Bi::CullPrimitive
+            | Bi::TriangleIndices
+            | Bi::LineIndices => return None,
         })
     }
 }
@@ -352,6 +355,7 @@ pub const fn address_space_str(
             As::WorkGroup => "workgroup",
             As::Handle => return (None, None),
             As::Function => "function",
+            As::TaskPayload => return (None, None),
         }),
         None,
     )

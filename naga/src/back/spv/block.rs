@@ -3631,7 +3631,8 @@ impl BlockContext<'_> {
                     primitive_count,
                 }) => {
                     let mut ins = Instruction::new(spirv::Op::SetMeshOutputsEXT);
-                    ins.operands = vec![self.cached[vertex_count], self.cached[primitive_count]];
+                    ins.operands =
+                        alloc::vec![self.cached[vertex_count], self.cached[primitive_count]];
                     block.body.push(ins);
                 }
                 Statement::MeshFunction(

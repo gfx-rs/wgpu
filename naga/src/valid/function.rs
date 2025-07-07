@@ -1546,8 +1546,7 @@ impl super::Validator {
                     // TODO: ensure this is the last statement executed
                     let ensure_correct =
                         |e: Handle<crate::Expression>| -> Result<(), WithSpan<FunctionError>> {
-                            let t = context.resolve_type(e, &self.valid_expression_set)?;
-                            match *t {
+                            match *context.resolve_type_inner(e, &self.valid_expression_set)? {
                                 Ti::Scalar(crate::Scalar::U32) => Ok(()),
                                 _ => Err(FunctionError::InvalidMeshFunctionType(e)
                                     .with_span_static(span, "invalid u32")),

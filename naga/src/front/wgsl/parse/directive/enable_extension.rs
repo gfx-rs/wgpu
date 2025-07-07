@@ -86,7 +86,6 @@ impl EnableExtension {
                 Self::Implemented(ImplementedEnableExtension::DualSourceBlending)
             }
             Self::MESH_SHADER => Self::Implemented(ImplementedEnableExtension::MeshShader),
-            _ => return Err(Error::UnknownEnableExtension(span, word)),
             Self::SUBGROUPS => Self::Unimplemented(UnimplementedEnableExtension::Subgroups),
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
@@ -111,13 +110,6 @@ impl EnableExtension {
 /// A variant of [`EnableExtension::Implemented`].
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum ImplementedEnableExtension {
-    /// Enables the `mesh_shader` extension, native only
-    MeshShader,
-}
-
-/// A variant of [`EnableExtension::Unimplemented`].
-#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
-pub enum UnimplementedEnableExtension {
     /// Enables `f16`/`half` primitive support in all shader languages.
     ///
     /// In the WGSL standard, this corresponds to [`enable f16;`].
@@ -136,6 +128,8 @@ pub enum UnimplementedEnableExtension {
     ///
     /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-clip_distances
     ClipDistances,
+    /// Enables the `mesh_shader` extension, native only
+    MeshShader,
 }
 
 /// A variant of [`EnableExtension::Unimplemented`].

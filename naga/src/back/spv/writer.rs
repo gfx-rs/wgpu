@@ -1211,13 +1211,13 @@ impl Writer {
                 Instruction::execution_mode(
                     function_id,
                     spirv::ExecutionMode::OutputVertices,
-                    std::slice::from_ref(&mesh_info.max_vertices),
+                    core::slice::from_ref(&mesh_info.max_vertices),
                 )
                 .to_words(&mut self.logical_layout.execution_modes);
                 Instruction::execution_mode(
                     function_id,
                     spirv::ExecutionMode::OutputPrimitivesEXT,
-                    std::slice::from_ref(&mesh_info.max_primitives),
+                    core::slice::from_ref(&mesh_info.max_primitives),
                 )
                 .to_words(&mut self.logical_layout.execution_modes);
                 spirv::ExecutionModel::MeshEXT
