@@ -127,7 +127,7 @@ heck = "0.5"
 hexf-parse = "0.2"
 image = { version = "0.25", default-features = false, features = ["png"] }
 indexmap = { version = "2.7", default-features = false }
-indicatif = "0.17"
+indicatif = "0.18"
 itertools = { version = "0.14" }
 jobserver = "0.1"
 ktx2 = "0.4"
@@ -229,7 +229,7 @@ wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "0.4.43"
 wasm-bindgen-test = "0.3"
 web-sys = { version = "0.3.77", default-features = false }
-web-time = "1"
+web-time = "1.1.0"
 
 # deno dependencies
 deno_console = "0.192.0"
