@@ -18,4 +18,12 @@ void swizzleImplicitCastCaller(vec3 a) {
     swizzleImplicitCastCallee(a.xz);
 }
 
-void main() {}
+void main() {
+    swizzleCaller(vec3(0));
+    uint a;
+    outImplicitCastCallee(a);
+    outImplicitCastCaller(1.0);
+    uvec2 b;
+    swizzleImplicitCastCallee(b);
+    swizzleImplicitCastCaller(vec3(0));
+}

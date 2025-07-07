@@ -1,0 +1,4 @@
+[spv]
+adjust_coordinate_space = true
+debug = true
+version = [1, 0]

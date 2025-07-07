@@ -33,6 +33,7 @@
 
 pub mod rank;
 
+#[cfg(feature = "std")] // requires thread-locals to work
 #[cfg_attr(not(wgpu_validate_locks), allow(dead_code))]
 mod ranked;
 

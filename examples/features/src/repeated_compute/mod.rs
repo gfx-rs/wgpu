@@ -5,6 +5,8 @@
 //! hello-compute example does not such as mapping buffers
 //! and why use the async channels.
 
+use nanorand::Rng;
+
 const OVERFLOW: u32 = 0xffffffff;
 
 async fn run() {
@@ -13,7 +15,7 @@ async fn run() {
 
     for _ in 0..10 {
         for p in numbers.iter_mut() {
-            *p = generate_rand() as u32;
+            *p = nanorand::tls_rng().generate::<u16>() as u32;
         }
 
         compute(&mut numbers, &context).await;
@@ -27,12 +29,6 @@ async fn run() {
             .collect::<Vec<String>>();
         log::info!("Results: {printed_numbers:?}");
     }
-}
-
-fn generate_rand() -> u16 {
-    let mut bytes = [0u8; 2];
-    getrandom::getrandom(&mut bytes[..]).unwrap();
-    u16::from_le_bytes(bytes)
 }
 
 async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
@@ -106,11 +102,8 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // In order for the mapping to be completed, one of three things must happen.
     // One of those can be calling `Device::poll`. This isn't necessary on the web as devices
     // are polled automatically but natively, we need to make sure this happens manually.
-    // `Maintain::Wait` will cause the thread to wait on native but not on WebGpu.
-    context
-        .device
-        .poll(wgpu::Maintain::wait())
-        .panic_on_timeout();
+    // `PollType::Wait` will cause the thread to wait on native but not on WebGpu.
+    context.device.poll(wgpu::PollType::wait()).unwrap();
     log::info!("Device polled.");
     // Now we await the receiving and panic if anything went wrong because we're lazy.
     receiver.recv_async().await.unwrap().unwrap();
@@ -165,15 +158,13 @@ impl WgpuContext {
             .await
             .unwrap();
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_defaults(),
-                    memory_hints: wgpu::MemoryHints::Performance,
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::Performance,
+                trace: wgpu::Trace::Off,
+            })
             .await
             .unwrap();
 

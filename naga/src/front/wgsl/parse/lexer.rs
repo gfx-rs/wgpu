@@ -1,9 +1,11 @@
-use super::{number::consume_number, Error, ExpectedToken};
+use super::{number::consume_number, Error, ExpectedToken, Result};
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
 use crate::front::wgsl::parse::{conv, Number};
 use crate::front::wgsl::Scalar;
 use crate::Span;
+
+use alloc::{boxed::Box, vec::Vec};
 
 type TokenSpan<'a> = (Token<'a>, Span);
 
@@ -12,7 +14,7 @@ pub enum Token<'a> {
     Separator(char),
     Paren(char),
     Attribute,
-    Number(Result<Number, NumberError>),
+    Number(core::result::Result<Number, NumberError>),
     Word(&'a str),
     Operation(char),
     LogicalOperation(char),
@@ -23,6 +25,8 @@ pub enum Token<'a> {
     Arrow,
     Unknown(char),
     Trivia,
+    DocComment(&'a str),
+    ModuleDocComment(&'a str),
     End,
 }
 
@@ -45,8 +49,10 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 /// -   Otherwise, interpret `<<` and `>>` as shift operators:
 ///     `Token::LogicalOperation` tokens.
 ///
+/// If `ignore_doc_comments` is true, doc comments are treated as [`Token::Trivia`].
+///
 /// [§3.1 Parsing]: https://gpuweb.github.io/gpuweb/wgsl/#parsing
-fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
+fn consume_token(input: &str, generic: bool, ignore_doc_comments: bool) -> (Token<'_>, &str) {
     let mut chars = input.chars();
     let cur = match chars.next() {
         Some(c) => c,
@@ -82,12 +88,37 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
             let og_chars = chars.as_str();
             match chars.next() {
                 Some('/') => {
-                    let _ = chars.position(is_comment_end);
-                    (Token::Trivia, chars.as_str())
+                    let mut input_chars = input.char_indices();
+                    let doc_comment_end = input_chars
+                        .find_map(|(index, c)| is_comment_end(c).then_some(index))
+                        .unwrap_or(input.len());
+                    let token = match chars.next() {
+                        Some('/') if !ignore_doc_comments => {
+                            Token::DocComment(&input[..doc_comment_end])
+                        }
+                        Some('!') if !ignore_doc_comments => {
+                            Token::ModuleDocComment(&input[..doc_comment_end])
+                        }
+                        _ => Token::Trivia,
+                    };
+                    (token, input_chars.as_str())
                 }
                 Some('*') => {
+                    let next_c = chars.next();
+
+                    enum CommentType {
+                        Doc,
+                        ModuleDoc,
+                        Normal,
+                    }
+                    let comment_type = match next_c {
+                        Some('*') if !ignore_doc_comments => CommentType::Doc,
+                        Some('!') if !ignore_doc_comments => CommentType::ModuleDoc,
+                        _ => CommentType::Normal,
+                    };
+
                     let mut depth = 1;
-                    let mut prev = None;
+                    let mut prev = next_c;
 
                     for c in &mut chars {
                         match (prev, c) {
@@ -95,7 +126,19 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
                                 prev = None;
                                 depth -= 1;
                                 if depth == 0 {
-                                    return (Token::Trivia, chars.as_str());
+                                    let rest = chars.as_str();
+                                    let token = match comment_type {
+                                        CommentType::Doc => {
+                                            let doc_comment_end = input.len() - rest.len();
+                                            Token::DocComment(&input[..doc_comment_end])
+                                        }
+                                        CommentType::ModuleDoc => {
+                                            let doc_comment_end = input.len() - rest.len();
+                                            Token::ModuleDocComment(&input[..doc_comment_end])
+                                        }
+                                        CommentType::Normal => Token::Trivia,
+                                    };
+                                    return (token, rest);
                                 }
                             }
                             (Some('/'), '*') => {
@@ -168,6 +211,7 @@ fn consume_token(input: &str, generic: bool) -> (Token<'_>, &str) {
 
 /// Returns whether or not a char is a comment end
 /// (Unicode Pattern_White_Space excluding U+0020, U+0009, U+200E and U+200F)
+/// <https://www.w3.org/TR/WGSL/#line-break>
 const fn is_comment_end(c: char) -> bool {
     match c {
         '\u{000a}'..='\u{000d}' | '\u{0085}' | '\u{2028}' | '\u{2029}' => true,
@@ -191,12 +235,12 @@ const fn is_blankspace(c: char) -> bool {
 
 /// Returns whether or not a char is a word start (Unicode XID_Start + '_')
 fn is_word_start(c: char) -> bool {
-    c == '_' || unicode_xid::UnicodeXID::is_xid_start(c)
+    c == '_' || unicode_ident::is_xid_start(c)
 }
 
 /// Returns whether or not a char is a word part (Unicode XID_Continue)
 fn is_word_part(c: char) -> bool {
-    unicode_xid::UnicodeXID::is_xid_continue(c)
+    unicode_ident::is_xid_continue(c)
 }
 
 #[derive(Clone)]
@@ -218,17 +262,21 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     /// statements.
     last_end_offset: usize,
 
-    #[allow(dead_code)]
+    /// Whether or not to ignore doc comments.
+    /// If `true`, doc comments are treated as [`Token::Trivia`].
+    ignore_doc_comments: bool,
+
     pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
 }
 
 impl<'a> Lexer<'a> {
-    pub(in crate::front::wgsl) const fn new(input: &'a str) -> Self {
+    pub(in crate::front::wgsl) const fn new(input: &'a str, ignore_doc_comments: bool) -> Self {
         Lexer {
             input,
             source: input,
             last_end_offset: 0,
             enable_extensions: EnableExtensions::empty(),
+            ignore_doc_comments,
         }
     }
 
@@ -243,8 +291,8 @@ impl<'a> Lexer<'a> {
     #[inline]
     pub fn capture_span<T, E>(
         &mut self,
-        inner: impl FnOnce(&mut Self) -> Result<T, E>,
-    ) -> Result<(T, Span), E> {
+        inner: impl FnOnce(&mut Self) -> core::result::Result<T, E>,
+    ) -> core::result::Result<(T, Span), E> {
         let start = self.current_byte_offset();
         let res = inner(self)?;
         let end = self.current_byte_offset();
@@ -254,7 +302,7 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn start_byte_offset(&mut self) -> usize {
         loop {
             // Eat all trivia because `next` doesn't eat trailing trivia.
-            let (token, rest) = consume_token(self.input, false);
+            let (token, rest) = consume_token(self.input, false, true);
             if let Token::Trivia = token {
                 self.input = rest;
             } else {
@@ -268,6 +316,40 @@ impl<'a> Lexer<'a> {
         let token = cloned.next();
         let rest = cloned.input;
         (token, rest)
+    }
+
+    /// Collect all module doc comments until a non doc token is found.
+    pub(in crate::front::wgsl) fn accumulate_module_doc_comments(&mut self) -> Vec<&'a str> {
+        let mut doc_comments = Vec::new();
+        loop {
+            // ignore blankspace
+            self.input = consume_any(self.input, is_blankspace).1;
+
+            let (token, rest) = consume_token(self.input, false, self.ignore_doc_comments);
+            if let Token::ModuleDocComment(doc_comment) = token {
+                self.input = rest;
+                doc_comments.push(doc_comment);
+            } else {
+                return doc_comments;
+            }
+        }
+    }
+
+    /// Collect all doc comments until a non doc token is found.
+    pub(in crate::front::wgsl) fn accumulate_doc_comments(&mut self) -> Vec<&'a str> {
+        let mut doc_comments = Vec::new();
+        loop {
+            // ignore blankspace
+            self.input = consume_any(self.input, is_blankspace).1;
+
+            let (token, rest) = consume_token(self.input, false, self.ignore_doc_comments);
+            if let Token::DocComment(doc_comment) = token {
+                self.input = rest;
+                doc_comments.push(doc_comment);
+            } else {
+                return doc_comments;
+            }
+        }
     }
 
     const fn current_byte_offset(&self) -> usize {
@@ -284,7 +366,7 @@ impl<'a> Lexer<'a> {
     /// occur, but not angle brackets.
     #[must_use]
     pub(in crate::front::wgsl) fn next(&mut self) -> TokenSpan<'a> {
-        self.next_impl(false)
+        self.next_impl(false, true)
     }
 
     /// Return the next non-whitespace token from `self`.
@@ -293,16 +375,25 @@ impl<'a> Lexer<'a> {
     /// but not bit shift operators.
     #[must_use]
     pub(in crate::front::wgsl) fn next_generic(&mut self) -> TokenSpan<'a> {
-        self.next_impl(true)
+        self.next_impl(true, true)
+    }
+
+    #[cfg(test)]
+    pub fn next_with_unignored_doc_comments(&mut self) -> TokenSpan<'a> {
+        self.next_impl(false, false)
     }
 
     /// Return the next non-whitespace token from `self`, with a span.
     ///
     /// See [`consume_token`] for the meaning of `generic`.
-    fn next_impl(&mut self, generic: bool) -> TokenSpan<'a> {
+    fn next_impl(&mut self, generic: bool, ignore_doc_comments: bool) -> TokenSpan<'a> {
         let mut start_byte_offset = self.current_byte_offset();
         loop {
-            let (token, rest) = consume_token(self.input, generic);
+            let (token, rest) = consume_token(
+                self.input,
+                generic,
+                ignore_doc_comments || self.ignore_doc_comments,
+            );
             self.input = rest;
             match token {
                 Token::Trivia => start_byte_offset = self.current_byte_offset(),
@@ -320,19 +411,19 @@ impl<'a> Lexer<'a> {
         token
     }
 
-    pub(in crate::front::wgsl) fn expect_span(
-        &mut self,
-        expected: Token<'a>,
-    ) -> Result<Span, Error<'a>> {
+    pub(in crate::front::wgsl) fn expect_span(&mut self, expected: Token<'a>) -> Result<'a, Span> {
         let next = self.next();
         if next.0 == expected {
             Ok(next.1)
         } else {
-            Err(Error::Unexpected(next.1, ExpectedToken::Token(expected)))
+            Err(Box::new(Error::Unexpected(
+                next.1,
+                ExpectedToken::Token(expected),
+            )))
         }
     }
 
-    pub(in crate::front::wgsl) fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
+    pub(in crate::front::wgsl) fn expect(&mut self, expected: Token<'a>) -> Result<'a, ()> {
         self.expect_span(expected)?;
         Ok(())
     }
@@ -340,16 +431,20 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn expect_generic_paren(
         &mut self,
         expected: char,
-    ) -> Result<(), Error<'a>> {
+    ) -> Result<'a, ()> {
         let next = self.next_generic();
         if next.0 == Token::Paren(expected) {
             Ok(())
         } else {
-            Err(Error::Unexpected(
+            Err(Box::new(Error::Unexpected(
                 next.1,
                 ExpectedToken::Token(Token::Paren(expected)),
-            ))
+            )))
         }
+    }
+
+    pub(in crate::front::wgsl) fn end_of_generic_arguments(&mut self) -> bool {
+        self.skip(Token::Separator(',')) && self.peek().0 != Token::Paren('>')
     }
 
     /// If the next token matches it is skipped and true is returned
@@ -363,59 +458,62 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub(in crate::front::wgsl) fn next_ident_with_span(
-        &mut self,
-    ) -> Result<(&'a str, Span), Error<'a>> {
+    pub(in crate::front::wgsl) fn next_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {
         match self.next() {
             (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
-            other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+            other => Err(Box::new(Error::Unexpected(
+                other.1,
+                ExpectedToken::Identifier,
+            ))),
         }
     }
 
-    pub(in crate::front::wgsl) fn peek_ident_with_span(
-        &mut self,
-    ) -> Result<(&'a str, Span), Error<'a>> {
+    pub(in crate::front::wgsl) fn peek_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {
         match self.peek() {
             (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
-            other => Err(Error::Unexpected(other.1, ExpectedToken::Identifier)),
+            other => Err(Box::new(Error::Unexpected(
+                other.1,
+                ExpectedToken::Identifier,
+            ))),
         }
     }
 
-    fn word_as_ident_with_span(word: &'a str, span: Span) -> Result<(&'a str, Span), Error<'a>> {
+    fn word_as_ident_with_span(word: &'a str, span: Span) -> Result<'a, (&'a str, Span)> {
         match word {
-            "_" => Err(Error::InvalidIdentifierUnderscore(span)),
-            word if word.starts_with("__") => Err(Error::ReservedIdentifierPrefix(span)),
+            "_" => Err(Box::new(Error::InvalidIdentifierUnderscore(span))),
+            word if word.starts_with("__") => Err(Box::new(Error::ReservedIdentifierPrefix(span))),
             word => Ok((word, span)),
         }
     }
 
-    pub(in crate::front::wgsl) fn next_ident(
-        &mut self,
-    ) -> Result<super::ast::Ident<'a>, Error<'a>> {
+    pub(in crate::front::wgsl) fn next_ident(&mut self) -> Result<'a, super::ast::Ident<'a>> {
         self.next_ident_with_span()
             .and_then(|(word, span)| Self::word_as_ident(word, span))
             .map(|(name, span)| super::ast::Ident { name, span })
     }
 
-    fn word_as_ident(word: &'a str, span: Span) -> Result<(&'a str, Span), Error<'a>> {
+    fn word_as_ident(word: &'a str, span: Span) -> Result<'a, (&'a str, Span)> {
         if crate::keywords::wgsl::RESERVED.contains(&word) {
-            Err(Error::ReservedKeyword(span))
+            Err(Box::new(Error::ReservedKeyword(span)))
         } else {
             Ok((word, span))
         }
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
-    pub(in crate::front::wgsl) fn next_scalar_generic(&mut self) -> Result<Scalar, Error<'a>> {
+    pub(in crate::front::wgsl) fn next_scalar_generic(&mut self) -> Result<'a, Scalar> {
         self.expect_generic_paren('<')?;
-        let pair = match self.next() {
+        let (scalar, _span) = match self.next() {
             (Token::Word(word), span) => {
-                conv::get_scalar_type(word).ok_or(Error::UnknownScalarType(span))
+                conv::get_scalar_type(&self.enable_extensions, span, word)?
+                    .map(|scalar| (scalar, span))
+                    .ok_or(Error::UnknownScalarType(span))?
             }
-            (_, span) => Err(Error::UnknownScalarType(span)),
-        }?;
+            (_, span) => return Err(Box::new(Error::UnknownScalarType(span))),
+        };
+
         self.expect_generic_paren('>')?;
-        Ok(pair)
+        Ok(scalar)
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
@@ -423,21 +521,25 @@ impl<'a> Lexer<'a> {
     /// Returns the span covering the inner type, excluding the brackets.
     pub(in crate::front::wgsl) fn next_scalar_generic_with_span(
         &mut self,
-    ) -> Result<(Scalar, Span), Error<'a>> {
+    ) -> Result<'a, (Scalar, Span)> {
         self.expect_generic_paren('<')?;
-        let pair = match self.next() {
-            (Token::Word(word), span) => conv::get_scalar_type(word)
-                .map(|scalar| (scalar, span))
-                .ok_or(Error::UnknownScalarType(span)),
-            (_, span) => Err(Error::UnknownScalarType(span)),
-        }?;
+
+        let (scalar, span) = match self.next() {
+            (Token::Word(word), span) => {
+                conv::get_scalar_type(&self.enable_extensions, span, word)?
+                    .map(|scalar| (scalar, span))
+                    .ok_or(Error::UnknownScalarType(span))?
+            }
+            (_, span) => return Err(Box::new(Error::UnknownScalarType(span))),
+        };
+
         self.expect_generic_paren('>')?;
-        Ok(pair)
+        Ok((scalar, span))
     }
 
     pub(in crate::front::wgsl) fn next_storage_access(
         &mut self,
-    ) -> Result<crate::StorageAccess, Error<'a>> {
+    ) -> Result<'a, crate::StorageAccess> {
         let (ident, span) = self.next_ident_with_span()?;
         match ident {
             "read" => Ok(crate::StorageAccess::LOAD),
@@ -446,13 +548,13 @@ impl<'a> Lexer<'a> {
             "atomic" => Ok(crate::StorageAccess::ATOMIC
                 | crate::StorageAccess::LOAD
                 | crate::StorageAccess::STORE),
-            _ => Err(Error::UnknownAccess(span)),
+            _ => Err(Box::new(Error::UnknownAccess(span))),
         }
     }
 
     pub(in crate::front::wgsl) fn next_format_generic(
         &mut self,
-    ) -> Result<(crate::StorageFormat, crate::StorageAccess), Error<'a>> {
+    ) -> Result<'a, (crate::StorageFormat, crate::StorageAccess)> {
         self.expect(Token::Paren('<'))?;
         let (ident, ident_span) = self.next_ident_with_span()?;
         let format = conv::map_storage_format(ident, ident_span)?;
@@ -462,16 +564,36 @@ impl<'a> Lexer<'a> {
         Ok((format, access))
     }
 
-    pub(in crate::front::wgsl) fn open_arguments(&mut self) -> Result<(), Error<'a>> {
+    pub(in crate::front::wgsl) fn next_acceleration_structure_flags(&mut self) -> Result<'a, bool> {
+        Ok(if self.skip(Token::Paren('<')) {
+            if !self.skip(Token::Paren('>')) {
+                let (name, span) = self.next_ident_with_span()?;
+                let ret = if name == "vertex_return" {
+                    true
+                } else {
+                    return Err(Box::new(Error::UnknownAttribute(span)));
+                };
+                self.skip(Token::Separator(','));
+                self.expect(Token::Paren('>'))?;
+                ret
+            } else {
+                false
+            }
+        } else {
+            false
+        })
+    }
+
+    pub(in crate::front::wgsl) fn open_arguments(&mut self) -> Result<'a, ()> {
         self.expect(Token::Paren('('))
     }
 
-    pub(in crate::front::wgsl) fn close_arguments(&mut self) -> Result<(), Error<'a>> {
+    pub(in crate::front::wgsl) fn close_arguments(&mut self) -> Result<'a, ()> {
         let _ = self.skip(Token::Separator(','));
         self.expect(Token::Paren(')'))
     }
 
-    pub(in crate::front::wgsl) fn next_argument(&mut self) -> Result<bool, Error<'a>> {
+    pub(in crate::front::wgsl) fn next_argument(&mut self) -> Result<'a, bool> {
         let paren = Token::Paren(')');
         if self.skip(Token::Separator(',')) {
             Ok(!self.skip(paren))
@@ -484,15 +606,38 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 #[track_caller]
 fn sub_test(source: &str, expected_tokens: &[Token]) {
-    let mut lex = Lexer::new(source);
+    sub_test_with(true, source, expected_tokens);
+}
+
+#[cfg(test)]
+#[track_caller]
+fn sub_test_with_and_without_doc_comments(source: &str, expected_tokens: &[Token]) {
+    sub_test_with(false, source, expected_tokens);
+    sub_test_with(
+        true,
+        source,
+        expected_tokens
+            .iter()
+            .filter(|v| !matches!(**v, Token::DocComment(_) | Token::ModuleDocComment(_)))
+            .cloned()
+            .collect::<Vec<_>>()
+            .as_slice(),
+    );
+}
+
+#[cfg(test)]
+#[track_caller]
+fn sub_test_with(ignore_doc_comments: bool, source: &str, expected_tokens: &[Token]) {
+    let mut lex = Lexer::new(source, ignore_doc_comments);
     for &token in expected_tokens {
-        assert_eq!(lex.next().0, token);
+        assert_eq!(lex.next_with_unignored_doc_comments().0, token);
     }
     assert_eq!(lex.next().0, Token::End);
 }
 
 #[test]
 fn test_numbers() {
+    use half::f16;
     // WGSL spec examples //
 
     // decimal integer
@@ -517,14 +662,16 @@ fn test_numbers() {
             Token::Number(Ok(Number::AbstractFloat(0.01))),
             Token::Number(Ok(Number::AbstractFloat(12.34))),
             Token::Number(Ok(Number::F32(0.))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            Token::Number(Ok(Number::F16(f16::from_f32(0.)))),
             Token::Number(Ok(Number::AbstractFloat(0.001))),
             Token::Number(Ok(Number::AbstractFloat(43.75))),
             Token::Number(Ok(Number::F32(16.))),
             Token::Number(Ok(Number::AbstractFloat(0.1875))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            // https://github.com/gfx-rs/wgpu/issues/7046
+            Token::Number(Err(NumberError::NotRepresentable)), // Should be 0.75
             Token::Number(Ok(Number::AbstractFloat(0.12109375))),
-            Token::Number(Err(NumberError::UnimplementedF16)),
+            // https://github.com/gfx-rs/wgpu/issues/7046
+            Token::Number(Err(NumberError::NotRepresentable)), // Should be 12.5
         ],
     );
 
@@ -702,11 +849,13 @@ fn test_tokens() {
     sub_test("No¾", &[Token::Word("No"), Token::Unknown('¾')]);
     sub_test("No好", &[Token::Word("No好")]);
     sub_test("_No", &[Token::Word("_No")]);
-    sub_test(
+
+    sub_test_with_and_without_doc_comments(
         "*/*/***/*//=/*****//",
         &[
             Token::Operation('*'),
             Token::AssignmentOperation('/'),
+            Token::DocComment("/*****/"),
             Token::Operation('/'),
         ],
     );
@@ -769,6 +918,135 @@ fn test_variable_decl() {
             Token::Word("u32"),
             Token::Paren('>'),
             Token::Separator(';'),
+        ],
+    );
+}
+
+#[test]
+fn test_comments() {
+    sub_test("// Single comment", &[]);
+
+    sub_test(
+        "/* multi
+    line
+    comment */",
+        &[],
+    );
+    sub_test(
+        "/* multi
+    line
+    comment */
+    // and another",
+        &[],
+    );
+}
+
+#[test]
+fn test_doc_comments() {
+    sub_test_with_and_without_doc_comments(
+        "/// Single comment",
+        &[Token::DocComment("/// Single comment")],
+    );
+
+    sub_test_with_and_without_doc_comments(
+        "/** multi
+    line
+    comment */",
+        &[Token::DocComment(
+            "/** multi
+    line
+    comment */",
+        )],
+    );
+    sub_test_with_and_without_doc_comments(
+        "/** multi
+    line
+    comment */
+    /// and another",
+        &[
+            Token::DocComment(
+                "/** multi
+    line
+    comment */",
+            ),
+            Token::DocComment("/// and another"),
+        ],
+    );
+}
+
+#[test]
+fn test_doc_comment_nested() {
+    sub_test_with_and_without_doc_comments(
+        "/**
+    a comment with nested one /**
+        nested comment
+    */
+    */
+    const a : i32 = 2;",
+        &[
+            Token::DocComment(
+                "/**
+    a comment with nested one /**
+        nested comment
+    */
+    */",
+            ),
+            Token::Word("const"),
+            Token::Word("a"),
+            Token::Separator(':'),
+            Token::Word("i32"),
+            Token::Operation('='),
+            Token::Number(Ok(Number::AbstractInt(2))),
+            Token::Separator(';'),
+        ],
+    );
+}
+
+#[test]
+fn test_doc_comment_long_character() {
+    sub_test_with_and_without_doc_comments(
+        "/// π/2
+        ///     D(𝐡) = ───────────────────────────────────────────────────
+///            παₜα_b((𝐡 ⋅ 𝐭)² / αₜ²) + (𝐡 ⋅ 𝐛)² / α_b² +`
+    const a : i32 = 2;",
+        &[
+            Token::DocComment("/// π/2"),
+            Token::DocComment("///     D(𝐡) = ───────────────────────────────────────────────────"),
+            Token::DocComment("///            παₜα_b((𝐡 ⋅ 𝐭)² / αₜ²) + (𝐡 ⋅ 𝐛)² / α_b² +`"),
+            Token::Word("const"),
+            Token::Word("a"),
+            Token::Separator(':'),
+            Token::Word("i32"),
+            Token::Operation('='),
+            Token::Number(Ok(Number::AbstractInt(2))),
+            Token::Separator(';'),
+        ],
+    );
+}
+
+#[test]
+fn test_doc_comments_module() {
+    sub_test_with_and_without_doc_comments(
+        "//! Comment Module
+        //! Another one.
+        /*! Different module comment */
+        /// Trying to break module comment
+        // Trying to break module comment again
+        //! After a regular comment is ok.
+        /*! Different module comment again */
+
+        //! After a break is supported.
+        const
+        //! After anything else is not.",
+        &[
+            Token::ModuleDocComment("//! Comment Module"),
+            Token::ModuleDocComment("//! Another one."),
+            Token::ModuleDocComment("/*! Different module comment */"),
+            Token::DocComment("/// Trying to break module comment"),
+            Token::ModuleDocComment("//! After a regular comment is ok."),
+            Token::ModuleDocComment("/*! Different module comment again */"),
+            Token::ModuleDocComment("//! After a break is supported."),
+            Token::Word("const"),
         ],
     );
 }

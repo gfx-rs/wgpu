@@ -1,4 +1,5 @@
-use std::ops::Range;
+use alloc::{boxed::Box, vec::Vec};
+use core::ops::Range;
 
 use crate::{
     AccelerationStructureBarrier, Api, Attachment, BufferBarrier, BufferBinding, BufferCopy,
@@ -13,7 +14,7 @@ use super::{
     DynTexture, DynTextureView,
 };
 
-pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
+pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
     unsafe fn begin_encoding(&mut self, label: Label) -> Result<(), DeviceError>;
 
     unsafe fn discard_encoding(&mut self);
@@ -93,7 +94,7 @@ pub trait DynCommandEncoder: DynResource + std::fmt::Debug {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<dyn DynQuerySet, dyn DynTextureView>,
-    );
+    ) -> Result<(), DeviceError>;
     unsafe fn end_render_pass(&mut self);
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &dyn DynRenderPipeline);
@@ -393,7 +394,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &RenderPassDescriptor<dyn DynQuerySet, dyn DynTextureView>,
-    ) {
+    ) -> Result<(), DeviceError> {
         let color_attachments = desc
             .color_attachments
             .iter()
@@ -423,7 +424,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
                     .occlusion_query_set
                     .map(|set| set.expect_downcast_ref()),
             };
-        unsafe { C::begin_render_pass(self, &desc) };
+        unsafe { C::begin_render_pass(self, &desc) }
     }
 
     unsafe fn end_render_pass(&mut self) {
@@ -729,6 +730,7 @@ impl<'a> ColorAttachment<'a, dyn DynTextureView> {
     pub fn expect_downcast<B: DynTextureView>(&self) -> ColorAttachment<'a, B> {
         ColorAttachment {
             target: self.target.expect_downcast(),
+            depth_slice: self.depth_slice,
             resolve_target: self.resolve_target.as_ref().map(|rt| rt.expect_downcast()),
             ops: self.ops,
             clear_value: self.clear_value,

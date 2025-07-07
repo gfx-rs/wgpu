@@ -12,15 +12,13 @@ async fn run() {
         .await
         .unwrap();
     let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                label: None,
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        )
+        .request_device(&wgpu::DeviceDescriptor {
+            label: None,
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            memory_hints: wgpu::MemoryHints::Performance,
+            trace: wgpu::Trace::Off,
+        })
         .await
         .unwrap();
 
@@ -183,7 +181,7 @@ async fn get_data<T: bytemuck::Pod>(
     let buffer_slice = staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
-    device.poll(wgpu::Maintain::wait()).panic_on_timeout();
+    device.poll(wgpu::PollType::wait()).unwrap();
     receiver.recv_async().await.unwrap().unwrap();
     output.copy_from_slice(bytemuck::cast_slice(&buffer_slice.get_mapped_range()[..]));
     staging_buffer.unmap();

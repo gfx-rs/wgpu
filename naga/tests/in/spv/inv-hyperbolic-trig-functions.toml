@@ -1,0 +1,4 @@
+targets = "HLSL | WGSL"
+
+[spv-in]
+adjust_coordinate_space = true

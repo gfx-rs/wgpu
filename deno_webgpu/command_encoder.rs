@@ -2,14 +2,17 @@
 
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use deno_core::cppgc::Ptr;
 use deno_core::op2;
+use deno_core::v8;
+use deno_core::webidl::{IntOptions, WebIdlConverter, WebIdlError};
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_core::command::PassChannel;
-use wgpu_types::TexelCopyBufferInfo;
+use wgpu_types::{BufferAddress, TexelCopyBufferInfo};
 
 use crate::buffer::GPUBuffer;
 use crate::command_buffer::GPUCommandBuffer;
@@ -26,11 +29,19 @@ pub struct GPUCommandEncoder {
 
     pub id: wgpu_core::id::CommandEncoderId,
     pub label: String,
+
+    pub finished: AtomicBool,
 }
 
 impl Drop for GPUCommandEncoder {
     fn drop(&mut self) {
-        self.instance.command_encoder_drop(self.id);
+        // Command encoders and command buffers are both the same wgpu object.
+        // At the time `finished` is set, ownership of the id (and
+        // responsibility for dropping it) transfers from the encoder to the
+        // buffer.
+        if !self.finished.load(Ordering::SeqCst) {
+            self.instance.command_encoder_drop(self.id);
+        }
     }
 }
 
@@ -63,6 +74,7 @@ impl GPUCommandEncoder {
                     attachment.into_option().map(|attachment| {
                         wgpu_core::command::RenderPassColorAttachment {
                             view: attachment.view.id,
+                            depth_slice: attachment.depth_slice,
                             resolve_target: attachment.resolve_target.map(|target| target.id),
                             load_op: attachment
                                 .load_op
@@ -126,7 +138,7 @@ impl GPUCommandEncoder {
 
         let (render_pass, err) = self
             .instance
-            .command_encoder_create_render_pass(self.id, &wgpu_descriptor);
+            .command_encoder_begin_render_pass(self.id, &wgpu_descriptor);
 
         self.error_handler.push_error(err);
 
@@ -158,7 +170,7 @@ impl GPUCommandEncoder {
 
         let (compute_pass, err) = self
             .instance
-            .command_encoder_create_compute_pass(self.id, &wgpu_descriptor);
+            .command_encoder_begin_compute_pass(self.id, &wgpu_descriptor);
 
         self.error_handler.push_error(err);
 
@@ -170,15 +182,78 @@ impl GPUCommandEncoder {
         }
     }
 
-    #[required(5)]
-    fn copy_buffer_to_buffer(
+    #[required(2)]
+    fn copy_buffer_to_buffer<'a>(
         &self,
+        scope: &mut v8::HandleScope<'a>,
         #[webidl] source: Ptr<GPUBuffer>,
-        #[webidl(options(enforce_range = true))] source_offset: u64,
-        #[webidl] destination: Ptr<GPUBuffer>,
-        #[webidl(options(enforce_range = true))] destination_offset: u64,
-        #[webidl(options(enforce_range = true))] size: u64,
-    ) {
+        arg2: v8::Local<'a, v8::Value>,
+        arg3: v8::Local<'a, v8::Value>,
+        arg4: v8::Local<'a, v8::Value>,
+        arg5: v8::Local<'a, v8::Value>,
+    ) -> Result<(), WebIdlError> {
+        let prefix = "Failed to execute 'GPUCommandEncoder.copyBufferToBuffer'";
+        let int_options = IntOptions {
+            clamp: false,
+            enforce_range: true,
+        };
+
+        let source_offset: BufferAddress;
+        let destination: Ptr<GPUBuffer>;
+        let destination_offset: BufferAddress;
+        let size: Option<BufferAddress>;
+        // Note that the last argument to either overload of `copy_buffer_to_buffer`
+        // is optional, so `arg5.is_undefined()` would not work here.
+        if arg4.is_undefined() {
+            // 3-argument overload
+            source_offset = 0;
+            destination = Ptr::<GPUBuffer>::convert(
+                scope,
+                arg2,
+                Cow::Borrowed(prefix),
+                (|| Cow::Borrowed("destination")).into(),
+                &(),
+            )?;
+            destination_offset = 0;
+            size = <Option<u64>>::convert(
+                scope,
+                arg3,
+                Cow::Borrowed(prefix),
+                (|| Cow::Borrowed("size")).into(),
+                &int_options,
+            )?;
+        } else {
+            // 5-argument overload
+            source_offset = u64::convert(
+                scope,
+                arg2,
+                Cow::Borrowed(prefix),
+                (|| Cow::Borrowed("sourceOffset")).into(),
+                &int_options,
+            )?;
+            destination = Ptr::<GPUBuffer>::convert(
+                scope,
+                arg3,
+                Cow::Borrowed(prefix),
+                (|| Cow::Borrowed("destination")).into(),
+                &(),
+            )?;
+            destination_offset = u64::convert(
+                scope,
+                arg4,
+                Cow::Borrowed(prefix),
+                (|| Cow::Borrowed("destinationOffset")).into(),
+                &int_options,
+            )?;
+            size = <Option<u64>>::convert(
+                scope,
+                arg5,
+                Cow::Borrowed(prefix),
+                (|| Cow::Borrowed("size")).into(),
+                &int_options,
+            )?;
+        }
+
         let err = self
             .instance
             .command_encoder_copy_buffer_to_buffer(
@@ -192,6 +267,8 @@ impl GPUCommandEncoder {
             .err();
 
         self.error_handler.push_error(err);
+
+        Ok(())
     }
 
     #[required(3)]
@@ -339,10 +416,22 @@ impl GPUCommandEncoder {
     fn finish(
         &self,
         #[webidl] descriptor: crate::command_buffer::GPUCommandBufferDescriptor,
-    ) -> GPUCommandBuffer {
+    ) -> Result<GPUCommandBuffer, JsErrorBox> {
         let wgpu_descriptor = wgpu_types::CommandBufferDescriptor {
             label: crate::transform_label(descriptor.label.clone()),
         };
+
+        // TODO(https://github.com/gfx-rs/wgpu/issues/7812): This is not right,
+        // it should be a validation error, and it would be nice if we can just
+        // let wgpu generate it for us. The problem is that if the encoder was
+        // already finished, we transferred ownership of the id to a command
+        // buffer, so we have to bail out before we mint a duplicate command
+        // buffer with the same id below.
+        if self.finished.fetch_or(true, Ordering::SeqCst) {
+            return Err(JsErrorBox::type_error(
+                "The command encoder has already finished.",
+            ));
+        }
 
         let (id, err) = self
             .instance
@@ -350,12 +439,11 @@ impl GPUCommandEncoder {
 
         self.error_handler.push_error(err);
 
-        GPUCommandBuffer {
+        Ok(GPUCommandBuffer {
             instance: self.instance.clone(),
             id,
             label: descriptor.label,
-            consumed: Default::default(),
-        }
+        })
     }
 
     fn push_debug_group(&self, #[webidl] group_label: String) {

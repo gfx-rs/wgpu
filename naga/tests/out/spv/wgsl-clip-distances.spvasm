@@ -1,0 +1,46 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 28
+OpCapability Shader
+OpCapability ClipDistance
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Vertex %14 "main" %10 %12
+OpDecorate %5 ArrayStride 4
+OpMemberDecorate %8 0 Offset 0
+OpMemberDecorate %8 1 Offset 16
+OpDecorate %10 BuiltIn Position
+OpDecorate %12 BuiltIn ClipDistance
+%2 = OpTypeVoid
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 4
+%7 = OpTypeInt 32 0
+%6 = OpConstant  %7  1
+%5 = OpTypeArray %3 %6
+%8 = OpTypeStruct %4 %5
+%11 = OpTypePointer Output %4
+%10 = OpVariable  %11  Output
+%13 = OpTypePointer Output %5
+%12 = OpVariable  %13  Output
+%15 = OpTypeFunction %2
+%16 = OpConstant  %3  0.5
+%18 = OpTypePointer Function %8
+%19 = OpConstantNull  %8
+%21 = OpTypePointer Function %5
+%22 = OpTypePointer Function %3
+%23 = OpConstant  %7  0
+%14 = OpFunction  %2  None %15
+%9 = OpLabel
+%17 = OpVariable  %18  Function %19
+OpBranch %20
+%20 = OpLabel
+%24 = OpAccessChain  %22  %17 %6 %23
+OpStore %24 %16
+%25 = OpLoad  %8  %17
+%26 = OpCompositeExtract  %4  %25 0
+OpStore %10 %26
+%27 = OpCompositeExtract  %5  %25 1
+OpStore %12 %27
+OpReturn
+OpFunctionEnd

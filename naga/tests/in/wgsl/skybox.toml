@@ -1,0 +1,52 @@
+spv_flow_dump_prefix = ""
+
+[msl]
+fake_missing_bindings = false
+lang_version = [2, 1]
+zero_initialize_workgroup_memory = true
+
+[[msl.inline_samplers]]
+coord = "Normalized"
+address = ["ClampToEdge", "ClampToEdge", "ClampToEdge"]
+mag_filter = "Linear"
+min_filter = "Linear"
+border_color = "TransparentBlack"
+compare_func = "Never"
+lod_clamp = { start = 0.5, end = 10.0 }
+max_anisotropy = 8
+
+[msl.per_entry_point_map.fs_main]
+resources = [
+    { resource_binding = { group = 0, binding = 1 }, bind_target = { texture = 0 } },
+    { resource_binding = { group = 0, binding = 2 }, bind_target = { sampler.Inline = 0 } },
+]
+[msl.per_entry_point_map.vs_main]
+resources = [
+    { resource_binding = { group = 0, binding = 0 }, bind_target = { buffer = 0 } },
+]
+
+[hlsl]
+fake_missing_bindings = false
+restrict_indexing = true
+sampler_buffer_binding_map = [
+    { group = 0, bind_target = { register = 0, space = 2 } },
+]
+special_constants_binding = { register = 1, space = 0 }
+zero_initialize_workgroup_memory = true
+binding_map = [
+    { resource_binding = { group = 0, binding = 0 }, bind_target = { register = 0, space = 0 } },
+    { resource_binding = { group = 0, binding = 1 }, bind_target = { register = 0, space = 0 } },
+    { resource_binding = { group = 0, binding = 2 }, bind_target = { register = 0, space = 1 } },
+]
+
+[glsl]
+binding_map = [
+    { resource_binding = { group = 0, binding = 0 }, bind_target = 0 },
+    { resource_binding = { group = 0, binding = 1 }, bind_target = 0 },
+]
+version.Embedded = { is_webgl = false, version = 320 }
+writer_flags = ""
+zero_initialize_workgroup_memory = true
+
+[spv]
+version = [1, 0]

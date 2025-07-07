@@ -1,11 +1,14 @@
 [package]
 name = "cts_runner"
-version = "0.1.0"
+version.workspace = true
 authors = ["Luca Casonato <hello@lcas.dev>"]
 edition.workspace = true
 description = "CTS runner for wgpu"
 license.workspace = true
 publish = false
+
+[dependencies]
+env_logger.workspace = true
 
 # We make all dependencies conditional on not being wasm,
 # so the whole workspace can built as wasm.

@@ -1,8 +1,14 @@
 #![allow(unused_variables)]
 
+use alloc::{string::String, vec, vec::Vec};
+use core::{ptr, sync::atomic::Ordering, time::Duration};
+
+#[cfg(supports_64bit_atomics)]
+use core::sync::atomic::AtomicU64;
+#[cfg(not(supports_64bit_atomics))]
+use portable_atomic::AtomicU64;
+
 use crate::TlasInstance;
-use core::ptr;
-use core::sync::atomic::{AtomicU64, Ordering};
 
 mod buffer;
 pub use buffer::Buffer;
@@ -71,7 +77,7 @@ impl crate::DynSurfaceTexture for Resource {}
 impl crate::DynTexture for Resource {}
 impl crate::DynTextureView for Resource {}
 
-impl std::borrow::Borrow<dyn crate::DynTexture> for Resource {
+impl core::borrow::Borrow<dyn crate::DynTexture> for Resource {
     fn borrow(&self) -> &dyn crate::DynTexture {
         self
     }
@@ -89,6 +95,7 @@ impl crate::Instance for Context {
                 },
             name: _,
             flags: _,
+            memory_budget_thresholds: _,
         } = *desc;
         if enable {
             Ok(Context)
@@ -147,6 +154,8 @@ const CAPABILITIES: crate::Capabilities = {
             max_storage_buffers_per_shader_stage: ALLOC_MAX_U32,
             max_storage_textures_per_shader_stage: ALLOC_MAX_U32,
             max_uniform_buffers_per_shader_stage: ALLOC_MAX_U32,
+            max_binding_array_elements_per_shader_stage: ALLOC_MAX_U32,
+            max_binding_array_sampler_elements_per_shader_stage: ALLOC_MAX_U32,
             max_uniform_buffer_binding_size: ALLOC_MAX_U32,
             max_storage_buffer_binding_size: ALLOC_MAX_U32,
             max_vertex_buffers: ALLOC_MAX_U32,
@@ -168,6 +177,10 @@ const CAPABILITIES: crate::Capabilities = {
             max_subgroup_size: ALLOC_MAX_U32,
             max_push_constant_size: ALLOC_MAX_U32,
             max_non_sampler_bindings: ALLOC_MAX_U32,
+            max_blas_primitive_count: ALLOC_MAX_U32,
+            max_blas_geometry_count: ALLOC_MAX_U32,
+            max_tlas_instance_count: ALLOC_MAX_U32,
+            max_acceleration_structures_per_shader_stage: ALLOC_MAX_U32,
         },
         alignments: crate::Alignments {
             // All maximally permissive
@@ -200,7 +213,7 @@ impl crate::Surface for Context {
 
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<Duration>,
         fence: &Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         Ok(None)
@@ -418,10 +431,10 @@ impl crate::Device for Context {
         Ok(true)
     }
 
-    unsafe fn start_capture(&self) -> bool {
+    unsafe fn start_graphics_debugger_capture(&self) -> bool {
         false
     }
-    unsafe fn stop_capture(&self) {}
+    unsafe fn stop_graphics_debugger_capture(&self) {}
     unsafe fn create_acceleration_structure(
         &self,
         desc: &crate::AccelerationStructureDescriptor,
@@ -448,5 +461,9 @@ impl crate::Device for Context {
 
     fn get_internal_counters(&self) -> wgt::HalCounters {
         Default::default()
+    }
+
+    fn check_if_oom(&self) -> DeviceResult<()> {
+        Ok(())
     }
 }

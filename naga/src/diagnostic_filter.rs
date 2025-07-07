@@ -1,12 +1,15 @@
 //! [`DiagnosticFilter`]s and supporting functionality.
 
+use alloc::boxed::Box;
+
+use crate::{Arena, Handle};
+
+#[cfg(feature = "wgsl-in")]
+use crate::FastIndexMap;
 #[cfg(feature = "wgsl-in")]
 use crate::Span;
-use crate::{Arena, Handle};
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
-#[cfg(feature = "wgsl-in")]
-use indexmap::IndexMap;
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
@@ -130,7 +133,7 @@ pub(crate) enum ShouldConflictOnFullDuplicate {
 /// [`add`]: DiagnosticFilterMap::add
 #[derive(Clone, Debug, Default)]
 #[cfg(feature = "wgsl-in")]
-pub(crate) struct DiagnosticFilterMap(IndexMap<FilterableTriggeringRule, (Severity, Span)>);
+pub(crate) struct DiagnosticFilterMap(FastIndexMap<FilterableTriggeringRule, (Severity, Span)>);
 
 #[cfg(feature = "wgsl-in")]
 impl DiagnosticFilterMap {

@@ -59,8 +59,9 @@
 //! [`Switch`]: crate::Statement::Switch
 //! [`SwitchCase`]: crate::SwitchCase
 
+use alloc::{rc::Rc, string::String, vec::Vec};
+
 use crate::proc::Namer;
-use std::rc::Rc;
 
 /// A summary of the code surrounding a statement.
 enum Nesting {
@@ -184,6 +185,7 @@ impl ContinueCtx {
     /// Resets internal state.
     ///
     /// Use this to reuse memory between writing sessions.
+    #[allow(dead_code, reason = "only used by some backends")]
     pub fn clear(&mut self) {
         self.stack.clear();
     }
@@ -222,7 +224,7 @@ impl ContinueCtx {
             // forward continue statements within this `Switch`. We can leave
             // the stack empty.
             None => None,
-            Some(&Nesting::Loop { .. }) => {
+            Some(&Nesting::Loop) => {
                 let variable = Rc::new(namer.call("should_continue"));
                 self.stack.push(Nesting::Switch {
                     variable: Rc::clone(&variable),
@@ -253,7 +255,7 @@ impl ContinueCtx {
             // This doesn't indicate a problem: we don't start pushing entries
             // for `Switch` statements unless we have an enclosing `Loop`.
             None => ExitControlFlow::None,
-            Some(Nesting::Loop { .. }) => {
+            Some(Nesting::Loop) => {
                 unreachable!("Unexpected loop state when exiting switch");
             }
             Some(Nesting::Switch {

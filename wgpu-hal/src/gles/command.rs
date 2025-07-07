@@ -1,9 +1,9 @@
-use super::{conv, Command as C};
+use alloc::string::String;
+use core::{mem, ops::Range};
+
 use arrayvec::ArrayVec;
-use std::{
-    mem::{self, size_of, size_of_val},
-    ops::Range,
-};
+
+use super::{conv, Command as C};
 
 #[derive(Clone, Copy, Debug, Default)]
 struct TextureSlotDesc {
@@ -37,6 +37,7 @@ pub(super) struct State {
     // The current state of the push constant data block.
     current_push_constant_data: [u32; super::MAX_PUSH_CONSTANTS],
     end_of_pass_timestamp: Option<glow::Query>,
+    clip_distance_count: u32,
 }
 
 impl Default for State {
@@ -65,6 +66,7 @@ impl Default for State {
             push_constant_descs: Default::default(),
             current_push_constant_data: [0; super::MAX_PUSH_CONSTANTS],
             end_of_pass_timestamp: Default::default(),
+            clip_distance_count: Default::default(),
         }
     }
 }
@@ -84,8 +86,7 @@ impl super::CommandBuffer {
     }
 
     fn add_push_constant_data(&mut self, data: &[u32]) -> Range<u32> {
-        let data_raw =
-            unsafe { std::slice::from_raw_parts(data.as_ptr().cast(), size_of_val(data)) };
+        let data_raw = bytemuck::cast_slice(data);
         let start = self.data_bytes.len();
         assert!(start < u32::MAX as usize);
         self.data_bytes.extend_from_slice(data_raw);
@@ -262,7 +263,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn begin_encoding(&mut self, label: crate::Label) -> Result<(), crate::DeviceError> {
         self.state = State::default();
-        self.cmd_buffer.label = label.map(str::to_string);
+        self.cmd_buffer.label = label.map(String::from);
         Ok(())
     }
     unsafe fn discard_encoding(&mut self) {
@@ -497,7 +498,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
-    ) {
+    ) -> Result<(), crate::DeviceError> {
         debug_assert!(self.state.end_of_pass_timestamp.is_none());
         if let Some(ref t) = desc.timestamp_writes {
             if let Some(index) = t.beginning_of_pass_write_index {
@@ -524,6 +525,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .any(|at| match at.target.view.inner {
                 #[cfg(webgl)]
                 super::TextureInner::ExternalFramebuffer { .. } => true,
+                #[cfg(native)]
+                super::TextureInner::ExternalNativeFramebuffer { .. } => true,
                 _ => false,
             });
 
@@ -558,6 +561,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         self.cmd_buffer.commands.push(C::BindAttachment {
                             attachment,
                             view: cat.target.view.clone(),
+                            depth_slice: cat.depth_slice,
                         });
                         if let Some(ref rat) = cat.resolve_target {
                             self.state
@@ -579,6 +583,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     self.cmd_buffer.commands.push(C::BindAttachment {
                         attachment,
                         view: dsat.target.view.clone(),
+                        depth_slice: None,
                     });
                     if aspects.contains(crate::FormatAspects::DEPTH)
                         && !dsat.depth_ops.contains(crate::AttachmentOps::STORE)
@@ -666,6 +671,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     .push(C::ClearStencil(dsat.clear_value.1));
             }
         }
+        Ok(())
     }
     unsafe fn end_render_pass(&mut self) {
         for (attachment, dst) in self.state.resolve_attachments.drain(..) {
@@ -977,6 +983,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for ct in pipeline.color_targets.iter() {
             self.state.color_targets.push(ct.clone());
         }
+
+        // set clip plane count
+        if pipeline.inner.clip_distance_count != self.state.clip_distance_count {
+            self.cmd_buffer.commands.push(C::SetClipDistances {
+                old_count: self.state.clip_distance_count,
+                new_count: pipeline.inner.clip_distance_count,
+            });
+            self.state.clip_distance_count = pipeline.inner.clip_distance_count;
+        }
     }
 
     unsafe fn set_index_buffer<'a>(
@@ -1200,7 +1215,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn dispatch(&mut self, count: [u32; 3]) {
         // Empty dispatches are invalid in OpenGL, but valid in WebGPU.
-        if count.iter().any(|&c| c == 0) {
+        if count.contains(&0) {
             return;
         }
         self.cmd_buffer.commands.push(C::Dispatch(count));

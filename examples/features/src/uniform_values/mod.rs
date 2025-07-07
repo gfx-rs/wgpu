@@ -110,15 +110,13 @@ impl WgpuContext {
             .await
             .unwrap();
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_defaults(),
-                    memory_hints: wgpu::MemoryHints::MemoryUsage,
-                },
-                None,
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
+                trace: wgpu::Trace::Off,
+            })
             .await
             .unwrap();
 
@@ -309,6 +307,7 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                                         color_attachments: &[Some(
                                             wgpu::RenderPassColorAttachment {
                                                 view: &view,
+                                                depth_slice: None,
                                                 resolve_target: None,
                                                 ops: wgpu::Operations {
                                                     load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),

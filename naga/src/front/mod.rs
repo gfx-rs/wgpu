@@ -14,12 +14,14 @@ pub mod spv;
 #[cfg(feature = "wgsl-in")]
 pub mod wgsl;
 
+use alloc::{boxed::Box, vec, vec::Vec};
+use core::ops;
+
 use crate::{
     arena::{Arena, Handle, HandleVec, UniqueArena},
     proc::{ResolveContext, ResolveError, TypeResolution},
     FastHashMap,
 };
-use std::ops;
 
 /// A table of types for an `Arena<Expression>`.
 ///
@@ -262,7 +264,7 @@ impl<Name, Var> SymbolTable<Name, Var> {
 
 impl<Name, Var> SymbolTable<Name, Var>
 where
-    Name: std::hash::Hash + Eq,
+    Name: core::hash::Hash + Eq,
 {
     /// Perform a lookup for a variable named `name`.
     ///
@@ -272,8 +274,8 @@ where
     /// scope.
     pub fn lookup<Q>(&self, name: &Q) -> Option<&Var>
     where
-        Name: std::borrow::Borrow<Q>,
-        Q: std::hash::Hash + Eq + ?Sized,
+        Name: core::borrow::Borrow<Q>,
+        Q: core::hash::Hash + Eq + ?Sized,
     {
         // Iterate backwards through the scopes and try to find the variable
         for scope in self.scopes[..self.cursor].iter().rev() {
@@ -318,7 +320,7 @@ impl<Name, Var> Default for SymbolTable<Name, Var> {
     }
 }
 
-use std::fmt;
+use core::fmt;
 
 impl<Name: fmt::Debug, Var: fmt::Debug> fmt::Debug for SymbolTable<Name, Var> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -326,5 +328,12 @@ impl<Name: fmt::Debug, Var: fmt::Debug> fmt::Debug for SymbolTable<Name, Var> {
         f.debug_list()
             .entries(self.scopes[..self.cursor].iter())
             .finish()
+    }
+}
+
+impl crate::Module {
+    pub fn get_or_insert_default_doc_comments(&mut self) -> &mut Box<crate::DocComments> {
+        self.doc_comments
+            .get_or_insert_with(|| Box::new(crate::DocComments::default()))
     }
 }

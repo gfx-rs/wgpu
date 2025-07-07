@@ -281,18 +281,18 @@ impl ExampleContext {
         // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the surface.
         let needed_limits = E::required_limits().using_resolution(adapter.limits());
 
-        let trace_dir = std::env::var("WGPU_TRACE");
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: (E::optional_features() & adapter.features())
-                        | E::required_features(),
-                    required_limits: needed_limits,
-                    memory_hints: wgpu::MemoryHints::MemoryUsage,
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: (E::optional_features() & adapter.features())
+                    | E::required_features(),
+                required_limits: needed_limits,
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
+                trace: match std::env::var_os("WGPU_TRACE") {
+                    Some(path) => wgpu::Trace::Directory(path.into()),
+                    None => wgpu::Trace::Off,
                 },
-                trace_dir.ok().as_ref().map(std::path::Path::new),
-            )
+            })
             .await
             .expect("Unable to find a suitable GPU adapter!");
 
@@ -512,7 +512,11 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
 
                 let features = E::required_features() | params.optional_features;
 
-                params.base_test_parameters.clone().features(features)
+                params
+                    .base_test_parameters
+                    .clone()
+                    .features(features)
+                    .limits(E::required_limits())
             })
             .run_async(move |ctx| async move {
                 let format = if E::SRGB {
@@ -592,9 +596,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
 
                 let dst_buffer_slice = dst_buffer.slice(..);
                 dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
-                ctx.async_poll(wgpu::Maintain::wait())
-                    .await
-                    .panic_on_timeout();
+                ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
                 let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
                 wgpu_test::image::compare_image_output(

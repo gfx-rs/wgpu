@@ -1,6 +1,8 @@
+use alloc::{borrow::ToOwned as _, format, string::String, sync::Arc, vec, vec::Vec};
+use core::sync::atomic::AtomicU8;
+
 use glow::HasContext;
 use parking_lot::Mutex;
-use std::sync::{atomic::AtomicU8, Arc};
 use wgt::AstcChannel;
 
 use crate::auxil::db;
@@ -79,7 +81,7 @@ impl super::Adapter {
     /// resulting in an `Err`.
     pub(super) fn parse_full_version(src: &str) -> Result<(u8, u8), crate::InstanceError> {
         let (version, _vendor_info) = match src.find(' ') {
-            Some(i) => (&src[..i], src[i + 1..].to_string()),
+            Some(i) => (&src[..i], src[i + 1..].to_owned()),
             None => (src, String::new()),
         };
 
@@ -201,7 +203,9 @@ impl super::Adapter {
             // emscripten doesn't enable "WEBGL_debug_renderer_info" extension by default. so, we do it manually.
             // See https://github.com/gfx-rs/wgpu/issues/3245 for context
             #[cfg(Emscripten)]
-            if unsafe { super::emscripten::enable_extension("WEBGL_debug_renderer_info\0") } {
+            if unsafe {
+                super::emscripten::enable_extension(c"WEBGL_debug_renderer_info".to_str().unwrap())
+            } {
                 (GL_UNMASKED_VENDOR_WEBGL, GL_UNMASKED_RENDERER_WEBGL)
             } else {
                 (glow::VENDOR, glow::RENDERER)
@@ -373,14 +377,14 @@ impl super::Adapter {
         } else {
             vertex_shader_storage_textures.min(fragment_shader_storage_textures)
         };
-        let indirect_execution =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_multi_draw_indirect");
+        // NOTE: GL_ARB_compute_shader adds support for indirect dispatch
+        let indirect_execution = supported((3, 1), (4, 3))
+            || (extensions.contains("GL_ARB_draw_indirect") && supports_compute);
 
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
-            | wgt::DownlevelFlags::COMPARISON_SAMPLERS
-            | wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
+            | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
@@ -462,6 +466,10 @@ impl super::Adapter {
                 || extensions.contains("GL_ARB_blend_func_extended"),
         );
         features.set(
+            wgt::Features::CLIP_DISTANCES,
+            full_ver.is_some() || extensions.contains("GL_EXT_clip_cull_distance"),
+        );
+        features.set(
             wgt::Features::SHADER_PRIMITIVE_INDEX,
             supported((3, 2), (3, 2))
                 || extensions.contains("OES_geometry_shader")
@@ -527,6 +535,7 @@ impl super::Adapter {
                     .compressed_texture_astc_supports_ldr_profile()
                 {
                     features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                    features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D);
                 }
                 if context
                     .glow_context
@@ -539,12 +548,18 @@ impl super::Adapter {
             #[cfg(any(native, Emscripten))]
             {
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC);
+                features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D);
                 features.insert(wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR);
             }
         } else {
             features.set(
                 wgt::Features::TEXTURE_COMPRESSION_ASTC,
                 extensions.contains("GL_KHR_texture_compression_astc_ldr"),
+            );
+            features.set(
+                wgt::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+                extensions.contains("GL_KHR_texture_compression_astc_ldr")
+                    && extensions.contains("GL_KHR_texture_compression_astc_sliced_3d"),
             );
             features.set(
                 wgt::Features::TEXTURE_COMPRESSION_ASTC_HDR,
@@ -685,6 +700,8 @@ impl super::Adapter {
             max_storage_buffers_per_shader_stage,
             max_storage_textures_per_shader_stage,
             max_uniform_buffers_per_shader_stage,
+            max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_sampler_elements_per_shader_stage: 0,
             max_uniform_buffer_binding_size: unsafe {
                 gl.get_parameter_i32(glow::MAX_UNIFORM_BLOCK_SIZE)
             } as u32,
@@ -784,6 +801,10 @@ impl super::Adapter {
             max_compute_workgroups_per_dimension,
             max_buffer_size: i32::MAX as u64,
             max_non_sampler_bindings: u32::MAX,
+            max_blas_primitive_count: 0,
+            max_blas_geometry_count: 0,
+            max_tlas_instance_count: 0,
+            max_acceleration_structures_per_shader_stage: 0,
         };
 
         let mut workarounds = super::Workarounds::empty();
@@ -975,7 +996,7 @@ impl crate::Adapter for super::Adapter {
         {
             Some(unsafe {
                 Self::create_shader_clear_program(gl, self.shared.es)
-                    .ok_or(crate::DeviceError::ResourceCreationFailed)?
+                    .ok_or(crate::DeviceError::Lost)?
             })
         } else {
             // If we don't need the workaround, don't waste time and resources compiling the clear program
@@ -1245,7 +1266,9 @@ impl super::AdapterShared {
             let buffer_mapping =
                 unsafe { gl.map_buffer_range(target, offset, length as _, glow::MAP_READ_BIT) };
 
-            unsafe { std::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length) };
+            unsafe {
+                core::ptr::copy_nonoverlapping(buffer_mapping, dst_data.as_mut_ptr(), length)
+            };
 
             unsafe { gl.unmap_buffer(target) };
         }

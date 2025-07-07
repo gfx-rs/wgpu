@@ -1,0 +1,20 @@
+god_mode = true
+
+[msl]
+fake_missing_bindings = false
+lang_version = [2, 4]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = true
+
+[hlsl]
+shader_model = "V6_0"
+fake_missing_bindings = true
+restrict_indexing = true
+zero_initialize_workgroup_memory = true
+
+[glsl]
+version.Desktop = 430
+zero_initialize_workgroup_memory = true
+
+[spv]
+version = [1, 3]

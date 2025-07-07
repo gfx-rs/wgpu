@@ -1,7 +1,11 @@
+use alloc::{boxed::Box, string::String, vec::Vec};
+use core::{fmt, num::NonZeroU32};
+
 use crate::{
     binding_model,
     hub::Hub,
     id::{BindGroupLayoutId, PipelineLayoutId},
+    ray_tracing::BlasCompactReadyPendingClosure,
     resource::{
         Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
         ResourceErrorIdent,
@@ -13,9 +17,10 @@ use crate::{
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::{BufferAddress, DeviceLostReason, TextureFormat};
-
-use std::num::NonZeroU32;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    BufferAddress, DeviceLostReason, TextureFormat,
+};
 
 pub(crate) mod bgl;
 pub mod global;
@@ -100,6 +105,12 @@ pub enum RenderPassCompatibilityError {
     },
 }
 
+impl WebGpuError for RenderPassCompatibilityError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 impl RenderPassContext {
     // Assumes the renderpass only contains one subpass
     pub(crate) fn check_compatible<T: Labeled>(
@@ -155,6 +166,7 @@ pub type BufferMapPendingClosure = (BufferMapOperation, BufferAccessResult);
 #[derive(Default)]
 pub struct UserClosures {
     pub mappings: Vec<BufferMapPendingClosure>,
+    pub blas_compact_ready: Vec<BlasCompactReadyPendingClosure>,
     pub submissions: SmallVec<[queue::SubmittedWorkDoneClosure; 1]>,
     pub device_lost_invocations: SmallVec<[DeviceLostInvocation; 1]>,
 }
@@ -162,6 +174,7 @@ pub struct UserClosures {
 impl UserClosures {
     fn extend(&mut self, other: Self) {
         self.mappings.extend(other.mappings);
+        self.blas_compact_ready.extend(other.blas_compact_ready);
         self.submissions.extend(other.submissions);
         self.device_lost_invocations
             .extend(other.device_lost_invocations);
@@ -175,6 +188,11 @@ impl UserClosures {
         // a on_submitted_work_done callback to be fired before the on_submitted_work_done callback.
         for (mut operation, status) in self.mappings {
             if let Some(callback) = operation.callback.take() {
+                callback(status);
+            }
+        }
+        for (mut operation, status) in self.blas_compact_ready {
+            if let Some(callback) = operation.take() {
                 callback(status);
             }
         }
@@ -236,7 +254,7 @@ pub(crate) fn map_buffer(
     // If this is a write mapping zeroing out the memory here is the only
     // reasonable way as all data is pushed to GPU anyways.
 
-    let mapped = unsafe { std::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
+    let mapped = unsafe { core::slice::from_raw_parts_mut(mapping.ptr.as_ptr(), size as usize) };
 
     // We can't call flush_mapped_ranges in this case, so we can't drain the uninitialized ranges either
     if !mapping.is_coherent
@@ -288,8 +306,8 @@ pub struct DeviceMismatch {
     pub(super) target_device: ResourceErrorIdent,
 }
 
-impl std::fmt::Display for DeviceMismatch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl fmt::Display for DeviceMismatch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
             "{} of {} doesn't match {}",
@@ -302,22 +320,34 @@ impl std::fmt::Display for DeviceMismatch {
     }
 }
 
-impl std::error::Error for DeviceMismatch {}
+impl core::error::Error for DeviceMismatch {}
+
+impl WebGpuError for DeviceMismatch {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
 
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum DeviceError {
-    #[error("{0} is invalid.")]
-    Invalid(ResourceErrorIdent),
     #[error("Parent device is lost")]
     Lost,
     #[error("Not enough memory left.")]
     OutOfMemory,
-    #[error("Creation of a resource failed for a reason other than running out of memory.")]
-    ResourceCreationFailed,
     #[error(transparent)]
     DeviceMismatch(#[from] Box<DeviceMismatch>),
+}
+
+impl WebGpuError for DeviceError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::DeviceMismatch(e) => e.webgpu_error_type(),
+            Self::Lost => ErrorType::DeviceLost,
+            Self::OutOfMemory => ErrorType::OutOfMemory,
+        }
+    }
 }
 
 impl DeviceError {
@@ -328,7 +358,6 @@ impl DeviceError {
         match error {
             hal::DeviceError::Lost => Self::Lost,
             hal::DeviceError::OutOfMemory => Self::OutOfMemory,
-            hal::DeviceError::ResourceCreationFailed => Self::ResourceCreationFailed,
             hal::DeviceError::Unexpected => Self::Lost,
         }
     }
@@ -338,11 +367,23 @@ impl DeviceError {
 #[error("Features {0:?} are required but not enabled on the device")]
 pub struct MissingFeatures(pub wgt::Features);
 
+impl WebGpuError for MissingFeatures {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[error(
     "Downlevel flags {0:?} are required but not supported on the device.\n{DOWNLEVEL_ERROR_MESSAGE}",
 )]
 pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
+
+impl WebGpuError for MissingDownlevelFlags {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -383,6 +424,10 @@ pub fn create_validator(
     );
     caps.set(Caps::FLOAT64, features.contains(wgt::Features::SHADER_F64));
     caps.set(
+        Caps::SHADER_FLOAT16,
+        features.contains(wgt::Features::SHADER_F16),
+    );
+    caps.set(
         Caps::PRIMITIVE_INDEX,
         features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX),
     );
@@ -392,9 +437,12 @@ pub fn create_validator(
             .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
     );
     caps.set(
-        Caps::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-        features
-            .contains(wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+        Caps::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        features.contains(wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+    );
+    caps.set(
+        Caps::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        features.contains(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS),
     );
     // TODO: This needs a proper wgpu feature
     caps.set(
@@ -446,6 +494,10 @@ pub fn create_validator(
         features.contains(wgt::Features::DUAL_SOURCE_BLENDING),
     );
     caps.set(
+        Caps::CLIP_DISTANCE,
+        features.contains(wgt::Features::CLIP_DISTANCES),
+    );
+    caps.set(
         Caps::CUBE_ARRAY_TEXTURES,
         downlevel.contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES),
     );
@@ -464,6 +516,10 @@ pub fn create_validator(
     caps.set(
         Caps::SUBGROUP_VERTEX_STAGE,
         features.contains(wgt::Features::SUBGROUP_VERTEX),
+    );
+    caps.set(
+        Caps::RAY_HIT_VERTEX_POSITION,
+        features.intersects(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN),
     );
 
     naga::valid::Validator::new(flags, caps)

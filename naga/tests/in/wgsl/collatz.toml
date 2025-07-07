@@ -1,0 +1,5 @@
+targets = "SPIRV | METAL | IR | ANALYSIS | HLSL | WGSL"
+
+[spv]
+debug = true
+version = [1, 0]

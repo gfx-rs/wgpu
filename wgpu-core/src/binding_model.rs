@@ -1,3 +1,22 @@
+use alloc::{
+    borrow::{Cow, ToOwned},
+    boxed::Box,
+    string::String,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
+use core::{fmt, mem::ManuallyDrop, ops::Range};
+
+use arrayvec::ArrayVec;
+use thiserror::Error;
+
+#[cfg(feature = "serde")]
+use serde::Deserialize;
+#[cfg(feature = "serde")]
+use serde::Serialize;
+
+use wgt::error::{ErrorType, WebGpuError};
+
 use crate::{
     device::{
         bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
@@ -7,7 +26,7 @@ use crate::{
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
         Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        MissingTextureUsageError, ResourceErrorIdent, Sampler, TextureView, TrackingData,
+        MissingTextureUsageError, ResourceErrorIdent, Sampler, TextureView, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -15,30 +34,11 @@ use crate::{
     Label,
 };
 
-use arrayvec::ArrayVec;
-
-#[cfg(feature = "serde")]
-use serde::Deserialize;
-#[cfg(feature = "serde")]
-use serde::Serialize;
-
-use std::{
-    borrow::Cow,
-    mem::ManuallyDrop,
-    ops::Range,
-    sync::{Arc, OnceLock, Weak},
-};
-
-use crate::resource::Tlas;
-use thiserror::Error;
-
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum BindGroupLayoutEntryError {
     #[error("Cube dimension is not expected for texture storage")]
     StorageTextureCube,
-    #[error("Read-write and read-only storage textures are not allowed by baseline webgpu, they require the native only feature TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES")]
-    StorageTextureReadWrite,
     #[error("Atomic storage textures are not allowed by baseline webgpu, they require the native only feature TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES")]
     StorageTextureAtomic,
     #[error("Arrays of bindings unsupported for this type of binding")]
@@ -76,6 +76,22 @@ pub enum CreateBindGroupLayoutError {
     InvalidBindingIndex { binding: u32, maximum: u32 },
     #[error("Invalid visibility {0:?}")]
     InvalidVisibility(wgt::ShaderStages),
+}
+
+impl WebGpuError for CreateBindGroupLayoutError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+
+            Self::ConflictBinding(_)
+            | Self::Entry { .. }
+            | Self::TooManyBindings(_)
+            | Self::InvalidBindingIndex { .. }
+            | Self::InvalidVisibility(_)
+            | Self::ContainsBothBindingArrayAndDynamicOffsetArray
+            | Self::ContainsBothBindingArrayAndUniformBuffer => ErrorType::Validation,
+        }
+    }
 }
 
 //TODO: refactor this to move out `enum BindingError`.
@@ -175,6 +191,13 @@ pub enum CreateBindGroupError {
     },
     #[error("Storage texture bindings must have a single mip level, but given a view with mip_level_count = {mip_level_count:?} at binding {binding}")]
     InvalidStorageTextureMipLevelCount { binding: u32, mip_level_count: u32 },
+    #[error("External texture bindings must have a single mip level, but given a view with mip_level_count = {mip_level_count:?} at binding {binding}")]
+    InvalidExternalTextureMipLevelCount { binding: u32, mip_level_count: u32 },
+    #[error("External texture bindings must have a format of `rgba8unorm`, `bgra8unorm`, or `rgba16float, but given a view with format = {format:?} at binding {binding}")]
+    InvalidExternalTextureFormat {
+        binding: u32,
+        format: wgt::TextureFormat,
+    },
     #[error("Sampler binding {binding} expects comparison = {layout_cmp}, but given a sampler with comparison = {sampler_cmp}")]
     WrongSamplerComparison {
         binding: u32,
@@ -187,6 +210,8 @@ pub enum CreateBindGroupError {
         layout_flt: bool,
         sampler_flt: bool,
     },
+    #[error("TLAS binding {binding} is required to support vertex returns but is missing flag AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN")]
+    MissingTLASVertexReturn { binding: u32 },
     #[error("Bound texture views can not have both depth and stencil aspects enabled")]
     DepthStencilAspect,
     #[error("The adapter does not support read access for storage textures of format {0:?}")]
@@ -201,6 +226,48 @@ pub enum CreateBindGroupError {
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+impl WebGpuError for CreateBindGroupError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::DestroyedResource(e) => e,
+            Self::MissingBufferUsage(e) => e,
+            Self::MissingTextureUsage(e) => e,
+            Self::ResourceUsageCompatibility(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::BindingArrayPartialLengthMismatch { .. }
+            | Self::BindingArrayLengthMismatch { .. }
+            | Self::BindingArrayZeroLength
+            | Self::BindingRangeTooLarge { .. }
+            | Self::BindingSizeTooSmall { .. }
+            | Self::BindingsNumMismatch { .. }
+            | Self::BindingZeroSize(_)
+            | Self::DuplicateBinding(_)
+            | Self::MissingBindingDeclaration(_)
+            | Self::SingleBindingExpected
+            | Self::UnalignedBufferOffset(_, _, _)
+            | Self::BufferRangeTooLarge { .. }
+            | Self::WrongBindingType { .. }
+            | Self::InvalidTextureMultisample { .. }
+            | Self::InvalidTextureSampleType { .. }
+            | Self::InvalidTextureDimension { .. }
+            | Self::InvalidStorageTextureFormat { .. }
+            | Self::InvalidStorageTextureMipLevelCount { .. }
+            | Self::WrongSamplerComparison { .. }
+            | Self::WrongSamplerFiltering { .. }
+            | Self::DepthStencilAspect
+            | Self::StorageReadNotSupported(_)
+            | Self::StorageWriteNotSupported(_)
+            | Self::StorageReadWriteNotSupported(_)
+            | Self::StorageAtomicNotSupported(_)
+            | Self::MissingTLASVertexReturn { .. }
+            | Self::InvalidExternalTextureMipLevelCount { .. }
+            | Self::InvalidExternalTextureFormat { .. } => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -220,6 +287,12 @@ pub struct BindingTypeMaxCountError {
     pub count: u32,
 }
 
+impl WebGpuError for BindingTypeMaxCountError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum BindingTypeMaxCountErrorKind {
     DynamicUniformBuffers,
@@ -229,6 +302,9 @@ pub enum BindingTypeMaxCountErrorKind {
     StorageBuffers,
     StorageTextures,
     UniformBuffers,
+    BindingArrayElements,
+    BindingArraySamplerElements,
+    AccelerationStructures,
 }
 
 impl BindingTypeMaxCountErrorKind {
@@ -249,6 +325,15 @@ impl BindingTypeMaxCountErrorKind {
                 "max_storage_textures_per_shader_stage"
             }
             BindingTypeMaxCountErrorKind::UniformBuffers => "max_uniform_buffers_per_shader_stage",
+            BindingTypeMaxCountErrorKind::BindingArrayElements => {
+                "max_binding_array_elements_per_shader_stage"
+            }
+            BindingTypeMaxCountErrorKind::BindingArraySamplerElements => {
+                "max_binding_array_sampler_elements_per_shader_stage"
+            }
+            BindingTypeMaxCountErrorKind::AccelerationStructures => {
+                "max_acceleration_structures_per_shader_stage"
+            }
         }
     }
 }
@@ -323,48 +408,71 @@ pub(crate) struct BindingTypeMaxCountValidator {
     storage_textures: PerStageBindingTypeCounter,
     uniform_buffers: PerStageBindingTypeCounter,
     acceleration_structures: PerStageBindingTypeCounter,
+    binding_array_elements: PerStageBindingTypeCounter,
+    binding_array_sampler_elements: PerStageBindingTypeCounter,
     has_bindless_array: bool,
 }
 
 impl BindingTypeMaxCountValidator {
     pub(crate) fn add_binding(&mut self, binding: &wgt::BindGroupLayoutEntry) {
         let count = binding.count.map_or(1, |count| count.get());
-        match binding.ty {
-            wgt::BindingType::Buffer {
-                ty: wgt::BufferBindingType::Uniform,
-                has_dynamic_offset,
-                ..
-            } => {
-                self.uniform_buffers.add(binding.visibility, count);
-                if has_dynamic_offset {
-                    self.dynamic_uniform_buffers += count;
-                }
-            }
-            wgt::BindingType::Buffer {
-                ty: wgt::BufferBindingType::Storage { .. },
-                has_dynamic_offset,
-                ..
-            } => {
-                self.storage_buffers.add(binding.visibility, count);
-                if has_dynamic_offset {
-                    self.dynamic_storage_buffers += count;
-                }
-            }
-            wgt::BindingType::Sampler { .. } => {
-                self.samplers.add(binding.visibility, count);
-            }
-            wgt::BindingType::Texture { .. } => {
-                self.sampled_textures.add(binding.visibility, count);
-            }
-            wgt::BindingType::StorageTexture { .. } => {
-                self.storage_textures.add(binding.visibility, count);
-            }
-            wgt::BindingType::AccelerationStructure => {
-                self.acceleration_structures.add(binding.visibility, count);
-            }
-        }
+
         if binding.count.is_some() {
+            self.binding_array_elements.add(binding.visibility, count);
             self.has_bindless_array = true;
+
+            if let wgt::BindingType::Sampler(_) = binding.ty {
+                self.binding_array_sampler_elements
+                    .add(binding.visibility, count);
+            }
+        } else {
+            match binding.ty {
+                wgt::BindingType::Buffer {
+                    ty: wgt::BufferBindingType::Uniform,
+                    has_dynamic_offset,
+                    ..
+                } => {
+                    self.uniform_buffers.add(binding.visibility, count);
+                    if has_dynamic_offset {
+                        self.dynamic_uniform_buffers += count;
+                    }
+                }
+                wgt::BindingType::Buffer {
+                    ty: wgt::BufferBindingType::Storage { .. },
+                    has_dynamic_offset,
+                    ..
+                } => {
+                    self.storage_buffers.add(binding.visibility, count);
+                    if has_dynamic_offset {
+                        self.dynamic_storage_buffers += count;
+                    }
+                }
+                wgt::BindingType::Sampler { .. } => {
+                    self.samplers.add(binding.visibility, count);
+                }
+                wgt::BindingType::Texture { .. } => {
+                    self.sampled_textures.add(binding.visibility, count);
+                }
+                wgt::BindingType::StorageTexture { .. } => {
+                    self.storage_textures.add(binding.visibility, count);
+                }
+                wgt::BindingType::AccelerationStructure { .. } => {
+                    self.acceleration_structures.add(binding.visibility, count);
+                }
+                wgt::BindingType::ExternalTexture => {
+                    // https://www.w3.org/TR/webgpu/#gpuexternaltexture
+                    // In order to account for many possible representations,
+                    // the binding conservatively uses the following, for each
+                    // external texture:
+                    // * Three sampled textures for up to 3 planes
+                    // * One additional sampled texture for a 3D LUT
+                    // * One sampler to sample the LUT
+                    // * One uniform buffer for metadata
+                    self.sampled_textures.add(binding.visibility, count * 4);
+                    self.samplers.add(binding.visibility, count);
+                    self.uniform_buffers.add(binding.visibility, count);
+                }
+            }
         }
     }
 
@@ -376,6 +484,12 @@ impl BindingTypeMaxCountValidator {
         self.storage_buffers.merge(&other.storage_buffers);
         self.storage_textures.merge(&other.storage_textures);
         self.uniform_buffers.merge(&other.uniform_buffers);
+        self.acceleration_structures
+            .merge(&other.acceleration_structures);
+        self.binding_array_elements
+            .merge(&other.binding_array_elements);
+        self.binding_array_sampler_elements
+            .merge(&other.binding_array_sampler_elements);
     }
 
     pub(crate) fn validate(&self, limits: &wgt::Limits) -> Result<(), BindingTypeMaxCountError> {
@@ -415,6 +529,18 @@ impl BindingTypeMaxCountValidator {
             limits.max_uniform_buffers_per_shader_stage,
             BindingTypeMaxCountErrorKind::UniformBuffers,
         )?;
+        self.binding_array_elements.validate(
+            limits.max_binding_array_elements_per_shader_stage,
+            BindingTypeMaxCountErrorKind::BindingArrayElements,
+        )?;
+        self.binding_array_sampler_elements.validate(
+            limits.max_binding_array_sampler_elements_per_shader_stage,
+            BindingTypeMaxCountErrorKind::BindingArraySamplerElements,
+        )?;
+        self.acceleration_structures.validate(
+            limits.max_acceleration_structures_per_shader_stage,
+            BindingTypeMaxCountErrorKind::AccelerationStructures,
+        )?;
         Ok(())
     }
 
@@ -437,6 +563,7 @@ impl BindingTypeMaxCountValidator {
 }
 
 /// Bindable resource and the slot to bind it to.
+/// cbindgen:ignore
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupEntry<'a, B = BufferId, S = SamplerId, TV = TextureViewId, TLAS = TlasId>
@@ -444,9 +571,9 @@ where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
-    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
-    <[S] as ToOwned>::Owned: std::fmt::Debug,
-    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+    <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
+    <[S] as ToOwned>::Owned: fmt::Debug,
+    <[TV] as ToOwned>::Owned: fmt::Debug,
 {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
@@ -459,6 +586,7 @@ where
     pub resource: BindingResource<'a, B, S, TV, TLAS>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedBindGroupEntry<'a> =
     BindGroupEntry<'a, Arc<Buffer>, Arc<Sampler>, Arc<TextureView>, Arc<Tlas>>;
 
@@ -476,11 +604,11 @@ pub struct BindGroupDescriptor<
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
-    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
-    <[S] as ToOwned>::Owned: std::fmt::Debug,
-    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+    <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
+    <[S] as ToOwned>::Owned: fmt::Debug,
+    <[TV] as ToOwned>::Owned: fmt::Debug,
     [BindGroupEntry<'a, B, S, TV, TLAS>]: ToOwned,
-    <[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: std::fmt::Debug,
+    <[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: fmt::Debug,
 {
     /// Debug label of the bind group.
     ///
@@ -498,6 +626,7 @@ pub struct BindGroupDescriptor<
     pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS>]>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedBindGroupDescriptor<'a> = BindGroupDescriptor<
     'a,
     Arc<BindGroupLayout>,
@@ -529,8 +658,8 @@ pub(crate) enum ExclusivePipeline {
     Compute(Weak<ComputePipeline>),
 }
 
-impl std::fmt::Display for ExclusivePipeline {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ExclusivePipeline {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ExclusivePipeline::None => f.write_str("None"),
             ExclusivePipeline::Render(p) => {
@@ -564,7 +693,7 @@ pub struct BindGroupLayout {
     /// We cannot unconditionally remove from the pool, as BGLs that don't come from the pool
     /// (derived BGLs) must not be removed.
     pub(crate) origin: bgl::Origin,
-    pub(crate) exclusive_pipeline: OnceLock<ExclusivePipeline>,
+    pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
     #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     /// The `label` from the descriptor used to create the resource.
@@ -628,6 +757,22 @@ pub enum CreatePipelineLayoutError {
     InvalidResource(#[from] InvalidResourceError),
 }
 
+impl WebGpuError for CreatePipelineLayoutError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::MissingFeatures(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::TooManyBindings(e) => e,
+            Self::MisalignedPushConstantRange { .. }
+            | Self::MoreThanOnePushConstantRangePerStage { .. }
+            | Self::PushConstantRangeTooLarge { .. }
+            | Self::TooManyGroups { .. } => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum PushConstantUploadError {
@@ -659,6 +804,12 @@ pub enum PushConstantUploadError {
     Unaligned(u32),
 }
 
+impl WebGpuError for PushConstantUploadError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 /// Describes a pipeline layout.
 ///
 /// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
@@ -668,7 +819,7 @@ pub enum PushConstantUploadError {
 pub struct PipelineLayoutDescriptor<'a, BGL = BindGroupLayoutId>
 where
     [BGL]: ToOwned,
-    <[BGL] as ToOwned>::Owned: std::fmt::Debug,
+    <[BGL] as ToOwned>::Owned: fmt::Debug,
 {
     /// Debug label of the pipeline layout.
     ///
@@ -691,6 +842,7 @@ where
     pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
 }
 
+/// cbindgen:ignore
 pub type ResolvedPipelineLayoutDescriptor<'a> = PipelineLayoutDescriptor<'a, Arc<BindGroupLayout>>;
 
 #[derive(Debug)]
@@ -830,9 +982,9 @@ where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
-    <[BufferBinding<B>] as ToOwned>::Owned: std::fmt::Debug,
-    <[S] as ToOwned>::Owned: std::fmt::Debug,
-    <[TV] as ToOwned>::Owned: std::fmt::Debug,
+    <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
+    <[S] as ToOwned>::Owned: fmt::Debug,
+    <[TV] as ToOwned>::Owned: fmt::Debug,
 {
     Buffer(BufferBinding<B>),
     #[cfg_attr(
@@ -898,6 +1050,12 @@ pub enum BindError {
         binding_range: Range<wgt::BufferAddress>,
         maximum_dynamic_offset: wgt::BufferAddress,
     },
+}
+
+impl WebGpuError for BindError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 #[derive(Debug)]
@@ -1059,6 +1217,15 @@ pub enum GetBindGroupLayoutError {
     InvalidGroupIndex(u32),
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+impl WebGpuError for GetBindGroupLayoutError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::InvalidGroupIndex(_) => ErrorType::Validation,
+            Self::InvalidResource(e) => e.webgpu_error_type(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]

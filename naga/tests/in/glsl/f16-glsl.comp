@@ -1,0 +1,57 @@
+#version 460
+
+#extension GL_AMD_gpu_shader_half_float: enable 
+
+layout(set = 0, binding = 0) uniform A {
+    float16_t a_1;
+    f16vec2 a_vec2;
+    f16vec3 a_vec3;
+    f16vec4 a_vec4;
+    // So the rules here are particularly nasty for any f16 matries in uniform buffers
+    // as the stride is always rounded up to 16, meaning that _every_ f16 matrix in a uniform
+    // buffer is over-aligned to what naga-ir wants.
+    // 
+    // This is https://github.com/gfx-rs/wgpu/issues/4375.
+
+    // f16mat2 a_mat2;
+    // f16mat2x3 a_mat2x3;
+    // f16mat2x4 a_mat2x4;
+    // f16mat3x2 a_mat3x2;
+    // f16mat3 a_mat3;
+    // f16mat3x4 a_mat3x4;
+    // f16mat4x2 a_mat4x2;
+    // f16mat4x3 a_mat4x3;
+    // f16mat4 a_mat4;
+};
+
+layout(set = 0, binding = 1) buffer B {
+    float16_t b_1;
+    f16vec2 b_vec2;
+    f16vec3 b_vec3;
+    f16vec4 b_vec4;
+    f16mat2 b_mat2;
+    f16mat2x3 b_mat2x3;
+    f16mat2x4 b_mat2x4;
+    f16mat3x2 b_mat3x2;
+    f16mat3 b_mat3;
+    f16mat3x4 b_mat3x4;
+    f16mat4x2 b_mat4x2;
+    f16mat4x3 b_mat4x3;
+    f16mat4 b_mat4;
+};
+
+void main() {
+    b_1 = a_1;
+    b_vec2 = a_vec2;
+    b_vec3 = a_vec3;
+    b_vec4 = a_vec4;
+    // b_mat2 = a_mat2;
+    // b_mat2x3 = a_mat2x3;
+    // b_mat2x4 = a_mat2x4;
+    // b_mat3x2 = a_mat3x2;
+    // b_mat3 = a_mat3;
+    // b_mat3x4 = a_mat3x4;
+    // b_mat4x2 = a_mat4x2;
+    // b_mat4x3 = a_mat4x3;
+    // b_mat4 = a_mat4;
+}

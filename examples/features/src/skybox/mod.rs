@@ -104,7 +104,7 @@ impl crate::framework::Example for Example {
     ) -> Self {
         let mut entities = Vec::new();
         {
-            let source = include_bytes!("models/teslacyberv3.0.obj");
+            let source = include_bytes!("models/rustacean-3d.obj");
             let data = obj::ObjData::load_buf(&source[..]).unwrap();
             let mut vertices = Vec::new();
             for object in data.objects {
@@ -115,8 +115,9 @@ impl crate::framework::Example for Example {
                             for &index in &[0, end_index - 1, end_index] {
                                 let obj::IndexTuple(position_id, _texture_id, normal_id) =
                                     poly.0[index];
+                                let [x, y, z] = data.position[position_id];
                                 vertices.push(Vertex {
-                                    pos: data.position[position_id],
+                                    pos: [y, z, x], // model is rotated to face down, so need to rotate it
                                     normal: data.normal[normal_id.unwrap()],
                                 })
                             }
@@ -321,7 +322,7 @@ impl crate::framework::Example for Example {
 
         let mut image = Vec::with_capacity(reader.data().len());
         for level in reader.levels() {
-            image.extend_from_slice(level);
+            image.extend_from_slice(level.data);
         }
 
         let texture = device.create_texture_with_data(
@@ -425,6 +426,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -481,7 +483,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     base_test_parameters: wgpu_test::TestParameters::default().expect_fail(
         wgpu_test::FailureCase::backend_adapter(wgpu::Backends::GL, "ANGLE"),
     ),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
 };
 
@@ -493,7 +495,7 @@ static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::Example
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_BC,
-    base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+    base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
 };
@@ -506,7 +508,7 @@ static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::Exampl
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
-    base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+    base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
     _phantom: std::marker::PhantomData::<Example>,
 };
@@ -519,7 +521,7 @@ static TEST_ASTC: crate::framework::ExampleTestParams = crate::framework::Exampl
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,
-    base_test_parameters: wgpu_test::TestParameters::default(), // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056
+    base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.016)],
     _phantom: std::marker::PhantomData::<Example>,
 };

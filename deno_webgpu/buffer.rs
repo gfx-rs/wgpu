@@ -161,7 +161,7 @@ impl GPUBuffer {
             while !*done.borrow() {
                 {
                     self.instance
-                        .device_poll(self.device, wgpu_types::Maintain::wait())
+                        .device_poll(self.device, wgpu_types::PollType::wait())
                         .unwrap();
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;
@@ -251,9 +251,7 @@ impl GPUBuffer {
     }
 
     #[fast]
-    fn destroy(&self) -> Result<(), JsErrorBox> {
-        self.instance
-            .buffer_destroy(self.id)
-            .map_err(|e| JsErrorBox::generic(e.to_string()))
+    fn destroy(&self) {
+        self.instance.buffer_destroy(self.id);
     }
 }

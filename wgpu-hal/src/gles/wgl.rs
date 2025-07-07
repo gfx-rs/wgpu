@@ -1,14 +1,16 @@
-use std::{
-    ffi::{c_void, CStr, CString},
-    mem::{self, size_of, size_of_val, ManuallyDrop},
-    os::raw::c_int,
+use alloc::{borrow::ToOwned as _, ffi::CString, string::String, sync::Arc, vec::Vec};
+use core::{
+    ffi::{c_int, c_void, CStr},
+    mem::{self, ManuallyDrop},
     ptr,
+    time::Duration,
+};
+use std::{
     sync::{
         mpsc::{sync_channel, SyncSender},
-        Arc,
+        LazyLock,
     },
     thread,
-    time::Duration,
 };
 
 use glow::HasContext;
@@ -17,7 +19,6 @@ use glutin_wgl_sys::wgl_extra::{
     CONTEXT_PROFILE_MASK_ARB,
 };
 use hashbrown::HashSet;
-use once_cell::sync::Lazy;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 use wgt::InstanceFlags;
@@ -98,7 +99,7 @@ pub struct AdapterContextLock<'a> {
     inner: MutexGuard<'a, Inner>,
 }
 
-impl<'a> std::ops::Deref for AdapterContextLock<'a> {
+impl<'a> core::ops::Deref for AdapterContextLock<'a> {
     type Target = glow::Context;
 
     fn deref(&self) -> &Self::Target {
@@ -320,8 +321,8 @@ fn create_global_window_class() -> Result<CString, crate::InstanceError> {
 }
 
 fn get_global_window_class() -> Result<CString, crate::InstanceError> {
-    static GLOBAL: Lazy<Result<CString, crate::InstanceError>> =
-        Lazy::new(create_global_window_class);
+    static GLOBAL: LazyLock<Result<CString, crate::InstanceError>> =
+        LazyLock::new(create_global_window_class);
     GLOBAL.clone()
 }
 
@@ -435,14 +436,13 @@ impl crate::Instance for Instance {
     unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (WGL) Backend");
         let opengl_module =
-            unsafe { LibraryLoader::LoadLibraryA(PCSTR("opengl32.dll\0".as_ptr())) }.map_err(
-                |e| {
+            unsafe { LibraryLoader::LoadLibraryA(PCSTR(c"opengl32.dll".as_ptr().cast())) }
+                .map_err(|e| {
                     crate::InstanceError::with_source(
                         String::from("unable to load the OpenGL library"),
                         e,
                     )
-                },
-            )?;
+                })?;
 
         let device = create_instance_device()?;
         let dc = device.dc;

@@ -1,3 +1,6 @@
+; SPIR-V
+; Version: 1.0
+
 ;; Ensure builtin binding isn't removed by unused gl_PerVertex builtin culling when
 ;; the builtin is used in a function defined after (in the SPIRV) the entry point.
 ;;

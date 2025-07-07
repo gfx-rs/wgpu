@@ -42,8 +42,8 @@ pub fn ensure_block_returns(block: &mut crate::Block) {
             | S::SubgroupBallot { .. }
             | S::SubgroupCollectiveOperation { .. }
             | S::SubgroupGather { .. }
-            | S::Barrier(_)
-            | S::MeshFunction(..)),
+            | S::ControlBarrier(_)
+            | S::MemoryBarrier(_)),
         )
         | None => block.push(S::Return { value: None }, Default::default()),
     }

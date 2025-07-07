@@ -1,0 +1,20 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Google rspirv; 0
+; Bound: 14
+; Schema: 0
+               OpCapability Shader
+               OpMemoryModel Logical Simple
+               OpEntryPoint GLCompute %1 "main"
+               OpExecutionMode %1 LocalSize 64 1 1
+       %void = OpTypeVoid
+          %6 = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+     %uint_3 = OpConstant %uint 3
+   %uint_136 = OpConstant %uint 136
+          %1 = OpFunction %void None %6
+         %13 = OpLabel
+               OpMemoryBarrier %uint_3 %uint_136
+               OpControlBarrier %uint_3 %uint_3 %uint_136
+               OpReturn
+               OpFunctionEnd

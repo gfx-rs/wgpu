@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, num::NonZeroU32, ops::Range};
+use core::{marker::PhantomData, num::NonZeroU32, ops::Range};
 
 use crate::dispatch::RenderBundleEncoderInterface;
 use crate::*;
@@ -57,6 +57,8 @@ impl<'a> RenderBundleEncoder<'a> {
             dispatch::DispatchRenderBundleEncoder::Core(b) => b.finish(desc),
             #[cfg(webgpu)]
             dispatch::DispatchRenderBundleEncoder::WebGPU(b) => b.finish(desc),
+            #[cfg(custom)]
+            dispatch::DispatchRenderBundleEncoder::Custom(_) => unimplemented!(),
         };
 
         RenderBundle { inner: bundle }
@@ -91,7 +93,7 @@ impl<'a> RenderBundleEncoder<'a> {
             &buffer_slice.buffer.inner,
             index_format,
             buffer_slice.offset,
-            buffer_slice.size,
+            Some(buffer_slice.size),
         );
     }
 
@@ -110,7 +112,7 @@ impl<'a> RenderBundleEncoder<'a> {
             slot,
             &buffer_slice.buffer.inner,
             buffer_slice.offset,
-            buffer_slice.size,
+            Some(buffer_slice.size),
         );
     }
 
@@ -185,6 +187,12 @@ impl<'a> RenderBundleEncoder<'a> {
     ) {
         self.inner
             .draw_indexed_indirect(&indirect_buffer.inner, indirect_offset);
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of RenderBundleEncoder (if custom backend and is internally T)
+    pub fn as_custom<T: custom::RenderBundleEncoderInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 }
 

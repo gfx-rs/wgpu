@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches-ignore: [
-        # We don't need to run on dependabot PRs.
-        "dependabot/**",
+        # We don't need to run on renovate PRs.
+        "renovate/**",
         # This is the branch the merge queue creates.
         "gh-readonly-queue/**",
       ]
@@ -18,29 +18,17 @@ env:
   #
 
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
-  #
-  # We don't include the 4th version number, as it's not used in any URL.
-  VULKAN_SDK_VERSION: "1.4.304"
-  # Sourced from https://www.nuget.org/packages/Microsoft.Direct3D.WARP
-  WARP_VERSION: "1.0.13"
+  VULKAN_SDK_VERSION: "1.4.313"
+  VULKAN_FULL_SDK_VERSION: "1.4.313.0"
 
-  # Sourced from https://github.com/microsoft/DirectXShaderCompiler/releases
-  #
-  # Must also be changed in shaders.yaml
-  DXC_RELEASE: "v1.8.2407"
-  DXC_FILENAME: "dxc_2024_07_31_clang_cl.zip"
-
-  # Sourced from https://archive.mesa3d.org/. Bumping this requires
-  # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
+  # These Mesa version definition is duplicated in the install-mesa action.
   MESA_VERSION: "24.3.4"
-  # Corresponds to https://github.com/gfx-rs/ci-build/releases
-  CI_BINARY_BUILD: "build20"
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.83"
+  REPO_MSRV: "1.84"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
-  CORE_MSRV: "1.76"
+  CORE_MSRV: "1.82.0"
 
   #
   # Environment variables
@@ -56,7 +44,7 @@ env:
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: d # cache busting
-  WGPU_TESTING: true
+  WGPU_CI: true
 
 # We distinguish the following kinds of builds:
 # - native: build for the same target as we compile on
@@ -145,6 +133,20 @@ jobs:
             tier: 2
             kind: native
 
+          # Android
+          - name: Android ARMv7
+            os: ubuntu-22.04
+            target: armv7-linux-androideabi
+            tier: 2
+            kind: wgpu-only
+
+          # Android
+          - name: Android x86_64
+            os: ubuntu-22.04
+            target: x86_64-linux-android
+            tier: 2
+            kind: wgpu-only
+
           # OpenHarmony
           - name: OpenHarmony aarch64
             os: ubuntu-22.04
@@ -165,31 +167,28 @@ jobs:
             tier: 2
             kind: wgpu-only
 
-          # TODO: Uncomment once web-sys updates past 0.3.76
-          # See https://github.com/rustwasm/wasm-bindgen/pull/4378 for details
-          # - name: WebAssembly Core 1.0
-          #   os: ubuntu-22.04
-          #   target: wasm32v1-none
-          #   tier: 2
-          #   kind: no_std
-
-          # Bare-metal x86-64
-          # TODO: Remove once web-sys updates past 0.3.76
-          # Included while wasm32v1-none is failing to ensure `no_std` does not regress
-          - name: no_std x86_64
+          - name: WebAssembly Core 1.0
             os: ubuntu-22.04
-            target: x86_64-unknown-none
+            target: wasm32v1-none
             tier: 2
             kind: no_std
+
+          # 32-bit PowerPC Linux
+          # Included to test support for `portable-atomic`
+          - name: Linux ppc32
+            os: ubuntu-22.04
+            target: powerpc-unknown-linux-gnu
+            tier: 2
+            kind: wgpu-only
 
     name: Clippy ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Toolchain (Repo MSRV - Tier 1 or 2)
+      - name: Install toolchain (repo MSRV - tier 1 or 2)
         if: matrix.tier == 1 || matrix.tier == 2
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy
@@ -208,13 +207,13 @@ jobs:
       #
       # RUSTC_BOOTSTRAP=1 is how the rust project builds itself when bootstrapping the compiler, so while not "stable"
       # it has been around for many years and don't anticipate it going away any time soon.
-      - name: Install Toolchain (Repo MSRV - Tier 3)
+      - name: Install toolchain (repo MSRV - tier 3)
         if: matrix.tier == 3
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy,rust-src
           echo "RUSTC_BOOTSTRAP=1" >> "$GITHUB_ENV"
 
-      - name: disable debug symbols
+      - name: Disable debug symbols
         shell: bash
         run: |
           mkdir -p .cargo
@@ -224,12 +223,12 @@ jobs:
             debug = false
           EOF
 
-      - name: caching
+      - name: Caching
         uses: Swatinem/rust-cache@v2
         with:
           key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
 
-      - name: (linux aarch64) install aarch64-linux-gnu g++
+      - name: (Linux `aarch64`) Install `aarch64-linux-gnu` `g++`
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           set -e
@@ -238,7 +237,7 @@ jobs:
 
           sudo apt-get install g++-aarch64-linux-gnu
 
-      - name: (android) add android apk to path
+      - name: (Android) Add Android APK to `PATH`
         if: matrix.target == 'aarch64-linux-android'
         run: |
           # clang++ will be detected correctly by CC from path
@@ -248,7 +247,7 @@ jobs:
           echo "AR_aarch64_linux_android=llvm-ar" >> "$GITHUB_ENV"
 
       # Building for wasm32 requires a series of specific tests for the WebGPU backend.
-      - name: check web
+      - name: Check web
         if: matrix.kind == 'web'
         shell: bash
         run: |
@@ -259,15 +258,15 @@ jobs:
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --features glsl,spirv
 
-          # check with no features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features
+          # check with only the web feature
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features --features=web
 
           # all features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --all-features
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --all-features
 
       # Building for platforms where the tests do not compile.
-      - name: check wgpu only
+      - name: Check `wgpu` only
         if: matrix.kind == 'wgpu-only'
         shell: bash
         run: |
@@ -282,8 +281,8 @@ jobs:
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --all-features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --all-features
 
-      # Building for no_std platforms where every feature is enabled except "std".
-      - name: check no_std
+      # Building for no_std platforms.
+      - name: Check `no_std`
         if: matrix.kind == 'no_std'
         shell: bash
         run: |
@@ -291,12 +290,18 @@ jobs:
 
           # check with no features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features
 
-          # Check with all features except "std".
+          # Check with all compatible features
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,spv-in,spv-out
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features fragile-send-sync-non-atomic-wasm
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features --features serde
 
       # Building for native platforms with standard tests.
-      - name: check native
+      - name: Check native
         if: matrix.kind == 'native'
         shell: bash
         run: |
@@ -311,7 +316,7 @@ jobs:
           # build docs
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
-      - name: check private item docs
+      - name: Check private item docs
         if: matrix.kind == 'native'
         shell: bash
         run: |
@@ -355,16 +360,16 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Core MSRV toolchain
+      - name: Install core MSRV toolchain
         run: |
           rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
           rustup override set ${{ env.CORE_MSRV }}
           cargo -V
 
-      - name: disable debug symbols
+      - name: Disable debug symbols
         shell: bash
         run: |
           mkdir -p .cargo
@@ -374,47 +379,52 @@ jobs:
             debug = false
           EOF
 
-      - name: caching
+      - name: Caching
         uses: Swatinem/rust-cache@v2
         with:
           key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
 
-      - name: check native
+      - name: Reduce MSRV on dependencies
         shell: bash
         run: |
           set -e
 
-          # check wgpu-core with all features. This will also get wgpu-hal and wgpu-types.
+          # 1.9.0 requires MSRV 1.84
+          cargo update -p bytemuck_derive --precise 1.8.1
+
+      - name: Check native
+        shell: bash
+        run: |
+          set -e
+
+          # check `wgpu-core` with all features. This will also get `wgpu-hal` and `wgpu-types`.
           cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
 
-  naga-minimal-versions:
+  # Check that the libraries build — but not that there are no warnings or that tests pass -
+  # with `-Zdirect-minimal-versions` which lowers all dependencies from the workspace packages
+  # to non-workspace packages to their minimum allowed version.
+  check-minimal-versions:
     # runtime is normally 2 minutes
     timeout-minutes: 10
 
-    name: MSRV naga Minimal Versions
+    name: MSRV Minimal Versions
     runs-on: ubuntu-22.04
+    env:
+      # Override flags to NOT include `-D warnings`, because warnings may be due to harmless problems in deps.
+      # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
+      RUSTFLAGS: -A unexpected_cfgs
 
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Core MSRV toolchain
-        run: |
-          rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy
-          rustup override set ${{ env.CORE_MSRV }}
-          cargo -V
-
-      - name: Install Nightly Toolchain
+      - name: Install toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
-          cargo +${{ env.REPO_MSRV }} -V
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
 
-      - name: Install cargo-hack
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-hack
-
-      - name: disable debug symbols
+      - name: Disable debug symbols
         shell: bash
         run: |
           mkdir -p .cargo
@@ -422,21 +432,21 @@ jobs:
           [profile.dev]
           debug = false" >> .cargo/config.toml
 
-      - name: Set Minimal Versions
+      - name: Set minimal versions
         shell: bash
         run: |
           set -e
 
-          cargo +${{ env.REPO_MSRV }} hack generate-lockfile --remove-dev-deps -Z minimal-versions -p naga -p naga-cli
+          cargo +${{ env.REPO_MSRV }} update -Zdirect-minimal-versions
         env:
           RUSTC_BOOTSTRAP: 1
 
-      - name: Clippy
+      - name: Run cargo check
         shell: bash
         run: |
           set -e
 
-          cargo clippy --all-features -p naga -p naga-cli
+          cargo check --all-targets --all-features
 
   wasm-test:
     # runtime is normally 2 minutes
@@ -446,24 +456,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Repo MSRV toolchain
+      - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy --target wasm32-unknown-unknown
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: Install wasm-pack
+      - name: Install `wasm-pack`
         uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
 
-      - name: execute tests
+      - name: Execute tests
         run: |
           cd wgpu
-          wasm-pack test --headless --chrome --no-default-features --features wgsl,webgl --workspace
+          wasm-pack test --headless --chrome --no-default-features --features wgsl,webgl,web --workspace
 
   gpu-test:
     # runtime is normally 5-15 minutes
@@ -489,20 +499,20 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Repo MSRV toolchain
+      - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal -c llvm-tools
           cargo -V
 
-      - name: Install cargo-nextest and cargo-llvm-cov
+      - name: Install `cargo-nextest` and `cargo-llvm-cov`
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest,cargo-llvm-cov
 
-      - name: debug symbols to line-tables-only
+      - name: Debug symbols to line-tables-only
         shell: bash
         run: |
           mkdir -p .cargo
@@ -514,44 +524,24 @@ jobs:
 
         # Cache step must go before warp and mesa install on windows as they write into the
         # target directory, and rust-cache will overwrite the entirety of the target directory.
-      - name: caching
+      - name: Caching
         uses: Swatinem/rust-cache@v2
         with:
           key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
           workspaces: |
             . -> target
-            xtask -> xtask/target
 
-      - name: (windows) install dxc
+      - name: (Windows) Install DXC
         if: matrix.os == 'windows-2022'
-        shell: bash
-        run: |
-          set -e
+        uses: ./.github/actions/install-dxc
 
-          curl.exe -L --retry 5 https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_FILENAME -o dxc.zip
-          7z.exe e dxc.zip -odxc bin/x64/{dxc.exe,dxcompiler.dll,dxil.dll}
-
-          # We need to use cygpath to convert PWD to a windows path as we're using bash.
-          cygpath --windows "$PWD/dxc" >> "$GITHUB_PATH"
-
-      - name: (windows) install warp
+      - name: (Windows) Install WARP
         if: matrix.os == 'windows-2022'
-        shell: bash
-        run: |
-          set -e
+        uses: ./.github/actions/install-warp
+        with:
+          target-dirs: "target/llvm-cov-target/debug target/llvm-cov-target/debug/deps"
 
-          # Make sure dxc is in path.
-          dxc --version
-
-          curl.exe -L --retry 5 https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/$WARP_VERSION -o warp.zip
-          7z.exe e warp.zip -owarp build/native/bin/x64/d3d10warp.dll
-
-          mkdir -p target/llvm-cov-target/debug/deps
-
-          cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/
-          cp -v warp/d3d10warp.dll target/llvm-cov-target/debug/deps
-
-      - name: (windows) install mesa
+      - name: (Windows) Install Mesa
         if: matrix.os == 'windows-2022'
         shell: bash
         run: |
@@ -567,7 +557,33 @@ jobs:
           echo "VK_DRIVER_FILES=`cygpath --windows $PWD/mesa/lvp_icd.x86_64.json`" >> "$GITHUB_ENV"
           echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
 
-      - name: (linux) install vulkan sdk
+      - name: (Windows) Install Vulkan SDK
+        if: matrix.os == 'windows-2022'
+        shell: bash
+        run: |
+          set -e
+
+          curl.exe -L --retry 5 https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_FULL_SDK_VERSION }}/windows/vulkansdk-windows-X64-${{ env.VULKAN_FULL_SDK_VERSION }}.exe -o vulkan-sdk-installer.exe
+
+          ./vulkan-sdk-installer.exe --accept-licenses --default-answer --confirm-command install
+
+          echo "C:/VulkanSDK/${{ env.VULKAN_FULL_SDK_VERSION }}/Bin" >> "$GITHUB_PATH"
+
+      - name: (Mac) Install Vulkan SDK
+        if: matrix.os == 'macos-14'
+        shell: bash
+        run: |
+          set -e
+
+          curl -L --retry 5 https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_FULL_SDK_VERSION }}/mac/vulkansdk-macos-${{ env.VULKAN_FULL_SDK_VERSION }}.zip -o vulkan-sdk.zip
+          unzip vulkan-sdk.zip -d vulkan-sdk
+
+          ls -l vulkan-sdk
+          sudo ./vulkan-sdk/vulkansdk-macOS-${{ env.VULKAN_FULL_SDK_VERSION }}.app/Contents/MacOS/vulkansdk-macOS-${{ env.VULKAN_FULL_SDK_VERSION }} --root "$HOME/VulkanSDK" --accept-licenses --default-answer --confirm-command install
+
+          echo "$HOME/VulkanSDK/macOS/bin" >> "$GITHUB_PATH"
+
+      - name: (Linux) Install Vulkan SDK
         if: matrix.os == 'ubuntu-24.04'
         shell: bash
         run: |
@@ -577,39 +593,24 @@ jobs:
 
           # vulkan sdk
           wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list https://packages.lunarg.com/vulkan/$VULKAN_SDK_VERSION/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${{ env.VULKAN_SDK_VERSION }}-noble.list https://packages.lunarg.com/vulkan/${{ env.VULKAN_SDK_VERSION }}/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list
 
           sudo apt-get update
           sudo apt install -y vulkan-sdk
 
-      - name: (linux) install mesa
+      - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
+        uses: ./.github/actions/install-mesa
+
+      - name: Delete Naga snapshots
         shell: bash
         run: |
           set -e
 
-          curl -L --retry 5 https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz -o mesa.tar.xz
-          mkdir mesa
-          tar xpf mesa.tar.xz -C mesa
+          # Delete snapshots so we can ensure there aren't any excess output files.
+          rm -r naga/tests/out
 
-          # The ICD provided by the mesa build is hardcoded to the build environment.
-          #
-          # We write out our own ICD file to point to the mesa vulkan
-          cat <<- EOF > icd.json
-          {
-            "ICD": {
-                "api_version": "1.1.255",
-                "library_path": "$PWD/mesa/lib/x86_64-linux-gnu/libvulkan_lvp.so"
-            },
-            "file_format_version": "1.0.0"
-          }
-          EOF
-
-          echo "VK_DRIVER_FILES=$PWD/icd.json" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=$PWD/mesa/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
-          echo "LIBGL_DRIVERS_PATH=$PWD/mesa/lib/x86_64-linux-gnu/dri" >> "$GITHUB_ENV"
-
-      - name: run wgpu-info
+      - name: Run `wgpu-info`
         shell: bash
         run: |
           echo "$PATH"
@@ -619,14 +620,14 @@ jobs:
           # This needs to match the command in xtask/tests.rs
           cargo llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info -- -vv
 
-      - name: run tests
+      - name: Run tests
         shell: bash
         run: |
           set -e
 
           cargo xtask test --llvm-cov
 
-      - name: check naga snapshots
+      - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
         run: git add . && git diff --exit-code HEAD naga/tests/out
 
@@ -638,7 +639,7 @@ jobs:
             **/*-actual.png
             **/*-difference.png
 
-      - name: generate coverage report
+      - name: Generate coverage report
         id: coverage
         shell: bash
         continue-on-error: true
@@ -647,8 +648,8 @@ jobs:
 
           cargo llvm-cov report --lcov --output-path lcov.info
 
-      - name: upload coverage report to codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage report to Codecov
+        uses: codecov/codecov-action@v5
         if: steps.coverage.outcome == 'success'
         with:
           files: lcov.info
@@ -662,21 +663,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Repo MSRV toolchain
+      - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: caching
+      - name: Caching
         uses: Swatinem/rust-cache@v2
         with:
           key: doctests-${{ env.CACHE_SUFFIX }}
 
-      - name: run doctests
+      - name: Run doctests
         shell: bash
         run: |
           set -e
@@ -690,10 +691,10 @@ jobs:
     name: Format & Typos
     runs-on: ubuntu-latest
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install Repo MSRV toolchain
+      - name: Install repo MSRV toolchain
         run: |
           rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
           rustup override set ${{ env.REPO_MSRV }}
@@ -702,19 +703,17 @@ jobs:
       - name: Run `cargo fmt`
         run: |
           cargo fmt -- --check
-          cargo fmt --manifest-path xtask/Cargo.toml -- --check
-          cargo fmt --manifest-path naga/xtask/Cargo.toml -- --check
 
       - name: Install Taplo
         uses: uncenter/setup-taplo@v1
         with:
           version: "0.9.3"
 
-      - name: run `taplo fmt`
+      - name: Run `taplo fmt`
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.29.5
+        uses: crate-ci/typos@v1.33.1
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -723,7 +722,7 @@ jobs:
     name: Clippy cts_runner
     runs-on: ubuntu-latest
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Install MSRV toolchain
@@ -732,7 +731,7 @@ jobs:
           rustup override set ${{ env.REPO_MSRV }}
           cargo -V
 
-      - name: disable debug symbols
+      - name: Disable debug symbols
         shell: bash
         run: |
           mkdir -p .cargo
@@ -742,12 +741,12 @@ jobs:
             debug = false
           EOF
 
-      - name: caching
+      - name: Caching
         uses: Swatinem/rust-cache@v2
         with:
           key: cts-runner-${{ env.CACHE_SUFFIX }}
 
-      - name: build Deno
+      - name: Build Deno
         run: |
           cargo clippy --manifest-path cts_runner/Cargo.toml
 
@@ -761,7 +760,7 @@ jobs:
     name: "cargo-deny advisories"
     runs-on: ubuntu-latest
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
@@ -778,7 +777,7 @@ jobs:
     name: "cargo-deny"
     runs-on: ubuntu-latest
     steps:
-      - name: checkout repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Run `cargo deny check`
@@ -787,22 +786,3 @@ jobs:
           command: check bans licenses sources
           arguments: --all-features --workspace
           rust-version: ${{ env.REPO_MSRV }}
-
-  check-feature-dependencies:
-    # runtime is normally 1 minute
-    timeout-minutes: 5
-
-    name: "Feature Dependencies"
-    runs-on: ubuntu-latest
-    steps:
-      - name: checkout repo
-        uses: actions/checkout@v4
-
-      - name: Install Repo MSRV toolchain
-        run: |
-          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
-          rustup override set ${{ env.REPO_MSRV }}
-          cargo -V
-
-      - name: Run `cargo feature-dependencies`
-        run: cargo xtask check-feature-dependencies

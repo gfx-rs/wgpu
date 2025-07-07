@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use core::mem;
 use core::ops::Range;
 
@@ -145,7 +146,11 @@ impl crate::CommandEncoder for CommandBuffer {
 
     // render
 
-    unsafe fn begin_render_pass(&mut self, desc: &crate::RenderPassDescriptor<Resource, Resource>) {
+    unsafe fn begin_render_pass(
+        &mut self,
+        desc: &crate::RenderPassDescriptor<Resource, Resource>,
+    ) -> DeviceResult<()> {
+        Ok(())
     }
     unsafe fn end_render_pass(&mut self) {}
 

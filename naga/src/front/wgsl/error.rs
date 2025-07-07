@@ -1,24 +1,30 @@
+//! Formatting WGSL front end error messages.
+
+use crate::common::wgsl::TryToWgsl;
 use crate::diagnostic_filter::ConflictingDiagnosticRuleError;
-use crate::front::wgsl::parse::directive::enable_extension::{
-    EnableExtension, UnimplementedEnableExtension,
-};
-use crate::front::wgsl::parse::directive::language_extension::{
+use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
+use crate::{Scalar, SourceLocation, Span};
+
+use super::parse::directive::enable_extension::{EnableExtension, UnimplementedEnableExtension};
+use super::parse::directive::language_extension::{
     LanguageExtension, UnimplementedLanguageExtension,
 };
-use crate::front::wgsl::parse::lexer::Token;
-use crate::front::wgsl::Scalar;
-use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
-use crate::{SourceLocation, Span};
+use super::parse::lexer::Token;
+
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
-use std::borrow::Cow;
-use std::ops::Range;
-use termcolor::{ColorChoice, NoColor, StandardStream};
 use thiserror::Error;
 
-#[cfg(test)]
-use std::mem::size_of;
+use alloc::{
+    borrow::Cow,
+    boxed::Box,
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::ops::Range;
 
 #[derive(Clone, Debug)]
 pub struct ParseError {
@@ -61,11 +67,13 @@ impl ParseError {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "stderr")]
     pub fn emit_to_stderr(&self, source: &str) {
         self.emit_to_stderr_with_path(source, "wgsl")
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "stderr")]
     pub fn emit_to_stderr_with_path<P>(&self, source: &str, path: P)
     where
         P: AsRef<std::path::Path>,
@@ -73,7 +81,15 @@ impl ParseError {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
-        let writer = StandardStream::stderr(ColorChoice::Auto);
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "termcolor")] {
+                let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
+            } else {
+                let writer = std::io::stderr();
+            }
+        }
+
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
             .expect("cannot write error");
     }
@@ -91,9 +107,11 @@ impl ParseError {
         let path = path.as_ref().display().to_string();
         let files = SimpleFile::new(path, source);
         let config = term::Config::default();
-        let mut writer = NoColor::new(Vec::new());
-        term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
-        String::from_utf8(writer.into_inner()).unwrap()
+
+        let mut writer = crate::error::DiagnosticBuffer::new();
+        term::emit(writer.inner_mut(), &config, &files, &self.diagnostic())
+            .expect("cannot write error");
+        writer.into_string()
     }
 
     /// Returns a [`SourceLocation`] for the first label in the error message.
@@ -102,14 +120,14 @@ impl ParseError {
     }
 }
 
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.message)
     }
 }
 
-impl std::error::Error for ParseError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl core::error::Error for ParseError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         None
     }
 }
@@ -146,8 +164,6 @@ pub enum NumberError {
     Invalid,
     #[error("numeric literal not representable by target type")]
     NotRepresentable,
-    #[error("unimplemented f16 type")]
-    UnimplementedF16,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -168,9 +184,10 @@ pub(crate) enum Error<'a> {
     BadTexture(Span),
     BadTypeCast {
         span: Span,
-        from_type: Box<str>,
-        to_type: Box<str>,
+        from_type: String,
+        to_type: String,
     },
+    NotStorageTexture(Span),
     BadTextureSampleType {
         span: Span,
         scalar: Scalar,
@@ -205,11 +222,12 @@ pub(crate) enum Error<'a> {
     TypeNotInferable(Span),
     InitializationTypeMismatch {
         name: Span,
-        expected: Box<str>,
-        got: Box<str>,
+        expected: String,
+        got: String,
     },
     DeclMissingTypeAndInit(Span),
     MissingAttribute(&'static str, Span),
+    InvalidAddrOfOperand(Span),
     InvalidAtomicPointer(Span),
     InvalidAtomicOperandType(Span),
     InvalidRayQueryPointer(Span),
@@ -250,8 +268,13 @@ pub(crate) enum Error<'a> {
         /// the same identifier as `ident`, above.
         path: Box<[(Span, Span)]>,
     },
-    InvalidSwitchValue {
-        uint: bool,
+    InvalidSwitchSelector {
+        span: Span,
+    },
+    InvalidSwitchCase {
+        span: Span,
+    },
+    SwitchCaseTypeMismatch {
         span: Span,
     },
     CalledEntryPoint(Span),
@@ -259,6 +282,75 @@ pub(crate) enum Error<'a> {
         span: Span,
         expected: Range<u32>,
         found: u32,
+    },
+    /// No overload of this function accepts this many arguments.
+    TooManyArguments {
+        /// The name of the function being called.
+        function: String,
+
+        /// The function name in the call expression.
+        call_span: Span,
+
+        /// The first argument that is unacceptable.
+        arg_span: Span,
+
+        /// Maximum number of arguments accepted by any overload of
+        /// this function.
+        max_arguments: u32,
+    },
+    /// A value passed to a builtin function has a type that is not
+    /// accepted by any overload of the function.
+    WrongArgumentType {
+        /// The name of the function being called.
+        function: String,
+
+        /// The function name in the call expression.
+        call_span: Span,
+
+        /// The first argument whose type is unacceptable.
+        arg_span: Span,
+
+        /// The index of the first argument whose type is unacceptable.
+        arg_index: u32,
+
+        /// That argument's actual type.
+        arg_ty: String,
+
+        /// The set of argument types that would have been accepted for
+        /// this argument, given the prior arguments.
+        allowed: Vec<String>,
+    },
+    /// A value passed to a builtin function has a type that is not
+    /// accepted, given the earlier arguments' types.
+    InconsistentArgumentType {
+        /// The name of the function being called.
+        function: String,
+
+        /// The function name in the call expression.
+        call_span: Span,
+
+        /// The first unacceptable argument.
+        arg_span: Span,
+
+        /// The index of the first unacceptable argument.
+        arg_index: u32,
+
+        /// The actual type of the first unacceptable argument.
+        arg_ty: String,
+
+        /// The prior argument whose type made the `arg_span` argument
+        /// unacceptable.
+        inconsistent_span: Span,
+
+        /// The index of the `inconsistent_span` argument.
+        inconsistent_index: u32,
+
+        /// The type of the `inconsistent_span` argument.
+        inconsistent_ty: String,
+
+        /// The types that would have been accepted instead of the
+        /// first unacceptable argument.
+        allowed: Vec<String>,
     },
     FunctionReturnsVoid(Span),
     FunctionMustUseUnused(Span),
@@ -307,6 +399,16 @@ pub(crate) enum Error<'a> {
         on_what: DiagnosticAttributeNotSupportedPosition,
         spans: Vec<Span>,
     },
+    SelectUnexpectedArgumentType {
+        arg_span: Span,
+        arg_type: String,
+    },
+    SelectRejectAndAcceptHaveNoCommonType {
+        reject_span: Span,
+        reject_type: String,
+        accept_span: Span,
+        accept_type: String,
+    },
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -331,24 +433,24 @@ impl From<&'static str> for DiagnosticAttributeNotSupportedPosition {
 #[derive(Clone, Debug)]
 pub(crate) struct AutoConversionError {
     pub dest_span: Span,
-    pub dest_type: Box<str>,
+    pub dest_type: String,
     pub source_span: Span,
-    pub source_type: Box<str>,
+    pub source_type: String,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct AutoConversionLeafScalarError {
     pub dest_span: Span,
-    pub dest_scalar: Box<str>,
+    pub dest_scalar: String,
     pub source_span: Span,
-    pub source_type: Box<str>,
+    pub source_type: String,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct ConcretizationFailedError {
     pub expr_span: Span,
-    pub expr_type: Box<str>,
-    pub scalar: Box<str>,
+    pub expr_type: String,
+    pub scalar: String,
     pub inner: ConstantEvaluatorError,
 }
 
@@ -377,6 +479,8 @@ impl<'a> Error<'a> {
                         Token::Arrow => "->".to_string(),
                         Token::Unknown(c) => format!("unknown (`{c}`)"),
                         Token::Trivia => "trivia".to_string(),
+                        Token::DocComment(s) => format!("doc comment ('{s}')"),
+                        Token::ModuleDocComment(s) => format!("module doc comment ('{s}')"),
                         Token::End => "end".to_string(),
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),
@@ -391,7 +495,8 @@ impl<'a> Error<'a> {
                         "workgroup size separator (`,`) or a closing parenthesis".to_string()
                     }
                     ExpectedToken::GlobalItem => concat!(
-                        "global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) ",
+                        "global item (`struct`, `const`, `var`, `alias`, ",
+                        "`fn`, `diagnostic`, `enable`, `requires`, `;`) ",
                         "or the end of the file"
                     )
                     .to_string(),
@@ -435,7 +540,7 @@ impl<'a> Error<'a> {
             Error::BadMatrixScalarKind(span, scalar) => ParseError {
                 message: format!(
                     "matrix scalar type must be floating-point, but found `{}`",
-                    scalar.to_wgsl()
+                    scalar.to_wgsl_for_diagnostics()
                 ),
                 labels: vec![(span, "must be floating-point (e.g. `f32`)".into())],
                 notes: vec![],
@@ -455,10 +560,15 @@ impl<'a> Error<'a> {
                 labels: vec![(bad_span, "unknown scalar type".into())],
                 notes: vec!["Valid scalar types are f32, f64, i32, u32, bool".into()],
             },
+            Error::NotStorageTexture(bad_span) => ParseError {
+                message: "textureStore can only be applied to storage textures".to_string(),
+                labels: vec![(bad_span, "not a storage texture".into())],
+                notes: vec![],
+            },
             Error::BadTextureSampleType { span, scalar } => ParseError {
                 message: format!(
                     "texture sample type must be one of f32, i32 or u32, but found {}",
-                    scalar.to_wgsl()
+                    scalar.to_wgsl_for_diagnostics()
                 ),
                 labels: vec![(span, "must be one of f32, i32 or u32".into())],
                 notes: vec![],
@@ -666,6 +776,11 @@ impl<'a> Error<'a> {
                 )],
                 notes: vec![],
             },
+            Error::InvalidAddrOfOperand(span) => ParseError {
+                message: "cannot take the address of a vector component".to_string(),
+                labels: vec![(span, "invalid operand for address-of".into())],
+                notes: vec![],
+            },
             Error::InvalidAtomicPointer(span) => ParseError {
                 message: "atomic operation is done on a pointer to a non-atomic".to_string(),
                 labels: vec![(span, "atomic pointer is invalid".into())],
@@ -712,7 +827,7 @@ impl<'a> Error<'a> {
 
                 ParseError {
                     message: "invalid left-hand side of assignment".into(),
-                    labels: std::iter::once((span, "cannot assign to this expression".into()))
+                    labels: core::iter::once((span, "cannot assign to this expression".into()))
                         .chain(extra_label)
                         .collect(),
                     notes,
@@ -766,26 +881,32 @@ impl<'a> Error<'a> {
                     .collect(),
                 notes: vec![],
             },
-            Error::InvalidSwitchValue { uint, span } => ParseError {
-                message: "invalid switch value".to_string(),
+            Error::InvalidSwitchSelector { span } => ParseError {
+                message: "invalid `switch` selector".to_string(),
                 labels: vec![(
                     span,
-                    if uint {
-                        "expected unsigned integer"
-                    } else {
-                        "expected signed integer"
-                    }
+                    "`switch` selector must be a scalar integer"
                     .into(),
                 )],
-                notes: vec![if uint {
-                    format!("suffix the integer with a `u`: `{}u`", &source[span])
-                } else {
-                    let span = span.to_range().unwrap();
-                    format!(
-                        "remove the `u` suffix: `{}`",
-                        &source[span.start..span.end - 1]
-                    )
-                }],
+                notes: vec![],
+            },
+            Error::InvalidSwitchCase { span } => ParseError {
+                message: "invalid `switch` case selector value".to_string(),
+                labels: vec![(
+                    span,
+                    "`switch` case selector must be a scalar integer const expression"
+                    .into(),
+                )],
+                notes: vec![],
+            },
+            Error::SwitchCaseTypeMismatch { span } => ParseError {
+                message: "invalid `switch` case selector value".to_string(),
+                labels: vec![(
+                    span,
+                    "`switch` case selector must have the same type as the `switch` selector expression"
+                    .into(),
+                )],
+                notes: vec![],
             },
             Error::CalledEntryPoint(span) => ParseError {
                 message: "entry point cannot be called".to_string(),
@@ -809,6 +930,74 @@ impl<'a> Error<'a> {
                 labels: vec![(span, "wrong number of arguments".into())],
                 notes: vec![],
             },
+            Error::TooManyArguments {
+                ref function,
+                call_span,
+                arg_span,
+                max_arguments,
+            } => ParseError {
+                message: format!("too many arguments passed to `{function}`"),
+                labels: vec![
+                    (call_span, "".into()),
+                    (arg_span, format!("unexpected argument #{}", max_arguments + 1).into())
+                ],
+                notes: vec![
+                    format!("The `{function}` function accepts at most {max_arguments} argument(s)")
+                ],
+            },
+            Error::WrongArgumentType {
+                ref function,
+                call_span,
+                arg_span,
+                arg_index,
+                ref arg_ty,
+                ref allowed,
+            } => {
+                let message = format!(
+                    "wrong type passed as argument #{} to `{function}`",
+                    arg_index + 1,
+                );
+                let labels = vec![
+                    (call_span, "".into()),
+                    (arg_span, format!("argument #{} has type `{arg_ty}`", arg_index + 1).into())
+                ];
+
+                let mut notes = vec![];
+                notes.push(format!("`{function}` accepts the following types for argument #{}:", arg_index + 1));
+                notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}")));
+
+                ParseError { message, labels, notes }
+            },
+            Error::InconsistentArgumentType {
+                ref function,
+                call_span,
+                arg_span,
+                arg_index,
+                ref arg_ty,
+                inconsistent_span,
+                inconsistent_index,
+                ref inconsistent_ty,
+                ref allowed
+            } => {
+                let message = format!(
+                    "inconsistent type passed as argument #{} to `{function}`",
+                    arg_index + 1,
+                );
+                let labels = vec![
+                    (call_span, "".into()),
+                    (arg_span, format!("argument #{} has type {arg_ty}", arg_index + 1).into()),
+                    (inconsistent_span, format!(
+                        "this argument has type {inconsistent_ty}, which constrains subsequent arguments"
+                    ).into()),
+                ];
+                let mut notes = vec![
+                    format!("Because argument #{} has type {inconsistent_ty}, only the following types", inconsistent_index + 1),
+                    format!("(or types that automatically convert to them) are accepted for argument #{}:", arg_index + 1),
+                ];
+                notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}")));
+
+                ParseError { message, labels, notes }
+            }
             Error::FunctionReturnsVoid(span) => ParseError {
                 message: "function does not return any value".to_string(),
                 labels: vec![(span, "".into())],
@@ -1008,23 +1197,22 @@ impl<'a> Error<'a> {
                 )],
             },
             Error::EnableExtensionNotEnabled { kind, span } => ParseError {
-                message: format!("`{}` enable-extension is not enabled", kind.to_ident()),
+                message: format!("the `{}` enable extension is not enabled", kind.to_ident()),
                 labels: vec![(
                     span,
                     format!(
                         concat!(
-                            "the `{}` enable-extension is needed for this functionality, ",
-                            "but it is not currently enabled"
+                            "the `{}` \"Enable Extension\" is needed for this functionality, ",
+                            "but it is not currently enabled."
                         ),
                         kind.to_ident()
                     )
                     .into(),
                 )],
-                #[allow(irrefutable_let_patterns)]
                 notes: if let EnableExtension::Unimplemented(kind) = kind {
                     vec![format!(
                         concat!(
-                            "This enable-extension is not yet implemented. ",
+                            "This \"Enable Extension\" is not yet implemented. ",
                             "Let Naga maintainers know that you ran into this at ",
                             "<https://github.com/gfx-rs/wgpu/issues/{}>, ",
                             "so they can prioritize it!"
@@ -1032,7 +1220,12 @@ impl<'a> Error<'a> {
                         kind.tracking_issue_num()
                     )]
                 } else {
-                    vec![]
+                    vec![
+                        format!(
+                            "You can enable this extension by adding `enable {};` at the top of the shader, before any other items.",
+                            kind.to_ident()
+                        ),
+                    ]
                 },
             },
             Error::LanguageExtensionNotYetImplemented { kind, span } => ParseError {
@@ -1100,7 +1293,7 @@ impl<'a> Error<'a> {
                             )
                         })
                         .expect("internal error: diag. attr. rejection on empty map");
-                    std::iter::once(first)
+                    core::iter::once(first)
                         .chain(spans.map(|span| (span, "".into())))
                         .collect()
                 },
@@ -1159,11 +1352,24 @@ impl<'a> Error<'a> {
                     ],
                 }
             }
+            Error::SelectUnexpectedArgumentType { arg_span, ref arg_type } => ParseError {
+                message: "unexpected argument type for `select` call".into(),
+                labels: vec![(arg_span, format!("this value of type {arg_type}").into())],
+                notes: vec!["expected a scalar or a `vecN` of scalars".into()],
+            },
+            Error::SelectRejectAndAcceptHaveNoCommonType {
+                reject_span,
+                ref reject_type,
+                accept_span,
+                ref accept_type,
+            } => ParseError {
+                message: "type mismatch for reject and accept values in `select` call".into(),
+                labels: vec![
+                    (reject_span, format!("reject value of type {reject_type}").into()),
+                    (accept_span, format!("accept value of type {accept_type}").into()),
+                ],
+                notes: vec![],
+            },
         }
     }
-}
-
-#[test]
-fn test_error_size() {
-    assert!(size_of::<Error<'_>>() <= 48);
 }

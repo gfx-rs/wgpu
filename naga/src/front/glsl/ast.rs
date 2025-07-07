@@ -1,4 +1,5 @@
-use std::{borrow::Cow, fmt};
+use alloc::{borrow::Cow, string::String, vec::Vec};
+use core::fmt;
 
 use super::{builtins::MacroCall, Span};
 use crate::{
@@ -178,6 +179,8 @@ pub enum QualifierKey<'a> {
     Layout,
     /// Used for image formats
     Format,
+    /// Used for `index` layout qualifiers
+    Index,
 }
 
 #[derive(Debug)]

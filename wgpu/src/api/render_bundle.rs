@@ -18,6 +18,14 @@ static_assertions::assert_impl_all!(RenderBundle: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(RenderBundle => .inner);
 
+impl RenderBundle {
+    #[cfg(custom)]
+    /// Returns custom implementation of RenderBundle (if custom backend and is internally T)
+    pub fn as_custom<T: custom::RenderBundleInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+}
+
 /// Describes a [`RenderBundle`].
 ///
 /// For use with [`RenderBundleEncoder::finish`].

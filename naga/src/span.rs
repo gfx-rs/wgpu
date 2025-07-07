@@ -1,5 +1,12 @@
-use crate::{Arena, Handle, UniqueArena};
-use std::{error::Error, fmt, ops::Range};
+use alloc::{
+    borrow::ToOwned,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{error::Error, fmt, ops::Range};
+
+use crate::{path_like::PathLike, Arena, Handle, UniqueArena};
 
 /// A source code span, used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -94,7 +101,7 @@ impl From<Range<usize>> for Span {
     }
 }
 
-impl std::ops::Index<Span> for str {
+impl core::ops::Index<Span> for str {
     type Output = str;
 
     #[inline]
@@ -232,7 +239,7 @@ impl<E> WithSpan<E> {
 
     /// Return a [`SourceLocation`] for our first span, if we have one.
     pub fn location(&self, source: &str) -> Option<SourceLocation> {
-        if self.spans.is_empty() {
+        if self.spans.is_empty() || source.is_empty() {
             return None;
         }
 
@@ -266,6 +273,7 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "stderr")]
     pub fn emit_to_stderr(&self, source: &str)
     where
         E: Error,
@@ -274,16 +282,26 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to standard error stream.
-    pub fn emit_to_stderr_with_path(&self, source: &str, path: &str)
+    #[cfg(feature = "stderr")]
+    pub fn emit_to_stderr_with_path<P>(&self, source: &str, path: P)
     where
         E: Error,
+        P: PathLike,
     {
         use codespan_reporting::{files, term};
-        use term::termcolor::{ColorChoice, StandardStream};
 
+        let path = path.to_string_lossy();
         let files = files::SimpleFile::new(path, source);
         let config = term::Config::default();
-        let writer = StandardStream::stderr(ColorChoice::Auto);
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "termcolor")] {
+                let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
+            } else {
+                let writer = std::io::stderr();
+            }
+        }
+
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
             .expect("cannot write error");
     }
@@ -297,18 +315,21 @@ impl<E> WithSpan<E> {
     }
 
     /// Emits a summary of the error to a string.
-    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String
+    pub fn emit_to_string_with_path<P>(&self, source: &str, path: P) -> String
     where
         E: Error,
+        P: PathLike,
     {
         use codespan_reporting::{files, term};
-        use term::termcolor::NoColor;
 
+        let path = path.to_string_lossy();
         let files = files::SimpleFile::new(path, source);
         let config = term::Config::default();
-        let mut writer = NoColor::new(Vec::new());
-        term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
-        String::from_utf8(writer.into_inner()).unwrap()
+
+        let mut writer = crate::error::DiagnosticBuffer::new();
+        term::emit(writer.inner_mut(), &config, &files, &self.diagnostic())
+            .expect("cannot write error");
+        writer.into_string()
     }
 }
 
@@ -359,7 +380,7 @@ pub(crate) trait SpanProvider<T> {
             x if !x.is_defined() => (Default::default(), "".to_string()),
             known => (
                 known,
-                format!("{} {:?}", std::any::type_name::<T>(), handle),
+                format!("{} {:?}", core::any::type_name::<T>(), handle),
             ),
         }
     }

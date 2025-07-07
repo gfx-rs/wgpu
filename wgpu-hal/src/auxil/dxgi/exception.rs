@@ -1,4 +1,4 @@
-use std::{borrow::Cow, slice};
+use alloc::{borrow::Cow, string::String};
 
 use parking_lot::Mutex;
 use windows::Win32::{Foundation, System::Diagnostics::Debug};
@@ -44,18 +44,12 @@ unsafe extern "system" fn output_debug_string_handler(
         return Debug::EXCEPTION_CONTINUE_SEARCH;
     }
     let message = match record.ExceptionCode {
-        Foundation::DBG_PRINTEXCEPTION_C => String::from_utf8_lossy(unsafe {
-            slice::from_raw_parts(
-                record.ExceptionInformation[1] as *const u8,
-                record.ExceptionInformation[0],
-            )
-        }),
-        Foundation::DBG_PRINTEXCEPTION_WIDE_C => Cow::Owned(String::from_utf16_lossy(unsafe {
-            slice::from_raw_parts(
-                record.ExceptionInformation[1] as *const u16,
-                record.ExceptionInformation[0],
-            )
-        })),
+        Foundation::DBG_PRINTEXCEPTION_C => {
+            String::from_utf8_lossy(bytemuck::cast_slice(&record.ExceptionInformation))
+        }
+        Foundation::DBG_PRINTEXCEPTION_WIDE_C => Cow::Owned(String::from_utf16_lossy(
+            bytemuck::cast_slice(&record.ExceptionInformation),
+        )),
         _ => return Debug::EXCEPTION_CONTINUE_SEARCH,
     };
 
@@ -89,7 +83,10 @@ unsafe extern "system" fn output_debug_string_handler(
         log::log!(level, "{}", message);
     });
 
+    #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && level == log::Level::Error {
+        use alloc::string::ToString as _;
+
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());
     }

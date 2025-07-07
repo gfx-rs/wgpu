@@ -1,0 +1,297 @@
+// language: metal1.2
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+
+void control_flow(
+) {
+    int pos = {};
+    metal::threadgroup_barrier(metal::mem_flags::mem_device);
+    metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+    metal::threadgroup_barrier(metal::mem_flags::mem_texture);
+    switch(1) {
+        default: {
+            pos = 1;
+            break;
+        }
+    }
+    int _e3 = pos;
+    switch(_e3) {
+        case 1: {
+            pos = 0;
+            break;
+        }
+        case 2: {
+            pos = 1;
+            break;
+        }
+        case 3:
+        case 4: {
+            pos = 2;
+            break;
+        }
+        case 5: {
+            pos = 3;
+            break;
+        }
+        default:
+        case 6: {
+            pos = 4;
+            break;
+        }
+    }
+    switch(0u) {
+        case 0u: {
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    int _e10 = pos;
+    switch(_e10) {
+        case 1: {
+            pos = 0;
+            break;
+        }
+        case 2: {
+            pos = 1;
+            return;
+        }
+        case 3: {
+            pos = 2;
+            return;
+        }
+        case 4: {
+            return;
+        }
+        default: {
+            pos = 3;
+            return;
+        }
+    }
+}
+
+void switch_default_break(
+    int i
+) {
+    switch(i) {
+        default: {
+            break;
+        }
+    }
+}
+
+void switch_case_break(
+) {
+    switch(0) {
+        case 0: {
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    return;
+}
+
+void switch_selector_type_conversion(
+) {
+    switch(0u) {
+        case 0u: {
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+    switch(0u) {
+        case 0u: {
+            return;
+        }
+        default: {
+            return;
+        }
+    }
+}
+
+void switch_const_expr_case_selectors(
+) {
+    switch(0) {
+        case 0: {
+            return;
+        }
+        case 1: {
+            return;
+        }
+        case 2: {
+            return;
+        }
+        case 3: {
+            return;
+        }
+        case 4: {
+            return;
+        }
+        default: {
+            return;
+        }
+    }
+}
+
+void loop_switch_continue(
+    int x
+) {
+    uint2 loop_bound = uint2(4294967295u);
+    while(true) {
+        if (metal::all(loop_bound == uint2(0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        switch(x) {
+            case 1: {
+                continue;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+    return;
+}
+
+void loop_switch_continue_nesting(
+    int x_1,
+    int y,
+    int z
+) {
+    uint2 loop_bound_1 = uint2(4294967295u);
+    while(true) {
+        if (metal::all(loop_bound_1 == uint2(0u))) { break; }
+        loop_bound_1 -= uint2(loop_bound_1.y == 0u, 1u);
+        switch(x_1) {
+            case 1: {
+                continue;
+            }
+            case 2: {
+                switch(y) {
+                    case 1: {
+                        continue;
+                    }
+                    default: {
+                        uint2 loop_bound_2 = uint2(4294967295u);
+                        while(true) {
+                            if (metal::all(loop_bound_2 == uint2(0u))) { break; }
+                            loop_bound_2 -= uint2(loop_bound_2.y == 0u, 1u);
+                            switch(z) {
+                                case 1: {
+                                    continue;
+                                }
+                                default: {
+                                    break;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        switch(y) {
+            default: {
+                continue;
+            }
+        }
+    }
+    uint2 loop_bound_3 = uint2(4294967295u);
+    while(true) {
+        if (metal::all(loop_bound_3 == uint2(0u))) { break; }
+        loop_bound_3 -= uint2(loop_bound_3.y == 0u, 1u);
+        switch(y) {
+            case 1:
+            default: {
+                switch(z) {
+                    default: {
+                        continue;
+                    }
+                }
+                break;
+            }
+        }
+    }
+    return;
+}
+
+void loop_switch_omit_continue_variable_checks(
+    int x_2,
+    int y_1,
+    int z_1,
+    int w
+) {
+    int pos_1 = 0;
+    uint2 loop_bound_4 = uint2(4294967295u);
+    while(true) {
+        if (metal::all(loop_bound_4 == uint2(0u))) { break; }
+        loop_bound_4 -= uint2(loop_bound_4.y == 0u, 1u);
+        switch(x_2) {
+            case 1: {
+                pos_1 = 1;
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+    uint2 loop_bound_5 = uint2(4294967295u);
+    while(true) {
+        if (metal::all(loop_bound_5 == uint2(0u))) { break; }
+        loop_bound_5 -= uint2(loop_bound_5.y == 0u, 1u);
+        switch(x_2) {
+            case 1: {
+                break;
+            }
+            case 2: {
+                switch(y_1) {
+                    case 1: {
+                        continue;
+                    }
+                    default: {
+                        switch(z_1) {
+                            case 1: {
+                                pos_1 = 2;
+                                break;
+                            }
+                            default: {
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+    return;
+}
+
+kernel void main_(
+) {
+    control_flow();
+    switch_default_break(1);
+    switch_case_break();
+    switch_selector_type_conversion();
+    switch_const_expr_case_selectors();
+    loop_switch_continue(1);
+    loop_switch_continue_nesting(1, 2, 3);
+    loop_switch_omit_continue_variable_checks(1, 2, 3, 4);
+    return;
+}

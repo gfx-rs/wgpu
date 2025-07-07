@@ -1,0 +1,9 @@
+[msl]
+fake_missing_bindings = false
+lang_version = [1, 2]
+spirv_cross_compatibility = false
+zero_initialize_workgroup_memory = true
+
+[msl.per_entry_point_map.main]
+resources = []
+sizes_buffer = 0

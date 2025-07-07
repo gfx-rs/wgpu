@@ -14,13 +14,17 @@ extern crate std;
 
 extern crate alloc;
 
+use alloc::borrow::Cow;
 use alloc::{string::String, vec, vec::Vec};
 use core::{
+    fmt,
     hash::{Hash, Hasher},
-    mem::size_of,
+    mem,
     num::NonZeroU32,
     ops::Range,
 };
+
+use bytemuck::{Pod, Zeroable};
 
 #[cfg(any(feature = "serde", test))]
 use {
@@ -29,45 +33,85 @@ use {
 };
 
 pub mod assertions;
+mod cast_utils;
 mod counters;
 mod env;
+pub mod error;
 mod features;
 pub mod instance;
 pub mod math;
+mod transfers;
 
 pub use counters::*;
 pub use features::*;
 pub use instance::*;
+pub use transfers::*;
 
-/// Integral type used for buffer offsets.
+/// Integral type used for [`Buffer`] offsets and sizes.
+///
+/// [`Buffer`]: ../wgpu/struct.Buffer.html
 pub type BufferAddress = u64;
-/// Integral type used for buffer slice sizes.
+
+/// Integral type used for [`BufferSlice`] sizes.
+///
+/// Note that while this type is non-zero, a [`Buffer`] *per se* can have a size of zero,
+/// but no slice or mapping can be created from it.
+///
+/// [`Buffer`]: ../wgpu/struct.Buffer.html
+/// [`BufferSlice`]: ../wgpu/struct.BufferSlice.html
 pub type BufferSize = core::num::NonZeroU64;
+
 /// Integral type used for binding locations in shaders.
+///
+/// Used in [`VertexAttribute`]s and errors.
+///
+/// [`VertexAttribute`]: ../wgpu/struct.VertexAttribute.html
 pub type ShaderLocation = u32;
-/// Integral type used for dynamic bind group offsets.
+
+/// Integral type used for
+/// [dynamic bind group offsets](../wgpu/struct.RenderPass.html#method.set_bind_group).
 pub type DynamicOffset = u32;
 
-/// Buffer-Texture copies must have [`bytes_per_row`] aligned to this number.
+/// Buffer-to-texture copies must have [`bytes_per_row`] aligned to this number.
 ///
-/// This doesn't apply to [`Queue::write_texture`][Qwt].
+/// This doesn't apply to [`Queue::write_texture`][Qwt], only to [`copy_buffer_to_texture()`].
 ///
 /// [`bytes_per_row`]: TexelCopyBufferLayout::bytes_per_row
+/// [`copy_buffer_to_texture()`]: ../wgpu/struct.Queue.html#method.copy_buffer_to_texture
 /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
-/// An offset into the query resolve buffer has to be aligned to this.
+
+/// An [offset into the query resolve buffer] has to be aligned to this.
+///
+/// [offset into the query resolve buffer]: ../wgpu/struct.CommandEncoder.html#method.resolve_query_set
 pub const QUERY_RESOLVE_BUFFER_ALIGNMENT: BufferAddress = 256;
+
 /// Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
-/// Size to align mappings.
+
+/// Minimum alignment of buffer mappings.
+///
+/// The range passed to [`map_async()`] or [`get_mapped_range()`] must be at least this aligned.
+///
+/// [`map_async()`]: ../wgpu/struct.Buffer.html#method.map_async
+/// [`get_mapped_range()`]: ../wgpu/struct.Buffer.html#method.get_mapped_range
 pub const MAP_ALIGNMENT: BufferAddress = 8;
-/// Vertex buffer strides have to be aligned to this number.
+
+/// [Vertex buffer strides] have to be a multiple of this number.
+///
+/// [Vertex buffer strides]: ../wgpu/struct.VertexBufferLayout.html#structfield.array_stride
 pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
-/// Alignment all push constants need
+/// Ranges of [writes to push constant storage] must be at least this aligned.
+///
+/// [writes to push constant storage]: ../wgpu/struct.RenderPass.html#method.set_push_constants
 pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
-/// Maximum queries in a query set
+
+/// Maximum queries in a [`QuerySetDescriptor`].
 pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
-/// Size of a single piece of query data.
+
+/// Size in bytes of a single piece of [query] data.
+///
+/// [query]: ../wgpu/struct.QuerySet.html
 pub const QUERY_SIZE: u32 = 8;
 
 /// Backends supported by wgpu.
@@ -111,6 +155,16 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// Array of all [`Backend`] values, corresponding to [`Backends::all()`].
+    pub const ALL: [Backend; Backends::all().bits().count_ones() as usize] = [
+        Self::Noop,
+        Self::Vulkan,
+        Self::Metal,
+        Self::Dx12,
+        Self::Gl,
+        Self::BrowserWebGpu,
+    ];
+
     /// Returns the string name of the backend.
     #[must_use]
     pub const fn to_str(self) -> &'static str {
@@ -313,6 +367,88 @@ impl<S> Default for RequestAdapterOptions<S> {
     }
 }
 
+/// Error when [`Instance::request_adapter()`] fails.
+///
+/// This type is not part of the WebGPU standard, where `requestAdapter()` would simply return null.
+///
+/// [`Instance::request_adapter()`]: ../wgpu/struct.Instance.html#method.request_adapter
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum RequestAdapterError {
+    /// No adapter available via the instance’s backends matched the request’s adapter criteria.
+    NotFound {
+        // These fields must be set by wgpu-core and wgpu, but are not intended to be stable API,
+        // only data for the production of the error message.
+        #[doc(hidden)]
+        active_backends: Backends,
+        #[doc(hidden)]
+        requested_backends: Backends,
+        #[doc(hidden)]
+        supported_backends: Backends,
+        #[doc(hidden)]
+        no_fallback_backends: Backends,
+        #[doc(hidden)]
+        no_adapter_backends: Backends,
+        #[doc(hidden)]
+        incompatible_surface_backends: Backends,
+    },
+
+    /// Attempted to obtain adapter specified by environment variable, but the environment variable
+    /// was not set.
+    EnvNotSet,
+}
+
+impl core::error::Error for RequestAdapterError {}
+impl fmt::Display for RequestAdapterError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RequestAdapterError::NotFound {
+                active_backends,
+                requested_backends,
+                supported_backends,
+                no_fallback_backends,
+                no_adapter_backends,
+                incompatible_surface_backends,
+            } => {
+                write!(f, "No suitable graphics adapter found; ")?;
+                let mut first = true;
+                for backend in Backend::ALL {
+                    let bit = Backends::from(backend);
+                    let comma = if mem::take(&mut first) { "" } else { ", " };
+                    let explanation = if !requested_backends.contains(bit) {
+                        // We prefer reporting this, because it makes the error most stable with
+                        // respect to what is directly controllable by the caller, as opposed to
+                        // compilation options or the run-time environment.
+                        "not requested"
+                    } else if !supported_backends.contains(bit) {
+                        "support not compiled in"
+                    } else if no_adapter_backends.contains(bit) {
+                        "found no adapters"
+                    } else if incompatible_surface_backends.contains(bit) {
+                        "not compatible with provided surface"
+                    } else if no_fallback_backends.contains(bit) {
+                        "had no fallback adapters"
+                    } else if !active_backends.contains(bit) {
+                        // Backend requested but not active in this instance
+                        if backend == Backend::Noop {
+                            "not explicitly enabled"
+                        } else {
+                            "drivers/libraries could not be loaded"
+                        }
+                    } else {
+                        // This path should be unreachable, but don't crash.
+                        "[unknown reason]"
+                    };
+                    write!(f, "{comma}{backend} {explanation}")?;
+                }
+            }
+            RequestAdapterError::EnvNotSet => f.write_str("WGPU_ADAPTER_NAME not set")?,
+        }
+        Ok(())
+    }
+}
+
 /// Represents the sets of limits an adapter/device supports.
 ///
 /// We provide three different defaults.
@@ -384,6 +520,15 @@ pub struct Limits {
     pub max_storage_textures_per_shader_stage: u32,
     /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
     pub max_uniform_buffers_per_shader_stage: u32,
+    /// Amount of individual resources within binding arrays that can be accessed in a single shader stage. Applies
+    /// to all types of bindings except samplers.
+    ///
+    /// This "defaults" to 0. However if binding arrays are supported, all devices can support 500,000. Higher is "better".
+    pub max_binding_array_elements_per_shader_stage: u32,
+    /// Amount of individual samplers within binding arrays that can be accessed in a single shader stage.
+    ///
+    /// This "defaults" to 0. However if binding arrays are supported, all devices can support 1,000. Higher is "better".
+    pub max_binding_array_sampler_elements_per_shader_stage: u32,
     /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 64 KiB. Higher is "better".
     pub max_uniform_buffer_binding_size: u32,
     /// Maximum size in bytes of a binding to a storage buffer. Defaults to 128 MiB. Higher is "better".
@@ -462,6 +607,22 @@ pub struct Limits {
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
+    /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
+    /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_blas_primitive_count: u32,
+    /// The maximum number of geometry descriptors a BLAS is allowed to have. Requesting
+    /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_blas_geometry_count: u32,
+    /// The maximum number of instances a TLAS is allowed to have. Requesting more than 0 during
+    /// device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_tlas_instance_count: u32,
+    /// The maximum number of acceleration structures allowed to be used in a shader stage.
+    /// Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// is enabled.
+    pub max_acceleration_structures_per_shader_stage: u32,
 }
 
 impl Default for Limits {
@@ -471,9 +632,60 @@ impl Default for Limits {
 }
 
 impl Limits {
-    // Rust doesn't allow const in trait implementations, so we break this out
-    // to allow reusing these defaults in const contexts like `downlevel_defaults`
-    const fn defaults() -> Self {
+    /// These default limits are guaranteed to to work on all modern
+    /// backends and guaranteed to be supported by WebGPU
+    ///
+    /// Those limits are as follows:
+    /// ```rust
+    /// # use wgpu_types::Limits;
+    /// assert_eq!(Limits::defaults(), Limits {
+    ///     max_texture_dimension_1d: 8192,
+    ///     max_texture_dimension_2d: 8192,
+    ///     max_texture_dimension_3d: 2048,
+    ///     max_texture_array_layers: 256,
+    ///     max_bind_groups: 4,
+    ///     max_bindings_per_bind_group: 1000,
+    ///     max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+    ///     max_dynamic_storage_buffers_per_pipeline_layout: 4,
+    ///     max_sampled_textures_per_shader_stage: 16,
+    ///     max_samplers_per_shader_stage: 16,
+    ///     max_storage_buffers_per_shader_stage: 8,
+    ///     max_storage_textures_per_shader_stage: 4,
+    ///     max_uniform_buffers_per_shader_stage: 12,
+    ///     max_binding_array_elements_per_shader_stage: 0,
+    ///     max_binding_array_sampler_elements_per_shader_stage: 0,
+    ///     max_uniform_buffer_binding_size: 64 << 10, // (64 KiB)
+    ///     max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
+    ///     max_vertex_buffers: 8,
+    ///     max_buffer_size: 256 << 20, // (256 MiB)
+    ///     max_vertex_attributes: 16,
+    ///     max_vertex_buffer_array_stride: 2048,
+    ///     min_uniform_buffer_offset_alignment: 256,
+    ///     min_storage_buffer_offset_alignment: 256,
+    ///     max_inter_stage_shader_components: 60,
+    ///     max_color_attachments: 8,
+    ///     max_color_attachment_bytes_per_sample: 32,
+    ///     max_compute_workgroup_storage_size: 16384,
+    ///     max_compute_invocations_per_workgroup: 256,
+    ///     max_compute_workgroup_size_x: 256,
+    ///     max_compute_workgroup_size_y: 256,
+    ///     max_compute_workgroup_size_z: 64,
+    ///     max_compute_workgroups_per_dimension: 65535,
+    ///     min_subgroup_size: 0,
+    ///     max_subgroup_size: 0,
+    ///     max_push_constant_size: 0,
+    ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_blas_primitive_count: 0,
+    ///     max_blas_geometry_count: 0,
+    ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
+    /// });
+    /// ```
+    ///
+    /// Rust doesn't allow const in trait implementations, so we break this out
+    /// to allow reusing these defaults in const contexts
+    #[must_use]
+    pub const fn defaults() -> Self {
         Self {
             max_texture_dimension_1d: 8192,
             max_texture_dimension_2d: 8192,
@@ -488,6 +700,8 @@ impl Limits {
             max_storage_buffers_per_shader_stage: 8,
             max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
+            max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_sampler_elements_per_shader_stage: 0,
             max_uniform_buffer_binding_size: 64 << 10, // (64 KiB)
             max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
             max_vertex_buffers: 8,
@@ -509,6 +723,10 @@ impl Limits {
             max_subgroup_size: 0,
             max_push_constant_size: 0,
             max_non_sampler_bindings: 1_000_000,
+            max_blas_primitive_count: 0,
+            max_blas_geometry_count: 0,
+            max_tlas_instance_count: 0,
+            max_acceleration_structures_per_shader_stage: 0,
         }
     }
 
@@ -531,6 +749,8 @@ impl Limits {
     ///     max_storage_buffers_per_shader_stage: 4, // *
     ///     max_storage_textures_per_shader_stage: 4,
     ///     max_uniform_buffers_per_shader_stage: 12,
+    ///     max_binding_array_elements_per_shader_stage: 0,
+    ///     max_binding_array_sampler_elements_per_shader_stage: 0,
     ///     max_uniform_buffer_binding_size: 16 << 10, // * (16 KiB)
     ///     max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
     ///     max_vertex_buffers: 8,
@@ -552,6 +772,10 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_blas_primitive_count: 0,
+    ///     max_blas_geometry_count: 0,
+    ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
     /// });
     /// ```
     #[must_use]
@@ -589,6 +813,8 @@ impl Limits {
     ///     max_storage_buffers_per_shader_stage: 0, // * +
     ///     max_storage_textures_per_shader_stage: 0, // +
     ///     max_uniform_buffers_per_shader_stage: 11, // +
+    ///     max_binding_array_elements_per_shader_stage: 0,
+    ///     max_binding_array_sampler_elements_per_shader_stage: 0,
     ///     max_uniform_buffer_binding_size: 16 << 10, // * (16 KiB)
     ///     max_storage_buffer_binding_size: 0, // * +
     ///     max_vertex_buffers: 8,
@@ -610,6 +836,10 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 0, // +
     ///     max_buffer_size: 256 << 20, // (256 MiB),
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_blas_primitive_count: 0,
+    ///     max_blas_geometry_count: 0,
+    ///     max_tlas_instance_count: 0,
+    ///     max_acceleration_structures_per_shader_stage: 0,
     /// });
     /// ```
     #[must_use]
@@ -661,6 +891,32 @@ impl Limits {
         Self {
             min_uniform_buffer_offset_alignment: other.min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment: other.min_storage_buffer_offset_alignment,
+            ..self
+        }
+    }
+
+    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    #[must_use]
+    pub const fn using_minimum_supported_acceleration_structure_values(self) -> Self {
+        Self {
+            max_blas_geometry_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
+            max_tlas_instance_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
+            max_blas_primitive_count: 1 << 28,      // 2^28: Metal's minimum
+            max_acceleration_structures_per_shader_stage: 16, // Vulkan's minimum
+            ..self
+        }
+    }
+
+    /// Modify the current limits to use the acceleration structure limits of `other` (`other` could
+    /// be the limits of the adapter).
+    #[must_use]
+    pub const fn using_acceleration_structure_values(self, other: Self) -> Self {
+        Self {
+            max_blas_geometry_count: other.max_blas_geometry_count,
+            max_tlas_instance_count: other.max_tlas_instance_count,
+            max_blas_primitive_count: other.max_blas_primitive_count,
+            max_acceleration_structures_per_shader_stage: other
+                .max_acceleration_structures_per_shader_stage,
             ..self
         }
     }
@@ -720,6 +976,7 @@ impl Limits {
         compare!(max_storage_buffers_per_shader_stage, Less);
         compare!(max_storage_textures_per_shader_stage, Less);
         compare!(max_uniform_buffers_per_shader_stage, Less);
+        compare!(max_binding_array_elements_per_shader_stage, Less);
         compare!(max_uniform_buffer_binding_size, Less);
         compare!(max_storage_buffer_binding_size, Less);
         compare!(max_vertex_buffers, Less);
@@ -743,6 +1000,9 @@ impl Limits {
         }
         compare!(max_push_constant_size, Less);
         compare!(max_non_sampler_bindings, Less);
+        compare!(max_blas_primitive_count, Less);
+        compare!(max_blas_geometry_count, Less);
+        compare!(max_tlas_instance_count, Less);
     }
 }
 
@@ -816,6 +1076,8 @@ bitflags::bitflags! {
         /// Supports binding storage buffers and textures to fragment shaders.
         const FRAGMENT_WRITABLE_STORAGE = 1 << 1;
         /// Supports indirect drawing and dispatching.
+        ///
+        /// [`Self::COMPUTE_SHADERS`] must be present for this flag.
         ///
         /// WebGL2, GLES 3.0, and Metal on Apple1/Apple2 GPUs do not support indirect.
         const INDIRECT_EXECUTION = 1 << 2;
@@ -928,34 +1190,6 @@ bitflags::bitflags! {
         /// Not Supported by:
         /// - GL ES / WebGL
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
-
-        /// If this is true, use of `@builtin(vertex_index)` and `@builtin(instance_index)` will properly take into consideration
-        /// the `first_vertex` and `first_instance` parameters of indirect draw calls.
-        ///
-        /// If this is false, `@builtin(vertex_index)` and `@builtin(instance_index)` will start by counting from 0, ignoring the
-        /// `first_vertex` and `first_instance` parameters.
-        ///
-        /// For example, if you had a draw call like this:
-        /// - `first_vertex: 4,`
-        /// - `vertex_count: 12,`
-        ///
-        /// When this flag is present, `@builtin(vertex_index)` will start at 4 and go up to 15 (12 invocations).
-        ///
-        /// When this flag is not present, `@builtin(vertex_index)` will start at 0 and go up to 11 (12 invocations).
-        ///
-        /// This only affects the builtins in the shaders,
-        /// vertex buffers and instance rate vertex buffers will behave like expected with this flag disabled.
-        ///
-        /// See also [`Features::`]
-        ///
-        /// Supported By:
-        /// - Vulkan
-        /// - Metal
-        /// - OpenGL
-        ///
-        /// Will be implemented in the future by:
-        /// - DX12 ([#2471](https://github.com/gfx-rs/wgpu/issues/2471))
-        const VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW = 1 << 23;
     }
 }
 
@@ -1097,6 +1331,9 @@ pub struct DeviceDescriptor<L> {
     pub required_limits: Limits,
     /// Hints for memory allocation strategies.
     pub memory_hints: MemoryHints,
+    /// Whether API tracing for debugging is enabled,
+    /// and where the trace is written if so.
+    pub trace: Trace,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -1108,8 +1345,29 @@ impl<L> DeviceDescriptor<L> {
             required_features: self.required_features,
             required_limits: self.required_limits.clone(),
             memory_hints: self.memory_hints.clone(),
+            trace: self.trace.clone(),
         }
     }
+}
+
+/// Controls API call tracing and specifies where the trace is written.
+///
+/// **Note:** Tracing is currently unavailable.
+/// See [issue 5974](https://github.com/gfx-rs/wgpu/issues/5974) for updates.
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+// This enum must be non-exhaustive so that enabling the "trace" feature is not a semver break.
+#[non_exhaustive]
+pub enum Trace {
+    /// Tracing disabled.
+    #[default]
+    Off,
+
+    /// Tracing enabled.
+    #[cfg(feature = "trace")]
+    // This must be owned rather than `&'a Path`, because if it were that, then the lifetime
+    // parameter would be unused when the "trace" feature is disabled, which is prohibited.
+    Directory(std::path::PathBuf),
 }
 
 bitflags::bitflags! {
@@ -1136,9 +1394,9 @@ bitflags::bitflags! {
         const COMPUTE = 1 << 2;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
         const VERTEX_FRAGMENT = Self::VERTEX.bits() | Self::FRAGMENT.bits();
-        /// Binding is visible from the task shader of a mesh shader pipeline
+        /// Binding is visible from the task shader of a mesh pipeline
         const TASK = 1 << 3;
-        /// Binding is visible from the mesh shader of a mesh shader pipeline
+        /// Binding is visible from the mesh shader of a mesh pipeline
         const MESH = 1 << 4;
     }
 }
@@ -1728,20 +1986,35 @@ pub enum AstcChannel {
     Hdr,
 }
 
-/// Underlying texture data format.
+/// Format in which a texture’s texels are stored in GPU memory.
 ///
-/// If there is a conversion in the format (such as srgb -> linear), the conversion listed here is for
-/// loading from texture in a shader. When writing to the texture, the opposite conversion takes place.
+/// Certain formats additionally specify a conversion.
+/// When these formats are used in a shader, the conversion automatically takes place when loading
+/// from or storing to the texture.
+///
+/// * `Unorm` formats linearly scale the integer range of the storage format to a floating-point
+///   range of 0 to 1, inclusive.
+/// * `Snorm` formats linearly scale the integer range of the storage format to a floating-point
+///   range of &minus;1 to 1, inclusive, except that the most negative value
+///   (&minus;128 for 8-bit, &minus;32768 for 16-bit) is excluded; on conversion,
+///   it is treated as identical to the second most negative
+///   (&minus;127 for 8-bit, &minus;32767 for 16-bit),
+///   so that the positive and negative ranges are symmetric.
+/// * `UnormSrgb` formats apply the [sRGB transfer function] so that the storage is sRGB encoded
+///   while the shader works with linear intensity values.
+/// * `Uint`, `Sint`, and `Float` formats perform no conversion.
 ///
 /// Corresponds to [WebGPU `GPUTextureFormat`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureformat).
+///
+/// [sRGB transfer function]: https://en.wikipedia.org/wiki/SRGB#Transfer_function_(%22gamma%22)
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     R8Unorm,
-    /// Red channel only. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red channel only. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     R8Snorm,
     /// Red channel only. 8 bit integer per channel. Unsigned in shader.
     R8Uint,
@@ -1757,7 +2030,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     R16Unorm,
-    /// Red channel only. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red channel only. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     R16Snorm,
@@ -1765,7 +2038,7 @@ pub enum TextureFormat {
     R16Float,
     /// Red and green channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     Rg8Unorm,
-    /// Red and green channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red and green channels. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     Rg8Snorm,
     /// Red and green channels. 8 bit integer per channel. Unsigned in shader.
     Rg8Uint,
@@ -1787,7 +2060,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rg16Unorm,
-    /// Red and green channels. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red and green channels. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rg16Snorm,
@@ -1797,7 +2070,7 @@ pub enum TextureFormat {
     Rgba8Unorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     Rgba8UnormSrgb,
-    /// Red, green, blue, and alpha channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
+    /// Red, green, blue, and alpha channels. 8 bit integer per channel. [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     Rgba8Snorm,
     /// Red, green, blue, and alpha channels. 8 bit integer per channel. Unsigned in shader.
     Rgba8Uint,
@@ -1837,7 +2110,7 @@ pub enum TextureFormat {
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rgba16Unorm,
-    /// Red, green, blue, and alpha. 16 bit integer per channel. [0, 65535] converted to/from float [-1, 1] in shader.
+    /// Red, green, blue, and alpha. 16 bit integer per channel. [&minus;32767, 32767] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_FORMAT_16BIT_NORM`] must be enabled to use this texture format.
     Rgba16Snorm,
@@ -1941,7 +2214,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_BC_SLICED_3D`] must be enabled to use this texture format with 3D dimension.
     Bc4RUnorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// Also known as RGTC1.
     ///
@@ -1957,7 +2230,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_BC_SLICED_3D`] must be enabled to use this texture format with 3D dimension.
     Bc5RgUnorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// Also known as RGTC2.
     ///
@@ -2030,7 +2303,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacR11Unorm,
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). Complex pallet. 11 bit integer R.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacR11Snorm,
@@ -2040,7 +2313,7 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacRg11Unorm,
     /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). Complex pallet. 11 bit integer R + 11 bit integer G.
-    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    /// [&minus;127, 127] converted to/from float [&minus;1, 1] in shader.
     ///
     /// [`Features::TEXTURE_COMPRESSION_ETC2`] must be enabled to use this texture format.
     EacRg11Snorm,
@@ -2558,6 +2831,13 @@ impl TextureFormat {
         self.required_features() == Features::TEXTURE_COMPRESSION_BC
     }
 
+    /// Returns `true` for ASTC compressed formats.
+    #[must_use]
+    pub fn is_astc(&self) -> bool {
+        self.required_features() == Features::TEXTURE_COMPRESSION_ASTC
+            || self.required_features() == Features::TEXTURE_COMPRESSION_ASTC_HDR
+    }
+
     /// Returns the required features (if any) in order to use the texture.
     #[must_use]
     pub fn required_features(&self) -> Features {
@@ -2678,11 +2958,12 @@ impl TextureFormat {
             storage | binding
         };
         let atomic = attachment | atomic_64;
-        let rg11b10f = if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
-            attachment
-        } else {
-            basic
-        };
+        let (rg11b10f_f, rg11b10f_u) =
+            if device_features.contains(Features::RG11B10UFLOAT_RENDERABLE) {
+                (msaa_resolve, attachment)
+            } else {
+                (msaa, basic)
+            };
         let (bgra8unorm_f, bgra8unorm) = if device_features.contains(Features::BGRA8UNORM_STORAGE) {
             (
                 msaa_resolve | TextureFormatFeatureFlags::STORAGE_WRITE_ONLY,
@@ -2723,7 +3004,7 @@ impl TextureFormat {
             Self::Bgra8UnormSrgb =>       (msaa_resolve, attachment),
             Self::Rgb10a2Uint =>          (        msaa, attachment),
             Self::Rgb10a2Unorm =>         (msaa_resolve, attachment),
-            Self::Rg11b10Ufloat =>        (        msaa,   rg11b10f),
+            Self::Rg11b10Ufloat =>        (  rg11b10f_f, rg11b10f_u),
             Self::R64Uint =>              (     s_ro_wo,  atomic_64),
             Self::Rg32Uint =>             (     s_ro_wo,  all_flags),
             Self::Rg32Sint =>             (     s_ro_wo,  all_flags),
@@ -3350,6 +3631,47 @@ impl TextureFormat {
     #[must_use]
     pub fn is_srgb(&self) -> bool {
         *self != self.remove_srgb_suffix()
+    }
+
+    /// Returns the theoretical memory footprint of a texture with the given format and dimensions.
+    ///
+    /// Actual memory usage may greatly exceed this value due to alignment and padding.
+    #[must_use]
+    pub fn theoretical_memory_footprint(&self, size: Extent3d) -> u64 {
+        let (block_width, block_height) = self.block_dimensions();
+
+        let block_size = self.block_copy_size(None);
+
+        let approximate_block_size = match block_size {
+            Some(size) => size,
+            None => match self {
+                // One f16 per pixel
+                Self::Depth16Unorm => 2,
+                // One u24 per pixel, padded to 4 bytes
+                Self::Depth24Plus => 4,
+                // One u24 per pixel, plus one u8 per pixel
+                Self::Depth24PlusStencil8 => 4,
+                // One f32 per pixel
+                Self::Depth32Float => 4,
+                // One f32 per pixel, plus one u8 per pixel, with 3 bytes intermediary padding
+                Self::Depth32FloatStencil8 => 8,
+                // One u8 per pixel
+                Self::Stencil8 => 1,
+                // Two chroma bytes per block, one luma byte per block
+                Self::NV12 => 3,
+                f => {
+                    log::warn!("Memory footprint for format {:?} is not implemented", f);
+                    0
+                }
+            },
+        };
+
+        let width_blocks = size.width.div_ceil(block_width) as u64;
+        let height_blocks = size.height.div_ceil(block_height) as u64;
+
+        let total_blocks = width_blocks * height_blocks * size.depth_or_array_layers as u64;
+
+        total_blocks * approximate_block_size as u64
     }
 }
 
@@ -3990,7 +4312,7 @@ impl Default for ColorWrites {
 
 /// Passed to `Device::poll` to control how and if it should block.
 #[derive(Clone, Debug)]
-pub enum Maintain<T> {
+pub enum PollType<T> {
     /// On wgpu-core based backends, block until the given submission has
     /// completed execution, and any callbacks have been invoked.
     ///
@@ -4003,7 +4325,7 @@ pub enum Maintain<T> {
     Poll,
 }
 
-impl<T> Maintain<T> {
+impl<T> PollType<T> {
     /// Construct a [`Self::Wait`] variant
     #[must_use]
     pub fn wait() -> Self {
@@ -4022,7 +4344,7 @@ impl<T> Maintain<T> {
         Self::WaitForSubmissionIndex(submission_index)
     }
 
-    /// This maintain represents a wait of some kind.
+    /// This `PollType` represents a wait of some kind.
     #[must_use]
     pub fn is_wait(&self) -> bool {
         match *self {
@@ -4033,39 +4355,57 @@ impl<T> Maintain<T> {
 
     /// Map on the wait index type.
     #[must_use]
-    pub fn map_index<U, F>(self, func: F) -> Maintain<U>
+    pub fn map_index<U, F>(self, func: F) -> PollType<U>
     where
         F: FnOnce(T) -> U,
     {
         match self {
-            Self::WaitForSubmissionIndex(i) => Maintain::WaitForSubmissionIndex(func(i)),
-            Self::Wait => Maintain::Wait,
-            Self::Poll => Maintain::Poll,
+            Self::WaitForSubmissionIndex(i) => PollType::WaitForSubmissionIndex(func(i)),
+            Self::Wait => PollType::Wait,
+            Self::Poll => PollType::Poll,
         }
     }
 }
 
-/// Result of a maintain operation.
-pub enum MaintainResult {
-    /// There are no active submissions in flight as of the beginning of the poll call.
-    /// Other submissions may have been queued on other threads at the same time.
-    ///
-    /// This implies that the given poll is complete.
-    SubmissionQueueEmpty,
-    /// More information coming soon <https://github.com/gfx-rs/wgpu/pull/5012>
-    Ok,
+/// Error states after a device poll
+#[derive(Debug)]
+#[cfg_attr(feature = "std", derive(thiserror::Error))]
+pub enum PollError {
+    /// The requested Wait timed out before the submission was completed.
+    #[cfg_attr(
+        feature = "std",
+        error("The requested Wait timed out before the submission was completed.")
+    )]
+    Timeout,
 }
 
-impl MaintainResult {
-    /// Returns true if the result is [`Self::SubmissionQueueEmpty`].
+/// Status of device poll operation.
+#[derive(Debug, PartialEq, Eq)]
+pub enum PollStatus {
+    /// There are no active submissions in flight as of the beginning of the poll call.
+    /// Other submissions may have been queued on other threads during the call.
+    ///
+    /// This implies that the given Wait was satisfied before the timeout.
+    QueueEmpty,
+
+    /// The requested Wait was satisfied before the timeout.
+    WaitSucceeded,
+
+    /// This was a poll.
+    Poll,
+}
+
+impl PollStatus {
+    /// Returns true if the result is [`Self::QueueEmpty`].
     #[must_use]
     pub fn is_queue_empty(&self) -> bool {
-        matches!(self, Self::SubmissionQueueEmpty)
+        matches!(self, Self::QueueEmpty)
     }
 
-    /// Panics if the [`MaintainResult`] is not Ok.
-    pub fn panic_on_timeout(self) {
-        let _ = self;
+    /// Returns true if the result is either [`Self::WaitSucceeded`] or [`Self::QueueEmpty`].
+    #[must_use]
+    pub fn wait_finished(&self) -> bool {
+        matches!(self, Self::WaitSucceeded | Self::QueueEmpty)
     }
 }
 
@@ -4527,13 +4867,16 @@ pub enum VertexStepMode {
 
 /// Vertex inputs (attributes) to shaders.
 ///
-/// Arrays of these can be made with the [`vertex_attr_array`]
-/// macro. Vertex attributes are assumed to be tightly packed.
+/// These are used to specify the individual attributes within a [`VertexBufferLayout`].
+/// See its documentation for an example.
+///
+/// The [`vertex_attr_array!`] macro can help create these with appropriate offsets.
 ///
 /// Corresponds to [WebGPU `GPUVertexAttribute`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexattribute).
 ///
-/// [`vertex_attr_array`]: ../wgpu/macro.vertex_attr_array.html
+/// [`vertex_attr_array!`]: ../wgpu/macro.vertex_attr_array.html
+/// [`VertexBufferLayout`]: ../wgpu/struct.VertexBufferLayout.html
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -4574,11 +4917,11 @@ pub enum VertexFormat {
     Unorm8x2 = 7,
     /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm8x4 = 8,
-    /// One signed byte (i8). [-127, 127] converted to float [-1, 1] `f32` in shaders.
+    /// One signed byte (i8). [&minus;127, 127] converted to float [&minus;1, 1] `f32` in shaders.
     Snorm8 = 9,
-    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2<f32>` in shaders.
+    /// Two signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec2<f32>` in shaders.
     Snorm8x2 = 10,
-    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4<f32>` in shaders.
+    /// Four signed bytes (i8). [&minus;127, 127] converted to float [&minus;1, 1] `vec4<f32>` in shaders.
     Snorm8x4 = 11,
     /// One unsigned short (u16). `u32` in shaders.
     Uint16 = 12,
@@ -4598,11 +4941,11 @@ pub enum VertexFormat {
     Unorm16x2 = 19,
     /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4<f32>` in shaders.
     Unorm16x4 = 20,
-    /// One signed short (i16). [-32767, 32767] converted to float [-1, 1] `f32` in shaders.
+    /// One signed short (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `f32` in shaders.
     Snorm16 = 21,
-    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2<f32>` in shaders.
+    /// Two signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec2<f32>` in shaders.
     Snorm16x2 = 22,
-    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4<f32>` in shaders.
+    /// Four signed shorts (i16). [&minus;32767, 32767] converted to float [&minus;1, 1] `vec4<f32>` in shaders.
     Snorm16x4 = 23,
     /// One half-precision float (no Rust equiv). `f32` in shaders.
     Float16 = 24,
@@ -4694,6 +5037,36 @@ impl VertexFormat {
             Self::Float64x4 => 32,
         }
     }
+
+    /// Returns the size read by an acceleration structure build of the vertex format. This is
+    /// slightly different from [`Self::size`] because the alpha component of 4-component formats
+    /// are not read in an acceleration structure build, allowing for a smaller stride.
+    #[must_use]
+    pub const fn min_acceleration_structure_vertex_stride(&self) -> u64 {
+        match self {
+            Self::Float16x2 | Self::Snorm16x2 => 4,
+            Self::Float32x3 => 12,
+            Self::Float32x2 => 8,
+            // This is the minimum value from DirectX
+            // > A16 component is ignored, other data can be packed there, such as setting vertex stride to 6 bytes
+            //
+            // https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_raytracing_geometry_triangles_desc
+            //
+            // Vulkan does not express a minimum stride.
+            Self::Float16x4 | Self::Snorm16x4 => 6,
+            _ => unreachable!(),
+        }
+    }
+
+    /// Returns the alignment required for `wgpu::BlasTriangleGeometry::vertex_stride`
+    #[must_use]
+    pub const fn acceleration_structure_stride_alignment(&self) -> u64 {
+        match self {
+            Self::Float16x4 | Self::Float16x2 | Self::Snorm16x4 | Self::Snorm16x2 => 2,
+            Self::Float32x2 | Self::Float32x3 => 4,
+            _ => unreachable!(),
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -4716,7 +5089,7 @@ bitflags::bitflags! {
         /// may have is COPY_DST.
         const MAP_READ = 1 << 0;
         /// Allow a buffer to be mapped for writing using [`Buffer::map_async`] + [`Buffer::get_mapped_range_mut`].
-        /// This does not include creating a buffer with `mapped_at_creation` set.
+        /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
         ///
         /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] feature isn't enabled, the only other usage a buffer
         /// may have is COPY_SRC.
@@ -4755,8 +5128,10 @@ bitflags::bitflags! {
         /// The argument to a write-only mapping.
         const MAP_WRITE = 1 << 1;
         /// The source of a hardware copy.
+        /// cbindgen:ignore
         const COPY_SRC = 1 << 2;
         /// The destination of a hardware copy.
+        /// cbindgen:ignore
         const COPY_DST = 1 << 3;
         /// The index buffer used for drawing.
         const INDEX = 1 << 4;
@@ -4765,8 +5140,10 @@ bitflags::bitflags! {
         /// A uniform buffer bound in a bind group.
         const UNIFORM = 1 << 6;
         /// A read-only storage buffer used in a bind group.
+        /// cbindgen:ignore
         const STORAGE_READ_ONLY = 1 << 7;
         /// A read-write buffer used in a bind group.
+        /// cbindgen:ignore
         const STORAGE_READ_WRITE = 1 << 8;
         /// The indirect or count buffer in a indirect draw or dispatch.
         const INDIRECT = 1 << 9;
@@ -4866,74 +5243,96 @@ impl<T> Default for CommandEncoderDescriptor<Option<T>> {
     }
 }
 
-/// Behavior of the presentation engine based on frame rate.
+/// Timing and queueing with which frames are actually displayed to the user.
+///
+/// Use this as part of a [`SurfaceConfiguration`] to control the behavior of
+/// [`SurfaceTexture::present()`].
+///
+/// Some modes are only supported by some backends.
+/// You can use one of the `Auto*` modes, [`Fifo`](Self::Fifo),
+/// or choose one of the supported modes from [`SurfaceCapabilities::present_modes`].
+///
+/// [presented]: ../wgpu/struct.SurfaceTexture.html#method.present
+/// [`SurfaceTexture::present()`]: ../wgpu/struct.SurfaceTexture.html#method.present
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PresentMode {
-    /// Chooses `FifoRelaxed` -> `Fifo` based on availability.
+    /// Chooses the first supported mode out of:
     ///
-    /// Because of the fallback behavior, it is supported everywhere.
+    /// 1. [`FifoRelaxed`](Self::FifoRelaxed)
+    /// 2. [`Fifo`](Self::Fifo)
+    ///
+    /// Because of the fallback behavior, this is supported everywhere.
     AutoVsync = 0,
-    /// Chooses `Immediate` -> `Mailbox` -> `Fifo` (on web) based on availability.
+
+    /// Chooses the first supported mode out of:
     ///
-    /// Because of the fallback behavior, it is supported everywhere.
+    /// 1. [`Immediate`](Self::Immediate)
+    /// 2. [`Mailbox`](Self::Mailbox)
+    /// 3. [`Fifo`](Self::Fifo)
+    ///
+    /// Because of the fallback behavior, this is supported everywhere.
     AutoNoVsync = 1,
+
     /// Presentation frames are kept in a First-In-First-Out queue approximately 3 frames
     /// long. Every vertical blanking period, the presentation engine will pop a frame
     /// off the queue to display. If there is no frame to display, it will present the same
     /// frame again until the next vblank.
     ///
-    /// When a present command is executed on the gpu, the presented image is added on the queue.
+    /// When a present command is executed on the GPU, the presented image is added on the queue.
     ///
-    /// No tearing will be observed.
+    /// Calls to [`Surface::get_current_texture()`] will block until there is a spot in the queue.
     ///
-    /// Calls to `Surface::get_current_texture` will block until there is a spot in the queue.
+    /// * **Tearing:** No tearing will be observed.
+    /// * **Supported on**: All platforms.
+    /// * **Also known as**: "Vsync On"
     ///
-    /// Supported on all platforms.
+    /// This is the [default](Self::default) value for `PresentMode`.
+    /// If you don't know what mode to choose, choose this mode.
     ///
-    /// If you don't know what mode to choose, choose this mode. This is traditionally called "Vsync On".
+    /// [`Surface::get_current_texture()`]: ../wgpu/struct.Surface.html#method.get_current_texture
     #[default]
     Fifo = 2,
+
     /// Presentation frames are kept in a First-In-First-Out queue approximately 3 frames
     /// long. Every vertical blanking period, the presentation engine will pop a frame
     /// off the queue to display. If there is no frame to display, it will present the
     /// same frame until there is a frame in the queue. The moment there is a frame in the
     /// queue, it will immediately pop the frame off the queue.
     ///
-    /// When a present command is executed on the gpu, the presented image is added on the queue.
+    /// When a present command is executed on the GPU, the presented image is added on the queue.
     ///
-    /// Tearing will be observed if frames last more than one vblank as the front buffer.
+    /// Calls to [`Surface::get_current_texture()`] will block until there is a spot in the queue.
     ///
-    /// Calls to `Surface::get_current_texture` will block until there is a spot in the queue.
+    /// * **Tearing**:
+    ///   Tearing will be observed if frames last more than one vblank as the front buffer.
+    /// * **Supported on**: AMD on Vulkan.
+    /// * **Also known as**: "Adaptive Vsync"
     ///
-    /// Supported on AMD on Vulkan.
-    ///
-    /// This is traditionally called "Adaptive Vsync"
+    /// [`Surface::get_current_texture()`]: ../wgpu/struct.Surface.html#method.get_current_texture
     FifoRelaxed = 3,
+
     /// Presentation frames are not queued at all. The moment a present command
     /// is executed on the GPU, the presented image is swapped onto the front buffer
     /// immediately.
     ///
-    /// Tearing can be observed.
-    ///
-    /// Supported on most platforms except older DX12 and Wayland.
-    ///
-    /// This is traditionally called "Vsync Off".
+    /// * **Tearing**: Tearing can be observed.
+    /// * **Supported on**: Most platforms except older DX12 and Wayland.
+    /// * **Also known as**: "Vsync Off"
     Immediate = 4,
+
     /// Presentation frames are kept in a single-frame queue. Every vertical blanking period,
     /// the presentation engine will pop a frame from the queue. If there is no frame to display,
     /// it will present the same frame again until the next vblank.
     ///
-    /// When a present command is executed on the gpu, the frame will be put into the queue.
+    /// When a present command is executed on the GPU, the frame will be put into the queue.
     /// If there was already a frame in the queue, the new frame will _replace_ the old frame
     /// on the queue.
     ///
-    /// No tearing will be observed.
-    ///
-    /// Supported on DX12 on Windows 10, NVidia on Vulkan and Wayland on Vulkan.
-    ///
-    /// This is traditionally called "Fast Vsync"
+    /// * **Tearing**: No tearing will be observed.
+    /// * **Supported on**: DX12 on Windows 10, NVidia on Vulkan and Wayland on Vulkan.
+    /// * **Also known as**: "Fast Vsync"
     Mailbox = 5,
 }
 
@@ -5025,8 +5424,10 @@ bitflags::bitflags! {
         /// Ready to present image to the surface.
         const PRESENT = 1 << 1;
         /// The source of a hardware copy.
+        /// cbindgen:ignore
         const COPY_SRC = 1 << 2;
         /// The destination of a hardware copy.
+        /// cbindgen:ignore
         const COPY_DST = 1 << 3;
         /// Read-only sampled or fetched resource.
         const RESOURCE = 1 << 4;
@@ -5037,20 +5438,27 @@ bitflags::bitflags! {
         /// Read-write depth stencil usage
         const DEPTH_STENCIL_WRITE = 1 << 7;
         /// Read-only storage texture usage. Corresponds to a UAV in d3d, so is exclusive, despite being read only.
+        /// cbindgen:ignore
         const STORAGE_READ_ONLY = 1 << 8;
         /// Write-only storage texture usage.
+        /// cbindgen:ignore
         const STORAGE_WRITE_ONLY = 1 << 9;
         /// Read-write storage texture usage.
+        /// cbindgen:ignore
         const STORAGE_READ_WRITE = 1 << 10;
         /// Image atomic enabled storage.
+        /// cbindgen:ignore
         const STORAGE_ATOMIC = 1 << 11;
         /// The combination of states that a texture may be in _at the same time_.
+        /// cbindgen:ignore
         const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
         /// The combination of states that a texture must exclusively be in.
+        /// cbindgen:ignore
         const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
+        /// cbindgen:ignore
         const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
@@ -5612,12 +6020,15 @@ fn test_max_mips() {
     );
 }
 
-/// Describes a `TextureView`.
+/// Describes a [`TextureView`].
 ///
-/// For use with `Texture::create_view`.
+/// For use with [`Texture::create_view()`].
 ///
 /// Corresponds to [WebGPU `GPUTextureViewDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
+///
+/// [`TextureView`]: ../wgpu/struct.TextureView.html
+/// [`Texture::create_view()`]: ../wgpu/struct.Texture.html#method.create_view
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TextureViewDescriptor<L> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
@@ -5837,10 +6248,15 @@ impl<L: Default> Default for SamplerDescriptor<L> {
     }
 }
 
-/// Kind of data the texture holds.
+/// Selects a subset of the data a [`Texture`] holds.
+///
+/// Used in [texture views](TextureViewDescriptor) and
+/// [texture copy operations](TexelCopyTextureInfo).
 ///
 /// Corresponds to [WebGPU `GPUTextureAspect`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureaspect).
+///
+/// [`Texture`]: ../wgpu/struct.Texture.html
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -6052,13 +6468,6 @@ pub struct TexelCopyBufferLayout {
     /// Required if there are multiple images (i.e. the depth is more than one).
     pub rows_per_image: Option<u32>,
 }
-
-/// Old name for a [`TexelCopyBufferLayout`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyBufferLayout`, and will be removed in 25.0.0."
-)]
-pub type ImageDataLayout = TexelCopyBufferLayout;
 
 /// Specific type of a buffer binding.
 ///
@@ -6299,12 +6708,16 @@ pub enum SamplerBindingType {
     Comparison,
 }
 
-/// Specific type of a binding.
+/// Type of a binding in a [bind group layout][`BindGroupLayoutEntry`].
 ///
-/// For use in [`BindGroupLayoutEntry`].
+/// For each binding in a layout, a [`BindGroup`] must provide a [`BindingResource`] of the
+/// corresponding type.
 ///
 /// Corresponds to WebGPU's mutually exclusive fields within [`GPUBindGroupLayoutEntry`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry).
+///
+/// [`BindingResource`]: ../wgpu/enum.BindingResource.html
+/// [`BindGroup`]: ../wgpu/struct.BindGroup.html
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BindingType {
@@ -6431,12 +6844,38 @@ pub enum BindingType {
     /// var as: acceleration_structure;
     /// ```
     ///
+    /// or with vertex return enabled
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var as: acceleration_structure<vertex_return>;
+    /// ```
+    ///
     /// Example GLSL syntax:
     /// ```cpp,ignore
     /// layout(binding = 0)
     /// uniform accelerationStructureEXT as;
     /// ```
-    AccelerationStructure,
+    AccelerationStructure {
+        /// Whether this acceleration structure can be used to
+        /// create a ray query that has flag vertex return in the shader
+        ///
+        /// If enabled requires [`Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`]
+        vertex_return: bool,
+    },
+
+    /// An external texture binding.
+    ///
+    /// Example WGSL syntax:
+    /// ```rust,ignore
+    /// @group(0) @binding(0)
+    /// var t: texture_external;
+    /// ```
+    ///
+    /// Corresponds to [WebGPU `GPUExternalTextureBindingLayout`](
+    /// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturebindinglayout).
+    ///
+    /// Requires [`Features::EXTERNAL_TEXTURE`]
+    ExternalTexture,
 }
 
 impl BindingType {
@@ -6496,13 +6935,6 @@ pub struct TexelCopyBufferInfo<B> {
     pub layout: TexelCopyBufferLayout,
 }
 
-/// Old name for a [`TexelCopyBufferInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyBufferInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyBuffer<B> = TexelCopyBufferInfo<B>;
-
 /// View of a texture which can be used to copy to/from a buffer/texture.
 ///
 /// Corresponds to [WebGPU `GPUTexelCopyTextureInfo`](
@@ -6544,18 +6976,11 @@ impl<T> TexelCopyTextureInfo<T> {
     }
 }
 
-/// Old name for a [`TexelCopyTextureInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `TexelCopyTextureInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyTexture<T> = TexelCopyTextureInfo<T>;
-
 /// View of an external texture that can be used to copy to a texture.
 ///
 /// Corresponds to [WebGPU `GPUCopyExternalImageSourceInfo`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuimagecopyexternalimage).
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "web"))]
 #[derive(Clone, Debug)]
 pub struct CopyExternalImageSourceInfo {
     /// The texture to be copied from. The copy source data is captured at the moment
@@ -6574,19 +6999,11 @@ pub struct CopyExternalImageSourceInfo {
     pub flip_y: bool,
 }
 
-/// Old name for a [`CopyExternalImageSourceInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `CopyExternalImageSourceInfo`, and will be removed in 25.0.0."
-)]
-#[cfg(target_arch = "wasm32")]
-pub type ImageCopyExternalImage = CopyExternalImageSourceInfo;
-
 /// Source of an external texture copy.
 ///
 /// Corresponds to the [implicit union type on WebGPU `GPUCopyExternalImageSourceInfo.source`](
 /// https://gpuweb.github.io/gpuweb/#dom-gpuimagecopyexternalimage-source).
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "web"))]
 #[derive(Clone, Debug)]
 pub enum ExternalImageSource {
     /// Copy from a previously-decoded image bitmap.
@@ -6608,7 +7025,7 @@ pub enum ExternalImageSource {
     VideoFrame(web_sys::VideoFrame),
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "web"))]
 impl ExternalImageSource {
     /// Gets the pixel, not css, width of the source.
     pub fn width(&self) -> u32 {
@@ -6639,7 +7056,7 @@ impl ExternalImageSource {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "web"))]
 impl core::ops::Deref for ExternalImageSource {
     type Target = js_sys::Object;
 
@@ -6659,12 +7076,14 @@ impl core::ops::Deref for ExternalImageSource {
 
 #[cfg(all(
     target_arch = "wasm32",
+    feature = "web",
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
 ))]
 unsafe impl Send for ExternalImageSource {}
 #[cfg(all(
     target_arch = "wasm32",
+    feature = "web",
     feature = "fragile-send-sync-non-atomic-wasm",
     not(target_feature = "atomics")
 ))]
@@ -6717,13 +7136,6 @@ impl<T> CopyExternalImageDestInfo<T> {
         }
     }
 }
-
-/// Old name for a [`CopyExternalImageDestInfo`].
-#[deprecated(
-    since = "24.0.0",
-    note = "This has been renamed to `CopyExternalImageDestInfo`, and will be removed in 25.0.0."
-)]
-pub type ImageCopyTextureTagged<T> = CopyExternalImageDestInfo<T>;
 
 /// Subresource range within an image
 #[repr(C)]
@@ -6877,10 +7289,12 @@ impl<L> QuerySetDescriptor<L> {
     }
 }
 
-/// Type of query contained in a `QuerySet`.
+/// Type of query contained in a [`QuerySet`].
 ///
 /// Corresponds to [WebGPU `GPUQueryType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuquerytype).
+///
+/// [`QuerySet`]: ../wgpu/struct.QuerySet.html
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QueryType {
@@ -6908,14 +7322,16 @@ pub enum QueryType {
 }
 
 bitflags::bitflags! {
-    /// Flags for which pipeline data should be recorded.
+    /// Flags for which pipeline data should be recorded in a query.
+    ///
+    /// Used in [`QueryType`].
     ///
     /// The amount of values written when resolved depends
-    /// on the amount of flags. If 3 flags are enabled, 3
-    /// 64-bit values will be written per-query.
+    /// on the amount of flags set. For example, if 3 flags are set, 3
+    /// 64-bit values will be written per query.
     ///
     /// The order they are written is the order they are declared
-    /// in this bitflags. If you enabled `CLIPPER_PRIMITIVES_OUT`
+    /// in these bitflags. For example, if you enabled `CLIPPER_PRIMITIVES_OUT`
     /// and `COMPUTE_SHADER_INVOCATIONS`, it would write 16 bytes,
     /// the first 8 bytes being the primitive out value, the last 8
     /// bytes being the compute shader invocation count.
@@ -6946,7 +7362,7 @@ bitflags::bitflags! {
 
 /// Argument buffer layout for `draw_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DrawIndirectArgs {
     /// The number of vertices to draw.
     pub vertex_count: u32,
@@ -6964,18 +7380,13 @@ impl DrawIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written in a buffer.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            core::mem::transmute(core::slice::from_raw_parts(
-                core::ptr::from_ref(self).cast::<u8>(),
-                size_of::<Self>(),
-            ))
-        }
+        bytemuck::bytes_of(self)
     }
 }
 
 /// Argument buffer layout for `draw_indexed_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DrawIndexedIndirectArgs {
     /// The number of indices to draw.
     pub index_count: u32,
@@ -6995,18 +7406,13 @@ impl DrawIndexedIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written in a buffer.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            core::mem::transmute(core::slice::from_raw_parts(
-                core::ptr::from_ref(self).cast::<u8>(),
-                size_of::<Self>(),
-            ))
-        }
+        bytemuck::bytes_of(self)
     }
 }
 
 /// Argument buffer layout for `dispatch_indirect` commands.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct DispatchIndirectArgs {
     /// The number of work groups in X dimension.
     pub x: u32,
@@ -7020,12 +7426,7 @@ impl DispatchIndirectArgs {
     /// Returns the bytes representation of the struct, ready to be written into a buffer.
     #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe {
-            core::mem::transmute(core::slice::from_raw_parts(
-                core::ptr::from_ref(self).cast::<u8>(),
-                size_of::<Self>(),
-            ))
-        }
+        bytemuck::bytes_of(self)
     }
 }
 
@@ -7106,7 +7507,7 @@ impl Default for ShaderRuntimeChecks {
 pub struct BlasTriangleGeometrySizeDescriptor {
     /// Format of a vertex position, must be [`VertexFormat::Float32x3`]
     /// with just [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
-    /// but later features may add more formats.
+    /// but [`Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS`] adds more.
     pub vertex_format: VertexFormat,
     /// Number of vertices.
     pub vertex_count: u32,
@@ -7205,8 +7606,8 @@ bitflags::bitflags!(
         /// Allow for incremental updates (no change in size), currently this is unimplemented
         /// and will build as normal (this is fine, update vs build should be unnoticeable)
         const ALLOW_UPDATE = 1 << 0;
-        /// Allow the acceleration structure to be compacted in a copy operation, the function
-        /// to compact is not currently implemented.
+        /// Allow the acceleration structure to be compacted in a copy operation
+        /// (`Blas::prepare_for_compaction`, `CommandEncoder::compact_blas`).
         const ALLOW_COMPACTION = 1 << 1;
         /// Optimize for fast ray tracing performance, recommended if the geometry is unlikely
         /// to change (e.g. in a game: non-interactive scene geometry)
@@ -7219,6 +7620,8 @@ bitflags::bitflags!(
         /// Use `BlasTriangleGeometry::transform_buffer` when building a BLAS (only allowed in
         /// BLAS creation)
         const USE_TRANSFORM = 1 << 5;
+        /// Allow retrieval of the vertices of the triangle hit by a ray.
+        const ALLOW_RAY_HIT_VERTEX_RETURN = 1 << 6;
     }
 );
 
@@ -7341,15 +7744,168 @@ mod send_sync {
     impl<T> WasmNotSync for T {}
 }
 
-/// Reason for "lose the device".
+/// Corresponds to a [`GPUDeviceLostReason`].
 ///
-/// Corresponds to [WebGPU `GPUDeviceLostReason`](https://gpuweb.github.io/gpuweb/#enumdef-gpudevicelostreason).
+/// [`GPUDeviceLostReason`]: https://www.w3.org/TR/webgpu/#enumdef-gpudevicelostreason
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DeviceLostReason {
-    /// Triggered by driver
+    /// The device was lost for an unspecific reason, including driver errors.
     Unknown = 0,
-    /// After `Device::destroy`
+    /// The device's `destroy` method was called.
     Destroyed = 1,
+}
+
+/// Descriptor for creating a shader module.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub enum CreateShaderModuleDescriptorPassthrough<'a, L> {
+    /// Passthrough for SPIR-V binaries.
+    SpirV(ShaderModuleDescriptorSpirV<'a, L>),
+    /// Passthrough for MSL source code.
+    Msl(ShaderModuleDescriptorMsl<'a, L>),
+    /// Passthrough for DXIL compiled with DXC
+    Dxil(ShaderModuleDescriptorDxil<'a, L>),
+    /// Passthrough for HLSL
+    Hlsl(ShaderModuleDescriptorHlsl<'a, L>),
+}
+
+impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
+    /// Takes a closure and maps the label of the shader module descriptor into another.
+    pub fn map_label<K>(
+        &self,
+        fun: impl FnOnce(&L) -> K,
+    ) -> CreateShaderModuleDescriptorPassthrough<'_, K> {
+        match self {
+            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::SpirV(
+                    ShaderModuleDescriptorSpirV {
+                        label: fun(&inner.label),
+                        source: inner.source.clone(),
+                    },
+                )
+            }
+            CreateShaderModuleDescriptorPassthrough::Msl(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Msl(ShaderModuleDescriptorMsl {
+                    entry_point: inner.entry_point.clone(),
+                    label: fun(&inner.label),
+                    num_workgroups: inner.num_workgroups,
+                    source: inner.source.clone(),
+                })
+            }
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Dxil(ShaderModuleDescriptorDxil {
+                    entry_point: inner.entry_point.clone(),
+                    label: fun(&inner.label),
+                    num_workgroups: inner.num_workgroups,
+                    source: inner.source,
+                })
+            }
+            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => {
+                CreateShaderModuleDescriptorPassthrough::<'_, K>::Hlsl(ShaderModuleDescriptorHlsl {
+                    entry_point: inner.entry_point.clone(),
+                    label: fun(&inner.label),
+                    num_workgroups: inner.num_workgroups,
+                    source: inner.source,
+                })
+            }
+        }
+    }
+
+    /// Returns the label of shader module passthrough descriptor.
+    pub fn label(&'a self) -> &'a L {
+        match self {
+            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => &inner.label,
+            CreateShaderModuleDescriptorPassthrough::Msl(inner) => &inner.label,
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => &inner.label,
+            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => &inner.label,
+        }
+    }
+
+    #[cfg(feature = "trace")]
+    /// Returns the source data for tracing purpose.
+    pub fn trace_data(&self) -> &[u8] {
+        match self {
+            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => {
+                bytemuck::cast_slice(&inner.source)
+            }
+            CreateShaderModuleDescriptorPassthrough::Msl(inner) => inner.source.as_bytes(),
+            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => inner.source,
+            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => inner.source.as_bytes(),
+        }
+    }
+
+    #[cfg(feature = "trace")]
+    /// Returns the binary file extension for tracing purpose.
+    pub fn trace_binary_ext(&self) -> &'static str {
+        match self {
+            CreateShaderModuleDescriptorPassthrough::SpirV(..) => "spv",
+            CreateShaderModuleDescriptorPassthrough::Msl(..) => "msl",
+            CreateShaderModuleDescriptorPassthrough::Dxil(..) => "dxil",
+            CreateShaderModuleDescriptorPassthrough::Hlsl(..) => "hlsl",
+        }
+    }
+}
+
+/// Descriptor for a shader module given by Metal MSL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorMsl<'a, L> {
+    /// Entrypoint.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
+    /// Shader MSL source.
+    pub source: Cow<'a, str>,
+}
+
+/// Descriptor for a shader module given by DirectX DXIL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorDxil<'a, L> {
+    /// Entrypoint.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
+    /// Shader DXIL source.
+    pub source: &'a [u8],
+}
+
+/// Descriptor for a shader module given by DirectX HLSL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorHlsl<'a, L> {
+    /// Entrypoint.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z.
+    pub num_workgroups: (u32, u32, u32),
+    /// Shader HLSL source.
+    pub source: &'a str,
+}
+
+/// Descriptor for a shader module given by SPIR-V binary.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+#[derive(Debug, Clone)]
+pub struct ShaderModuleDescriptorSpirV<'a, L> {
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Binary SPIR-V data, in 4-byte words.
+    pub source: Cow<'a, [u32]>,
 }

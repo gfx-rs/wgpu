@@ -33,4 +33,9 @@ void switchNoLastBreak(int a) {
     return;
 }
 
-void main() {}
+void main() {
+    switchEmpty(1);
+    switchNoDefault(2);
+    switchCaseImplConv(3);
+    switchNoLastBreak(4);
+}

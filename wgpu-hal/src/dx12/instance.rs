@@ -1,4 +1,4 @@
-use std::{mem::size_of_val, sync::Arc};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 use parking_lot::RwLock;
 use windows::{
@@ -10,7 +10,10 @@ use windows::{
 };
 
 use super::SurfaceTarget;
-use crate::{auxil, dx12::D3D12Lib};
+use crate::{
+    auxil,
+    dx12::{shader_compilation::CompilerContainer, D3D12Lib},
+};
 
 impl crate::Instance for super::Instance {
     type A = super::Api;
@@ -66,39 +69,34 @@ impl crate::Instance for super::Instance {
             }
         }
 
-        // Initialize DXC shader compiler
-        let dxc_container = match desc.backend_options.dx12.shader_compiler.clone() {
+        // Initialize the shader compiler
+        let compiler_container = match desc.backend_options.dx12.shader_compiler.clone() {
             wgt::Dx12Compiler::DynamicDxc {
-                dxil_path,
                 dxc_path,
-            } => {
-                let container = super::shader_compilation::get_dynamic_dxc_container(
-                    dxc_path.into(),
-                    dxil_path.into(),
-                )
-                .map_err(|e| {
+                max_shader_model,
+            } => CompilerContainer::new_dynamic_dxc(dxc_path.into(), max_shader_model).map_err(
+                |e| {
                     crate::InstanceError::with_source(String::from("Failed to load dynamic DXC"), e)
-                })?;
-
-                Some(Arc::new(container))
-            }
-            wgt::Dx12Compiler::StaticDxc => {
-                let container =
-                    super::shader_compilation::get_static_dxc_container().map_err(|e| {
-                        crate::InstanceError::with_source(
-                            String::from("Failed to load static DXC"),
-                            e,
-                        )
-                    })?;
-
-                Some(Arc::new(container))
-            }
-            wgt::Dx12Compiler::Fxc => None,
+                },
+            )?,
+            wgt::Dx12Compiler::StaticDxc => CompilerContainer::new_static_dxc().map_err(|e| {
+                crate::InstanceError::with_source(String::from("Failed to load static DXC"), e)
+            })?,
+            wgt::Dx12Compiler::Fxc => CompilerContainer::new_fxc().map_err(|e| {
+                crate::InstanceError::with_source(String::from("Failed to load FXC"), e)
+            })?,
         };
 
-        match dxc_container {
-            Some(_) => log::debug!("Using DXC for shader compilation"),
-            None => log::debug!("Using FXC for shader compilation"),
+        match compiler_container {
+            CompilerContainer::DynamicDxc(..) => {
+                log::debug!("Using dynamic DXC for shader compilation")
+            }
+            CompilerContainer::StaticDxc(..) => {
+                log::debug!("Using static DXC for shader compilation")
+            }
+            CompilerContainer::Fxc(..) => {
+                log::debug!("Using FXC for shader compilation")
+            }
         }
 
         Ok(Self {
@@ -109,7 +107,8 @@ impl crate::Instance for super::Instance {
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
             flags: desc.flags,
-            dxc_container,
+            memory_budget_thresholds: desc.memory_budget_thresholds,
+            compiler_container: Arc::new(compiler_container),
         })
     }
 
@@ -142,7 +141,13 @@ impl crate::Instance for super::Instance {
         adapters
             .into_iter()
             .filter_map(|raw| {
-                super::Adapter::expose(raw, &self.library, self.flags, self.dxc_container.clone())
+                super::Adapter::expose(
+                    raw,
+                    &self.library,
+                    self.flags,
+                    self.memory_budget_thresholds,
+                    self.compiler_container.clone(),
+                )
             })
             .collect()
     }

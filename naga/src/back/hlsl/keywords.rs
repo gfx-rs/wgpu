@@ -1,3 +1,7 @@
+use crate::racy_lock::RacyLock;
+
+use hashbrown::HashSet;
+
 // When compiling with FXC without strict mode, these keywords are actually case insensitive.
 // If you compile with strict mode and specify a different casing like "Pass" instead in an identifier, FXC will give this error:
 // "error X3086: alternate cases for 'pass' are deprecated in strict mode"
@@ -822,6 +826,15 @@ pub const RESERVED: &[&str] = &[
     super::writer::INSERT_BITS_FUNCTION,
     super::writer::SAMPLER_HEAP_VAR,
     super::writer::COMPARISON_SAMPLER_HEAP_VAR,
+    super::writer::ABS_FUNCTION,
+    super::writer::DIV_FUNCTION,
+    super::writer::MOD_FUNCTION,
+    super::writer::NEG_FUNCTION,
+    super::writer::F2I32_FUNCTION,
+    super::writer::F2U32_FUNCTION,
+    super::writer::F2I64_FUNCTION,
+    super::writer::F2U64_FUNCTION,
+    super::writer::IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION,
 ];
 
 // DXC scalar types, from https://github.com/microsoft/DirectXShaderCompiler/blob/18c9e114f9c314f93e68fbc72ce207d4ed2e65ae/tools/clang/lib/AST/ASTContextHLSL.cpp#L48-L254
@@ -907,6 +920,22 @@ pub const TYPES: &[&str] = &{
 
     res
 };
+
+/// The above set of reserved keywords, turned into a cached HashSet. This saves
+/// significant time during [`Namer::reset`](crate::proc::Namer::reset).
+///
+/// See <https://github.com/gfx-rs/wgpu/pull/7338> for benchmarks.
+pub static RESERVED_SET: RacyLock<HashSet<&'static str>> = RacyLock::new(|| {
+    let mut set = HashSet::default();
+    set.reserve(RESERVED.len() + TYPES.len());
+    for &word in RESERVED {
+        set.insert(word);
+    }
+    for &word in TYPES {
+        set.insert(word);
+    }
+    set
+});
 
 pub const RESERVED_PREFIXES: &[&str] = &[
     "__dynamic_buffer_offsets",

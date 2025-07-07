@@ -9,6 +9,12 @@ struct ExampleDesc {
 
 const EXAMPLES: &[ExampleDesc] = &[
     ExampleDesc {
+        name: "big_compute_buffers",
+        function: wgpu_examples::big_compute_buffers::main,
+        webgl: false,  // Native only example
+        webgpu: false, // Native only example
+    },
+    ExampleDesc {
         name: "boids",
         function: wgpu_examples::boids::main,
         webgl: false, // No compute
@@ -169,6 +175,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         function: wgpu_examples::ray_traced_triangle::main,
         webgl: false,
         webgpu: false,
+    },
+    ExampleDesc {
+        name: "ray_cube_normals",
+        function: wgpu_examples::ray_cube_normals::main,
+        webgl: false,  // No Ray-tracing extensions
+        webgpu: false, // No Ray-tracing extensions (yet)
     },
 ];
 

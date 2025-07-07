@@ -1,0 +1,305 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct _mslBufferSizes {
+    uint buffer_size1;
+};
+
+struct VertexOutput {
+    metal::float4 position;
+};
+struct VertexInput {
+    metal::uint4 v_uint8_;
+    metal::uint4 v_uint8x2_;
+    metal::uint4 v_uint8x4_;
+    metal::int4 v_sint8_;
+    metal::int4 v_sint8x2_;
+    metal::int4 v_sint8x4_;
+    metal::float4 v_unorm8_;
+    metal::float4 v_unorm8x2_;
+    metal::float4 v_unorm8x4_;
+    metal::float4 v_snorm8_;
+    metal::float4 v_snorm8x2_;
+    metal::float4 v_snorm8x4_;
+    metal::uint4 v_uint16_;
+    metal::uint4 v_uint16x2_;
+    metal::uint4 v_uint16x4_;
+    metal::int4 v_sint16_;
+    metal::int4 v_sint16x2_;
+    metal::int4 v_sint16x4_;
+    metal::float4 v_unorm16_;
+    metal::float4 v_unorm16x2_;
+    metal::float4 v_unorm16x4_;
+    metal::float4 v_snorm16_;
+    metal::float4 v_snorm16x2_;
+    metal::float4 v_snorm16x4_;
+    metal::float4 v_float16_;
+    metal::float4 v_float16x2_;
+    metal::float4 v_float16x4_;
+    metal::float4 v_float32_;
+    metal::float4 v_float32x2_;
+    metal::float4 v_float32x3_;
+    metal::float4 v_float32x4_;
+    metal::uint4 v_uint32_;
+    metal::uint4 v_uint32x2_;
+    metal::uint4 v_uint32x3_;
+    metal::uint4 v_uint32x4_;
+    metal::int4 v_sint32_;
+    metal::int4 v_sint32x2_;
+    metal::int4 v_sint32x3_;
+    metal::int4 v_sint32x4_;
+    metal::float4 v_unorm10_10_10_2_;
+    metal::float4 v_unorm8x4_bgra;
+};
+uint unpackUint8_(metal::uchar b0) {
+    return uint(b0);
+}
+metal::uint2 unpackUint8x2_(metal::uchar b0, metal::uchar b1) {
+    return metal::uint2(b0, b1);
+}
+metal::uint4 unpackUint8x4_(metal::uchar b0, metal::uchar b1, metal::uchar b2, metal::uchar b3) {
+    return metal::uint4(b0, b1, b2, b3);
+}
+int unpackSint8_(metal::uchar b0) {
+    return int(as_type<char>(b0));
+}
+metal::int2 unpackSint8x2_(metal::uchar b0, metal::uchar b1) {
+    return metal::int2(as_type<char>(b0), as_type<char>(b1));
+}
+metal::int4 unpackSint8x4_(metal::uchar b0, metal::uchar b1, metal::uchar b2, metal::uchar b3) {
+    return metal::int4(as_type<char>(b0), as_type<char>(b1), as_type<char>(b2), as_type<char>(b3));
+}
+float unpackUnorm8_(metal::uchar b0) {
+    return float(float(b0) / 255.0f);
+}
+metal::float2 unpackUnorm8x2_(metal::uchar b0, metal::uchar b1) {
+    return metal::float2(float(b0) / 255.0f, float(b1) / 255.0f);
+}
+metal::float4 unpackUnorm8x4_(metal::uchar b0, metal::uchar b1, metal::uchar b2, metal::uchar b3) {
+    return metal::float4(float(b0) / 255.0f, float(b1) / 255.0f, float(b2) / 255.0f, float(b3) / 255.0f);
+}
+float unpackSnorm8_(metal::uchar b0) {
+    return float(metal::max(-1.0f, as_type<char>(b0) / 127.0f));
+}
+metal::float2 unpackSnorm8x2_(metal::uchar b0, metal::uchar b1) {
+    return metal::float2(metal::max(-1.0f, as_type<char>(b0) / 127.0f), metal::max(-1.0f, as_type<char>(b1) / 127.0f));
+}
+metal::float4 unpackSnorm8x4_(metal::uchar b0, metal::uchar b1, metal::uchar b2, metal::uchar b3) {
+    return metal::float4(metal::max(-1.0f, as_type<char>(b0) / 127.0f), metal::max(-1.0f, as_type<char>(b1) / 127.0f), metal::max(-1.0f, as_type<char>(b2) / 127.0f), metal::max(-1.0f, as_type<char>(b3) / 127.0f));
+}
+metal::uint unpackUint16_(metal::uint b0, metal::uint b1) {
+    return metal::uint(b1 << 8 | b0);
+}
+metal::uint2 unpackUint16x2_(metal::uint b0, metal::uint b1, metal::uint b2, metal::uint b3) {
+    return metal::uint2(b1 << 8 | b0, b3 << 8 | b2);
+}
+metal::uint4 unpackUint16x4_(metal::uint b0, metal::uint b1, metal::uint b2, metal::uint b3, metal::uint b4, metal::uint b5, metal::uint b6, metal::uint b7) {
+    return metal::uint4(b1 << 8 | b0, b3 << 8 | b2, b5 << 8 | b4, b7 << 8 | b6);
+}
+int unpackSint16_(metal::ushort b0, metal::ushort b1) {
+    return int(as_type<short>(metal::ushort(b1 << 8 | b0)));
+}
+metal::int2 unpackSint16x2_(metal::ushort b0, metal::ushort b1, metal::ushort b2, metal::ushort b3) {
+    return metal::int2(as_type<short>(metal::ushort(b1 << 8 | b0)), as_type<short>(metal::ushort(b3 << 8 | b2)));
+}
+metal::int4 unpackSint16x4_(metal::ushort b0, metal::ushort b1, metal::ushort b2, metal::ushort b3, metal::ushort b4, metal::ushort b5, metal::ushort b6, metal::ushort b7) {
+    return metal::int4(as_type<short>(metal::ushort(b1 << 8 | b0)), as_type<short>(metal::ushort(b3 << 8 | b2)), as_type<short>(metal::ushort(b5 << 8 | b4)), as_type<short>(metal::ushort(b7 << 8 | b6)));
+}
+float unpackUnorm16_(metal::ushort b0, metal::ushort b1) {
+    return float(float(b1 << 8 | b0) / 65535.0f);
+}
+metal::float2 unpackUnorm16x2_(metal::ushort b0, metal::ushort b1, metal::ushort b2, metal::ushort b3) {
+    return metal::float2(float(b1 << 8 | b0) / 65535.0f, float(b3 << 8 | b2) / 65535.0f);
+}
+metal::float4 unpackUnorm16x4_(metal::ushort b0, metal::ushort b1, metal::ushort b2, metal::ushort b3, metal::ushort b4, metal::ushort b5, metal::ushort b6, metal::ushort b7) {
+    return metal::float4(float(b1 << 8 | b0) / 65535.0f, float(b3 << 8 | b2) / 65535.0f, float(b5 << 8 | b4) / 65535.0f, float(b7 << 8 | b6) / 65535.0f);
+}
+float unpackSnorm16_(metal::ushort b0, metal::ushort b1) {
+    return metal::unpack_snorm2x16_to_float(b1 << 8 | b0).x;
+}
+metal::float2 unpackSnorm16x2_(metal::ushort b0, metal::ushort b1, metal::ushort b2, metal::ushort b3) {
+    return metal::unpack_snorm2x16_to_float(b1 << 24 | b0 << 16 | b3 << 8 | b2);
+}
+metal::float4 unpackSnorm16x4_(metal::ushort b0, metal::ushort b1, metal::ushort b2, metal::ushort b3, metal::ushort b4, metal::ushort b5, metal::ushort b6, metal::ushort b7) {
+    return metal::float4(metal::unpack_snorm2x16_to_float(b1 << 24 | b0 << 16 | b3 << 8 | b2), metal::unpack_snorm2x16_to_float(b5 << 24 | b4 << 16 | b7 << 8 | b6));
+}
+float unpackFloat16_(metal::ushort b0, metal::ushort b1) {
+    return float(as_type<half>(metal::ushort(b1 << 8 | b0)));
+}
+metal::float2 unpackFloat16x2_(metal::ushort b0, metal::ushort b1, metal::ushort b2, metal::ushort b3) {
+    return metal::float2(as_type<half>(metal::ushort(b1 << 8 | b0)), as_type<half>(metal::ushort(b3 << 8 | b2)));
+}
+metal::float4 unpackFloat16x4_(metal::ushort b0, metal::ushort b1, metal::ushort b2, metal::ushort b3, metal::ushort b4, metal::ushort b5, metal::ushort b6, metal::ushort b7) {
+    return metal::float4(as_type<half>(metal::ushort(b1 << 8 | b0)), as_type<half>(metal::ushort(b3 << 8 | b2)), as_type<half>(metal::ushort(b5 << 8 | b4)), as_type<half>(metal::ushort(b7 << 8 | b6)));
+}
+float unpackFloat32_(uint b0, uint b1, uint b2, uint b3) {
+    return as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0);
+}
+metal::float2 unpackFloat32x2_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7) {
+    return metal::float2(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4));
+}
+metal::float3 unpackFloat32x3_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7, uint b8, uint b9, uint b10, uint b11) {
+    return metal::float3(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4), as_type<float>(b11 << 24 | b10 << 16 | b9 << 8 | b8));
+}
+metal::float4 unpackFloat32x4_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7, uint b8, uint b9, uint b10, uint b11, uint b12, uint b13, uint b14, uint b15) {
+    return metal::float4(as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0), as_type<float>(b7 << 24 | b6 << 16 | b5 << 8 | b4), as_type<float>(b11 << 24 | b10 << 16 | b9 << 8 | b8), as_type<float>(b15 << 24 | b14 << 16 | b13 << 8 | b12));
+}
+uint unpackUint32_(uint b0, uint b1, uint b2, uint b3) {
+    return (b3 << 24 | b2 << 16 | b1 << 8 | b0);
+}
+uint2 unpackUint32x2_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7) {
+    return uint2((b3 << 24 | b2 << 16 | b1 << 8 | b0), (b7 << 24 | b6 << 16 | b5 << 8 | b4));
+}
+uint3 unpackUint32x3_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7, uint b8, uint b9, uint b10, uint b11) {
+    return uint3((b3 << 24 | b2 << 16 | b1 << 8 | b0), (b7 << 24 | b6 << 16 | b5 << 8 | b4), (b11 << 24 | b10 << 16 | b9 << 8 | b8));
+}
+metal::uint4 unpackUint32x4_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7, uint b8, uint b9, uint b10, uint b11, uint b12, uint b13, uint b14, uint b15) {
+    return metal::uint4((b3 << 24 | b2 << 16 | b1 << 8 | b0), (b7 << 24 | b6 << 16 | b5 << 8 | b4), (b11 << 24 | b10 << 16 | b9 << 8 | b8), (b15 << 24 | b14 << 16 | b13 << 8 | b12));
+}
+int unpackSint32_(uint b0, uint b1, uint b2, uint b3) {
+    return as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0);
+}
+metal::int2 unpackSint32x2_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7) {
+    return metal::int2(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4));
+}
+metal::int3 unpackSint32x3_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7, uint b8, uint b9, uint b10, uint b11) {
+    return metal::int3(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4), as_type<int>(b11 << 24 | b10 << 16 | b9 << 8 | b8));
+}
+metal::int4 unpackSint32x4_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7, uint b8, uint b9, uint b10, uint b11, uint b12, uint b13, uint b14, uint b15) {
+    return metal::int4(as_type<int>(b3 << 24 | b2 << 16 | b1 << 8 | b0), as_type<int>(b7 << 24 | b6 << 16 | b5 << 8 | b4), as_type<int>(b11 << 24 | b10 << 16 | b9 << 8 | b8), as_type<int>(b15 << 24 | b14 << 16 | b13 << 8 | b12));
+}
+metal::float4 unpackUnorm10_10_10_2_(uint b0, uint b1, uint b2, uint b3) {
+    return metal::unpack_unorm10a2_to_float(b3 << 24 | b2 << 16 | b1 << 8 | b0);
+}
+metal::float4 unpackUnorm8x4Bgra(metal::uchar b0, metal::uchar b1, metal::uchar b2, metal::uchar b3) {
+    return metal::float4(float(b2) / 255.0f, float(b1) / 255.0f, float(b0) / 255.0f, float(b3) / 255.0f);
+}
+
+struct render_vertexOutput {
+    metal::float4 position [[position]];
+};
+struct vb_1_type { metal::uchar data[644]; };
+vertex render_vertexOutput render_vertex(
+  uint v_id [[vertex_id]]
+, const device vb_1_type* vb_1_in [[buffer(1)]]
+, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
+) {
+    metal::uint4 v_uint8_ = {};
+    metal::uint4 v_uint8x2_ = {};
+    metal::uint4 v_uint8x4_ = {};
+    metal::int4 v_sint8_ = {};
+    metal::int4 v_sint8x2_ = {};
+    metal::int4 v_sint8x4_ = {};
+    metal::float4 v_unorm8_ = {};
+    metal::float4 v_unorm8x2_ = {};
+    metal::float4 v_unorm8x4_ = {};
+    metal::float4 v_snorm8_ = {};
+    metal::float4 v_snorm8x2_ = {};
+    metal::float4 v_snorm8x4_ = {};
+    metal::uint4 v_uint16_ = {};
+    metal::uint4 v_uint16x2_ = {};
+    metal::uint4 v_uint16x4_ = {};
+    metal::int4 v_sint16_ = {};
+    metal::int4 v_sint16x2_ = {};
+    metal::int4 v_sint16x4_ = {};
+    metal::float4 v_unorm16_ = {};
+    metal::float4 v_unorm16x2_ = {};
+    metal::float4 v_unorm16x4_ = {};
+    metal::float4 v_snorm16_ = {};
+    metal::float4 v_snorm16x2_ = {};
+    metal::float4 v_snorm16x4_ = {};
+    metal::float4 v_float16_ = {};
+    metal::float4 v_float16x2_ = {};
+    metal::float4 v_float16x4_ = {};
+    metal::float4 v_float32_ = {};
+    metal::float4 v_float32x2_ = {};
+    metal::float4 v_float32x3_ = {};
+    metal::float4 v_float32x4_ = {};
+    metal::uint4 v_uint32_ = {};
+    metal::uint4 v_uint32x2_ = {};
+    metal::uint4 v_uint32x3_ = {};
+    metal::uint4 v_uint32x4_ = {};
+    metal::int4 v_sint32_ = {};
+    metal::int4 v_sint32x2_ = {};
+    metal::int4 v_sint32x3_ = {};
+    metal::int4 v_sint32x4_ = {};
+    metal::float4 v_unorm10_10_10_2_ = {};
+    metal::float4 v_unorm8x4_bgra = {};
+    if (v_id < (_buffer_sizes.buffer_size1 / 644)) {
+        const vb_1_type vb_1_elem = vb_1_in[v_id];
+        // metal::uint4 <- Uint8
+        v_uint8_ = metal::uint4(unpackUint8_(vb_1_elem.data[0]), 0, 0, 1);
+        // metal::uint4 <- Uint8x2
+        v_uint8x2_ = metal::uint4(unpackUint8x2_(vb_1_elem.data[16], vb_1_elem.data[17]), 0, 1);
+        v_uint8x4_ = unpackUint8x4_(vb_1_elem.data[32], vb_1_elem.data[33], vb_1_elem.data[34], vb_1_elem.data[35]);
+        // metal::int4 <- Sint8
+        v_sint8_ = metal::int4(unpackSint8_(vb_1_elem.data[48]), 0, 0, 1);
+        // metal::int4 <- Sint8x2
+        v_sint8x2_ = metal::int4(unpackSint8x2_(vb_1_elem.data[64], vb_1_elem.data[65]), 0, 1);
+        v_sint8x4_ = unpackSint8x4_(vb_1_elem.data[80], vb_1_elem.data[81], vb_1_elem.data[82], vb_1_elem.data[83]);
+        // metal::float4 <- Unorm8
+        v_unorm8_ = metal::float4(unpackUnorm8_(vb_1_elem.data[96]), 0.0, 0.0, 1.0);
+        // metal::float4 <- Unorm8x2
+        v_unorm8x2_ = metal::float4(unpackUnorm8x2_(vb_1_elem.data[112], vb_1_elem.data[113]), 0.0, 1.0);
+        v_unorm8x4_ = unpackUnorm8x4_(vb_1_elem.data[128], vb_1_elem.data[129], vb_1_elem.data[130], vb_1_elem.data[131]);
+        // metal::float4 <- Snorm8
+        v_snorm8_ = metal::float4(unpackSnorm8_(vb_1_elem.data[144]), 0.0, 0.0, 1.0);
+        // metal::float4 <- Snorm8x2
+        v_snorm8x2_ = metal::float4(unpackSnorm8x2_(vb_1_elem.data[160], vb_1_elem.data[161]), 0.0, 1.0);
+        v_snorm8x4_ = unpackSnorm8x4_(vb_1_elem.data[176], vb_1_elem.data[177], vb_1_elem.data[178], vb_1_elem.data[179]);
+        // metal::uint4 <- Uint16
+        v_uint16_ = metal::uint4(unpackUint16_(vb_1_elem.data[192], vb_1_elem.data[193]), 0, 0, 1);
+        // metal::uint4 <- Uint16x2
+        v_uint16x2_ = metal::uint4(unpackUint16x2_(vb_1_elem.data[208], vb_1_elem.data[209], vb_1_elem.data[210], vb_1_elem.data[211]), 0, 1);
+        v_uint16x4_ = unpackUint16x4_(vb_1_elem.data[224], vb_1_elem.data[225], vb_1_elem.data[226], vb_1_elem.data[227], vb_1_elem.data[228], vb_1_elem.data[229], vb_1_elem.data[230], vb_1_elem.data[231]);
+        // metal::int4 <- Sint16
+        v_sint16_ = metal::int4(unpackSint16_(vb_1_elem.data[240], vb_1_elem.data[241]), 0, 0, 1);
+        // metal::int4 <- Sint16x2
+        v_sint16x2_ = metal::int4(unpackSint16x2_(vb_1_elem.data[256], vb_1_elem.data[257], vb_1_elem.data[258], vb_1_elem.data[259]), 0, 1);
+        v_sint16x4_ = unpackSint16x4_(vb_1_elem.data[272], vb_1_elem.data[273], vb_1_elem.data[274], vb_1_elem.data[275], vb_1_elem.data[276], vb_1_elem.data[277], vb_1_elem.data[278], vb_1_elem.data[279]);
+        // metal::float4 <- Unorm16
+        v_unorm16_ = metal::float4(unpackUnorm16_(vb_1_elem.data[288], vb_1_elem.data[289]), 0.0, 0.0, 1.0);
+        // metal::float4 <- Unorm16x2
+        v_unorm16x2_ = metal::float4(unpackUnorm16x2_(vb_1_elem.data[304], vb_1_elem.data[305], vb_1_elem.data[306], vb_1_elem.data[307]), 0.0, 1.0);
+        v_unorm16x4_ = unpackUnorm16x4_(vb_1_elem.data[320], vb_1_elem.data[321], vb_1_elem.data[322], vb_1_elem.data[323], vb_1_elem.data[324], vb_1_elem.data[325], vb_1_elem.data[326], vb_1_elem.data[327]);
+        // metal::float4 <- Snorm16
+        v_snorm16_ = metal::float4(unpackSnorm16_(vb_1_elem.data[336], vb_1_elem.data[337]), 0.0, 0.0, 1.0);
+        // metal::float4 <- Snorm16x2
+        v_snorm16x2_ = metal::float4(unpackSnorm16x2_(vb_1_elem.data[352], vb_1_elem.data[353], vb_1_elem.data[354], vb_1_elem.data[355]), 0.0, 1.0);
+        v_snorm16x4_ = unpackSnorm16x4_(vb_1_elem.data[368], vb_1_elem.data[369], vb_1_elem.data[370], vb_1_elem.data[371], vb_1_elem.data[372], vb_1_elem.data[373], vb_1_elem.data[374], vb_1_elem.data[375]);
+        // metal::float4 <- Float16
+        v_float16_ = metal::float4(unpackFloat16_(vb_1_elem.data[384], vb_1_elem.data[385]), 0.0, 0.0, 1.0);
+        // metal::float4 <- Float16x2
+        v_float16x2_ = metal::float4(unpackFloat16x2_(vb_1_elem.data[400], vb_1_elem.data[401], vb_1_elem.data[402], vb_1_elem.data[403]), 0.0, 1.0);
+        v_float16x4_ = unpackFloat16x4_(vb_1_elem.data[416], vb_1_elem.data[417], vb_1_elem.data[418], vb_1_elem.data[419], vb_1_elem.data[420], vb_1_elem.data[421], vb_1_elem.data[422], vb_1_elem.data[423]);
+        // metal::float4 <- Float32
+        v_float32_ = metal::float4(unpackFloat32_(vb_1_elem.data[432], vb_1_elem.data[433], vb_1_elem.data[434], vb_1_elem.data[435]), 0.0, 0.0, 1.0);
+        // metal::float4 <- Float32x2
+        v_float32x2_ = metal::float4(unpackFloat32x2_(vb_1_elem.data[448], vb_1_elem.data[449], vb_1_elem.data[450], vb_1_elem.data[451], vb_1_elem.data[452], vb_1_elem.data[453], vb_1_elem.data[454], vb_1_elem.data[455]), 0.0, 1.0);
+        // metal::float4 <- Float32x3
+        v_float32x3_ = metal::float4(unpackFloat32x3_(vb_1_elem.data[464], vb_1_elem.data[465], vb_1_elem.data[466], vb_1_elem.data[467], vb_1_elem.data[468], vb_1_elem.data[469], vb_1_elem.data[470], vb_1_elem.data[471], vb_1_elem.data[472], vb_1_elem.data[473], vb_1_elem.data[474], vb_1_elem.data[475]), 1.0);
+        v_float32x4_ = unpackFloat32x4_(vb_1_elem.data[480], vb_1_elem.data[481], vb_1_elem.data[482], vb_1_elem.data[483], vb_1_elem.data[484], vb_1_elem.data[485], vb_1_elem.data[486], vb_1_elem.data[487], vb_1_elem.data[488], vb_1_elem.data[489], vb_1_elem.data[490], vb_1_elem.data[491], vb_1_elem.data[492], vb_1_elem.data[493], vb_1_elem.data[494], vb_1_elem.data[495]);
+        // metal::uint4 <- Uint32
+        v_uint32_ = metal::uint4(unpackUint32_(vb_1_elem.data[496], vb_1_elem.data[497], vb_1_elem.data[498], vb_1_elem.data[499]), 0, 0, 1);
+        // metal::uint4 <- Uint32x2
+        v_uint32x2_ = metal::uint4(unpackUint32x2_(vb_1_elem.data[512], vb_1_elem.data[513], vb_1_elem.data[514], vb_1_elem.data[515], vb_1_elem.data[516], vb_1_elem.data[517], vb_1_elem.data[518], vb_1_elem.data[519]), 0, 1);
+        // metal::uint4 <- Uint32x3
+        v_uint32x3_ = metal::uint4(unpackUint32x3_(vb_1_elem.data[528], vb_1_elem.data[529], vb_1_elem.data[530], vb_1_elem.data[531], vb_1_elem.data[532], vb_1_elem.data[533], vb_1_elem.data[534], vb_1_elem.data[535], vb_1_elem.data[536], vb_1_elem.data[537], vb_1_elem.data[538], vb_1_elem.data[539]), 1);
+        v_uint32x4_ = unpackUint32x4_(vb_1_elem.data[544], vb_1_elem.data[545], vb_1_elem.data[546], vb_1_elem.data[547], vb_1_elem.data[548], vb_1_elem.data[549], vb_1_elem.data[550], vb_1_elem.data[551], vb_1_elem.data[552], vb_1_elem.data[553], vb_1_elem.data[554], vb_1_elem.data[555], vb_1_elem.data[556], vb_1_elem.data[557], vb_1_elem.data[558], vb_1_elem.data[559]);
+        // metal::int4 <- Sint32
+        v_sint32_ = metal::int4(unpackSint32_(vb_1_elem.data[560], vb_1_elem.data[561], vb_1_elem.data[562], vb_1_elem.data[563]), 0, 0, 1);
+        // metal::int4 <- Sint32x2
+        v_sint32x2_ = metal::int4(unpackSint32x2_(vb_1_elem.data[576], vb_1_elem.data[577], vb_1_elem.data[578], vb_1_elem.data[579], vb_1_elem.data[580], vb_1_elem.data[581], vb_1_elem.data[582], vb_1_elem.data[583]), 0, 1);
+        // metal::int4 <- Sint32x3
+        v_sint32x3_ = metal::int4(unpackSint32x3_(vb_1_elem.data[592], vb_1_elem.data[593], vb_1_elem.data[594], vb_1_elem.data[595], vb_1_elem.data[596], vb_1_elem.data[597], vb_1_elem.data[598], vb_1_elem.data[599], vb_1_elem.data[600], vb_1_elem.data[601], vb_1_elem.data[602], vb_1_elem.data[603]), 1);
+        v_sint32x4_ = unpackSint32x4_(vb_1_elem.data[608], vb_1_elem.data[609], vb_1_elem.data[610], vb_1_elem.data[611], vb_1_elem.data[612], vb_1_elem.data[613], vb_1_elem.data[614], vb_1_elem.data[615], vb_1_elem.data[616], vb_1_elem.data[617], vb_1_elem.data[618], vb_1_elem.data[619], vb_1_elem.data[620], vb_1_elem.data[621], vb_1_elem.data[622], vb_1_elem.data[623]);
+        v_unorm10_10_10_2_ = unpackUnorm10_10_10_2_(vb_1_elem.data[624], vb_1_elem.data[625], vb_1_elem.data[626], vb_1_elem.data[627]);
+        v_unorm8x4_bgra = unpackUnorm8x4Bgra(vb_1_elem.data[640], vb_1_elem.data[641], vb_1_elem.data[642], vb_1_elem.data[643]);
+    }
+    const VertexInput v_in = { v_uint8_, v_uint8x2_, v_uint8x4_, v_sint8_, v_sint8x2_, v_sint8x4_, v_unorm8_, v_unorm8x2_, v_unorm8x4_, v_snorm8_, v_snorm8x2_, v_snorm8x4_, v_uint16_, v_uint16x2_, v_uint16x4_, v_sint16_, v_sint16x2_, v_sint16x4_, v_unorm16_, v_unorm16x2_, v_unorm16x4_, v_snorm16_, v_snorm16x2_, v_snorm16x4_, v_float16_, v_float16x2_, v_float16x4_, v_float32_, v_float32x2_, v_float32x3_, v_float32x4_, v_uint32_, v_uint32x2_, v_uint32x3_, v_uint32x4_, v_sint32_, v_sint32x2_, v_sint32x3_, v_sint32x4_, v_unorm10_10_10_2_, v_unorm8x4_bgra };
+    const auto _tmp = VertexOutput {metal::float4(static_cast<float>(v_in.v_uint8_.x))};
+    return render_vertexOutput { _tmp.position };
+}

@@ -1,5 +1,8 @@
-use super::{block::DebugInfoInner, helpers};
+use alloc::{vec, vec::Vec};
+
 use spirv::{Op, Word};
+
+use super::{block::DebugInfoInner, helpers};
 
 pub(super) enum Signedness {
     Unsigned = 0,
@@ -100,10 +103,6 @@ impl super::Instruction {
         instruction.add_operand(line);
         instruction.add_operand(column);
         instruction
-    }
-
-    pub(super) const fn no_line() -> Self {
-        Self::new(Op::NoLine)
     }
 
     //
@@ -404,6 +403,10 @@ impl super::Instruction {
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction
+    }
+
+    pub(super) fn constant_16bit(result_type_id: Word, id: Word, low: Word) -> Self {
+        Self::constant(result_type_id, id, &[low])
     }
 
     pub(super) fn constant_32bit(result_type_id: Word, id: Word, value: Word) -> Self {
@@ -792,6 +795,20 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn ray_query_return_vertex_position(
+        result_type_id: Word,
+        id: Word,
+        query: Word,
+        intersection: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::RayQueryGetIntersectionTriangleVertexPositionsKHR);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(query);
+        instruction.add_operand(intersection);
+        instruction
+    }
+
     pub(super) fn ray_query_get_intersection(
         op: Op,
         result_type_id: Word,
@@ -1121,6 +1138,12 @@ impl super::Instruction {
         instruction.add_operand(semantics_id);
         instruction
     }
+    pub(super) fn memory_barrier(mem_scope_id: Word, semantics_id: Word) -> Self {
+        let mut instruction = Self::new(Op::MemoryBarrier);
+        instruction.add_operand(mem_scope_id);
+        instruction.add_operand(semantics_id);
+        instruction
+    }
 
     // Group Instructions
 
@@ -1185,6 +1208,22 @@ impl super::Instruction {
             instruction.add_operand(group_op as u32);
         }
         instruction.add_operand(value);
+
+        instruction
+    }
+    pub(super) fn group_non_uniform_quad_swap(
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        value: Word,
+        direction: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::GroupNonUniformQuadSwap);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        instruction.add_operand(value);
+        instruction.add_operand(direction);
 
         instruction
     }

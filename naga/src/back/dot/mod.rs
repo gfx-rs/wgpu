@@ -7,14 +7,17 @@ of IR inspection and debugging.
 [dot]: https://graphviz.org/doc/info/lang.html
 */
 
+use alloc::{
+    borrow::Cow,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::fmt::{Error as FmtError, Write as _};
+
 use crate::{
     arena::Handle,
     valid::{FunctionInfo, ModuleInfo},
-};
-
-use std::{
-    borrow::Cow,
-    fmt::{Error as FmtError, Write as _},
 };
 
 /// Configuration options for the dot backend
@@ -109,7 +112,8 @@ impl StatementGraph {
                     }
                     "Continue"
                 }
-                S::Barrier(_flags) => "Barrier",
+                S::ControlBarrier(_flags) => "ControlBarrier",
+                S::MemoryBarrier(_flags) => "MemoryBarrier",
                 S::Block(ref b) => {
                     let (other, last) = self.add(b, targets);
                     self.flow.push((id, other, ""));
@@ -395,9 +399,11 @@ impl StatementGraph {
                         | crate::GatherMode::Shuffle(index)
                         | crate::GatherMode::ShuffleDown(index)
                         | crate::GatherMode::ShuffleUp(index)
-                        | crate::GatherMode::ShuffleXor(index) => {
+                        | crate::GatherMode::ShuffleXor(index)
+                        | crate::GatherMode::QuadBroadcast(index) => {
                             self.dependencies.push((id, index, "index"))
                         }
+                        crate::GatherMode::QuadSwap(_) => {}
                     }
                     self.dependencies.push((id, argument, "arg"));
                     self.emits.push((id, result));
@@ -408,6 +414,12 @@ impl StatementGraph {
                         crate::GatherMode::ShuffleDown(_) => "SubgroupShuffleDown",
                         crate::GatherMode::ShuffleUp(_) => "SubgroupShuffleUp",
                         crate::GatherMode::ShuffleXor(_) => "SubgroupShuffleXor",
+                        crate::GatherMode::QuadBroadcast(_) => "SubgroupQuadBroadcast",
+                        crate::GatherMode::QuadSwap(direction) => match direction {
+                            crate::Direction::X => "SubgroupQuadSwapX",
+                            crate::Direction::Y => "SubgroupQuadSwapY",
+                            crate::Direction::Diagonal => "SubgroupQuadSwapDiagonal",
+                        },
                     }
                 }
             };
@@ -431,26 +443,26 @@ const COLORS: &[&str] = &[
 
 struct Prefixed<T>(Handle<T>);
 
-impl std::fmt::Display for Prefixed<crate::Expression> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::Expression> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "e")
     }
 }
 
-impl std::fmt::Display for Prefixed<crate::LocalVariable> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::LocalVariable> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "l")
     }
 }
 
-impl std::fmt::Display for Prefixed<crate::GlobalVariable> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::GlobalVariable> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "g")
     }
 }
 
-impl std::fmt::Display for Prefixed<crate::Function> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for Prefixed<crate::Function> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         self.0.write_prefixed(f, "f")
     }
 }
@@ -607,6 +619,7 @@ fn write_function_expressions(
                 offset: _,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 edges.insert("image", image);
                 edges.insert("sampler", sampler);
@@ -743,6 +756,11 @@ fn write_function_expressions(
             }
             E::SubgroupBallotResult => ("SubgroupBallotResult".into(), 4),
             E::SubgroupOperationResult { .. } => ("SubgroupOperationResult".into(), 4),
+            E::RayQueryVertexPositions { query, committed } => {
+                edges.insert("", query);
+                let ty = if committed { "Committed" } else { "Candidate" };
+                (format!("get{}HitVertexPositions", ty).into(), 4)
+            }
         };
 
         // give uniform expressions an outline
@@ -812,7 +830,7 @@ pub fn write(
     mod_info: Option<&ModuleInfo>,
     options: Options,
 ) -> Result<String, FmtError> {
-    use std::fmt::Write as _;
+    use core::fmt::Write as _;
 
     let mut output = String::new();
     output += "digraph Module {\n";

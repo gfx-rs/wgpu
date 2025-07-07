@@ -1,7 +1,10 @@
-use crate::id;
-use std::ops::Range;
+use alloc::{string::String, vec::Vec};
+use core::{convert::Infallible, ops::Range};
+
 #[cfg(feature = "trace")]
-use std::{borrow::Cow, io::Write as _};
+use {alloc::borrow::Cow, std::io::Write as _};
+
+use crate::id;
 
 //TODO: consider a readable Id that doesn't include the backend
 
@@ -106,7 +109,7 @@ pub enum Action<'a> {
     CreateRenderBundle {
         id: id::RenderBundleId,
         desc: crate::command::RenderBundleEncoderDescriptor<'a>,
-        base: crate::command::BasePass<crate::command::RenderCommand>,
+        base: crate::command::BasePass<crate::command::RenderCommand, Infallible>,
     },
     DestroyRenderBundle(id::RenderBundleId),
     CreateQuerySet {
@@ -148,7 +151,7 @@ pub enum Command {
         src_offset: wgt::BufferAddress,
         dst: id::BufferId,
         dst_offset: wgt::BufferAddress,
-        size: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
     },
     CopyBufferToTexture {
         src: crate::command::TexelCopyBufferInfo,
@@ -189,19 +192,15 @@ pub enum Command {
     PopDebugGroup,
     InsertDebugMarker(String),
     RunComputePass {
-        base: crate::command::BasePass<crate::command::ComputeCommand>,
+        base: crate::command::BasePass<crate::command::ComputeCommand, Infallible>,
         timestamp_writes: Option<crate::command::PassTimestampWrites>,
     },
     RunRenderPass {
-        base: crate::command::BasePass<crate::command::RenderCommand>,
+        base: crate::command::BasePass<crate::command::RenderCommand, Infallible>,
         target_colors: Vec<Option<crate::command::RenderPassColorAttachment>>,
         target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<crate::command::PassTimestampWrites>,
         occlusion_query_set_id: Option<id::QuerySetId>,
-    },
-    BuildAccelerationStructuresUnsafeTlas {
-        blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
-        tlas: Vec<crate::ray_tracing::TlasBuildEntry>,
     },
     BuildAccelerationStructures {
         blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
@@ -220,13 +219,12 @@ pub struct Trace {
 
 #[cfg(feature = "trace")]
 impl Trace {
-    pub fn new(dir_path_name: &str) -> Result<Self, std::io::Error> {
-        let path = std::path::Path::new(dir_path_name);
+    pub fn new(path: std::path::PathBuf) -> Result<Self, std::io::Error> {
         log::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;
         Ok(Self {
-            path: path.to_path_buf(),
+            path,
             file,
             config: ron::ser::PrettyConfig::default(),
             binary_id: 0,
@@ -235,7 +233,7 @@ impl Trace {
 
     pub fn make_binary(&mut self, kind: &str, data: &[u8]) -> String {
         self.binary_id += 1;
-        let name = format!("data{}.{}", self.binary_id, kind);
+        let name = std::format!("data{}.{}", self.binary_id, kind);
         let _ = std::fs::write(self.path.join(&name), data);
         name
     }

@@ -1,21 +1,21 @@
 [package]
-name = "xtask"
+name = "wgpu-xtask"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.83"
+rust-version = "1.84"
 publish = false
 
-[dependencies]
-# The dependencies in this config have no transitive dependencies.
-anyhow = "1.0.71"
-env_logger = { version = "0.10.0", default-features = false }
-regex-lite = "0.1.5"
-log = "0.4.18"
-pico-args = { version = "0.5.0", features = [
-    "eq-separator",
-    "short-space-opt",
-    "combined-flags",
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    # Added by xshell
+    'cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)',
 ] }
-xshell = "0.2.3"
 
-[workspace]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The dependencies in this config have no transitive dependencies.
+anyhow.workspace = true
+env_logger.workspace = true
+regex-lite.workspace = true
+log.workspace = true
+pico-args.workspace = true
+xshell.workspace = true

@@ -130,7 +130,8 @@ define_lock_ranks! {
 
     rank BUFFER_BIND_GROUPS "Buffer::bind_groups" followed by { }
     rank BUFFER_INITIALIZATION_STATUS "Buffer::initialization_status" followed by { }
-    rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by { }
+    rank DEVICE_COMMAND_INDICES "Device::command_indices" followed by {}
+    rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by {}
     rank DEVICE_FENCE "Device::fence" followed by { }
     #[allow(dead_code)]
     rank DEVICE_TRACE "Device::trace" followed by { }
@@ -144,10 +145,13 @@ define_lock_ranks! {
     rank SURFACE_PRESENTATION "Surface::presentation" followed by { }
     rank TEXTURE_BIND_GROUPS "Texture::bind_groups" followed by { }
     rank TEXTURE_INITIALIZATION_STATUS "Texture::initialization_status" followed by { }
+    rank TEXTURE_CLEAR_MODE "Texture::clear_mode" followed by { }
     rank TEXTURE_VIEWS "Texture::views" followed by { }
     rank BLAS_BUILT_INDEX "Blas::built_index" followed by { }
+    rank BLAS_COMPACTION_STATE "Blas::compaction_size" followed by { }
     rank TLAS_BUILT_INDEX "Tlas::built_index" followed by { }
     rank TLAS_DEPENDENCIES "Tlas::dependencies" followed by { }
+    rank BUFFER_POOL "BufferPool::buffers" followed by { }
 
     #[cfg(test)]
     rank PAWN "pawn" followed by { ROOK, BISHOP }

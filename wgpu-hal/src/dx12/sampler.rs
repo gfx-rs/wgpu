@@ -2,6 +2,8 @@
 //!
 //! Nearly identical to the Vulkan sampler cache, with added descriptor heap management.
 
+use alloc::vec::Vec;
+
 use hashbrown::{hash_map::Entry, HashMap};
 
 use ordered_float::OrderedFloat;
@@ -41,8 +43,8 @@ impl PartialEq for HashableSamplerDesc {
 
 impl Eq for HashableSamplerDesc {}
 
-impl std::hash::Hash for HashableSamplerDesc {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl core::hash::Hash for HashableSamplerDesc {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.0.Filter.0.hash(state);
         self.0.AddressU.0.hash(state);
         self.0.AddressV.0.hash(state);

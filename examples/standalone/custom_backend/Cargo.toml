@@ -1,0 +1,16 @@
+[package]
+name = "wgpu-example-custom-backend"
+edition = "2021"
+rust-version = "1.84"
+publish = false
+
+[features]
+default = ["web"]
+web = ["wgpu/web"]
+
+[dependencies]
+wgpu = { version = "25.0.0", features = [
+    "custom",
+    "wgsl",
+], default-features = false }
+pollster = { version = "0.4", features = ["macro"] }

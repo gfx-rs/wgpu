@@ -1,13 +1,14 @@
-use std::{borrow::Cow, future::Future, marker::PhantomData};
+use alloc::{string::String, vec::Vec};
+use core::{future::Future, marker::PhantomData};
 
 use crate::*;
 
 /// Handle to a compiled shader module.
 ///
 /// A `ShaderModule` represents a compiled shader module on the GPU. It can be created by passing
-/// source code to [`Device::create_shader_module`] or valid SPIR-V binary to
-/// [`Device::create_shader_module_spirv`]. Shader modules are used to define programmable stages
-/// of a pipeline.
+/// source code to [`Device::create_shader_module`]. MSL shader or SPIR-V binary can also be passed
+/// directly using [`Device::create_shader_module_passthrough`]. Shader modules are used to define
+/// programmable stages of a pipeline.
 ///
 /// Corresponds to [WebGPU `GPUShaderModule`](https://gpuweb.github.io/gpuweb/#shader-module).
 #[derive(Debug, Clone)]
@@ -23,6 +24,12 @@ impl ShaderModule {
     /// Get the compilation info for the shader module.
     pub fn get_compilation_info(&self) -> impl Future<Output = CompilationInfo> + WasmNotSend {
         self.inner.get_compilation_info()
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of ShaderModule (if custom backend and is internally T)
+    pub fn as_custom<T: custom::ShaderModuleInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 }
 
@@ -87,6 +94,7 @@ impl From<crate::naga::error::ShaderError<crate::naga::front::wgsl::ParseError>>
     for CompilationInfo
 {
     fn from(value: crate::naga::error::ShaderError<crate::naga::front::wgsl::ParseError>) -> Self {
+        use alloc::{string::ToString, vec};
         CompilationInfo {
             messages: vec![CompilationMessage {
                 message: value.to_string(),
@@ -99,6 +107,7 @@ impl From<crate::naga::error::ShaderError<crate::naga::front::wgsl::ParseError>>
 #[cfg(feature = "glsl")]
 impl From<naga::error::ShaderError<naga::front::glsl::ParseErrors>> for CompilationInfo {
     fn from(value: naga::error::ShaderError<naga::front::glsl::ParseErrors>) -> Self {
+        use alloc::string::ToString;
         let messages = value
             .inner
             .errors
@@ -116,6 +125,7 @@ impl From<naga::error::ShaderError<naga::front::glsl::ParseErrors>> for Compilat
 #[cfg(feature = "spirv")]
 impl From<naga::error::ShaderError<naga::front::spv::Error>> for CompilationInfo {
     fn from(value: naga::error::ShaderError<naga::front::spv::Error>) -> Self {
+        use alloc::{string::ToString, vec};
         CompilationInfo {
             messages: vec![CompilationMessage {
                 message: value.to_string(),
@@ -137,6 +147,7 @@ impl
             crate::naga::WithSpan<crate::naga::valid::ValidationError>,
         >,
     ) -> Self {
+        use alloc::{string::ToString, vec};
         CompilationInfo {
             messages: vec![CompilationMessage {
                 message: value.to_string(),
@@ -176,25 +187,27 @@ pub enum ShaderSource<'a> {
     ///
     /// See also: [`util::make_spirv`], [`include_spirv`]
     #[cfg(feature = "spirv")]
-    SpirV(Cow<'a, [u32]>),
+    SpirV(alloc::borrow::Cow<'a, [u32]>),
     /// GLSL module as a string slice.
     ///
     /// Note: GLSL is not yet fully supported and must be a specific ShaderStage.
     #[cfg(feature = "glsl")]
     Glsl {
         /// The source code of the shader.
-        shader: Cow<'a, str>,
+        shader: alloc::borrow::Cow<'a, str>,
         /// The shader stage that the shader targets. For example, `naga::ShaderStage::Vertex`
         stage: naga::ShaderStage,
-        /// Defines to unlock configured shader features.
-        defines: naga::FastHashMap<String, String>,
+        /// Key-value pairs to represent defines sent to the glsl preprocessor.
+        ///
+        /// If the same name is defined multiple times, the last value is used.
+        defines: &'a [(&'a str, &'a str)],
     },
     /// WGSL module as a string slice.
     #[cfg(feature = "wgsl")]
-    Wgsl(Cow<'a, str>),
+    Wgsl(alloc::borrow::Cow<'a, str>),
     /// Naga module.
     #[cfg(feature = "naga-ir")]
-    Naga(Cow<'static, naga::Module>),
+    Naga(alloc::borrow::Cow<'static, naga::Module>),
     /// Dummy variant because `Naga` doesn't have a lifetime and without enough active features it
     /// could be the last one active.
     #[doc(hidden)]
@@ -215,16 +228,34 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 static_assertions::assert_impl_all!(ShaderModuleDescriptor<'_>: Send, Sync);
 
-/// Descriptor for a shader module given by SPIR-V binary, for use with
-/// [`Device::create_shader_module_spirv`].
+/// Descriptor for a shader module that will bypass wgpu's shader tooling, for use with
+/// [`Device::create_shader_module_passthrough`].
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
-#[derive(Debug)]
-pub struct ShaderModuleDescriptorSpirV<'a> {
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
-    /// Binary SPIR-V data, in 4-byte words.
-    pub source: Cow<'a, [u32]>,
-}
-static_assertions::assert_impl_all!(ShaderModuleDescriptorSpirV<'_>: Send, Sync);
+pub type ShaderModuleDescriptorPassthrough<'a> =
+    wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
+
+/// Descriptor for a shader module given by Metal MSL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+pub type ShaderModuleDescriptorMsl<'a> = wgt::ShaderModuleDescriptorMsl<'a, Label<'a>>;
+
+/// Descriptor for a shader module given by SPIR-V binary.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+pub type ShaderModuleDescriptorSpirV<'a> = wgt::ShaderModuleDescriptorSpirV<'a, Label<'a>>;
+
+/// Descriptor for a shader module given by DirectX HLSL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+pub type ShaderModuleDescriptorHlsl<'a> = wgt::ShaderModuleDescriptorHlsl<'a, Label<'a>>;
+
+/// Descriptor for a shader module given by DirectX DXIL source.
+///
+/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
+/// only WGSL source code strings are accepted.
+pub type ShaderModuleDescriptorDxil<'a> = wgt::ShaderModuleDescriptorDxil<'a, Label<'a>>;

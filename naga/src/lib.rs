@@ -1,221 +1,70 @@
-/*! Universal shader translator.
+/*!
+Naga can be used to translate source code written in one shading language to another.
 
-The central structure of the crate is [`Module`]. A `Module` contains:
+# Example
 
-- [`Function`]s, which have arguments, a return type, local variables, and a body,
+The following example translates WGSL to GLSL.
+It requires the features `"wgsl-in"` and `"glsl-out"` to be enabled.
 
-- [`EntryPoint`]s, which are specialized functions that can serve as the entry
-  point for pipeline stages like vertex shading or fragment shading,
+*/
+// If we don't have the required front- and backends, don't try to build this example.
+#![cfg_attr(all(feature = "wgsl-in", feature = "glsl-out"), doc = "```")]
+#![cfg_attr(not(all(feature = "wgsl-in", feature = "glsl-out")), doc = "```ignore")]
+/*!
+let wgsl_source = "
+@fragment
+fn main_fs() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+}
+";
 
-- [`Constant`]s and [`GlobalVariable`]s used by `EntryPoint`s and `Function`s, and
+// Parse the source into a Module.
+let module: naga::Module = naga::front::wgsl::parse_str(wgsl_source)?;
 
-- [`Type`]s used by the above.
+// Validate the module.
+// Validation can be made less restrictive by changing the ValidationFlags.
+let module_info: naga::valid::ModuleInfo =
+    naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::all(),
+    )
+    .subgroup_stages(naga::valid::ShaderStages::all())
+    .subgroup_operations(naga::valid::SubgroupOperationSet::all())
+    .validate(&module)?;
 
-The body of an `EntryPoint` or `Function` is represented using two types:
+// Translate the module.
+use naga::back::glsl;
+let mut glsl_source = String::new();
+glsl::Writer::new(
+    &mut glsl_source,
+    &module,
+    &module_info,
+    &glsl::Options::default(),
+    &glsl::PipelineOptions {
+        entry_point: "main_fs".into(),
+        shader_stage: naga::ShaderStage::Fragment,
+        multiview: None,
+    },
+    naga::proc::BoundsCheckPolicies::default(),
+)?.write()?;
 
-- An [`Expression`] produces a value, but has no side effects or control flow.
-  `Expressions` include variable references, unary and binary operators, and so
-  on.
+assert_eq!(glsl_source, "\
+#version 310 es
 
-- A [`Statement`] can have side effects and structured control flow.
-  `Statement`s do not produce a value, other than by storing one in some
-  designated place. `Statements` include blocks, conditionals, and loops, but also
-  operations that have side effects, like stores and function calls.
+precision highp float;
+precision highp int;
 
-`Statement`s form a tree, with pointers into the DAG of `Expression`s.
+layout(location = 0) out vec4 _fs2p_location0;
 
-Restricting side effects to statements simplifies analysis and code generation.
-A Naga backend can generate code to evaluate an `Expression` however and
-whenever it pleases, as long as it is certain to observe the side effects of all
-previously executed `Statement`s.
+void main() {
+    _fs2p_location0 = vec4(1.0, 1.0, 1.0, 1.0);
+    return;
+}
 
-Many `Statement` variants use the [`Block`] type, which is `Vec<Statement>`,
-with optional span info, representing a series of statements executed in order. The body of an
-`EntryPoint`s or `Function` is a `Block`, and `Statement` has a
-[`Block`][Statement::Block] variant.
+");
 
-## Function Calls
-
-Naga's representation of function calls is unusual. Most languages treat
-function calls as expressions, but because calls may have side effects, Naga
-represents them as a kind of statement, [`Statement::Call`]. If the function
-returns a value, a call statement designates a particular [`Expression::CallResult`]
-expression to represent its return value, for use by subsequent statements and
-expressions.
-
-## `Expression` evaluation time
-
-It is essential to know when an [`Expression`] should be evaluated, because its
-value may depend on previous [`Statement`]s' effects. But whereas the order of
-execution for a tree of `Statement`s is apparent from its structure, it is not
-so clear for `Expressions`, since an expression may be referred to by any number
-of `Statement`s and other `Expression`s.
-
-Naga's rules for when `Expression`s are evaluated are as follows:
-
--   [`Literal`], [`Constant`], and [`ZeroValue`] expressions are
-    considered to be implicitly evaluated before execution begins.
-
--   [`FunctionArgument`] and [`LocalVariable`] expressions are considered
-    implicitly evaluated upon entry to the function to which they belong.
-    Function arguments cannot be assigned to, and `LocalVariable` expressions
-    produce a *pointer to* the variable's value (for use with [`Load`] and
-    [`Store`]). Neither varies while the function executes, so it suffices to
-    consider these expressions evaluated once on entry.
-
--   Similarly, [`GlobalVariable`] expressions are considered implicitly
-    evaluated before execution begins, since their value does not change while
-    code executes, for one of two reasons:
-
-    -   Most `GlobalVariable` expressions produce a pointer to the variable's
-        value, for use with [`Load`] and [`Store`], as `LocalVariable`
-        expressions do. Although the variable's value may change, its address
-        does not.
-
-    -   A `GlobalVariable` expression referring to a global in the
-        [`AddressSpace::Handle`] address space produces the value directly, not
-        a pointer. Such global variables hold opaque types like shaders or
-        images, and cannot be assigned to.
-
--   A [`CallResult`] expression that is the `result` of a [`Statement::Call`],
-    representing the call's return value, is evaluated when the `Call` statement
-    is executed.
-
--   Similarly, an [`AtomicResult`] expression that is the `result` of an
-    [`Atomic`] statement, representing the result of the atomic operation, is
-    evaluated when the `Atomic` statement is executed.
-
--   A [`RayQueryProceedResult`] expression, which is a boolean
-    indicating if the ray query is finished, is evaluated when the
-    [`RayQuery`] statement whose [`Proceed::result`] points to it is
-    executed.
-
--   All other expressions are evaluated when the (unique) [`Statement::Emit`]
-    statement that covers them is executed.
-
-Now, strictly speaking, not all `Expression` variants actually care when they're
-evaluated. For example, you can evaluate a [`BinaryOperator::Add`] expression
-any time you like, as long as you give it the right operands. It's really only a
-very small set of expressions that are affected by timing:
-
--   [`Load`], [`ImageSample`], and [`ImageLoad`] expressions are influenced by
-    stores to the variables or images they access, and must execute at the
-    proper time relative to them.
-
--   [`Derivative`] expressions are sensitive to control flow uniformity: they
-    must not be moved out of an area of uniform control flow into a non-uniform
-    area.
-
--   More generally, any expression that's used by more than one other expression
-    or statement should probably be evaluated only once, and then stored in a
-    variable to be cited at each point of use.
-
-Naga tries to help back ends handle all these cases correctly in a somewhat
-circuitous way. The [`ModuleInfo`] structure returned by [`Validator::validate`]
-provides a reference count for each expression in each function in the module.
-Naturally, any expression with a reference count of two or more deserves to be
-evaluated and stored in a temporary variable at the point that the `Emit`
-statement covering it is executed. But if we selectively lower the reference
-count threshold to _one_ for the sensitive expression types listed above, so
-that we _always_ generate a temporary variable and save their value, then the
-same code that manages multiply referenced expressions will take care of
-introducing temporaries for time-sensitive expressions as well. The
-`Expression::bake_ref_count` method (private to the back ends) is meant to help
-with this.
-
-## `Expression` scope
-
-Each `Expression` has a *scope*, which is the region of the function within
-which it can be used by `Statement`s and other `Expression`s. It is a validation
-error to use an `Expression` outside its scope.
-
-An expression's scope is defined as follows:
-
--   The scope of a [`Constant`], [`GlobalVariable`], [`FunctionArgument`] or
-    [`LocalVariable`] expression covers the entire `Function` in which it
-    occurs.
-
--   The scope of an expression evaluated by an [`Emit`] statement covers the
-    subsequent expressions in that `Emit`, the subsequent statements in the `Block`
-    to which that `Emit` belongs (if any) and their sub-statements (if any).
-
--   The `result` expression of a [`Call`] or [`Atomic`] statement has a scope
-    covering the subsequent statements in the `Block` in which the statement
-    occurs (if any) and their sub-statements (if any).
-
-For example, this implies that an expression evaluated by some statement in a
-nested `Block` is not available in the `Block`'s parents. Such a value would
-need to be stored in a local variable to be carried upwards in the statement
-tree.
-
-## Constant expressions
-
-A Naga *constant expression* is one of the following [`Expression`]
-variants, whose operands (if any) are also constant expressions:
-- [`Literal`]
-- [`Constant`], for [`Constant`]s
-- [`ZeroValue`], for fixed-size types
-- [`Compose`]
-- [`Access`]
-- [`AccessIndex`]
-- [`Splat`]
-- [`Swizzle`]
-- [`Unary`]
-- [`Binary`]
-- [`Select`]
-- [`Relational`]
-- [`Math`]
-- [`As`]
-
-A constant expression can be evaluated at module translation time.
-
-## Override expressions
-
-A Naga *override expression* is the same as a [constant expression],
-except that it is also allowed to reference other [`Override`]s.
-
-An override expression can be evaluated at pipeline creation time.
-
-[`AtomicResult`]: Expression::AtomicResult
-[`RayQueryProceedResult`]: Expression::RayQueryProceedResult
-[`CallResult`]: Expression::CallResult
-[`Constant`]: Expression::Constant
-[`ZeroValue`]: Expression::ZeroValue
-[`Literal`]: Expression::Literal
-[`Derivative`]: Expression::Derivative
-[`FunctionArgument`]: Expression::FunctionArgument
-[`GlobalVariable`]: Expression::GlobalVariable
-[`ImageLoad`]: Expression::ImageLoad
-[`ImageSample`]: Expression::ImageSample
-[`Load`]: Expression::Load
-[`LocalVariable`]: Expression::LocalVariable
-
-[`Atomic`]: Statement::Atomic
-[`Call`]: Statement::Call
-[`Emit`]: Statement::Emit
-[`Store`]: Statement::Store
-[`RayQuery`]: Statement::RayQuery
-
-[`Proceed::result`]: RayQueryFunction::Proceed::result
-
-[`Validator::validate`]: valid::Validator::validate
-[`ModuleInfo`]: valid::ModuleInfo
-
-[`Literal`]: Expression::Literal
-[`ZeroValue`]: Expression::ZeroValue
-[`Compose`]: Expression::Compose
-[`Access`]: Expression::Access
-[`AccessIndex`]: Expression::AccessIndex
-[`Splat`]: Expression::Splat
-[`Swizzle`]: Expression::Swizzle
-[`Unary`]: Expression::Unary
-[`Binary`]: Expression::Binary
-[`Select`]: Expression::Select
-[`Relational`]: Expression::Relational
-[`Math`]: Expression::Math
-[`As`]: Expression::As
-
-[constant expression]: index.html#constant-expressions
+# Ok::<(), Box<dyn core::error::Error>>(())
+```
 */
 
 #![allow(
@@ -249,32 +98,36 @@ An override expression can be evaluated at pipeline creation time.
         clippy::todo
     )
 )]
+#![no_std]
+
+#[cfg(std)]
+extern crate std;
+
+extern crate alloc;
 
 mod arena;
 pub mod back;
-mod block;
 pub mod common;
-#[cfg(feature = "compact")]
 pub mod compact;
 pub mod diagnostic_filter;
 pub mod error;
 pub mod front;
+pub mod ir;
 pub mod keywords;
 mod non_max_u32;
+mod path_like;
 pub mod proc;
+mod racy_lock;
 mod span;
 pub mod valid;
 
-pub use crate::arena::{Arena, Handle, Range, UniqueArena};
+use alloc::string::String;
 
+pub use crate::arena::{Arena, Handle, Range, UniqueArena};
 pub use crate::span::{SourceLocation, Span, SpanContext, WithSpan};
-#[cfg(feature = "arbitrary")]
-use arbitrary::Arbitrary;
-use diagnostic_filter::DiagnosticFilterNode;
-#[cfg(feature = "deserialize")]
-use serde::Deserialize;
-#[cfg(feature = "serialize")]
-use serde::Serialize;
+
+// TODO: Eliminate this re-export and migrate uses of `crate::Foo` to `use crate::ir; ir::Foo`.
+pub use ir::*;
 
 /// Width of a boolean type, in bytes.
 pub const BOOL_WIDTH: Bytes = 1;
@@ -283,25 +136,25 @@ pub const BOOL_WIDTH: Bytes = 1;
 pub const ABSTRACT_WIDTH: Bytes = 8;
 
 /// Hash map that is faster but not resilient to DoS attacks.
-/// (Similar to rustc_hash::FxHashMap but using hashbrown::HashMap instead of std::collections::HashMap.)
+/// (Similar to rustc_hash::FxHashMap but using hashbrown::HashMap instead of alloc::collections::HashMap.)
 /// To construct a new instance: `FastHashMap::default()`
 pub type FastHashMap<K, T> =
-    hashbrown::HashMap<K, T, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+    hashbrown::HashMap<K, T, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Hash set that is faster but not resilient to DoS attacks.
-/// (Similar to rustc_hash::FxHashSet but using hashbrown::HashSet instead of std::collections::HashMap.)
+/// (Similar to rustc_hash::FxHashSet but using hashbrown::HashSet instead of alloc::collections::HashMap.)
 pub type FastHashSet<K> =
-    hashbrown::HashSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+    hashbrown::HashSet<K, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Insertion-order-preserving hash set (`IndexSet<K>`), but with the same
 /// hasher as `FastHashSet<K>` (faster but not resilient to DoS attacks).
 pub type FastIndexSet<K> =
-    indexmap::IndexSet<K, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+    indexmap::IndexSet<K, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Insertion-order-preserving hash map (`IndexMap<K, V>`), but with the same
 /// hasher as `FastHashMap<K, V>` (faster but not resilient to DoS attacks).
 pub type FastIndexMap<K, V> =
-    indexmap::IndexMap<K, V, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+    indexmap::IndexMap<K, V, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Map of expressions that have associated variable names
 pub(crate) type NamedExpressions = FastIndexMap<Handle<Expression>, String>;

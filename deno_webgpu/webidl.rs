@@ -65,7 +65,7 @@ impl<'a> WebIdlConverter<'a> for GPUExtent3D {
                             enforce_range: true,
                         },
                     )?;
-                    if !(conv.len() > 1 && conv.len() <= 3) {
+                    if conv.is_empty() || conv.len() > 3 {
                         return Err(WebIdlError::other(prefix, context, JsErrorBox::type_error(format!("A sequence of number used as a GPUExtent3D must have between 1 and 3 elements, received {} elements", conv.len()))));
                     }
 
@@ -359,6 +359,8 @@ pub enum GPUFeatureName {
     TextureCompressionEtc2,
     #[webidl(rename = "texture-compression-astc")]
     TextureCompressionAstc,
+    #[webidl(rename = "texture-compression-astc-sliced-3d")]
+    TextureCompressionAstcSliced3d,
     #[webidl(rename = "rg11b10ufloat-renderable")]
     Rg11b10ufloatRenderable,
     #[webidl(rename = "bgra8unorm-storage")]
@@ -391,8 +393,10 @@ pub enum GPUFeatureName {
     StorageResourceBindingArray,
     #[webidl(rename = "sampled-texture-and-storage-buffer-array-non-uniform-indexing")]
     SampledTextureAndStorageBufferArrayNonUniformIndexing,
-    #[webidl(rename = "uniform-buffer-and-storage-texture-array-non-uniform-indexing")]
-    UniformBufferAndStorageTextureArrayNonUniformIndexing,
+    #[webidl(rename = "storage-texture-array-non-uniform-indexing")]
+    StorageTextureArrayNonUniformIndexing,
+    #[webidl(rename = "uniform-buffer-binding-arrays")]
+    UniformBufferBindingArrays,
     #[webidl(rename = "partially-bound-binding-array")]
     PartiallyBoundBindingArray,
     #[webidl(rename = "multi-draw-indirect")]
@@ -415,6 +419,8 @@ pub enum GPUFeatureName {
     VertexWritableStorage,
     #[webidl(rename = "clear-texture")]
     ClearTexture,
+    #[webidl(rename = "msl-shader-passthrough")]
+    MslShaderPassthrough,
     #[webidl(rename = "spirv-shader-passthrough")]
     SpirvShaderPassthrough,
     #[webidl(rename = "multiview")]
@@ -447,6 +453,7 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
       GPUFeatureName::TextureCompressionBcSliced3d => Features::TEXTURE_COMPRESSION_BC_SLICED_3D,
       GPUFeatureName::TextureCompressionEtc2 => Features::TEXTURE_COMPRESSION_ETC2,
       GPUFeatureName::TextureCompressionAstc => Features::TEXTURE_COMPRESSION_ASTC,
+      GPUFeatureName::TextureCompressionAstcSliced3d => Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
       GPUFeatureName::Rg11b10ufloatRenderable => Features::RG11B10UFLOAT_RENDERABLE,
       GPUFeatureName::Bgra8unormStorage => Features::BGRA8UNORM_STORAGE,
       GPUFeatureName::Float32Filterable => Features::FLOAT32_FILTERABLE,
@@ -462,7 +469,8 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
       GPUFeatureName::BufferBindingArray => Features::BUFFER_BINDING_ARRAY,
       GPUFeatureName::StorageResourceBindingArray => Features::STORAGE_RESOURCE_BINDING_ARRAY,
       GPUFeatureName::SampledTextureAndStorageBufferArrayNonUniformIndexing => Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-      GPUFeatureName::UniformBufferAndStorageTextureArrayNonUniformIndexing => Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+      GPUFeatureName::StorageTextureArrayNonUniformIndexing => Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+      GPUFeatureName::UniformBufferBindingArrays => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
       GPUFeatureName::PartiallyBoundBindingArray => Features::PARTIALLY_BOUND_BINDING_ARRAY,
       GPUFeatureName::MultiDrawIndirect => Features::MULTI_DRAW_INDIRECT,
       GPUFeatureName::MultiDrawIndirectCount => Features::MULTI_DRAW_INDIRECT_COUNT,
@@ -474,11 +482,12 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
       GPUFeatureName::ConservativeRasterization => Features::CONSERVATIVE_RASTERIZATION,
       GPUFeatureName::VertexWritableStorage => Features::VERTEX_WRITABLE_STORAGE,
       GPUFeatureName::ClearTexture => Features::CLEAR_TEXTURE,
+      GPUFeatureName::MslShaderPassthrough => Features::MSL_SHADER_PASSTHROUGH,
       GPUFeatureName::SpirvShaderPassthrough => Features::SPIRV_SHADER_PASSTHROUGH,
       GPUFeatureName::Multiview => Features::MULTIVIEW,
       GPUFeatureName::VertexAttribute64Bit => Features::VERTEX_ATTRIBUTE_64BIT,
       GPUFeatureName::ShaderF64 => Features::SHADER_F64,
-      GPUFeatureName::ShaderI16 => Features::SHADER_F16,
+      GPUFeatureName::ShaderI16 => Features::SHADER_I16,
       GPUFeatureName::ShaderPrimitiveIndex => Features::SHADER_PRIMITIVE_INDEX,
       GPUFeatureName::ShaderEarlyDepthTest => Features::SHADER_EARLY_DEPTH_TEST,
     };
@@ -522,6 +531,9 @@ pub fn features_to_feature_names(features: wgpu_types::Features) -> HashSet<GPUF
     }
     if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC) {
         return_features.insert(TextureCompressionAstc);
+    }
+    if features.contains(wgpu_types::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D) {
+        return_features.insert(TextureCompressionAstcSliced3d);
     }
     if features.contains(wgpu_types::Features::RG11B10UFLOAT_RENDERABLE) {
         return_features.insert(Rg11b10ufloatRenderable);
@@ -575,10 +587,11 @@ pub fn features_to_feature_names(features: wgpu_types::Features) -> HashSet<GPUF
     ) {
         return_features.insert(SampledTextureAndStorageBufferArrayNonUniformIndexing);
     }
-    if features.contains(
-        wgpu_types::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-    ) {
-        return_features.insert(UniformBufferAndStorageTextureArrayNonUniformIndexing);
+    if features.contains(wgpu_types::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) {
+        return_features.insert(StorageTextureArrayNonUniformIndexing);
+    }
+    if features.contains(wgpu_types::Features::UNIFORM_BUFFER_BINDING_ARRAYS) {
+        return_features.insert(UniformBufferBindingArrays);
     }
     if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
         return_features.insert(PartiallyBoundBindingArray);

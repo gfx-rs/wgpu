@@ -1,3 +1,6 @@
+use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::{ptr::NonNull, sync::atomic::Ordering};
+
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
@@ -27,12 +30,6 @@ use crate::{
 };
 
 use wgt::{BufferAddress, TextureFormat};
-
-use std::{
-    borrow::Cow,
-    ptr::NonNull,
-    sync::{atomic::Ordering, Arc},
-};
 
 use super::{ImplicitPipelineIds, UserClosures};
 
@@ -112,7 +109,7 @@ impl Global {
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 let mut desc = desc.clone();
-                let mapped_at_creation = std::mem::replace(&mut desc.mapped_at_creation, false);
+                let mapped_at_creation = core::mem::replace(&mut desc.mapped_at_creation, false);
                 if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                     desc.usage |= wgt::BufferUsages::COPY_DST;
                 }
@@ -239,7 +236,7 @@ impl Global {
         }
         .map_err(|e| device.handle_hal_error(e))?;
 
-        unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
+        unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
 
         if !mapping.is_coherent {
             #[allow(clippy::single_range_in_vec_init)]
@@ -255,13 +252,16 @@ impl Global {
         Ok(())
     }
 
-    pub fn buffer_destroy(&self, buffer_id: id::BufferId) -> Result<(), resource::DestroyError> {
+    pub fn buffer_destroy(&self, buffer_id: id::BufferId) {
         profiling::scope!("Buffer::destroy");
         api_log!("Buffer::destroy {buffer_id:?}");
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.get(buffer_id).get()?;
+        let Ok(buffer) = hub.buffers.get(buffer_id).get() else {
+            // If the buffer is already invalid, there's nothing to do.
+            return;
+        };
 
         #[cfg(feature = "trace")]
         if let Some(trace) = buffer.device.trace.lock().as_mut() {
@@ -273,7 +273,7 @@ impl Global {
             buffer_id,
         );
 
-        buffer.destroy()
+        buffer.destroy();
     }
 
     pub fn buffer_drop(&self, buffer_id: id::BufferId) {
@@ -412,20 +412,23 @@ impl Global {
         (id, err)
     }
 
-    pub fn texture_destroy(&self, texture_id: id::TextureId) -> Result<(), resource::DestroyError> {
+    pub fn texture_destroy(&self, texture_id: id::TextureId) {
         profiling::scope!("Texture::destroy");
         api_log!("Texture::destroy {texture_id:?}");
 
         let hub = &self.hub;
 
-        let texture = hub.textures.get(texture_id).get()?;
+        let Ok(texture) = hub.textures.get(texture_id).get() else {
+            // If the texture is already invalid, there's nothing to do.
+            return;
+        };
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
             trace.add(trace::Action::FreeTexture(texture_id));
         }
 
-        texture.destroy()
+        texture.destroy();
     }
 
     pub fn texture_drop(&self, texture_id: id::TextureId) {
@@ -651,6 +654,10 @@ impl Global {
                 trace.add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
             }
 
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
+            }
+
             let bind_group_layouts = {
                 let bind_group_layouts_guard = hub.bind_group_layouts.read();
                 desc.bind_group_layouts
@@ -717,6 +724,10 @@ impl Global {
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
+            }
+
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
             }
 
             let layout = match hub.bind_group_layouts.get(desc.layout).get() {
@@ -941,23 +952,21 @@ impl Global {
         (id, Some(error))
     }
 
-    // Unsafe-ness of internal calls has little to do with unsafe-ness of this.
     #[allow(unused_unsafe)]
     /// # Safety
     ///
-    /// This function passes SPIR-V binary to the backend as-is and can potentially result in a
+    /// This function passes source code or binary to the backend as-is and can potentially result in a
     /// driver crash.
-    pub unsafe fn device_create_shader_module_spirv(
+    pub unsafe fn device_create_shader_module_passthrough(
         &self,
         device_id: DeviceId,
-        desc: &pipeline::ShaderModuleDescriptor,
-        source: Cow<[u32]>,
+        desc: &pipeline::ShaderModuleDescriptorPassthrough<'_>,
         id_in: Option<id::ShaderModuleId>,
     ) -> (
         id::ShaderModuleId,
         Option<pipeline::CreateShaderModuleError>,
     ) {
-        profiling::scope!("Device::create_shader_module");
+        profiling::scope!("Device::create_shader_module_passthrough");
 
         let hub = &self.hub;
         let fid = hub.shader_modules.prepare(id_in);
@@ -967,17 +976,42 @@ impl Global {
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
-                let data = trace.make_binary("spv", unsafe {
-                    std::slice::from_raw_parts(source.as_ptr().cast::<u8>(), source.len() * 4)
-                });
+                let data = trace.make_binary(desc.trace_binary_ext(), desc.trace_data());
                 trace.add(trace::Action::CreateShaderModule {
                     id: fid.id(),
-                    desc: desc.clone(),
+                    desc: match desc {
+                        pipeline::ShaderModuleDescriptorPassthrough::SpirV(inner) => {
+                            pipeline::ShaderModuleDescriptor {
+                                label: inner.label.clone(),
+                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                            }
+                        }
+                        pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => {
+                            pipeline::ShaderModuleDescriptor {
+                                label: inner.label.clone(),
+                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                            }
+                        }
+                        pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
+                            pipeline::ShaderModuleDescriptor {
+                                label: inner.label.clone(),
+                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                            }
+                        }
+                        pipeline::ShaderModuleDescriptorPassthrough::Hlsl(inner) => {
+                            pipeline::ShaderModuleDescriptor {
+                                label: inner.label.clone(),
+                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                            }
+                        }
+                    },
                     data,
                 });
             };
 
-            let shader = match unsafe { device.create_shader_module_spirv(desc, &source) } {
+            let result = unsafe { device.create_shader_module_passthrough(desc) };
+
+            let shader = match result {
                 Ok(shader) => shader,
                 Err(e) => break 'error e,
             };
@@ -986,7 +1020,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label().to_string())));
         (id, Some(error))
     }
 
@@ -1032,7 +1066,11 @@ impl Global {
             return (id.into_command_encoder_id(), None);
         };
 
-        let id = fid.assign(Arc::new(CommandBuffer::new_invalid(&device, &desc.label)));
+        let id = fid.assign(Arc::new(CommandBuffer::new_invalid(
+            &device,
+            &desc.label,
+            error.clone().into(),
+        )));
         (id.into_command_encoder_id(), Some(error))
     }
 
@@ -1218,6 +1256,10 @@ impl Global {
                     desc: desc.clone(),
                     implicit_context: implicit_context.clone(),
                 });
+            }
+
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
             }
 
             let layout = desc
@@ -1453,6 +1495,10 @@ impl Global {
                     desc: desc.clone(),
                     implicit_context: implicit_context.clone(),
                 });
+            }
+
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
             }
 
             let layout = desc
@@ -1809,7 +1855,7 @@ impl Global {
                     Err(_) => break 'error E::UnsupportedQueueFamily,
                 };
 
-                let mut hal_view_formats = vec![];
+                let mut hal_view_formats = Vec::new();
                 for format in config.view_formats.iter() {
                     if *format == config.format {
                         continue;
@@ -1869,9 +1915,26 @@ impl Global {
                 // Wait for all work to finish before configuring the surface.
                 let snatch_guard = device.snatchable_lock.read();
                 let fence = device.fence.read();
-                match device.maintain(fence, wgt::Maintain::Wait, snatch_guard) {
-                    Ok((closures, _)) => {
-                        user_callbacks = closures;
+
+                let maintain_result;
+                (user_callbacks, maintain_result) =
+                    device.maintain(fence, wgt::PollType::Wait, snatch_guard);
+
+                match maintain_result {
+                    // We're happy
+                    Ok(wgt::PollStatus::QueueEmpty) => {}
+                    Ok(wgt::PollStatus::WaitSucceeded) => {
+                        // After the wait, the queue should be empty. It can only be non-empty
+                        // if another thread is submitting at the same time.
+                        break 'error E::GpuWaitTimeout;
+                    }
+                    Ok(wgt::PollStatus::Poll) => {
+                        unreachable!("Cannot get a Poll result from a Wait action.")
+                    }
+                    Err(WaitIdleError::Timeout) if cfg!(target_arch = "wasm32") => {
+                        // On wasm, you cannot actually successfully wait for the surface.
+                        // However WebGL does not actually require you do this, so ignoring
+                        // the failure is totally fine. See https://github.com/gfx-rs/wgpu/issues/7363
                     }
                     Err(e) => {
                         break 'error e.into();
@@ -1931,38 +1994,34 @@ impl Global {
     pub fn device_poll(
         &self,
         device_id: DeviceId,
-        maintain: wgt::Maintain<crate::SubmissionIndex>,
-    ) -> Result<bool, WaitIdleError> {
-        api_log!("Device::poll {maintain:?}");
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
+    ) -> Result<wgt::PollStatus, WaitIdleError> {
+        api_log!("Device::poll {poll_type:?}");
 
         let device = self.hub.devices.get(device_id);
 
-        let DevicePoll {
-            closures,
-            queue_empty,
-        } = Self::poll_single_device(&device, maintain)?;
+        let (closures, result) = Self::poll_single_device(&device, poll_type);
 
         closures.fire();
 
-        Ok(queue_empty)
+        result
     }
 
     fn poll_single_device(
         device: &crate::device::Device,
-        maintain: wgt::Maintain<crate::SubmissionIndex>,
-    ) -> Result<DevicePoll, WaitIdleError> {
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
+    ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
         let snatch_guard = device.snatchable_lock.read();
         let fence = device.fence.read();
-        let (closures, queue_empty) = device.maintain(fence, maintain, snatch_guard)?;
+        let maintain_result = device.maintain(fence, poll_type, snatch_guard);
+
+        device.lose_if_oom();
 
         // Some deferred destroys are scheduled in maintain so run this right after
         // to avoid holding on to them until the next device poll.
         device.deferred_resource_destruction();
 
-        Ok(DevicePoll {
-            closures,
-            queue_empty,
-        })
+        maintain_result
     }
 
     /// Poll all devices belonging to the specified backend.
@@ -1974,7 +2033,7 @@ impl Global {
     fn poll_all_devices_of_api(
         &self,
         force_wait: bool,
-        closures: &mut UserClosures,
+        closure_list: &mut UserClosures,
     ) -> Result<bool, WaitIdleError> {
         profiling::scope!("poll_device");
 
@@ -1984,20 +2043,19 @@ impl Global {
             let device_guard = hub.devices.read();
 
             for (_id, device) in device_guard.iter() {
-                let maintain = if force_wait {
-                    wgt::Maintain::Wait
+                let poll_type = if force_wait {
+                    wgt::PollType::Wait
                 } else {
-                    wgt::Maintain::Poll
+                    wgt::PollType::Poll
                 };
 
-                let DevicePoll {
-                    closures: cbs,
-                    queue_empty,
-                } = Self::poll_single_device(device, maintain)?;
+                let (closures, result) = Self::poll_single_device(device, poll_type);
 
-                all_queue_empty &= queue_empty;
+                let is_queue_empty = matches!(result, Ok(wgt::PollStatus::QueueEmpty));
 
-                closures.extend(cbs);
+                all_queue_empty &= is_queue_empty;
+
+                closure_list.extend(closures);
             }
         }
 
@@ -2020,26 +2078,36 @@ impl Global {
         Ok(all_queue_empty)
     }
 
-    pub fn device_start_capture(&self, device_id: DeviceId) {
-        api_log!("Device::start_capture");
+    /// # Safety
+    ///
+    /// - See [wgpu::Device::start_graphics_debugger_capture][api] for details the safety.
+    ///
+    /// [api]: ../../wgpu/struct.Device.html#method.start_graphics_debugger_capture
+    pub unsafe fn device_start_graphics_debugger_capture(&self, device_id: DeviceId) {
+        api_log!("Device::start_graphics_debugger_capture");
 
         let device = self.hub.devices.get(device_id);
 
         if !device.is_valid() {
             return;
         }
-        unsafe { device.raw().start_capture() };
+        unsafe { device.raw().start_graphics_debugger_capture() };
     }
 
-    pub fn device_stop_capture(&self, device_id: DeviceId) {
-        api_log!("Device::stop_capture");
+    /// # Safety
+    ///
+    /// - See [wgpu::Device::stop_graphics_debugger_capture][api] for details the safety.
+    ///
+    /// [api]: ../../wgpu/struct.Device.html#method.stop_graphics_debugger_capture
+    pub unsafe fn device_stop_graphics_debugger_capture(&self, device_id: DeviceId) {
+        api_log!("Device::stop_graphics_debugger_capture");
 
         let device = self.hub.devices.get(device_id);
 
         if !device.is_valid() {
             return;
         }
-        unsafe { device.raw().stop_capture() };
+        unsafe { device.raw().stop_graphics_debugger_capture() };
     }
 
     pub fn pipeline_cache_get_data(&self, id: id::PipelineCacheId) -> Option<Vec<u8>> {
@@ -2188,10 +2256,8 @@ impl Global {
 
         let range_size = if let Some(size) = size {
             size
-        } else if offset > buffer.size {
-            0
         } else {
-            buffer.size - offset
+            buffer.size.saturating_sub(offset)
         };
 
         if offset % wgt::MAP_ALIGNMENT != 0 {
@@ -2264,9 +2330,4 @@ impl Global {
             buffer_id,
         )
     }
-}
-
-struct DevicePoll {
-    closures: UserClosures,
-    queue_empty: bool,
 }

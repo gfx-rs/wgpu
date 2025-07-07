@@ -1,3 +1,5 @@
+use alloc::{vec, vec::Vec};
+
 use super::{
     ast::{
         BuiltinVariations, FunctionDeclaration, FunctionKind, Overload, ParameterInfo,
@@ -1698,13 +1700,7 @@ impl MacroCall {
                     true => {
                         let offset_arg = args[num_args];
                         num_args += 1;
-                        match ctx.lift_up_const_expression(offset_arg) {
-                            Ok(v) => Some(v),
-                            Err(e) => {
-                                frontend.errors.push(e);
-                                None
-                            }
-                        }
+                        Some(offset_arg)
                     }
                     false => None,
                 };
@@ -2039,8 +2035,10 @@ impl MacroCall {
             )?,
             MacroCall::Barrier => {
                 ctx.emit_restart();
-                ctx.body
-                    .push(crate::Statement::Barrier(crate::Barrier::all()), meta);
+                ctx.body.push(
+                    crate::Statement::ControlBarrier(crate::Barrier::all()),
+                    meta,
+                );
                 return Ok(None);
             }
             MacroCall::SmoothStep { splatted } => {
@@ -2087,6 +2085,7 @@ fn texture_call(
                 offset,
                 level,
                 depth_ref: comps.depth_ref,
+                clamp_to_edge: false,
             },
             meta,
         )?)

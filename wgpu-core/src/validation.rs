@@ -1,9 +1,19 @@
-use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString as _},
+    vec::Vec,
+};
+use core::fmt;
+
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
-use std::fmt;
 use thiserror::Error;
-use wgt::{BindGroupLayoutEntry, BindingType};
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    BindGroupLayoutEntry, BindingType,
+};
+
+use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
 
 #[derive(Debug)]
 enum ResourceType {
@@ -18,7 +28,9 @@ enum ResourceType {
     Sampler {
         comparison: bool,
     },
-    AccelerationStructure,
+    AccelerationStructure {
+        vertex_return: bool,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -27,6 +39,7 @@ pub enum BindingTypeName {
     Texture,
     Sampler,
     AccelerationStructure,
+    ExternalTexture,
 }
 
 impl From<&ResourceType> for BindingTypeName {
@@ -48,6 +61,7 @@ impl From<&BindingType> for BindingTypeName {
             BindingType::StorageTexture { .. } => BindingTypeName::Texture,
             BindingType::Sampler { .. } => BindingTypeName::Sampler,
             BindingType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+            BindingType::ExternalTexture => BindingTypeName::ExternalTexture,
         }
     }
 }
@@ -210,6 +224,12 @@ pub enum BindingError {
     BadStorageFormat(wgt::TextureFormat),
 }
 
+impl WebGpuError for BindingError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum FilteringError {
@@ -217,6 +237,12 @@ pub enum FilteringError {
     Integer,
     #[error("Non-filterable float textures can't be sampled with a filtering sampler")]
     Float,
+}
+
+impl WebGpuError for FilteringError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -230,6 +256,12 @@ pub enum InputError {
     InterpolationMismatch(Option<naga::Interpolation>),
     #[error("Input sampling doesn't match provided {0:?}")]
     SamplingMismatch(Option<naga::Sampling>),
+}
+
+impl WebGpuError for InputError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 /// Errors produced when validating a programmable stage of a pipeline.
@@ -277,6 +309,31 @@ pub enum StageError {
     MultipleEntryPointsFound,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+impl WebGpuError for StageError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Binding(_, e) => e,
+            Self::InvalidResource(e) => e,
+            Self::Filtering {
+                texture: _,
+                sampler: _,
+                error,
+            } => error,
+            Self::Input {
+                location: _,
+                var: _,
+                error,
+            } => error,
+            Self::InvalidWorkgroupSize { .. }
+            | Self::TooManyVaryings { .. }
+            | Self::MissingEntryPoint(..)
+            | Self::NoEntryPointFound
+            | Self::MultipleEntryPointsFound => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 pub fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
@@ -457,6 +514,7 @@ impl Resource {
                 let view_dimension = match entry.ty {
                     BindingType::Texture { view_dimension, .. }
                     | BindingType::StorageTexture { view_dimension, .. } => view_dimension,
+                    BindingType::ExternalTexture => wgt::TextureViewDimension::D2,
                     _ => {
                         return Err(BindingError::WrongTextureViewDimension {
                             dim,
@@ -550,8 +608,10 @@ impl Resource {
                     });
                 }
             }
-            ResourceType::AccelerationStructure => match entry.ty {
-                BindingType::AccelerationStructure => (),
+            ResourceType::AccelerationStructure { vertex_return } => match entry.ty {
+                BindingType::AccelerationStructure {
+                    vertex_return: entry_vertex_return,
+                } if vertex_return == entry_vertex_return => (),
                 _ => {
                     return Err(BindingError::WrongType {
                         binding: (&entry.ty).into(),
@@ -643,7 +703,9 @@ impl Resource {
                     },
                 }
             }
-            ResourceType::AccelerationStructure => BindingType::AccelerationStructure,
+            ResourceType::AccelerationStructure { vertex_return } => {
+                BindingType::AccelerationStructure { vertex_return }
+            }
         })
     }
 }
@@ -802,19 +864,6 @@ impl NumericType {
             _ => false,
         }
     }
-
-    fn is_compatible_with(&self, other: &NumericType) -> bool {
-        if self.scalar.kind != other.scalar.kind {
-            return false;
-        }
-        match (self.dim, other.dim) {
-            (NumericDimension::Scalar, NumericDimension::Scalar) => true,
-            (NumericDimension::Scalar, NumericDimension::Vector(_)) => true,
-            (NumericDimension::Vector(_), NumericDimension::Vector(_)) => true,
-            (NumericDimension::Matrix(..), NumericDimension::Matrix(..)) => true,
-            _ => false,
-        }
-    }
 }
 
 /// Return true if the fragment `format` is covered by the provided `output`.
@@ -942,7 +991,9 @@ impl Interface {
                     class,
                 },
                 naga::TypeInner::Sampler { comparison } => ResourceType::Sampler { comparison },
-                naga::TypeInner::AccelerationStructure => ResourceType::AccelerationStructure,
+                naga::TypeInner::AccelerationStructure { vertex_return } => {
+                    ResourceType::AccelerationStructure { vertex_return }
+                }
                 ref other => ResourceType::Buffer {
                     size: wgt::BufferSize::new(other.size(module.to_ctx()) as u64).unwrap(),
                 },
@@ -1145,6 +1196,9 @@ impl Interface {
                 );
                 let texture_sample_type = match texture_layout.ty {
                     BindingType::Texture { sample_type, .. } => sample_type,
+                    BindingType::ExternalTexture => {
+                        wgt::TextureSampleType::Float { filterable: true }
+                    }
                     _ => unreachable!(),
                 };
 
@@ -1176,7 +1230,7 @@ impl Interface {
             ];
             let total_invocations = entry_point.workgroup_size.iter().product::<u32>();
 
-            if entry_point.workgroup_size.iter().any(|&s| s == 0)
+            if entry_point.workgroup_size.contains(&0)
                 || total_invocations > self.limits.max_compute_invocations_per_workgroup
                 || entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
                 || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
@@ -1206,8 +1260,10 @@ impl Interface {
                                     // For vertex attributes, there are defaults filled out
                                     // by the driver if data is not provided.
                                     naga::ShaderStage::Vertex => {
+                                        let is_compatible =
+                                            iv.ty.scalar.kind == provided.ty.scalar.kind;
                                         // vertex inputs don't count towards inter-stage
-                                        (iv.ty.is_compatible_with(&provided.ty), 0)
+                                        (is_compatible, 0)
                                     }
                                     naga::ShaderStage::Fragment => {
                                         if iv.interpolation != provided.interpolation {

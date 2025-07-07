@@ -1,8 +1,8 @@
-use parking_lot::Mutex;
+#[cfg(wgpu_core)]
+use alloc::vec::Vec;
+use core::future::Future;
 
-use crate::{dispatch::InstanceInterface, *};
-
-use std::future::Future;
+use crate::{dispatch::InstanceInterface, util::Mutex, *};
 
 bitflags::bitflags! {
     /// WGSL language extensions.
@@ -60,45 +60,27 @@ impl Instance {
     ///
     /// `InstanceDescriptor::backends` does not need to be a subset of this,
     /// but any backend that is not in this set, will not be picked.
-    ///
-    /// TODO: Right now it's otherwise not possible yet to opt-out of all features on some platforms.
-    /// See <https://github.com/gfx-rs/wgpu/issues/3514>
-    /// * Windows/Linux/Android: always enables Vulkan and GLES with no way to opt out
     pub const fn enabled_backend_features() -> Backends {
         let mut backends = Backends::empty();
-
-        if cfg!(native) {
-            if cfg!(metal) {
-                backends = backends.union(Backends::METAL);
-            }
-            if cfg!(dx12) {
-                backends = backends.union(Backends::DX12);
-            }
-
-            // Windows, Android, Linux currently always enable Vulkan and OpenGL.
-            // See <https://github.com/gfx-rs/wgpu/issues/3514>
-            if cfg!(target_os = "windows") || cfg!(unix) {
-                backends = backends.union(Backends::VULKAN).union(Backends::GL);
-            }
-
-            // Vulkan on Mac/iOS is only available through vulkan-portability.
-            if cfg!(target_vendor = "apple") && cfg!(feature = "vulkan-portability") {
-                backends = backends.union(Backends::VULKAN);
-            }
-
-            // GL on Mac is only available through angle.
-            if cfg!(target_os = "macos") && cfg!(feature = "angle") {
-                backends = backends.union(Backends::GL);
-            }
-        } else {
-            if cfg!(webgpu) {
-                backends = backends.union(Backends::BROWSER_WEBGPU);
-            }
-            if cfg!(webgl) {
-                backends = backends.union(Backends::GL);
-            }
+        // `.set` and `|=` don't work in a `const` context.
+        if cfg!(noop) {
+            backends = backends.union(Backends::NOOP);
         }
-
+        if cfg!(vulkan) {
+            backends = backends.union(Backends::VULKAN);
+        }
+        if cfg!(any(gles, webgl)) {
+            backends = backends.union(Backends::GL);
+        }
+        if cfg!(metal) {
+            backends = backends.union(Backends::METAL);
+        }
+        if cfg!(dx12) {
+            backends = backends.union(Backends::DX12);
+        }
+        if cfg!(webgpu) {
+            backends = backends.union(Backends::BROWSER_WEBGPU);
+        }
         backends
     }
 
@@ -216,12 +198,26 @@ impl Instance {
         }
     }
 
+    #[cfg(custom)]
+    /// Creates instance from custom context implementation
+    pub fn from_custom<T: InstanceInterface>(instance: T) -> Self {
+        Self {
+            inner: dispatch::DispatchInstance::Custom(backend::custom::DynContext::new(instance)),
+        }
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of Instance (if custom backend and is internally T)
+    pub fn as_custom<T: custom::InstanceInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
     ///
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(native)]
+    #[cfg(wgpu_core)]
     pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
         let Some(core_instance) = self.inner.as_core_opt() else {
             return Vec::new();
@@ -244,13 +240,14 @@ impl Instance {
     ///
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
     ///
-    /// If no adapters are found that suffice all the "hard" options, `None` is returned.
+    /// If no adapters are found that satisfy all the "hard" options, an error is returned.
     ///
-    /// A `compatible_surface` is required when targeting WebGL2.
+    /// When targeting WebGL2, a [`compatible_surface`](RequestAdapterOptions::compatible_surface)
+    /// must be specified; using `RequestAdapterOptions::default()` will not succeed.
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions<'_, '_>,
-    ) -> impl Future<Output = Option<Adapter>> + WasmNotSend {
+    ) -> impl Future<Output = Result<Adapter, RequestAdapterError>> + WasmNotSend {
         let future = self.inner.request_adapter(options);
         async move { future.await.map(|adapter| Adapter { inner: adapter }) }
     }
@@ -304,12 +301,12 @@ impl Instance {
                 surface
             }?,
 
-            #[cfg(any(webgpu, webgl))]
+            #[cfg(web)]
             SurfaceTarget::Canvas(canvas) => {
                 handle_source = None;
 
                 let value: &wasm_bindgen::JsValue = &canvas;
-                let obj = std::ptr::NonNull::from(value).cast();
+                let obj = core::ptr::NonNull::from(value).cast();
                 let raw_window_handle = raw_window_handle::WebCanvasWindowHandle::new(obj).into();
                 let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
 
@@ -323,12 +320,12 @@ impl Instance {
                 }?
             }
 
-            #[cfg(any(webgpu, webgl))]
+            #[cfg(web)]
             SurfaceTarget::OffscreenCanvas(canvas) => {
                 handle_source = None;
 
                 let value: &wasm_bindgen::JsValue = &canvas;
-                let obj = std::ptr::NonNull::from(value).cast();
+                let obj = core::ptr::NonNull::from(value).cast();
                 let raw_window_handle =
                     raw_window_handle::WebOffscreenCanvasWindowHandle::new(obj).into();
                 let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();

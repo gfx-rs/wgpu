@@ -160,6 +160,7 @@ impl Example {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &views[target_mip],
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
@@ -410,7 +411,7 @@ impl crate::framework::Example for Example {
                 .slice(..)
                 .map_async(wgpu::MapMode::Read, |_| ());
             // Wait for device to be done rendering mipmaps
-            device.poll(wgpu::Maintain::wait()).panic_on_timeout();
+            device.poll(wgpu::PollType::wait()).unwrap();
             // This is guaranteed to be ready.
             let timestamp_view = query_sets
                 .mapping_buffer
@@ -481,6 +482,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(clear_color),

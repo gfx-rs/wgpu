@@ -5,7 +5,7 @@ use alloc::string::String;
 use crate::Backends;
 
 #[cfg(doc)]
-use crate::Backend;
+use crate::{Backend, DownlevelFlags};
 
 /// Options for creating an instance.
 #[derive(Clone, Debug)]
@@ -14,6 +14,8 @@ pub struct InstanceDescriptor {
     pub backends: Backends,
     /// Flags to tune the behavior of the instance.
     pub flags: InstanceFlags,
+    /// Memory budget thresholds used by some backends.
+    pub memory_budget_thresholds: MemoryBudgetThresholds,
     /// Options the control the behavior of various backends.
     pub backend_options: BackendOptions,
 }
@@ -23,6 +25,7 @@ impl Default for InstanceDescriptor {
         Self {
             backends: Backends::all(),
             flags: InstanceFlags::default(),
+            memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options: BackendOptions::default(),
         }
     }
@@ -48,6 +51,7 @@ impl InstanceDescriptor {
         Self {
             backends,
             flags,
+            memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options,
         }
     }
@@ -56,7 +60,7 @@ impl InstanceDescriptor {
 bitflags::bitflags! {
     /// Instance debugging flags.
     ///
-    /// These are not part of the webgpu standard.
+    /// These are not part of the WebGPU standard.
     ///
     /// Defaults to enabling debugging-related flags if the build configuration has `debug_assertions`.
     #[repr(transparent)]
@@ -98,6 +102,43 @@ bitflags::bitflags! {
         ///
         /// When `Self::from_env()` is used takes value from `WGPU_GPU_BASED_VALIDATION` environment variable.
         const GPU_BASED_VALIDATION = 1 << 4;
+
+        /// Validate indirect buffer content prior to issuing indirect draws/dispatches.
+        ///
+        /// This validation will transform indirect calls into no-ops if they are not valid:
+        ///
+        /// - When calling `dispatch_workgroups_indirect`, all 3 indirect arguments encoded in the buffer
+        /// must be less than the `max_compute_workgroups_per_dimension` device limit.
+        /// - When calling `draw_indirect`/`draw_indexed_indirect`/`multi_draw_indirect`/`multi_draw_indexed_indirect`:
+        ///   - If `Features::INDIRECT_FIRST_INSTANCE` is not enabled on the device, the `first_instance` indirect argument must be 0.
+        ///   - The `first_instance` & `instance_count` indirect arguments must form a range that fits within all bound vertex buffers with `step_mode` set to `Instance`.
+        /// - When calling `draw_indirect`/`multi_draw_indirect`:
+        ///   - The `first_vertex` & `vertex_count` indirect arguments must form a range that fits within all bound vertex buffers with `step_mode` set to `Vertex`.
+        /// - When calling `draw_indexed_indirect`/`multi_draw_indexed_indirect`:
+        ///   - The `first_index` & `index_count` indirect arguments must form a range that fits within the bound index buffer.
+        ///
+        /// __Behavior is undefined if this validation is disabled and the rules above are not satisfied.__
+        ///
+        /// Disabling this will also cause the following built-ins to not report the right values on the D3D12 backend:
+        ///
+        /// - the 3 components of `@builtin(num_workgroups)` will be 0
+        /// - the value of `@builtin(vertex_index)` will not take into account the value of the `first_vertex`/`base_vertex` argument present in the indirect buffer
+        /// - the value of `@builtin(instance_index)` will not take into account the value of the `first_instance` argument present in the indirect buffer
+        ///
+        /// When `Self::from_env()` is used takes value from `WGPU_VALIDATION_INDIRECT_CALL` environment variable.
+        const VALIDATION_INDIRECT_CALL = 1 << 5;
+
+        /// Enable automatic timestamp normalization. This means that in [`CommandEncoder::resolve_query_set`][rqs],
+        /// the timestamps will automatically be normalized to be in nanoseconds instead of the raw timestamp values.
+        ///
+        /// This is disabled by default because it introduces a compute shader into the resolution of query sets.
+        ///
+        /// This can be useful for users that need to read timestamps on the gpu, as the normalization
+        /// can be a hassle to do manually. When this is enabled, the timestamp period returned by the queue
+        /// will always be `1.0`.
+        ///
+        /// [rqs]: ../wgpu/struct.CommandEncoder.html#method.resolve_query_set
+        const AUTOMATIC_TIMESTAMP_NORMALIZATION = 1 << 6;
     }
 }
 
@@ -111,7 +152,7 @@ impl InstanceFlags {
     /// Enable recommended debugging and validation flags.
     #[must_use]
     pub fn debugging() -> Self {
-        InstanceFlags::DEBUG | InstanceFlags::VALIDATION
+        InstanceFlags::DEBUG | InstanceFlags::VALIDATION | InstanceFlags::VALIDATION_INDIRECT_CALL
     }
 
     /// Enable advanced debugging and validation flags (potentially very slow).
@@ -130,7 +171,7 @@ impl InstanceFlags {
             return InstanceFlags::debugging();
         }
 
-        InstanceFlags::empty()
+        InstanceFlags::VALIDATION_INDIRECT_CALL
     }
 
     /// Derive defaults from environment variables. See [`Self::with_env()`] for more information.
@@ -154,6 +195,7 @@ impl InstanceFlags {
     /// - `WGPU_DISCARD_HAL_LABELS`
     /// - `WGPU_ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER`
     /// - `WGPU_GPU_BASED_VALIDATION`
+    /// - `WGPU_VALIDATION_INDIRECT_CALL`
     #[must_use]
     pub fn with_env(mut self) -> Self {
         fn env(key: &str) -> Option<bool> {
@@ -166,6 +208,7 @@ impl InstanceFlags {
         if let Some(bit) = env("WGPU_VALIDATION") {
             self.set(Self::VALIDATION, bit);
         }
+
         if let Some(bit) = env("WGPU_DEBUG") {
             self.set(Self::DEBUG, bit);
         }
@@ -178,9 +221,30 @@ impl InstanceFlags {
         if let Some(bit) = env("WGPU_GPU_BASED_VALIDATION") {
             self.set(Self::GPU_BASED_VALIDATION, bit);
         }
+        if let Some(bit) = env("WGPU_VALIDATION_INDIRECT_CALL") {
+            self.set(Self::VALIDATION_INDIRECT_CALL, bit);
+        }
 
         self
     }
+}
+
+/// Memory budget thresholds used by backends to try to avoid high memory pressure situations.
+///
+/// Currently only the D3D12 and (optionally) Vulkan backends support these options.
+#[derive(Default, Clone, Debug, Copy)]
+pub struct MemoryBudgetThresholds {
+    /// Threshold at which texture, buffer, query set and acceleration structure creation will start to return OOM errors.
+    /// This is a percent of the memory budget reported by native APIs.
+    ///
+    /// If not specified, resource creation might still return OOM errors.
+    pub for_resource_creation: Option<u8>,
+
+    /// Threshold at which devices will become lost due to memory pressure.
+    /// This is a percent of the memory budget reported by native APIs.
+    ///
+    /// If not specified, devices might still become lost due to memory pressure.
+    pub for_device_loss: Option<u8>,
 }
 
 /// Options that are passed to a given backend.
@@ -230,7 +294,7 @@ pub struct GlBackendOptions {
     /// Which OpenGL ES 3 minor version to request, if using OpenGL ES.
     pub gles_minor_version: Gles3MinorVersion,
     /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
-    pub short_circuit_fences: GlFenceBehavior,
+    pub fence_behavior: GlFenceBehavior,
 }
 
 impl GlBackendOptions {
@@ -242,7 +306,7 @@ impl GlBackendOptions {
         let gles_minor_version = Gles3MinorVersion::from_env().unwrap_or_default();
         Self {
             gles_minor_version,
-            short_circuit_fences: GlFenceBehavior::Normal,
+            fence_behavior: GlFenceBehavior::Normal,
         }
     }
 
@@ -252,10 +316,10 @@ impl GlBackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let gles_minor_version = self.gles_minor_version.with_env();
-        let short_circuit_fences = self.short_circuit_fences.with_env();
+        let short_circuit_fences = self.fence_behavior.with_env();
         Self {
             gles_minor_version,
-            short_circuit_fences,
+            fence_behavior: short_circuit_fences,
         }
     }
 }
@@ -337,10 +401,21 @@ impl NoopBackendOptions {
     }
 }
 
+/// DXC shader model.
+#[derive(Clone, Debug)]
+#[allow(missing_docs)]
+pub enum DxcShaderModel {
+    V6_0,
+    V6_1,
+    V6_2,
+    V6_3,
+    V6_4,
+    V6_5,
+    V6_6,
+    V6_7,
+}
+
 /// Selects which DX12 shader compiler to use.
-///
-/// If the `DynamicDxc` option is selected, but `dxcompiler.dll` and `dxil.dll` files aren't found,
-/// then this will fall back to the Fxc compiler at runtime and log an error.
 #[derive(Clone, Debug, Default)]
 pub enum Dx12Compiler {
     /// The Fxc compiler (default) is old, slow and unmaintained.
@@ -350,17 +425,17 @@ pub enum Dx12Compiler {
     Fxc,
     /// The Dxc compiler is new, fast and maintained.
     ///
-    /// However, it requires both `dxcompiler.dll` and `dxil.dll` to be shipped with the application.
+    /// However, it requires `dxcompiler.dll` to be shipped with the application.
     /// These files can be downloaded from <https://github.com/microsoft/DirectXShaderCompiler/releases>.
     ///
-    /// Minimum supported version: [v1.5.2010](https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.5.2010)
+    /// Minimum supported version: [v1.8.2502](https://github.com/microsoft/DirectXShaderCompiler/releases/tag/v1.8.2502)
     ///
     /// It also requires WDDM 2.1 (Windows 10 version 1607).
     DynamicDxc {
         /// Path to `dxcompiler.dll`.
         dxc_path: String,
-        /// Path to `dxil.dll`.
-        dxil_path: String,
+        /// Maximum shader model the given dll supports.
+        max_shader_model: DxcShaderModel,
     },
     /// The statically-linked variant of Dxc.
     ///
@@ -371,10 +446,12 @@ pub enum Dx12Compiler {
 
 impl Dx12Compiler {
     /// Helper function to construct a `DynamicDxc` variant with default paths.
+    ///
+    /// The dll must support at least shader model 6.8.
     pub fn default_dynamic_dxc() -> Self {
         Self::DynamicDxc {
             dxc_path: String::from("dxcompiler.dll"),
-            dxil_path: String::from("dxil.dll"),
+            max_shader_model: DxcShaderModel::V6_7, // should be 6.8 but the variant is missing
         }
     }
 
@@ -472,7 +549,7 @@ pub enum GlFenceBehavior {
     ///
     /// This solves a very specific issue that arose due to a bug in wgpu-core that made
     /// many WebGL programs work when they "shouldn't" have. If you have code that is trying
-    /// to call `device.poll(wgpu::Maintain::Wait)` on WebGL, you need to enable this option
+    /// to call `device.poll(wgpu::PollType::Wait)` on WebGL, you need to enable this option
     /// for the "Wait" to behave how you would expect.
     ///
     /// Previously all `poll(Wait)` acted like the OpenGL fences were signalled even if they weren't.

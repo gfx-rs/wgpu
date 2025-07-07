@@ -1,0 +1,39 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+
+void fb1_(
+    thread bool& cond
+) {
+    uint2 loop_bound = uint2(4294967295u);
+    bool loop_init = true;
+    while(true) {
+        if (metal::all(loop_bound == uint2(0u))) { break; }
+        loop_bound -= uint2(loop_bound.y == 0u, 1u);
+        if (!loop_init) {
+            bool _e1 = cond;
+            if (!(cond)) {
+                break;
+            }
+        }
+        loop_init = false;
+        continue;
+    }
+    return;
+}
+
+void main_1(
+) {
+    bool param = {};
+    param = false;
+    fb1_(param);
+    return;
+}
+
+fragment void main_(
+) {
+    main_1();
+}

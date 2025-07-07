@@ -1,9 +1,6 @@
-use std::{
-    mem::{size_of, size_of_val},
-    ptr,
-    sync::Arc,
-    thread,
-};
+use alloc::{string::String, sync::Arc, vec::Vec};
+use core::ptr;
+use std::thread;
 
 use parking_lot::Mutex;
 use windows::{
@@ -59,7 +56,8 @@ impl super::Adapter {
         adapter: DxgiAdapter,
         library: &Arc<D3D12Lib>,
         instance_flags: wgt::InstanceFlags,
-        dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+        memory_budget_thresholds: wgt::MemoryBudgetThresholds,
+        compiler_container: Arc<shader_compilation::CompilerContainer>,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
@@ -226,9 +224,18 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if dxc_container.is_none() {
-            naga::back::hlsl::ShaderModel::V5_1
-        } else {
+        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
+            let max_shader_model = match max_shader_model {
+                wgt::DxcShaderModel::V6_0 => Direct3D12::D3D_SHADER_MODEL_6_0,
+                wgt::DxcShaderModel::V6_1 => Direct3D12::D3D_SHADER_MODEL_6_1,
+                wgt::DxcShaderModel::V6_2 => Direct3D12::D3D_SHADER_MODEL_6_2,
+                wgt::DxcShaderModel::V6_3 => Direct3D12::D3D_SHADER_MODEL_6_3,
+                wgt::DxcShaderModel::V6_4 => Direct3D12::D3D_SHADER_MODEL_6_4,
+                wgt::DxcShaderModel::V6_5 => Direct3D12::D3D_SHADER_MODEL_6_5,
+                wgt::DxcShaderModel::V6_6 => Direct3D12::D3D_SHADER_MODEL_6_6,
+                wgt::DxcShaderModel::V6_7 => Direct3D12::D3D_SHADER_MODEL_6_7,
+            };
+
             let mut versions = [
                 Direct3D12::D3D_SHADER_MODEL_6_7,
                 Direct3D12::D3D_SHADER_MODEL_6_6,
@@ -239,7 +246,8 @@ impl super::Adapter {
                 Direct3D12::D3D_SHADER_MODEL_6_1,
                 Direct3D12::D3D_SHADER_MODEL_6_0,
             ]
-            .iter();
+            .iter()
+            .filter(|shader_model| shader_model.0 <= max_shader_model.0);
 
             let highest_shader_model = loop {
                 if let Some(&sm) = versions.next() {
@@ -274,6 +282,8 @@ impl super::Adapter {
                 Direct3D12::D3D_SHADER_MODEL_6_7 => naga::back::hlsl::ShaderModel::V6_7,
                 _ => unreachable!(),
             }
+        } else {
+            naga::back::hlsl::ShaderModel::V5_1
         };
         let private_caps = super::PrivateCapabilities {
             instance_flags,
@@ -372,15 +382,12 @@ impl super::Adapter {
         features.set(
             wgt::Features::TEXTURE_BINDING_ARRAY
                 | wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY
-                | wgt::Features::UNIFORM_BUFFER_AND_STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-                | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            shader_model >= naga::back::hlsl::ShaderModel::V5_1,
-        );
-
-        // See note below the table https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
-        features.set(
-            wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY,
-            options.ResourceBindingTier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0,
+                | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                | wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                // See note below the table https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-support
+                | wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY,
+            shader_model >= naga::back::hlsl::ShaderModel::V5_1
+                && options.ResourceBindingTier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0,
         );
 
         let bgra8unorm_storage_supported = {
@@ -421,6 +428,23 @@ impl super::Adapter {
                 && features1.Int64ShaderOps.as_bool(),
         );
 
+        let float16_supported = {
+            let mut features4 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS4::default();
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS4, // https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_feature#syntax
+                    ptr::from_mut(&mut features4).cast(),
+                    size_of::<Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS4>() as _,
+                )
+            };
+            hr.is_ok() && features4.Native16BitShaderOpsSupported.as_bool()
+        };
+
+        features.set(
+            wgt::Features::SHADER_F16,
+            shader_model >= naga::back::hlsl::ShaderModel::V6_2 && float16_supported,
+        );
+
         features.set(
             wgt::Features::TEXTURE_INT64_ATOMIC,
             shader_model >= naga::back::hlsl::ShaderModel::V6_6
@@ -450,7 +474,8 @@ impl super::Adapter {
         // Once ray tracing pipelines are supported they also will go here
         features.set(
             wgt::Features::EXPERIMENTAL_RAY_QUERY
-                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
+                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+                | wgt::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
             features5.RaytracingTier == Direct3D12::D3D12_RAYTRACING_TIER_1_1
                 && shader_model >= naga::back::hlsl::ShaderModel::V6_5
                 && has_features5,
@@ -479,15 +504,27 @@ impl super::Adapter {
 
         let base = wgt::Limits::default();
 
-        let mut downlevel = wgt::DownlevelCapabilities::default();
-        // https://github.com/gfx-rs/wgpu/issues/2471
-        downlevel.flags -=
-            wgt::DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW;
+        let downlevel = wgt::DownlevelCapabilities::default();
 
         // See https://learn.microsoft.com/en-us/windows/win32/direct3d12/hardware-feature-levels#feature-level-support
         let max_color_attachments = 8;
         let max_color_attachment_bytes_per_sample =
             max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
+
+        let max_srv_count = match options.ResourceBindingTier {
+            Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
+            _ => full_heap_count,
+        };
+
+        // If we also support acceleration structures these are shared so we must halve it.
+        // It's unlikely that this affects anything because most devices that support ray tracing
+        // probably have a higher binding tier than one.
+        let max_sampled_textures_per_shader_stage =
+            if !features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
+                max_srv_count
+            } else {
+                max_srv_count / 2
+            };
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -497,7 +534,8 @@ impl super::Adapter {
                 private_caps,
                 presentation_timer,
                 workarounds,
-                dxc_container,
+                memory_budget_thresholds,
+                compiler_container,
             },
             info,
             features,
@@ -515,10 +553,7 @@ impl super::Adapter {
                         .max_dynamic_uniform_buffers_per_pipeline_layout,
                     max_dynamic_storage_buffers_per_pipeline_layout: base
                         .max_dynamic_storage_buffers_per_pipeline_layout,
-                    max_sampled_textures_per_shader_stage: match options.ResourceBindingTier {
-                        Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
-                        _ => full_heap_count,
-                    },
+                    max_sampled_textures_per_shader_stage,
                     max_samplers_per_shader_stage: match options.ResourceBindingTier {
                         Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
                         _ => Direct3D12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
@@ -529,6 +564,8 @@ impl super::Adapter {
                     max_storage_buffers_per_shader_stage: uav_count / 4,
                     max_storage_textures_per_shader_stage: uav_count / 4,
                     max_uniform_buffers_per_shader_stage: full_heap_count,
+                    max_binding_array_elements_per_shader_stage: full_heap_count,
+                    max_binding_array_sampler_elements_per_shader_stage: full_heap_count,
                     max_uniform_buffer_binding_size:
                         Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
                     max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE,
@@ -565,7 +602,8 @@ impl super::Adapter {
                     max_inter_stage_shader_components: base.max_inter_stage_shader_components,
                     max_color_attachments,
                     max_color_attachment_bytes_per_sample,
-                    max_compute_workgroup_storage_size: base.max_compute_workgroup_storage_size, //TODO?
+                    // From: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.6%20Inter-Thread%20Data%20Sharing
+                    max_compute_workgroup_storage_size: 32768,
                     max_compute_invocations_per_workgroup:
                         Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP,
                     max_compute_workgroup_size_x: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_X,
@@ -578,6 +616,34 @@ impl super::Adapter {
                     // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
                     max_buffer_size: i32::MAX as u64,
                     max_non_sampler_bindings: 1_000_000,
+                    max_blas_primitive_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 29 // 2^29
+                    } else {
+                        0
+                    },
+                    max_blas_geometry_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 24 // 2^24
+                    } else {
+                        0
+                    },
+                    max_tlas_instance_count: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        1 << 24 // 2^24
+                    } else {
+                        0
+                    },
+                    max_acceleration_structures_per_shader_stage: if features
+                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+                    {
+                        max_srv_count / 2
+                    } else {
+                        0
+                    },
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
@@ -606,7 +672,7 @@ impl crate::Adapter for super::Adapter {
 
     unsafe fn open(
         &self,
-        _features: wgt::Features,
+        features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
@@ -625,13 +691,16 @@ impl crate::Adapter for super::Adapter {
         };
 
         let device = super::Device::new(
+            self.raw.clone(),
             self.device.clone(),
             queue.clone(),
+            features,
             limits,
             memory_hints,
             self.private_caps,
             &self.library,
-            self.dxc_container.clone(),
+            self.memory_budget_thresholds,
+            self.compiler_container.clone(),
         )?;
         Ok(crate::OpenDevice {
             device,

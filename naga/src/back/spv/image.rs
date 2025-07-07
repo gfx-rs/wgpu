@@ -2,12 +2,13 @@
 Generating SPIR-V for image operations.
 */
 
+use spirv::Word;
+
 use super::{
     selection::{MergeTuple, Selection},
     Block, BlockContext, Error, IdGenerator, Instruction, LocalType, LookupType, NumericType,
 };
 use crate::arena::Handle;
-use spirv::Word;
 
 /// Information about a vector of coordinates.
 ///
@@ -125,12 +126,10 @@ impl Load {
         // image produces a scalar `f32`, so in that case we need to find
         // the right SPIR-V type for the access instruction here.
         let type_id = match image_class {
-            crate::ImageClass::Depth { .. } => {
-                ctx.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
-                    size: crate::VectorSize::Quad,
-                    scalar: crate::Scalar::F32,
-                })))
-            }
+            crate::ImageClass::Depth { .. } => ctx.get_numeric_type_id(NumericType::Vector {
+                size: crate::VectorSize::Quad,
+                scalar: crate::Scalar::F32,
+            }),
             _ => result_type_id,
         };
 
@@ -339,9 +338,7 @@ impl BlockContext<'_> {
             }
         };
         let reconciled_array_index_id = if let Some(cast) = cast {
-            let component_ty_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-                NumericType::Scalar(component_scalar),
-            )));
+            let component_ty_id = self.get_numeric_type_id(NumericType::Scalar(component_scalar));
             let reconciled_id = self.gen_id();
             block.body.push(Instruction::unary(
                 cast,
@@ -355,11 +352,10 @@ impl BlockContext<'_> {
         };
 
         // Find the SPIR-V type for the combined coordinates/index vector.
-        let type_id =
-            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
-                size,
-                scalar: component_scalar,
-            })));
+        let type_id = self.get_numeric_type_id(NumericType::Vector {
+            size,
+            scalar: component_scalar,
+        });
 
         // Schmear the coordinates and index together.
         let value_id = self.gen_id();
@@ -526,9 +522,7 @@ impl BlockContext<'_> {
             &[spirv::Capability::ImageQuery],
         )?;
 
-        let i32_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-            NumericType::Scalar(crate::Scalar::I32),
-        )));
+        let i32_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32));
 
         // If `level` is `Some`, clamp it to fall within bounds. This must
         // happen first, because we'll use it to query the image size for
@@ -611,9 +605,7 @@ impl BlockContext<'_> {
         )?;
 
         let bool_type_id = self.writer.get_bool_type_id();
-        let i32_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-            NumericType::Scalar(crate::Scalar::I32),
-        )));
+        let i32_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32));
 
         let null_id = access.out_of_bounds_value(self);
 
@@ -683,8 +675,7 @@ impl BlockContext<'_> {
             },
             None => NumericType::Scalar(crate::Scalar::BOOL),
         };
-        let coords_bool_type_id =
-            self.get_type_id(LookupType::Local(LocalType::Numeric(coords_numeric_type)));
+        let coords_bool_type_id = self.get_numeric_type_id(coords_numeric_type);
         let coords_conds_id = self.gen_id();
         selection.block().body.push(Instruction::binary(
             spirv::Op::ULessThan,
@@ -819,6 +810,7 @@ impl BlockContext<'_> {
         offset: Option<Handle<crate::Expression>>,
         level: crate::SampleLevel,
         depth_ref: Option<Handle<crate::Expression>>,
+        clamp_to_edge: bool,
         block: &mut Block,
     ) -> Result<Word, Error> {
         use super::instructions::SampleLod;
@@ -835,23 +827,113 @@ impl BlockContext<'_> {
             _ => false,
         };
         let sample_result_type_id = if needs_sub_access {
-            self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
+            self.get_numeric_type_id(NumericType::Vector {
                 size: crate::VectorSize::Quad,
                 scalar: crate::Scalar::F32,
-            })))
+            })
         } else {
             result_type_id
         };
 
         // OpTypeSampledImage
-        let image_type_id = self.get_type_id(LookupType::Handle(image_type));
+        let image_type_id = self.get_handle_type_id(image_type);
         let sampled_image_type_id =
             self.get_type_id(LookupType::Local(LocalType::SampledImage { image_type_id }));
 
         let sampler_id = self.get_handle_id(sampler);
-        let coordinates_id = self
-            .write_image_coordinates(coordinate, array_index, block)?
-            .value_id;
+
+        let coordinates = self.write_image_coordinates(coordinate, array_index, block)?;
+        let coordinates_id = if clamp_to_edge {
+            self.writer.require_any(
+                "clamp sample coordinates to edge",
+                &[spirv::Capability::ImageQuery],
+            )?;
+
+            // clamp_to_edge can only be used with Level 0, and no array offset, offset,
+            // depth_ref or gather. This should have been caught by validation. Rather
+            // than entirely duplicate validation code here just ensure the level is
+            // zero, as we rely on that to query the texture size in order to calculate
+            // the clamped coordinates.
+            if level != crate::SampleLevel::Zero {
+                return Err(Error::Validation(
+                    "ImageSample::clamp_to_edge requires SampleLevel::Zero",
+                ));
+            }
+
+            // Query the size of level 0 of the texture.
+            let image_size_id = self.gen_id();
+            let vec2u_type_id = self.writer.get_vec2u_type_id();
+            let const_zero_uint_id = self.writer.get_constant_scalar(crate::Literal::U32(0));
+            let mut query_inst = Instruction::image_query(
+                spirv::Op::ImageQuerySizeLod,
+                vec2u_type_id,
+                image_size_id,
+                image_id,
+            );
+            query_inst.add_operand(const_zero_uint_id);
+            block.body.push(query_inst);
+
+            let image_size_f_id = self.gen_id();
+            let vec2f_type_id = self.writer.get_vec2f_type_id();
+            block.body.push(Instruction::unary(
+                spirv::Op::ConvertUToF,
+                vec2f_type_id,
+                image_size_f_id,
+                image_size_id,
+            ));
+
+            // Calculate the top-left and bottom-right margin for clamping to. I.e. a
+            // half-texel from each side.
+            let const_0_5_f32_id = self.writer.get_constant_scalar(crate::Literal::F32(0.5));
+            let const_0_5_vec2f_id = self.writer.get_constant_composite(
+                LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                    size: crate::VectorSize::Bi,
+                    scalar: crate::Scalar::F32,
+                })),
+                &[const_0_5_f32_id, const_0_5_f32_id],
+            );
+
+            let margin_left_id = self.gen_id();
+            block.body.push(Instruction::binary(
+                spirv::Op::FDiv,
+                vec2f_type_id,
+                margin_left_id,
+                const_0_5_vec2f_id,
+                image_size_f_id,
+            ));
+
+            let const_1_f32_id = self.writer.get_constant_scalar(crate::Literal::F32(1.0));
+            let const_1_vec2f_id = self.writer.get_constant_composite(
+                LookupType::Local(LocalType::Numeric(NumericType::Vector {
+                    size: crate::VectorSize::Bi,
+                    scalar: crate::Scalar::F32,
+                })),
+                &[const_1_f32_id, const_1_f32_id],
+            );
+
+            let margin_right_id = self.gen_id();
+            block.body.push(Instruction::binary(
+                spirv::Op::FSub,
+                vec2f_type_id,
+                margin_right_id,
+                const_1_vec2f_id,
+                margin_left_id,
+            ));
+
+            // Clamp the coords to the calculated margins
+            let clamped_coords_id = self.gen_id();
+            block.body.push(Instruction::ext_inst(
+                self.writer.gl450_ext_inst_id,
+                spirv::GLOp::NClamp,
+                vec2f_type_id,
+                clamped_coords_id,
+                &[coordinates.value_id, margin_left_id, margin_right_id],
+            ));
+
+            clamped_coords_id
+        } else {
+            coordinates.value_id
+        };
 
         let sampled_image_id = self.gen_id();
         block.body.push(Instruction::sampled_image(
@@ -936,9 +1018,8 @@ impl BlockContext<'_> {
                     }
                 ) {
                     let lod_f32_id = self.gen_id();
-                    let f32_type_id = self.get_type_id(LookupType::Local(LocalType::Numeric(
-                        NumericType::Scalar(crate::Scalar::F32),
-                    )));
+                    let f32_type_id =
+                        self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::F32));
                     let convert_op = match *self.fun_info[lod_handle]
                         .ty
                         .inner_with(&self.ir_module.types)
@@ -1006,7 +1087,7 @@ impl BlockContext<'_> {
         };
 
         if let Some(offset_const) = offset {
-            let offset_id = self.writer.constant_ids[offset_const];
+            let offset_id = self.cached[offset_const];
             main_instruction.add_operand(offset_id);
         }
 
@@ -1078,8 +1159,7 @@ impl BlockContext<'_> {
                     None => NumericType::Scalar(crate::Scalar::U32),
                 };
 
-                let extended_size_type_id =
-                    self.get_type_id(LookupType::Local(LocalType::Numeric(vector_numeric_type)));
+                let extended_size_type_id = self.get_numeric_type_id(vector_numeric_type);
 
                 let (query_op, level_id) = match class {
                     Ic::Sampled { multi: true, .. }
@@ -1145,11 +1225,10 @@ impl BlockContext<'_> {
                     Id::D2 | Id::Cube => crate::VectorSize::Tri,
                     Id::D3 => crate::VectorSize::Quad,
                 };
-                let extended_size_type_id =
-                    self.get_type_id(LookupType::Local(LocalType::Numeric(NumericType::Vector {
-                        size: vec_size,
-                        scalar: crate::Scalar::U32,
-                    })));
+                let extended_size_type_id = self.get_numeric_type_id(NumericType::Vector {
+                    size: vec_size,
+                    scalar: crate::Scalar::U32,
+                });
                 let id_extended = self.gen_id();
                 let mut inst = Instruction::image_query(
                     spirv::Op::ImageQuerySizeLod,
@@ -1248,10 +1327,8 @@ impl BlockContext<'_> {
             return Err(Error::Validation("Invalid image class"));
         };
         let scalar = format.into();
-        let pointer_type_id = self.get_type_id(LookupType::Local(LocalType::LocalPointer {
-            base: NumericType::Scalar(scalar),
-            class: spirv::StorageClass::Image,
-        }));
+        let scalar_type_id = self.get_numeric_type_id(NumericType::Scalar(scalar));
+        let pointer_type_id = self.get_pointer_type_id(scalar_type_id, spirv::StorageClass::Image);
         let signed = scalar.kind == crate::ScalarKind::Sint;
         if scalar.width == 8 {
             self.writer
