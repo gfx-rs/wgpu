@@ -3132,6 +3132,57 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
+
+                        "setMeshOutputs" | "setVertex" | "setPrimitive" => {
+                            let mut args = ctx.prepare_args(arguments, 2, span);
+                            let arg1 = self.expression(args.next()?, ctx)?;
+                            let arg2 = self.expression(args.next()?, ctx)?;
+                            let mut convert_to_u32 =
+                                |expr: Handle<crate::Expression>| -> Result<Handle<crate::Expression>> {
+                                    let goal_inner = crate::TypeInner::Scalar(crate::Scalar::U32);
+                                    match goal_inner.scalar_for_conversions(&ctx.module.types) {
+                                        Some(goal_scalar) => {
+                                            let arg_span = ctx.get_expression_span(expr);
+                                            ctx.try_automatic_conversion_for_leaf_scalar(
+                                                expr,
+                                                goal_scalar,
+                                                arg_span,
+                                            )
+                                        }
+                                        // No conversion is necessary.
+                                        None => Ok(expr),
+                                    }
+                                };
+                            let arg1 = convert_to_u32(arg1)?;
+                            let arg2 = if function.name == "setMeshOutputs" {
+                                convert_to_u32(arg2)?
+                            } else {
+                                arg2
+                            };
+                            args.finish()?;
+
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block.push(
+                                crate::Statement::MeshFunction(match function.name {
+                                    "setMeshOutputs" => crate::MeshFunction::SetMeshOutputs {
+                                        vertex_count: arg1,
+                                        primitive_count: arg2,
+                                    },
+                                    "setVertex" => crate::MeshFunction::SetVertex {
+                                        index: arg1,
+                                        value: arg2,
+                                    },
+                                    "setPrimitive" => crate::MeshFunction::SetPrimitive {
+                                        index: arg1,
+                                        value: arg2,
+                                    },
+                                    _ => unreachable!(),
+                                }),
+                                span,
+                            );
+
+                            return Ok(None);
+                        }
                         _ => {
                             return Err(Box::new(Error::UnknownIdent(function.span, function.name)))
                         }

@@ -7174,7 +7174,7 @@ mod workgroup_mem_init {
             fun_info: &valid::FunctionInfo,
         ) -> bool {
             options.zero_initialize_workgroup_memory
-                && ep.stage == crate::ShaderStage::Compute
+                && ep.stage.compute_like()
                 && module.global_variables.iter().any(|(handle, var)| {
                     !fun_info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
                 })

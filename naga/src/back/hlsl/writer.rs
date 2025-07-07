@@ -490,7 +490,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             self.write_wrapped_functions(module, &ctx)?;
 
-            if ep.stage == ShaderStage::Compute {
+            if ep.stage.compute_like() {
                 // HLSL is calling workgroup size "num threads"
                 let num_threads = ep.workgroup_size;
                 writeln!(

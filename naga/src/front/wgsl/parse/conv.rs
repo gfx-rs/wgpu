@@ -53,6 +53,7 @@ pub fn map_built_in(
         "cull_primitive" => crate::BuiltIn::CullPrimitive,
         "line_indices" => crate::BuiltIn::LineIndices,
         "triangle_indices" => crate::BuiltIn::TriangleIndices,
+        "mesh_task_size" => crate::BuiltIn::MeshTaskSize,
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     };
     match built_in {

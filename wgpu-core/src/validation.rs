@@ -1222,7 +1222,7 @@ impl Interface {
         }
 
         // check workgroup size limits
-        if shader_stage == naga::ShaderStage::Compute {
+        if shader_stage.compute_like() {
             let max_workgroup_size_limits = [
                 self.limits.max_compute_workgroup_size_x,
                 self.limits.max_compute_workgroup_size_y,

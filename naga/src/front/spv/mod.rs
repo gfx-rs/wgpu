@@ -4896,6 +4896,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 spirv::ExecutionModel::Vertex => crate::ShaderStage::Vertex,
                 spirv::ExecutionModel::Fragment => crate::ShaderStage::Fragment,
                 spirv::ExecutionModel::GLCompute => crate::ShaderStage::Compute,
+                spirv::ExecutionModel::TaskEXT => crate::ShaderStage::Task,
+                spirv::ExecutionModel::MeshEXT => crate::ShaderStage::Mesh,
                 _ => return Err(Error::UnsupportedExecutionModel(exec_model as u32)),
             },
             name,

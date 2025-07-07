@@ -400,6 +400,7 @@ pub enum BuiltIn {
     SubgroupSize,
     SubgroupInvocationId,
     // mesh
+    MeshTaskSize,
     CullPrimitive,
     LineIndices,
     TriangleIndices,

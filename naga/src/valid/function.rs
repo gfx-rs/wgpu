@@ -217,8 +217,8 @@ pub enum FunctionError {
     EmitResult(Handle<crate::Expression>),
     #[error("Expression not visited by the appropriate statement")]
     UnvisitedExpression(Handle<crate::Expression>),
-    #[error("U32 {0:?} is not a matching expression")]
-    InvalidMeshFunctionType(Handle<crate::Expression>),
+    #[error("Expression {0:?} should be u32, but isn't")]
+    InvalidMeshFunctionCall(Handle<crate::Expression>),
 }
 
 bitflags::bitflags! {
@@ -1543,27 +1543,36 @@ impl super::Validator {
                     }
                 }
                 S::MeshFunction(func) => {
-                    // TODO: ensure this is the last statement executed
-                    let ensure_correct =
-                        |e: Handle<crate::Expression>| -> Result<(), WithSpan<FunctionError>> {
-                            match *context.resolve_type_inner(e, &self.valid_expression_set)? {
-                                Ti::Scalar(crate::Scalar::U32) => Ok(()),
-                                _ => Err(FunctionError::InvalidMeshFunctionType(e)
-                                    .with_span_static(span, "invalid u32")),
+                    let ensure_u32 =
+                        |expr: Handle<crate::Expression>| -> Result<(), WithSpan<FunctionError>> {
+                            let u32_ty = TypeResolution::Value(Ti::Scalar(crate::Scalar::U32));
+                            let ty = context
+                                .resolve_type_impl(expr, &self.valid_expression_set)
+                                .map_err_inner(|source| {
+                                    FunctionError::Expression {
+                                        source,
+                                        handle: expr,
+                                    }
+                                    .with_span_handle(expr, context.expressions)
+                                })?;
+                            if !context.compare_types(&u32_ty, ty) {
+                                return Err(FunctionError::InvalidMeshFunctionCall(expr)
+                                    .with_span_handle(expr, context.expressions));
                             }
+                            Ok(())
                         };
                     match func {
                         crate::MeshFunction::SetMeshOutputs {
                             vertex_count,
                             primitive_count,
                         } => {
-                            ensure_correct(vertex_count)?;
-                            ensure_correct(primitive_count)?;
+                            ensure_u32(vertex_count)?;
+                            ensure_u32(primitive_count)?;
                         }
-                        crate::MeshFunction::SetVertex { index, value }
-                        | crate::MeshFunction::SetPrimitive { index, value } => {
-                            ensure_correct(index)?;
-                            ensure_correct(value)?;
+                        crate::MeshFunction::SetVertex { index, value: _ }
+                        | crate::MeshFunction::SetPrimitive { index, value: _ } => {
+                            ensure_u32(index)?;
+                            // TODO: ensure it is correct for the value
                         }
                     }
                 }

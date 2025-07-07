@@ -2123,6 +2123,7 @@ impl Writer {
                     Bi::CullPrimitive => BuiltIn::CullPrimitiveEXT,
                     Bi::LineIndices => BuiltIn::PrimitiveLineIndicesEXT,
                     Bi::TriangleIndices => BuiltIn::PrimitiveTriangleIndicesEXT,
+                    Bi::MeshTaskSize => unreachable!(),
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);

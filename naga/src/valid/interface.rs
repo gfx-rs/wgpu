@@ -321,6 +321,14 @@ impl VaryingContext<'_> {
                                 scalar: crate::Scalar::U32,
                             },
                     ),
+                    Bi::MeshTaskSize => (
+                        self.stage == St::Task && self.output,
+                        *ty_inner
+                            == Ti::Vector {
+                                size: Vs::Tri,
+                                scalar: crate::Scalar::U32,
+                            },
+                    ),
                 };
 
                 if !visible {
@@ -693,7 +701,7 @@ impl super::Validator {
             }
         }
 
-        if ep.stage == crate::ShaderStage::Compute {
+        if ep.stage.compute_like() {
             if ep
                 .workgroup_size
                 .iter()

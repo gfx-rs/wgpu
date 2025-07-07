@@ -191,7 +191,8 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::WorkGroupSize
             | Bi::CullPrimitive
             | Bi::TriangleIndices
-            | Bi::LineIndices => return None,
+            | Bi::LineIndices
+            | Bi::MeshTaskSize => return None,
         })
     }
 }

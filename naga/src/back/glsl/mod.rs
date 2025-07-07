@@ -5262,7 +5262,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
         Bi::SubgroupInvocationId => "gl_SubgroupInvocationID",
         // mesh
         // TODO: figure out how to map these to glsl things as glsl treats them as arrays
-        Bi::CullPrimitive | Bi::LineIndices | Bi::TriangleIndices => {
+        Bi::CullPrimitive | Bi::LineIndices | Bi::TriangleIndices | Bi::MeshTaskSize => {
             unimplemented!()
         }
     }
