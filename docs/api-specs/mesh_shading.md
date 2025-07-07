@@ -156,23 +156,26 @@ fn ts_main() -> vec3<u32> {
 fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocation_id) id: vec3<u32>) {
 	setMeshOutputs(3u, 1u);
 	workgroupData = 2.0;
-	setVertex(0, VertexOutput {
-		position: positions[0],
-		color: colors[0] * taskPayload.colorMask,
-	});
-	setVertex(1, VertexOutput {
-		position: positions[1],
-		color: colors[1] * taskPayload.colorMask,
-	});
-	setVertex(2, VertexOutput {
-		position: positions[2],
-		color: colors[2] * taskPayload.colorMask,
-	});
-	setPrimitive(0, PrimitiveOutput {
-		index: vec3<u32>(0, 1, 2),
-		cull: !taskPayload.visible,
-		colorMask: vec4<f32>(1.0, 0.0, 1.0, 1.0),
-	});
+	
+	var v: VertexOutput;
+	var p: PrimitiveOutput;
+
+	v.position = positions[0];
+	v.color = colors[0] * taskPayload.colorMask;
+	setVertex(0, v);
+
+	v.position = positions[1];
+	v.color = colors[1] * taskPayload.colorMask;
+	setVertex(1, v);
+
+	v.position = positions[2];
+	v.color = colors[2] * taskPayload.colorMask;
+	setVertex(2, v);
+
+	p.index = vec3<u32>(0, 1, 2);
+	p.cull = !taskPayload.visible;
+	p.colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
+	setPrimitive(0, p);
 }
 @fragment
 fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
