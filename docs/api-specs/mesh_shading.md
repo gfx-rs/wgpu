@@ -135,6 +135,9 @@ struct PrimitiveOutput {
 	@builtin(cull_primitive) cull: bool,
 	@location(1) colorMask: vec4<f32>,
 }
+struct PrimitiveInput {
+	@location(1) colorMask: vec4<f32>,	
+}
 
 @task
 @payload(taskPayload)
@@ -172,7 +175,7 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 	});
 }
 @fragment
-fn fs_main(vertex: VertexOutput, primitive: @builtin(primitive) PrimitiveOutput) -> @location(0) vec4<f32> {
+fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
 	return vertex.color * primitive.colorMask;
 }
 ```
