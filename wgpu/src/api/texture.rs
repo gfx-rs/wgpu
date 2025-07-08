@@ -79,7 +79,7 @@ impl Texture {
         let resolved_dimension = dimension.unwrap_or_else(|| match self.descriptor.dimension {
             TextureDimension::D1 => TextureViewDimension::D1,
             TextureDimension::D2 => {
-                if array_layer_count == Some(1) {
+                if self.descriptor.array_layer_count() == 1 {
                     TextureViewDimension::D2
                 } else {
                     TextureViewDimension::D2Array
