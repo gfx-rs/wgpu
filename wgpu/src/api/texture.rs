@@ -51,7 +51,85 @@ impl Texture {
     pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> TextureView {
         let view = self.inner.create_view(desc);
 
-        TextureView { inner: view }
+        let &TextureViewDescriptor {
+            label: _,
+            format,
+            dimension,
+            usage,
+            aspect,
+            base_mip_level,
+            mip_level_count,
+            base_array_layer,
+            array_layer_count,
+        } = desc;
+
+        // WebGPU spec requires us to fill in optional fields for later access.
+        // We could do this by accessing the underlying implementation, but duplicating this
+        // logic here is a lot simpler than piping this through from a backend.
+        // See <https://www.w3.org/TR/webgpu/#abstract-opdef-resolving-gputextureviewdescriptor-defaults>
+        // See also wgpu-core's `create_texture_view`
+
+        let resolved_format = format.unwrap_or_else(|| {
+            self.descriptor
+                .format
+                .aspect_specific_format(aspect)
+                .unwrap_or(self.descriptor.format)
+        });
+
+        let resolved_dimension = dimension.unwrap_or_else(|| match self.descriptor.dimension {
+            TextureDimension::D1 => TextureViewDimension::D1,
+            TextureDimension::D2 => {
+                if array_layer_count == Some(1) {
+                    TextureViewDimension::D2
+                } else {
+                    TextureViewDimension::D2Array
+                }
+            }
+            TextureDimension::D3 => TextureViewDimension::D3,
+        });
+
+        let resolved_mip_level_count = mip_level_count.unwrap_or_else(|| {
+            self.descriptor
+                .mip_level_count
+                .saturating_sub(base_mip_level)
+        });
+
+        let resolved_array_layer_count =
+            array_layer_count.unwrap_or_else(|| match resolved_dimension {
+                TextureViewDimension::D1 | TextureViewDimension::D2 | TextureViewDimension::D3 => 1,
+                TextureViewDimension::Cube => 6,
+                TextureViewDimension::D2Array | TextureViewDimension::CubeArray => self
+                    .descriptor
+                    .array_layer_count()
+                    .saturating_sub(base_array_layer),
+            });
+
+        let resolved_usage = {
+            let usage = usage.unwrap_or(wgt::TextureUsages::empty());
+            if usage.is_empty() {
+                self.descriptor.usage
+            } else {
+                usage
+                // If usage is still empty we have an error, but that's handled by the backend.
+            }
+        };
+
+        let filled_descriptor = TextureViewDescriptor {
+            label: None,
+            format: Some(resolved_format),
+            dimension: Some(resolved_dimension),
+            usage: Some(resolved_usage),
+            aspect,
+            base_mip_level,
+            mip_level_count: Some(resolved_mip_level_count),
+            base_array_layer,
+            array_layer_count: Some(resolved_array_layer_count),
+        };
+
+        TextureView {
+            inner: view,
+            filled_descriptor,
+        }
     }
 
     /// Destroy the associated native resources as soon as possible.

@@ -12,6 +12,7 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct TextureView {
     pub(crate) inner: dispatch::DispatchTextureView,
+    pub(crate) filled_descriptor: TextureViewDescriptor<'static>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
@@ -45,6 +46,17 @@ impl TextureView {
     /// Returns custom implementation of TextureView (if custom backend and is internally T)
     pub fn as_custom<T: custom::TextureViewInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
+    }
+
+    /// The [`TextureViewDescriptor`] describing this texture view.
+    ///
+    /// Fields of [`TextureViewDescriptor`] that were left optional on creation and are
+    /// derived from the texture are filled out.
+    /// I.e. this is not the original descriptor used to create this texture view.
+    ///
+    /// Does not preserve the original label and leaves it as `None`.
+    pub fn descriptor(&self) -> &TextureViewDescriptor<'static> {
+        &self.filled_descriptor
     }
 }
 
