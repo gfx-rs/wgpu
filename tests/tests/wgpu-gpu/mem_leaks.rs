@@ -169,8 +169,8 @@ async fn draw_test_with_reports(
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.texture_views.num_allocated, 1);
     assert_eq!(report.texture_views.num_kept_from_user, 1);
-    assert_eq!(report.textures.num_allocated, 0);
-    assert_eq!(report.textures.num_kept_from_user, 0);
+    assert_eq!(report.textures.num_allocated, 1); // View keeps texture alive.
+    assert_eq!(report.textures.num_kept_from_user, 1); // View keeps texture alive.
 
     let mut encoder = ctx
         .device
@@ -208,7 +208,7 @@ async fn draw_test_with_reports(
     assert_eq!(report.command_buffers.num_allocated, 1);
     assert_eq!(report.render_bundles.num_allocated, 0);
     assert_eq!(report.texture_views.num_allocated, 1);
-    assert_eq!(report.textures.num_allocated, 0);
+    assert_eq!(report.textures.num_allocated, 1); // View keeps texture alive.
 
     function(&mut rpass);
 
