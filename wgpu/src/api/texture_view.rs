@@ -13,6 +13,7 @@ use crate::*;
 pub struct TextureView {
     pub(crate) inner: dispatch::DispatchTextureView,
     pub(crate) filled_descriptor: TextureViewDescriptor<'static>,
+    pub(crate) texture: Texture,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
@@ -46,6 +47,11 @@ impl TextureView {
     /// Returns custom implementation of TextureView (if custom backend and is internally T)
     pub fn as_custom<T: custom::TextureViewInterface>(&self) -> Option<&T> {
         self.inner.as_custom()
+    }
+
+    /// The [`Texture`] this texture view is a view of.
+    pub fn texture(&self) -> &Texture {
+        &self.texture
     }
 
     /// The [`TextureViewDescriptor`] describing this texture view.

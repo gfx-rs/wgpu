@@ -129,6 +129,7 @@ impl Texture {
         TextureView {
             inner: view,
             filled_descriptor,
+            texture: self.clone(),
         }
     }
 
