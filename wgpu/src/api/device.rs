@@ -278,7 +278,7 @@ impl Device {
         Texture {
             inner: texture,
             descriptor: TextureDescriptor {
-                label: None,    
+                label: None,
                 view_formats: &[],
                 ..desc.clone()
             },
