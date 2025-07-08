@@ -64,6 +64,26 @@ impl TextureView {
     pub fn descriptor(&self) -> &TextureViewDescriptor<'static> {
         &self.filled_descriptor
     }
+
+    /// The extent of the texture view if this texture view is renderable.
+    pub fn render_extent(&self) -> Option<Extent3d> {
+        // Computing this on the fly is a lot simpler than piping this through from a backend.
+
+        // The filled_descriptor should have usage always be set.
+        debug_assert!(self.filled_descriptor.usage.is_some());
+        let usage = self
+            .filled_descriptor
+            .usage
+            .unwrap_or(wgt::TextureUsages::empty());
+
+        usage
+            .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
+            .then(|| {
+                self.texture
+                    .descriptor
+                    .compute_render_extent(self.descriptor().base_mip_level)
+            })
+    }
 }
 
 /// Describes a [`TextureView`].
