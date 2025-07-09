@@ -1,3 +1,6 @@
+#[cfg(wgpu_core)]
+use core::ops::Deref;
+
 use alloc::{boxed::Box, vec::Vec};
 
 use wgt::{WasmNotSend, WasmNotSendSync};
@@ -151,28 +154,40 @@ impl Blas {
         self.handle
     }
 
-    /// Returns the inner hal Acceleration Structure using a callback. The hal acceleration structure
-    /// will be `None` if the backend type argument does not match with this wgpu Blas
+    /// Get the [`wgpu_hal`] acceleration structure from this `Blas`.
     ///
-    /// This method will start the wgpu_core level command recording.
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::AccelerationStructure`].
+    ///
+    /// # Deadlocks
+    ///
+    /// - The returned guard holds a read-lock on a device-local "destruction"
+    ///   lock, which will cause all calls to `destroy` to block until the
+    ///   guard is released.
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The acceleration structure is not from the backend specified by `A`.
+    /// - The acceleration structure is from the `webgpu` or `custom` backend.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Acceleration Structure must not be manually destroyed
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
+    ///
+    /// [`A::AccelerationStructure`]: hal::Api::AccelerationStructure
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&A::AccelerationStructure>) -> R,
-        R,
-    >(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
         &mut self,
-        hal_blas_callback: F,
-    ) -> R {
-        if let Some(blas) = self.inner.as_core_opt() {
-            unsafe { blas.context.blas_as_hal::<A, F, R>(blas, hal_blas_callback) }
-        } else {
-            hal_blas_callback(None)
-        }
+    ) -> Option<impl Deref<Target = A::AccelerationStructure> + WasmNotSendSync> {
+        let blas = self.inner.as_core_opt()?;
+        unsafe { blas.context.blas_as_hal::<A>(blas) }
     }
 
     #[cfg(custom)]

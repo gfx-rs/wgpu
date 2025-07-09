@@ -40,6 +40,15 @@ Bottom level categories:
 
 ## Unreleased
 
+### `as_hal` calls now return guards instead of using callbacks.
+
+Previously, if you wanted to get access to the wgpu-hal or underlying api types, you would call `as_hal` and get the hal type as a callback. Now the function returns a guard which dereferences to the hal type.
+
+```diff
+- device.as_hal::<hal::api::Vulkan>(|hal_device| {...});
++ let hal_device: impl Deref<Item = hal::vulkan::Device> = device.as_hal::<hal::api::Vulkan>();
+```
+
 ### New Features
 
 #### Naga

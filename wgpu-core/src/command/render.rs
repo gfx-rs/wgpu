@@ -1,17 +1,12 @@
 use alloc::{borrow::Cow, sync::Arc, vec::Vec};
-use core::{
-    fmt,
-    num::{NonZeroU32, NonZeroU64},
-    str,
-};
-use hal::ShouldBeNonZeroExt;
+use core::{fmt, num::NonZeroU32, ops::Range, str};
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
-    BufferAddress, BufferSize, BufferSizeOrZero, BufferUsages, Color, DynamicOffset, IndexFormat,
-    ShaderStages, TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
+    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
+    TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
 use crate::command::{
@@ -20,6 +15,7 @@ use crate::command::{
     TimestampWritesError,
 };
 use crate::pipeline::{RenderPipeline, VertexStep};
+use crate::resource::RawResourceAccess;
 use crate::resource::{InvalidResourceError, ResourceErrorIdent};
 use crate::snatch::SnatchGuard;
 use crate::{
@@ -361,17 +357,13 @@ struct IndexState {
 }
 
 impl IndexState {
-    fn update_buffer<B: hal::DynBuffer + ?Sized>(
-        &mut self,
-        binding: &hal::BufferBinding<'_, B>,
-        format: IndexFormat,
-    ) {
+    fn update_buffer(&mut self, range: Range<BufferAddress>, format: IndexFormat) {
         self.buffer_format = Some(format);
         let shift = match format {
             IndexFormat::Uint16 => 1,
             IndexFormat::Uint32 => 2,
         };
-        self.limit = binding.size.get() >> shift;
+        self.limit = (range.end - range.start) >> shift;
     }
 
     fn reset(&mut self) {
@@ -2353,14 +2345,13 @@ fn set_pipeline(
     Ok(())
 }
 
-// This function is duplicative of `bundle::set_index_buffer`.
 fn set_index_buffer(
     state: &mut State,
     cmd_buf: &Arc<CommandBuffer>,
     buffer: Arc<crate::resource::Buffer>,
     index_format: IndexFormat,
     offset: u64,
-    size: Option<BufferSizeOrZero>,
+    size: Option<BufferSize>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::set_index_buffer {}", buffer.error_ident());
 
@@ -2373,34 +2364,40 @@ fn set_index_buffer(
     buffer.same_device_as(cmd_buf.as_ref())?;
 
     buffer.check_usage(BufferUsages::INDEX)?;
+    let buf_raw = buffer.try_raw(state.general.snatch_guard)?;
 
-    let binding = buffer
-        .binding(offset, size, state.general.snatch_guard)
-        .map_err(RenderCommandError::from)?;
-    state.index.update_buffer(&binding, index_format);
+    let end = match size {
+        Some(s) => offset + s.get(),
+        None => buffer.size,
+    };
+    state.index.update_buffer(offset..end, index_format);
 
     state.general.buffer_memory_init_actions.extend(
         buffer.initialization_status.read().create_action(
             &buffer,
-            offset..(offset + binding.size.get()),
+            offset..end,
             MemoryInitKind::NeedsInitializedMemory,
         ),
     );
 
+    let bb = hal::BufferBinding {
+        buffer: buf_raw,
+        offset,
+        size,
+    };
     unsafe {
-        hal::DynCommandEncoder::set_index_buffer(state.general.raw_encoder, binding, index_format);
+        hal::DynCommandEncoder::set_index_buffer(state.general.raw_encoder, bb, index_format);
     }
     Ok(())
 }
 
-// This function is duplicative of `render::set_vertex_buffer`.
 fn set_vertex_buffer(
     state: &mut State,
     cmd_buf: &Arc<CommandBuffer>,
     slot: u32,
     buffer: Arc<crate::resource::Buffer>,
     offset: u64,
-    size: Option<BufferSizeOrZero>,
+    size: Option<BufferSize>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!(
         "RenderPass::set_vertex_buffer {slot} {}",
@@ -2425,22 +2422,30 @@ fn set_vertex_buffer(
     }
 
     buffer.check_usage(BufferUsages::VERTEX)?;
+    let buf_raw = buffer.try_raw(state.general.snatch_guard)?;
 
-    let binding = buffer
-        .binding(offset, size, state.general.snatch_guard)
-        .map_err(RenderCommandError::from)?;
-    state.vertex.buffer_sizes[slot as usize] = Some(binding.size.get());
+    //TODO: where are we checking that the offset is in bound?
+    let buffer_size = match size {
+        Some(s) => s.get(),
+        None => buffer.size - offset,
+    };
+    state.vertex.buffer_sizes[slot as usize] = Some(buffer_size);
 
     state.general.buffer_memory_init_actions.extend(
         buffer.initialization_status.read().create_action(
             &buffer,
-            offset..(offset + binding.size.get()),
+            offset..(offset + buffer_size),
             MemoryInitKind::NeedsInitializedMemory,
         ),
     );
 
+    let bb = hal::BufferBinding {
+        buffer: buf_raw,
+        offset,
+        size,
+    };
     unsafe {
-        hal::DynCommandEncoder::set_vertex_buffer(state.general.raw_encoder, slot, binding);
+        hal::DynCommandEncoder::set_vertex_buffer(state.general.raw_encoder, slot, bb);
     }
     if let Some(pipeline) = state.pipeline.as_ref() {
         state.vertex.update_limits(&pipeline.vertex_steps);
@@ -3162,7 +3167,7 @@ impl Global {
             buffer: pass_try!(base, scope, self.resolve_render_pass_buffer_id(buffer_id)),
             index_format,
             offset,
-            size: size.map(NonZeroU64::get),
+            size,
         });
 
         Ok(())
@@ -3183,7 +3188,7 @@ impl Global {
             slot,
             buffer: pass_try!(base, scope, self.resolve_render_pass_buffer_id(buffer_id)),
             offset,
-            size: size.map(NonZeroU64::get),
+            size,
         });
 
         Ok(())

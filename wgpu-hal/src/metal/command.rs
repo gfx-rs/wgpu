@@ -4,7 +4,7 @@ use alloc::{
     borrow::{Cow, ToOwned as _},
     vec::Vec,
 };
-use core::{num::NonZeroU64, ops::Range};
+use core::ops::Range;
 use metal::{
     MTLIndexType, MTLLoadAction, MTLPrimitiveType, MTLScissorRect, MTLSize, MTLStoreAction,
     MTLViewport, MTLVisibilityResultMode, NSRange,
@@ -977,11 +977,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let encoder = self.state.render.as_ref().unwrap();
         encoder.set_vertex_buffer(buffer_index, Some(&binding.buffer.raw), binding.offset);
 
-        // https://github.com/gfx-rs/wgpu/issues/3170
-        let size =
-            NonZeroU64::new(binding.size).expect("zero-size vertex buffers are not supported");
-
-        self.state.vertex_buffer_size_map.insert(buffer_index, size);
+        let buffer_size = binding.resolve_size();
+        if buffer_size > 0 {
+            self.state.vertex_buffer_size_map.insert(
+                buffer_index,
+                core::num::NonZeroU64::new(buffer_size).unwrap(),
+            );
+        } else {
+            self.state.vertex_buffer_size_map.remove(&buffer_index);
+        }
 
         if let Some((index, sizes)) = self
             .state

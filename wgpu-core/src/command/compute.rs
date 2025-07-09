@@ -7,9 +7,9 @@ use wgt::{
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, str};
 
-use crate::binding_model::BindError;
 use crate::command::{pass, EncoderStateError, PassStateError, TimestampWritesError};
 use crate::resource::DestroyedResourceError;
+use crate::{binding_model::BindError, resource::RawResourceAccess};
 use crate::{
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
     command::{

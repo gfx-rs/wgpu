@@ -280,26 +280,34 @@ impl Queue {
         self.inner.on_submitted_work_done(Box::new(callback));
     }
 
-    /// Returns the inner hal Queue using a callback. The hal queue will be `None` if the
-    /// backend type argument does not match with this wgpu Queue
+    /// Get the [`wgpu_hal`] device from this `Queue`.
+    ///
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Queue`].
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The queue is not from the backend specified by `A`.
+    /// - The queue is from the `webgpu` or `custom` backend.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Queue must not be manually destroyed
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
+    ///
+    /// [`A::Queue`]: hal::Api::Queue
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Queue>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
         &self,
-        hal_queue_callback: F,
-    ) -> R {
-        if let Some(core_queue) = self.inner.as_core_opt() {
-            unsafe {
-                core_queue
-                    .context
-                    .queue_as_hal::<A, F, R>(core_queue, hal_queue_callback)
-            }
-        } else {
-            hal_queue_callback(None)
-        }
+    ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
+        let queue = self.inner.as_core_opt()?;
+        unsafe { queue.context.queue_as_hal::<A>(queue) }
     }
 
     /// Compact a BLAS, it must have had [`Blas::prepare_compaction_async`] called on it and had the
