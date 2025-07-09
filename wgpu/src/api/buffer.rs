@@ -200,26 +200,41 @@ impl Buffer {
         }
     }
 
-    /// Returns the inner hal Buffer using a callback. The hal buffer will be `None` if the
-    /// backend type argument does not match with this wgpu Buffer
+    /// Get the [`wgpu_hal`] buffer from this `Buffer`.
+    ///
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Buffer`].
+    ///
+    /// # Deadlocks
+    ///
+    /// - The returned guard holds a read-lock on a device-local "destruction"
+    ///   lock, which will cause all calls to `destroy` to block until the
+    ///   guard is released.
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The buffer is not from the backend specified by `A`.
+    /// - The buffer is from the `webgpu` or `custom` backend.
+    /// - The buffer has had [`Self::destroy()`] called on it.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Buffer must not be manually destroyed
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
+    ///
+    /// [`A::Buffer`]: hal::Api::Buffer
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
         &self,
-        hal_buffer_callback: F,
-    ) -> R {
-        if let Some(buffer) = self.inner.as_core_opt() {
-            unsafe {
-                buffer
-                    .context
-                    .buffer_as_hal::<A, F, R>(buffer, hal_buffer_callback)
-            }
-        } else {
-            hal_buffer_callback(None)
-        }
+    ) -> Option<impl Deref<Target = A::Buffer> + WasmNotSendSync> {
+        let buffer = self.inner.as_core_opt()?;
+        unsafe { buffer.context.buffer_as_hal::<A>(buffer) }
     }
 
     /// Returns a [`BufferSlice`] referring to the portion of `self`'s contents

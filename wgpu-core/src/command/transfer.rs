@@ -22,8 +22,8 @@ use crate::{
         TextureInitTrackerAction,
     },
     resource::{
-        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, Texture,
-        TextureErrorDimension,
+        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, RawResourceAccess,
+        Texture, TextureErrorDimension,
     },
     snatch::SnatchGuard,
 };

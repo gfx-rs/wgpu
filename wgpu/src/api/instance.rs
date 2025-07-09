@@ -163,16 +163,28 @@ impl Instance {
         }
     }
 
-    /// Return a reference to a specific backend instance, if available.
+    /// Get the [`wgpu_hal`] instance from this `Instance`.
     ///
-    /// If this `Instance` has a wgpu-hal [`Instance`] for backend
-    /// `A`, return a reference to it. Otherwise, return `None`.
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Instance`].
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The instance is not from the backend specified by `A`.
+    /// - The instance is from the `webgpu` or `custom` backend.
     ///
     /// # Safety
     ///
-    /// - The raw instance handle returned must not be manually destroyed.
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
     ///
-    /// [`Instance`]: hal::Api::Instance
+    /// [`A::Instance`]: hal::Api::Instance
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
         self.inner

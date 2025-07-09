@@ -232,9 +232,10 @@ impl Dispatch {
                 resource_index: 0,
                 count: 1,
             }],
-            buffers: &[unsafe {
-                // SAFETY: We just created the buffer with this size.
-                hal::BufferBinding::new_unchecked(dst_buffer.as_ref(), 0, DST_BUFFER_SIZE)
+            buffers: &[hal::BufferBinding {
+                buffer: dst_buffer.as_ref(),
+                offset: 0,
+                size: Some(DST_BUFFER_SIZE),
             }],
             samplers: &[],
             textures: &[],
@@ -277,9 +278,10 @@ impl Dispatch {
                 resource_index: 0,
                 count: 1,
             }],
-            buffers: &[unsafe {
-                // SAFETY: We calculated the binding size to fit within the buffer.
-                hal::BufferBinding::new_unchecked(buffer, 0, binding_size)
+            buffers: &[hal::BufferBinding {
+                buffer,
+                offset: 0,
+                size: Some(binding_size),
             }],
             samplers: &[],
             textures: &[],

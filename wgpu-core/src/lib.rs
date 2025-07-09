@@ -65,6 +65,7 @@ extern crate std;
 extern crate wgpu_hal as hal;
 extern crate wgpu_types as wgt;
 
+mod as_hal;
 pub mod binding_model;
 pub mod command;
 mod conv;
