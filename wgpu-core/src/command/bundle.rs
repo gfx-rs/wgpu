@@ -1629,7 +1629,7 @@ where
 pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
     use crate::{command::DrawCommandFamily, id, RawString};
-    use core::{convert::TryInto, num::NonZeroU64, slice};
+    use core::{convert::TryInto, slice};
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
     /// # Safety
