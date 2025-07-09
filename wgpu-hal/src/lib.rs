@@ -1972,8 +1972,8 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 ///
 /// The recommended way to construct a `BufferBinding` is using the `binding`
 /// method on a wgpu-core `Buffer`, which will validate the binding size
-/// against the buffer size. An unsafe `new_unchecked` constructor is also
-/// provided for cases where direct construction is necessary.
+/// against the buffer size. A `new_unchecked` constructor is also provided for
+/// cases where direct construction is necessary.
 ///
 /// ## Accessible region
 ///
@@ -2035,7 +2035,11 @@ pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     pub offset: wgt::BufferAddress,
 
     /// The size of the region bound, in bytes.
-    pub size: wgt::BufferSizeOrZero,
+    ///
+    /// If `None`, the region extends from `offset` to the end of the
+    /// buffer. Given the restrictions on `offset`, this means that
+    /// the size is always greater than zero.
+    pub size: Option<wgt::BufferSize>,
 }
 
 // We must implement this manually because `B` is not necessarily `Clone`.
@@ -2068,6 +2072,15 @@ impl ShouldBeNonZeroExt for u64 {
     }
 }
 
+impl ShouldBeNonZeroExt for Option<NonZeroU64> {
+    fn get(&self) -> u64 {
+        match *self {
+            Some(non_zero) => non_zero.get(),
+            None => 0,
+        }
+    }
+}
+
 impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
     /// Construct a `BufferBinding` with the given contents.
     ///
@@ -2082,10 +2095,10 @@ impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
     /// bytes starting at `offset` is contained within the buffer.
     ///
     /// The `S` type parameter is a temporary convenience to allow callers to
-    /// pass either a `u64` or a `NonZeroU64`. When the zero-size binding issue
-    /// is resolved, the argument should just match the type of the member.
+    /// pass a zero size. When the zero-size binding issue is resolved, the
+    /// argument should just match the type of the member.
     /// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove the parameter
-    pub unsafe fn new_unchecked<S: Into<wgt::BufferSizeOrZero>>(
+    pub unsafe fn new_unchecked<S: Into<Option<NonZeroU64>>>(
         buffer: &'a B,
         offset: wgt::BufferAddress,
         size: S,

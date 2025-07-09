@@ -8,7 +8,7 @@ use alloc::{
 use core::{
     fmt,
     mem::{self, ManuallyDrop},
-    num::{NonZeroU32, NonZeroU64},
+    num::NonZeroU32,
     sync::atomic::{AtomicBool, Ordering},
 };
 use hal::ShouldBeNonZeroExt;
@@ -2198,8 +2198,8 @@ impl Device {
 
         buffer.check_usage(pub_usage)?;
 
-        let bb = buffer.binding(bb.offset, bb.size.map(NonZeroU64::get), snatch_guard)?;
-        let bind_size = bb.size.get();
+        let (bb, bind_size) = buffer.binding(bb.offset, bb.size, snatch_guard)?;
+        let bind_end = bb.offset + bind_size;
 
         if bind_size > range_limit as u64 {
             return Err(Error::BufferRangeTooLarge {
@@ -2214,8 +2214,8 @@ impl Device {
             dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {
                 binding_idx: binding,
                 buffer_size: buffer.size,
-                binding_range: bb.offset..bb.offset + bind_size,
-                maximum_dynamic_offset: buffer.size - bb.offset - bind_size,
+                binding_range: bb.offset..bind_end,
+                maximum_dynamic_offset: buffer.size - bind_end,
                 binding_type: binding_ty,
             });
         }

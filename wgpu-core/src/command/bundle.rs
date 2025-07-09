@@ -505,7 +505,7 @@ impl RenderBundleEncoder {
             buffer_id,
             index_format,
             offset,
-            size: size.map(NonZeroU64::get),
+            size,
         });
     }
 }
@@ -610,7 +610,7 @@ fn set_index_buffer(
     buffer_id: id::Id<id::markers::Buffer>,
     index_format: wgt::IndexFormat,
     offset: u64,
-    size: Option<wgt::BufferSizeOrZero>,
+    size: Option<NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
     let buffer = buffer_guard.get(buffer_id).get()?;
 
@@ -642,7 +642,7 @@ fn set_vertex_buffer(
     slot: u32,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
-    size: Option<wgt::BufferSizeOrZero>,
+    size: Option<NonZeroU64>,
 ) -> Result<(), RenderBundleErrorInner> {
     let max_vertex_buffers = state.device.limits.max_vertex_buffers;
     if slot >= max_vertex_buffers {
@@ -967,11 +967,7 @@ impl RenderBundle {
                     let bb = unsafe {
                         // SAFETY: The binding size was checked against the buffer size
                         // in `set_index_buffer` and again in `IndexState::flush`.
-                        hal::BufferBinding::new_unchecked(
-                            buffer,
-                            *offset,
-                            size.expect("size was resolved in `RenderBundleEncoder::finish`"),
-                        )
+                        hal::BufferBinding::new_unchecked(buffer, *offset, *size)
                     };
                     unsafe { raw.set_index_buffer(bb, *index_format) };
                 }
@@ -985,11 +981,7 @@ impl RenderBundle {
                     let bb = unsafe {
                         // SAFETY: The binding size was checked against the buffer size
                         // in `set_vertex_buffer` and again in `VertexState::flush`.
-                        hal::BufferBinding::new_unchecked(
-                            buffer,
-                            *offset,
-                            size.expect("size was resolved in `RenderBundleEncoder::finish`"),
-                        )
+                        hal::BufferBinding::new_unchecked(buffer, *offset, *size)
                     };
                     unsafe { raw.set_vertex_buffer(*slot, bb) };
                 }
@@ -1176,7 +1168,7 @@ impl IndexState {
                 buffer: self.buffer.clone(),
                 index_format: self.format,
                 offset: self.range.start,
-                size: Some(binding_size),
+                size: NonZeroU64::new(binding_size),
             })
         } else {
             None
@@ -1232,7 +1224,7 @@ impl VertexState {
                 slot,
                 buffer: self.buffer.clone(),
                 offset: self.range.start,
-                size: Some(binding_size),
+                size: NonZeroU64::new(binding_size),
             })
         } else {
             None
@@ -1596,7 +1588,7 @@ where
 pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
     use crate::{id, RawString};
-    use core::{convert::TryInto, num::NonZeroU64, slice};
+    use core::{convert::TryInto, slice};
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
     /// # Safety
@@ -1655,7 +1647,7 @@ pub mod bundle_ffi {
             slot,
             buffer_id,
             offset,
-            size: size.map(NonZeroU64::get),
+            size,
         });
     }
 
