@@ -234,7 +234,7 @@ impl Dispatch {
             }],
             buffers: &[unsafe {
                 // SAFETY: We just created the buffer with this size.
-                hal::BufferBinding::new_unchecked(dst_buffer.as_ref(), 0, DST_BUFFER_SIZE)
+                hal::BufferBinding::new_unchecked(dst_buffer.as_ref(), 0, Some(DST_BUFFER_SIZE))
             }],
             samplers: &[],
             textures: &[],

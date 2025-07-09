@@ -1,16 +1,11 @@
 use alloc::{borrow::Cow, sync::Arc, vec::Vec};
-use core::{
-    fmt,
-    num::{NonZeroU32, NonZeroU64},
-    str,
-};
-use hal::ShouldBeNonZeroExt;
+use core::{fmt, num::NonZeroU32, ops::Range, str};
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{
-    BufferAddress, BufferSize, BufferSizeOrZero, BufferUsages, Color, DynamicOffset, IndexFormat,
-    ShaderStages, TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
+    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
+    TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
 use crate::binding_model::BindGroup;
@@ -362,17 +357,13 @@ struct IndexState {
 }
 
 impl IndexState {
-    fn update_buffer<B: hal::DynBuffer + ?Sized>(
-        &mut self,
-        binding: &hal::BufferBinding<'_, B>,
-        format: IndexFormat,
-    ) {
+    fn update_buffer(&mut self, range: Range<BufferAddress>, format: IndexFormat) {
         self.buffer_format = Some(format);
         let shift = match format {
             IndexFormat::Uint16 => 1,
             IndexFormat::Uint32 => 2,
         };
-        self.limit = binding.size.get() >> shift;
+        self.limit = (range.end - range.start) >> shift;
     }
 
     fn reset(&mut self) {
@@ -2304,7 +2295,7 @@ fn set_index_buffer(
     buffer: Arc<crate::resource::Buffer>,
     index_format: IndexFormat,
     offset: u64,
-    size: Option<BufferSizeOrZero>,
+    size: Option<BufferSize>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::set_index_buffer {}", buffer.error_ident());
 
@@ -2318,16 +2309,17 @@ fn set_index_buffer(
 
     buffer.check_usage(BufferUsages::INDEX)?;
 
-    let binding = buffer
+    let (binding, resolved_size) = buffer
         .binding(offset, size, state.snatch_guard)
         .map_err(RenderCommandError::from)?;
-    state.index.update_buffer(&binding, index_format);
+    let end = offset + resolved_size;
+    state.index.update_buffer(offset..end, index_format);
 
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
             &buffer,
-            offset..(offset + binding.size.get()),
+            offset..end,
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
@@ -2344,7 +2336,7 @@ fn set_vertex_buffer(
     slot: u32,
     buffer: Arc<crate::resource::Buffer>,
     offset: u64,
-    size: Option<BufferSizeOrZero>,
+    size: Option<BufferSize>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!(
         "RenderPass::set_vertex_buffer {slot} {}",
@@ -2370,16 +2362,16 @@ fn set_vertex_buffer(
 
     buffer.check_usage(BufferUsages::VERTEX)?;
 
-    let binding = buffer
+    let (binding, buffer_size) = buffer
         .binding(offset, size, state.snatch_guard)
         .map_err(RenderCommandError::from)?;
-    state.vertex.buffer_sizes[slot as usize] = Some(binding.size.get());
+    state.vertex.buffer_sizes[slot as usize] = Some(buffer_size);
 
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
             &buffer,
-            offset..(offset + binding.size.get()),
+            offset..(offset + buffer_size),
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
@@ -3154,7 +3146,7 @@ impl Global {
             buffer: self.resolve_render_pass_buffer_id(scope, buffer_id)?,
             index_format,
             offset,
-            size: size.map(NonZeroU64::get),
+            size,
         });
 
         Ok(())
@@ -3175,7 +3167,7 @@ impl Global {
             slot,
             buffer: self.resolve_render_pass_buffer_id(scope, buffer_id)?,
             offset,
-            size: size.map(NonZeroU64::get),
+            size,
         });
 
         Ok(())
