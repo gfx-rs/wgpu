@@ -1,9 +1,9 @@
-use core::{cell::UnsafeCell, fmt};
+use core::{cell::UnsafeCell, fmt, mem::ManuallyDrop};
 
-use crate::lock::{rank, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use crate::lock::{rank, RankData, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// A guard that provides read access to snatchable data.
-pub struct SnatchGuard<'a>(#[expect(dead_code)] RwLockReadGuard<'a, ()>);
+pub struct SnatchGuard<'a>(RwLockReadGuard<'a, ()>);
 /// A guard that allows snatching the snatchable data.
 pub struct ExclusiveSnatchGuard<'a>(#[expect(dead_code)] RwLockWriteGuard<'a, ()>);
 
@@ -157,6 +157,33 @@ impl SnatchLock {
     pub fn write(&self) -> ExclusiveSnatchGuard {
         LockTrace::enter("write");
         ExclusiveSnatchGuard(self.lock.write())
+    }
+
+    #[track_caller]
+    pub unsafe fn force_unlock_read(&self, data: RankData) {
+        // This is unsafe because it can cause deadlocks if the lock is held.
+        // It should only be used in very specific cases, like when a resource
+        // needs to be snatched in a panic handler.
+        LockTrace::exit();
+        unsafe { self.lock.force_unlock_read(data) };
+    }
+}
+
+impl SnatchGuard<'_> {
+    /// Forget the guard, leaving the lock in a locked state with no guard.
+    ///
+    /// This is equivalent to `std::mem::forget`, but preserves the information about the lock
+    /// rank.
+    pub fn forget(this: Self) -> RankData {
+        // Cancel the drop implementation of the current guard.
+        let manually_drop = ManuallyDrop::new(this);
+
+        // As we are unable to destructure out of this guard due to the drop implementation,
+        // so we manually read the inner value.
+        // SAFETY: This is safe because we never access the original guard again.
+        let inner_guard = unsafe { core::ptr::read(&manually_drop.0) };
+
+        RwLockReadGuard::forget(inner_guard)
     }
 }
 

@@ -8,7 +8,7 @@ use crate::{
     ray_tracing::BlasCompactReadyPendingClosure,
     resource::{
         Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
-        ResourceErrorIdent,
+        RawResourceAccess, ResourceErrorIdent,
     },
     snatch::SnatchGuard,
     Label, DOWNLEVEL_ERROR_MESSAGE,

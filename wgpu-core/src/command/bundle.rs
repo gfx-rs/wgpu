@@ -111,7 +111,7 @@ use crate::{
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{
         Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice,
-        TrackingData,
+        RawResourceAccess, TrackingData,
     },
     resource_log,
     snatch::SnatchGuard,

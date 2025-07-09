@@ -175,7 +175,7 @@ fn git_version_at_least(shell: &Shell, version: GitVersion) -> anyhow::Result<bo
 
     let parsed = parse_git_version_output(&stdout).expect(fmt_err_msg);
 
-    Ok(parsed <= version)
+    Ok(parsed >= version)
 }
 
 pub type GitVersion = [u8; 3];
