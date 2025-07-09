@@ -502,14 +502,12 @@ impl Buffer {
     ) -> Result<(hal::BufferBinding<'a, dyn hal::DynBuffer>, u64), BindingError> {
         let buf_raw = self.try_raw(snatch_guard)?;
         let resolved_size = self.resolve_binding_size(offset, binding_size)?;
-        unsafe {
-            // SAFETY: The offset and size passed to hal::BufferBinding::new_unchecked must
-            // define a binding contained within the buffer.
-            Ok((
-                hal::BufferBinding::new_unchecked(buf_raw, offset, binding_size),
-                resolved_size,
-            ))
-        }
+        // SAFETY: The offset and size passed to hal::BufferBinding::new_unchecked must
+        // define a binding contained within the buffer.
+        Ok((
+            hal::BufferBinding::new_unchecked(buf_raw, offset, binding_size),
+            resolved_size,
+        ))
     }
 
     /// Returns the mapping callback in case of error so that the callback can be fired outside
