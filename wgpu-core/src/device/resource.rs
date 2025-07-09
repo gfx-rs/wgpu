@@ -8,10 +8,9 @@ use alloc::{
 use core::{
     fmt,
     mem::{self, ManuallyDrop},
-    num::{NonZeroU32, NonZeroU64},
+    num::NonZeroU32,
     sync::atomic::{AtomicBool, Ordering},
 };
-use hal::ShouldBeNonZeroExt;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
@@ -2198,7 +2197,7 @@ impl Device {
 
         buffer.check_usage(pub_usage)?;
 
-        let bb = buffer.binding(bb.offset, bb.size.map(NonZeroU64::get), snatch_guard)?;
+        let bb = buffer.binding(bb.offset, bb.size, snatch_guard)?;
         let bind_size = bb.size.get();
 
         if bind_size > range_limit as u64 {

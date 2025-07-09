@@ -106,7 +106,7 @@ pub enum BindingError {
         binding_size: u64,
         buffer_size: u64,
     },
-    #[error("Buffer {buffer}: Binding offset {offset} is greater than buffer size {buffer_size}")]
+    #[error("Buffer {buffer}: Binding offset {offset} is greater than or equal to buffer size {buffer_size}")]
     BindingOffsetTooLarge {
         buffer: ResourceErrorIdent,
         offset: wgt::BufferAddress,

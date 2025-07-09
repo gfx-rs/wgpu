@@ -490,32 +490,35 @@ impl Buffer {
     /// If `size` is `None`, then the remainder of the buffer starting from
     /// `offset` is used.
     ///
-    /// If the binding would overflow the buffer, then an error is returned.
-    ///
-    /// Zero-size bindings are permitted here for historical reasons. Although
-    /// zero-size bindings are permitted by WebGPU, they are not permitted by
-    /// some backends. See [`Buffer::binding`] and
-    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+    /// If the binding would overflow the buffer or is empty (see
+    /// [`hal::BufferBinding`]), then an error is returned.
     pub fn resolve_binding_size(
         &self,
         offset: wgt::BufferAddress,
-        binding_size: Option<wgt::BufferSizeOrZero>,
-    ) -> Result<wgt::BufferSizeOrZero, BindingError> {
+        binding_size: Option<wgt::BufferSize>,
+    ) -> Result<wgt::BufferSize, BindingError> {
         let buffer_size = self.size;
 
         match binding_size {
-            Some(binding_size) => match offset.checked_add(binding_size) {
-                Some(end) if end <= buffer_size => Ok(binding_size),
-                _ => Err(BindingError::BindingRangeTooLarge {
-                    buffer: self.error_ident(),
-                    offset,
-                    binding_size,
-                    buffer_size,
-                }),
-            },
+            Some(binding_size) => {
+                match offset.checked_add(binding_size.get()) {
+                    // `binding_size` is not zero which means `end == buffer_size` is ok.
+                    Some(end) if end <= buffer_size => Ok(binding_size),
+                    _ => Err(BindingError::BindingRangeTooLarge {
+                        buffer: self.error_ident(),
+                        offset,
+                        binding_size: binding_size.get(),
+                        buffer_size,
+                    }),
+                }
+            }
             None => {
+                // We require that `buffer_size - offset` converts to
+                // `BufferSize` (`NonZeroU64`) because bindings must not be
+                // empty.
                 buffer_size
                     .checked_sub(offset)
+                    .and_then(wgt::BufferSize::new)
                     .ok_or_else(|| BindingError::BindingOffsetTooLarge {
                         buffer: self.error_ident(),
                         offset,
@@ -531,20 +534,12 @@ impl Buffer {
     /// If `size` is `None`, then the remainder of the buffer starting from
     /// `offset` is used.
     ///
-    /// If the binding would overflow the buffer, then an error is returned.
-    ///
-    /// Zero-size bindings are permitted here for historical reasons. Although
-    /// zero-size bindings are permitted by WebGPU, they are not permitted by
-    /// some backends. Previous documentation for `hal::BufferBinding`
-    /// disallowed zero-size bindings, but this restriction was not honored
-    /// elsewhere in the code. Zero-size bindings need to be quashed or remapped
-    /// to a non-zero size, either universally in wgpu-core, or in specific
-    /// backends that do not support them. See
-    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+    /// If the binding would overflow the buffer or is empty (see
+    /// [`hal::BufferBinding`]), then an error is returned.
     pub fn binding<'a>(
         &'a self,
         offset: wgt::BufferAddress,
-        binding_size: Option<wgt::BufferSizeOrZero>,
+        binding_size: Option<wgt::BufferSize>,
         snatch_guard: &'a SnatchGuard,
     ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer>, BindingError> {
         let buf_raw = self.try_raw(snatch_guard)?;

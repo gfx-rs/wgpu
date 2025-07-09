@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 
-use wgt::{BufferAddress, BufferSizeOrZero, Color};
+use wgt::{BufferAddress, BufferSize, Color};
 
 use super::{Rect, RenderBundle};
 use crate::{
@@ -24,13 +24,13 @@ pub enum RenderCommand {
         buffer_id: id::BufferId,
         index_format: wgt::IndexFormat,
         offset: BufferAddress,
-        size: Option<BufferSizeOrZero>,
+        size: Option<BufferSize>,
     },
     SetVertexBuffer {
         slot: u32,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: Option<BufferSizeOrZero>,
+        size: Option<BufferSize>,
     },
     SetBlendConstant(Color),
     SetStencilReference(u32),
@@ -418,18 +418,21 @@ pub enum ArcRenderCommand {
         offset: BufferAddress,
 
         // For a render pass, this reflects the argument passed by the
-        // application, which may be `None`. For a finished render bundle, this
-        // reflects the validated size of the binding, and will be populated
-        // even in the case that the application omitted the size.
-        size: Option<BufferSizeOrZero>,
+        // application, which may be `None`. For a render bundle, this reflects
+        // the validated size of the binding, and will be populated even in the
+        // case that the application omitted the size.
+        size: Option<BufferSize>,
     },
     SetVertexBuffer {
         slot: u32,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
 
-        // See comment in `SetIndexBuffer`.
-        size: Option<BufferSizeOrZero>,
+        // For a render pass, this reflects the argument passed by the
+        // application, which may be `None`. For a render bundle, this reflects
+        // the validated size of the binding, and will be populated even in the
+        // case that the application omitted the size.
+        size: Option<BufferSize>,
     },
     SetBlendConstant(Color),
     SetStencilReference(u32),

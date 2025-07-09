@@ -297,7 +297,7 @@ use core::{
     borrow::Borrow,
     error::Error,
     fmt,
-    num::{NonZeroU32, NonZeroU64},
+    num::NonZeroU32,
     ops::{Range, RangeInclusive},
     ptr::NonNull,
 };
@@ -1979,7 +1979,7 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 ///
 /// `wgpu_hal` guarantees that shaders compiled with
 /// [`ShaderModuleDescriptor::runtime_checks`] set to `true` cannot read or
-/// write data via this binding outside the *accessible region* of a buffer:
+/// write data via this binding outside the *accessible region* of [`buffer`]:
 ///
 /// - The accessible region starts at [`offset`].
 ///
@@ -2004,14 +2004,14 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 /// Some back ends cannot tolerate zero-length regions; for example, see
 /// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
 /// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
-/// documentation for GLES's [glBindBufferRange][bbr]. This documentation
-/// previously stated that a `BufferBinding` must have `offset` strictly less
-/// than the size of the buffer, but this restriction was not honored elsewhere
-/// in the code, so has been removed. However, it remains the case that
-/// some backends do not support zero-length bindings, so additional
-/// logic is needed somewhere to handle this properly. See
-/// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+/// documentation for GLES's [glBindBufferRange][bbr]. For this reason, a valid
+/// `BufferBinding` must have `offset` strictly less than the size of the
+/// buffer.
 ///
+/// WebGPU allows zero-length bindings, and there is not currently a mechanism
+/// in place
+///
+/// [`buffer`]: BufferBinding::buffer
 /// [`offset`]: BufferBinding::offset
 /// [`size`]: BufferBinding::size
 /// [`Storage`]: wgt::BufferBindingType::Storage
@@ -2031,11 +2031,12 @@ pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
 
     /// The offset at which the bound region starts.
     ///
-    /// This must be less or equal to the size of the buffer.
+    /// Because zero-length bindings are not permitted (see above), this must be
+    /// strictly less than the size of the buffer.
     pub offset: wgt::BufferAddress,
 
     /// The size of the region bound, in bytes.
-    pub size: wgt::BufferSizeOrZero,
+    pub size: wgt::BufferSize,
 }
 
 // We must implement this manually because `B` is not necessarily `Clone`.
@@ -2046,25 +2047,6 @@ impl<B: DynBuffer + ?Sized> Clone for BufferBinding<'_, B> {
             offset: self.offset,
             size: self.size,
         }
-    }
-}
-
-/// Temporary convenience trait to let us call `.get()` on `u64`s in code that
-/// really wants to be using `NonZeroU64`.
-/// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove this
-pub trait ShouldBeNonZeroExt {
-    fn get(&self) -> u64;
-}
-
-impl ShouldBeNonZeroExt for NonZeroU64 {
-    fn get(&self) -> u64 {
-        NonZeroU64::get(*self)
-    }
-}
-
-impl ShouldBeNonZeroExt for u64 {
-    fn get(&self) -> u64 {
-        *self
     }
 }
 
@@ -2080,20 +2062,15 @@ impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
     ///
     /// SAFETY: The caller is responsible for ensuring that a binding of `size`
     /// bytes starting at `offset` is contained within the buffer.
-    ///
-    /// The `S` type parameter is a temporary convenience to allow callers to
-    /// pass either a `u64` or a `NonZeroU64`. When the zero-size binding issue
-    /// is resolved, the argument should just match the type of the member.
-    /// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove the parameter
-    pub unsafe fn new_unchecked<S: Into<wgt::BufferSizeOrZero>>(
+    pub unsafe fn new_unchecked(
         buffer: &'a B,
         offset: wgt::BufferAddress,
-        size: S,
+        size: wgt::BufferSize,
     ) -> Self {
         Self {
             buffer,
             offset,
-            size: size.into(),
+            size,
         }
     }
 }

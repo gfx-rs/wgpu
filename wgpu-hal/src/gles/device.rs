@@ -1261,11 +1261,10 @@ impl crate::Device for super::Device {
             let binding = match layout.ty {
                 wgt::BindingType::Buffer { .. } => {
                     let bb = &desc.buffers[entry.resource_index as usize];
-                    assert!(bb.size != 0, "zero-size bindings are not supported");
                     super::RawBinding::Buffer {
                         raw: bb.buffer.raw.unwrap(),
                         offset: bb.offset.try_into().unwrap(),
-                        size: bb.size.try_into().unwrap(),
+                        size: bb.size.get().try_into().unwrap(),
                     }
                 }
                 wgt::BindingType::Sampler { .. } => {
