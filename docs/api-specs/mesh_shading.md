@@ -49,17 +49,23 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 
 ## Naga implementation
 
+
 ### Supported frontends
 * 🛠️ WGSL
-* 🛠️ SPIR-V
-* ❌ GLSL
+* ❌ SPIR-V
+* 🚫 GLSL
 
 ### Supported backends
 * 🛠️ SPIR-V
-* 🛠️ HLSL
-* ❌ WGSL
-* ❌ GLSL
+* ❌ HLSL
 * ❌ MSL
+* 🚫 GLSL
+* 🚫 WGSL
+
+✔️ = Complete
+🛠️ = In progress
+❌ = Planned
+🚫 = Unplanned/impossible
 
 ## `WGSL` extension specification
 
