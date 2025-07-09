@@ -448,17 +448,17 @@ impl Buffer {
     pub fn resolve_binding_size(
         &self,
         offset: wgt::BufferAddress,
-        binding_size: Option<wgt::BufferSizeOrZero>,
-    ) -> Result<wgt::BufferSizeOrZero, BindingError> {
+        binding_size: Option<wgt::BufferSize>,
+    ) -> Result<u64, BindingError> {
         let buffer_size = self.size;
 
         match binding_size {
-            Some(binding_size) => match offset.checked_add(binding_size) {
-                Some(end) if end <= buffer_size => Ok(binding_size),
+            Some(binding_size) => match offset.checked_add(binding_size.get()) {
+                Some(end) if end <= buffer_size => Ok(binding_size.get()),
                 _ => Err(BindingError::BindingRangeTooLarge {
                     buffer: self.error_ident(),
                     offset,
-                    binding_size,
+                    binding_size: binding_size.get(),
                     buffer_size,
                 }),
             },
@@ -475,35 +475,38 @@ impl Buffer {
     }
 
     /// Create a new [`hal::BufferBinding`] for the buffer with `offset` and
-    /// `size`.
+    /// `binding_size`.
     ///
-    /// If `size` is `None`, then the remainder of the buffer starting from
-    /// `offset` is used.
+    /// If `binding_size` is `None`, then the remainder of the buffer starting
+    /// from `offset` is used.
     ///
     /// If the binding would overflow the buffer, then an error is returned.
     ///
-    /// Zero-size bindings are permitted here for historical reasons. Although
+    /// A zero-size binding at the end of the buffer is permitted here for historical reasons. Although
     /// zero-size bindings are permitted by WebGPU, they are not permitted by
-    /// some backends. Previous documentation for `hal::BufferBinding`
-    /// disallowed zero-size bindings, but this restriction was not honored
-    /// elsewhere in the code. Zero-size bindings need to be quashed or remapped
-    /// to a non-zero size, either universally in wgpu-core, or in specific
-    /// backends that do not support them. See
+    /// some backends. The zero-size binding need to be quashed or remapped to a
+    /// non-zero size, either universally in wgpu-core, or in specific backends
+    /// that do not support them. See
     /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+    ///
+    /// Although it seems like it would be simpler and safer to use the resolved
+    /// size in the returned [`hal::BufferBinding`], doing this (and removing
+    /// redundant logic in backends to resolve the implicit size) was observed
+    /// to cause problems in certain CTS tests, so an implicit size
+    /// specification is preserved in the output.
     pub fn binding<'a>(
         &'a self,
         offset: wgt::BufferAddress,
-        binding_size: Option<wgt::BufferSizeOrZero>,
+        binding_size: Option<wgt::BufferSize>,
         snatch_guard: &'a SnatchGuard,
-    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer>, BindingError> {
+    ) -> Result<(hal::BufferBinding<'a, dyn hal::DynBuffer>, u64), BindingError> {
         let buf_raw = self.try_raw(snatch_guard)?;
         let resolved_size = self.resolve_binding_size(offset, binding_size)?;
         unsafe {
             // SAFETY: The offset and size passed to hal::BufferBinding::new_unchecked must
             // define a binding contained within the buffer.
-            Ok(hal::BufferBinding::new_unchecked(
-                buf_raw,
-                offset,
+            Ok((
+                hal::BufferBinding::new_unchecked(buf_raw, offset, binding_size),
                 resolved_size,
             ))
         }

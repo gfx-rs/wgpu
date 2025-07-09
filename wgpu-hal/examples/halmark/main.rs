@@ -14,7 +14,9 @@ use winit::{
 
 use std::{
     borrow::{Borrow, Cow},
-    iter, ptr,
+    iter,
+    num::NonZeroU64,
+    ptr,
     time::Instant,
 };
 
@@ -447,7 +449,11 @@ impl<A: hal::Api> Example<A> {
         let global_group = {
             let global_buffer_binding = unsafe {
                 // SAFETY: This is the same size that was specified for buffer creation.
-                hal::BufferBinding::new_unchecked(&global_buffer, 0, global_buffer_desc.size)
+                hal::BufferBinding::new_unchecked(
+                    &global_buffer,
+                    0,
+                    NonZeroU64::new(global_buffer_desc.size),
+                )
             };
             let texture_binding = hal::TextureBinding {
                 view: &texture_view,
@@ -487,7 +493,7 @@ impl<A: hal::Api> Example<A> {
                 hal::BufferBinding::new_unchecked(
                     &local_buffer,
                     0,
-                    wgpu_types::BufferSize::new(size_of::<Locals>() as _).unwrap(),
+                    wgpu_types::BufferSize::new(size_of::<Locals>() as _),
                 )
             };
             let local_group_desc = hal::BindGroupDescriptor {

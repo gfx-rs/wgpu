@@ -9,6 +9,8 @@ webgpu:api,operation,compute,basic:memcpy:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute_pipeline,overrides:*
 webgpu:api,operation,device,lost:*
+webgpu:api,validation,encoding,cmds,render,draw:index_buffer_OOB:*
+webgpu:api,validation,encoding,cmds,render,draw:unused_buffer_bound:*
 webgpu:api,validation,queue,submit:command_buffer,device_mismatch:*
 webgpu:api,validation,queue,submit:command_buffer,duplicate_buffers:*
 webgpu:api,validation,queue,submit:command_buffer,submit_invalidates:*
