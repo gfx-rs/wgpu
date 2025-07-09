@@ -60,9 +60,14 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
 
         if git_version_at_least(&shell, [2, 49, 0])? {
             log::info!("Cloning CTS shallowly with revision {cts_revision}");
-            cmd = cmd.args(["--depth=1", "--revision", &cts_revision])
+            cmd = cmd.args(["--depth=1", "--revision", &cts_revision]);
+            cmd = cmd.args([
+                "-c",
+                "remote.origin.fetch=+refs/heads/gh-pages:refs/remotes/origin/gh-pages",
+            ]);
         } else {
             log::info!("Cloning full checkout of CTS with revision {cts_revision}");
+            cmd = cmd.args(["-b", "gh-pages", "--single-branch"]);
         }
 
         cmd.run().context("Failed to clone CTS")?;
@@ -70,6 +75,30 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         shell.change_dir(CTS_CHECKOUT_PATH);
     } else if !skip_checkout {
         shell.change_dir(CTS_CHECKOUT_PATH);
+
+        // For new clones, this is set by the cloning commands above, but older
+        // clones may not have it. Eventually this can be removed.
+        if shell
+            .cmd("git")
+            .args(["config", "get", "remote.origin.fetch"])
+            .quiet()
+            .ignore_stdout()
+            .ignore_stderr()
+            .run()
+            .is_err()
+        {
+            shell
+                .cmd("git")
+                .args([
+                    "config",
+                    "set",
+                    "remote.origin.fetch",
+                    "+refs/heads/gh-pages:refs/remotes/origin/gh-pages",
+                ])
+                .quiet()
+                .run()
+                .context("Failed setting git config")?;
+        }
 
         // If we don't have the CTS commit we want, try to fetch it.
         if shell

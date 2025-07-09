@@ -50,7 +50,7 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: v1-rust # Increment version for cache busting
+          prefix-key: v2-rust # Increment version for cache busting
           cache-directories: cts
 
       # We enable line numbers for panics, but that's it
