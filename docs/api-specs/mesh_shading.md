@@ -41,10 +41,10 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 * `max_mesh_output_layers` - the maximum number of output layers for a mesh shader pipeline.
 
 ### Backend specific information
-* Unlike Vulkan, DirectX doesn't support point rendering
-* Only Vulkan is currently supported
-* DirectX 12 support is planned
-* Metal support is desired but not planned
+* Only Vulkan is currently supported.
+* DirectX 12 doesn't support point rendering.
+* DirectX 12 support is planned.
+* Metal support is desired but not currently planned.
 
 
 ## Naga implementation
@@ -63,7 +63,7 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 
 ## `WGSL` extension specification
 
-The majority of changes relating to mesh shaders will be in `WGSL` and `naga`.
+The majority of changes relating to mesh shaders will be in WGSL and `naga`.
 
 Using any of these features in a `wgsl` program will require adding the `enable mesh_shading` directive to the top of a program.
 
