@@ -135,10 +135,8 @@ impl Draw {
                 resource_index: 0,
                 count: 1,
             }],
-            buffers: &[unsafe {
-                // SAFETY: We calculated the binding size to fit within the buffer.
-                hal::BufferBinding::new_unchecked(buffer, 0, binding_size)
-            }],
+            // SAFETY: We calculated the binding size to fit within the buffer.
+            buffers: &[hal::BufferBinding::new_unchecked(buffer, 0, binding_size)],
             samplers: &[],
             textures: &[],
             acceleration_structures: &[],
@@ -683,10 +681,12 @@ fn create_buffer_and_bind_group(
             resource_index: 0,
             count: 1,
         }],
-        buffers: &[unsafe {
-            // SAFETY: We just created the buffer with this size.
-            hal::BufferBinding::new_unchecked(buffer.as_ref(), 0, BUFFER_SIZE)
-        }],
+        // SAFETY: We just created the buffer with this size.
+        buffers: &[hal::BufferBinding::new_unchecked(
+            buffer.as_ref(),
+            0,
+            BUFFER_SIZE,
+        )],
         samplers: &[],
         textures: &[],
         acceleration_structures: &[],
