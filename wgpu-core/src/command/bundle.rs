@@ -93,6 +93,7 @@ use core::{
 use arrayvec::ArrayVec;
 use thiserror::Error;
 
+use wgpu_hal::ShouldBeNonZeroExt;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
@@ -522,7 +523,7 @@ impl RenderBundleEncoder {
             buffer_id,
             index_format,
             offset,
-            size,
+            size: size.map(NonZeroU64::get),
         });
     }
 }
@@ -620,13 +621,14 @@ fn set_pipeline(
     Ok(())
 }
 
+// This function is duplicative of `render::set_index_buffer`.
 fn set_index_buffer(
     state: &mut State,
     buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     buffer_id: id::Id<id::markers::Buffer>,
     index_format: wgt::IndexFormat,
     offset: u64,
-    size: Option<NonZeroU64>,
+    size: Option<wgt::BufferSizeOrZero>,
 ) -> Result<(), RenderBundleErrorInner> {
     let buffer = buffer_guard.get(buffer_id).get()?;
 
@@ -638,28 +640,27 @@ fn set_index_buffer(
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDEX)?;
 
-    let end = match size {
-        Some(s) => offset + s.get(),
-        None => buffer.size,
-    };
+    let end = buffer.resolve_binding_size(offset, size)?;
+
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
             &buffer,
-            offset..end,
+            offset..end.get(),
             MemoryInitKind::NeedsInitializedMemory,
         ));
-    state.set_index_buffer(buffer, index_format, offset..end);
+    state.set_index_buffer(buffer, index_format, offset..end.get());
     Ok(())
 }
 
+// This function is duplicative of `render::set_vertex_buffer`.
 fn set_vertex_buffer(
     state: &mut State,
     buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     slot: u32,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
-    size: Option<NonZeroU64>,
+    size: Option<wgt::BufferSizeOrZero>,
 ) -> Result<(), RenderBundleErrorInner> {
     let max_vertex_buffers = state.device.limits.max_vertex_buffers;
     if slot >= max_vertex_buffers {
@@ -680,18 +681,16 @@ fn set_vertex_buffer(
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::VERTEX)?;
 
-    let end = match size {
-        Some(s) => offset + s.get(),
-        None => buffer.size,
-    };
+    let end = buffer.resolve_binding_size(offset, size)?;
+
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
             &buffer,
-            offset..end,
+            offset..end.get(),
             MemoryInitKind::NeedsInitializedMemory,
         ));
-    state.vertex[slot as usize] = Some(VertexState::new(buffer, offset..end));
+    state.vertex[slot as usize] = Some(VertexState::new(buffer, offset..end.get()));
     Ok(())
 }
 
@@ -1018,10 +1017,14 @@ impl RenderBundle {
                     size,
                 } => {
                     let buffer = buffer.try_raw(snatch_guard)?;
-                    let bb = hal::BufferBinding {
-                        buffer,
-                        offset: *offset,
-                        size: *size,
+                    let bb = unsafe {
+                        // SAFETY: The binding size was checked against the buffer size
+                        // in `set_index_buffer` and again in `IndexState::flush`.
+                        hal::BufferBinding::new_unchecked(
+                            buffer,
+                            *offset,
+                            size.expect("size was resolved in `RenderBundleEncoder::finish`"),
+                        )
                     };
                     unsafe { raw.set_index_buffer(bb, *index_format) };
                 }
@@ -1032,10 +1035,14 @@ impl RenderBundle {
                     size,
                 } => {
                     let buffer = buffer.try_raw(snatch_guard)?;
-                    let bb = hal::BufferBinding {
-                        buffer,
-                        offset: *offset,
-                        size: *size,
+                    let bb = unsafe {
+                        // SAFETY: The binding size was checked against the buffer size
+                        // in `set_vertex_buffer` and again in `VertexState::flush`.
+                        hal::BufferBinding::new_unchecked(
+                            buffer,
+                            *offset,
+                            size.expect("size was resolved in `RenderBundleEncoder::finish`"),
+                        )
                     };
                     unsafe { raw.set_vertex_buffer(*slot, bb) };
                 }
@@ -1195,6 +1202,9 @@ crate::impl_trackable!(RenderBundle);
 /// [`RenderBundleEncoder::finish`] records the currently set index buffer here,
 /// and calls [`State::flush_index`] before any indexed draw command to produce
 /// a `SetIndexBuffer` command if one is necessary.
+///
+/// Binding ranges must be validated against the size of the buffer before
+/// being stored in `IndexState`.
 #[derive(Debug)]
 struct IndexState {
     buffer: Arc<Buffer>,
@@ -1216,13 +1226,21 @@ impl IndexState {
     /// Generate a `SetIndexBuffer` command to prepare for an indexed draw
     /// command, if needed.
     fn flush(&mut self) -> Option<ArcRenderCommand> {
+        // This was all checked before, but let's check again just in case.
+        let binding_size = self
+            .range
+            .end
+            .checked_sub(self.range.start)
+            .filter(|_| self.range.end <= self.buffer.size)
+            .expect("index range must be contained in buffer");
+
         if self.is_dirty {
             self.is_dirty = false;
             Some(ArcRenderCommand::SetIndexBuffer {
                 buffer: self.buffer.clone(),
                 index_format: self.format,
                 offset: self.range.start,
-                size: wgt::BufferSize::new(self.range.end - self.range.start),
+                size: Some(binding_size),
             })
         } else {
             None
@@ -1238,6 +1256,9 @@ impl IndexState {
 /// calls this type's [`flush`] method just before any draw command to
 /// produce a `SetVertexBuffer` commands if one is necessary.
 ///
+/// Binding ranges must be validated against the size of the buffer before
+/// being stored in `VertexState`.
+///
 /// [`flush`]: IndexState::flush
 #[derive(Debug)]
 struct VertexState {
@@ -1247,6 +1268,9 @@ struct VertexState {
 }
 
 impl VertexState {
+    /// Create a new `VertexState`.
+    ///
+    /// The `range` must be contained within `buffer`.
     fn new(buffer: Arc<Buffer>, range: Range<wgt::BufferAddress>) -> Self {
         Self {
             buffer,
@@ -1259,13 +1283,20 @@ impl VertexState {
     ///
     /// `slot` is the index of the vertex buffer slot that `self` tracks.
     fn flush(&mut self, slot: u32) -> Option<ArcRenderCommand> {
+        let binding_size = self
+            .range
+            .end
+            .checked_sub(self.range.start)
+            .filter(|_| self.range.end <= self.buffer.size)
+            .expect("vertex range must be contained in buffer");
+
         if self.is_dirty {
             self.is_dirty = false;
             Some(ArcRenderCommand::SetVertexBuffer {
                 slot,
                 buffer: self.buffer.clone(),
                 offset: self.range.start,
-                size: wgt::BufferSize::new(self.range.end - self.range.start),
+                size: Some(binding_size),
             })
         } else {
             None
@@ -1629,7 +1660,7 @@ where
 pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
     use crate::{command::DrawCommandFamily, id, RawString};
-    use core::{convert::TryInto, slice};
+    use core::{convert::TryInto, num::NonZeroU64, slice};
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
     /// # Safety
@@ -1688,7 +1719,7 @@ pub mod bundle_ffi {
             slot,
             buffer_id,
             offset,
-            size,
+            size: size.map(NonZeroU64::get),
         });
     }
 

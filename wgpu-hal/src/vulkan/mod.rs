@@ -776,11 +776,70 @@ impl Drop for Queue {
         unsafe { self.relay_semaphores.lock().destroy(&self.device.raw) };
     }
 }
-
+#[derive(Debug)]
+enum BufferMemoryBacking {
+    Managed(gpu_alloc::MemoryBlock<vk::DeviceMemory>),
+    VulkanMemory {
+        memory: vk::DeviceMemory,
+        offset: u64,
+        size: u64,
+    },
+}
+impl BufferMemoryBacking {
+    fn memory(&self) -> &vk::DeviceMemory {
+        match self {
+            Self::Managed(m) => m.memory(),
+            Self::VulkanMemory { memory, .. } => memory,
+        }
+    }
+    fn offset(&self) -> u64 {
+        match self {
+            Self::Managed(m) => m.offset(),
+            Self::VulkanMemory { offset, .. } => *offset,
+        }
+    }
+    fn size(&self) -> u64 {
+        match self {
+            Self::Managed(m) => m.size(),
+            Self::VulkanMemory { size, .. } => *size,
+        }
+    }
+}
 #[derive(Debug)]
 pub struct Buffer {
     raw: vk::Buffer,
-    block: Option<Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>>,
+    block: Option<Mutex<BufferMemoryBacking>>,
+}
+impl Buffer {
+    /// # Safety
+    ///
+    /// - `vk_buffer`'s memory must be managed by the caller
+    /// - Externally imported buffers can't be mapped by `wgpu`
+    pub unsafe fn from_raw(vk_buffer: vk::Buffer) -> Self {
+        Self {
+            raw: vk_buffer,
+            block: None,
+        }
+    }
+    /// # Safety
+    /// - We will use this buffer and the buffer's backing memory range as if we have exclusive ownership over it, until the wgpu resource is dropped and the wgpu-hal object is cleaned up
+    /// - Externally imported buffers can't be mapped by `wgpu`
+    /// - `offset` and `size` must be valid with the allocation of `memory`
+    pub unsafe fn from_raw_managed(
+        vk_buffer: vk::Buffer,
+        memory: vk::DeviceMemory,
+        offset: u64,
+        size: u64,
+    ) -> Self {
+        Self {
+            raw: vk_buffer,
+            block: Some(Mutex::new(BufferMemoryBacking::VulkanMemory {
+                memory,
+                offset,
+                size,
+            })),
+        }
+    }
 }
 
 impl crate::DynBuffer for Buffer {}
