@@ -622,7 +622,7 @@ fn set_index_buffer(
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDEX)?;
 
-    let end = buffer.resolve_binding_size(offset, size)?;
+    let end = offset + buffer.resolve_binding_size(offset, size)?;
 
     state
         .buffer_memory_init_actions
@@ -663,7 +663,7 @@ fn set_vertex_buffer(
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::VERTEX)?;
 
-    let end = buffer.resolve_binding_size(offset, size)?;
+    let end = offset + buffer.resolve_binding_size(offset, size)?;
 
     state
         .buffer_memory_init_actions
