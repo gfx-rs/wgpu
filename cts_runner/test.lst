@@ -43,6 +43,7 @@ webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_grou
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:encoderType="render%20pass";*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:buffer_binding,render_pipeline:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:sampler_binding,render_pipeline:*
+webgpu:api,validation,image_copy,layout_related:copy_end_overflows_u64:*
 webgpu:api,validation,image_copy,texture_related:format:dimension="1d";*
 webgpu:api,validation,queue,submit:command_buffer,device_mismatch:*
 webgpu:api,validation,queue,submit:command_buffer,duplicate_buffers:*

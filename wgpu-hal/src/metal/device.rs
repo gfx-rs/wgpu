@@ -1,5 +1,5 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{ptr::NonNull, sync::atomic};
+use core::{num::NonZeroU64, ptr::NonNull, sync::atomic};
 use std::{thread, time};
 
 use parking_lot::Mutex;
@@ -340,10 +340,6 @@ impl super::Device {
         }
     }
 
-    pub unsafe fn buffer_from_raw(raw: metal::Buffer, size: wgt::BufferAddress) -> super::Buffer {
-        super::Buffer { raw, size }
-    }
-
     pub fn raw_device(&self) -> &Mutex<metal::Device> {
         &self.shared.device
     }
@@ -373,10 +369,7 @@ impl crate::Device for super::Device {
                 raw.set_label(label);
             }
             self.counters.buffers.add(1);
-            Ok(super::Buffer {
-                raw,
-                size: desc.size,
-            })
+            Ok(super::Buffer { raw })
         })
     }
     unsafe fn destroy_buffer(&self, _buffer: super::Buffer) {
@@ -935,14 +928,12 @@ impl crate::Device for super::Device {
                                 let end = start + 1;
                                 bg.buffers
                                     .extend(desc.buffers[start..end].iter().map(|source| {
-                                        // Given the restrictions on `BufferBinding::offset`,
-                                        // this should never be `None`.
-                                        let remaining_size = wgt::BufferSize::new(
-                                            source.buffer.size - source.offset,
-                                        );
+                                        // https://github.com/gfx-rs/wgpu/issues/3170
+                                        let source_size = NonZeroU64::new(source.size)
+                                            .expect("zero-size bindings are not supported");
                                         let binding_size = match ty {
                                             wgt::BufferBindingType::Storage { .. } => {
-                                                source.size.or(remaining_size)
+                                                Some(source_size)
                                             }
                                             _ => None,
                                         };
