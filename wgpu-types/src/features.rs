@@ -1272,7 +1272,9 @@ bitflags_array! {
         ///
         /// GLSL data is not parsed or interpreted in any way
         ///
-        /// Supported platforms:
+        /// This features is not implemented yet.
+        /// 
+        /// Potential supported platforms:
         /// - OpenGL ES
         ///
         /// This is a native only feature.
