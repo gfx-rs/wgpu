@@ -149,7 +149,6 @@ impl WebGpuError for CreateShaderModuleError {
             Self::ParsingGlsl(..) => return ErrorType::Validation,
             #[cfg(feature = "spirv")]
             Self::ParsingSpirV(..) => return ErrorType::Validation,
-            // TODO: ensure this is the correct error type
             Self::NotCompiledForBackend => return ErrorType::Validation,
         };
         e.webgpu_error_type()
