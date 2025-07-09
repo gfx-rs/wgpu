@@ -964,11 +964,9 @@ impl RenderBundle {
                     size,
                 } => {
                     let buffer = buffer.try_raw(snatch_guard)?;
-                    let bb = unsafe {
-                        // SAFETY: The binding size was checked against the buffer size
-                        // in `set_index_buffer` and again in `IndexState::flush`.
-                        hal::BufferBinding::new_unchecked(buffer, *offset, *size)
-                    };
+                    // SAFETY: The binding size was checked against the buffer size
+                    // in `set_index_buffer` and again in `IndexState::flush`.
+                    let bb = hal::BufferBinding::new_unchecked(buffer, *offset, *size);
                     unsafe { raw.set_index_buffer(bb, *index_format) };
                 }
                 Cmd::SetVertexBuffer {
@@ -978,11 +976,9 @@ impl RenderBundle {
                     size,
                 } => {
                     let buffer = buffer.try_raw(snatch_guard)?;
-                    let bb = unsafe {
-                        // SAFETY: The binding size was checked against the buffer size
-                        // in `set_vertex_buffer` and again in `VertexState::flush`.
-                        hal::BufferBinding::new_unchecked(buffer, *offset, *size)
-                    };
+                    // SAFETY: The binding size was checked against the buffer size
+                    // in `set_vertex_buffer` and again in `VertexState::flush`.
+                    let bb = hal::BufferBinding::new_unchecked(buffer, *offset, *size);
                     unsafe { raw.set_vertex_buffer(*slot, bb) };
                 }
                 Cmd::SetPushConstant {

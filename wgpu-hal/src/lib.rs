@@ -2098,7 +2098,7 @@ impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
     /// pass a zero size. When the zero-size binding issue is resolved, the
     /// argument should just match the type of the member.
     /// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove the parameter
-    pub unsafe fn new_unchecked<S: Into<Option<NonZeroU64>>>(
+    pub fn new_unchecked<S: Into<Option<NonZeroU64>>>(
         buffer: &'a B,
         offset: wgt::BufferAddress,
         size: S,
