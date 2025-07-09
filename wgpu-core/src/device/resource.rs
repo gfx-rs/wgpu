@@ -1787,7 +1787,7 @@ impl Device {
         descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
-        self.require_features(wgt::Features::EXPERIMENTAL_PRECOMPILED_SHADERS)?;
+        self.require_features(wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)?;
 
         // TODO: when we get to use if-let chains, this will be a little nicer!
 

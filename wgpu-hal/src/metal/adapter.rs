@@ -916,7 +916,6 @@ impl super::PrivateCapabilities {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::MSL_SHADER_PASSTHROUGH
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
@@ -927,7 +926,7 @@ impl super::PrivateCapabilities {
             | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
-            | F::EXPERIMENTAL_PRECOMPILED_SHADERS;
+            | F::EXPERIMENTAL_PASSTHROUGH_SHADERS;
 
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
         features.set(
