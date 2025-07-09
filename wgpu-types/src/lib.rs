@@ -7757,264 +7757,15 @@ pub enum DeviceLostReason {
     Destroyed = 1,
 }
 
-/// Descriptor for creating a shader module.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub enum CreateShaderModuleDescriptorPassthrough<'a, L> {
-    /// Passthrough for SPIR-V binaries.
-    SpirV(ShaderModuleDescriptorSpirV<'a, L>),
-    /// Passthrough for MSL source code.
-    Msl(ShaderModuleDescriptorMsl<'a, L>),
-    /// Passthrough for DXIL compiled with DXC
-    Dxil(ShaderModuleDescriptorDxil<'a, L>),
-    /// Passthrough for HLSL
-    Hlsl(ShaderModuleDescriptorHlsl<'a, L>),
-    /// Passthrough for GLSL
-    Glsl(ShaderModuleDescriptorGlsl<'a, L>),
-    /// Passthrough for multiple types of sources, with optional reflection
-    Generic(ShaderModuleDescriptorGeneric<'a, L>),
-}
-
-impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
-    /// Takes a closure and maps the label of the shader module descriptor into another.
-    pub fn map_label<K>(
-        &self,
-        fun: impl FnOnce(&L) -> K,
-    ) -> CreateShaderModuleDescriptorPassthrough<'_, K> {
-        match self {
-            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => {
-                CreateShaderModuleDescriptorPassthrough::<'_, K>::SpirV(
-                    ShaderModuleDescriptorSpirV {
-                        label: fun(&inner.label),
-                        source: inner.source.clone(),
-                        reflection: inner.reflection.clone(),
-                    },
-                )
-            }
-            CreateShaderModuleDescriptorPassthrough::Msl(inner) => {
-                CreateShaderModuleDescriptorPassthrough::<'_, K>::Msl(ShaderModuleDescriptorMsl {
-                    entry_point: inner.entry_point.clone(),
-                    label: fun(&inner.label),
-                    num_workgroups: inner.num_workgroups,
-                    reflection: inner.reflection.clone(),
-                    source: inner.source,
-                })
-            }
-            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => {
-                CreateShaderModuleDescriptorPassthrough::<'_, K>::Dxil(ShaderModuleDescriptorDxil {
-                    entry_point: inner.entry_point.clone(),
-                    label: fun(&inner.label),
-                    num_workgroups: inner.num_workgroups,
-                    reflection: inner.reflection.clone(),
-                    source: inner.source,
-                })
-            }
-            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => {
-                CreateShaderModuleDescriptorPassthrough::<'_, K>::Hlsl(ShaderModuleDescriptorHlsl {
-                    entry_point: inner.entry_point.clone(),
-                    label: fun(&inner.label),
-                    num_workgroups: inner.num_workgroups,
-                    reflection: inner.reflection.clone(),
-                    source: inner.source,
-                })
-            }
-            CreateShaderModuleDescriptorPassthrough::Glsl(inner) => {
-                CreateShaderModuleDescriptorPassthrough::Glsl(ShaderModuleDescriptorGlsl {
-                    entry_point: inner.entry_point.clone(),
-                    label: fun(&inner.label),
-                    num_workgroups: inner.num_workgroups,
-                    reflection: inner.reflection.clone(),
-                    source: inner.source,
-                })
-            }
-            CreateShaderModuleDescriptorPassthrough::Generic(inner) => {
-                CreateShaderModuleDescriptorPassthrough::<'_, K>::Generic(
-                    ShaderModuleDescriptorGeneric {
-                        entry_point: inner.entry_point.clone(),
-                        label: fun(&inner.label),
-                        num_workgroups: inner.num_workgroups,
-                        reflection: inner.reflection.clone(),
-                        spirv: inner.spirv.clone(),
-                        dxil: inner.dxil.clone(),
-                        msl: inner.msl.clone(),
-                        hlsl: inner.hlsl.clone(),
-                        glsl: inner.glsl.clone(),
-                        runtime_checks: inner.runtime_checks,
-                    },
-                )
-            }
-        }
-    }
-
-    /// Returns the label of shader module passthrough descriptor.
-    pub fn label(&'a self) -> &'a L {
-        match self {
-            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => &inner.label,
-            CreateShaderModuleDescriptorPassthrough::Msl(inner) => &inner.label,
-            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => &inner.label,
-            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => &inner.label,
-            CreateShaderModuleDescriptorPassthrough::Glsl(inner) => &inner.label,
-            CreateShaderModuleDescriptorPassthrough::Generic(inner) => &inner.label,
-        }
-    }
-
-    /// Returns the optional reflection information of shader module passthrough descriptor.
-    pub fn reflection(&'a self) -> Option<&'a ShaderModuleReflection> {
-        match self {
-            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => inner.reflection.as_ref(),
-            CreateShaderModuleDescriptorPassthrough::Msl(inner) => inner.reflection.as_ref(),
-            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => inner.reflection.as_ref(),
-            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => inner.reflection.as_ref(),
-            CreateShaderModuleDescriptorPassthrough::Glsl(inner) => inner.reflection.as_ref(),
-            CreateShaderModuleDescriptorPassthrough::Generic(inner) => inner.reflection.as_ref(),
-        }
-    }
-
-    #[cfg(feature = "trace")]
-    /// Returns the source data for tracing purpose.
-    pub fn trace_data(&self) -> &[u8] {
-        match self {
-            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => {
-                bytemuck::cast_slice(&inner.source)
-            }
-            CreateShaderModuleDescriptorPassthrough::Msl(inner) => inner.source.as_bytes(),
-            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => inner.source,
-            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => inner.source.as_bytes(),
-            CreateShaderModuleDescriptorPassthrough::Glsl(inner) => inner.source.as_bytes(),
-            CreateShaderModuleDescriptorPassthrough::Generic(inner) => {
-                if let Some(spirv) = &inner.spirv {
-                    bytemuck::cast_slice(spirv)
-                } else if let Some(msl) = &inner.msl {
-                    msl.as_bytes()
-                } else if let Some(dxil) = &inner.dxil {
-                    dxil
-                } else {
-                    panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
-                }
-            }
-        }
-    }
-
-    #[cfg(feature = "trace")]
-    /// Returns the binary file extension for tracing purpose.
-    pub fn trace_binary_ext(&self) -> &'static str {
-        match self {
-            CreateShaderModuleDescriptorPassthrough::SpirV(..) => "spv",
-            CreateShaderModuleDescriptorPassthrough::Msl(..) => "msl",
-            CreateShaderModuleDescriptorPassthrough::Dxil(..) => "dxil",
-            CreateShaderModuleDescriptorPassthrough::Hlsl(..) => "hlsl",
-            CreateShaderModuleDescriptorPassthrough::Glsl(..) => "glsl",
-            CreateShaderModuleDescriptorPassthrough::Generic(inner) => {
-                if inner.spirv.is_some() {
-                    "spv"
-                } else if inner.msl.is_some() {
-                    "msl"
-                } else if inner.dxil.is_some() {
-                    "dxil"
-                } else {
-                    panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
-                }
-            }
-        }
-    }
-}
-
-/// Descriptor for a shader module given by Metal MSL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorMsl<'a, L> {
-    /// Entrypoint.
-    pub entry_point: String,
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-    /// Optional reflection information
-    pub reflection: Option<ShaderModuleReflection>,
-    /// Shader MSL source.
-    pub source: &'a str,
-}
-
-/// Descriptor for a shader module given by DirectX DXIL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorDxil<'a, L> {
-    /// Entrypoint.
-    pub entry_point: String,
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-    /// Optional reflection information
-    pub reflection: Option<ShaderModuleReflection>,
-    /// Shader MSL source.
-    pub source: &'a [u8],
-}
-/// Descriptor for a shader module given by DirectX HLSL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorHlsl<'a, L> {
-    /// Entrypoint.
-    pub entry_point: String,
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-    /// Optional reflection information
-    pub reflection: Option<ShaderModuleReflection>,
-    /// Shader MSL source.
-    pub source: &'a str,
-}
-
-/// Descriptor for a shader module given by OpenGL ES GLSL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorGlsl<'a, L> {
-    /// Entrypoint.
-    pub entry_point: String,
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-    /// Optional reflection information
-    pub reflection: Option<ShaderModuleReflection>,
-    /// Shader GLSL source.
-    pub source: &'a str,
-}
-
-/// Descriptor for a shader module given by SPIR-V binary.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorSpirV<'a, L> {
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Binary SPIR-V data, in 4-byte words.
-    pub source: Cow<'a, [u32]>,
-    /// Optional reflection information
-    pub reflection: Option<ShaderModuleReflection>,
-}
-
 /// Descriptor for a shader module given by any of several sources, with optional reflection information.
 /// All shader types that may be used by the backend must be `Some`, otherwise usage is undefined behavior
 #[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorGeneric<'a, L> {
-    /// Entrypoint.
+pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
+    /// Entrypoint. Unused for Spir-V.
     pub entry_point: String,
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: L,
-    /// Number of workgroups in each dimension x, y and z.
+    /// Number of workgroups in each dimension x, y and z. Unused for Spir-V.
     pub num_workgroups: (u32, u32, u32),
     /// Optional reflection information
     pub reflection: Option<ShaderModuleReflection>,
@@ -8029,13 +7780,62 @@ pub struct ShaderModuleDescriptorGeneric<'a, L> {
     pub msl: Option<Cow<'a, str>>,
     /// Shader HLSL source.
     pub hlsl: Option<Cow<'a, str>>,
-    /// Shader GLSL source.
+    /// Shader GLSL source (currently unused).
     pub glsl: Option<Cow<'a, str>>,
+    /// Shader WGSL source (currently unused).
+    pub wgsl: Option<Cow<'a, str>>,
+}
+
+impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
+    /// Takes a closure and maps the label of the shader module descriptor into another.
+    pub fn map_label<K>(
+        &self,
+        fun: impl FnOnce(&L) -> K,
+    ) -> CreateShaderModuleDescriptorPassthrough<'a, K> {
+        CreateShaderModuleDescriptorPassthrough {
+            entry_point: self.entry_point.clone(),
+            label: fun(&self.label),
+            num_workgroups: self.num_workgroups,
+            reflection: self.reflection.clone(),
+            runtime_checks: self.runtime_checks,
+            spirv: self.spirv.clone(),
+            dxil: self.dxil.clone(),
+            msl: self.msl.clone(),
+            hlsl: self.hlsl.clone(),
+            glsl: self.glsl.clone(),
+            wgsl: self.wgsl.clone(),
+        }
+    }
+
+    #[cfg(feature = "trace")]
+    /// Returns the source data for tracing purpose.
+    pub fn trace_data(&self) -> &[u8] {
+        if let Some(spirv) = &self.spirv {
+            bytemuck::cast_slice(spirv)
+        } else if let Some(msl) = &self.msl {
+            msl.as_bytes()
+        } else if let Some(dxil) = &self.dxil {
+            dxil
+        } else {
+            panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
+        }
+    }
+
+    #[cfg(feature = "trace")]
+    /// Returns the binary file extension for tracing purpose.
+    pub fn trace_binary_ext(&self) -> &'static str {
+        if self.spirv.is_some() {
+            "spv"
+        } else if self.msl.is_some() {
+            "msl"
+        } else if self.dxil.is_some() {
+            "dxil"
+        } else {
+            panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
+        }
+    }
 }
 
 /// Reflection information for a shader compiled with `naga`
 #[derive(Debug, Clone)]
-pub struct ShaderModuleReflection {
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-}
+pub struct ShaderModuleReflection {}

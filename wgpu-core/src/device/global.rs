@@ -979,43 +979,9 @@ impl Global {
                 let data = trace.make_binary(desc.trace_binary_ext(), desc.trace_data());
                 trace.add(trace::Action::CreateShaderModule {
                     id: fid.id(),
-                    desc: match desc {
-                        pipeline::ShaderModuleDescriptorPassthrough::SpirV(inner) => {
-                            pipeline::ShaderModuleDescriptor {
-                                label: inner.label.clone(),
-                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                            }
-                        }
-                        pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => {
-                            pipeline::ShaderModuleDescriptor {
-                                label: inner.label.clone(),
-                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                            }
-                        }
-                        pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
-                            pipeline::ShaderModuleDescriptor {
-                                label: inner.label.clone(),
-                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                            }
-                        }
-                        pipeline::ShaderModuleDescriptorPassthrough::Hlsl(inner) => {
-                            pipeline::ShaderModuleDescriptor {
-                                label: inner.label.clone(),
-                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                            }
-                        }
-                        pipeline::ShaderModuleDescriptorPassthrough::Glsl(inner) => {
-                            pipeline::ShaderModuleDescriptor {
-                                label: inner.label.clone(),
-                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                            }
-                        }
-                        pipeline::ShaderModuleDescriptorPassthrough::Generic(inner) => {
-                            pipeline::ShaderModuleDescriptor {
-                                label: inner.label.clone(),
-                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                            }
-                        }
+                    desc: pipeline::ShaderModuleDescriptor {
+                        label: desc.label.clone(),
+                        runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
                     },
                     data,
                 });
@@ -1032,7 +998,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label().to_string())));
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 

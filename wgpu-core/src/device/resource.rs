@@ -1787,93 +1787,58 @@ impl Device {
         descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
-        let hal_shader = match descriptor {
-            pipeline::ShaderModuleDescriptorPassthrough::SpirV(inner) => {
-                self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
-                hal::ShaderInput::SpirV(&inner.source)
-            }
-            pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => {
-                self.require_features(wgt::Features::MSL_SHADER_PASSTHROUGH)?;
-                hal::ShaderInput::Msl {
-                    shader: inner.source,
-                    entry_point: inner.entry_point.to_string(),
-                    num_workgroups: inner.num_workgroups,
-                }
-            }
-            pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
-                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
-                hal::ShaderInput::Dxil {
-                    shader: inner.source,
-                    entry_point: inner.entry_point.clone(),
-                    num_workgroups: inner.num_workgroups,
-                }
-            }
-            pipeline::ShaderModuleDescriptorPassthrough::Hlsl(inner) => {
-                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
-                hal::ShaderInput::Hlsl {
-                    shader: inner.source,
-                    entry_point: inner.entry_point.clone(),
-                    num_workgroups: inner.num_workgroups,
-                }
-            }
-            pipeline::ShaderModuleDescriptorPassthrough::Glsl(inner) => {
-                self.require_features(wgt::Features::GLSL_SHADER_PASSTHROUGH)?;
-                hal::ShaderInput::Glsl {
-                    shader: inner.source,
-                    entry_point: inner.entry_point.clone(),
-                    num_workgroups: inner.num_workgroups,
-                }
-            }
-            pipeline::ShaderModuleDescriptorPassthrough::Generic(inner) => {
-                use wgt::Features;
-                self.require_features(Features::EXPERIMENTAL_PRECOMPILED_SHADERS)?;
-                let features = self.adapter.features();
+        self.require_features(wgt::Features::EXPERIMENTAL_PRECOMPILED_SHADERS)?;
 
-                // TODO: when we get to use if-let chains, this will be a little nicer!
+        // TODO: when we get to use if-let chains, this will be a little nicer!
 
-                // Some backends can take multiple kinds of passthrough. Currently, this only includes DirectX,
-                // and those are under the same feature anyway, but I figured I'd check for every feature anyway.
-                if features.contains(Features::SPIRV_SHADER_PASSTHROUGH) && inner.spirv.is_some() {
-                    hal::ShaderInput::SpirV(inner.spirv.as_ref().unwrap())
-                } else if features.contains(Features::HLSL_DXIL_SHADER_PASSTHROUGH)
-                    && inner.hlsl.is_some()
-                {
-                    hal::ShaderInput::Hlsl {
-                        shader: inner.hlsl.as_ref().unwrap(),
-                        entry_point: inner.entry_point.clone(),
-                        num_workgroups: inner.num_workgroups,
-                    }
-                } else if features.contains(Features::HLSL_DXIL_SHADER_PASSTHROUGH)
-                    && inner.dxil.is_some()
-                {
+        let hal_shader = match self.adapter.backend() {
+            wgt::Backend::Vulkan => hal::ShaderInput::SpirV(
+                descriptor
+                    .spirv
+                    .as_ref()
+                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
+            ),
+            wgt::Backend::Dx12 => {
+                if let Some(dxil) = &descriptor.dxil {
                     hal::ShaderInput::Dxil {
-                        shader: inner.dxil.as_ref().unwrap(),
-                        entry_point: inner.entry_point.clone(),
-                        num_workgroups: inner.num_workgroups,
+                        shader: dxil,
+                        entry_point: descriptor.entry_point.clone(),
+                        num_workgroups: descriptor.num_workgroups,
                     }
-                } else if features.contains(Features::MSL_SHADER_PASSTHROUGH) && inner.msl.is_some()
-                {
-                    hal::ShaderInput::Msl {
-                        shader: inner.msl.as_ref().unwrap(),
-                        entry_point: inner.entry_point.clone(),
-                        num_workgroups: inner.num_workgroups,
-                    }
-                } else if features.contains(Features::GLSL_SHADER_PASSTHROUGH)
-                    && inner.glsl.is_some()
-                {
-                    hal::ShaderInput::Glsl {
-                        shader: inner.glsl.as_ref().unwrap(),
-                        entry_point: inner.entry_point.clone(),
-                        num_workgroups: inner.num_workgroups,
+                } else if let Some(hlsl) = &descriptor.hlsl {
+                    hal::ShaderInput::Hlsl {
+                        shader: hlsl,
+                        entry_point: descriptor.entry_point.clone(),
+                        num_workgroups: descriptor.num_workgroups,
                     }
                 } else {
                     return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
                 }
             }
+            wgt::Backend::Metal => hal::ShaderInput::Msl {
+                shader: descriptor
+                    .msl
+                    .as_ref()
+                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
+                entry_point: descriptor.entry_point.clone(),
+                num_workgroups: descriptor.num_workgroups,
+            },
+            wgt::Backend::Gl => hal::ShaderInput::Glsl {
+                shader: descriptor
+                    .glsl
+                    .as_ref()
+                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
+                entry_point: descriptor.entry_point.clone(),
+                num_workgroups: descriptor.num_workgroups,
+            },
+            wgt::Backend::Noop => {
+                return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend)
+            }
+            wgt::Backend::BrowserWebGpu => unreachable!(),
         };
 
         let hal_desc = hal::ShaderModuleDescriptor {
-            label: descriptor.label().to_hal(self.instance_flags),
+            label: descriptor.label.to_hal(self.instance_flags),
             runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
         };
 
@@ -1896,7 +1861,7 @@ impl Device {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),
             interface: None,
-            label: descriptor.label().to_string(),
+            label: descriptor.label.to_string(),
         };
 
         Ok(Arc::new(module))
