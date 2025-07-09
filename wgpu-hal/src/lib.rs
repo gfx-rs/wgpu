@@ -1968,13 +1968,6 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 ///
 /// [`BindGroup`]: Api::BindGroup
 ///
-/// ## Construction
-///
-/// The recommended way to construct a `BufferBinding` is using the `binding`
-/// method on a wgpu-core `Buffer`, which will validate the binding size
-/// against the buffer size. An unsafe `new_unchecked` constructor is also
-/// provided for cases where direct construction is necessary.
-///
 /// ## Accessible region
 ///
 /// `wgpu_hal` guarantees that shaders compiled with
@@ -1999,78 +1992,44 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 /// parts of which buffers shaders might observe. This optimization is only
 /// sound if shader access is bounds-checked.
 ///
-/// ## Zero-length bindings
-///
-/// Some back ends cannot tolerate zero-length regions; for example, see
-/// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
-/// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
-/// documentation for GLES's [glBindBufferRange][bbr]. For this reason, a valid
-/// `BufferBinding` must have `offset` strictly less than the size of the
-/// buffer.
-///
-/// WebGPU allows zero-length bindings, and there is not currently a mechanism
-/// in place
-///
 /// [`buffer`]: BufferBinding::buffer
 /// [`offset`]: BufferBinding::offset
 /// [`size`]: BufferBinding::size
 /// [`Storage`]: wgt::BufferBindingType::Storage
 /// [`Uniform`]: wgt::BufferBindingType::Uniform
-/// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
-/// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
-/// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
 /// [woob]: https://gpuweb.github.io/gpuweb/wgsl/#out-of-bounds-access-sec
 #[derive(Debug)]
 pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     /// The buffer being bound.
-    ///
-    /// This is not fully `pub` to prevent direct construction of
-    /// `BufferBinding`s, while still allowing public read access to the `offset`
-    /// and `size` properties.
-    pub(crate) buffer: &'a B,
+    pub buffer: &'a B,
 
     /// The offset at which the bound region starts.
     ///
-    /// Because zero-length bindings are not permitted (see above), this must be
-    /// strictly less than the size of the buffer.
+    /// This must be less than the size of the buffer. Some back ends
+    /// cannot tolerate zero-length regions; for example, see
+    /// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
+    /// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
+    /// documentation for GLES's [glBindBufferRange][bbr].
+    ///
+    /// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
+    /// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
+    /// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
     pub offset: wgt::BufferAddress,
 
     /// The size of the region bound, in bytes.
-    pub size: wgt::BufferSize,
+    ///
+    /// If `None`, the region extends from `offset` to the end of the
+    /// buffer. Given the restrictions on `offset`, this means that
+    /// the size is always greater than zero.
+    pub size: Option<wgt::BufferSize>,
 }
 
-// We must implement this manually because `B` is not necessarily `Clone`.
-impl<B: DynBuffer + ?Sized> Clone for BufferBinding<'_, B> {
+impl<'a, T: DynBuffer + ?Sized> Clone for BufferBinding<'a, T> {
     fn clone(&self) -> Self {
         BufferBinding {
             buffer: self.buffer,
             offset: self.offset,
             size: self.size,
-        }
-    }
-}
-
-impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
-    /// Construct a `BufferBinding` with the given contents.
-    ///
-    /// When possible, use the `binding` method on a wgpu-core `Buffer` instead
-    /// of this method. `Buffer::binding` validates the size of the binding
-    /// against the size of the buffer.
-    ///
-    /// It is more difficult to provide a validating constructor here, due to
-    /// not having direct access to the size of a `DynBuffer`.
-    ///
-    /// SAFETY: The caller is responsible for ensuring that a binding of `size`
-    /// bytes starting at `offset` is contained within the buffer.
-    pub unsafe fn new_unchecked(
-        buffer: &'a B,
-        offset: wgt::BufferAddress,
-        size: wgt::BufferSize,
-    ) -> Self {
-        Self {
-            buffer,
-            offset,
-            size,
         }
     }
 }

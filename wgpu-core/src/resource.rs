@@ -17,7 +17,7 @@ use wgt::{
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::{BindGroup, BindingError},
+    binding_model::BindGroup,
     device::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
         DeviceMismatch, HostMap, MissingDownlevelFlags, MissingFeatures,
@@ -482,76 +482,6 @@ impl Buffer {
                 actual: self.usage,
                 expected,
             })
-        }
-    }
-
-    /// Resolve the size of a binding for buffer with `offset` and `size`.
-    ///
-    /// If `size` is `None`, then the remainder of the buffer starting from
-    /// `offset` is used.
-    ///
-    /// If the binding would overflow the buffer or is empty (see
-    /// [`hal::BufferBinding`]), then an error is returned.
-    pub fn resolve_binding_size(
-        &self,
-        offset: wgt::BufferAddress,
-        binding_size: Option<wgt::BufferSize>,
-    ) -> Result<wgt::BufferSize, BindingError> {
-        let buffer_size = self.size;
-
-        match binding_size {
-            Some(binding_size) => {
-                match offset.checked_add(binding_size.get()) {
-                    // `binding_size` is not zero which means `end == buffer_size` is ok.
-                    Some(end) if end <= buffer_size => Ok(binding_size),
-                    _ => Err(BindingError::BindingRangeTooLarge {
-                        buffer: self.error_ident(),
-                        offset,
-                        binding_size: binding_size.get(),
-                        buffer_size,
-                    }),
-                }
-            }
-            None => {
-                // We require that `buffer_size - offset` converts to
-                // `BufferSize` (`NonZeroU64`) because bindings must not be
-                // empty.
-                buffer_size
-                    .checked_sub(offset)
-                    .and_then(wgt::BufferSize::new)
-                    .ok_or_else(|| BindingError::BindingOffsetTooLarge {
-                        buffer: self.error_ident(),
-                        offset,
-                        buffer_size,
-                    })
-            }
-        }
-    }
-
-    /// Create a new [`hal::BufferBinding`] for the buffer with `offset` and
-    /// `size`.
-    ///
-    /// If `size` is `None`, then the remainder of the buffer starting from
-    /// `offset` is used.
-    ///
-    /// If the binding would overflow the buffer or is empty (see
-    /// [`hal::BufferBinding`]), then an error is returned.
-    pub fn binding<'a>(
-        &'a self,
-        offset: wgt::BufferAddress,
-        binding_size: Option<wgt::BufferSize>,
-        snatch_guard: &'a SnatchGuard,
-    ) -> Result<hal::BufferBinding<'a, dyn hal::DynBuffer>, BindingError> {
-        let buf_raw = self.try_raw(snatch_guard)?;
-        let resolved_size = self.resolve_binding_size(offset, binding_size)?;
-        unsafe {
-            // SAFETY: The offset and size passed to hal::BufferBinding::new_unchecked must
-            // define a binding contained within the buffer.
-            Ok(hal::BufferBinding::new_unchecked(
-                buf_raw,
-                offset,
-                resolved_size,
-            ))
         }
     }
 

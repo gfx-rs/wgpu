@@ -445,13 +445,10 @@ impl<A: hal::Api> Example<A> {
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
         let global_group = {
-            let global_buffer_binding = unsafe {
-                // SAFETY: This is the same size that was specified for buffer creation.
-                hal::BufferBinding::new_unchecked(
-                    &global_buffer,
-                    0,
-                    global_buffer_desc.size.try_into().unwrap(),
-                )
+            let global_buffer_binding = hal::BufferBinding {
+                buffer: &global_buffer,
+                offset: 0,
+                size: None,
             };
             let texture_binding = hal::TextureBinding {
                 view: &texture_view,
@@ -486,13 +483,10 @@ impl<A: hal::Api> Example<A> {
         };
 
         let local_group = {
-            let local_buffer_binding = unsafe {
-                // SAFETY: The size must fit within the buffer.
-                hal::BufferBinding::new_unchecked(
-                    &local_buffer,
-                    0,
-                    wgpu_types::BufferSize::new(size_of::<Locals>() as _).unwrap(),
-                )
+            let local_buffer_binding = hal::BufferBinding {
+                buffer: &local_buffer,
+                offset: 0,
+                size: wgpu_types::BufferSize::new(size_of::<Locals>() as _),
             };
             let local_group_desc = hal::BindGroupDescriptor {
                 label: Some("local"),

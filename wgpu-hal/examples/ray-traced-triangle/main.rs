@@ -603,13 +603,10 @@ impl<A: hal::Api> Example<A> {
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
         let bind_group = {
-            let buffer_binding = unsafe {
-                // SAFETY: The size matches the buffer allocation.
-                hal::BufferBinding::new_unchecked(
-                    &uniform_buffer,
-                    0,
-                    wgpu_types::BufferSize::new_unchecked(uniforms_size as u64),
-                )
+            let buffer_binding = hal::BufferBinding {
+                buffer: &uniform_buffer,
+                offset: 0,
+                size: None,
             };
             let texture_binding = hal::TextureBinding {
                 view: &texture_view,

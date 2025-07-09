@@ -977,9 +977,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let encoder = self.state.render.as_ref().unwrap();
         encoder.set_vertex_buffer(buffer_index, Some(&binding.buffer.raw), binding.offset);
 
-        self.state
-            .vertex_buffer_size_map
-            .insert(buffer_index, binding.size);
+        let buffer_size = binding.resolve_size();
+        if buffer_size > 0 {
+            self.state.vertex_buffer_size_map.insert(
+                buffer_index,
+                core::num::NonZeroU64::new(buffer_size).unwrap(),
+            );
+        } else {
+            self.state.vertex_buffer_size_map.remove(&buffer_index);
+        }
 
         if let Some((index, sizes)) = self
             .state
