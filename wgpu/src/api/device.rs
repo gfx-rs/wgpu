@@ -322,7 +322,6 @@ impl Device {
     /// - `hal_buffer` must be created from this device internal handle
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
-    /// - `hal_buffer` must not have zero size
     #[cfg(wgpu_core)]
     #[must_use]
     pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
