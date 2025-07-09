@@ -1804,12 +1804,12 @@ impl crate::Device for super::Device {
                     (buffer_infos, local_buffer_infos) =
                         buffer_infos.extend(desc.buffers[start as usize..end as usize].iter().map(
                             |binding| {
+                                // https://github.com/gfx-rs/wgpu/issues/3170
+                                assert!(binding.size != 0, "zero-size bindings are not supported");
                                 vk::DescriptorBufferInfo::default()
                                     .buffer(binding.buffer.raw)
                                     .offset(binding.offset)
-                                    .range(
-                                        binding.size.map_or(vk::WHOLE_SIZE, wgt::BufferSize::get),
-                                    )
+                                    .range(binding.size)
                             },
                         ));
                     write.buffer_info(local_buffer_infos)

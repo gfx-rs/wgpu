@@ -8,9 +8,10 @@ use alloc::{
 use core::{
     fmt,
     mem::{self, ManuallyDrop},
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroU64},
     sync::atomic::{AtomicBool, Ordering},
 };
+use hal::ShouldBeNonZeroExt;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
@@ -702,7 +703,8 @@ impl Device {
         let buffer = unsafe { self.raw().create_buffer(&hal_desc) }
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
-        let timestamp_normalization_bind_group = Snatchable::new(
+        let timestamp_normalization_bind_group = Snatchable::new(unsafe {
+            // SAFETY: The size passed here must not overflow the buffer.
             self.timestamp_normalizer
                 .get()
                 .unwrap()
@@ -710,10 +712,10 @@ impl Device {
                     self,
                     &*buffer,
                     desc.label.as_deref(),
-                    desc.size,
+                    wgt::BufferSize::new(hal_desc.size).unwrap(),
                     desc.usage,
-                )?,
-        );
+                )
+        }?);
 
         let indirect_validation_bind_groups =
             self.create_indirect_validation_bind_groups(buffer.as_ref(), desc.size, desc.usage)?;
@@ -809,28 +811,36 @@ impl Device {
         Ok(texture)
     }
 
-    pub(crate) fn create_buffer_from_hal(
+    /// # Safety
+    ///
+    /// - `hal_buffer` must have been created on this device.
+    /// - `hal_buffer` must have been created respecting `desc` (in particular, the size).
+    /// - `hal_buffer` must be initialized.
+    /// - `hal_buffer` must not have zero size.
+    pub(crate) unsafe fn create_buffer_from_hal(
         self: &Arc<Self>,
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> (Fallible<Buffer>, Option<resource::CreateBufferError>) {
-        let timestamp_normalization_bind_group = match self
-            .timestamp_normalizer
-            .get()
-            .unwrap()
-            .create_normalization_bind_group(
-                self,
-                &*hal_buffer,
-                desc.label.as_deref(),
-                desc.size,
-                desc.usage,
-            ) {
-            Ok(bg) => Snatchable::new(bg),
-            Err(e) => {
-                return (
-                    Fallible::Invalid(Arc::new(desc.label.to_string())),
-                    Some(e.into()),
-                )
+        let timestamp_normalization_bind_group = unsafe {
+            match self
+                .timestamp_normalizer
+                .get()
+                .unwrap()
+                .create_normalization_bind_group(
+                    self,
+                    &*hal_buffer,
+                    desc.label.as_deref(),
+                    wgt::BufferSize::new(desc.size).unwrap(),
+                    desc.usage,
+                ) {
+                Ok(bg) => Snatchable::new(bg),
+                Err(e) => {
+                    return (
+                        Fallible::Invalid(Arc::new(desc.label.to_string())),
+                        Some(e.into()),
+                    )
+                }
             }
         };
 
@@ -2187,31 +2197,9 @@ impl Device {
         buffer.same_device(self)?;
 
         buffer.check_usage(pub_usage)?;
-        let raw_buffer = buffer.try_raw(snatch_guard)?;
 
-        let (bind_size, bind_end) = match bb.size {
-            Some(size) => {
-                let end = bb.offset + size.get();
-                if end > buffer.size {
-                    return Err(Error::BindingRangeTooLarge {
-                        buffer: buffer.error_ident(),
-                        range: bb.offset..end,
-                        size: buffer.size,
-                    });
-                }
-                (size.get(), end)
-            }
-            None => {
-                if buffer.size < bb.offset {
-                    return Err(Error::BindingRangeTooLarge {
-                        buffer: buffer.error_ident(),
-                        range: bb.offset..bb.offset,
-                        size: buffer.size,
-                    });
-                }
-                (buffer.size - bb.offset, buffer.size)
-            }
-        };
+        let bb = buffer.binding(bb.offset, bb.size.map(NonZeroU64::get), snatch_guard)?;
+        let bind_size = bb.size.get();
 
         if bind_size > range_limit as u64 {
             return Err(Error::BufferRangeTooLarge {
@@ -2226,8 +2214,8 @@ impl Device {
             dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {
                 binding_idx: binding,
                 buffer_size: buffer.size,
-                binding_range: bb.offset..bind_end,
-                maximum_dynamic_offset: buffer.size - bind_end,
+                binding_range: bb.offset..bb.offset + bind_size,
+                maximum_dynamic_offset: buffer.size - bb.offset - bind_size,
                 binding_type: binding_ty,
             });
         }
@@ -2265,11 +2253,7 @@ impl Device {
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-        Ok(hal::BufferBinding {
-            buffer: raw_buffer,
-            offset: bb.offset,
-            size: bb.size,
-        })
+        Ok(bb)
     }
 
     fn create_sampler_binding<'a>(

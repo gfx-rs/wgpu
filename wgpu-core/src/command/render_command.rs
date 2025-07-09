@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 
-use wgt::{BufferAddress, BufferSize, Color};
+use wgt::{BufferAddress, BufferSizeOrZero, Color};
 
 use super::{Rect, RenderBundle};
 use crate::{
@@ -24,13 +24,13 @@ pub enum RenderCommand {
         buffer_id: id::BufferId,
         index_format: wgt::IndexFormat,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferSizeOrZero>,
     },
     SetVertexBuffer {
         slot: u32,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+        size: Option<BufferSizeOrZero>,
     },
     SetBlendConstant(Color),
     SetStencilReference(u32),
@@ -392,6 +392,17 @@ impl RenderCommand {
 }
 
 /// Equivalent to `RenderCommand` with the Ids resolved into resource Arcs.
+///
+/// In a render pass, commands are stored in this format between when they are
+/// added to the pass, and when the pass is `end()`ed and the commands are
+/// replayed to the HAL encoder. Validation occurs when the pass is ended, which
+/// means that parameters stored in an `ArcRenderCommand` for a pass operation
+/// have generally not been validated.
+///
+/// In a render bundle, commands are stored in this format between when the bundle
+/// is `finish()`ed and when the bundle is executed. Validation occurs when the
+/// bundle is finished, which means that parameters stored in an `ArcRenderCommand`
+/// for a render bundle operation must have been validated.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 pub enum ArcRenderCommand {
@@ -405,13 +416,20 @@ pub enum ArcRenderCommand {
         buffer: Arc<Buffer>,
         index_format: wgt::IndexFormat,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+
+        // For a render pass, this reflects the argument passed by the
+        // application, which may be `None`. For a finished render bundle, this
+        // reflects the validated size of the binding, and will be populated
+        // even in the case that the application omitted the size.
+        size: Option<BufferSizeOrZero>,
     },
     SetVertexBuffer {
         slot: u32,
         buffer: Arc<Buffer>,
         offset: BufferAddress,
-        size: Option<BufferSize>,
+
+        // See comment in `SetIndexBuffer`.
+        size: Option<BufferSizeOrZero>,
     },
     SetBlendConstant(Color),
     SetStencilReference(u32),
