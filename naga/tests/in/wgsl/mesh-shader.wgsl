@@ -45,7 +45,7 @@ fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
 @vertex_output(VertexOutput, 3) @primitive_output(PrimitiveOutput, 1)
 @workgroup_size(1)
 fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocation_id) id: vec3<u32>) {
-	setMeshOutputs(3u, 1u);
+	setMeshOutputs(3, 1);
 	workgroupData = 2.0;
 	var v: VertexOutput;
 
@@ -57,17 +57,17 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 
 	v.position = positions[1];
 	v.color = colors[1] * taskPayload.colorMask;
-	setVertex(1u, v);
+	setVertex(1, v);
 
 	v.position = positions[2];
 	v.color = colors[2] * taskPayload.colorMask;
-	setVertex(2u, v);
+	setVertex(2, v);
 
 	var p: PrimitiveOutput;
 	p.index = vec3<u32>(0, 1, 2);
 	p.cull = !taskPayload.visible;
 	p.colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
-	setPrimitive(0u, p);
+	setPrimitive(0, p);
 }
 @fragment
 fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
