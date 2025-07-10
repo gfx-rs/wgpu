@@ -17,13 +17,13 @@ The API is based on the [WebGPU standard][webgpu]. It serves as the core of the 
 
 | Docs                  | Examples                  | Changelog               |
 |:---------------------:|:-------------------------:|:-----------------------:|
-| [v25][rel-docs]       | [v25][rel-examples]       | [v25][rel-change]       |
+| [v26][rel-docs]       | [v26][rel-examples]       | [v26][rel-change]       |
 | [`trunk`][trunk-docs] | [`trunk`][trunk-examples] | [`trunk`][trunk-change] |
 
 Contributors are welcome! See [CONTRIBUTING.md][contrib] for more information.
 
 [rel-docs]: https://docs.rs/wgpu/
-[rel-examples]: https://github.com/gfx-rs/wgpu/tree/v25/examples#readme
+[rel-examples]: https://github.com/gfx-rs/wgpu/tree/v26/examples#readme
 [rel-change]: https://github.com/gfx-rs/wgpu/releases
 [trunk-docs]: https://wgpu.rs/doc/wgpu/
 [trunk-examples]: https://github.com/gfx-rs/wgpu/tree/trunk/examples#readme

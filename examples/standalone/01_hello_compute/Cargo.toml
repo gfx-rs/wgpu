@@ -8,4 +8,4 @@ publish = false
 bytemuck = "1.22.0"
 env_logger = "0.11"
 pollster = "0.4"
-wgpu = "25.0.0"
+wgpu = "26.0.0"
