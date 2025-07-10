@@ -680,29 +680,26 @@ impl GPUDevice {
                     .buffers
                     .into_iter()
                     .map(|b| {
-                        let layout = b.into_option().ok_or_else(|| {
-                            JsErrorBox::type_error(
-                                "Nullable GPUVertexBufferLayouts are currently not supported",
-                            )
-                        })?;
-
-                        Ok(wgpu_core::pipeline::VertexBufferLayout {
-                            array_stride: layout.array_stride,
-                            step_mode: layout.step_mode.into(),
-                            attributes: Cow::Owned(
-                                layout
-                                    .attributes
-                                    .into_iter()
-                                    .map(|attr| wgpu_types::VertexAttribute {
-                                        format: attr.format.into(),
-                                        offset: attr.offset,
-                                        shader_location: attr.shader_location,
-                                    })
-                                    .collect(),
-                            ),
-                        })
+                        b.into_option().map_or_else(
+                            wgpu_core::pipeline::VertexBufferLayout::default,
+                            |layout| wgpu_core::pipeline::VertexBufferLayout {
+                                array_stride: layout.array_stride,
+                                step_mode: layout.step_mode.into(),
+                                attributes: Cow::Owned(
+                                    layout
+                                        .attributes
+                                        .into_iter()
+                                        .map(|attr| wgpu_types::VertexAttribute {
+                                            format: attr.format.into(),
+                                            offset: attr.offset,
+                                            shader_location: attr.shader_location,
+                                        })
+                                        .collect(),
+                                ),
+                            },
+                        )
                     })
-                    .collect::<Result<_, JsErrorBox>>()?,
+                    .collect(),
             ),
         };
 

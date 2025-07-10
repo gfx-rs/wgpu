@@ -166,6 +166,12 @@ impl ContextWgpuCore {
         }
     }
 
+    /// # Safety
+    ///
+    /// - `hal_buffer` must be created from `device`.
+    /// - `hal_buffer` must be created respecting `desc`
+    /// - `hal_buffer` must be initialized
+    /// - `hal_buffer` must not have zero size.
     pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
         &self,
         hal_buffer: A::Buffer,

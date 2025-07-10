@@ -371,6 +371,17 @@ pub struct VertexBufferLayout<'a> {
     pub attributes: Cow<'a, [wgt::VertexAttribute]>,
 }
 
+/// A null vertex buffer layout that may be placed in unused slots.
+impl Default for VertexBufferLayout<'_> {
+    fn default() -> Self {
+        Self {
+            array_stride: Default::default(),
+            step_mode: Default::default(),
+            attributes: Cow::Borrowed(&[]),
+        }
+    }
+}
+
 /// Describes the vertex process in a render pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

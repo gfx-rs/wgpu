@@ -210,6 +210,14 @@ impl QuerySet {
         query_index: u32,
         reset_state: Option<&mut QueryResetMap>,
     ) -> Result<(), QueryUseError> {
+        // NOTE: Further code assumes the index is good, so do this first.
+        if query_index >= self.desc.count {
+            return Err(QueryUseError::OutOfBounds {
+                query_index,
+                query_set_size: self.desc.count,
+            });
+        }
+
         // We need to defer our resets because we are in a renderpass,
         // add the usage to the reset map.
         if let Some(reset) = reset_state {
@@ -224,13 +232,6 @@ impl QuerySet {
             return Err(QueryUseError::IncompatibleType {
                 query_type,
                 set_type: simple_set_type,
-            });
-        }
-
-        if query_index >= self.desc.count {
-            return Err(QueryUseError::OutOfBounds {
-                query_index,
-                query_set_size: self.desc.count,
             });
         }
 

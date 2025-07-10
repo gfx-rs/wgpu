@@ -1442,7 +1442,7 @@ impl crate::Device for super::Device {
                     let end = start + entry.count as usize;
                     for data in &desc.buffers[start..end] {
                         let gpu_address = data.resolve_address();
-                        let mut size = data.resolve_size() as u32;
+                        let mut size = data.resolve_size().try_into().unwrap();
 
                         if has_dynamic_offset {
                             match ty {
