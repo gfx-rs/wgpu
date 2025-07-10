@@ -51,6 +51,13 @@ Previously, if you wanted to get access to the wgpu-hal or underlying api types,
 
 ### New Features
 
+#### New method `TextureView::texture`
+
+You can now call `texture_view.texture()` to get access to the texture that
+a given texture view points to.
+
+By @cwfitzgerald in [#7907](https://github.com/gfx-rs/wgpu/pull/7907).
+
 #### Naga
 
 - Added `no_std` support with default features disabled. By @Bushrat011899 in [#7585](https://github.com/gfx-rs/wgpu/pull/7585).
