@@ -412,7 +412,7 @@ jobs:
     timeout-minutes: 10
 
     name: MSRV Minimal Versions
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       # Override flags to NOT include `-D warnings`, because warnings may be due to harmless problems in deps.
       # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
