@@ -994,7 +994,7 @@ checksum = "4f211af61d8efdd104f96e57adf5e426ba1bc3ed7a4ead616e15e5881fd79c4d"
 
 [[package]]
 name = "cts_runner"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "deno_console",
  "deno_core",
@@ -1925,7 +1925,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hlsl-snapshots"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "anyhow",
  "nanoserde",
@@ -2331,7 +2331,7 @@ checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
 
 [[package]]
 name = "lock-analyzer"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "anyhow",
  "ron",
@@ -2478,7 +2478,7 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "arbitrary",
  "arrayvec",
@@ -2515,7 +2515,7 @@ dependencies = [
 
 [[package]]
 name = "naga-cli"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "anyhow",
  "argh",
@@ -2528,7 +2528,7 @@ dependencies = [
 
 [[package]]
 name = "naga-fuzz"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "arbitrary",
  "cfg_aliases 0.2.1",
@@ -3175,7 +3175,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "player"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "env_logger",
  "log",
@@ -4829,7 +4829,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
@@ -4857,7 +4857,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-benchmark"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -4873,7 +4873,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "arrayvec",
  "bit-set 0.8.0",
@@ -4906,28 +4906,28 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core-deps-apple"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-emscripten"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-wasm"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-windows-linux-android"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "wgpu-hal",
 ]
@@ -4962,7 +4962,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-examples"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -4993,7 +4993,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -5047,7 +5047,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "anyhow",
  "bitflags 2.9.1",
@@ -5061,7 +5061,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-macros"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "heck 0.5.0",
  "quote",
@@ -5070,7 +5070,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-test"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "anyhow",
  "approx",
@@ -5111,7 +5111,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "bitflags 2.9.1",
  "bytemuck",
