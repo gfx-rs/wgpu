@@ -40,6 +40,10 @@ Bottom level categories:
 
 ## Unreleased
 
+### Bug Fixes
+
+- Fixed build error occurring when the `profiling` dependency is configured to have profiling active. By @kpreid in [#7916](https://github.com/gfx-rs/wgpu/pull/7916).
+
 ## v26.0.0 (2025-07-09)
 
 ### Major Features
