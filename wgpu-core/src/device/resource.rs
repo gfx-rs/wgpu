@@ -236,7 +236,7 @@ impl Device {
 
         let rt_uses = if desc
             .required_features
-            .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            .intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY)
         {
             wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
         } else {

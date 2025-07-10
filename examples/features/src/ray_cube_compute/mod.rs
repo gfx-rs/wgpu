@@ -145,7 +145,6 @@ impl crate::framework::Example for Example {
         wgpu::Features::TEXTURE_BINDING_ARRAY
             | wgpu::Features::VERTEX_WRITABLE_STORAGE
             | wgpu::Features::EXPERIMENTAL_RAY_QUERY
-            | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {

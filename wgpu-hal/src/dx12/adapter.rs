@@ -468,17 +468,15 @@ impl super::Adapter {
         }
         .is_ok();
 
-        // Since all features for raytracing pipeline (geometry index) and ray queries both come
-        // from here, there is no point in adding an extra call here given that there will be no
-        // feature using EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE if all these are not met.
         // Once ray tracing pipelines are supported they also will go here
+        let supports_ray_tracing = features5.RaytracingTier
+            == Direct3D12::D3D12_RAYTRACING_TIER_1_1
+            && shader_model >= naga::back::hlsl::ShaderModel::V6_5
+            && has_features5;
         features.set(
             wgt::Features::EXPERIMENTAL_RAY_QUERY
-                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
                 | wgt::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
-            features5.RaytracingTier == Direct3D12::D3D12_RAYTRACING_TIER_1_1
-                && shader_model >= naga::back::hlsl::ShaderModel::V6_5
-                && has_features5,
+            supports_ray_tracing,
         );
 
         let atomic_int64_on_typed_resource_supported = {
@@ -519,12 +517,11 @@ impl super::Adapter {
         // If we also support acceleration structures these are shared so we must halve it.
         // It's unlikely that this affects anything because most devices that support ray tracing
         // probably have a higher binding tier than one.
-        let max_sampled_textures_per_shader_stage =
-            if !features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
-                max_srv_count
-            } else {
-                max_srv_count / 2
-            };
+        let max_sampled_textures_per_shader_stage = if !supports_ray_tracing {
+            max_srv_count
+        } else {
+            max_srv_count / 2
+        };
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -616,30 +613,22 @@ impl super::Adapter {
                     // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
                     max_buffer_size: i32::MAX as u64,
                     max_non_sampler_bindings: 1_000_000,
-                    max_blas_primitive_count: if features
-                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-                    {
+                    max_blas_primitive_count: if supports_ray_tracing {
                         1 << 29 // 2^29
                     } else {
                         0
                     },
-                    max_blas_geometry_count: if features
-                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-                    {
+                    max_blas_geometry_count: if supports_ray_tracing {
                         1 << 24 // 2^24
                     } else {
                         0
                     },
-                    max_tlas_instance_count: if features
-                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-                    {
+                    max_tlas_instance_count: if supports_ray_tracing {
                         1 << 24 // 2^24
                     } else {
                         0
                     },
-                    max_acceleration_structures_per_shader_stage: if features
-                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-                    {
+                    max_acceleration_structures_per_shader_stage: if supports_ray_tracing {
                         max_srv_count / 2
                     } else {
                         0
