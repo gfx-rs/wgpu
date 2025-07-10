@@ -40,6 +40,10 @@ Bottom level categories:
 
 ## Unreleased
 
+### General
+
+- Merge `EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE` into `EXPERIMENTAL_RAY_QUERY`. By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
+
 ## v26.0.0 (2025-07-09)
 
 ### Major Features
