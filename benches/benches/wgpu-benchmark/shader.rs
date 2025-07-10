@@ -152,12 +152,22 @@ fn frontends(c: &mut Criterion) {
         let inputs_bin = inputs_wgsl
             .inner
             .iter()
-            .map(|input| bincode::serialize(&input.module.as_ref().unwrap()).unwrap())
+            .map(|input| {
+                bincode::serde::encode_to_vec(
+                    input.module.as_ref().unwrap(),
+                    bincode::config::standard(),
+                )
+                .unwrap()
+            })
             .collect::<Vec<_>>();
 
         b.iter(move || {
             for input in inputs_bin.iter() {
-                bincode::deserialize::<naga::Module>(input).unwrap();
+                bincode::serde::decode_from_slice::<naga::Module, _>(
+                    input,
+                    bincode::config::standard(),
+                )
+                .unwrap();
             }
         });
     });

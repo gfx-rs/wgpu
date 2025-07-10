@@ -26,7 +26,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 ] }
 
 [dependencies]
-bincode.workspace = true
+bincode = { workspace = true, features = ["serde"] }
 bytemuck.workspace = true
 criterion.workspace = true
 naga = { workspace = true, features = [
