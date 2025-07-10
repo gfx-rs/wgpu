@@ -40,7 +40,18 @@ Bottom level categories:
 
 ## Unreleased
 
-### `as_hal` calls now return guards instead of using callbacks.
+## v26.0.0 (2025-07-09)
+
+### Major Features
+
+#### New method `TextureView::texture`
+
+You can now call `texture_view.texture()` to get access to the texture that
+a given texture view points to.
+
+By @cwfitzgerald and @Wumpf in [#7907](https://github.com/gfx-rs/wgpu/pull/7907).
+
+#### `as_hal` calls now return guards instead of using callbacks.
 
 Previously, if you wanted to get access to the wgpu-hal or underlying api types, you would call `as_hal` and get the hal type as a callback. Now the function returns a guard which dereferences to the hal type.
 
@@ -49,16 +60,48 @@ Previously, if you wanted to get access to the wgpu-hal or underlying api types,
 + let hal_device: impl Deref<Item = hal::vulkan::Device> = device.as_hal::<hal::api::Vulkan>();
 ```
 
-### New Features
+By @cwfitzgerald in [#7863](https://github.com/gfx-rs/wgpu/pull/7863).
 
-#### New method `TextureView::texture`
+#### Enabling Vulkan Features/Extensions
 
-You can now call `texture_view.texture()` to get access to the texture that
-a given texture view points to.
+For those who are doing vulkan/wgpu interop or passthrough and need to enable features/extensions that wgpu does not expose, there is a new `wgpu_hal::vulkan::Adapter::open_with_callback` that allows the user to modify the pnext chains and extension lists populated by wgpu before we create a vulkan device. This should vastly simplify the experience, as previously you needed to create a device yourself.
 
-By @cwfitzgerald in [#7907](https://github.com/gfx-rs/wgpu/pull/7907).
+Underlying api interop is a quickly evolving space, so we welcome all feedback!
 
-#### Naga
+```rust
+type VkApi = wgpu::hal::api::Vulkan;
+let adapter: wgpu::Adapter = ...;
+
+let mut buffer_device_address_create_info = ash::vk::PhysicalDeviceBufferDeviceAddressFeatures { .. };
+let hal_device: wgpu::hal::OpenDevice<VkApi> = adapter
+    .as_hal::<VkApi>()
+    .unwrap()
+    .open_with_callback(
+        wgpu::Features::empty(),
+        &wgpu::MemoryHints::Performance,
+        Some(Box::new(|args| {
+            // Add the buffer device address extension.
+            args.extensions.push(ash::khr::buffer_device_address::NAME);
+            // Extend the create info with the buffer device address create info.
+            *args.create_info = args
+                .create_info
+                .push_next(&mut buffer_device_address_create_info);
+            // We also have access to the queue create infos if we need them.
+            let _ = args.queue_create_infos;
+        })),
+    )
+    .unwrap();
+
+let (device, queue) = adapter
+    .create_device_from_hal(hal_device, &wgpu::DeviceDescriptor { .. })
+    .unwrap();
+```
+
+More examples of this 
+
+By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829). 
+
+### Naga
 
 - Added `no_std` support with default features disabled. By @Bushrat011899 in [#7585](https://github.com/gfx-rs/wgpu/pull/7585).
 - [wgsl-in,ir] Add support for parsing rust-style doc comments via `naga::front::glsl::Frontend::new_with_options`. By @Vrixyz in [#6364](https://github.com/gfx-rs/wgpu/pull/6364).
@@ -67,9 +110,10 @@ By @cwfitzgerald in [#7907](https://github.com/gfx-rs/wgpu/pull/7907).
 - Add support for [quad operations](https://www.w3.org/TR/WGSL/#quad-builtin-functions) (requires `SUBGROUP` feature to be enabled). By @dzamkov and @valaphee in [#7683](https://github.com/gfx-rs/wgpu/pull/7683).
 - Add support for `atomicCompareExchangeWeak` in HLSL and GLSL backends. By @cryvosh in [#7658](https://github.com/gfx-rs/wgpu/pull/7658)
 
-#### General
+### General
 
 - Add support for astc-sliced-3d feature. By @mehmetoguzderin in [#7577](https://github.com/gfx-rs/wgpu/issues/7577)
+- Added `wgpu_hal::dx12::Adapter::as_raw()`. By @tronical in [##7852](https://github.com/gfx-rs/wgpu/pull/7852)
 - Add support for rendering to slices of 3D texture views and single layered 2D-Array texture views (this requires `VK_KHR_maintenance1` which should be widely available on newer drivers). By @teoxoy in [#7596](https://github.com/gfx-rs/wgpu/pull/7596)
 - Add extra acceleration structure vertex formats. By @Vecvec in [#7580](https://github.com/gfx-rs/wgpu/pull/7580).
 - Add acceleration structure limits. By @Vecvec in [#7845](https://github.com/gfx-rs/wgpu/pull/7845).
@@ -77,10 +121,6 @@ By @cwfitzgerald in [#7907](https://github.com/gfx-rs/wgpu/pull/7907).
 - Added `wgpu_types::error::{ErrorType, WebGpuError}` for classification of errors according to WebGPU's [`GPUError`]'s classification scheme, and implement `WebGpuError` for existing errors. This allows users of `wgpu-core` to offload error classification onto the WGPU ecosystem, rather than having to do it themselves without sufficient information. By @ErichDonGubler in [#6547](https://github.com/gfx-rs/wgpu/pull/6547).
 
 [`GPUError`]: https://www.w3.org/TR/webgpu/#gpuerror
-
-#### Vulkan
-
-- Add ways to initialise the instance and open the adapter with callbacks to add extensions. By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829). 
 
 ### Bug Fixes
 
@@ -108,7 +148,6 @@ By @cwfitzgerald in [#7907](https://github.com/gfx-rs/wgpu/pull/7907).
 #### DX12
 
 - Get `vertex_index` & `instance_index` builtins working for indirect draws. By @teoxoy in [#7535](https://github.com/gfx-rs/wgpu/pull/7535)
-- Added `wgpu_hal::dx12::Adapter::as_raw()`. By @tronical in [##7852](https://github.com/gfx-rs/wgpu/pull/7852)
 
 #### Vulkan
 
@@ -136,6 +175,13 @@ By @cwfitzgerald in [#7907](https://github.com/gfx-rs/wgpu/pull/7907).
 - The `destroy` functions for buffers and textures in wgpu-core are now infallible. Previously, they returned an error if called multiple times for the same object. This only affects the wgpu-core API; the wgpu API already allowed multiple `destroy` calls. By @andyleiserson in [#7686](https://github.com/gfx-rs/wgpu/pull/7686) and [#7720](https://github.com/gfx-rs/wgpu/pull/7720).
 - Remove `CommandEncoder::build_acceleration_structures_unsafe_tlas` in favour of `as_hal` and apply
   simplifications allowed by this. By @Vecvec in [#7513](https://github.com/gfx-rs/wgpu/pull/7513)
+- The type of the `size` parameter to `copy_buffer_to_buffer` has changed from `BufferAddress` to `impl Into<Option<BufferAddress>>`. This achieves the spec-defined behavior of the value being optional, while still accepting existing calls without changes. By @andyleiserson in [#7659](https://github.com/gfx-rs/wgpu/pull/7659).
+- To bring wgpu's error reporting into compliance with the WebGPU specification, the error type returned from some functions has changed, and some errors may be raised at a different time than they were previously.
+  - The error type returned by many methods on `CommandEncoder`, `RenderPassEncoder`, `ComputePassEncoder`, and `RenderBundleEncoder` has changed to `EncoderStateError` or `PassStateError`. These functions will return the `Ended` variant of these errors if called on an encoder that is no longer active. Reporting of all other errors is deferred until a call to `finish()`.
+  - Variants holding a `CommandEncoderError` in the error enums `ClearError`, `ComputePassErrorInner`, `QueryError`, and `RenderPassErrorInner` have been replaced with variants holding an `EncoderStateError`.
+  - The definition of `enum CommandEncoderError` has changed significantly, to reflect which errors can be raised by `CommandEncoder.finish()`. There are also some errors that no longer appear directly in `CommandEncoderError`, and instead appear nested within the `RenderPass` or `ComputePass` variants.
+  - `CopyError` has been removed. Errors that were previously a `CopyError` are now a `CommandEncoderError` returned by `finish()`. (The detailed reasons for copies to fail were and still are described by `TransferError`, which was previously a variant of `CopyError`, and is now a variant of `CommandEncoderError`).
+
 
 #### Naga
 
@@ -156,16 +202,6 @@ By @cwfitzgerald in [#7907](https://github.com/gfx-rs/wgpu/pull/7907).
 #### Vulkan
 
 - Use highest SPIR-V version supported by Vulkan API version. By @robamler in [#7595](https://github.com/gfx-rs/wgpu/pull/7595)
-
-#### WebGPU
-
-- The type of the `size` parameter to `copy_buffer_to_buffer` has changed from `BufferAddress` to `impl Into<Option<BufferAddress>>`. This achieves the spec-defined behavior of the value being optional, while still accepting existing calls without changes. By @andyleiserson in [#7659](https://github.com/gfx-rs/wgpu/pull/7659).
-- To bring wgpu's error reporting into compliance with the WebGPU specification, the error type returned from some functions has changed, and some errors may be raised at a different time than they were previously.
-  - The error type returned by many methods on `CommandEncoder`, `RenderPassEncoder`, `ComputePassEncoder`, and `RenderBundleEncoder` has changed to `EncoderStateError` or `PassStateError`. These functions will return the `Ended` variant of these errors if called on an encoder that is no longer active. Reporting of all other errors is deferred until a call to `finish()`.
-  - Variants holding a `CommandEncoderError` in the error enums `ClearError`, `ComputePassErrorInner`, `QueryError`, and `RenderPassErrorInner` have been replaced with variants holding an `EncoderStateError`.
-  - The definition of `enum CommandEncoderError` has changed significantly, to reflect which errors can be raised by `CommandEncoder.finish()`. There are also some errors that no longer appear directly in `CommandEncoderError`, and instead appear nested within the `RenderPass` or `ComputePass` variants.
-  - `CopyError` has been removed. Errors that were previously a `CopyError` are now a `CommandEncoderError` returned by `finish()`. (The detailed reasons for copies to fail were and still are described by `TransferError`, which was previously a variant of `CopyError`, and is now a variant of `CommandEncoderError`).
-
 
 #### HAL
 
