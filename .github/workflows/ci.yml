@@ -122,60 +122,60 @@ jobs:
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             tier: 1
             kind: native
 
           - name: Linux aarch64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
             tier: 1
             kind: native
 
           # Android
           - name: Android aarch64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: aarch64-linux-android
             tier: 2
             kind: native
 
           # Android
           - name: Android ARMv7
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: armv7-linux-androideabi
             tier: 2
             kind: wgpu-only
 
           # Android
           - name: Android x86_64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: x86_64-linux-android
             tier: 2
             kind: wgpu-only
 
           # OpenHarmony
           - name: OpenHarmony aarch64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: aarch64-unknown-linux-ohos
             tier: 2
             kind: native
 
           # WebGPU/WebGL
           - name: WebAssembly
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: wasm32-unknown-unknown
             tier: 2
             kind: web
 
           - name: Emscripten
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: wasm32-unknown-emscripten
             tier: 2
             kind: wgpu-only
 
           - name: WebAssembly Core 1.0
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: wasm32v1-none
             tier: 2
             kind: no_std
@@ -183,7 +183,7 @@ jobs:
           # 32-bit PowerPC Linux
           # Included to test support for `portable-atomic`
           - name: Linux ppc32
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: powerpc-unknown-linux-gnu
             tier: 2
             kind: wgpu-only
@@ -364,7 +364,7 @@ jobs:
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
 
     name: MSRV Check ${{ matrix.name }}
@@ -419,7 +419,7 @@ jobs:
     timeout-minutes: 10
 
     name: MSRV Minimal Versions
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       # Override flags to NOT include `-D warnings`, because warnings may be due to harmless problems in deps.
       # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
