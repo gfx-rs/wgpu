@@ -29,6 +29,9 @@ harness = true
 
 [features]
 webgl = ["wgpu/webgl"]
+# This feature is not actually used by this package, but it being present somewhere in the workspace
+# allows us to force the build to have profiling code enabled so we can test that configuration.
+test-build-with-profiling = ["profiling/type-check"]
 
 [dependencies]
 wgpu = { workspace = true, features = ["noop"] }

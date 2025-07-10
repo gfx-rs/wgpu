@@ -313,6 +313,10 @@ jobs:
           # Check with all features.
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features
 
+          # Check with all features and profiling macro code.
+          # If we don't check this then errors inside `profiling::scope!()` will not be caught.
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features --features test-build-with-profiling
+
           # build docs
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
