@@ -15,6 +15,7 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct TextureView {
     pub(crate) inner: dispatch::DispatchTextureView,
+    pub(crate) texture: Texture,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
@@ -22,6 +23,14 @@ static_assertions::assert_impl_all!(TextureView: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(TextureView => .inner);
 
 impl TextureView {
+    /// Returns the [`Texture`] that this `TextureView` refers to.
+    ///
+    /// All wgpu resources are refcounted, so you can own the returned [`Texture`]
+    /// by cloning it.
+    pub fn texture(&self) -> &Texture {
+        &self.texture
+    }
+
     /// Get the [`wgpu_hal`] texture view from this `TextureView`.
     ///
     /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],

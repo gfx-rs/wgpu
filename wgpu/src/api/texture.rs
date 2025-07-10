@@ -70,7 +70,10 @@ impl Texture {
     pub fn create_view(&self, desc: &TextureViewDescriptor<'_>) -> TextureView {
         let view = self.inner.create_view(desc);
 
-        TextureView { inner: view }
+        TextureView {
+            inner: view,
+            texture: self.clone(),
+        }
     }
 
     /// Destroy the associated native resources as soon as possible.
