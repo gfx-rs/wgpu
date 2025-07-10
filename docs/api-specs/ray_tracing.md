@@ -19,7 +19,7 @@ The documentation and specific details of the functions and structures provided
 can be found with their definitions.
 
 Acceleration structures do not have a separate feature, instead they are enabled by `Features::EXPERIMENTAL_RAY_QUERY`, unlike vulkan.
-When ray tracing pipelines are added that feature will also enable acceleration structures.
+When ray tracing pipelines are added, that feature will also enable acceleration structures.
 
 A [`Blas`] can be created with [`Device::create_blas`].
 A [`Tlas`] can be created with [`Device::create_tlas`].
