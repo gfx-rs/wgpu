@@ -15,7 +15,6 @@ use crate::{
     api_log, api_log_debug,
     device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
     global::Global,
-    hal_api::HalApi,
     id::{markers, AdapterId, DeviceId, QueueId, SurfaceId},
     lock::{rank, Mutex},
     present::Presentation,
@@ -117,7 +116,7 @@ impl Instance {
     }
 
     /// Helper for `Instance::new()`; attempts to add a single `wgpu-hal` backend to this instance.
-    fn try_add_hal<A: HalApi>(&mut self, _: A, instance_desc: &wgt::InstanceDescriptor) {
+    fn try_add_hal<A: hal::Api>(&mut self, _: A, instance_desc: &wgt::InstanceDescriptor) {
         // Whether or not the backend was requested, and whether or not it succeeds,
         // note that we *could* try it.
         self.supported_backends |= A::VARIANT.into();
@@ -151,7 +150,7 @@ impl Instance {
         }
     }
 
-    pub(crate) fn from_hal_instance<A: HalApi>(
+    pub(crate) fn from_hal_instance<A: hal::Api>(
         name: String,
         hal_instance: <A as hal::Api>::Instance,
     ) -> Self {
@@ -175,7 +174,7 @@ impl Instance {
     /// # Safety
     ///
     /// - The raw instance handle returned must not be manually destroyed.
-    pub unsafe fn as_hal<A: HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<&A::Instance> {
         self.raw(A::VARIANT).map(|instance| {
             instance
                 .as_any()

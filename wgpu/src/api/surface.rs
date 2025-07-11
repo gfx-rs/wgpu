@@ -182,7 +182,7 @@ impl Surface<'_> {
     ///
     /// [`A::Surface`]: hal::Api::Surface
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
     ) -> Option<impl Deref<Target = A::Surface> + WasmNotSendSync> {
         let core_surface = self.inner.as_core_opt()?;

@@ -305,7 +305,7 @@ impl Device {
     /// - `hal_texture` must be initialized
     #[cfg(wgpu_core)]
     #[must_use]
-    pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_texture_from_hal<A: hal::Api>(
         &self,
         hal_texture: A::Texture,
         desc: &TextureDescriptor<'_>,
@@ -345,7 +345,7 @@ impl Device {
     /// - `hal_buffer` must not have zero size
     #[cfg(wgpu_core)]
     #[must_use]
-    pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_buffer_from_hal<A: hal::Api>(
         &self,
         hal_buffer: A::Buffer,
         desc: &BufferDescriptor<'_>,
@@ -515,7 +515,7 @@ impl Device {
     ///
     /// [`A::Device`]: hal::Api::Device
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
     ) -> Option<impl Deref<Target = A::Device> + WasmNotSendSync> {
         let device = self.inner.as_core_opt()?;

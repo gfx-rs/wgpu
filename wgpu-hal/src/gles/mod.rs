@@ -141,6 +141,8 @@ const MAX_PUSH_CONSTANTS: usize = 64;
 const MAX_PUSH_CONSTANT_COMMANDS: usize = MAX_PUSH_CONSTANTS * crate::MAX_CONCURRENT_SHADER_STAGES;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Gl;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;

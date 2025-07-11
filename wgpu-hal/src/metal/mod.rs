@@ -47,6 +47,8 @@ pub struct Api;
 type ResourceIndex = u32;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Metal;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;

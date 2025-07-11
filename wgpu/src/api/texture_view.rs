@@ -70,9 +70,7 @@ impl TextureView {
     ///
     /// [`A::TextureView`]: hal::Api::TextureView
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
-        &self,
-    ) -> Option<impl Deref<Target = A::TextureView>> {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::TextureView>> {
         let view = self.inner.as_core_opt()?;
         unsafe { view.context.texture_view_as_hal::<A>(view) }
     }

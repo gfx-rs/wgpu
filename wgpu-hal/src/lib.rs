@@ -472,7 +472,9 @@ impl InstanceError {
     }
 }
 
-pub trait Api: Clone + fmt::Debug + Sized {
+pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
+    const VARIANT: wgt::Backend;
+
     type Instance: DynInstance + Instance<A = Self>;
     type Surface: DynSurface + Surface<A = Self>;
     type Adapter: DynAdapter + Adapter<A = Self>;

@@ -68,7 +68,7 @@ impl Tlas {
     ///
     /// [`A::AccelerationStructure`]: hal::Api::AccelerationStructure
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &mut self,
     ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
         let tlas = self.inner.as_core_opt()?;

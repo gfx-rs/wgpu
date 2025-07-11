@@ -325,7 +325,7 @@ impl Instance {
     /// - The `hal_instance` must be a valid and usable instance of the backend specified by `A`.
     /// - wgpu will act like it has complete ownership of this instance, and will destroy it
     ///   when the last reference to the instance, internal or external, is dropped.
-    pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal<A: hal::Api>(hal_instance: A::Instance) -> Self {
         Self {
             inner: unsafe {
                 crate::backend::ContextWgpuCore::from_hal_instance::<A>(hal_instance).into()
@@ -362,7 +362,7 @@ impl Instance {
     /// - All the safety requirements of wgpu-hal must be upheld.
     ///
     /// [`A::Instance`]: hal::Api::Instance
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<&A::Instance> {
         self.inner
             .as_core_opt()
             .and_then(|ctx| unsafe { ctx.instance_as_hal::<A>() })
@@ -382,7 +382,7 @@ impl Instance {
     /// # Safety
     ///
     /// `hal_adapter` must be created from this instance internal handle.
-    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_adapter_from_hal<A: hal::Api>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> Adapter {

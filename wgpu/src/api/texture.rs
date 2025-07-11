@@ -58,9 +58,7 @@ impl Texture {
     ///
     /// [`A::Texture`]: hal::Api::Texture
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
-        &self,
-    ) -> Option<impl Deref<Target = A::Texture>> {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::Texture>> {
         let texture = self.inner.as_core_opt()?;
         unsafe { texture.context.texture_as_hal::<A>(texture) }
     }

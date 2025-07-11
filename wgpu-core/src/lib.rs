@@ -72,7 +72,6 @@ mod conv;
 pub mod device;
 pub mod error;
 pub mod global;
-pub mod hal_api;
 mod hash_utils;
 pub mod hub;
 pub mod id;

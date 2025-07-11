@@ -73,7 +73,7 @@ impl Adapter {
     /// - `hal_device` must be created from this adapter internal handle.
     /// - `desc.features` must be a subset of `hal_device`'s supported features.
     #[cfg(wgpu_core)]
-    pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_device_from_hal<A: hal::Api>(
         &self,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor<'_>,
@@ -127,7 +127,7 @@ impl Adapter {
     ///
     /// [`A::Adapter`]: hal::Api::Adapter
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
     ) -> Option<impl Deref<Target = A::Adapter> + WasmNotSendSync> {
         let adapter = self.inner.as_core_opt()?;

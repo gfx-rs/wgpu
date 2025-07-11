@@ -258,11 +258,7 @@ impl CommandEncoder {
     /// - The wgpu command encoder must not be interacted with in any way while recording is
     ///   happening to the wgpu_hal or backend command encoder.
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal_mut<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
-        R,
-    >(
+    pub unsafe fn as_hal_mut<A: hal::Api, F: FnOnce(Option<&mut A::CommandEncoder>) -> R, R>(
         &mut self,
         hal_command_encoder_callback: F,
     ) -> R {

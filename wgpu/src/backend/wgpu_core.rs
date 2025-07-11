@@ -55,7 +55,7 @@ impl fmt::Debug for ContextWgpuCore {
 }
 
 impl ContextWgpuCore {
-    pub unsafe fn from_hal_instance<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal_instance<A: hal::Api>(hal_instance: A::Instance) -> Self {
         Self(unsafe {
             Arc::new(wgc::global::Global::from_hal_instance::<A>(
                 "wgpu",
@@ -67,7 +67,7 @@ impl ContextWgpuCore {
     /// # Safety
     ///
     /// - The raw instance handle returned must not be manually destroyed.
-    pub unsafe fn instance_as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn instance_as_hal<A: hal::Api>(&self) -> Option<&A::Instance> {
         unsafe { self.0.instance_as_hal::<A>() }
     }
 
@@ -80,28 +80,28 @@ impl ContextWgpuCore {
         self.0.enumerate_adapters(backends)
     }
 
-    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_adapter_from_hal<A: hal::Api>(
         &self,
         hal_adapter: hal::ExposedAdapter<A>,
     ) -> wgc::id::AdapterId {
         unsafe { self.0.create_adapter_from_hal(hal_adapter.into(), None) }
     }
 
-    pub unsafe fn adapter_as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn adapter_as_hal<A: hal::Api>(
         &self,
         adapter: &CoreAdapter,
     ) -> Option<impl Deref<Target = A::Adapter> + WasmNotSendSync> {
         unsafe { self.0.adapter_as_hal::<A>(adapter.id) }
     }
 
-    pub unsafe fn buffer_as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn buffer_as_hal<A: hal::Api>(
         &self,
         buffer: &CoreBuffer,
     ) -> Option<impl Deref<Target = A::Buffer>> {
         unsafe { self.0.buffer_as_hal::<A>(buffer.id) }
     }
 
-    pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_device_from_hal<A: hal::Api>(
         &self,
         adapter: &CoreAdapter,
         hal_device: hal::OpenDevice<A>,
@@ -140,7 +140,7 @@ impl ContextWgpuCore {
         Ok((device, queue))
     }
 
-    pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_texture_from_hal<A: hal::Api>(
         &self,
         hal_texture: A::Texture,
         device: &CoreDevice,
@@ -172,7 +172,7 @@ impl ContextWgpuCore {
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
     /// - `hal_buffer` must not have zero size.
-    pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_buffer_from_hal<A: hal::Api>(
         &self,
         hal_buffer: A::Buffer,
         device: &CoreDevice,
@@ -201,28 +201,28 @@ impl ContextWgpuCore {
         }
     }
 
-    pub unsafe fn device_as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn device_as_hal<A: hal::Api>(
         &self,
         device: &CoreDevice,
     ) -> Option<impl Deref<Target = A::Device>> {
         unsafe { self.0.device_as_hal::<A>(device.id) }
     }
 
-    pub unsafe fn surface_as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn surface_as_hal<A: hal::Api>(
         &self,
         surface: &CoreSurface,
     ) -> Option<impl Deref<Target = A::Surface>> {
         unsafe { self.0.surface_as_hal::<A>(surface.id) }
     }
 
-    pub unsafe fn texture_as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn texture_as_hal<A: hal::Api>(
         &self,
         texture: &CoreTexture,
     ) -> Option<impl Deref<Target = A::Texture>> {
         unsafe { self.0.texture_as_hal::<A>(texture.id) }
     }
 
-    pub unsafe fn texture_view_as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn texture_view_as_hal<A: hal::Api>(
         &self,
         texture_view: &CoreTextureView,
     ) -> Option<impl Deref<Target = A::TextureView>> {
@@ -231,7 +231,7 @@ impl ContextWgpuCore {
 
     /// This method will start the wgpu_core level command recording.
     pub unsafe fn command_encoder_as_hal_mut<
-        A: wgc::hal_api::HalApi,
+        A: hal::Api,
         F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
         R,
     >(
@@ -247,14 +247,14 @@ impl ContextWgpuCore {
         }
     }
 
-    pub unsafe fn blas_as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn blas_as_hal<A: hal::Api>(
         &self,
         blas: &CoreBlas,
     ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
         unsafe { self.0.blas_as_hal::<A>(blas.id) }
     }
 
-    pub unsafe fn tlas_as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn tlas_as_hal<A: hal::Api>(
         &self,
         tlas: &CoreTlas,
     ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
@@ -369,7 +369,7 @@ impl ContextWgpuCore {
         format!("Validation Error\n\nCaused by:\n{output}")
     }
 
-    pub unsafe fn queue_as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn queue_as_hal<A: hal::Api>(
         &self,
         queue: &CoreQueue,
     ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {

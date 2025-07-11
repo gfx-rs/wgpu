@@ -397,6 +397,8 @@ impl D3DBlob {
 pub struct Api;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Dx12;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;
