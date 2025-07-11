@@ -88,8 +88,13 @@ pub enum Action<'a> {
     },
     CreateShaderModulePassthrough {
         id: id::ShaderModuleId,
-        desc: crate::pipeline::ShaderModuleDescriptor<'a>,
         data: Vec<FileName>,
+
+        entry_point: String,
+        label: crate::Label<'a>,
+        num_workgroups: (u32, u32, u32),
+        reflection: Option<wgt::ShaderModuleReflection>,
+        runtime_checks: wgt::ShaderRuntimeChecks,
     },
     DestroyShaderModule(id::ShaderModuleId),
     CreateComputePipeline {

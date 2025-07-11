@@ -994,11 +994,13 @@ impl Global {
                 }
                 trace.add(trace::Action::CreateShaderModulePassthrough {
                     id: fid.id(),
-                    desc: pipeline::ShaderModuleDescriptor {
-                        label: desc.label.clone(),
-                        runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                    },
                     data: file_names,
+
+                    entry_point: desc.entry_point.clone(),
+                    label: desc.label.clone(),
+                    num_workgroups: desc.num_workgroups,
+                    reflection: desc.reflection.clone(),
+                    runtime_checks: desc.runtime_checks,
                 });
             };
 
