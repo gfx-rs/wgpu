@@ -80,7 +80,7 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         // clones may not have it. Eventually this can be removed.
         if shell
             .cmd("git")
-            .args(["config", "get", "remote.origin.fetch"])
+            .args(["config", "--get", "remote.origin.fetch"])
             .quiet()
             .ignore_stdout()
             .ignore_stderr()
@@ -91,7 +91,6 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
                 .cmd("git")
                 .args([
                     "config",
-                    "set",
                     "remote.origin.fetch",
                     "+refs/heads/gh-pages:refs/remotes/origin/gh-pages",
                 ])
