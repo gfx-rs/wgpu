@@ -76,8 +76,7 @@ impl Global {
             |cmd_buf_data| -> Result<(), BuildAccelerationStructureError> {
                 let device = &cmd_buf.device;
                 device.check_is_valid()?;
-                device
-                    .require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+                device.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
                 let mut build_command = AsBuild::default();
 
@@ -214,7 +213,7 @@ impl Global {
 
             let device = &cmd_buf.device;
             device.check_is_valid()?;
-            device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+            device.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
             let mut buf_storage = Vec::new();
             iter_blas(

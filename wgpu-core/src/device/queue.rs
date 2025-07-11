@@ -1691,9 +1691,7 @@ impl Global {
         // TODO: Tracing
 
         let error = 'error: {
-            match device.require_features(
-                wgpu_types::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
-            ) {
+            match device.require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY) {
                 Ok(_) => {}
                 Err(err) => break 'error err.into(),
             }

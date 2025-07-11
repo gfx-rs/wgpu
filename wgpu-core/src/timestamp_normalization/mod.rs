@@ -242,12 +242,16 @@ impl TimestampNormalizer {
         }
     }
 
-    pub fn create_normalization_bind_group(
+    /// Create a bind group for normalizing timestamps in `buffer`.
+    ///
+    /// This function is unsafe because it does not know that `buffer_size` is
+    /// the true size of the buffer.
+    pub unsafe fn create_normalization_bind_group(
         &self,
         device: &Device,
         buffer: &dyn hal::DynBuffer,
         buffer_label: Option<&str>,
-        buffer_size: u64,
+        buffer_size: wgt::BufferSize,
         buffer_usages: wgt::BufferUsages,
     ) -> Result<TimestampNormalizationBindGroup, DeviceError> {
         unsafe {
@@ -263,7 +267,7 @@ impl TimestampNormalizer {
             // at once to normalize the timestamps, we can't use it. We force the buffer to fail
             // to allocate. The lowest max binding size is 128MB, and query sets must be small
             // (no more than 4096), so this should never be hit in practice by sane programs.
-            if buffer_size > device.adapter.limits().max_storage_buffer_binding_size as u64 {
+            if buffer_size.get() > device.adapter.limits().max_storage_buffer_binding_size as u64 {
                 return Err(DeviceError::OutOfMemory);
             }
 
@@ -282,11 +286,7 @@ impl TimestampNormalizer {
                 .create_bind_group(&hal::BindGroupDescriptor {
                     label: Some(label),
                     layout: &*state.temporary_bind_group_layout,
-                    buffers: &[hal::BufferBinding {
-                        buffer,
-                        offset: 0,
-                        size: None,
-                    }],
+                    buffers: &[hal::BufferBinding::new_unchecked(buffer, 0, buffer_size)],
                     samplers: &[],
                     textures: &[],
                     acceleration_structures: &[],

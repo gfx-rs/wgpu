@@ -31,6 +31,7 @@ pub use timestamp_writes::PassTimestampWrites;
 
 use self::memory_init::CommandBufferTextureMemoryActions;
 
+use crate::binding_model::BindingError;
 use crate::command::transition_resources::TransitionResourcesError;
 use crate::device::queue::TempResource;
 use crate::device::{Device, DeviceError, MissingFeatures};
@@ -1058,6 +1059,18 @@ impl CommandEncoderError {
                 })
                 | Self::RenderPass(RenderPassError {
                     inner: RenderPassErrorInner::DestroyedResource(_),
+                    ..
+                })
+                | Self::RenderPass(RenderPassError {
+                    inner: RenderPassErrorInner::RenderCommand(
+                        RenderCommandError::DestroyedResource(_)
+                    ),
+                    ..
+                })
+                | Self::RenderPass(RenderPassError {
+                    inner: RenderPassErrorInner::RenderCommand(RenderCommandError::BindingError(
+                        BindingError::DestroyedResource(_)
+                    )),
                     ..
                 })
         )

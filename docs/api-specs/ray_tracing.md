@@ -3,7 +3,7 @@
 🧪Experimental🧪
 
 `wgpu` supports an experimental version of ray tracing which is subject to change. The extensions allow for acceleration structures to be created and built (with
-`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE` enabled) and interacted with in shaders. Currently `naga` only supports ray queries
+`Features::EXPERIMENTAL_RAY_QUERY` enabled) and interacted with in shaders. Currently `naga` only supports ray queries
 (accessible with `Features::EXPERIMENTAL_RAY_QUERY` enabled in wgpu).
 
 **Note**: The features documented here may have major bugs in them and are expected to be subject
@@ -17,6 +17,9 @@ an [introduction](https://developer.nvidia.com/blog/introduction-nvidia-rtx-dire
 
 The documentation and specific details of the functions and structures provided
 can be found with their definitions.
+
+Acceleration structures do not have a separate feature, instead they are enabled by `Features::EXPERIMENTAL_RAY_QUERY`, unlike vulkan.
+When ray tracing pipelines are added, that feature will also enable acceleration structures.
 
 A [`Blas`] can be created with [`Device::create_blas`].
 A [`Tlas`] can be created with [`Device::create_tlas`].

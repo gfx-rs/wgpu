@@ -297,7 +297,7 @@ use core::{
     borrow::Borrow,
     error::Error,
     fmt,
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroU64},
     ops::{Range, RangeInclusive},
     ptr::NonNull,
 };
@@ -1968,11 +1968,18 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 ///
 /// [`BindGroup`]: Api::BindGroup
 ///
+/// ## Construction
+///
+/// The recommended way to construct a `BufferBinding` is using the `binding`
+/// method on a wgpu-core `Buffer`, which will validate the binding size
+/// against the buffer size. A `new_unchecked` constructor is also provided for
+/// cases where direct construction is necessary.
+///
 /// ## Accessible region
 ///
 /// `wgpu_hal` guarantees that shaders compiled with
 /// [`ShaderModuleDescriptor::runtime_checks`] set to `true` cannot read or
-/// write data via this binding outside the *accessible region* of [`buffer`]:
+/// write data via this binding outside the *accessible region* of a buffer:
 ///
 /// - The accessible region starts at [`offset`].
 ///
@@ -1992,28 +1999,39 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 /// parts of which buffers shaders might observe. This optimization is only
 /// sound if shader access is bounds-checked.
 ///
-/// [`buffer`]: BufferBinding::buffer
+/// ## Zero-length bindings
+///
+/// Some back ends cannot tolerate zero-length regions; for example, see
+/// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
+/// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
+/// documentation for GLES's [glBindBufferRange][bbr]. This documentation
+/// previously stated that a `BufferBinding` must have `offset` strictly less
+/// than the size of the buffer, but this restriction was not honored elsewhere
+/// in the code, so has been removed. However, it remains the case that
+/// some backends do not support zero-length bindings, so additional
+/// logic is needed somewhere to handle this properly. See
+/// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+///
 /// [`offset`]: BufferBinding::offset
 /// [`size`]: BufferBinding::size
 /// [`Storage`]: wgt::BufferBindingType::Storage
 /// [`Uniform`]: wgt::BufferBindingType::Uniform
+/// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
+/// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
+/// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
 /// [woob]: https://gpuweb.github.io/gpuweb/wgsl/#out-of-bounds-access-sec
 #[derive(Debug)]
 pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     /// The buffer being bound.
-    pub buffer: &'a B,
+    ///
+    /// This is not fully `pub` to prevent direct construction of
+    /// `BufferBinding`s, while still allowing public read access to the `offset`
+    /// and `size` properties.
+    pub(crate) buffer: &'a B,
 
     /// The offset at which the bound region starts.
     ///
-    /// This must be less than the size of the buffer. Some back ends
-    /// cannot tolerate zero-length regions; for example, see
-    /// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
-    /// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
-    /// documentation for GLES's [glBindBufferRange][bbr].
-    ///
-    /// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
-    /// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
-    /// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
+    /// This must be less or equal to the size of the buffer.
     pub offset: wgt::BufferAddress,
 
     /// The size of the region bound, in bytes.
@@ -2024,12 +2042,71 @@ pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     pub size: Option<wgt::BufferSize>,
 }
 
-impl<'a, T: DynBuffer + ?Sized> Clone for BufferBinding<'a, T> {
+// We must implement this manually because `B` is not necessarily `Clone`.
+impl<B: DynBuffer + ?Sized> Clone for BufferBinding<'_, B> {
     fn clone(&self) -> Self {
         BufferBinding {
             buffer: self.buffer,
             offset: self.offset,
             size: self.size,
+        }
+    }
+}
+
+/// Temporary convenience trait to let us call `.get()` on `u64`s in code that
+/// really wants to be using `NonZeroU64`.
+/// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove this
+pub trait ShouldBeNonZeroExt {
+    fn get(&self) -> u64;
+}
+
+impl ShouldBeNonZeroExt for NonZeroU64 {
+    fn get(&self) -> u64 {
+        NonZeroU64::get(*self)
+    }
+}
+
+impl ShouldBeNonZeroExt for u64 {
+    fn get(&self) -> u64 {
+        *self
+    }
+}
+
+impl ShouldBeNonZeroExt for Option<NonZeroU64> {
+    fn get(&self) -> u64 {
+        match *self {
+            Some(non_zero) => non_zero.get(),
+            None => 0,
+        }
+    }
+}
+
+impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
+    /// Construct a `BufferBinding` with the given contents.
+    ///
+    /// When possible, use the `binding` method on a wgpu-core `Buffer` instead
+    /// of this method. `Buffer::binding` validates the size of the binding
+    /// against the size of the buffer.
+    ///
+    /// It is more difficult to provide a validating constructor here, due to
+    /// not having direct access to the size of a `DynBuffer`.
+    ///
+    /// SAFETY: The caller is responsible for ensuring that a binding of `size`
+    /// bytes starting at `offset` is contained within the buffer.
+    ///
+    /// The `S` type parameter is a temporary convenience to allow callers to
+    /// pass a zero size. When the zero-size binding issue is resolved, the
+    /// argument should just match the type of the member.
+    /// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove the parameter
+    pub fn new_unchecked<S: Into<Option<NonZeroU64>>>(
+        buffer: &'a B,
+        offset: wgt::BufferAddress,
+        size: S,
+    ) -> Self {
+        Self {
+            buffer,
+            offset,
+            size: size.into(),
         }
     }
 }
