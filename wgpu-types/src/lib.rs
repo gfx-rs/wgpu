@@ -97,10 +97,18 @@ pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
 /// [`get_mapped_range()`]: ../wgpu/struct.Buffer.html#method.get_mapped_range
 pub const MAP_ALIGNMENT: BufferAddress = 8;
 
+/// [Vertex buffer offsets] and [strides] have to be a multiple of this number.
+///
+/// [Vertex buffer offsets]: ../wgpu/util/trait.RenderEncoder.html#tymethod.set_vertex_buffer
+/// [strides]: ../wgpu/struct.VertexBufferLayout.html#structfield.array_stride
+pub const VERTEX_ALIGNMENT: BufferAddress = 4;
+
 /// [Vertex buffer strides] have to be a multiple of this number.
 ///
 /// [Vertex buffer strides]: ../wgpu/struct.VertexBufferLayout.html#structfield.array_stride
+#[deprecated(note = "Use `VERTEX_ALIGNMENT` instead", since = "27.0.0")]
 pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
+
 /// Ranges of [writes to push constant storage] must be at least this aligned.
 ///
 /// [writes to push constant storage]: ../wgpu/struct.RenderPass.html#method.set_push_constants

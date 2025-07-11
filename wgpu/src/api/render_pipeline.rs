@@ -76,7 +76,7 @@ impl RenderPipeline {
 pub struct VertexBufferLayout<'a> {
     /// The stride, in bytes, between elements of this buffer (between vertices).
     ///
-    /// This must be a multiple of [`VERTEX_STRIDE_ALIGNMENT`].
+    /// This must be a multiple of [`VERTEX_ALIGNMENT`].
     pub array_stride: BufferAddress,
     /// How often this vertex buffer is "stepped" forward.
     pub step_mode: VertexStepMode,

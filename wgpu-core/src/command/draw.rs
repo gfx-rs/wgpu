@@ -73,6 +73,12 @@ pub enum RenderCommandError {
     BindGroupIndexOutOfRange(#[from] pass::BindGroupIndexOutOfRange),
     #[error("Vertex buffer index {index} is greater than the device's requested `max_vertex_buffers` limit {max}")]
     VertexBufferIndexOutOfRange { index: u32, max: u32 },
+    #[error(
+        "Offset {offset} for vertex buffer in slot {slot} is not a multiple of `VERTEX_ALIGNMENT`"
+    )]
+    UnalignedVertexBuffer { slot: u32, offset: u64 },
+    #[error("Offset {offset} for index buffer is not a multiple of {alignment}")]
+    UnalignedIndexBuffer { offset: u64, alignment: usize },
     #[error("Render pipeline targets are incompatible with render pass")]
     IncompatiblePipelineTargets(#[from] crate::device::RenderPassCompatibilityError),
     #[error("{0} writes to depth, while the pass has read-only depth access")]
@@ -116,6 +122,8 @@ impl WebGpuError for RenderCommandError {
 
             Self::BindGroupIndexOutOfRange { .. }
             | Self::VertexBufferIndexOutOfRange { .. }
+            | Self::UnalignedIndexBuffer { .. }
+            | Self::UnalignedVertexBuffer { .. }
             | Self::IncompatibleDepthAccess(..)
             | Self::IncompatibleStencilAccess(..)
             | Self::InvalidViewportRectSize { .. }
