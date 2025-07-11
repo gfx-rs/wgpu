@@ -7,9 +7,9 @@ use wgt::{
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, str};
 
-use crate::binding_model::BindError;
 use crate::command::{pass, EncoderStateError, PassStateError, TimestampWritesError};
 use crate::resource::DestroyedResourceError;
+use crate::{binding_model::BindError, resource::RawResourceAccess};
 use crate::{
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
     command::{
@@ -492,7 +492,7 @@ impl Global {
         let pass_scope = PassErrorScope::Pass;
         profiling::scope!(
             "CommandEncoder::run_compute_pass {}",
-            base.label.as_deref().unwrap_or("")
+            pass.base.label.as_deref().unwrap_or("")
         );
 
         let cmd_buf = pass.parent.take().ok_or(EncoderStateError::Ended)?;

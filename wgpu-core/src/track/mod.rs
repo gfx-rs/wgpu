@@ -106,7 +106,7 @@ use crate::{
     binding_model, command,
     lock::{rank, Mutex},
     pipeline,
-    resource::{self, Labeled, ResourceErrorIdent},
+    resource::{self, Labeled, RawResourceAccess, ResourceErrorIdent},
     snatch::SnatchGuard,
     track::blas::BlasTracker,
 };

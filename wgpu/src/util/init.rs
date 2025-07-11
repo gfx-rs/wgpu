@@ -5,20 +5,23 @@ use crate::Backends;
 
 /// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable.
 #[cfg(wgpu_core)]
+#[cfg_attr(not(std), expect(unused_variables, unreachable_code))]
 pub fn initialize_adapter_from_env(
     instance: &Instance,
     compatible_surface: Option<&Surface<'_>>,
 ) -> Result<Adapter, wgt::RequestAdapterError> {
-    cfg_if::cfg_if! {
-        if #[cfg(std)] {
-            let desired_adapter_name = std::env::var("WGPU_ADAPTER_NAME")
-                .as_deref()
-                .map(str::to_lowercase)
-                .map_err(|_| wgt::RequestAdapterError::EnvNotSet)?;
-        } else {
-            return Err(wgt::RequestAdapterError::EnvNotSet);
+    let desired_adapter_name: alloc::string::String = {
+        cfg_if::cfg_if! {
+            if #[cfg(std)] {
+                std::env::var("WGPU_ADAPTER_NAME")
+                    .as_deref()
+                    .map(str::to_lowercase)
+                    .map_err(|_| wgt::RequestAdapterError::EnvNotSet)?
+            } else {
+                return Err(wgt::RequestAdapterError::EnvNotSet)
+            }
         }
-    }
+    };
 
     let adapters = instance.enumerate_adapters(crate::Backends::all());
 

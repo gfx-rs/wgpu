@@ -14,7 +14,6 @@ use wgt::{
 };
 
 use super::{life::LifetimeTracker, Device};
-use crate::device::resource::CommandIndices;
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::{
@@ -33,8 +32,8 @@ use crate::{
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
     resource::{
-        AccelerationStructure, Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState,
-        DestroyedBuffer, DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
+        Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState, DestroyedBuffer,
+        DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
         InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
         TextureInner, Trackable, TrackingData,
     },
@@ -44,6 +43,7 @@ use crate::{
     track::{self, Tracker, TrackerIndex},
     FastHashMap, SubmissionIndex,
 };
+use crate::{device::resource::CommandIndices, resource::RawResourceAccess};
 
 pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
@@ -1691,9 +1691,7 @@ impl Global {
         // TODO: Tracing
 
         let error = 'error: {
-            match device.require_features(
-                wgpu_types::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
-            ) {
+            match device.require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY) {
                 Ok(_) => {}
                 Err(err) => break 'error err.into(),
             }

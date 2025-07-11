@@ -632,9 +632,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.2.27"
+version = "1.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d487aa071b5f64da6f19a3e848e3578944b726ee5a4854b82172f02aa876bfdc"
+checksum = "5c1599538de2394445747c8cf7935946e3cc27e9625f889d979bfb2aaf569362"
 dependencies = [
  "jobserver",
  "libc",
@@ -799,15 +799,15 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.15.11"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "054ccb5b10f9f2cbf51eb355ca1d05c2d279ce1804688d0db74b4733a5aeafd8"
+checksum = "2e09ced7ebbccb63b4c65413d821f2e00ce54c5ca4514ddc6b3c892fdbcbc69d"
 dependencies = [
  "encode_unicode",
  "libc",
  "once_cell",
  "unicode-width",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -994,7 +994,7 @@ checksum = "4f211af61d8efdd104f96e57adf5e426ba1bc3ed7a4ead616e15e5881fd79c4d"
 
 [[package]]
 name = "cts_runner"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "deno_console",
  "deno_core",
@@ -1925,7 +1925,7 @@ checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
 
 [[package]]
 name = "hlsl-snapshots"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "anyhow",
  "nanoserde",
@@ -2090,15 +2090,26 @@ dependencies = [
 
 [[package]]
 name = "indicatif"
-version = "0.17.11"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "183b3088984b400f4cfac3620d5e076c84da5364016b4f49473de574b2586235"
+checksum = "70a646d946d06bedbbc4cac4c218acf4bbf2d87757a784857025f4d447e4e1cd"
 dependencies = [
  "console",
- "number_prefix",
  "portable-atomic",
  "unicode-width",
+ "unit-prefix",
  "web-time 1.1.0",
+]
+
+[[package]]
+name = "io-uring"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b86e202f00093dcba4275d4636b93ef9dd75d025ae560d2521b45ea28ab49013"
+dependencies = [
+ "bitflags 2.9.1",
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]
@@ -2320,7 +2331,7 @@ checksum = "b4ce301924b7887e9d637144fdade93f9dfff9b60981d4ac161db09720d39aa5"
 
 [[package]]
 name = "lock-analyzer"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "anyhow",
  "ron",
@@ -2467,7 +2478,7 @@ dependencies = [
 
 [[package]]
 name = "naga"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "arbitrary",
  "arrayvec",
@@ -2504,7 +2515,7 @@ dependencies = [
 
 [[package]]
 name = "naga-cli"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "anyhow",
  "argh",
@@ -2517,7 +2528,7 @@ dependencies = [
 
 [[package]]
 name = "naga-fuzz"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "arbitrary",
  "cfg_aliases 0.2.1",
@@ -2719,12 +2730,6 @@ dependencies = [
  "quote",
  "syn",
 ]
-
-[[package]]
-name = "number_prefix"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "nv-flip"
@@ -3170,7 +3175,7 @@ checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
 name = "player"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "env_logger",
  "log",
@@ -4188,17 +4193,19 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.45.1"
+version = "1.46.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75ef51a33ef1da925cea3e4eb122833cb377c61439ca401b770f54902b806779"
+checksum = "0cc3a2344dafbe23a245241fe8b09735b521110d30fcefbbd5feb1797ca35d17"
 dependencies = [
  "backtrace",
  "bytes",
+ "io-uring",
  "libc",
  "mio",
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
+ "slab",
  "socket2",
  "tokio-macros",
  "windows-sys 0.52.0",
@@ -4423,6 +4430,12 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
+
+[[package]]
+name = "unit-prefix"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "323402cff2dd658f39ca17c789b502021b3f18707c91cdf22e3838e1b4023817"
 
 [[package]]
 name = "url"
@@ -4816,7 +4829,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
@@ -4844,7 +4857,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-benchmark"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -4860,7 +4873,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "arrayvec",
  "bit-set 0.8.0",
@@ -4893,28 +4906,28 @@ dependencies = [
 
 [[package]]
 name = "wgpu-core-deps-apple"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-emscripten"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-wasm"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "wgpu-hal",
 ]
 
 [[package]]
 name = "wgpu-core-deps-windows-linux-android"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "wgpu-hal",
 ]
@@ -4949,7 +4962,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-examples"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -4980,7 +4993,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "android_system_properties",
  "arrayvec",
@@ -5034,7 +5047,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-info"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "anyhow",
  "bitflags 2.9.1",
@@ -5048,7 +5061,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-macros"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "heck 0.5.0",
  "quote",
@@ -5057,7 +5070,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-test"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "anyhow",
  "approx",
@@ -5098,7 +5111,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-types"
-version = "25.0.0"
+version = "26.0.0"
 dependencies = [
  "bitflags 2.9.1",
  "bytemuck",

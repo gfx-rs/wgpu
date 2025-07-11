@@ -392,6 +392,17 @@ impl RenderCommand {
 }
 
 /// Equivalent to `RenderCommand` with the Ids resolved into resource Arcs.
+///
+/// In a render pass, commands are stored in this format between when they are
+/// added to the pass, and when the pass is `end()`ed and the commands are
+/// replayed to the HAL encoder. Validation occurs when the pass is ended, which
+/// means that parameters stored in an `ArcRenderCommand` for a pass operation
+/// have generally not been validated.
+///
+/// In a render bundle, commands are stored in this format between when the bundle
+/// is `finish()`ed and when the bundle is executed. Validation occurs when the
+/// bundle is finished, which means that parameters stored in an `ArcRenderCommand`
+/// for a render bundle operation must have been validated.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 pub enum ArcRenderCommand {

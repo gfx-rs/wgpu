@@ -313,6 +313,10 @@ jobs:
           # Check with all features.
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features
 
+          # Check with all features and profiling macro code.
+          # If we don't check this then errors inside `profiling::scope!()` will not be caught.
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features --features test-build-with-profiling
+
           # build docs
           cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
@@ -713,7 +717,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.33.1
+        uses: crate-ci/typos@v1.34.0
 
   check-cts-runner:
     # runtime is normally 2 minutes

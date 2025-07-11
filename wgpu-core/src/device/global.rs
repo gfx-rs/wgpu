@@ -207,6 +207,8 @@ impl Global {
         offset: BufferAddress,
         data: &[u8],
     ) -> BufferAccessResult {
+        use crate::resource::RawResourceAccess;
+
         let hub = &self.hub;
 
         let buffer = hub.buffers.get(buffer_id).get()?;
@@ -383,6 +385,7 @@ impl Global {
     /// - `hal_buffer` must be created from `device_id` corresponding raw handle.
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
+    /// - `hal_buffer` must not have zero size.
     pub unsafe fn create_buffer_from_hal<A: HalApi>(
         &self,
         hal_buffer: A::Buffer,
@@ -404,7 +407,7 @@ impl Global {
             trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
         }
 
-        let (buffer, err) = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
+        let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), desc) };
 
         let id = fid.assign(buffer);
         api_log!("Device::create_buffer -> {id:?}");

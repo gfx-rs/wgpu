@@ -608,19 +608,19 @@ pub struct Limits {
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
     /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
-    /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
     /// is enabled.
     pub max_blas_primitive_count: u32,
     /// The maximum number of geometry descriptors a BLAS is allowed to have. Requesting
-    /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
     /// is enabled.
     pub max_blas_geometry_count: u32,
     /// The maximum number of instances a TLAS is allowed to have. Requesting more than 0 during
-    /// device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
     /// is enabled.
     pub max_tlas_instance_count: u32,
     /// The maximum number of acceleration structures allowed to be used in a shader stage.
-    /// Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
     /// is enabled.
     pub max_acceleration_structures_per_shader_stage: u32,
 }
@@ -895,7 +895,7 @@ impl Limits {
         }
     }
 
-    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// The minimum guaranteed limits for acceleration structures if you enable [`Features::EXPERIMENTAL_RAY_QUERY`]
     #[must_use]
     pub const fn using_minimum_supported_acceleration_structure_values(self) -> Self {
         Self {
@@ -7506,7 +7506,7 @@ impl Default for ShaderRuntimeChecks {
 /// Descriptor for all size defining attributes of a single triangle geometry inside a bottom level acceleration structure.
 pub struct BlasTriangleGeometrySizeDescriptor {
     /// Format of a vertex position, must be [`VertexFormat::Float32x3`]
-    /// with just [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]
+    /// with just [`Features::EXPERIMENTAL_RAY_QUERY`]
     /// but [`Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS`] adds more.
     pub vertex_format: VertexFormat,
     /// Number of vertices.

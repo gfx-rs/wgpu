@@ -15,10 +15,7 @@ static ACCESS_ALL_STRUCT_MEMBERS: GpuTestConfiguration = GpuTestConfiguration::n
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(
-                wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-                    | wgpu::Features::EXPERIMENTAL_RAY_QUERY,
-            ),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
     )
     .run_sync(access_all_struct_members);
 

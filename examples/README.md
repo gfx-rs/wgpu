@@ -1,6 +1,6 @@
 > [!NOTE]  
 > These are the examples for the development version of wgpu. If you want to see the examples for the latest crates.io release
-> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v25/examples#readme).
+> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v26/examples#readme).
 
 # Examples
 
@@ -23,7 +23,7 @@ be cloned out of the repository to serve as a starting point for your own projec
 You can also use [`cargo-generate`](https://github.com/cargo-generate/cargo-generate) to easily use these as a basis for your own projects.
 
 ```sh
-cargo generate gfx-rs/wgpu --branch v25
+cargo generate gfx-rs/wgpu --branch v26
 ```
 
 ## Framework Examples

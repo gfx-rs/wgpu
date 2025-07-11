@@ -4,7 +4,8 @@ use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
-    BufferAddress, BufferUsages, Extent3d, TextureSelector, TextureUsages,
+    BufferAddress, BufferTextureCopyInfoError, BufferUsages, Extent3d, TextureSelector,
+    TextureUsages,
 };
 
 #[cfg(feature = "trace")]
@@ -21,8 +22,8 @@ use crate::{
         TextureInitTrackerAction,
     },
     resource::{
-        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, Texture,
-        TextureErrorDimension,
+        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, RawResourceAccess,
+        Texture, TextureErrorDimension,
     },
     snatch::SnatchGuard,
 };
@@ -95,6 +96,8 @@ pub enum TransferError {
     InvalidBytesPerRow,
     #[error("Number of rows per image is invalid")]
     InvalidRowsPerImage,
+    #[error("Overflow while computing the size of the copy")]
+    SizeOverflow,
     #[error("Copy source aspects must refer to all aspects of the source texture format")]
     CopySrcMissingAspects,
     #[error(
@@ -164,6 +167,7 @@ impl WebGpuError for TransferError {
             | Self::UnspecifiedRowsPerImage
             | Self::InvalidBytesPerRow
             | Self::InvalidRowsPerImage
+            | Self::SizeOverflow
             | Self::CopySrcMissingAspects
             | Self::CopyDstMissingAspects
             | Self::CopyAspectNotOne
@@ -178,6 +182,18 @@ impl WebGpuError for TransferError {
             | Self::SameSourceDestinationBuffer => return ErrorType::Validation,
         };
         e.webgpu_error_type()
+    }
+}
+
+impl From<BufferTextureCopyInfoError> for TransferError {
+    fn from(value: BufferTextureCopyInfoError) -> Self {
+        match value {
+            BufferTextureCopyInfoError::InvalidBytesPerRow => Self::InvalidBytesPerRow,
+            BufferTextureCopyInfoError::InvalidRowsPerImage => Self::InvalidRowsPerImage,
+            BufferTextureCopyInfoError::ImageStrideOverflow
+            | BufferTextureCopyInfoError::ImageBytesOverflow(_)
+            | BufferTextureCopyInfoError::ArraySizeOverflow(_) => Self::SizeOverflow,
+        }
     }
 }
 
@@ -254,7 +270,7 @@ pub(crate) fn validate_linear_texture_data(
         width_blocks: _,
         height_blocks,
 
-        row_bytes_dense,
+        row_bytes_dense: _,
         row_stride_bytes,
 
         image_stride_rows: _,
@@ -264,7 +280,7 @@ pub(crate) fn validate_linear_texture_data(
         image_bytes_dense: _,
 
         bytes_in_copy,
-    } = layout.get_buffer_texture_copy_info(format, aspect, copy_size);
+    } = layout.get_buffer_texture_copy_info(format, aspect, copy_size)?;
 
     if copy_width % block_width_texels != 0 {
         return Err(TransferError::UnalignedCopyWidth);
@@ -276,21 +292,15 @@ pub(crate) fn validate_linear_texture_data(
     let requires_multiple_rows = depth_or_array_layers > 1 || height_blocks > 1;
     let requires_multiple_images = depth_or_array_layers > 1;
 
-    if let Some(raw_bytes_per_row) = layout.bytes_per_row {
-        let raw_bytes_per_row = raw_bytes_per_row as BufferAddress;
-        if raw_bytes_per_row < row_bytes_dense {
-            return Err(TransferError::InvalidBytesPerRow);
-        }
-    } else if requires_multiple_rows {
+    // `get_buffer_texture_copy_info()` already proceeded with defaults if these
+    // were not specified, and ensured that the values satisfy the minima if
+    // they were, but now we enforce the WebGPU requirement that they be
+    // specified any time they apply.
+    if layout.bytes_per_row.is_none() && requires_multiple_rows {
         return Err(TransferError::UnspecifiedBytesPerRow);
     }
 
-    if let Some(raw_rows_per_image) = layout.rows_per_image {
-        let raw_rows_per_image = raw_rows_per_image as BufferAddress;
-        if raw_rows_per_image < height_blocks {
-            return Err(TransferError::InvalidRowsPerImage);
-        }
-    } else if requires_multiple_images {
+    if layout.rows_per_image.is_none() && requires_multiple_images {
         return Err(TransferError::UnspecifiedRowsPerImage);
     };
 
