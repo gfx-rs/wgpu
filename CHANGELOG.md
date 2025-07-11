@@ -53,6 +53,9 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
+### General
+- Added `Features::EXPERIMENTAL_PRECOMPILED_SHADERS`, replacing existing passthrough types with a unified `CreateShaderModuleDescriptorPassthrough` which allows passing multiple shader codes for different backends. By @SupaMaggie70Incorporated in [#7834](https://github.com/gfx-rs/wgpu/pull/7834)
+
 ## v26.0.1 (2025-07-10)
 
 ### Bug Fixes

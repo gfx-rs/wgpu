@@ -1339,18 +1339,15 @@ impl crate::Device for super::Device {
 
         Ok(super::ShaderModule {
             source: match shader {
-                crate::ShaderInput::SpirV(_) => {
-                    panic!("`Features::SPIRV_SHADER_PASSTHROUGH` is not enabled")
-                }
-                crate::ShaderInput::Msl { .. } => {
-                    panic!("`Features::MSL_SHADER_PASSTHROUGH` is not enabled")
-                }
                 crate::ShaderInput::Naga(naga) => naga,
-                crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
-                    panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
-                }
                 // The backend doesn't yet expose this feature so it should be fine
                 crate::ShaderInput::Glsl { .. } => unimplemented!(),
+                crate::ShaderInput::SpirV(_)
+                | crate::ShaderInput::Msl { .. }
+                | crate::ShaderInput::Dxil { .. }
+                | crate::ShaderInput::Hlsl { .. } => {
+                    unreachable!()
+                }
             },
             label: desc.label.map(|str| str.to_string()),
             id: self.shared.next_shader_id.fetch_add(1, Ordering::Relaxed),

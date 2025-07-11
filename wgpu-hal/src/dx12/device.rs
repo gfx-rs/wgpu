@@ -1700,15 +1700,6 @@ impl crate::Device for super::Device {
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
-            crate::ShaderInput::SpirV(_) => {
-                panic!("Features::SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
-            }
-            crate::ShaderInput::Msl { .. } => {
-                panic!("Features::MSL_SHADER_PASSTHROUGH is not enabled for this backend")
-            }
-            crate::ShaderInput::Glsl { .. } => {
-                panic!("Features::GLSL_SHADER_PASSTHROUGH is not enabled for this backend")
-            }
             crate::ShaderInput::Dxil {
                 shader,
                 entry_point,
@@ -1735,6 +1726,11 @@ impl crate::Device for super::Device {
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
+            crate::ShaderInput::SpirV(_)
+            | crate::ShaderInput::Msl { .. }
+            | crate::ShaderInput::Glsl { .. } => {
+                unreachable!()
+            }
         }
     }
     unsafe fn destroy_shader_module(&self, _module: super::ShaderModule) {

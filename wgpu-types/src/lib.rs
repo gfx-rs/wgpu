@@ -7760,6 +7760,7 @@ pub enum DeviceLostReason {
 /// Descriptor for a shader module given by any of several sources, with optional reflection information.
 /// All shader types that may be used by the backend must be `Some`, otherwise usage is undefined behavior
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
     /// Entrypoint. Unused for Spir-V.
     pub entry_point: String,
@@ -7838,4 +7839,5 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
 
 /// Reflection information for a shader compiled with `naga`
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ShaderModuleReflection {}

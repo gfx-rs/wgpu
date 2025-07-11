@@ -86,6 +86,11 @@ pub enum Action<'a> {
         desc: crate::pipeline::ShaderModuleDescriptor<'a>,
         data: FileName,
     },
+    CreateShaderModulePassthrough {
+        id: id::ShaderModuleId,
+        desc: crate::pipeline::ShaderModuleDescriptor<'a>,
+        data: Vec<FileName>,
+    },
     DestroyShaderModule(id::ShaderModuleId),
     CreateComputePipeline {
         id: id::ComputePipelineId,

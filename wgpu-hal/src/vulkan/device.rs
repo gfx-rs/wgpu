@@ -1910,16 +1910,11 @@ impl crate::Device for super::Device {
                     .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?,
                 )
             }
-            crate::ShaderInput::Msl { .. } => {
-                panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
-            }
-            crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
-                panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled for this backend")
-            }
-            crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
-            crate::ShaderInput::Glsl { .. } => {
-                panic!("Features::GLSL_SHADER_PASSTHROUGH is not enabled for this backend")
-            }
+            crate::ShaderInput::Msl { .. }
+            | crate::ShaderInput::Dxil { .. }
+            | crate::ShaderInput::Hlsl { .. }
+            | crate::ShaderInput::SpirV(..)
+            | crate::ShaderInput::Glsl { .. } => unreachable!(),
         };
 
         let raw = self.create_shader_module_impl(&spv)?;
