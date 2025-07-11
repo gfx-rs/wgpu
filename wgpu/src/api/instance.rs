@@ -53,37 +53,6 @@ impl Default for Instance {
 }
 
 impl Instance {
-    /// Returns which backends can be picked for the current build configuration.
-    ///
-    /// The returned set depends on a combination of target platform and enabled features.
-    /// This does *not* do any runtime checks and is exclusively based on compile time information.
-    ///
-    /// `InstanceDescriptor::backends` does not need to be a subset of this,
-    /// but any backend that is not in this set, will not be picked.
-    pub const fn enabled_backend_features() -> Backends {
-        let mut backends = Backends::empty();
-        // `.set` and `|=` don't work in a `const` context.
-        if cfg!(noop) {
-            backends = backends.union(Backends::NOOP);
-        }
-        if cfg!(vulkan) {
-            backends = backends.union(Backends::VULKAN);
-        }
-        if cfg!(any(gles, webgl)) {
-            backends = backends.union(Backends::GL);
-        }
-        if cfg!(metal) {
-            backends = backends.union(Backends::METAL);
-        }
-        if cfg!(dx12) {
-            backends = backends.union(Backends::DX12);
-        }
-        if cfg!(webgpu) {
-            backends = backends.union(Backends::BROWSER_WEBGPU);
-        }
-        backends
-    }
-
     /// Create an new instance of wgpu using the given options and enabled backends.
     ///
     /// # Panics
@@ -129,83 +98,43 @@ impl Instance {
         );
     }
 
-    /// Create an new instance of wgpu from a wgpu-hal instance.
+    /// Returns which backends can be picked for the current build configuration.
     ///
-    /// # Arguments
+    /// The returned set depends on a combination of target platform and enabled features.
+    /// This does *not* do any runtime checks and is exclusively based on compile time information.
     ///
-    /// - `hal_instance` - wgpu-hal instance.
-    ///
-    /// # Safety
-    ///
-    /// Refer to the creation of wgpu-hal Instance for every backend.
-    #[cfg(wgpu_core)]
-    pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
-        Self {
-            inner: unsafe {
-                crate::backend::ContextWgpuCore::from_hal_instance::<A>(hal_instance).into()
-            },
+    /// `InstanceDescriptor::backends` does not need to be a subset of this,
+    /// but any backend that is not in this set, will not be picked.
+    pub const fn enabled_backend_features() -> Backends {
+        let mut backends = Backends::empty();
+        // `.set` and `|=` don't work in a `const` context.
+        if cfg!(noop) {
+            backends = backends.union(Backends::NOOP);
         }
-    }
-
-    /// Get the [`wgpu_hal`] instance from this `Instance`.
-    ///
-    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
-    /// and pass that struct to the to the `A` type parameter.
-    ///
-    /// Returns a guard that dereferences to the type of the hal backend
-    /// which implements [`A::Instance`].
-    ///
-    /// # Errors
-    ///
-    /// This method will return None if:
-    /// - The instance is not from the backend specified by `A`.
-    /// - The instance is from the `webgpu` or `custom` backend.
-    ///
-    /// # Safety
-    ///
-    /// - The returned resource must not be destroyed unless the guard
-    ///   is the last reference to it and it is not in use by the GPU.
-    ///   The guard and handle may be dropped at any time however.
-    /// - All the safety requirements of wgpu-hal must be upheld.
-    ///
-    /// [`A::Instance`]: hal::Api::Instance
-    #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
-        self.inner
-            .as_core_opt()
-            .and_then(|ctx| unsafe { ctx.instance_as_hal::<A>() })
-    }
-
-    /// Create an new instance of wgpu from a wgpu-core instance.
-    ///
-    /// # Arguments
-    ///
-    /// - `core_instance` - wgpu-core instance.
-    ///
-    /// # Safety
-    ///
-    /// Refer to the creation of wgpu-core Instance.
-    #[cfg(wgpu_core)]
-    pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
-        Self {
-            inner: unsafe {
-                crate::backend::ContextWgpuCore::from_core_instance(core_instance).into()
-            },
+        if cfg!(vulkan) {
+            backends = backends.union(Backends::VULKAN);
         }
-    }
-
-    #[cfg(custom)]
-    /// Creates instance from custom context implementation
-    pub fn from_custom<T: InstanceInterface>(instance: T) -> Self {
-        Self {
-            inner: dispatch::DispatchInstance::Custom(backend::custom::DynContext::new(instance)),
+        if cfg!(any(gles, webgl)) {
+            backends = backends.union(Backends::GL);
         }
+        if cfg!(metal) {
+            backends = backends.union(Backends::METAL);
+        }
+        if cfg!(dx12) {
+            backends = backends.union(Backends::DX12);
+        }
+        if cfg!(webgpu) {
+            backends = backends.union(Backends::BROWSER_WEBGPU);
+        }
+        backends
     }
 
-    #[cfg(custom)]
-    /// Returns custom implementation of Instance (if custom backend and is internally T)
-    pub fn as_custom<T: custom::InstanceInterface>(&self) -> Option<&T> {
-        self.inner.as_custom()
+    /// Returns the set of [WGSL language extensions] supported by this instance.
+    ///
+    /// [WGSL language extensions]: https://www.w3.org/TR/webgpu/#gpuwgsllanguagefeatures
+    #[cfg(feature = "wgsl")]
+    pub fn wgsl_language_features(&self) -> WgslLanguageFeatures {
+        self.inner.wgsl_language_features()
     }
 
     /// Retrieves all available [`Adapter`]s that match the given [`Backends`].
@@ -246,26 +175,6 @@ impl Instance {
     ) -> impl Future<Output = Result<Adapter, RequestAdapterError>> + WasmNotSend {
         let future = self.inner.request_adapter(options);
         async move { future.await.map(|adapter| Adapter { inner: adapter }) }
-    }
-
-    /// Converts a wgpu-hal `ExposedAdapter` to a wgpu [`Adapter`].
-    ///
-    /// # Safety
-    ///
-    /// `hal_adapter` must be created from this instance internal handle.
-    #[cfg(wgpu_core)]
-    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
-        &self,
-        hal_adapter: hal::ExposedAdapter<A>,
-    ) -> Adapter {
-        let core_instance = self.inner.as_core();
-        let adapter = unsafe { core_instance.create_adapter_from_hal(hal_adapter) };
-        let core = backend::wgpu_core::CoreAdapter {
-            context: core_instance.clone(),
-            id: adapter,
-        };
-
-        Adapter { inner: core.into() }
     }
 
     /// Creates a new surface targeting a given window/canvas/surface/etc..
@@ -393,12 +302,110 @@ impl Instance {
     pub fn generate_report(&self) -> Option<wgc::global::GlobalReport> {
         self.inner.as_core_opt().map(|ctx| ctx.generate_report())
     }
+}
 
-    /// Returns set of supported WGSL language extensions supported by this instance.
+/// Interop with wgpu-hal.
+#[cfg(wgpu_core)]
+impl Instance {
+    /// Create an new instance of wgpu from a wgpu-hal instance.
     ///
-    /// <https://www.w3.org/TR/webgpu/#gpuwgsllanguagefeatures>
-    #[cfg(feature = "wgsl")]
-    pub fn wgsl_language_features(&self) -> WgslLanguageFeatures {
-        self.inner.wgsl_language_features()
+    /// # Arguments
+    ///
+    /// - `hal_instance` - wgpu-hal instance.
+    ///
+    /// # Safety
+    ///
+    /// Refer to the creation of wgpu-hal Instance for every backend.
+    pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
+        Self {
+            inner: unsafe {
+                crate::backend::ContextWgpuCore::from_hal_instance::<A>(hal_instance).into()
+            },
+        }
+    }
+
+    /// Get the [`wgpu_hal`] instance from this `Instance`.
+    ///
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Instance`].
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The instance is not from the backend specified by `A`.
+    /// - The instance is from the `webgpu` or `custom` backend.
+    ///
+    /// # Safety
+    ///
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
+    ///
+    /// [`A::Instance`]: hal::Api::Instance
+    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(&self) -> Option<&A::Instance> {
+        self.inner
+            .as_core_opt()
+            .and_then(|ctx| unsafe { ctx.instance_as_hal::<A>() })
+    }
+
+    /// Converts a wgpu-hal `ExposedAdapter` to a wgpu [`Adapter`].
+    ///
+    /// # Safety
+    ///
+    /// `hal_adapter` must be created from this instance internal handle.
+    pub unsafe fn create_adapter_from_hal<A: wgc::hal_api::HalApi>(
+        &self,
+        hal_adapter: hal::ExposedAdapter<A>,
+    ) -> Adapter {
+        let core_instance = self.inner.as_core();
+        let adapter = unsafe { core_instance.create_adapter_from_hal(hal_adapter) };
+        let core = backend::wgpu_core::CoreAdapter {
+            context: core_instance.clone(),
+            id: adapter,
+        };
+
+        Adapter { inner: core.into() }
+    }
+}
+
+/// Interop with wgpu-core.
+#[cfg(wgpu_core)]
+impl Instance {
+    /// Create an new instance of wgpu from a wgpu-core instance.
+    ///
+    /// # Arguments
+    ///
+    /// - `core_instance` - wgpu-core instance.
+    ///
+    /// # Safety
+    ///
+    /// Refer to the creation of wgpu-core Instance.
+    pub unsafe fn from_core(core_instance: wgc::instance::Instance) -> Self {
+        Self {
+            inner: unsafe {
+                crate::backend::ContextWgpuCore::from_core_instance(core_instance).into()
+            },
+        }
+    }
+}
+
+/// Interop with custom backends.
+#[cfg(custom)]
+impl Instance {
+    /// Creates instance from custom context implementation
+    pub fn from_custom<T: InstanceInterface>(instance: T) -> Self {
+        Self {
+            inner: dispatch::DispatchInstance::Custom(backend::custom::DynContext::new(instance)),
+        }
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of Instance (if custom backend and is internally T)
+    pub fn as_custom<T: custom::InstanceInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 }
