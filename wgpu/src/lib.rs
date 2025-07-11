@@ -11,7 +11,7 @@
 //! complicated cases.
 //!
 //! - **`wgpu_core`** --- Enabled when there is any non-webgpu backend enabled on the platform.
-//! - **`naga`** ---- Enabled when any non-wgsl shader input is enabled.
+//! - **`naga`** --- Enabled when target `glsl` or `spirv`` input is enabled, or when `wgpu_core` is enabled.
 //!
 
 #![no_std]
