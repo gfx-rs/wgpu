@@ -8,15 +8,34 @@ use crate::Backends;
 use crate::{Backend, DownlevelFlags};
 
 /// Options for creating an instance.
+///
+/// If you want to allow control of instance settings via environment variables, call either
+/// [`InstanceDescriptor::from_env_or_default()`] or [`InstanceDescriptor::with_env()`]. Each type
+/// within this descriptor has its own equivalent methods, so you can select which options you want
+/// to expose to influence from the environment.
 #[derive(Clone, Debug)]
 pub struct InstanceDescriptor {
-    /// Which `Backends` to enable.
+    /// Which [`Backends`] to enable.
+    ///
+    /// [`Backends::BROWSER_WEBGPU`] has an additional effect:
+    /// If it is set and a [`navigator.gpu`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu)
+    /// object is present, this instance will *only* be able to create WebGPU adapters.
+    ///
+    /// ⚠️ On some browsers this check is insufficient to determine whether WebGPU is supported,
+    /// as the browser may define the `navigator.gpu` object, but be unable to create any WebGPU adapters.
+    /// For targeting _both_ WebGPU & WebGL, it is recommended to use [`crate::util::new_instance_with_webgpu_detection`](../wgpu/util/fn.new_instance_with_webgpu_detection.html).
+    ///
+    /// If you instead want to force use of WebGL, either disable the `webgpu` compile-time feature
+    /// or don't include the [`Backends::BROWSER_WEBGPU`] flag in this field.
+    /// If it is set and WebGPU support is *not* detected, the instance will use `wgpu-core`
+    /// to create adapters, meaning that if the `webgl` feature is enabled, it is able to create
+    /// a WebGL adapter.
     pub backends: Backends,
     /// Flags to tune the behavior of the instance.
     pub flags: InstanceFlags,
     /// Memory budget thresholds used by some backends.
     pub memory_budget_thresholds: MemoryBudgetThresholds,
-    /// Options the control the behavior of various backends.
+    /// Options the control the behavior of specific backends.
     pub backend_options: BackendOptions,
 }
 

@@ -21,7 +21,7 @@ bitflags::bitflags! {
     }
 }
 
-/// Context for all other wgpu objects. Instance of wgpu.
+/// Contains the various entry points to start interacting with the system's GPUs.
 ///
 /// This is the first thing you create when using wgpu.
 /// Its primary use is to create [`Adapter`]s and [`Surface`]s.
@@ -84,33 +84,14 @@ impl Instance {
         backends
     }
 
-    /// Create an new instance of wgpu.
-    ///
-    /// # Arguments
-    ///
-    /// - `instance_desc` - Has fields for which [backends][Backends] wgpu will choose
-    ///   during instantiation, and which [DX12 shader compiler][Dx12Compiler] wgpu will use.
-    ///
-    ///   [`Backends::BROWSER_WEBGPU`] takes a special role:
-    ///   If it is set and a [`navigator.gpu`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu)
-    ///   object is present, this instance will *only* be able to create WebGPU adapters.
-    ///
-    ///   ⚠️ On some browsers this check is insufficient to determine whether WebGPU is supported,
-    ///   as the browser may define the `navigator.gpu` object, but be unable to create any WebGPU adapters.
-    ///   For targeting _both_ WebGPU & WebGL is recommended to use [`crate::util::new_instance_with_webgpu_detection`].
-    ///
-    ///   If you instead want to force use of WebGL, either disable the `webgpu` compile-time feature
-    ///   or don't add the [`Backends::BROWSER_WEBGPU`] flag to the the `instance_desc`'s `backends` field.
-    ///   If it is set and WebGPU support is *not* detected, the instance will use wgpu-core
-    ///   to create adapters. Meaning that if the `webgl` feature is enabled, it is able to create
-    ///   a WebGL adapter.
+    /// Create an new instance of wgpu using the given options and enabled backends.
     ///
     /// # Panics
     ///
-    /// If no backend feature for the active target platform is enabled,
-    /// this method will panic, see [`Instance::enabled_backend_features()`].
+    /// - If no backend feature for the active target platform is enabled,
+    ///   this method will panic; see [`Instance::enabled_backend_features()`].
     #[allow(clippy::allow_attributes, unreachable_code)]
-    pub fn new(_instance_desc: &InstanceDescriptor) -> Self {
+    pub fn new(desc: &InstanceDescriptor) -> Self {
         if Self::enabled_backend_features().is_empty() {
             panic!(
                 "No wgpu backend feature that is implemented for the target platform was enabled. \
@@ -121,14 +102,14 @@ impl Instance {
         #[cfg(webgpu)]
         {
             let is_only_available_backend = !cfg!(wgpu_core);
-            let requested_webgpu = _instance_desc.backends.contains(Backends::BROWSER_WEBGPU);
+            let requested_webgpu = desc.backends.contains(Backends::BROWSER_WEBGPU);
             let support_webgpu = crate::backend::get_browser_gpu_property()
                 .map(|maybe_gpu| maybe_gpu.is_some())
                 .unwrap_or(false);
 
             if is_only_available_backend || (requested_webgpu && support_webgpu) {
                 return Self {
-                    inner: crate::backend::ContextWebGpu::new(_instance_desc).into(),
+                    inner: crate::backend::ContextWebGpu::new(desc).into(),
                 };
             }
         }
@@ -136,9 +117,12 @@ impl Instance {
         #[cfg(wgpu_core)]
         {
             return Self {
-                inner: crate::backend::ContextWgpuCore::new(_instance_desc).into(),
+                inner: crate::backend::ContextWgpuCore::new(desc).into(),
             };
         }
+
+        // Silence unused variable warnings without adding _ to the parameter name (which shows up in docs).
+        let _ = desc;
 
         unreachable!(
             "Earlier check of `enabled_backend_features` should have prevented getting here!"

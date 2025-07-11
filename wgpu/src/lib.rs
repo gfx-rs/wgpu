@@ -1,6 +1,23 @@
-//! A cross-platform graphics and compute library based on [WebGPU](https://gpuweb.github.io/gpuweb/).
+//! `wgpu` is a cross-platform, safe, pure-Rust graphics API. It runs natively on
+//! Vulkan, Metal, D3D12, and OpenGL; and on top of WebGL2 and WebGPU on wasm.
 //!
-//! To start using the API, create an [`Instance`].
+//! The API is based on the [WebGPU standard][webgpu]. It serves as the core of the
+//! WebGPU integration in Firefox, Servo, and Deno.
+//!
+//! [webgpu]: https://gpuweb.github.io/gpuweb/
+//!
+//! ## Getting Started
+//!
+//! The main entry point to the API is the [`Instance`] type, from which you can create [`Adapter`], [`Device`], and [`Surface`].
+//!
+//! If you are new to `wgpu` and graphics programming, we recommend reading
+//! <https://sotrh.github.io/learn-wgpu/> and <https://webgpufundamentals.org/>. The latter is a WebGPU
+//! tutorial, but the concepts are nearly identical to `wgpu`.
+//!
+//! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v26/examples#readme)..
+//!
+//! The API is refcounted, so all handles are cloneable, and if you create a resource which references another,
+//! it will automatically keep dependent resources alive.
 //!
 //! ## Feature flags
 #![doc = document_features::document_features!()]
