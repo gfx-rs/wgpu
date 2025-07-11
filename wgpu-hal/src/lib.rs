@@ -472,6 +472,13 @@ impl InstanceError {
     }
 }
 
+/// All the types and methods that make up a implementation on top of a backend.
+///
+/// Only the types that have non-dyn trait bounds have methods on them. Most methods
+/// are either on [`CommandEncoder`] or [`Device`].
+///
+/// The api can either be used through generics (through use of this trait and associated
+/// types) or dynamically through using the `Dyn*` traits.
 pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     const VARIANT: wgt::Backend;
 
@@ -1806,6 +1813,10 @@ pub struct Capabilities {
     pub downlevel: wgt::DownlevelCapabilities,
 }
 
+/// An adapter with all the information needed to reason about its capabilities.
+///
+/// These are either made by [`Instance::enumerate_adapters`] or by backend specific
+/// methods on the backend [`Instance`] or [`Adapter`].
 #[derive(Debug)]
 pub struct ExposedAdapter<A: Api> {
     pub adapter: A::Adapter,
@@ -1860,6 +1871,10 @@ pub struct AcquiredSurfaceTexture<A: Api> {
     pub suboptimal: bool,
 }
 
+/// An open connection to a device and a queue.
+///
+/// This can be created from [`Adapter::open`] or backend
+/// specific methods on the backend's [`Instance`] or [`Adapter`].
 #[derive(Debug)]
 pub struct OpenDevice<A: Api> {
     pub device: A::Device,
