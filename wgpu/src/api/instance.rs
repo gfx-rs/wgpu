@@ -307,15 +307,24 @@ impl Instance {
 /// Interop with wgpu-hal.
 #[cfg(wgpu_core)]
 impl Instance {
-    /// Create an new instance of wgpu from a wgpu-hal instance.
+    /// Create an new instance of wgpu from a wgpu-hal instance. This is often useful
+    /// when you need to do backend specific logic, or interop with an existing backend
+    /// instance.
     ///
-    /// # Arguments
+    /// # Types
     ///
-    /// - `hal_instance` - wgpu-hal instance.
+    /// The type of `A::Instance` depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Instance")]
+    #[doc = crate::hal_type_metal!("Instance")]
+    #[doc = crate::hal_type_dx12!("Instance")]
+    #[doc = crate::hal_type_gles!("Instance")]
     ///
     /// # Safety
     ///
-    /// Refer to the creation of wgpu-hal Instance for every backend.
+    /// - The `hal_instance` must be a valid and usable instance of the backend specified by `A`.
+    /// - wgpu will act like it has complete ownership of this instance, and will destroy it
+    ///   when the last reference to the instance, internal or external, is dropped.
     pub unsafe fn from_hal<A: wgc::hal_api::HalApi>(hal_instance: A::Instance) -> Self {
         Self {
             inner: unsafe {
@@ -331,6 +340,13 @@ impl Instance {
     ///
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::Instance`].
+    ///
+    /// # Types
+    ///
+    #[doc = crate::hal_type_vulkan!("Instance")]
+    #[doc = crate::hal_type_metal!("Instance")]
+    #[doc = crate::hal_type_dx12!("Instance")]
+    #[doc = crate::hal_type_gles!("Instance")]
     ///
     /// # Errors
     ///
@@ -352,7 +368,16 @@ impl Instance {
             .and_then(|ctx| unsafe { ctx.instance_as_hal::<A>() })
     }
 
-    /// Converts a wgpu-hal `ExposedAdapter` to a wgpu [`Adapter`].
+    /// Converts a wgpu-hal [`hal::ExposedAdapter`] to a wgpu [`Adapter`].
+    ///
+    /// # Types
+    ///
+    /// The type of `hal_adapter.adapter` depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Adapter")]
+    #[doc = crate::hal_type_metal!("Adapter")]
+    #[doc = crate::hal_type_dx12!("Adapter")]
+    #[doc = crate::hal_type_gles!("Adapter")]
     ///
     /// # Safety
     ///

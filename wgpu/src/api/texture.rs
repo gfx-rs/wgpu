@@ -27,6 +27,15 @@ impl Texture {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::Texture`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Texture")]
+    #[doc = crate::hal_type_metal!("Texture")]
+    #[doc = crate::hal_type_dx12!("Texture")]
+    #[doc = crate::hal_type_gles!("Texture")]
+    ///
     /// # Deadlocks
     ///
     /// - The returned guard holds a read-lock on a device-local "destruction"

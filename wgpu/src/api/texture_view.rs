@@ -39,6 +39,15 @@ impl TextureView {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::TextureView`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("TextureView")]
+    #[doc = crate::hal_type_metal!("TextureView")]
+    #[doc = crate::hal_type_dx12!("TextureView")]
+    #[doc = crate::hal_type_gles!("TextureView")]
+    ///
     /// # Deadlocks
     ///
     /// - The returned guard holds a read-lock on a device-local "destruction"

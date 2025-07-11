@@ -158,6 +158,15 @@ impl Surface<'_> {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::Surface`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Surface")]
+    #[doc = crate::hal_type_metal!("Surface")]
+    #[doc = crate::hal_type_dx12!("Surface")]
+    #[doc = crate::hal_type_gles!("Surface")]
+    ///
     /// # Errors
     ///
     /// This method will return None if:

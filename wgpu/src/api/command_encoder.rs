@@ -232,14 +232,31 @@ impl CommandEncoder {
         );
     }
 
-    /// Returns the inner hal CommandEncoder using a callback. The hal command encoder will be `None` if the
-    /// backend type argument does not match with this wgpu CommandEncoder
+    /// Get the [`wgpu_hal`] command encoder from this `CommandEncoder`.
     ///
-    /// This method will start the wgpu_core level command recording.
+    /// The returned command encoder will be ready to record onto.
+    ///
+    /// # Errors
+    ///
+    /// This method will pass in [`None`] if:
+    /// - The encoder is not from the backend specified by `A`.
+    /// - The encoder is from the `webgpu` or `custom` backend.
+    ///
+    /// # Types
+    ///
+    /// The callback argument depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("CommandEncoder")]
+    #[doc = crate::hal_type_metal!("CommandEncoder")]
+    #[doc = crate::hal_type_dx12!("CommandEncoder")]
+    #[doc = crate::hal_type_gles!("CommandEncoder")]
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal CommandEncoder must not be manually destroyed
+    /// - The raw handle obtained from the `A::CommandEncoder` must not be manually destroyed.
+    /// - You must not end the command buffer; wgpu will do it when you call finish.
+    /// - The wgpu command encoder must not be interacted with in any way while recording is
+    ///   happening to the wgpu_hal or backend command encoder.
     #[cfg(wgpu_core)]
     pub unsafe fn as_hal_mut<
         A: wgc::hal_api::HalApi,

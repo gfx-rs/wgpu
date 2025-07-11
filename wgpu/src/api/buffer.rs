@@ -208,6 +208,15 @@ impl Buffer {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::Buffer`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Buffer")]
+    #[doc = crate::hal_type_metal!("Buffer")]
+    #[doc = crate::hal_type_dx12!("Buffer")]
+    #[doc = crate::hal_type_gles!("Buffer")]
+    ///
     /// # Deadlocks
     ///
     /// - The returned guard holds a read-lock on a device-local "destruction"

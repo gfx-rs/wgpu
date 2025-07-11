@@ -101,17 +101,17 @@ pub use fence::Fence;
 #[cfg(not(any(windows, webgl)))]
 pub use self::egl::{AdapterContext, AdapterContextLock};
 #[cfg(not(any(windows, webgl)))]
-use self::egl::{Instance, Surface};
+pub use self::egl::{Instance, Surface};
 
 #[cfg(webgl)]
 pub use self::web::AdapterContext;
 #[cfg(webgl)]
-use self::web::{Instance, Surface};
+pub use self::web::{Instance, Surface};
 
 #[cfg(windows)]
 use self::wgl::AdapterContext;
 #[cfg(windows)]
-use self::wgl::{Instance, Surface};
+pub use self::wgl::{Instance, Surface};
 
 use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
 use core::{

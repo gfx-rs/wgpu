@@ -289,6 +289,15 @@ impl Device {
 
     /// Creates a [`Texture`] from a wgpu-hal Texture.
     ///
+    /// # Types
+    ///
+    /// The type of `A::Texture` depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Texture")]
+    #[doc = crate::hal_type_metal!("Texture")]
+    #[doc = crate::hal_type_dx12!("Texture")]
+    #[doc = crate::hal_type_gles!("Texture")]
+    ///
     /// # Safety
     ///
     /// - `hal_texture` must be created from this device internal handle
@@ -318,6 +327,15 @@ impl Device {
     }
 
     /// Creates a [`Buffer`] from a wgpu-hal Buffer.
+    ///
+    /// # Types
+    ///
+    /// The type of `A::Buffer` depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Buffer")]
+    #[doc = crate::hal_type_metal!("Buffer")]
+    #[doc = crate::hal_type_dx12!("Buffer")]
+    #[doc = crate::hal_type_gles!("Buffer")]
     ///
     /// # Safety
     ///
@@ -472,6 +490,15 @@ impl Device {
     ///
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::Device`].
+    ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Device")]
+    #[doc = crate::hal_type_metal!("Device")]
+    #[doc = crate::hal_type_dx12!("Device")]
+    #[doc = crate::hal_type_gles!("Device")]
     ///
     /// # Errors
     ///
