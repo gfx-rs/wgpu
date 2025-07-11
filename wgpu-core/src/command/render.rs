@@ -2344,6 +2344,13 @@ fn set_index_buffer(
 
     buffer.check_usage(BufferUsages::INDEX)?;
 
+    if offset % u64::try_from(index_format.byte_size()).unwrap() != 0 {
+        return Err(RenderCommandError::UnalignedIndexBuffer {
+            offset,
+            alignment: index_format.byte_size(),
+        }
+        .into());
+    }
     let (binding, resolved_size) = buffer
         .binding(offset, size, state.general.snatch_guard)
         .map_err(RenderCommandError::from)?;
@@ -2397,6 +2404,9 @@ fn set_vertex_buffer(
 
     buffer.check_usage(BufferUsages::VERTEX)?;
 
+    if offset % wgt::VERTEX_ALIGNMENT != 0 {
+        return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
+    }
     let (binding, buffer_size) = buffer
         .binding(offset, size, state.general.snatch_guard)
         .map_err(RenderCommandError::from)?;
