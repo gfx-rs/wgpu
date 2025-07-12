@@ -858,9 +858,10 @@ impl super::Validator {
                     _ => GlobalUse::READ | GlobalUse::QUERY,
                 },
                 // TODO: update this to reflect the nuance around taskpayload(writable in task stage, readable in mesh stage)
-                crate::AddressSpace::Private
-                | crate::AddressSpace::WorkGroup
-                | crate::AddressSpace::TaskPayload => {
+                crate::AddressSpace::Private | crate::AddressSpace::WorkGroup => {
+                    GlobalUse::READ | GlobalUse::WRITE | GlobalUse::QUERY
+                }
+                crate::AddressSpace::TaskPayload => {
                     GlobalUse::READ
                         | GlobalUse::QUERY
                         | if ep.stage == crate::ShaderStage::Task {
