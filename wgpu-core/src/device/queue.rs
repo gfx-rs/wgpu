@@ -717,11 +717,6 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring write_texture of size 0");
-            return Ok(());
-        }
-
         let dst = destination.texture.get()?;
         let destination = wgt::TexelCopyTextureInfo {
             texture: (),
@@ -774,6 +769,13 @@ impl Queue {
 
         let snatch_guard = self.device.snatchable_lock.read();
 
+        let dst_raw = dst.try_raw(&snatch_guard)?;
+
+        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
+            log::trace!("Ignoring write_texture of size 0");
+            return Ok(());
+        }
+
         let mut pending_writes = self.pending_writes.lock();
         let encoder = pending_writes.activate();
 
@@ -818,8 +820,6 @@ impl Queue {
                     .drain(init_layer_range);
             }
         }
-
-        let dst_raw = dst.try_raw(&snatch_guard)?;
 
         let (block_width, block_height) = dst.desc.format.block_dimensions();
         let width_in_blocks = size.width / block_width;

@@ -289,7 +289,9 @@ impl CommandEncoderStatus {
     // Since we do not track the state of an invalid encoder, it is not
     // necessary to unlock an encoder that has been invalidated.
     fn invalidate<E: Clone + Into<CommandEncoderError>>(&mut self, err: E) -> E {
-        *self = Self::Error(err.clone().into());
+        let enc_err = err.clone().into();
+        api_log!("Invalidating command encoder: {enc_err:?}");
+        *self = Self::Error(enc_err);
         err
     }
 }
