@@ -127,6 +127,8 @@ pub enum EntryPointError {
     UnexpectedMeshShaderAttributes,
     #[error("Non mesh/task shader entry point cannot have task payload attribute")]
     UnexpectedTaskPayload,
+    #[error("Task payload must be declared with `var<task_payload>`")]
+    TaskPayloadWrongAddressSpace,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -721,11 +723,13 @@ impl super::Validator {
             return Err(EntryPointError::UnexpectedMeshShaderAttributes.with_span());
         }
 
-        if ep.stage != crate::ShaderStage::Task
-            && ep.stage != crate::ShaderStage::Mesh
-            && ep.task_payload.is_some()
-        {
-            return Err(EntryPointError::UnexpectedTaskPayload.with_span());
+        if let Some(handle) = ep.task_payload {
+            if ep.stage != crate::ShaderStage::Task && ep.stage != crate::ShaderStage::Mesh {
+                return Err(EntryPointError::UnexpectedTaskPayload.with_span());
+            }
+            if module.global_variables[handle].space != crate::AddressSpace::TaskPayload {
+                return Err(EntryPointError::TaskPayloadWrongAddressSpace.with_span());
+            }
         }
 
         let mut info = self

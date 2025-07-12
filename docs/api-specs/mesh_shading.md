@@ -80,12 +80,12 @@ This shader stage can be selected by marking a function with `@task`. Task shade
 
 The output of this determines how many workgroups of mesh shaders will be dispatched. Once dispatched, global id variables will be local to the task shader workgroup dispatch, and mesh shaders won't know the position of their dispatch among all mesh shader dispatches unless this is passed through the payload. The output may be zero to skip dispatching any mesh shader workgroups for the task shader workgroup.
 
-If task shaders are marked with `@payload(someVar)`, where `someVar` is global variable declared like `var<workgroup> someVar: <type>`, task shaders may write to `someVar`. This payload is passed to the mesh shader workgroup that is invoked. The mesh shader can skip declaring `@payload` to ignore this input.
+If task shaders are marked with `@payload(someVar)`, where `someVar` is global variable declared like `var<task_payload> someVar: <type>`, task shaders may use `someVar` as if it is a read-write workgroup storage variable. This payload is passed to the mesh shader workgroup that is invoked. The mesh shader can skip declaring `@payload` to ignore this input.
 
 ### Mesh shader
 This shader stage can be selected by marking a function with `@mesh`. Mesh shaders must not return anything.
 
-Mesh shaders can be marked with `@payload(someVar)` similar to task shaders. Unlike task shaders, mesh shaders cannot write to this workgroup memory. Declaring `@payload` in a pipeline with no task shader, in a pipeline with a task shader that doesn't declare `@payload`, or in a task shader with an `@payload` that is statically sized and smaller than the mesh shader payload is illegal.
+Mesh shaders can be marked with `@payload(someVar)` similar to task shaders. Unlike task shaders, mesh shaders cannot write to this memory. Declaring `@payload` in a pipeline with no task shader, in a pipeline with a task shader that doesn't declare `@payload`, or in a task shader with an `@payload` that is statically sized and smaller than the mesh shader payload is illegal.
 
 Mesh shaders must be marked with `@vertex_output(OutputType, numOutputs)`, where `numOutputs` is the maximum number of vertices to be output by a mesh shader, and `OutputType` is the data associated with vertices, similar to a standard vertex shader output.
 
@@ -128,7 +128,7 @@ struct TaskPayload {
 	colorMask: vec4<f32>,
 	visible: bool,
 }
-var<workgroup> taskPayload: TaskPayload;
+var<task_payload> taskPayload: TaskPayload;
 var<workgroup> workgroupData: f32;
 struct VertexOutput {
 	@builtin(position) position: vec4<f32>,

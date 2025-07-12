@@ -14,7 +14,7 @@ struct TaskPayload {
 	colorMask: vec4<f32>,
 	visible: bool,
 }
-var<workgroup> taskPayload: TaskPayload;
+var<task_payload> taskPayload: TaskPayload;
 var<workgroup> workgroupData: f32;
 struct VertexOutput {
 	@builtin(position) position: vec4<f32>,

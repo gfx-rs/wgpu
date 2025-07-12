@@ -16,6 +16,7 @@ pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpa
         }),
         "push_constant" => Ok(crate::AddressSpace::PushConstant),
         "function" => Ok(crate::AddressSpace::Function),
+        "task_payload" => Ok(crate::AddressSpace::TaskPayload),
         _ => Err(Box::new(Error::UnknownAddressSpace(span))),
     }
 }
