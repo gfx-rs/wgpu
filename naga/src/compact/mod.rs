@@ -221,6 +221,30 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
         }
     }
 
+    for entry in &module.entry_points {
+        if let Some(task_payload) = entry.task_payload {
+            module_tracer.global_variables_used.insert(task_payload);
+        }
+        if let Some(ref mesh_info) = entry.mesh_info {
+            module_tracer
+                .types_used
+                .insert(mesh_info.vertex_output_type);
+            module_tracer
+                .types_used
+                .insert(mesh_info.primitive_output_type);
+            if let Some(max_vertices_override) = mesh_info.max_vertices_override {
+                module_tracer
+                    .global_expressions_used
+                    .insert(max_vertices_override);
+            }
+            if let Some(max_primitives_override) = mesh_info.max_primitives_override {
+                module_tracer
+                    .global_expressions_used
+                    .insert(max_primitives_override);
+            }
+        }
+    }
+
     module_tracer.type_expression_tandem();
 
     // Now that we know what is used and what is never touched,
@@ -342,6 +366,23 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             &module_map,
             &mut reused_named_expressions,
         );
+        if let Some(ref mut task_payload) = entry.task_payload {
+            module_map.globals.adjust(task_payload);
+        }
+        if let Some(ref mut mesh_info) = entry.mesh_info {
+            module_map.types.adjust(&mut mesh_info.vertex_output_type);
+            module_map
+                .types
+                .adjust(&mut mesh_info.primitive_output_type);
+            if let Some(ref mut max_vertices_override) = mesh_info.max_vertices_override {
+                module_map.global_expressions.adjust(max_vertices_override);
+            }
+            if let Some(ref mut max_primitives_override) = mesh_info.max_primitives_override {
+                module_map
+                    .global_expressions
+                    .adjust(max_primitives_override);
+            }
+        }
     }
 }
 

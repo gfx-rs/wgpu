@@ -900,7 +900,7 @@ impl super::Validator {
             if let Some(used_vertex_type) = info.mesh_shader_info.vertex_type {
                 if used_vertex_type.0 != mesh_info.vertex_output_type {
                     return Err(EntryPointError::WrongMeshOutputType
-                        .with_span_handle(used_vertex_type.0, &module.types));
+                        .with_span_handle(mesh_info.vertex_output_type, &module.types));
                 }
             }
         } else if info.mesh_shader_info.vertex_type.is_some()

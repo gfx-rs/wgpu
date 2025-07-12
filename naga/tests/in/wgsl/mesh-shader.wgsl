@@ -28,9 +28,7 @@ struct PrimitiveOutput {
 struct PrimitiveInput {
 	@location(1) colorMask: vec4<f32>,
 }
-fn test_function(input: u32) {
 
-}
 @task
 @payload(taskPayload)
 @workgroup_size(1)
@@ -48,8 +46,6 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 	setMeshOutputs(3, 1);
 	workgroupData = 2.0;
 	var v: VertexOutput;
-
-	test_function(1);
 
 	v.position = positions[0];
 	v.color = colors[0] * taskPayload.colorMask;
