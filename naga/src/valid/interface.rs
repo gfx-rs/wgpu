@@ -820,6 +820,13 @@ impl super::Validator {
             }
         }
 
+        if let Some(task_payload) = ep.task_payload {
+            if module.global_variables[task_payload].space != crate::AddressSpace::TaskPayload {
+                return Err(EntryPointError::TaskPayloadWrongAddressSpace
+                    .with_span_handle(task_payload, &module.global_variables));
+            }
+        }
+
         self.ep_resource_bindings.clear();
         for (var_handle, var) in module.global_variables.iter() {
             let usage = info[var_handle];
@@ -828,12 +835,7 @@ impl super::Validator {
             }
 
             if var.space == crate::AddressSpace::TaskPayload {
-                if let Some(task_payload) = ep.task_payload {
-                    if task_payload != var_handle {
-                        return Err(EntryPointError::TaskPayloadWrongAddressSpace
-                            .with_span_handle(var_handle, &module.global_variables));
-                    }
-                } else {
+                if ep.task_payload != Some(var_handle) {
                     return Err(EntryPointError::WrongTaskPayloadUsed
                         .with_span_handle(var_handle, &module.global_variables));
                 }
@@ -897,7 +899,7 @@ impl super::Validator {
             // Technically it is allowed to not output anything
             if let Some(used_vertex_type) = info.mesh_shader_info.vertex_type {
                 if used_vertex_type.0 != mesh_info.vertex_output_type {
-                    return Err(EntryPointError::WrongTaskPayloadUsed
+                    return Err(EntryPointError::WrongMeshOutputType
                         .with_span_handle(used_vertex_type.0, &module.types));
                 }
             }
