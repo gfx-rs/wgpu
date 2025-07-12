@@ -52,6 +52,7 @@ pub fn map_built_in(
         "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
         // mesh
         "cull_primitive" => crate::BuiltIn::CullPrimitive,
+        "point_index" => crate::BuiltIn::PointIndex,
         "line_indices" => crate::BuiltIn::LineIndices,
         "triangle_indices" => crate::BuiltIn::TriangleIndices,
         "mesh_task_size" => crate::BuiltIn::MeshTaskSize,

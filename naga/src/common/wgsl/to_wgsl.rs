@@ -192,7 +192,8 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::CullPrimitive
             | Bi::TriangleIndices
             | Bi::LineIndices
-            | Bi::MeshTaskSize => return None,
+            | Bi::MeshTaskSize
+            | Bi::PointIndex => return None,
         })
     }
 }

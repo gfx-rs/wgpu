@@ -185,7 +185,7 @@ impl crate::BuiltIn {
             }
             Self::CullPrimitive => "SV_CullPrimitive",
             // TODO: make this work
-            Self::LineIndices | Self::TriangleIndices => unimplemented!(),
+            Self::PointIndex | Self::LineIndices | Self::TriangleIndices => unimplemented!(),
             Self::MeshTaskSize => unreachable!(),
         })
     }

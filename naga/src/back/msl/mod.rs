@@ -653,7 +653,7 @@ impl ResolvedBinding {
                     }
                     Bi::CullPrimitive => "primitive_culled",
                     // TODO: figure out how to make this written as a function call
-                    Bi::LineIndices | Bi::TriangleIndices => unimplemented!(),
+                    Bi::PointIndex | Bi::LineIndices | Bi::TriangleIndices => unimplemented!(),
                     Bi::MeshTaskSize => unreachable!(),
                 };
                 write!(out, "{name}")?;

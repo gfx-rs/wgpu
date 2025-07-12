@@ -2122,6 +2122,7 @@ impl Writer {
                         BuiltIn::SubgroupLocalInvocationId
                     }
                     Bi::CullPrimitive => BuiltIn::CullPrimitiveEXT,
+                    Bi::PointIndex => BuiltIn::PrimitivePointIndicesEXT,
                     Bi::LineIndices => BuiltIn::PrimitiveLineIndicesEXT,
                     Bi::TriangleIndices => BuiltIn::PrimitiveTriangleIndicesEXT,
                     Bi::MeshTaskSize => unreachable!(),
@@ -2426,6 +2427,9 @@ impl Writer {
         let mut has_ray_query = ir_module.special_types.ray_desc.is_some()
             | ir_module.special_types.ray_intersection.is_some();
         let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
+        let has_mesh_shaders = ir_module.entry_points.iter().any(|entry| {
+            entry.stage == crate::ShaderStage::Mesh || entry.stage == crate::ShaderStage::Task
+        });
 
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
             // spirv does not know whether these have vertex return - that is done by us
@@ -2452,6 +2456,11 @@ impl Writer {
         if has_vertex_return {
             Instruction::extension("SPV_KHR_ray_tracing_position_fetch")
                 .to_words(&mut self.logical_layout.extensions);
+        }
+        if has_mesh_shaders {
+            Instruction::extension("SPV_EXT_mesh_shader")
+                .to_words(&mut self.logical_layout.extensions);
+            self.require_any("Mesh Shaders", &[spirv::Capability::MeshShadingEXT])?;
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")

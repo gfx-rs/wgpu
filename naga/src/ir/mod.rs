@@ -402,6 +402,7 @@ pub enum BuiltIn {
     // mesh
     MeshTaskSize,
     CullPrimitive,
+    PointIndex,
     LineIndices,
     TriangleIndices,
 }
