@@ -135,6 +135,10 @@ pub enum EntryPointError {
     WrongMeshOutputType,
     #[error("Only mesh shader entry points can write to mesh output vertices and primitives")]
     UnexpectedMeshShaderOutput,
+    #[error("Mesh shader entry point cannot have a return type")]
+    UnexpectedMeshShaderEntryResult,
+    #[error("Task shader entry point must return @builtin(mesh_task_size) vec3<u32>")]
+    WrongTaskShaderEntryResult,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -798,11 +802,21 @@ impl super::Validator {
             {
                 return Err(EntryPointError::MissingVertexOutputPosition.with_span());
             }
+            if ep.stage == crate::ShaderStage::Mesh {
+                return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span());
+            }
+            if ep.stage == crate::ShaderStage::Task {
+                if fr.binding != Some(crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize)) {
+                    return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
+                }
+            }
             if !self.blend_src_mask.is_empty() {
                 info.dual_source_blending = true;
             }
         } else if ep.stage == crate::ShaderStage::Vertex {
             return Err(EntryPointError::MissingVertexOutputPosition.with_span());
+        } else if ep.stage == crate::ShaderStage::Task {
+            return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
         }
 
         {
