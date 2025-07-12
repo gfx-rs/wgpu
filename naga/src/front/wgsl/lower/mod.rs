@@ -3235,31 +3235,32 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                         "setMeshOutputs" | "setVertex" | "setPrimitive" => {
                             let mut args = ctx.prepare_args(arguments, 2, span);
+
                             let arg1 = self.expression(args.next()?, ctx)?;
                             let arg2 = self.expression(args.next()?, ctx)?;
-                            let mut convert_to_u32 =
-                                |expr: Handle<crate::Expression>| -> Result<Handle<crate::Expression>> {
-                                    let goal_inner = crate::TypeInner::Scalar(crate::Scalar::U32);
-                                    match goal_inner.scalar_for_conversions(&ctx.module.types) {
-                                        Some(goal_scalar) => {
-                                            let arg_span = ctx.get_expression_span(expr);
-                                            ctx.try_automatic_conversion_for_leaf_scalar(
-                                                expr,
-                                                goal_scalar,
-                                                arg_span,
-                                            )
-                                        }
-                                        // No conversion is necessary.
-                                        None => Ok(expr),
+                            args.finish()?;
+
+                            let mut const_u32 = |expr| -> Result<Handle<ir::Expression>> {
+                                let goal_inner = ir::TypeInner::Scalar(ir::Scalar::U32);
+                                Ok(match goal_inner.scalar_for_conversions(&ctx.module.types) {
+                                    Some(goal_scalar) => {
+                                        let arg_span = ctx.get_expression_span(expr);
+                                        ctx.try_automatic_conversion_for_leaf_scalar(
+                                            expr,
+                                            goal_scalar,
+                                            arg_span,
+                                        )?
                                     }
-                                };
-                            let arg1 = convert_to_u32(arg1)?;
+                                    // No conversion is necessary.
+                                    None => expr,
+                                })
+                            };
+                            let arg1 = const_u32(arg1)?;
                             let arg2 = if function.name == "setMeshOutputs" {
-                                convert_to_u32(arg2)?
+                                const_u32(arg2)?
                             } else {
                                 arg2
                             };
-                            args.finish()?;
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
