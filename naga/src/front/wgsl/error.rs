@@ -1400,7 +1400,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::MeshPrimitiveNoDefinedTopology { struct_span, attribute_span } => ParseError {
-                message: "mesh primitive struct must have exactly one of point indices, line indicies, or triangle indices".to_string(),
+                message: "mesh primitive struct must have exactly one of point indices, line indices, or triangle indices".to_string(),
                 labels: vec![(attribute_span, "primitive type declared here".into()), (struct_span, "primitive struct declared here".into())],
                 notes: vec![]
             },

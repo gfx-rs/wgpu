@@ -1529,7 +1529,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 proc::ConstantEvaluatorError::OverrideExpr => Ok((
                                     0,
                                     Some(
-                                        // This is dubious but it seems the code isn't workgroup size specifc
+                                        // This is dubious but it seems the code isn't workgroup size specific
                                         self.workgroup_size_override(expr, &mut ctx.as_override())?,
                                     ),
                                 )),

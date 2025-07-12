@@ -2863,16 +2863,16 @@ impl Parser {
                 "vertex_output" | "primitive_output" => {
                     lexer.expect(Token::Paren('('))?;
                     let type_span = lexer.peek().1;
-                    let typ = self.type_decl(lexer, &mut ctx)?;
+                    let r#type = self.type_decl(lexer, &mut ctx)?;
                     let type_span = lexer.span_from(type_span.to_range().unwrap().start);
                     lexer.expect(Token::Separator(','))?;
                     let max_output = self.general_expression(lexer, &mut ctx)?;
                     let end_span = lexer.expect_span(Token::Paren(')'))?;
                     let total_span = name_span.until(&end_span);
                     if name == "vertex_output" {
-                        vertex_output.set((typ, type_span, max_output), total_span)?;
+                        vertex_output.set((r#type, type_span, max_output), total_span)?;
                     } else if name == "primitive_output" {
-                        primitive_output.set((typ, type_span, max_output), total_span)?;
+                        primitive_output.set((r#type, type_span, max_output), total_span)?;
                     }
                 }
                 "workgroup_size" => {
