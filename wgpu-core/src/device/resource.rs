@@ -3159,7 +3159,7 @@ impl Device {
                     limit: self.limits.max_vertex_buffer_array_stride,
                 });
             }
-            if vb_state.array_stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
+            if vb_state.array_stride % wgt::VERTEX_ALIGNMENT != 0 {
                 return Err(pipeline::CreateRenderPipelineError::UnalignedVertexStride {
                     index: i as u32,
                     stride: vb_state.array_stride,

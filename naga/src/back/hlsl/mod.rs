@@ -13,11 +13,17 @@ type should be stored in `uniform` and `storage` buffers. The HLSL we
 generate must access values in that form, even when it is not what
 HLSL would use normally.
 
-The rules described here only apply to WGSL `uniform` variables. WGSL
-`storage` buffers are translated as HLSL `ByteAddressBuffers`, for
-which we generate `Load` and `Store` method calls with explicit byte
-offsets. WGSL pipeline inputs must be scalars or vectors; they cannot
-be matrices, which is where the interesting problems arise.
+Matching the WGSL memory layout is a concern only for `uniform`
+variables. WGSL `storage` buffers are translated as HLSL
+`ByteAddressBuffers`, for which we generate `Load` and `Store` method
+calls with explicit byte offsets. WGSL pipeline inputs must be scalars
+or vectors; they cannot be matrices, which is where the interesting
+problems arise. However, when an affected type appears in a struct
+definition, the transformations described here are applied without
+consideration of where the struct is used.
+
+Access to storage buffers is implemented in `storage.rs`. Access to
+uniform buffers is implemented where applicable in `writer.rs`.
 
 ## Row- and column-major ordering for matrices
 
@@ -57,10 +63,9 @@ that the columns of a `matKx2<f32>` need only be [aligned as required
 for `vec2<f32>`][ilov], which is [eight-byte alignment][8bb].
 
 To compensate for this, any time a `matKx2<f32>` appears in a WGSL
-`uniform` variable, whether directly as the variable's type or as part
-of a struct/array, we actually emit `K` separate `float2` members, and
-assemble/disassemble the matrix from its columns (in WGSL; rows in
-HLSL) upon load and store.
+`uniform` value or as part of a struct/array, we actually emit `K`
+separate `float2` members, and assemble/disassemble the matrix from its
+columns (in WGSL; rows in HLSL) upon load and store.
 
 For example, the following WGSL struct type:
 
