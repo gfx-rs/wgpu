@@ -53,6 +53,9 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
+### Naga
+- Added mesh shader support to naga with `WGSL` frontend and `SPIR-V` backend. By @SupaMaggie70Incorporated in [#7930](https://github.com/gfx-rs/wgpu/pull/7930).
+
 ## v26.0.1 (2025-07-10)
 
 ### Bug Fixes
