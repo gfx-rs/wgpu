@@ -129,6 +129,12 @@ pub enum EntryPointError {
     UnexpectedTaskPayload,
     #[error("Task payload must be declared with `var<task_payload>`")]
     TaskPayloadWrongAddressSpace,
+    #[error("For a task payload to be used, it must be declared with @payload")]
+    WrongTaskPayloadUsed,
+    #[error("A function can only set vertex and primitive types that correspond to the mesh shader attributes")]
+    WrongMeshOutputType,
+    #[error("Only mesh shader entry points can write to mesh output vertices and primitives")]
+    UnexpectedMeshShaderOutput,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -821,6 +827,18 @@ impl super::Validator {
                 continue;
             }
 
+            if var.space == crate::AddressSpace::TaskPayload {
+                if let Some(task_payload) = ep.task_payload {
+                    if task_payload != var_handle {
+                        return Err(EntryPointError::TaskPayloadWrongAddressSpace
+                            .with_span_handle(var_handle, &module.global_variables));
+                    }
+                } else {
+                    return Err(EntryPointError::WrongTaskPayloadUsed
+                        .with_span_handle(var_handle, &module.global_variables));
+                }
+            }
+
             let allowed_usage = match var.space {
                 crate::AddressSpace::Function => unreachable!(),
                 crate::AddressSpace::Uniform => GlobalUse::READ | GlobalUse::QUERY,
@@ -843,7 +861,13 @@ impl super::Validator {
                 crate::AddressSpace::Private
                 | crate::AddressSpace::WorkGroup
                 | crate::AddressSpace::TaskPayload => {
-                    GlobalUse::READ | GlobalUse::WRITE | GlobalUse::QUERY
+                    GlobalUse::READ
+                        | GlobalUse::QUERY
+                        | if ep.stage == crate::ShaderStage::Task {
+                            GlobalUse::WRITE
+                        } else {
+                            GlobalUse::empty()
+                        }
                 }
                 crate::AddressSpace::PushConstant => GlobalUse::READ,
             };
@@ -866,6 +890,20 @@ impl super::Validator {
                     }
                 }
             }
+        }
+
+        if let &Some(ref mesh_info) = &ep.mesh_info {
+            // Technically it is allowed to not output anything
+            if let Some(used_vertex_type) = info.mesh_shader_info.vertex_type {
+                if used_vertex_type.0 != mesh_info.vertex_output_type {
+                    return Err(EntryPointError::WrongTaskPayloadUsed
+                        .with_span_handle(used_vertex_type.0, &module.types));
+                }
+            }
+        } else if info.mesh_shader_info.vertex_type.is_some()
+            || info.mesh_shader_info.primitive_type.is_some()
+        {
+            return Err(EntryPointError::UnexpectedMeshShaderOutput.with_span());
         }
 
         Ok(info)
