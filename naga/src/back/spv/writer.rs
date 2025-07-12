@@ -1200,6 +1200,7 @@ impl Writer {
                 Instruction::execution_mode(
                     function_id,
                     match mesh_info.topology {
+                        crate::MeshOutputTopology::Points => spirv::ExecutionMode::OutputPoints,
                         crate::MeshOutputTopology::Lines => spirv::ExecutionMode::OutputLinesEXT,
                         crate::MeshOutputTopology::Triangles => {
                             spirv::ExecutionMode::OutputTrianglesEXT

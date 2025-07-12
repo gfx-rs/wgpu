@@ -2862,15 +2862,17 @@ impl Parser {
                 }
                 "vertex_output" | "primitive_output" => {
                     lexer.expect(Token::Paren('('))?;
-                    let type_ident = lexer.next_ident_with_span()?;
+                    let type_span = lexer.peek().1;
+                    let typ = self.type_decl(lexer, &mut ctx)?;
+                    let type_span = lexer.span_from(type_span.to_range().unwrap().start);
                     lexer.expect(Token::Separator(','))?;
                     let max_output = self.general_expression(lexer, &mut ctx)?;
                     let end_span = lexer.expect_span(Token::Paren(')'))?;
                     let total_span = name_span.until(&end_span);
                     if name == "vertex_output" {
-                        vertex_output.set((type_ident, max_output), total_span)?;
+                        vertex_output.set((typ, type_span, max_output), total_span)?;
                     } else if name == "primitive_output" {
-                        primitive_output.set((type_ident, max_output), total_span)?;
+                        primitive_output.set((typ, type_span, max_output), total_span)?;
                     }
                 }
                 "workgroup_size" => {
@@ -3040,10 +3042,36 @@ impl Parser {
                         if stage.compute_like() && workgroup_size.value.is_none() {
                             return Err(Box::new(Error::MissingWorkgroupSize(compute_like_span)));
                         }
+                        if stage == ShaderStage::Mesh
+                            && (vertex_output.value.is_none() || primitive_output.value.is_none())
+                        {
+                            return Err(Box::new(Error::MissingMeshShaderInfo {
+                                mesh_attribute_span: compute_like_span,
+                            }));
+                        }
+                        let mesh_shader_info = match (vertex_output.value, primitive_output.value) {
+                            (Some(vertex_output), Some(primitive_output)) => {
+                                Some(ast::EntryPointMeshShaderInfo {
+                                    vertex_count: vertex_output.2,
+                                    primitive_count: primitive_output.2,
+                                    vertex_type: (vertex_output.0, vertex_output.1),
+                                    primitive_type: (primitive_output.0, primitive_output.1),
+                                })
+                            }
+                            (None, None) => None,
+                            (Some(v), None) | (None, Some(v)) => {
+                                return Err(Box::new(Error::OneMeshShaderAttribute {
+                                    attribute_span: v.1,
+                                }))
+                            }
+                        };
+
                         Some(ast::EntryPoint {
                             stage,
                             early_depth_test: early_depth_test.value,
                             workgroup_size: workgroup_size.value,
+                            mesh_shader_info,
+                            task_payload: payload.value,
                         })
                     } else {
                         None

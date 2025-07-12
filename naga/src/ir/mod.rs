@@ -2529,11 +2529,12 @@ pub struct Module {
     pub doc_comments: Option<Box<DocComments>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum MeshOutputTopology {
+    Points,
     Lines,
     Triangles,
 }
@@ -2543,10 +2544,12 @@ pub enum MeshOutputTopology {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[allow(dead_code)]
 pub struct MeshStageInfo {
+    /// Should be Some by the time it passes validation
     pub topology: MeshOutputTopology,
-    // Should this be an expression or what? Not clear
     pub max_vertices: u32,
+    pub max_vertices_override: Option<Handle<Expression>>,
     pub max_primitives: u32,
+    pub max_primitives_override: Option<Handle<Expression>>,
     pub vertex_output_type: Handle<Type>,
     pub primitive_output_type: Handle<Type>,
 }

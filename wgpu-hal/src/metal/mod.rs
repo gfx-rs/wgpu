@@ -602,9 +602,6 @@ struct MultiStageData<T> {
     vs: T,
     fs: T,
     cs: T,
-    // TODO: work on this for metal
-    /*ts: T,
-    ms: T,*/
 }
 
 const NAGA_STAGES: MultiStageData<naga::ShaderStage> = MultiStageData {

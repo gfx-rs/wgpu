@@ -123,6 +123,10 @@ pub enum EntryPointError {
     InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
     Function(#[from] FunctionError),
+    #[error("Non mesh shader entry point cannot have mesh shader attributes")]
+    UnexpectedMeshShaderAttributes,
+    #[error("Non mesh/task shader entry point cannot have task payload attribute")]
+    UnexpectedTaskPayload,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -711,6 +715,17 @@ impl super::Validator {
             }
         } else if ep.workgroup_size != [0; 3] {
             return Err(EntryPointError::UnexpectedWorkgroupSize.with_span());
+        }
+
+        if ep.stage != crate::ShaderStage::Mesh && ep.mesh_info.is_some() {
+            return Err(EntryPointError::UnexpectedMeshShaderAttributes.with_span());
+        }
+
+        if ep.stage != crate::ShaderStage::Task
+            && ep.stage != crate::ShaderStage::Mesh
+            && ep.task_payload.is_some()
+        {
+            return Err(EntryPointError::UnexpectedTaskPayload.with_span());
         }
 
         let mut info = self

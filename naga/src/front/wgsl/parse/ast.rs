@@ -128,6 +128,16 @@ pub struct EntryPoint<'a> {
     pub stage: crate::ShaderStage,
     pub early_depth_test: Option<crate::EarlyDepthTest>,
     pub workgroup_size: Option<[Option<Handle<Expression<'a>>>; 3]>,
+    pub mesh_shader_info: Option<EntryPointMeshShaderInfo<'a>>,
+    pub task_payload: Option<(&'a str, Span)>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EntryPointMeshShaderInfo<'a> {
+    pub vertex_count: Handle<Expression<'a>>,
+    pub primitive_count: Handle<Expression<'a>>,
+    pub vertex_type: (Handle<Type<'a>>, Span),
+    pub primitive_type: (Handle<Type<'a>>, Span),
 }
 
 #[cfg(doc)]
