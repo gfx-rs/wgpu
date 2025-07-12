@@ -805,10 +805,10 @@ impl super::Validator {
             if ep.stage == crate::ShaderStage::Mesh {
                 return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span());
             }
-            if ep.stage == crate::ShaderStage::Task {
-                if fr.binding != Some(crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize)) {
-                    return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
-                }
+            if ep.stage == crate::ShaderStage::Task
+                && !result_built_ins.contains(&crate::BuiltIn::MeshTaskSize)
+            {
+                return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
             }
             if !self.blend_src_mask.is_empty() {
                 info.dual_source_blending = true;
