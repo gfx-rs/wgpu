@@ -802,11 +802,16 @@ impl super::Validator {
             {
                 return Err(EntryPointError::MissingVertexOutputPosition.with_span());
             }
-            if ep.stage == crate::ShaderStage::Mesh {
+            if ep.stage == crate::ShaderStage::Mesh
+                && (!result_built_ins.is_empty() || !self.location_mask.is_empty())
+            {
                 return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span());
             }
+            // Cannot have any other built-ins or @location outputs as those are per-vertex or per-primitive
             if ep.stage == crate::ShaderStage::Task
-                && !result_built_ins.contains(&crate::BuiltIn::MeshTaskSize)
+                && (!result_built_ins.contains(&crate::BuiltIn::MeshTaskSize)
+                    || result_built_ins.len() != 1
+                    || !self.location_mask.is_empty())
             {
                 return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
             }
