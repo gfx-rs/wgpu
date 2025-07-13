@@ -245,6 +245,7 @@ impl Corpus {
     }
 }
 
+#[cfg(not(miri))]
 #[test]
 fn test_api() {
     env_logger::init();

@@ -4,6 +4,9 @@ use naga::{front::wgsl, valid::Validator};
 use std::{ffi::OsStr, fs, path::Path};
 
 /// Runs through all example shaders and ensures they are valid wgsl.
+// While we _can_ run this test under miri, it is extremely slow (>5 minutes),
+// and naga isn't the primary target for miri testing, so we disable it.
+#[cfg(not(miri))]
 #[test]
 pub fn parse_example_wgsl() {
     let example_path = Path::new(env!("CARGO_MANIFEST_DIR"))

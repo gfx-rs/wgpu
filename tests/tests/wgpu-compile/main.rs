@@ -1,3 +1,4 @@
+#![cfg(not(miri))]
 // Tests that ensure that various constructs that should not compile do not compile.
 
 #[test]
