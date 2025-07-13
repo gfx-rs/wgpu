@@ -737,6 +737,10 @@ impl super::Validator {
             return Err(EntryPointError::UnexpectedMeshShaderAttributes.with_span());
         }
 
+        let mut info = self
+            .validate_function(&ep.function, module, mod_info, true)
+            .map_err(WithSpan::into_other)?;
+
         if let Some(handle) = ep.task_payload {
             if ep.stage != crate::ShaderStage::Task && ep.stage != crate::ShaderStage::Mesh {
                 return Err(EntryPointError::UnexpectedTaskPayload.with_span());
@@ -744,11 +748,14 @@ impl super::Validator {
             if module.global_variables[handle].space != crate::AddressSpace::TaskPayload {
                 return Err(EntryPointError::TaskPayloadWrongAddressSpace.with_span());
             }
+            // Make sure that this is always present in the outputted shader
+            let uses = if ep.stage == crate::ShaderStage::Mesh {
+                GlobalUse::READ
+            } else {
+                GlobalUse::READ | GlobalUse::WRITE
+            };
+            info.insert_global_use(uses, handle);
         }
-
-        let mut info = self
-            .validate_function(&ep.function, module, mod_info, true)
-            .map_err(WithSpan::into_other)?;
 
         {
             use super::ShaderStages;

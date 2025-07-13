@@ -384,6 +384,14 @@ impl FunctionInfo {
         info.uniformity.non_uniform_result
     }
 
+    pub fn insert_global_use(
+        &mut self,
+        global_use: GlobalUse,
+        global: Handle<crate::GlobalVariable>,
+    ) {
+        self.global_uses[global.index()] |= global_use;
+    }
+
     /// Record a use of `expr` for its value.
     ///
     /// This is used for almost all expression references. Anything

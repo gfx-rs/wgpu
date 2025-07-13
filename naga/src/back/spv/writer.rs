@@ -811,7 +811,13 @@ impl Writer {
             Some(ref result) => {
                 if let Some(ref mut iface) = interface {
                     let mut has_point_size = false;
-                    let class = spirv::StorageClass::Output;
+                    let class = if result.binding
+                        == Some(crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize))
+                    {
+                        spirv::StorageClass::Private
+                    } else {
+                        spirv::StorageClass::Output
+                    };
                     if let Some(ref binding) = result.binding {
                         has_point_size |=
                             *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
@@ -824,7 +830,9 @@ impl Writer {
                             result.ty,
                             binding,
                         )?;
-                        iface.varying_ids.push(varying_id);
+                        if class != spirv::StorageClass::Private {
+                            iface.varying_ids.push(varying_id);
+                        }
                         ep_context.results.push(ResultMember {
                             id: varying_id,
                             type_id,
@@ -850,7 +858,9 @@ impl Writer {
                                 member.ty,
                                 binding,
                             )?;
-                            iface.varying_ids.push(varying_id);
+                            if class != spirv::StorageClass::Private {
+                                iface.varying_ids.push(varying_id);
+                            }
                             ep_context.results.push(ResultMember {
                                 id: varying_id,
                                 type_id,
@@ -890,6 +900,13 @@ impl Writer {
             None => self.void_type,
         };
 
+        if let Some(ref mut i) = interface {
+            if let Some(task_payload) = i.task_payload {
+                i.varying_ids
+                    .push(self.global_variables[task_payload].var_id);
+            }
+        }
+
         let lookup_function_type = LookupFunctionType {
             parameter_type_ids,
             return_type_id,
@@ -923,10 +940,10 @@ impl Writer {
                 continue;
             }
 
-            let mut gv = self.global_variables[handle].clone();
+            let mut gv: GlobalVariable = self.global_variables[handle].clone();
             if let Some(ref mut iface) = interface {
                 // Have to include global variables in the interface
-                if self.physical_layout.version >= 0x10400 {
+                if self.physical_layout.version >= 0x10400 && iface.task_payload != Some(handle) {
                     iface.varying_ids.push(gv.var_id);
                 }
             }
