@@ -64,7 +64,7 @@ struct Args {
     #[argh(option)]
     shader_model: Option<ShaderModelArg>,
 
-    /// the SPIR-V version to use if targetting SPIR-V
+    /// the SPIR-V version to use if targeting SPIR-V
     ///
     /// For example, 1.0, 1.4, etc
     #[argh(option)]
