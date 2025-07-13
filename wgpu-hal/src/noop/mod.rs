@@ -120,22 +120,34 @@ impl crate::Instance for Context {
     ) -> Vec<crate::ExposedAdapter<Api>> {
         vec![crate::ExposedAdapter {
             adapter: Context,
-            info: wgt::AdapterInfo {
-                name: String::from("noop wgpu backend"),
-                vendor: 0,
-                device: 0,
-                device_type: wgt::DeviceType::Cpu,
-                driver: String::from("wgpu"),
-                driver_info: String::new(),
-                backend: wgt::Backend::Noop,
-            },
+            info: adapter_info(),
             features: wgt::Features::all(),
             capabilities: CAPABILITIES,
         }]
     }
 }
 
-const CAPABILITIES: crate::Capabilities = {
+/// Returns the adapter info for the noop backend.
+///
+/// This is used in the test harness to construct info about
+/// the noop backend adapter without actually initializing wgpu.
+pub fn adapter_info() -> wgt::AdapterInfo {
+    wgt::AdapterInfo {
+        name: String::from("noop wgpu backend"),
+        vendor: 0,
+        device: 0,
+        device_type: wgt::DeviceType::Cpu,
+        driver: String::from("wgpu"),
+        driver_info: String::new(),
+        backend: wgt::Backend::Noop,
+    }
+}
+
+/// The capabilities of the noop backend.
+///
+/// This is used in the test harness to construct capabilities
+/// of the noop backend without actually initializing wgpu.
+pub const CAPABILITIES: crate::Capabilities = {
     /// Guaranteed to be no bigger than isize::MAX which is the maximum size of an allocation,
     /// except on 16-bit platforms which we certainly don’t fit in.
     const ALLOC_MAX_U32: u32 = i32::MAX as u32;

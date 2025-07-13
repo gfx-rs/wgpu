@@ -41,7 +41,9 @@ impl Default for TestParameters {
             required_limits: Limits::downlevel_webgl2_defaults(),
             required_instance_flags: InstanceFlags::empty(),
             force_fxc: false,
-            skips: Vec::new(),
+            // By default we skip the noop backend, and enable it if the test
+            // parameters ask us to remove it.
+            skips: vec![FailureCase::backend(wgpu::Backends::NOOP)],
             failures: Vec::new(),
         }
     }
@@ -92,6 +94,16 @@ impl TestParameters {
     /// Mark the test as always failing, and needing to be skipped.
     pub fn skip(mut self, when: FailureCase) -> Self {
         self.skips.push(when);
+        self
+    }
+
+    /// Enable testing against the noop backend and miri.
+    ///
+    /// The noop backend does not execute any operations, but allows us to test
+    /// validation and memory safety.
+    pub fn enable_noop(mut self) -> Self {
+        self.skips
+            .retain(|case| *case != FailureCase::backend(wgpu::Backends::NOOP));
         self
     }
 }

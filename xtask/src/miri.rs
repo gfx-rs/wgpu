@@ -22,6 +22,7 @@ pub fn run_miri(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
             "MIRIFLAGS",
             "-Zmiri-disable-isolation -Zmiri-deterministic-floats",
         )
+        .env("WGPU_GPU_TESTS_USE_NOOP_BACKEND", "1")
         .quiet()
         .run()?;
 
