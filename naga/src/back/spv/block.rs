@@ -259,21 +259,21 @@ impl Writer {
         }
         // MeshTaskSize must be called write before exiting
         for (index, res_member) in result_members.iter().enumerate() {
-            let member_value_id = match ir_result.binding {
-                Some(_) => value_id,
-                None => {
-                    let member_value_id = self.id_gen.next();
-                    body.push(Instruction::composite_extract(
-                        res_member.type_id,
-                        member_value_id,
-                        value_id,
-                        &[index as Word],
-                    ));
-                    member_value_id
-                }
-            };
-
             if res_member.built_in == Some(crate::BuiltIn::MeshTaskSize) {
+                let member_value_id = match ir_result.binding {
+                    Some(_) => value_id,
+                    None => {
+                        let member_value_id = self.id_gen.next();
+                        body.push(Instruction::composite_extract(
+                            res_member.type_id,
+                            member_value_id,
+                            value_id,
+                            &[index as Word],
+                        ));
+                        member_value_id
+                    }
+                };
+
                 let values = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
                 for (i, &value) in values.iter().enumerate() {
                     let instruction = Instruction::composite_extract(
