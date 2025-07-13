@@ -78,6 +78,8 @@ pub enum Error {
     Override,
     #[error(transparent)]
     ResolveArraySizeError(#[from] crate::proc::ResolveArraySizeError),
+    #[error("module requires SPIRV-{0}.{1}, which isn't supported")]
+    SpirvVersionTooLow(u8, u8),
 }
 
 #[derive(Default)]

@@ -2493,6 +2493,10 @@ impl Writer {
             Instruction::extension("SPV_EXT_mesh_shader")
                 .to_words(&mut self.logical_layout.extensions);
             self.require_any("Mesh Shaders", &[spirv::Capability::MeshShadingEXT])?;
+            let lang_version = self.lang_version();
+            if lang_version.0 <= 1 && lang_version.1 < 4 {
+                return Err(Error::SpirvVersionTooLow(1, 4));
+            }
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")

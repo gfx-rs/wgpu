@@ -222,8 +222,11 @@ impl Writer {
         result_members: &[ResultMember],
         body: &mut Vec<Instruction>,
         task_payload: Option<Word>,
-    ) -> Result<(), Error> {
+    ) -> Result<Instruction, Error> {
         for (index, res_member) in result_members.iter().enumerate() {
+            if res_member.built_in == Some(crate::BuiltIn::MeshTaskSize) {
+                continue;
+            }
             let member_value_id = match ir_result.binding {
                 Some(_) => value_id,
                 None => {
@@ -238,9 +241,7 @@ impl Writer {
                 }
             };
 
-            if res_member.built_in != Some(crate::BuiltIn::MeshTaskSize) {
-                body.push(Instruction::store(res_member.id, member_value_id, None))
-            }
+            body.push(Instruction::store(res_member.id, member_value_id, None));
 
             match res_member.built_in {
                 Some(crate::BuiltIn::Position { .. })
@@ -253,30 +254,43 @@ impl Writer {
                 {
                     self.write_epilogue_frag_depth_clamp(res_member.id, body)?;
                 }
-                Some(crate::BuiltIn::MeshTaskSize) => {
-                    let values = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
-                    for (i, &value) in values.iter().enumerate() {
-                        let mut instruction = Instruction::new(spirv::Op::CompositeExtract);
-                        instruction.add_operand(self.get_u32_type_id());
-                        instruction.add_operand(value);
-                        instruction.add_operand(member_value_id);
-                        instruction.add_operand(i as u32);
-                        body.push(instruction);
-                        // Use OpCompositeExtract to save the component of the vec3
-                    }
-                    let mut instruction = Instruction::new(spirv::Op::EmitMeshTasksEXT);
-                    for id in values {
-                        instruction.add_operand(id);
-                    }
-                    if let Some(task_payload) = task_payload {
-                        instruction.add_operand(task_payload);
-                    }
-                    body.push(instruction);
-                }
                 _ => {}
             }
         }
-        Ok(())
+        // MeshTaskSize must be called write before exiting
+        for (index, res_member) in result_members.iter().enumerate() {
+            let member_value_id = {
+                let member_value_id = self.id_gen.next();
+                body.push(Instruction::composite_extract(
+                    res_member.type_id,
+                    member_value_id,
+                    value_id,
+                    &[index as Word],
+                ));
+                member_value_id
+            };
+            if res_member.built_in == Some(crate::BuiltIn::MeshTaskSize) {
+                let values = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
+                for (i, &value) in values.iter().enumerate() {
+                    let mut instruction = Instruction::new(spirv::Op::CompositeExtract);
+                    instruction.add_operand(self.get_u32_type_id());
+                    instruction.add_operand(value);
+                    instruction.add_operand(member_value_id);
+                    instruction.add_operand(i as u32);
+                    body.push(instruction);
+                    // Use OpCompositeExtract to save the component of the vec3
+                }
+                let mut instruction = Instruction::new(spirv::Op::EmitMeshTasksEXT);
+                for id in values {
+                    instruction.add_operand(id);
+                }
+                if let Some(task_payload) = task_payload {
+                    instruction.add_operand(task_payload);
+                }
+                return Ok(instruction);
+            }
+        }
+        Ok(Instruction::return_void())
     }
 }
 
@@ -3245,16 +3259,13 @@ impl BlockContext<'_> {
                     let instruction = match self.function.entry_point_context {
                         // If this is an entry point, and we need to return anything,
                         // let's instead store the output variables and return `void`.
-                        Some(ref context) => {
-                            self.writer.write_entry_point_return(
-                                value_id,
-                                self.ir_function.result.as_ref().unwrap(),
-                                &context.results,
-                                &mut block.body,
-                                context.task_payload,
-                            )?;
-                            Instruction::return_void()
-                        }
+                        Some(ref context) => self.writer.write_entry_point_return(
+                            value_id,
+                            self.ir_function.result.as_ref().unwrap(),
+                            &context.results,
+                            &mut block.body,
+                            context.task_payload,
+                        )?,
                         None => Instruction::return_value(value_id),
                     };
                     self.function.consume(block, instruction);
