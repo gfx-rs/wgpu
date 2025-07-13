@@ -142,6 +142,7 @@ struct ResultMember {
 struct EntryPointContext {
     argument_ids: Vec<Word>,
     results: Vec<ResultMember>,
+    task_payload: Option<Word>,
 }
 
 #[derive(Default)]

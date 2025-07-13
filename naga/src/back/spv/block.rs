@@ -221,6 +221,7 @@ impl Writer {
         ir_result: &crate::FunctionResult,
         result_members: &[ResultMember],
         body: &mut Vec<Instruction>,
+        task_payload: Option<Word>,
     ) -> Result<(), Error> {
         for (index, res_member) in result_members.iter().enumerate() {
             let member_value_id = match ir_result.binding {
@@ -231,7 +232,7 @@ impl Writer {
                         res_member.type_id,
                         member_value_id,
                         value_id,
-                        &[index as u32],
+                        &[index as Word],
                     ));
                     member_value_id
                 }
@@ -249,6 +250,26 @@ impl Writer {
                     if self.flags.contains(WriterFlags::CLAMP_FRAG_DEPTH) =>
                 {
                     self.write_epilogue_frag_depth_clamp(res_member.id, body)?;
+                }
+                Some(crate::BuiltIn::MeshTaskSize) => {
+                    let values = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
+                    for (i, &value) in values.iter().enumerate() {
+                        let mut instruction = Instruction::new(spirv::Op::CompositeExtract);
+                        instruction.add_operand(self.get_u32_type_id());
+                        instruction.add_operand(value);
+                        instruction.add_operand(member_value_id);
+                        instruction.add_operand(i as u32);
+                        body.push(instruction);
+                        // Use OpCompositeExtract to save the component of the vec3
+                    }
+                    let mut instruction = Instruction::new(spirv::Op::EmitMeshTasksEXT);
+                    for id in values {
+                        instruction.add_operand(id);
+                    }
+                    if let Some(task_payload) = task_payload {
+                        instruction.add_operand(task_payload);
+                    }
+                    body.push(instruction);
                 }
                 _ => {}
             }
@@ -3215,8 +3236,10 @@ impl BlockContext<'_> {
                     );
                     return Ok(BlockExitDisposition::Discarded);
                 }
-                Statement::Return { value: Some(value) } => {
-                    let value_id = self.cached[value];
+                Statement::Return {
+                    value: Some(output),
+                } => {
+                    let value_id = self.cached[output];
                     let instruction = match self.function.entry_point_context {
                         // If this is an entry point, and we need to return anything,
                         // let's instead store the output variables and return `void`.
@@ -3226,6 +3249,7 @@ impl BlockContext<'_> {
                                 self.ir_function.result.as_ref().unwrap(),
                                 &context.results,
                                 &mut block.body,
+                                context.task_payload,
                             )?;
                             Instruction::return_void()
                         }

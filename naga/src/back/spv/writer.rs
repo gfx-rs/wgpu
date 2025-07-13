@@ -22,6 +22,7 @@ use crate::{
 struct FunctionInterface<'a> {
     varying_ids: &'a mut Vec<Word>,
     stage: crate::ShaderStage,
+    task_payload: Option<Handle<crate::GlobalVariable>>,
 }
 
 impl Function {
@@ -699,6 +700,11 @@ impl Writer {
         let mut ep_context = EntryPointContext {
             argument_ids: Vec::new(),
             results: Vec::new(),
+            task_payload: if let Some(ref i) = interface {
+                i.task_payload.map(|a| self.global_variables[a].var_id)
+            } else {
+                None
+            },
         };
 
         let mut local_invocation_id = None;
@@ -831,6 +837,9 @@ impl Writer {
                             let type_id = self.get_handle_type_id(member.ty);
                             let name = member.name.as_deref();
                             let binding = member.binding.as_ref().unwrap();
+                            if binding.to_built_in() == Some(crate::BuiltIn::MeshTaskSize) {
+                                continue;
+                            }
                             has_point_size |=
                                 *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
                             let varying_id = self.write_varying(
@@ -1113,6 +1122,7 @@ impl Writer {
             Some(FunctionInterface {
                 varying_ids: &mut interface_ids,
                 stage: entry_point.stage,
+                task_payload: entry_point.task_payload,
             }),
             debug_info,
         )?;
@@ -2125,7 +2135,8 @@ impl Writer {
                     Bi::PointIndex => BuiltIn::PrimitivePointIndicesEXT,
                     Bi::LineIndices => BuiltIn::PrimitiveLineIndicesEXT,
                     Bi::TriangleIndices => BuiltIn::PrimitiveTriangleIndicesEXT,
-                    Bi::MeshTaskSize => unreachable!(),
+                    // No decoration, this EmitMeshTasksEXT is called at function return
+                    Bi::MeshTaskSize => return Ok(id),
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);

@@ -243,6 +243,9 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
                     .insert(max_primitives_override);
             }
         }
+        if entry.stage == crate::ShaderStage::Task || entry.stage == crate::ShaderStage::Mesh {
+            // TODO: make sure u32 is preserved
+        }
     }
 
     module_tracer.type_expression_tandem();
