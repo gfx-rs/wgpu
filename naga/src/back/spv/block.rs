@@ -238,7 +238,9 @@ impl Writer {
                 }
             };
 
-            body.push(Instruction::store(res_member.id, member_value_id, None));
+            if res_member.built_in != Some(crate::BuiltIn::MeshTaskSize) {
+                body.push(Instruction::store(res_member.id, member_value_id, None))
+            }
 
             match res_member.built_in {
                 Some(crate::BuiltIn::Position { .. })

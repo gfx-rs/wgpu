@@ -811,28 +811,26 @@ impl Writer {
             Some(ref result) => {
                 if let Some(ref mut iface) = interface {
                     let mut has_point_size = false;
-                    let class = if result.binding
-                        == Some(crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize))
-                    {
-                        spirv::StorageClass::Private
-                    } else {
-                        spirv::StorageClass::Output
-                    };
+                    let class = spirv::StorageClass::Output;
                     if let Some(ref binding) = result.binding {
                         has_point_size |=
                             *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
                         let type_id = self.get_handle_type_id(result.ty);
-                        let varying_id = self.write_varying(
-                            ir_module,
-                            iface.stage,
-                            class,
-                            None,
-                            result.ty,
-                            binding,
-                        )?;
-                        if class != spirv::StorageClass::Private {
-                            iface.varying_ids.push(varying_id);
-                        }
+                        let varying_id =
+                            if *binding == crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize) {
+                                0
+                            } else {
+                                let varying_id = self.write_varying(
+                                    ir_module,
+                                    iface.stage,
+                                    class,
+                                    None,
+                                    result.ty,
+                                    binding,
+                                )?;
+                                iface.varying_ids.push(varying_id);
+                                varying_id
+                            };
                         ep_context.results.push(ResultMember {
                             id: varying_id,
                             type_id,
@@ -850,17 +848,23 @@ impl Writer {
                             }
                             has_point_size |=
                                 *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
-                            let varying_id = self.write_varying(
-                                ir_module,
-                                iface.stage,
-                                class,
-                                name,
-                                member.ty,
-                                binding,
-                            )?;
-                            if class != spirv::StorageClass::Private {
+                            let varying_id = if *binding
+                                == crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize)
+                            {
+                                0
+                            } else {
+                                let varying_id = self.write_varying(
+                                    ir_module,
+                                    iface.stage,
+                                    class,
+                                    name,
+                                    result.ty,
+                                    binding,
+                                )?;
                                 iface.varying_ids.push(varying_id);
-                            }
+                                varying_id
+                            };
+                            iface.varying_ids.push(varying_id);
                             ep_context.results.push(ResultMember {
                                 id: varying_id,
                                 type_id,
