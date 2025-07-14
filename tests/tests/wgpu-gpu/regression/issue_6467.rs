@@ -13,7 +13,11 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// The following test should successfully do nothing on all platforms.
 #[gpu_test]
 static ZERO_WORKGROUP_COUNT: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().limits(wgpu::Limits::default()))
+    .parameters(
+        TestParameters::default()
+            .limits(wgpu::Limits::default())
+            .enable_noop(),
+    )
     .run_async(|ctx| async move {
         let module = ctx
             .device

@@ -16,7 +16,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// This also tests that shaders generated with this fix execute correctly.
 #[gpu_test]
 static CONTINUE_SWITCH: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().force_fxc(true))
+    .parameters(TestParameters::default().force_fxc(true).enable_noop())
     .run_async(|ctx| async move { test_impl(&ctx).await });
 
 async fn test_impl(ctx: &TestingContext) {

@@ -42,7 +42,7 @@ const TRIVIAL_FRAGMENT_SHADER_DESC: wgpu::ShaderModuleDescriptor = wgpu::ShaderM
 #[gpu_test]
 static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
@@ -72,7 +72,11 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
 #[gpu_test]
 static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().test_features_limits())
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .enable_noop(),
+        )
         .run_sync(|ctx| {
             ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
@@ -101,7 +105,7 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
 #[gpu_test]
 static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
@@ -138,7 +142,11 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
 #[gpu_test]
 static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().test_features_limits())
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .enable_noop(),
+        )
         .run_sync(|ctx| {
             ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
@@ -186,7 +194,7 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
 
 #[gpu_test]
 static NO_TARGETLESS_RENDER: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         fail(
             &ctx.device,

@@ -343,12 +343,18 @@ macro_rules! make_test {
     ($name:ident, $test_data:expr, $expect_noop:expr, $features:expr) => {
         #[gpu_test]
         static $name: GpuTestConfiguration = GpuTestConfiguration::new()
-            .parameters(
-                TestParameters::default()
+            .parameters({
+                let params = TestParameters::default()
                     .downlevel_flags(wgpu::DownlevelFlags::INDIRECT_EXECUTION)
                     .features($features)
-                    .limits(wgpu::Limits::downlevel_defaults()),
-            )
+                    .limits(wgpu::Limits::downlevel_defaults());
+
+                if $expect_noop {
+                    params.enable_noop()
+                } else {
+                    params
+                }
+            })
             .run_async(|ctx| run_test(ctx, $test_data, $expect_noop));
     };
 }

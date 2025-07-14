@@ -6,7 +6,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 #[gpu_test]
 static DROP_FAILED_TIMESTAMP_QUERY_SET: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         // Enter an error scope, so the validation catch-all doesn't
         // report the error too early.

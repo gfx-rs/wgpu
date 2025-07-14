@@ -40,7 +40,11 @@ const ENTRY: wgpu::BindGroupLayoutEntry = wgpu::BindGroupLayoutEntry {
 
 #[gpu_test]
 static BIND_GROUP_LAYOUT_DEDUPLICATION: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop(),
+    )
     .run_async(bgl_dedupe);
 
 async fn bgl_dedupe(ctx: TestingContext) {
@@ -120,7 +124,11 @@ async fn bgl_dedupe(ctx: TestingContext) {
 #[gpu_test]
 static BIND_GROUP_LAYOUT_DEDUPLICATION_WITH_DROPPED_USER_HANDLE: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().test_features_limits())
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .enable_noop(),
+        )
         .run_sync(bgl_dedupe_with_dropped_user_handle);
 
 // https://github.com/gfx-rs/wgpu/issues/4824
@@ -203,7 +211,11 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
 
 #[gpu_test]
 static GET_DERIVED_BGL: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop(),
+    )
     .run_sync(get_derived_bgl);
 
 fn get_derived_bgl(ctx: TestingContext) {
@@ -277,7 +289,11 @@ fn get_derived_bgl(ctx: TestingContext) {
 #[gpu_test]
 static SEPARATE_PIPELINES_HAVE_INCOMPATIBLE_DERIVED_BGLS: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().test_features_limits())
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .enable_noop(),
+        )
         .run_sync(separate_pipelines_have_incompatible_derived_bgls);
 
 fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
@@ -341,7 +357,11 @@ fn separate_pipelines_have_incompatible_derived_bgls(ctx: TestingContext) {
 #[gpu_test]
 static DERIVED_BGLS_INCOMPATIBLE_WITH_REGULAR_BGLS: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().test_features_limits())
+        .parameters(
+            TestParameters::default()
+                .test_features_limits()
+                .enable_noop(),
+        )
         .run_sync(derived_bgls_incompatible_with_regular_bgls);
 
 fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
@@ -412,7 +432,11 @@ fn derived_bgls_incompatible_with_regular_bgls(ctx: TestingContext) {
 
 #[gpu_test]
 static BIND_GROUP_LAYOUT_DEDUPLICATION_DERIVED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop(),
+    )
     .run_sync(bgl_dedupe_derived);
 
 fn bgl_dedupe_derived(ctx: TestingContext) {

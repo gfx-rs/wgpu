@@ -11,7 +11,8 @@ static NON_FATAL_ERRORS_IN_QUEUE_SUBMIT: GpuTestConfiguration = GpuTestConfigura
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults()),
+            .limits(Limits::downlevel_defaults())
+            .enable_noop(),
     )
     .run_sync(|ctx| {
         let shader_with_trivial_bind_group = concat!(

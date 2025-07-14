@@ -74,7 +74,7 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
             .limits(wgpu::Limits {
                 max_push_constant_size: 4,
                 ..wgpu::Limits::downlevel_defaults()
-            }),
+            }).enable_noop(),
     )
     .run_async(|ctx| async move {
         ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -116,7 +116,8 @@ static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
             .limits(wgpu::Limits {
                 max_push_constant_size: 4,
                 ..wgpu::Limits::downlevel_defaults()
-            }),
+            })
+            .enable_noop(),
     )
     .run_async(|ctx| async move {
         ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);

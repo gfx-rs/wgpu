@@ -6,7 +6,9 @@ use wgpu::{
     CommandEncoderDescriptor, ComputePassDescriptor, PollType, ShaderStages,
 };
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -64,16 +66,19 @@ fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
 }
 
 #[gpu_test]
-static WAIT: GpuTestConfiguration = GpuTestConfiguration::new().run_async(|ctx| async move {
-    let cmd_buf = generate_dummy_work(&ctx);
+static WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
+        let cmd_buf = generate_dummy_work(&ctx);
 
-    ctx.queue.submit(Some(cmd_buf));
-    ctx.async_poll(PollType::wait()).await.unwrap();
-});
+        ctx.queue.submit(Some(cmd_buf));
+        ctx.async_poll(PollType::wait()).await.unwrap();
+    });
 
 #[gpu_test]
-static DOUBLE_WAIT: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static DOUBLE_WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let cmd_buf = generate_dummy_work(&ctx);
 
         ctx.queue.submit(Some(cmd_buf));
@@ -82,8 +87,9 @@ static DOUBLE_WAIT: GpuTestConfiguration =
     });
 
 #[gpu_test]
-static WAIT_ON_SUBMISSION: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let cmd_buf = generate_dummy_work(&ctx);
 
         let index = ctx.queue.submit(Some(cmd_buf));
@@ -91,8 +97,9 @@ static WAIT_ON_SUBMISSION: GpuTestConfiguration =
     });
 
 #[gpu_test]
-static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let cmd_buf = generate_dummy_work(&ctx);
 
         let index = ctx.queue.submit(Some(cmd_buf));
@@ -103,8 +110,9 @@ static DOUBLE_WAIT_ON_SUBMISSION: GpuTestConfiguration =
     });
 
 #[gpu_test]
-static WAIT_OUT_OF_ORDER: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static WAIT_OUT_OF_ORDER: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let cmd_buf1 = generate_dummy_work(&ctx);
         let cmd_buf2 = generate_dummy_work(&ctx);
 
@@ -120,7 +128,11 @@ static WAIT_OUT_OF_ORDER: GpuTestConfiguration =
 /// console.
 #[gpu_test]
 static WAIT_AFTER_BAD_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(wgpu_test::TestParameters::default().skip(wgpu_test::FailureCase::webgl2()))
+    .parameters(
+        wgpu_test::TestParameters::default()
+            .skip(wgpu_test::FailureCase::webgl2())
+            .enable_noop(),
+    )
     .run_async(wait_after_bad_submission);
 
 async fn wait_after_bad_submission(ctx: TestingContext) {

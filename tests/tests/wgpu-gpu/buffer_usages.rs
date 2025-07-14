@@ -59,20 +59,26 @@ fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
 }
 
 #[gpu_test]
-static BUFFER_USAGE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    try_create(
-        ctx,
-        &[
-            (false, ALWAYS_VALID),
-            (true, NEEDS_MAPPABLE_PRIMARY_BUFFERS),
-            (true, ALWAYS_FAIL),
-        ],
-    );
-});
+static BUFFER_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_sync(|ctx| {
+        try_create(
+            ctx,
+            &[
+                (false, ALWAYS_VALID),
+                (true, NEEDS_MAPPABLE_PRIMARY_BUFFERS),
+                (true, ALWAYS_FAIL),
+            ],
+        );
+    });
 
 #[gpu_test]
 static BUFFER_USAGE_MAPPABLE_PRIMARY_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS)
+            .enable_noop(),
+    )
     .run_sync(|ctx| {
         try_create(
             ctx,
@@ -169,7 +175,11 @@ async fn map_test(
 
 #[gpu_test]
 static BUFFER_MAP_ASYNC_MAP_STATE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS)
+            .enable_noop(),
+    )
     .run_async(move |ctx| async move {
         for usage_type in ["invalid", "read", "write"] {
             for map_mode_type in [Ma::Read, Ma::Write] {

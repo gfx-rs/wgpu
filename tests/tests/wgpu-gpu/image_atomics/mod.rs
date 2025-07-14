@@ -172,7 +172,7 @@ async fn test_format(
 
 #[gpu_test]
 static IMAGE_ATOMICS_NOT_ENABLED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 256,
@@ -200,7 +200,7 @@ static IMAGE_ATOMICS_NOT_ENABLED: GpuTestConfiguration = GpuTestConfiguration::n
 
 #[gpu_test]
 static IMAGE_ATOMICS_NOT_SUPPORTED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_ATOMIC))
+    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_ATOMIC).enable_noop())
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 256,

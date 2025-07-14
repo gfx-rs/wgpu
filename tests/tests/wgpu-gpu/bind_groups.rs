@@ -176,14 +176,15 @@ static MULTIPLE_BINDINGS_WITH_DIFFERENT_SIZES: GpuTestConfiguration = GpuTestCon
     .parameters(
         TestParameters::default()
             .limits(wgpu::Limits::downlevel_defaults())
-            .expect_fail(FailureCase::always()), // https://github.com/gfx-rs/wgpu/issues/7359
+            .expect_fail(FailureCase::always())
+            .enable_noop(), // https://github.com/gfx-rs/wgpu/issues/7359
     )
     .run_sync(multiple_bindings_with_differing_sizes);
 
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_NONFILTERING_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,
@@ -201,7 +202,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_NONFILTERING_SAMPLER: GpuTestConfiguration
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,
@@ -219,7 +220,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER: GpuTestConfiguration =
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,
@@ -237,7 +238,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER: GpuTestConfiguration =
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,

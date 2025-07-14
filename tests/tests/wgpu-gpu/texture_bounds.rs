@@ -1,95 +1,97 @@
 //! Tests for texture copy bounds checks.
 
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration};
+use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.push(BAD_COPY_ORIGIN_TEST);
 }
 
 #[gpu_test]
-static BAD_COPY_ORIGIN_TEST: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    let try_origin = |origin, size, should_panic| {
-        let texture = ctx.device.create_texture(&TEXTURE_DESCRIPTOR);
-        let data = vec![255; BUFFER_SIZE as usize];
+static BAD_COPY_ORIGIN_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_sync(|ctx| {
+        let try_origin = |origin, size, should_panic| {
+            let texture = ctx.device.create_texture(&TEXTURE_DESCRIPTOR);
+            let data = vec![255; BUFFER_SIZE as usize];
 
-        fail_if(
-            &ctx.device,
-            should_panic,
-            || {
-                ctx.queue.write_texture(
-                    wgpu::TexelCopyTextureInfo {
-                        texture: &texture,
-                        mip_level: 0,
-                        origin,
-                        aspect: wgpu::TextureAspect::All,
-                    },
-                    &data,
-                    BUFFER_COPY_LAYOUT,
-                    size,
-                )
+            fail_if(
+                &ctx.device,
+                should_panic,
+                || {
+                    ctx.queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                            texture: &texture,
+                            mip_level: 0,
+                            origin,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        &data,
+                        BUFFER_COPY_LAYOUT,
+                        size,
+                    )
+                },
+                None,
+            );
+        };
+
+        try_origin(wgpu::Origin3d { x: 0, y: 0, z: 0 }, TEXTURE_SIZE, false);
+        try_origin(wgpu::Origin3d { x: 1, y: 0, z: 0 }, TEXTURE_SIZE, true);
+        try_origin(wgpu::Origin3d { x: 0, y: 1, z: 0 }, TEXTURE_SIZE, true);
+        try_origin(wgpu::Origin3d { x: 0, y: 0, z: 1 }, TEXTURE_SIZE, true);
+
+        try_origin(
+            wgpu::Origin3d {
+                x: TEXTURE_SIZE.width - 1,
+                y: TEXTURE_SIZE.height - 1,
+                z: TEXTURE_SIZE.depth_or_array_layers - 1,
             },
-            None,
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            false,
         );
-    };
-
-    try_origin(wgpu::Origin3d { x: 0, y: 0, z: 0 }, TEXTURE_SIZE, false);
-    try_origin(wgpu::Origin3d { x: 1, y: 0, z: 0 }, TEXTURE_SIZE, true);
-    try_origin(wgpu::Origin3d { x: 0, y: 1, z: 0 }, TEXTURE_SIZE, true);
-    try_origin(wgpu::Origin3d { x: 0, y: 0, z: 1 }, TEXTURE_SIZE, true);
-
-    try_origin(
-        wgpu::Origin3d {
-            x: TEXTURE_SIZE.width - 1,
-            y: TEXTURE_SIZE.height - 1,
-            z: TEXTURE_SIZE.depth_or_array_layers - 1,
-        },
-        wgpu::Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        },
-        false,
-    );
-    try_origin(
-        wgpu::Origin3d {
-            x: u32::MAX,
-            y: 0,
-            z: 0,
-        },
-        wgpu::Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        },
-        true,
-    );
-    try_origin(
-        wgpu::Origin3d {
-            x: u32::MAX,
-            y: 0,
-            z: 0,
-        },
-        wgpu::Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        },
-        true,
-    );
-    try_origin(
-        wgpu::Origin3d {
-            x: u32::MAX,
-            y: 0,
-            z: 0,
-        },
-        wgpu::Extent3d {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        },
-        true,
-    );
-});
+        try_origin(
+            wgpu::Origin3d {
+                x: u32::MAX,
+                y: 0,
+                z: 0,
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            true,
+        );
+        try_origin(
+            wgpu::Origin3d {
+                x: u32::MAX,
+                y: 0,
+                z: 0,
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            true,
+        );
+        try_origin(
+            wgpu::Origin3d {
+                x: u32::MAX,
+                y: 0,
+                z: 0,
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            true,
+        );
+    });
 
 const TEXTURE_SIZE: wgpu::Extent3d = wgpu::Extent3d {
     width: 64,

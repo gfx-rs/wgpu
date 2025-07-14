@@ -268,7 +268,11 @@ async fn render_pass_query_set_ownership_timestamps(ctx: TestingContext) {
 
 #[gpu_test]
 static RENDER_PASS_KEEP_ENCODER_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().test_features_limits())
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .enable_noop(),
+    )
     .run_async(render_pass_keep_encoder_alive);
 
 async fn render_pass_keep_encoder_alive(ctx: TestingContext) {

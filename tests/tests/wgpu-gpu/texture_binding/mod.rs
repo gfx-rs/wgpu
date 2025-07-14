@@ -18,7 +18,8 @@ static TEXTURE_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .downlevel_flags(DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT),
+            .downlevel_flags(DownlevelFlags::WEBGPU_TEXTURE_FORMAT_SUPPORT)
+            .enable_noop(),
     )
     .run_sync(texture_binding);
 

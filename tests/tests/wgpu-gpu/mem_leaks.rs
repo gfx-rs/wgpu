@@ -310,7 +310,8 @@ static SIMPLE_DRAW_CHECK_MEM_LEAKS: wgpu_test::GpuTestConfiguration =
         .parameters(
             wgpu_test::TestParameters::default()
                 .test_features_limits()
-                .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+                .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
+                .enable_noop(),
         )
         .run_async(|ctx| {
             draw_test_with_reports(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {

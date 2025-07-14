@@ -1,7 +1,7 @@
 //! Tests for texture copy
 
 use wgpu::*;
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -199,8 +199,9 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
     });
 
 #[gpu_test]
-static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let size = 256;
 
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {

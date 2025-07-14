@@ -1,7 +1,7 @@
 //! Tests for buffer copy validation.
 
 use wgpu::PollType;
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -13,6 +13,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 #[gpu_test]
 static QUEUE_WRITE_TEXTURE_THEN_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -61,8 +62,9 @@ static QUEUE_WRITE_TEXTURE_THEN_DESTROY: GpuTestConfiguration = GpuTestConfigura
     });
 
 #[gpu_test]
-static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(|ctx| {
+static QUEUE_WRITE_TEXTURE_OVERFLOW: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_sync(|ctx| {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: wgpu::Extent3d {

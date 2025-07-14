@@ -26,7 +26,8 @@ static LIMITS_HIT: GpuTestConfiguration = GpuTestConfiguration::new()
                 max_acceleration_structures_per_shader_stage: 1,
                 ..Limits::default()
             })
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(hit_limits);
 

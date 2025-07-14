@@ -1,4 +1,4 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -9,6 +9,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 #[gpu_test]
 static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let source = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -60,6 +61,7 @@ static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfi
 
 #[gpu_test]
 static TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let source = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,

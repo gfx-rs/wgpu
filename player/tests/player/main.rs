@@ -245,7 +245,7 @@ impl Corpus {
     }
 }
 
-#[cfg(not(miri))]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn test_api() {
     env_logger::init();

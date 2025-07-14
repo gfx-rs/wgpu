@@ -2,7 +2,7 @@
 
 use wgpu::BufferAddress;
 
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer};
+use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(COPY_ALIGNMENT);
@@ -26,49 +26,51 @@ fn try_copy(
 }
 
 #[gpu_test]
-static COPY_ALIGNMENT: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    try_copy(&ctx, 0, 0, None);
-    try_copy(
-        &ctx,
-        4,
-        16 + 1,
-        Some("copy size 17 does not respect `copy_buffer_alignment`"),
-    );
-    try_copy(
-        &ctx,
-        64,
-        20 + 2,
-        Some("copy size 22 does not respect `copy_buffer_alignment`"),
-    );
-    try_copy(
-        &ctx,
-        256,
-        44 + 3,
-        Some("copy size 47 does not respect `copy_buffer_alignment`"),
-    );
-    try_copy(&ctx, 1024, 8 + 4, None);
+static COPY_ALIGNMENT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_sync(|ctx| {
+        try_copy(&ctx, 0, 0, None);
+        try_copy(
+            &ctx,
+            4,
+            16 + 1,
+            Some("copy size 17 does not respect `copy_buffer_alignment`"),
+        );
+        try_copy(
+            &ctx,
+            64,
+            20 + 2,
+            Some("copy size 22 does not respect `copy_buffer_alignment`"),
+        );
+        try_copy(
+            &ctx,
+            256,
+            44 + 3,
+            Some("copy size 47 does not respect `copy_buffer_alignment`"),
+        );
+        try_copy(&ctx, 1024, 8 + 4, None);
 
-    try_copy(&ctx, 0, 4, None);
-    try_copy(
-        &ctx,
-        4 + 1,
-        8,
-        Some("buffer offset 5 is not aligned to block size or `copy_buffer_alignment`"),
-    );
-    try_copy(
-        &ctx,
-        64 + 2,
-        12,
-        Some("buffer offset 66 is not aligned to block size or `copy_buffer_alignment`"),
-    );
-    try_copy(
-        &ctx,
-        256 + 3,
-        16,
-        Some("buffer offset 259 is not aligned to block size or `copy_buffer_alignment`"),
-    );
-    try_copy(&ctx, 1024 + 4, 4, None);
-});
+        try_copy(&ctx, 0, 4, None);
+        try_copy(
+            &ctx,
+            4 + 1,
+            8,
+            Some("buffer offset 5 is not aligned to block size or `copy_buffer_alignment`"),
+        );
+        try_copy(
+            &ctx,
+            64 + 2,
+            12,
+            Some("buffer offset 66 is not aligned to block size or `copy_buffer_alignment`"),
+        );
+        try_copy(
+            &ctx,
+            256 + 3,
+            16,
+            Some("buffer offset 259 is not aligned to block size or `copy_buffer_alignment`"),
+        );
+        try_copy(&ctx, 1024 + 4, 4, None);
+    });
 
 const BUFFER_SIZE: BufferAddress = 1234;
 

@@ -55,7 +55,7 @@ fn blend_state_with_dual_source_blending() -> BlendState {
 
 #[gpu_test]
 static DUAL_SOURCE_BLENDING_FEATURE_DISABLED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_async(dual_source_blending_disabled);
 
 async fn dual_source_blending_disabled(ctx: TestingContext) {
@@ -118,7 +118,11 @@ async fn dual_source_blending_disabled(ctx: TestingContext) {
 
 #[gpu_test]
 static DUAL_SOURCE_BLENDING_FEATURE_ENABLED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::DUAL_SOURCE_BLENDING))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::DUAL_SOURCE_BLENDING)
+            .enable_noop(),
+    )
     .run_async(dual_source_blending_enabled);
 
 async fn dual_source_blending_enabled(ctx: TestingContext) {

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 use wgpu::*;
 
@@ -18,6 +18,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// to add them to. This is incorrect, as we do not immediately invoke map_async callbacks.
 #[gpu_test]
 static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         // Create a mappable buffer
         let buffer = ctx.device.create_buffer(&BufferDescriptor {

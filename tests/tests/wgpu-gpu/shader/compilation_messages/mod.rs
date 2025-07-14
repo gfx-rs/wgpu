@@ -8,7 +8,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 #[gpu_test]
 static SHADER_COMPILE_SUCCESS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         let sm = ctx
             .device
@@ -22,7 +22,7 @@ static SHADER_COMPILE_SUCCESS: GpuTestConfiguration = GpuTestConfiguration::new(
 
 #[gpu_test]
 static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
         let sm = ctx

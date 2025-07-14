@@ -26,7 +26,11 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().expect_fail(FailureCase::always()))
+    .parameters(
+        TestParameters::default()
+            .expect_fail(FailureCase::always())
+            .enable_noop(),
+    )
     .run_async(|ctx| async move {
         // Create a bind group using a layout from another device. This should be a validation
         // error but currently crashes.
@@ -53,7 +57,7 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
 static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         ctx.instance.poll_all(false);
 
@@ -80,7 +84,7 @@ static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
 static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         use pollster::FutureExt as _;
         ctx.adapter
@@ -162,7 +166,11 @@ async fn request_device_error_message() {
 // should turn into no-ops, per spec.
 #[gpu_test]
 static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::CLEAR_TEXTURE)
+            .enable_noop(),
+    )
     .run_sync(|ctx| {
         // Create some resources on the device that we will attempt to use *after* losing
         // the device.
@@ -474,7 +482,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
 
 #[gpu_test]
 static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         // This test checks that when device.destroy is called, the provided
         // DeviceLostClosure is called with reason DeviceLostReason::Destroyed.
@@ -509,7 +517,7 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
 
 #[gpu_test]
 static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         // This test addresses a bug found in multiple backends where `wgpu_core` and `wgpu_hal`
         // backends made different assumptions about the element order of vectors of bind group
@@ -636,7 +644,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
 
 #[gpu_test]
 static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         // When a device is destroyed, its resources should be released,
         // without causing a deadlock.
@@ -675,7 +683,7 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
 
 #[gpu_test]
 static DEVICE_AND_QUEUE_HAVE_DIFFERENT_IDS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         let TestingContext {
             adapter,
