@@ -1,4 +1,8 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(TRANSITION_RESOURCES);
+}
 
 #[gpu_test]
 static TRANSITION_RESOURCES: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

@@ -1,4 +1,8 @@
-use wgpu_test::{fail, gpu_test, valid, GpuTestConfiguration};
+use wgpu_test::{fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([BAD_BUFFER, BAD_TEXTURE]);
+}
 
 #[gpu_test]
 static BAD_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

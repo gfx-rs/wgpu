@@ -1,7 +1,16 @@
 use wgpu::{DownlevelFlags, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest};
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        NUMERIC_BUILTINS,
+        INT64_ATOMIC_MIN_MAX,
+        INT64_ATOMIC_ALL_OPS,
+        FLOAT32_ATOMIC,
+    ]);
+}
 
 fn create_numeric_builtin_test() -> Vec<ShaderTest> {
     let mut tests = Vec::new();

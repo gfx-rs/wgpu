@@ -1,6 +1,10 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer};
 
 use wgpu::*;
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(ALLOW_INPUT_NOT_CONSUMED);
+}
 
 /// Previously, for every user-defined vertex output a fragment shader had to have a corresponding
 /// user-defined input. This would generate `StageError::InputNotConsumed`.

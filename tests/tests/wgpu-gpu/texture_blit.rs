@@ -1,4 +1,11 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST,
+        TEXTURE_BLIT_WITH_NEAREST_FILTER_TEST,
+    ]);
+}
 
 #[gpu_test]
 static TEXTURE_BLIT_WITH_LINEAR_FILTER_TEST: GpuTestConfiguration = GpuTestConfiguration::new()

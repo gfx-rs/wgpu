@@ -3,6 +3,10 @@ use wgpu::util::DeviceExt;
 use wgpu::{BufferDescriptor, BufferUsages, MapMode, PollType};
 use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.push(ARRAY_SIZE_OVERRIDES);
+}
+
 const SHADER: &str = r#"
     const testing_shared: array<i32, 1> = array(8);
     override n = testing_shared[0u];

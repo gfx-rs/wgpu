@@ -2,7 +2,17 @@
 
 use wgpu::BufferAddress;
 use wgpu::{BufferUsages as Bu, MapMode as Ma};
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        BUFFER_USAGE,
+        BUFFER_USAGE_MAPPABLE_PRIMARY_BUFFERS,
+        BUFFER_MAP_ASYNC_MAP_STATE,
+    ]);
+}
 
 const BUFFER_SIZE: BufferAddress = 1234;
 

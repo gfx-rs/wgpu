@@ -2,7 +2,19 @@
 //!
 //! Do some tests to ensure things are working correctly and nothing gets mad.
 
-use wgpu_test::{did_oom, gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    did_oom, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        SAMPLER_DEDUPLICATION,
+        SAMPLER_CREATION_FAILURE,
+        SAMPLER_SINGLE_BIND_GROUP,
+        SAMPLER_MULTI_BIND_GROUP,
+    ]);
+}
 
 // A number large enough to likely cause sampler caches to run out of space
 // on some devices.

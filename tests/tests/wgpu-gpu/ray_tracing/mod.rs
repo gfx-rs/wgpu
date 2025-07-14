@@ -18,6 +18,15 @@ mod limits;
 mod scene;
 mod shader;
 
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    as_build::all_tests(tests);
+    as_create::all_tests(tests);
+    as_use_after_free::all_tests(tests);
+    limits::all_tests(tests);
+    scene::all_tests(tests);
+    shader::all_tests(tests);
+}
+
 fn acceleration_structure_limits() -> wgpu::Limits {
     wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()
 }

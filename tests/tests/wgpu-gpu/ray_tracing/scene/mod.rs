@@ -9,6 +9,13 @@ use glam::{Affine3A, Quat, Vec3};
 
 mod mesh_gen;
 
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    tests.extend([
+        ACCELERATION_STRUCTURE_BUILD_NO_INDEX,
+        ACCELERATION_STRUCTURE_BUILD_WITH_INDEX,
+    ]);
+}
+
 fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
     let max_instances = 1000;
     let device = &ctx.device;

@@ -1,4 +1,17 @@
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        EMPTY_BUFFER,
+        MAP_OFFSET,
+        MINIMUM_BUFFER_BINDING_SIZE_LAYOUT,
+        MINIMUM_BUFFER_BINDING_SIZE_DISPATCH,
+        CLEAR_OFFSET_OUTSIDE_RESOURCE_BOUNDS,
+        CLEAR_OFFSET_PLUS_SIZE_OUTSIDE_U64_BOUNDS,
+    ]);
+}
 
 async fn test_empty_buffer_range(ctx: &TestingContext, buffer_size: u64, label: &str) {
     let r = wgpu::BufferUsages::MAP_READ;

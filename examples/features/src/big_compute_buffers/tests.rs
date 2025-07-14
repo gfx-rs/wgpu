@@ -2,7 +2,7 @@ use super::*;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
-static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
+pub static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .features(

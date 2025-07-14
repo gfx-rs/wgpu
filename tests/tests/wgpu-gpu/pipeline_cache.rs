@@ -2,6 +2,10 @@ use std::{fmt::Write, num::NonZeroU64};
 
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.push(PIPELINE_CACHE);
+}
+
 /// We want to test that using a pipeline cache doesn't cause failure
 ///
 /// It would be nice if we could also assert that reusing a pipeline cache would make compilation

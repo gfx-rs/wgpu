@@ -6,7 +6,18 @@ use wgpu::{
     CommandEncoderDescriptor, ComputePassDescriptor, PollType, ShaderStages,
 };
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestingContext};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        WAIT,
+        DOUBLE_WAIT,
+        WAIT_ON_SUBMISSION,
+        DOUBLE_WAIT_ON_SUBMISSION,
+        WAIT_OUT_OF_ORDER,
+        WAIT_AFTER_BAD_SUBMISSION,
+    ]);
+}
 
 fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
     let buffer = ctx.device.create_buffer(&BufferDescriptor {

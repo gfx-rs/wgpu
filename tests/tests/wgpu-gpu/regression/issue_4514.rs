@@ -1,4 +1,10 @@
-use wgpu_test::{gpu_test, image, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(DEGENERATE_SWITCH);
+}
 
 /// FXC and potentially some glsl consumers have a bug when handling switch statements on a constant
 /// with just a default case. (not sure if the constant part is relevant)

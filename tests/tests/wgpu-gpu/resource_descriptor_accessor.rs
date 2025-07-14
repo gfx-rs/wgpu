@@ -1,4 +1,8 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(BUFFER_SIZE_AND_USAGE);
+}
 
 #[gpu_test]
 static BUFFER_SIZE_AND_USAGE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

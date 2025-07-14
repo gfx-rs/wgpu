@@ -5,7 +5,19 @@ use wgpu::{
     CreateTlasDescriptor, Error, ErrorFilter, Extent3d, Features, QuerySetDescriptor, QueryType,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, VertexFormat,
 };
+use wgpu_test::GpuTestInitializer;
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        TEXTURE_OOM_TEST,
+        BUFFER_OOM_TEST,
+        MAPPING_BUFFER_OOM_TEST,
+        QUERY_SET_OOM_TEST,
+        BLAS_OOM_TEST,
+        TLAS_OOM_TEST,
+    ]);
+}
 
 // Tests in this file must all end with "OOM_TEST" so that nextest doesn't run any other tests while it runs one of the OOM tests.
 // This is done so that other tests that create resources will not fail with OOM errors due to the OOM tests running in parallel.

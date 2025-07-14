@@ -1,6 +1,19 @@
 use std::num::NonZeroU64;
 
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        BIND_GROUP_LAYOUT_DEDUPLICATION,
+        BIND_GROUP_LAYOUT_DEDUPLICATION_WITH_DROPPED_USER_HANDLE,
+        GET_DERIVED_BGL,
+        SEPARATE_PIPELINES_HAVE_INCOMPATIBLE_DERIVED_BGLS,
+        DERIVED_BGLS_INCOMPATIBLE_WITH_REGULAR_BGLS,
+        BIND_GROUP_LAYOUT_DEDUPLICATION_DERIVED,
+    ]);
+}
 
 const SHADER_SRC: &str = "
 @group(0) @binding(0)

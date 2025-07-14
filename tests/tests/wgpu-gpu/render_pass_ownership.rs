@@ -12,7 +12,18 @@
 use std::num::NonZeroU64;
 
 use wgpu::util::DeviceExt as _;
-use wgpu_test::{gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        RENDER_PASS_RESOURCE_OWNERSHIP,
+        RENDER_PASS_QUERY_SET_OWNERSHIP_PIPELINE_STATISTICS,
+        RENDER_PASS_QUERY_SET_OWNERSHIP_TIMESTAMPS,
+        RENDER_PASS_KEEP_ENCODER_ALIVE,
+    ]);
+}
 
 // Minimal shader with buffer based side effect - only needed to check whether the render pass has executed at all.
 const SHADER_SRC: &str = "

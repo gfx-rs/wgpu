@@ -1,6 +1,13 @@
 //! Tests for FLOAT32_FILTERABLE feature.
 
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        FLOAT32_FILTERABLE_WITHOUT_FEATURE,
+        FLOAT32_FILTERABLE_WITH_FEATURE,
+    ]);
+}
 
 fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, filterable: bool) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {

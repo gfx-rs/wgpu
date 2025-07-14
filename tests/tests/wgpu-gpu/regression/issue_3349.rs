@@ -1,7 +1,12 @@
 use wgpu::util::DeviceExt;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, TestParameters, TestingContext,
+    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(MULTI_STAGE_DATA_BINDING);
+}
 
 /// We thought we had an OpenGL bug that, when running without explicit in-shader locations,
 /// we will not properly bind uniform buffers to both the vertex and fragment

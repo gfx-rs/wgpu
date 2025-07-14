@@ -1,4 +1,15 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        NUM_WORKGROUPS_BUILTIN,
+        DISCARD_DISPATCH,
+        RESET_BIND_GROUPS,
+        ZERO_SIZED_BUFFER,
+    ]);
+}
 
 /// Make sure that the num_workgroups builtin works properly (it requires a workaround on D3D12).
 #[gpu_test]

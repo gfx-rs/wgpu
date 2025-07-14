@@ -9,6 +9,7 @@ use parking_lot::Mutex;
 
 use crate::{
     config::GpuTestConfiguration, params::TestInfo, report::AdapterReport, run::execute_test,
+    GpuTestInitializer,
 };
 
 type NativeTestFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -76,7 +77,7 @@ pub static TEST_LIST: Mutex<Vec<crate::GpuTestConfiguration>> = Mutex::new(Vec::
 pub type MainResult = anyhow::Result<()>;
 
 /// Main function that runs every gpu function once for every adapter on the system.
-pub fn main() -> MainResult {
+pub fn main(tests: Vec<GpuTestInitializer>) -> MainResult {
     use anyhow::Context;
 
     use crate::report::GpuReport;
@@ -108,9 +109,9 @@ pub fn main() -> MainResult {
         report
     };
 
-    let mut test_guard = TEST_LIST.lock();
     // Iterate through all the tests. Creating a test per adapter.
-    execute_native(test_guard.drain(..).flat_map(|test| {
+    execute_native(tests.into_iter().flat_map(|initializer| {
+        let test = initializer();
         report
             .devices
             .iter()

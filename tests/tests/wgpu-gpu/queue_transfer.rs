@@ -1,7 +1,15 @@
 //! Tests for buffer copy validation.
 
 use wgpu::PollType;
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        QUEUE_WRITE_TEXTURE_THEN_DESTROY,
+        QUEUE_WRITE_TEXTURE_OVERFLOW,
+        QUEUE_WRITE_TEXTURE_BUFFER_OOB,
+    ]);
+}
 
 #[gpu_test]
 static QUEUE_WRITE_TEXTURE_THEN_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()

@@ -6,6 +6,10 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.extend([VERTEX_FORMATS_ALL, VERTEX_FORMATS_10_10_10_2]);
+}
+
 #[derive(Debug, Copy, Clone)]
 enum TestCase {
     UnormsAndSnorms,

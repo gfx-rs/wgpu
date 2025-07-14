@@ -8,6 +8,10 @@ use nanorand::Rng;
 use wgpu::{util::DeviceExt, Limits};
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.extend([U64_MUL_U32, SHIFT_RIGHT_U96]);
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uint96(u32, u32, u32);

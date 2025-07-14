@@ -1,6 +1,12 @@
 use std::ops::Range;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(CLEAR_BUFFER_RANGE_RESPECTED);
+}
 
 async fn fill_test(ctx: &TestingContext, range: Range<u64>, size: u64) -> bool {
     let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {

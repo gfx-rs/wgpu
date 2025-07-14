@@ -1,14 +1,14 @@
 mod regression {
-    mod issue_3349;
-    mod issue_3457;
-    mod issue_4024;
-    mod issue_4122;
-    mod issue_4485;
-    mod issue_4514;
-    mod issue_5553;
-    mod issue_6317;
-    mod issue_6467;
-    mod issue_6827;
+    pub mod issue_3349;
+    pub mod issue_3457;
+    pub mod issue_4024;
+    pub mod issue_4122;
+    pub mod issue_4485;
+    pub mod issue_4514;
+    pub mod issue_5553;
+    pub mod issue_6317;
+    pub mod issue_6467;
+    pub mod issue_6827;
 }
 
 mod bgra8unorm_storage;
@@ -69,4 +69,76 @@ mod vertex_indices;
 mod write_texture;
 mod zero_init_texture_after_discard;
 
-wgpu_test::gpu_test_main!();
+fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
+    let mut tests = Vec::new();
+
+    bgra8unorm_storage::all_tests(&mut tests);
+    bind_group_layout_dedup::all_tests(&mut tests);
+    bind_groups::all_tests(&mut tests);
+    binding_array::all_tests(&mut tests);
+    buffer_copy::all_tests(&mut tests);
+    buffer_usages::all_tests(&mut tests);
+    buffer::all_tests(&mut tests);
+    clear_texture::all_tests(&mut tests);
+    clip_distances::all_tests(&mut tests);
+    cloneable_types::all_tests(&mut tests);
+    compute_pass_ownership::all_tests(&mut tests);
+    device::all_tests(&mut tests);
+    dispatch_workgroups_indirect::all_tests(&mut tests);
+    draw_indirect::all_tests(&mut tests);
+    dual_source_blending::all_tests(&mut tests);
+    encoder::all_tests(&mut tests);
+    float32_filterable::all_tests(&mut tests);
+    image_atomics::all_tests(&mut tests);
+    instance::all_tests(&mut tests);
+    life_cycle::all_tests(&mut tests);
+    mem_leaks::all_tests(&mut tests);
+    mesh_shader::all_tests(&mut tests);
+    nv12_texture::all_tests(&mut tests);
+    occlusion_query::all_tests(&mut tests);
+    oob_indexing::all_tests(&mut tests);
+    oom::all_tests(&mut tests);
+    pipeline_cache::all_tests(&mut tests);
+    pipeline::all_tests(&mut tests);
+    poll::all_tests(&mut tests);
+    push_constants::all_tests(&mut tests);
+    query_set::all_tests(&mut tests);
+    queue_transfer::all_tests(&mut tests);
+    ray_tracing::all_tests(&mut tests);
+    regression::issue_3349::all_tests(&mut tests);
+    regression::issue_3457::all_tests(&mut tests);
+    regression::issue_4024::all_tests(&mut tests);
+    regression::issue_4122::all_tests(&mut tests);
+    regression::issue_4485::all_tests(&mut tests);
+    regression::issue_4514::all_tests(&mut tests);
+    regression::issue_5553::all_tests(&mut tests);
+    regression::issue_6317::all_tests(&mut tests);
+    regression::issue_6467::all_tests(&mut tests);
+    regression::issue_6827::all_tests(&mut tests);
+    render_pass_ownership::all_tests(&mut tests);
+    render_target::all_tests(&mut tests);
+    resource_descriptor_accessor::all_tests(&mut tests);
+    resource_error::all_tests(&mut tests);
+    samplers::all_tests(&mut tests);
+    scissor_tests::all_tests(&mut tests);
+    shader_primitive_index::all_tests(&mut tests);
+    shader_view_format::all_tests(&mut tests);
+    shader::all_tests(&mut tests);
+    subgroup_operations::all_tests(&mut tests);
+    texture_binding::all_tests(&mut tests);
+    texture_blit::all_tests(&mut tests);
+    texture_bounds::all_tests(&mut tests);
+    texture_view_creation::all_tests(&mut tests);
+    timestamp_normalization::all_tests(&mut tests);
+    timestamp_query::all_tests(&mut tests);
+    transfer::all_tests(&mut tests);
+    transition_resources::all_tests(&mut tests);
+    vertex_formats::all_tests(&mut tests);
+    vertex_indices::all_tests(&mut tests);
+    write_texture::all_tests(&mut tests);
+    zero_init_texture_after_discard::all_tests(&mut tests);
+
+    tests
+}
+
+wgpu_test::gpu_test_main!(all_tests());

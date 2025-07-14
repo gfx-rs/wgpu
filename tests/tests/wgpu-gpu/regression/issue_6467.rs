@@ -1,5 +1,9 @@
 use wgpu::util::DeviceExt;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(ZERO_WORKGROUP_COUNT);
+}
 
 /// Running a compute shader with a total workgroup count of zero implies that no work
 /// should be done, and is a user error. Vulkan and DX12 accept this invalid input with grace, but

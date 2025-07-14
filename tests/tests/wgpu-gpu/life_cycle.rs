@@ -1,5 +1,16 @@
 use wgpu::{util::DeviceExt, Backends};
-use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{
+    fail, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        BUFFER_DESTROY,
+        TEXTURE_DESTROY,
+        BUFFER_DESTROY_BEFORE_SUBMIT,
+        TEXTURE_DESTROY_BEFORE_SUBMIT,
+    ]);
+}
 
 #[gpu_test]
 static BUFFER_DESTROY: GpuTestConfiguration =

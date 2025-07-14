@@ -3,7 +3,29 @@ use std::iter;
 use crate::ray_tracing::{acceleration_structure_limits, AsBuildContext};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
-use wgpu_test::{fail, fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    fail, fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
+};
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([
+        UNBUILT_BLAS,
+        UNBUILT_BLAS_COMPACTION,
+        BLAS_COMPACTION_WITHOUT_FLAGS,
+        UNPREPARED_BLAS_COMPACTION,
+        BLAS_COMPACTION,
+        OUT_OF_ORDER_AS_BUILD,
+        OUT_OF_ORDER_AS_BUILD_USE,
+        EMPTY_BUILD,
+        BUILD_WITH_TRANSFORM,
+        ONLY_BLAS_VERTEX_RETURN,
+        ONLY_TLAS_VERTEX_RETURN,
+        EXTRA_FORMAT_BUILD,
+        MISALIGNED_BUILD,
+        TOO_SMALL_STRIDE_BUILD,
+    ]);
+}
 
 #[gpu_test]
 static UNBUILT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()

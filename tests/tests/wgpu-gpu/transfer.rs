@@ -1,4 +1,8 @@
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(COPY_OVERFLOW_Z);
+}
 
 #[gpu_test]
 static COPY_OVERFLOW_Z: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

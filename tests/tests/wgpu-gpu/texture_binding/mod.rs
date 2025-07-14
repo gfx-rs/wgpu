@@ -7,7 +7,11 @@ use wgpu::{
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
 };
 use wgpu_macros::gpu_test;
-use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([TEXTURE_BINDING, SINGLE_SCALAR_LOAD]);
+}
 
 #[gpu_test]
 static TEXTURE_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()

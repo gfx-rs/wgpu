@@ -1,6 +1,28 @@
 use std::sync::atomic::AtomicBool;
 
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        CROSS_DEVICE_BIND_GROUP_USAGE,
+        DEVICE_DESTROY_THEN_MORE,
+        DEVICE_DESTROY_THEN_LOST,
+        DIFFERENT_BGL_ORDER_BW_SHADER_AND_API,
+        DEVICE_DESTROY_THEN_BUFFER_CLEANUP,
+        DEVICE_AND_QUEUE_HAVE_DIFFERENT_IDS,
+    ]);
+
+    #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
+    {
+        vec.extend([
+            DEVICE_LIFETIME_CHECK,
+            MULTIPLE_DEVICES,
+            REQUEST_DEVICE_ERROR_MESSAGE_NATIVE,
+        ]);
+    }
+}
 
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()

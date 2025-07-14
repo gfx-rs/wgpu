@@ -1,6 +1,10 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer};
 
 use wgpu::*;
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(PASS_RESET_VERTEX_BUFFER);
+}
 
 /// The core issue here was that we weren't properly disabling vertex attributes on GL
 /// when a renderpass ends. This ended up being rather tricky to test for as GL is remarkably

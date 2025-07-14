@@ -8,6 +8,10 @@ use wgpu::{IndexFormat, VertexFormat};
 use wgpu_macros::gpu_test;
 use wgpu_test::{fail, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    tests.extend([BLAS_INVALID_VERTEX_FORMAT, BLAS_MISMATCHED_INDEX]);
+}
+
 #[gpu_test]
 static BLAS_INVALID_VERTEX_FORMAT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(

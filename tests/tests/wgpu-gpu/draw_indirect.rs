@@ -2,7 +2,33 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     vertex_attr_array,
 };
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend(&[
+        DRAW,
+        DRAW_OOB_START,
+        DRAW_OOB_COUNT,
+        INSTANCED_DRAW,
+        INSTANCED_DRAW_OOB_START,
+        INSTANCED_DRAW_OOB_COUNT,
+        INSTANCED_DRAW_OOB_INSTANCE_START,
+        INSTANCED_DRAW_OOB_INSTANCE_COUNT,
+        INSTANCED_DRAW_WITH_NON_ZERO_FIRST_INSTANCE,
+        INSTANCED_DRAW_WITH_NON_ZERO_FIRST_INSTANCE_MISSING_FEATURE,
+        INDEXED_DRAW,
+        INDEXED_DRAW_OOB_START,
+        INDEXED_DRAW_OOB_COUNT,
+        INSTANCED_INDEXED_DRAW,
+        INSTANCED_INDEXED_DRAW_OOB_START,
+        INSTANCED_INDEXED_DRAW_OOB_COUNT,
+        INSTANCED_INDEXED_DRAW_OOB_INSTANCE_START,
+        INSTANCED_INDEXED_DRAW_OOB_INSTANCE_COUNT,
+        INDIRECT_BUFFER_OFFSETS,
+    ]);
+}
 
 struct TestData {
     kind: Kind,

@@ -2,8 +2,18 @@
 
 use wgpu::ShaderModuleDescriptor;
 use wgpu_test::{
-    fail, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, TestParameters, TestingContext,
+    fail, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([
+        IMAGE_64_ATOMICS,
+        IMAGE_32_ATOMICS,
+        IMAGE_ATOMICS_NOT_ENABLED,
+        IMAGE_ATOMICS_NOT_SUPPORTED,
+    ]);
+}
 
 #[gpu_test]
 static IMAGE_64_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()

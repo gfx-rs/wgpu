@@ -1,5 +1,14 @@
 use wgpu::*;
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        DUAL_SOURCE_BLENDING_FEATURE_DISABLED,
+        DUAL_SOURCE_BLENDING_FEATURE_ENABLED,
+    ]);
+}
 
 const VERTEX_SHADER: &str = r#"
 @vertex

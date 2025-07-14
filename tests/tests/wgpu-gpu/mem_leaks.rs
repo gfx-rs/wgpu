@@ -1,3 +1,17 @@
+#[allow(
+    clippy::allow_attributes,
+    reason = "Using expect is going to be much more verbose"
+)]
+#[allow(clippy::ptr_arg)]
+pub fn all_tests(_vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
+    _vec.push(SIMPLE_DRAW_CHECK_MEM_LEAKS);
+}
+
 #[cfg(any(
     not(target_arch = "wasm32"),
     target_os = "emscripten",

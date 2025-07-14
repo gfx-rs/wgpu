@@ -1,4 +1,10 @@
-use wgpu_test::{gpu_test, image, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(CONTINUE_SWITCH);
+}
 
 /// FXC doesn't accept `continue` inside a switch. Instead we store a flag for whether
 /// the loop should continue that is checked after the switch.

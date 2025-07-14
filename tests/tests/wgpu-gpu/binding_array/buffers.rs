@@ -1,7 +1,18 @@
 use std::num::{NonZeroU32, NonZeroU64};
 
 use wgpu::*;
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([
+        BINDING_ARRAY_UNIFORM_BUFFERS,
+        PARTIAL_BINDING_ARRAY_UNIFORM_BUFFERS,
+        BINDING_ARRAY_STORAGE_BUFFERS,
+        PARTIAL_BINDING_ARRAY_STORAGE_BUFFERS,
+    ]);
+}
 
 #[gpu_test]
 static BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()

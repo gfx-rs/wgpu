@@ -10,6 +10,10 @@ use wgpu::{
 use wgpu_macros::gpu_test;
 use wgpu_test::{fail, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    tests.push(LIMITS_HIT);
+}
+
 #[gpu_test]
 static LIMITS_HIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(

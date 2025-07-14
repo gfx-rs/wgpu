@@ -2,7 +2,13 @@ use wgpu::{
     util::DeviceExt, ComputePassTimestampWrites, Features, InstanceFlags,
     QUERY_RESOLVE_BUFFER_ALIGNMENT,
 };
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(TIMESTAMP_QUERY);
+}
 
 const SHADER: &str = r#"
 @compute @workgroup_size(1)

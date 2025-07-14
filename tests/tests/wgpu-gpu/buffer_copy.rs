@@ -2,7 +2,11 @@
 
 use wgpu::BufferAddress;
 
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration};
+use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(COPY_ALIGNMENT);
+}
 
 fn try_copy(
     ctx: &wgpu_test::TestingContext,

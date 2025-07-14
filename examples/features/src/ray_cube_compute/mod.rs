@@ -486,7 +486,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_cube_compute",
     image_path: "/examples/features/src/ray_cube_compute/screenshot.png",
     width: 1024,

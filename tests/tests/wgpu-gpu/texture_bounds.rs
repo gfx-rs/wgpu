@@ -2,6 +2,10 @@
 
 use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.push(BAD_COPY_ORIGIN_TEST);
+}
+
 #[gpu_test]
 static BAD_COPY_ORIGIN_TEST: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
     let try_origin = |origin, size, should_panic| {

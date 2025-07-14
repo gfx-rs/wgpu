@@ -1,6 +1,10 @@
 use wgpu::include_wgsl;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([SHADER_COMPILE_SUCCESS, SHADER_COMPILE_ERROR]);
+}
 
 #[gpu_test]
 static SHADER_COMPILE_SUCCESS: GpuTestConfiguration = GpuTestConfiguration::new()

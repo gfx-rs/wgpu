@@ -1,8 +1,18 @@
 use wgpu::util::DeviceExt;
 use wgpu::CommandEncoder;
 use wgpu_test::{
-    fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
+    fail, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        DROP_ENCODER,
+        DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER,
+        DROP_ENCODER_AFTER_ERROR,
+        ENCODER_OPERATIONS_FAIL_WHILE_PASS_ALIVE,
+    ]);
+}
 
 #[gpu_test]
 static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {

@@ -1,7 +1,21 @@
 use std::{io::Write, process::Stdio};
 
 use wgpu::util::DeviceExt;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([
+        MESH_PIPELINE_BASIC_MESH,
+        MESH_PIPELINE_BASIC_TASK_MESH,
+        MESH_PIPELINE_BASIC_MESH_FRAG,
+        MESH_PIPELINE_BASIC_TASK_MESH_FRAG,
+        MESH_DRAW_INDIRECT,
+        MESH_MULTI_DRAW_INDIRECT,
+        MESH_MULTI_DRAW_INDIRECT_COUNT,
+    ]);
+}
 
 // Same as in mesh shader example
 fn compile_glsl(
