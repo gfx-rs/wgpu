@@ -70,9 +70,29 @@ bitflags::bitflags! {
         ///
         /// When `Self::from_env()` is used takes value from `WGPU_DEBUG` environment variable.
         const DEBUG = 1 << 0;
-        /// Enable validation, if possible.
+        /// Enable validation in the backend API, if possible:
         ///
-        /// When `Self::from_env()` is used takes value from `WGPU_VALIDATION` environment variable.
+        /// - On the Direct3D `dx12` backend, this calls [`ID3D12Debug::EnableDebugLayer`][dx12].
+        ///
+        /// - On the Vulkan backend, this enables the [Vulkan Validation Layer][vvl].
+        ///
+        /// - On the `gles` backend driving Windows OpenGL, this enables [debug
+        ///   output][gl:do], effectively calling `glEnable(GL_DEBUG_OUTPUT)`.
+        ///
+        /// - On non-Windows `gles` backends, this calls
+        ///   [`eglDebugMessageControlKHR`][gl:dm] to enable all debugging messages.
+        ///   If the GLES implementation is ANGLE running on Vulkan, this also
+        ///   enables the Vulkan validation layers by setting
+        ///   [`EGL_PLATFORM_ANGLE_DEBUG_LAYERS_ENABLED`][gl:av].
+        ///
+        /// When `Self::from_env()` is used, this bit is set if the `WGPU_VALIDATION`
+        /// environment variable has any value but "0".
+        ///
+        /// [dx12]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12sdklayers/nf-d3d12sdklayers-id3d12debug-enabledebuglayer
+        /// [vvl]: https://github.com/KhronosGroup/Vulkan-ValidationLayers
+        /// [gl:dm]: https://registry.khronos.org/EGL/extensions/KHR/EGL_KHR_debug.txt
+        /// [gl:do]: https://www.khronos.org/opengl/wiki/Debug_Output
+        /// [gl:av]: https://chromium.googlesource.com/angle/angle/+/HEAD/extensions/EGL_ANGLE_platform_angle.txt
         const VALIDATION = 1 << 1;
         /// Don't pass labels to wgpu-hal.
         ///
