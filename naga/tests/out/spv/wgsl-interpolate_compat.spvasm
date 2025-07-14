@@ -1,14 +1,14 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 130
+; Bound: 133
 OpCapability Shader
 OpCapability SampleRateShading
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %26 "vert_main" %11 %13 %14 %15 %16 %17 %18 %19 %20 %21 %22 %23
-OpEntryPoint Fragment %128 "frag_main" %101 %104 %107 %109 %112 %115 %118 %120 %122 %124 %126
-OpExecutionMode %128 OriginUpperLeft
+OpEntryPoint Vertex %29 "vert_main" %11 %13 %15 %16 %18 %20 %22 %23 %24 %25 %26 %27
+OpEntryPoint Fragment %131 "frag_main" %104 %107 %110 %112 %115 %118 %121 %123 %125 %127 %129
+OpExecutionMode %131 OriginUpperLeft
 %3 = OpString "interpolate_compat.wgsl"
 OpSource Unknown 0 %3 "// NOTE: This is basically the same as `interpolate.wgsl`, except for the removal of
 // `@interpolate(flat, first)`, which is unsupported in GLSL and `compat`.
@@ -68,29 +68,29 @@ OpMemberName %9 10 "perspective_center"
 OpName %9 "FragmentInput"
 OpName %11 "position"
 OpName %13 "_flat"
-OpName %14 "flat_either"
-OpName %15 "_linear"
-OpName %16 "linear_centroid"
-OpName %17 "linear_sample"
-OpName %18 "linear_center"
-OpName %19 "perspective"
-OpName %20 "perspective_centroid"
-OpName %21 "perspective_sample"
-OpName %22 "perspective_center"
-OpName %26 "vert_main"
-OpName %55 "out"
-OpName %101 "position"
-OpName %104 "_flat"
-OpName %107 "flat_either"
-OpName %109 "_linear"
-OpName %112 "linear_centroid"
-OpName %115 "linear_sample"
-OpName %118 "linear_center"
-OpName %120 "perspective"
-OpName %122 "perspective_centroid"
-OpName %124 "perspective_sample"
-OpName %126 "perspective_center"
-OpName %128 "frag_main"
+OpName %15 "flat_either"
+OpName %16 "_linear"
+OpName %18 "linear_centroid"
+OpName %20 "linear_sample"
+OpName %22 "linear_center"
+OpName %23 "perspective"
+OpName %24 "perspective_centroid"
+OpName %25 "perspective_sample"
+OpName %26 "perspective_center"
+OpName %29 "vert_main"
+OpName %58 "out"
+OpName %104 "position"
+OpName %107 "_flat"
+OpName %110 "flat_either"
+OpName %112 "_linear"
+OpName %115 "linear_centroid"
+OpName %118 "linear_sample"
+OpName %121 "linear_center"
+OpName %123 "perspective"
+OpName %125 "perspective_centroid"
+OpName %127 "perspective_sample"
+OpName %129 "perspective_center"
+OpName %131 "frag_main"
 OpMemberDecorate %9 0 Offset 0
 OpMemberDecorate %9 1 Offset 16
 OpMemberDecorate %9 2 Offset 20
@@ -105,46 +105,46 @@ OpMemberDecorate %9 10 Offset 104
 OpDecorate %11 BuiltIn Position
 OpDecorate %13 Location 0
 OpDecorate %13 Flat
-OpDecorate %14 Location 2
-OpDecorate %14 Flat
-OpDecorate %15 Location 3
-OpDecorate %15 NoPerspective
-OpDecorate %16 Location 4
+OpDecorate %15 Location 2
+OpDecorate %15 Flat
+OpDecorate %16 Location 3
 OpDecorate %16 NoPerspective
-OpDecorate %16 Centroid
-OpDecorate %17 Location 6
-OpDecorate %17 NoPerspective
-OpDecorate %17 Sample
-OpDecorate %18 Location 7
+OpDecorate %18 Location 4
 OpDecorate %18 NoPerspective
-OpDecorate %19 Location 8
-OpDecorate %20 Location 9
-OpDecorate %20 Centroid
-OpDecorate %21 Location 10
-OpDecorate %21 Sample
-OpDecorate %22 Location 11
-OpDecorate %23 BuiltIn PointSize
-OpDecorate %101 BuiltIn FragCoord
-OpDecorate %104 Location 0
-OpDecorate %104 Flat
-OpDecorate %107 Location 2
+OpDecorate %18 Centroid
+OpDecorate %20 Location 6
+OpDecorate %20 NoPerspective
+OpDecorate %20 Sample
+OpDecorate %22 Location 7
+OpDecorate %22 NoPerspective
+OpDecorate %23 Location 8
+OpDecorate %24 Location 9
+OpDecorate %24 Centroid
+OpDecorate %25 Location 10
+OpDecorate %25 Sample
+OpDecorate %26 Location 11
+OpDecorate %27 BuiltIn PointSize
+OpDecorate %104 BuiltIn FragCoord
+OpDecorate %107 Location 0
 OpDecorate %107 Flat
-OpDecorate %109 Location 3
-OpDecorate %109 NoPerspective
-OpDecorate %112 Location 4
+OpDecorate %110 Location 2
+OpDecorate %110 Flat
+OpDecorate %112 Location 3
 OpDecorate %112 NoPerspective
-OpDecorate %112 Centroid
-OpDecorate %115 Location 6
+OpDecorate %115 Location 4
 OpDecorate %115 NoPerspective
-OpDecorate %115 Sample
-OpDecorate %118 Location 7
+OpDecorate %115 Centroid
+OpDecorate %118 Location 6
 OpDecorate %118 NoPerspective
-OpDecorate %120 Location 8
-OpDecorate %122 Location 9
-OpDecorate %122 Centroid
-OpDecorate %124 Location 10
-OpDecorate %124 Sample
-OpDecorate %126 Location 11
+OpDecorate %118 Sample
+OpDecorate %121 Location 7
+OpDecorate %121 NoPerspective
+OpDecorate %123 Location 8
+OpDecorate %125 Location 9
+OpDecorate %125 Centroid
+OpDecorate %127 Location 10
+OpDecorate %127 Sample
+OpDecorate %129 Location 11
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %5 = OpTypeVector %4 4
@@ -152,181 +152,184 @@ OpDecorate %126 Location 11
 %7 = OpTypeVector %4 2
 %8 = OpTypeVector %4 3
 %9 = OpTypeStruct %5 %6 %6 %4 %7 %8 %8 %5 %4 %4 %4
-%12 = OpTypePointer Output %9
+%12 = OpTypePointer Output %5
 %11 = OpVariable  %12  Output
-%13 = OpVariable  %12  Output
-%14 = OpVariable  %12  Output
-%15 = OpVariable  %12  Output
-%16 = OpVariable  %12  Output
-%17 = OpVariable  %12  Output
-%18 = OpVariable  %12  Output
-%19 = OpVariable  %12  Output
-%20 = OpVariable  %12  Output
-%21 = OpVariable  %12  Output
-%22 = OpVariable  %12  Output
-%24 = OpTypePointer Output %4
-%23 = OpVariable  %24  Output
-%25 = OpConstant  %4  1.0
-%27 = OpTypeFunction %2
-%28 = OpConstant  %4  2.0
-%29 = OpConstant  %4  4.0
-%30 = OpConstant  %4  5.0
-%31 = OpConstant  %4  6.0
-%32 = OpConstantComposite  %5  %28 %29 %30 %31
-%33 = OpConstant  %6  8
-%34 = OpConstant  %6  10
-%35 = OpConstant  %4  27.0
-%36 = OpConstant  %4  64.0
-%37 = OpConstant  %4  125.0
-%38 = OpConstantComposite  %7  %36 %37
-%39 = OpConstant  %4  216.0
-%40 = OpConstant  %4  343.0
-%41 = OpConstant  %4  512.0
-%42 = OpConstantComposite  %8  %39 %40 %41
-%43 = OpConstant  %4  255.0
-%44 = OpConstant  %4  511.0
-%45 = OpConstant  %4  1024.0
-%46 = OpConstantComposite  %8  %43 %44 %45
-%47 = OpConstant  %4  729.0
-%48 = OpConstant  %4  1000.0
-%49 = OpConstant  %4  1331.0
-%50 = OpConstant  %4  1728.0
-%51 = OpConstantComposite  %5  %47 %48 %49 %50
-%52 = OpConstant  %4  2197.0
-%53 = OpConstant  %4  2744.0
-%54 = OpConstant  %4  2812.0
-%56 = OpTypePointer Function %9
-%57 = OpConstantNull  %9
-%59 = OpTypePointer Function %5
-%60 = OpConstant  %6  0
-%62 = OpTypePointer Function %6
-%63 = OpConstant  %6  1
-%65 = OpConstant  %6  2
-%67 = OpTypePointer Function %4
-%68 = OpConstant  %6  3
-%70 = OpTypePointer Function %7
-%71 = OpConstant  %6  4
-%73 = OpTypePointer Function %8
-%74 = OpConstant  %6  5
-%76 = OpConstant  %6  6
-%78 = OpConstant  %6  7
-%81 = OpConstant  %6  9
-%102 = OpTypePointer Input %5
-%101 = OpVariable  %102  Input
-%105 = OpTypePointer Input %6
+%14 = OpTypePointer Output %6
+%13 = OpVariable  %14  Output
+%15 = OpVariable  %14  Output
+%17 = OpTypePointer Output %4
+%16 = OpVariable  %17  Output
+%19 = OpTypePointer Output %7
+%18 = OpVariable  %19  Output
+%21 = OpTypePointer Output %8
+%20 = OpVariable  %21  Output
+%22 = OpVariable  %21  Output
+%23 = OpVariable  %12  Output
+%24 = OpVariable  %17  Output
+%25 = OpVariable  %17  Output
+%26 = OpVariable  %17  Output
+%27 = OpVariable  %17  Output
+%28 = OpConstant  %4  1.0
+%30 = OpTypeFunction %2
+%31 = OpConstant  %4  2.0
+%32 = OpConstant  %4  4.0
+%33 = OpConstant  %4  5.0
+%34 = OpConstant  %4  6.0
+%35 = OpConstantComposite  %5  %31 %32 %33 %34
+%36 = OpConstant  %6  8
+%37 = OpConstant  %6  10
+%38 = OpConstant  %4  27.0
+%39 = OpConstant  %4  64.0
+%40 = OpConstant  %4  125.0
+%41 = OpConstantComposite  %7  %39 %40
+%42 = OpConstant  %4  216.0
+%43 = OpConstant  %4  343.0
+%44 = OpConstant  %4  512.0
+%45 = OpConstantComposite  %8  %42 %43 %44
+%46 = OpConstant  %4  255.0
+%47 = OpConstant  %4  511.0
+%48 = OpConstant  %4  1024.0
+%49 = OpConstantComposite  %8  %46 %47 %48
+%50 = OpConstant  %4  729.0
+%51 = OpConstant  %4  1000.0
+%52 = OpConstant  %4  1331.0
+%53 = OpConstant  %4  1728.0
+%54 = OpConstantComposite  %5  %50 %51 %52 %53
+%55 = OpConstant  %4  2197.0
+%56 = OpConstant  %4  2744.0
+%57 = OpConstant  %4  2812.0
+%59 = OpTypePointer Function %9
+%60 = OpConstantNull  %9
+%62 = OpTypePointer Function %5
+%63 = OpConstant  %6  0
+%65 = OpTypePointer Function %6
+%66 = OpConstant  %6  1
+%68 = OpConstant  %6  2
+%70 = OpTypePointer Function %4
+%71 = OpConstant  %6  3
+%73 = OpTypePointer Function %7
+%74 = OpConstant  %6  4
+%76 = OpTypePointer Function %8
+%77 = OpConstant  %6  5
+%79 = OpConstant  %6  6
+%81 = OpConstant  %6  7
+%84 = OpConstant  %6  9
+%105 = OpTypePointer Input %5
 %104 = OpVariable  %105  Input
-%107 = OpVariable  %105  Input
-%110 = OpTypePointer Input %4
-%109 = OpVariable  %110  Input
-%113 = OpTypePointer Input %7
+%108 = OpTypePointer Input %6
+%107 = OpVariable  %108  Input
+%110 = OpVariable  %108  Input
+%113 = OpTypePointer Input %4
 %112 = OpVariable  %113  Input
-%116 = OpTypePointer Input %8
+%116 = OpTypePointer Input %7
 %115 = OpVariable  %116  Input
-%118 = OpVariable  %116  Input
-%120 = OpVariable  %102  Input
-%122 = OpVariable  %110  Input
-%124 = OpVariable  %110  Input
-%126 = OpVariable  %110  Input
-%26 = OpFunction  %2  None %27
+%119 = OpTypePointer Input %8
+%118 = OpVariable  %119  Input
+%121 = OpVariable  %119  Input
+%123 = OpVariable  %105  Input
+%125 = OpVariable  %113  Input
+%127 = OpVariable  %113  Input
+%129 = OpVariable  %113  Input
+%29 = OpFunction  %2  None %30
 %10 = OpLabel
-%55 = OpVariable  %56  Function %57
-OpStore %23 %25
-OpBranch %58
-%58 = OpLabel
+%58 = OpVariable  %59  Function %60
+OpStore %27 %28
+OpBranch %61
+%61 = OpLabel
 OpLine %3 26 4
 OpLine %3 26 19
 OpLine %3 26 4
-%61 = OpAccessChain  %59  %55 %60
-OpStore %61 %32
+%64 = OpAccessChain  %62  %58 %63
+OpStore %64 %35
 OpLine %3 27 4
 OpLine %3 27 4
-%64 = OpAccessChain  %62  %55 %63
-OpStore %64 %33
+%67 = OpAccessChain  %65  %58 %66
+OpStore %67 %36
 OpLine %3 29 4
 OpLine %3 29 4
-%66 = OpAccessChain  %62  %55 %65
-OpStore %66 %34
+%69 = OpAccessChain  %65  %58 %68
+OpStore %69 %37
 OpLine %3 30 4
 OpLine %3 30 4
-%69 = OpAccessChain  %67  %55 %68
-OpStore %69 %35
+%72 = OpAccessChain  %70  %58 %71
+OpStore %72 %38
 OpLine %3 31 4
 OpLine %3 31 26
 OpLine %3 31 4
-%72 = OpAccessChain  %70  %55 %71
-OpStore %72 %38
+%75 = OpAccessChain  %73  %58 %74
+OpStore %75 %41
 OpLine %3 32 4
 OpLine %3 32 24
 OpLine %3 32 4
-%75 = OpAccessChain  %73  %55 %74
-OpStore %75 %42
+%78 = OpAccessChain  %76  %58 %77
+OpStore %78 %45
 OpLine %3 33 4
 OpLine %3 33 24
 OpLine %3 33 4
-%77 = OpAccessChain  %73  %55 %76
-OpStore %77 %46
+%80 = OpAccessChain  %76  %58 %79
+OpStore %80 %49
 OpLine %3 34 4
 OpLine %3 34 22
 OpLine %3 34 4
-%79 = OpAccessChain  %59  %55 %78
-OpStore %79 %51
+%82 = OpAccessChain  %62  %58 %81
+OpStore %82 %54
 OpLine %3 35 4
 OpLine %3 35 4
-%80 = OpAccessChain  %67  %55 %33
-OpStore %80 %52
+%83 = OpAccessChain  %70  %58 %36
+OpStore %83 %55
 OpLine %3 36 4
 OpLine %3 36 4
-%82 = OpAccessChain  %67  %55 %81
-OpStore %82 %53
+%85 = OpAccessChain  %70  %58 %84
+OpStore %85 %56
 OpLine %3 37 4
 OpLine %3 37 4
-%83 = OpAccessChain  %67  %55 %34
-OpStore %83 %54
+%86 = OpAccessChain  %70  %58 %37
+OpStore %86 %57
 OpLine %3 1 1
-%84 = OpLoad  %9  %55
-%85 = OpCompositeExtract  %5  %84 0
-OpStore %11 %85
-%86 = OpAccessChain  %24  %11 %63
-%87 = OpLoad  %4  %86
-%88 = OpFNegate  %4  %87
-OpStore %86 %88
-%89 = OpCompositeExtract  %6  %84 1
-OpStore %13 %89
-%90 = OpCompositeExtract  %6  %84 2
-OpStore %14 %90
-%91 = OpCompositeExtract  %4  %84 3
-OpStore %15 %91
-%92 = OpCompositeExtract  %7  %84 4
-OpStore %16 %92
-%93 = OpCompositeExtract  %8  %84 5
-OpStore %17 %93
-%94 = OpCompositeExtract  %8  %84 6
-OpStore %18 %94
-%95 = OpCompositeExtract  %5  %84 7
-OpStore %19 %95
-%96 = OpCompositeExtract  %4  %84 8
+%87 = OpLoad  %9  %58
+%88 = OpCompositeExtract  %5  %87 0
+OpStore %11 %88
+%89 = OpAccessChain  %17  %11 %66
+%90 = OpLoad  %4  %89
+%91 = OpFNegate  %4  %90
+OpStore %89 %91
+%92 = OpCompositeExtract  %6  %87 1
+OpStore %13 %92
+%93 = OpCompositeExtract  %6  %87 2
+OpStore %15 %93
+%94 = OpCompositeExtract  %4  %87 3
+OpStore %16 %94
+%95 = OpCompositeExtract  %7  %87 4
+OpStore %18 %95
+%96 = OpCompositeExtract  %8  %87 5
 OpStore %20 %96
-%97 = OpCompositeExtract  %4  %84 9
-OpStore %21 %97
-%98 = OpCompositeExtract  %4  %84 10
-OpStore %22 %98
+%97 = OpCompositeExtract  %8  %87 6
+OpStore %22 %97
+%98 = OpCompositeExtract  %5  %87 7
+OpStore %23 %98
+%99 = OpCompositeExtract  %4  %87 8
+OpStore %24 %99
+%100 = OpCompositeExtract  %4  %87 9
+OpStore %25 %100
+%101 = OpCompositeExtract  %4  %87 10
+OpStore %26 %101
 OpReturn
 OpFunctionEnd
-%128 = OpFunction  %2  None %27
-%99 = OpLabel
-%103 = OpLoad  %5  %101
-%106 = OpLoad  %6  %104
-%108 = OpLoad  %6  %107
-%111 = OpLoad  %4  %109
-%114 = OpLoad  %7  %112
-%117 = OpLoad  %8  %115
-%119 = OpLoad  %8  %118
-%121 = OpLoad  %5  %120
-%123 = OpLoad  %4  %122
-%125 = OpLoad  %4  %124
-%127 = OpLoad  %4  %126
-%100 = OpCompositeConstruct  %9  %103 %106 %108 %111 %114 %117 %119 %121 %123 %125 %127
-OpBranch %129
-%129 = OpLabel
+%131 = OpFunction  %2  None %30
+%102 = OpLabel
+%106 = OpLoad  %5  %104
+%109 = OpLoad  %6  %107
+%111 = OpLoad  %6  %110
+%114 = OpLoad  %4  %112
+%117 = OpLoad  %7  %115
+%120 = OpLoad  %8  %118
+%122 = OpLoad  %8  %121
+%124 = OpLoad  %5  %123
+%126 = OpLoad  %4  %125
+%128 = OpLoad  %4  %127
+%130 = OpLoad  %4  %129
+%103 = OpCompositeConstruct  %9  %106 %109 %111 %114 %117 %120 %122 %124 %126 %128 %130
+OpBranch %132
+%132 = OpLabel
 OpReturn
 OpFunctionEnd

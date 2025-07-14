@@ -867,7 +867,7 @@ impl Writer {
                                     iface.stage,
                                     class,
                                     name,
-                                    result.ty,
+                                    member.ty,
                                     binding,
                                 )?;
                                 iface.varying_ids.push(varying_id);
