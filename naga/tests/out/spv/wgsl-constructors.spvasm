@@ -31,11 +31,11 @@ OpDecorate %18 ArrayStride 4
 %19 = OpConstant  %12  4
 %18 = OpTypeArray %5 %19
 %20 = OpTypeMatrix %7 2
-%21 = OpConstant  %3  0.0
+%21 = OpConstant  %3  0
 %22 = OpConstantComposite  %7  %21 %21 %21
-%23 = OpConstant  %3  1.0
-%24 = OpConstant  %3  2.0
-%25 = OpConstant  %3  3.0
+%23 = OpConstant  %3  1
+%24 = OpConstant  %3  2
+%25 = OpConstant  %3  3
 %26 = OpConstantComposite  %9  %21 %23
 %27 = OpConstantComposite  %9  %24 %25
 %28 = OpConstantComposite  %8  %26 %27
