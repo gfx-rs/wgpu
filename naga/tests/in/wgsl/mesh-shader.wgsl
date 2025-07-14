@@ -66,6 +66,6 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 	setPrimitive(0, p);
 }
 @fragment
-fn fs_main(vertex: VertexOutput, @per_primitive primitive: PrimitiveInput) -> @location(0) vec4<f32> {
+fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
 	return vertex.color * primitive.colorMask;
 }

@@ -930,15 +930,15 @@ pub struct MeshOutputInfo {
     /// of the max output sizes among all the entry points! It will default to zero, so that if an unused function
     /// tries to write to it, the function can still be valid if it is never called.
     pub index_of_length_decl: usize,
-    pub inner_type: Word,
+    pub inner_ty: Word,
     // Structs with elements with layout can't have elements with builtins, and vice versa.
     // Therefore, we separate it into 2 structs and whatnot
     pub outputs: Vec<MeshOutputArrayInfo>,
 }
 #[derive(Clone)]
 pub struct MeshOutputArrayInfo {
-    pub inner_type: Word,
-    pub array_type: Word,
+    pub member_ty: Word,
+    pub array_ty: Word,
     pub var_id: Word,
     pub member: crate::StructMember,
 }

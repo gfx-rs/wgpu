@@ -2023,7 +2023,12 @@ impl Writer {
         }
 
         let binding = self.map_binding(ir_module, stage, class, ty, binding)?;
+        self.write_binding(id, binding);
 
+        Ok(id)
+    }
+
+    pub fn write_binding(&mut self, id: Word, binding: BindingDecorations) {
         match binding {
             BindingDecorations::None => (),
             BindingDecorations::BuiltIn(bi, others) => {
@@ -2046,8 +2051,6 @@ impl Writer {
                 }
             }
         }
-
-        Ok(id)
     }
 
     pub fn write_binding_struct_member(
@@ -2350,93 +2353,19 @@ impl Writer {
                     _ => unreachable!("Mesh output type isn't a struct"),
                 };
 
-                /*let (location_type_id, builtin_type_id) = {
-                    let mut location_type_id = None;
-                    let mut builtin_type_id = None;
-                    let mut location_ins = Instruction::type_struct(0, &[]);
-                    let mut builtin_ins = Instruction::type_struct(0, &[]);
-                    for member in &struct_members {
-                        let binding = if let &Some(ref b) = &member.binding {
-                            b
-                        } else {
-                            continue;
-                        };
-                        let (subset_type_id, member_idx) =
-                            if matches!(binding, &crate::Binding::Location { .. }) {
-                                if location_type_id.is_none() {
-                                    location_type_id = Some(self.id_gen.next());
-                                    location_ins.result_id = location_type_id;
-                                }
-                                location_ins.add_operand(self.get_handle_type_id(member.ty));
-                                (location_type_id.unwrap(), location_ins.operands.len() - 1)
-                            } else if matches!(binding, &crate::Binding::BuiltIn(..)) {
-                                if builtin_type_id.is_none() {
-                                    builtin_type_id = Some(self.id_gen.next());
-                                    builtin_ins.result_id = builtin_type_id;
-                                }
-                                builtin_ins.add_operand(self.get_handle_type_id(member.ty));
-                                (builtin_type_id.unwrap(), builtin_ins.operands.len() - 1)
-                            } else {
-                                unreachable!()
-                            };
-                        // TODO: update the offset
-                        self.decorate_struct_member(
-                            subset_type_id,
-                            member_idx,
-                            member,
-                            &ir_module.types,
-                        )?;
-                        let binding = self.map_binding(
-                            ir_module,
-                            crate::ShaderStage::Mesh,
-                            spirv::StorageClass::Output,
-                            member.ty,
-                            member.binding.as_ref().unwrap(),
-                        )?;
-                        self.write_binding_struct_member(
-                            subset_type_id,
-                            member_idx as Word,
-                            binding,
-                        );
-                    }
-                    if let Some(location_type_id) = location_type_id {
-                        location_ins.result_id = Some(location_type_id);
-                        location_ins.to_words(&mut self.logical_layout.declarations);
-                        self.decorate(location_type_id, spirv::Decoration::Block, &[]);
-                        if self.flags.contains(WriterFlags::DEBUG) {
-                            if let Some(ref name) = main_ty_ir.name {
-                                let mut n = String::new();
-                                n.push_str("__");
-                                n.push_str(name);
-                                n.push_str("_LocationOutputs");
-                                self.debugs.push(Instruction::name(location_type_id, &n));
-                            }
-                        }
-                    }
-                    if let Some(builtin_type_id) = builtin_type_id {
-                        builtin_ins.result_id = Some(builtin_type_id);
-                        builtin_ins.to_words(&mut self.logical_layout.declarations);
-                        self.decorate(builtin_type_id, spirv::Decoration::Block, &[]);
-                        if self.flags.contains(WriterFlags::DEBUG) {
-                            if let Some(ref name) = main_ty_ir.name {
-                                let mut n = String::new();
-                                n.push_str("__");
-                                n.push_str(name);
-                                n.push_str("_BuiltinOutputs");
-                                self.debugs.push(Instruction::name(builtin_type_id, &n));
-                            }
-                        }
-                    }
-                    (location_type_id, builtin_type_id)
-                };
+                let mut outputs = Vec::new();
 
-                let mut to_array_info = |base_id| {
-                    let array_type = self.id_gen.next();
-                    Instruction::type_array(array_type, base_id, len_value_id)
+                for member in struct_members {
+                    if member.binding.is_none() {
+                        continue;
+                    }
+                    let member_ty = self.get_handle_type_id(member.ty);
+                    let array_ty = self.id_gen.next();
+                    Instruction::type_array(array_ty, member_ty, len_value_id)
                         .to_words(&mut self.logical_layout.declarations);
                     let var_id = self.id_gen.next();
                     Instruction::variable(
-                        self.get_pointer_type_id(array_type, spirv::StorageClass::Output),
+                        self.get_pointer_type_id(array_ty, spirv::StorageClass::Output),
                         var_id,
                         spirv::StorageClass::Output,
                         None,
@@ -2447,25 +2376,34 @@ impl Writer {
                         self.decorate(var_id, spirv::Decoration::PerPrimitiveEXT, &[]);
                     }
 
-                    super::MeshOutputArrayInfo {
-                        inner_type: base_id,
-                        array_type,
-                        var_id,
+                    let binding = self.map_binding(
+                        ir_module,
+                        crate::ShaderStage::Mesh,
+                        spirv::StorageClass::Output,
+                        member.ty,
+                        member.binding.as_ref().unwrap(),
+                    )?;
+                    self.write_binding(var_id, binding);
+
+                    if self
+                        .flags
+                        .contains(WriterFlags::DEBUG | WriterFlags::LABEL_VARYINGS)
+                    {
+                        if let Some(name) = member.name.as_deref() {
+                            self.debugs.push(Instruction::name(var_id, name));
+                        }
                     }
-                };
 
-                let location_output = location_type_id.map(&mut to_array_info);
-                let builtin_output = builtin_type_id.map(to_array_info);*/
-
-                let mut outputs = Vec::new();
-
-                for member in struct_members {
-                    let member_ty = self.get_handle_type_id(member.ty);
-                    let array_ty = self.id_gen.next();
+                    outputs.push(super::MeshOutputArrayInfo {
+                        member_ty,
+                        array_ty,
+                        var_id,
+                        member,
+                    })
                 }
 
                 let info = super::MeshOutputInfo {
-                    inner_type: main_type_id,
+                    inner_ty: main_type_id,
                     index_of_length_decl: len_literal_idx,
                     outputs,
                 };

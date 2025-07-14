@@ -3703,7 +3703,7 @@ impl BlockContext<'_> {
                     )?;
 
                     for (i, member_info) in info.outputs.iter().enumerate() {
-                        let member_ty = info.inner_type;
+                        let member_ty = member_info.member_ty;
 
                         let in_value_id = self.gen_id();
                         block.body.push(Instruction::composite_extract(
