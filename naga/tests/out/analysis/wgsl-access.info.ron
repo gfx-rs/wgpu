@@ -1197,6 +1197,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2523,6 +2527,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2563,6 +2571,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2612,6 +2624,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2655,6 +2671,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2749,6 +2769,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2870,6 +2894,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2922,6 +2950,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -2977,6 +3009,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -3029,6 +3065,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -3084,6 +3124,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -3148,6 +3192,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -3221,6 +3269,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -3297,6 +3349,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -3397,6 +3453,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -3593,6 +3653,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
     ],
     entry_points: [
@@ -4290,6 +4354,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -4742,6 +4810,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
@@ -4812,6 +4884,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
     ],
     const_expression_types: [
