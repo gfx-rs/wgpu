@@ -17,6 +17,7 @@ const CTS_DEFAULT_TEST_LIST: &str = "cts_runner/test.lst";
 
 pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     let skip_checkout = args.contains("--skip-checkout");
+    let llvm_cov = args.contains("--llvm-cov");
 
     let mut list_files = Vec::<OsString>::new();
     while let Some(file) = args.opt_value_from_str("-f")? {
@@ -133,12 +134,18 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         log::info!("Skipping CTS checkout because --skip-checkout was specified");
     }
 
+    let run_flags = if llvm_cov {
+        &["llvm-cov", "--no-cfg-coverage", "--no-report", "run"][..]
+    } else {
+        &["run"][..]
+    };
+
     log::info!("Running CTS");
     for test in &tests {
         log::info!("Running {}", test.to_string_lossy());
         shell
             .cmd("cargo")
-            .args(["run"])
+            .args(run_flags)
             .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
             .args(["-p", "cts_runner"])
             .args(["--bin", "cts_runner"])
