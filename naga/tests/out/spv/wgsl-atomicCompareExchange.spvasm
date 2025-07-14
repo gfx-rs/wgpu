@@ -44,7 +44,7 @@ OpMemberDecorate %15 0 Offset 0
 %21 = OpConstant  %3  0
 %23 = OpConstantFalse  %8
 %24 = OpTypeFloat 32
-%25 = OpConstant  %24  1.0
+%25 = OpConstant  %24  1
 %26 = OpConstant  %3  1
 %28 = OpTypePointer Function %3
 %30 = OpTypePointer Function %4

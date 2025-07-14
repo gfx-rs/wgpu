@@ -99,8 +99,8 @@ OpMemberDecorate %36 0 Offset 0
 %78 = OpTypePointer Uniform %6
 %79 = OpConstant  %5  1
 %88 = OpTypePointer Uniform %7
-%94 = OpConstant  %7  -9.223372e18
-%95 = OpConstant  %7  9.2233715e18
+%94 = OpConstant  %7  -9223372000000000000
+%95 = OpConstant  %7  9223371500000000000
 %100 = OpTypePointer Uniform %3
 %101 = OpConstant  %5  7
 %108 = OpTypePointer Uniform %4
@@ -128,8 +128,8 @@ OpMemberDecorate %36 0 Offset 0
 %230 = OpConstant  %4  18446744073709551615
 %231 = OpConstant  %4  5
 %233 = OpTypePointer Function %4
-%264 = OpConstant  %7  0.0
-%265 = OpConstant  %7  1.8446743e19
+%264 = OpConstant  %7  0
+%265 = OpConstant  %7  18446743000000000000
 %299 = OpTypePointer StorageBuffer %4
 %306 = OpTypePointer StorageBuffer %8
 %313 = OpTypePointer StorageBuffer %9

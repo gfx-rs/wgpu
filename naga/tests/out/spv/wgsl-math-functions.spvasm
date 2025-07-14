@@ -33,12 +33,12 @@ OpMemberDecorate %15 1 Offset 16
 %15 = OpTypeStruct %4 %6
 %16 = OpTypeVector %3 3
 %19 = OpTypeFunction %2
-%20 = OpConstant  %3  1.0
-%21 = OpConstant  %3  0.0
+%20 = OpConstant  %3  1
+%21 = OpConstant  %3  0
 %22 = OpConstantComposite  %4  %21 %21 %21 %21
 %23 = OpConstant  %5  -1
 %24 = OpConstantComposite  %6  %23 %23 %23 %23
-%25 = OpConstant  %3  -1.0
+%25 = OpConstant  %3  -1
 %26 = OpConstantComposite  %4  %25 %25 %25 %25
 %27 = OpConstantNull  %7
 %28 = OpConstant  %9  4294967295
@@ -54,7 +54,7 @@ OpMemberDecorate %15 1 Offset 16
 %38 = OpConstant  %9  31
 %39 = OpConstantComposite  %8  %38 %38
 %40 = OpConstant  %5  2
-%41 = OpConstant  %3  2.0
+%41 = OpConstant  %3  2
 %42 = OpConstantComposite  %10  %20 %41
 %43 = OpConstant  %5  3
 %44 = OpConstant  %5  4
