@@ -931,17 +931,8 @@ impl Writer {
                     true,
                     mesh_info.max_primitives,
                 )?;
-
-                for info in [
-                    &vert_info.location_output,
-                    &vert_info.builtin_output,
-                    &prim_info.location_output,
-                    &prim_info.builtin_output,
-                ]
-                .into_iter()
-                .flatten()
-                {
-                    iface.varying_ids.push(info.var_id);
+                for array in vert_info.outputs.iter().chain(prim_info.outputs.iter()) {
+                    iface.varying_ids.push(array.var_id);
                 }
             }
         }
@@ -2359,7 +2350,7 @@ impl Writer {
                     _ => unreachable!("Mesh output type isn't a struct"),
                 };
 
-                let (location_type_id, builtin_type_id) = {
+                /*let (location_type_id, builtin_type_id) = {
                     let mut location_type_id = None;
                     let mut builtin_type_id = None;
                     let mut location_ins = Instruction::type_struct(0, &[]);
@@ -2464,14 +2455,19 @@ impl Writer {
                 };
 
                 let location_output = location_type_id.map(&mut to_array_info);
-                let builtin_output = builtin_type_id.map(to_array_info);
+                let builtin_output = builtin_type_id.map(to_array_info);*/
+
+                let mut outputs = Vec::new();
+
+                for member in struct_members {
+                    let member_ty = self.get_handle_type_id(member.ty);
+                    let array_ty = self.id_gen.next();
+                }
 
                 let info = super::MeshOutputInfo {
                     inner_type: main_type_id,
                     index_of_length_decl: len_literal_idx,
-                    fields: struct_members,
-                    builtin_output,
-                    location_output,
+                    outputs,
                 };
                 if is_primitive {
                     self.mesh_state

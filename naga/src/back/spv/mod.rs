@@ -933,13 +933,12 @@ pub struct MeshOutputInfo {
     pub inner_type: Word,
     // Structs with elements with layout can't have elements with builtins, and vice versa.
     // Therefore, we separate it into 2 structs and whatnot
-    pub builtin_output: Option<MeshOutputArrayInfo>,
-    pub location_output: Option<MeshOutputArrayInfo>,
-    pub fields: Vec<crate::StructMember>,
+    pub outputs: Vec<MeshOutputArrayInfo>,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct MeshOutputArrayInfo {
     pub inner_type: Word,
     pub array_type: Word,
     pub var_id: Word,
+    pub member: crate::StructMember,
 }
