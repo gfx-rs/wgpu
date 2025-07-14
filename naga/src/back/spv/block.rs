@@ -3722,6 +3722,51 @@ impl BlockContext<'_> {
                         block
                             .body
                             .push(Instruction::store(out_ptr_id, in_value_id, None));
+
+                        // Coordinate flip
+                        if self
+                            .writer
+                            .flags
+                            .contains(WriterFlags::ADJUST_COORDINATE_SPACE)
+                            && matches!(
+                                member_info.member.binding,
+                                Some(crate::Binding::BuiltIn(crate::BuiltIn::Position { .. }))
+                            )
+                        {
+                            let float_ptr_type_id = self
+                                .writer
+                                .get_f32_pointer_type_id(spirv::StorageClass::Output);
+                            let index_y_id = self.get_index_constant(1);
+
+                            let access_id = self.gen_id();
+                            block.body.push(Instruction::access_chain(
+                                float_ptr_type_id,
+                                access_id,
+                                out_ptr_id,
+                                &[index_y_id],
+                            ));
+
+                            let float_type_id = self.writer.get_f32_type_id();
+                            let y_val = self.gen_id();
+                            block.body.push(Instruction::composite_extract(
+                                float_type_id,
+                                y_val,
+                                in_value_id,
+                                &[1],
+                            ));
+
+                            let flipped_y_val = self.gen_id();
+                            block.body.push(Instruction::unary(
+                                spirv::Op::FNegate,
+                                float_type_id,
+                                flipped_y_val,
+                                y_val,
+                            ));
+
+                            block
+                                .body
+                                .push(Instruction::store(access_id, flipped_y_val, None));
+                        }
                     }
                 }
                 Statement::SubgroupBallot {
