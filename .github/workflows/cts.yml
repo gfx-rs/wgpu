@@ -43,9 +43,14 @@ jobs:
 
       - name: Install Repo MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }}
+          rustup toolchain install ${{ env.MSRV }} --no-self-update --profile=minimal --target ${{ matrix.target }} --component llvm-tools
           rustup override set ${{ env.MSRV }}
           cargo -V
+
+      - name: Install `cargo-llvm-cov`
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
 
       - name: caching
         uses: Swatinem/rust-cache@v2
@@ -60,7 +65,7 @@ jobs:
           mkdir -p .cargo
           cat <<EOF >> .cargo/config.toml
           [profile.dev]
-          debug = 1
+          debug = "line-tables-only"
           EOF
 
       - name: (Windows) Install DXC
@@ -71,7 +76,7 @@ jobs:
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-warp
         with:
-          target-dirs: "target/debug"
+          target-dirs: "target/llvm-cov-target/debug"
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
@@ -79,4 +84,20 @@ jobs:
 
       - name: run CTS
         shell: bash
-        run: cargo xtask cts
+        run: cargo xtask cts --llvm-cov
+
+      - name: Generate coverage report
+        id: coverage
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -e
+
+          cargo llvm-cov report --lcov --output-path lcov.info
+
+      - name: Upload coverage report to Codecov
+        uses: codecov/codecov-action@v5
+        if: steps.coverage.outcome == 'success'
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
