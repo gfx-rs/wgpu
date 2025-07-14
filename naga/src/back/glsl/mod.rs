@@ -1670,7 +1670,6 @@ impl<'a, W: Write> Writer<'a, W> {
         // We ignore all interpolation and auxiliary modifiers that aren't used in fragment
         // shaders' input globals or vertex shaders' output globals.
         let emit_interpolation_and_auxiliary = match self.entry_point.stage {
-            // TODO: make this more nuanced for mesh and fragment shaders which can have per primitive and per vertex data
             ShaderStage::Vertex => output,
             ShaderStage::Fragment => !output,
             ShaderStage::Compute => false,
@@ -2673,19 +2672,11 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_image_atomic(ctx, image, coordinate, array_index, fun, value)?
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
-                vertex_count,
-                primitive_count,
-            }) => {
-                write!(self.out, "{level}SetMeshOutputsEXT(")?;
-                self.write_expr(vertex_count, ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(primitive_count, ctx)?;
-                write!(self.out, ");")?;
-            }
             Statement::MeshFunction(
-                crate::MeshFunction::SetVertex { .. } | crate::MeshFunction::SetPrimitive { .. },
-            ) => unimplemented!(),
+                crate::MeshFunction::SetMeshOutputs { .. }
+                | crate::MeshFunction::SetVertex { .. }
+                | crate::MeshFunction::SetPrimitive { .. },
+            ) => unreachable!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let res_name = Baked(result).to_string();
@@ -5284,7 +5275,7 @@ const fn glsl_storage_qualifier(space: crate::AddressSpace) -> Option<&'static s
         As::Handle => Some("uniform"),
         As::WorkGroup => Some("shared"),
         As::PushConstant => Some("uniform"),
-        As::TaskPayload => Some("taskPayloadSharedEXT"),
+        As::TaskPayload => unreachable!(),
     }
 }
 

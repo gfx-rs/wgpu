@@ -244,7 +244,19 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             }
         }
         if entry.stage == crate::ShaderStage::Task || entry.stage == crate::ShaderStage::Mesh {
-            // TODO: make sure u32 is preserved
+            // u32 should always be there if the module is valid, as it is e.g. the type of some expressions
+            let u32_type = module
+                .types
+                .iter()
+                .find_map(|tuple| {
+                    if tuple.1.inner == crate::TypeInner::Scalar(crate::Scalar::U32) {
+                        Some(tuple.0)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap();
+            module_tracer.types_used.insert(u32_type);
         }
     }
 

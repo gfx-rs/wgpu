@@ -187,7 +187,7 @@ impl<W: Write> Writer<W> {
             let attributes = match ep.stage {
                 ShaderStage::Vertex | ShaderStage::Fragment => vec![Attribute::Stage(ep.stage)],
                 ShaderStage::Compute => vec![
-                    Attribute::Stage(ep.stage),
+                    Attribute::Stage(ShaderStage::Compute),
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
                 ShaderStage::Mesh | ShaderStage::Task => unreachable!(),
@@ -839,30 +839,7 @@ impl<W: Write> Writer<W> {
                 }
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
-                vertex_count,
-                primitive_count,
-            }) => {
-                write!(self.out, "{level}setMeshOutputs(")?;
-                self.write_expr(module, vertex_count, func_ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(module, primitive_count, func_ctx)?;
-                writeln!(self.out, ");")?;
-            }
-            Statement::MeshFunction(crate::MeshFunction::SetVertex { index, value }) => {
-                write!(self.out, "{level}setVertex(")?;
-                self.write_expr(module, index, func_ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(module, value, func_ctx)?;
-                writeln!(self.out, ");")?;
-            }
-            Statement::MeshFunction(crate::MeshFunction::SetPrimitive { index, value }) => {
-                write!(self.out, "{level}setPrimitive(")?;
-                self.write_expr(module, index, func_ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(module, value, func_ctx)?;
-                writeln!(self.out, ");")?;
-            }
+            Statement::MeshFunction(..) => unreachable!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let res_name = Baked(result).to_string();
