@@ -773,6 +773,8 @@ pub struct Writer {
 
     ray_get_committed_intersection_function: Option<Word>,
     ray_get_candidate_intersection_function: Option<Word>,
+
+    mesh_state: WriteMeshInfo,
 }
 
 bitflags::bitflags! {
@@ -909,4 +911,28 @@ pub fn write_vec(
         &mut words,
     )?;
     Ok(words)
+}
+
+/// The outputs of a mesh shader must be stored in global variables. These outputs are determined by the attributes on
+/// the entry point, but other functions may also set these outputs. A single module might have multiple such global
+/// variables, but each function will only end up using one and will have to look up the global variable for its type,
+/// not its entry point. Therefore the variables must be associated with types and not entry points.
+pub struct WriteMeshInfo {
+    pub vertex_outputs_by_type: crate::FastHashMap<Handle<crate::Type>, MeshOutputInfo>,
+    pub primitive_outputs_by_type: crate::FastHashMap<Handle<crate::Type>, MeshOutputInfo>,
+}
+
+#[derive(Clone, Copy)]
+pub struct MeshOutputInfo {
+    /// The index of the word that specifies the length of the global variable array. This is very hacky lol
+    /// We want to allow the same global variable to be used across entry points of the same output type
+    /// so that they can reuse functions that might set vertices/indices. So we make the array the largest
+    /// of the max output sizes among all the entry points! It will default to zero, so that if an unused function
+    /// tries to write to it, the function can still be valid if it is never called.
+    pub index_of_length_decl: usize,
+    pub inner_type: Word,
+    pub array_type: Word,
+    pub ptr_type: Word,
+    pub array_ptr_type: Word,
+    pub var_id: Word,
 }

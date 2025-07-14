@@ -1,5 +1,6 @@
 use alloc::{string::String, vec, vec::Vec};
 
+use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
 use spirv::Word;
 
@@ -13,7 +14,7 @@ use super::{
 };
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
-    back::spv::{BindingInfo, WrappedFunction},
+    back::spv::{helpers::BindingDecorations, BindingInfo, WrappedFunction},
     path_like::PathLike,
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
@@ -23,6 +24,7 @@ struct FunctionInterface<'a> {
     varying_ids: &'a mut Vec<Word>,
     stage: crate::ShaderStage,
     task_payload: Option<Handle<crate::GlobalVariable>>,
+    mesh_info: Option<crate::MeshStageInfo>,
 }
 
 impl Function {
@@ -93,6 +95,10 @@ impl Writer {
             temp_list: Vec::new(),
             ray_get_committed_intersection_function: None,
             ray_get_candidate_intersection_function: None,
+            mesh_state: super::WriteMeshInfo {
+                vertex_outputs_by_type: crate::FastHashMap::default(),
+                primitive_outputs_by_type: crate::FastHashMap::default(),
+            },
         })
     }
 
@@ -152,6 +158,12 @@ impl Writer {
             temp_list: take(&mut self.temp_list).recycle(),
             ray_get_candidate_intersection_function: None,
             ray_get_committed_intersection_function: None,
+
+            mesh_state: super::WriteMeshInfo {
+                vertex_outputs_by_type: take(&mut self.mesh_state.vertex_outputs_by_type).recycle(),
+                primitive_outputs_by_type: take(&mut self.mesh_state.primitive_outputs_by_type)
+                    .recycle(),
+            },
         };
 
         *self = fresh;
@@ -848,11 +860,7 @@ impl Writer {
                             }
                             has_point_size |=
                                 *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
-                            let varying_id = if *binding
-                                == crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize)
-                            {
-                                0
-                            } else {
+                            let varying_id = {
                                 let varying_id = self.write_varying(
                                     ir_module,
                                     iface.stage,
@@ -904,10 +912,25 @@ impl Writer {
             None => self.void_type,
         };
 
-        if let Some(ref mut i) = interface {
-            if let Some(task_payload) = i.task_payload {
-                i.varying_ids
+        if let Some(ref mut iface) = interface {
+            if let Some(task_payload) = iface.task_payload {
+                iface
+                    .varying_ids
                     .push(self.global_variables[task_payload].var_id);
+            }
+            if let Some(ref mesh_info) = iface.mesh_info {
+                self.mesh_shader_output_variable(
+                    ir_module,
+                    mesh_info.vertex_output_type,
+                    false,
+                    mesh_info.max_vertices,
+                )?;
+                self.mesh_shader_output_variable(
+                    ir_module,
+                    mesh_info.primitive_output_type,
+                    true,
+                    mesh_info.max_primitives,
+                )?;
             }
         }
 
@@ -1144,6 +1167,7 @@ impl Writer {
                 varying_ids: &mut interface_ids,
                 stage: entry_point.stage,
                 task_payload: entry_point.task_payload,
+                mesh_info: entry_point.mesh_info.clone(),
             }),
             debug_info,
         )?;
@@ -1995,8 +2019,99 @@ impl Writer {
             }
         }
 
-        use spirv::{BuiltIn, Decoration};
+        let binding = self.map_binding(ir_module, stage, class, ty, binding)?;
 
+        match binding {
+            BindingDecorations::None => (),
+            BindingDecorations::BuiltIn(bi, others) => {
+                self.decorate(id, spirv::Decoration::BuiltIn, &[bi as u32]);
+                for other in others {
+                    self.decorate(id, other, &[]);
+                }
+            }
+            BindingDecorations::Location {
+                location,
+                others,
+                blend_src,
+            } => {
+                self.decorate(id, spirv::Decoration::Location, &[location]);
+                for other in others {
+                    self.decorate(id, other, &[]);
+                }
+                if let Some(blend_src) = blend_src {
+                    self.decorate(id, spirv::Decoration::Index, &[blend_src]);
+                }
+            }
+        }
+
+        Ok(id)
+    }
+
+    pub fn write_binding_struct_member(
+        &mut self,
+        struct_id: Word,
+        member_idx: Word,
+        binding_info: BindingDecorations,
+    ) {
+        match binding_info {
+            BindingDecorations::None => (),
+            BindingDecorations::BuiltIn(bi, others) => {
+                self.annotations.push(Instruction::member_decorate(
+                    struct_id,
+                    member_idx,
+                    spirv::Decoration::BuiltIn,
+                    &[bi as Word],
+                ));
+                for other in others {
+                    self.annotations.push(Instruction::member_decorate(
+                        struct_id,
+                        member_idx,
+                        other,
+                        &[],
+                    ));
+                }
+            }
+            BindingDecorations::Location {
+                location,
+                others,
+                blend_src,
+            } => {
+                self.annotations.push(Instruction::member_decorate(
+                    struct_id,
+                    member_idx,
+                    spirv::Decoration::Location,
+                    &[location],
+                ));
+                for other in others {
+                    self.annotations.push(Instruction::member_decorate(
+                        struct_id,
+                        member_idx,
+                        other,
+                        &[],
+                    ));
+                }
+                if let Some(blend_src) = blend_src {
+                    self.annotations.push(Instruction::member_decorate(
+                        struct_id,
+                        member_idx,
+                        spirv::Decoration::Index,
+                        &[blend_src],
+                    ));
+                }
+            }
+        }
+    }
+
+    pub fn map_binding(
+        &mut self,
+        ir_module: &crate::Module,
+        stage: crate::ShaderStage,
+        class: spirv::StorageClass,
+        ty: Handle<crate::Type>,
+        binding: &crate::Binding,
+    ) -> Result<BindingDecorations, Error> {
+        use spirv::BuiltIn;
+        use spirv::Decoration;
         match *binding {
             crate::Binding::Location {
                 location,
@@ -2004,7 +2119,7 @@ impl Writer {
                 sampling,
                 blend_src,
             } => {
-                self.decorate(id, Decoration::Location, &[location]);
+                let mut others = ArrayVec::new();
 
                 let no_decorations =
                     // VUID-StandaloneSpirv-Flat-06202
@@ -2021,10 +2136,10 @@ impl Writer {
                         // Perspective-correct interpolation is the default in SPIR-V.
                         None | Some(crate::Interpolation::Perspective) => (),
                         Some(crate::Interpolation::Flat) => {
-                            self.decorate(id, Decoration::Flat, &[]);
+                            others.push(Decoration::Flat);
                         }
                         Some(crate::Interpolation::Linear) => {
-                            self.decorate(id, Decoration::NoPerspective, &[]);
+                            others.push(Decoration::NoPerspective);
                         }
                     }
                     match sampling {
@@ -2036,27 +2151,30 @@ impl Writer {
                             | crate::Sampling::Either,
                         ) => (),
                         Some(crate::Sampling::Centroid) => {
-                            self.decorate(id, Decoration::Centroid, &[]);
+                            others.push(Decoration::Centroid);
                         }
                         Some(crate::Sampling::Sample) => {
                             self.require_any(
                                 "per-sample interpolation",
                                 &[spirv::Capability::SampleRateShading],
                             )?;
-                            self.decorate(id, Decoration::Sample, &[]);
+                            others.push(Decoration::Sample);
                         }
                     }
                 }
-                if let Some(blend_src) = blend_src {
-                    self.decorate(id, Decoration::Index, &[blend_src]);
-                }
+                Ok(BindingDecorations::Location {
+                    location,
+                    others,
+                    blend_src,
+                })
             }
             crate::Binding::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
+                let mut others = ArrayVec::new();
                 let built_in = match built_in {
                     Bi::Position { invariant } => {
                         if invariant {
-                            self.decorate(id, Decoration::Invariant, &[]);
+                            others.push(Decoration::Invariant);
                         }
 
                         if class == spirv::StorageClass::Output {
@@ -2157,10 +2275,8 @@ impl Writer {
                     Bi::LineIndices => BuiltIn::PrimitiveLineIndicesEXT,
                     Bi::TriangleIndices => BuiltIn::PrimitiveTriangleIndicesEXT,
                     // No decoration, this EmitMeshTasksEXT is called at function return
-                    Bi::MeshTaskSize => return Ok(id),
+                    Bi::MeshTaskSize => return Ok(BindingDecorations::None),
                 };
-
-                self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);
 
                 use crate::ScalarKind as Sk;
 
@@ -2185,13 +2301,109 @@ impl Writer {
                     };
 
                     if is_flat {
-                        self.decorate(id, Decoration::Flat, &[]);
+                        others.push(Decoration::Flat);
                     }
                 }
+                Ok(BindingDecorations::BuiltIn(built_in, others))
             }
         }
+    }
 
-        Ok(id)
+    /// Returns the id of the variable, and the type of the array
+    pub fn mesh_shader_output_variable(
+        &mut self,
+        ir_module: &crate::Module,
+        output_type: Handle<crate::Type>,
+        is_primitive: bool,
+        array_len: Word,
+    ) -> Result<super::MeshOutputInfo, Error> {
+        let type_id = self.get_handle_type_id(output_type);
+        let ptr_type_id = self.get_handle_pointer_type_id(output_type, spirv::StorageClass::Output);
+        let u32_type_id = self.get_u32_type_id();
+        let entry = if is_primitive {
+            self.mesh_state.primitive_outputs_by_type.entry(output_type)
+        } else {
+            self.mesh_state.vertex_outputs_by_type.entry(output_type)
+        };
+        let out = match entry {
+            Entry::Occupied(value) => {
+                // This is the hacky part lol. We want to make sure the array size is the largest max output
+                // of any of the entry points.
+                let val = *value.get();
+                let len_ref = &mut self.logical_layout.declarations[val.index_of_length_decl];
+                *len_ref = (*len_ref).max(array_len);
+                val
+            }
+            Entry::Vacant(entry) => {
+                // We write the literal, and avoid caching as it might change lol
+                let len_value_id = self.id_gen.next();
+                Instruction::constant_32bit(u32_type_id, len_value_id, array_len)
+                    .to_words(&mut self.logical_layout.declarations);
+                // This is the best part
+                let len_literal_idx = self.logical_layout.declarations.len() - 1;
+
+                // We generate the array and pointer types here, even if they weren't in the module's type arena
+                let array_type_id = self.id_gen.next();
+                Instruction::type_array(array_type_id, type_id, len_value_id)
+                    .to_words(&mut self.logical_layout.declarations);
+                let array_ptr_type_id = self.id_gen.next();
+                Instruction::type_pointer(
+                    array_ptr_type_id,
+                    spirv::StorageClass::Output,
+                    array_type_id,
+                )
+                .to_words(&mut self.logical_layout.declarations);
+
+                // Create the actual variable
+                let var_id = self.id_gen.next();
+                if self.flags.contains(WriterFlags::DEBUG) {
+                    if let Some(ref name) = ir_module.types[output_type].name {
+                        self.debugs.push(Instruction::name(var_id, name));
+                    }
+                }
+                Instruction::variable(array_ptr_type_id, var_id, spirv::StorageClass::Output, None)
+                    .to_words(&mut self.logical_layout.declarations);
+                if is_primitive {
+                    Instruction::decorate(var_id, spirv::Decoration::PerPrimitiveEXT, &[])
+                        .to_words(&mut self.logical_layout.annotations);
+                }
+
+                let info = super::MeshOutputInfo {
+                    index_of_length_decl: len_literal_idx,
+                    array_type: array_type_id,
+                    var_id,
+                    inner_type: type_id,
+                    ptr_type: ptr_type_id,
+                    array_ptr_type: array_ptr_type_id,
+                };
+                entry.insert(info);
+
+                if let crate::TypeInner::Struct { ref members, .. } =
+                    ir_module.types[output_type].inner
+                {
+                    for (idx, member) in members.iter().enumerate() {
+                        if member.binding.is_none() {
+                            continue;
+                        }
+                        let binding = self.map_binding(
+                            ir_module,
+                            crate::ShaderStage::Mesh,
+                            spirv::StorageClass::Output,
+                            member.ty,
+                            member.binding.as_ref().unwrap(),
+                        )?;
+                        self.write_binding_struct_member(type_id, idx as Word, binding);
+                    }
+                } else {
+                    unreachable!("Mesh output type isn't a struct");
+                }
+                self.decorate(type_id, spirv::Decoration::Block, &[]);
+
+                info
+            }
+        };
+
+        Ok(out)
     }
 
     fn write_global_variable(
@@ -2490,8 +2702,7 @@ impl Writer {
                 .to_words(&mut self.logical_layout.extensions);
         }
         if has_mesh_shaders {
-            Instruction::extension("SPV_EXT_mesh_shader")
-                .to_words(&mut self.logical_layout.extensions);
+            self.use_extension("SPV_EXT_mesh_shader");
             self.require_any("Mesh Shaders", &[spirv::Capability::MeshShadingEXT])?;
             let lang_version = self.lang_version();
             if lang_version.0 <= 1 && lang_version.1 < 4 {

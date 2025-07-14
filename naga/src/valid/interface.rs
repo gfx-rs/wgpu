@@ -139,6 +139,8 @@ pub enum EntryPointError {
     UnexpectedMeshShaderEntryResult,
     #[error("Task shader entry point must return @builtin(mesh_task_size) vec3<u32>")]
     WrongTaskShaderEntryResult,
+    #[error("Mesh output type must be a user-defined struct")]
+    InvalidMeshOutputType,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -932,6 +934,27 @@ impl super::Validator {
                     return Err(EntryPointError::WrongMeshOutputType
                         .with_span_handle(mesh_info.vertex_output_type, &module.types));
                 }
+            }
+            if let Some(used_primitive_type) = info.mesh_shader_info.primitive_type {
+                if used_primitive_type.0 != mesh_info.primitive_output_type {
+                    return Err(EntryPointError::WrongMeshOutputType
+                        .with_span_handle(mesh_info.primitive_output_type, &module.types));
+                }
+            }
+
+            if !matches!(
+                module.types[mesh_info.vertex_output_type].inner,
+                crate::TypeInner::Struct { .. }
+            ) {
+                return Err(EntryPointError::InvalidMeshOutputType
+                    .with_span_handle(mesh_info.vertex_output_type, &module.types));
+            }
+            if !matches!(
+                module.types[mesh_info.primitive_output_type].inner,
+                crate::TypeInner::Struct { .. }
+            ) {
+                return Err(EntryPointError::InvalidMeshOutputType
+                    .with_span_handle(mesh_info.primitive_output_type, &module.types));
             }
         } else if info.mesh_shader_info.vertex_type.is_some()
             || info.mesh_shader_info.primitive_type.is_some()

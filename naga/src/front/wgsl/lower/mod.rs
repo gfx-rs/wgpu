@@ -3259,6 +3259,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             };
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
+
+                            // TODO: fix this
+                            // Emit all previous expressions, even if not used directly
+                            rctx.block
+                                .extend(rctx.emitter.finish(&rctx.function.expressions));
                             rctx.block.push(
                                 crate::Statement::MeshFunction(match function.name {
                                     "setMeshOutputs" => crate::MeshFunction::SetMeshOutputs {
@@ -3277,6 +3282,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 }),
                                 span,
                             );
+                            rctx.emitter.start(&rctx.function.expressions);
 
                             return Ok(None);
                         }

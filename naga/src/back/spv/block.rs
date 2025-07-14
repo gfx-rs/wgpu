@@ -3673,16 +3673,48 @@ impl BlockContext<'_> {
                     primitive_count,
                 }) => {
                     let mut ins = Instruction::new(spirv::Op::SetMeshOutputsEXT);
-                    ins.operands =
-                        alloc::vec![self.cached[vertex_count], self.cached[primitive_count]];
+                    ins.add_operand(self.cached[vertex_count]);
+                    ins.add_operand(self.cached[primitive_count]);
                     block.body.push(ins);
                 }
                 Statement::MeshFunction(
-                    crate::MeshFunction::SetVertex { .. }
-                    | crate::MeshFunction::SetPrimitive { .. },
+                    crate::MeshFunction::SetVertex { index, value }
+                    | crate::MeshFunction::SetPrimitive { index, value },
                 ) => {
-                    // TODO: work on this
-                    unimplemented!();
+                    self.writer
+                        .require_any("mesh shaders", &[spirv::Capability::MeshShadingEXT])?;
+                    self.writer.use_extension("SPV_EXT_mesh_shader");
+                    let lang_version = self.writer.lang_version();
+                    if lang_version.0 <= 1 && lang_version.1 < 4 {
+                        return Err(Error::SpirvVersionTooLow(1, 4));
+                    }
+                    let is_prim = matches!(
+                        *statement,
+                        Statement::MeshFunction(crate::MeshFunction::SetPrimitive { .. })
+                    );
+                    let type_handle = if is_prim {
+                        self.fun_info.mesh_shader_info.primitive_type.unwrap().0
+                    } else {
+                        self.fun_info.mesh_shader_info.vertex_type.unwrap().0
+                    };
+                    let info = self.writer.mesh_shader_output_variable(
+                        self.ir_module,
+                        type_handle,
+                        is_prim,
+                        0,
+                    )?;
+
+                    let var_ptr = self.gen_id();
+                    block.body.push(Instruction::access_chain(
+                        info.ptr_type,
+                        var_ptr,
+                        info.var_id,
+                        &[self.cached[index]],
+                    ));
+
+                    block
+                        .body
+                        .push(Instruction::store(var_ptr, self.cached[value], None));
                 }
                 Statement::SubgroupBallot {
                     result,
