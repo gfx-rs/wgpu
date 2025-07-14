@@ -23,16 +23,19 @@ jobs:
           - name: Windows x86_64
             os: windows-2022
             target: x86_64-pc-windows-msvc
+            backend: dx12
 
           # Mac
           - name: Mac aarch64
             os: macos-14
             target: x86_64-apple-darwin
+            backend: metal
 
           # Linux
           - name: Linux x86_64
             os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
+            backend: vulkan
 
     name: CTS ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -84,7 +87,7 @@ jobs:
 
       - name: run CTS
         shell: bash
-        run: cargo xtask cts --llvm-cov
+        run: cargo xtask cts --llvm-cov --backend ${{ matrix.backend }}
 
       - name: Generate coverage report
         id: coverage
