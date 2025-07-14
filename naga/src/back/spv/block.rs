@@ -235,7 +235,7 @@ impl Writer {
                         res_member.type_id,
                         member_value_id,
                         value_id,
-                        &[index as Word],
+                        &[index as u32],
                     ));
                     member_value_id
                 }
@@ -3257,10 +3257,8 @@ impl BlockContext<'_> {
                     );
                     return Ok(BlockExitDisposition::Discarded);
                 }
-                Statement::Return {
-                    value: Some(output),
-                } => {
-                    let value_id = self.cached[output];
+                Statement::Return { value: Some(value) } => {
+                    let value_id = self.cached[value];
                     let instruction = match self.function.entry_point_context {
                         // If this is an entry point, and we need to return anything,
                         // let's instead store the output variables and return `void`.

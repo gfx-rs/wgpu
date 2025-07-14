@@ -855,12 +855,13 @@ impl Writer {
                             let type_id = self.get_handle_type_id(member.ty);
                             let name = member.name.as_deref();
                             let binding = member.binding.as_ref().unwrap();
-                            if binding.to_built_in() == Some(crate::BuiltIn::MeshTaskSize) {
-                                continue;
-                            }
                             has_point_size |=
                                 *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
-                            let varying_id = {
+                            let varying_id = if *binding
+                                == crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize)
+                            {
+                                0
+                            } else {
                                 let varying_id = self.write_varying(
                                     ir_module,
                                     iface.stage,
@@ -872,7 +873,6 @@ impl Writer {
                                 iface.varying_ids.push(varying_id);
                                 varying_id
                             };
-                            iface.varying_ids.push(varying_id);
                             ep_context.results.push(ResultMember {
                                 id: varying_id,
                                 type_id,
@@ -979,7 +979,7 @@ impl Writer {
                 continue;
             }
 
-            let mut gv: GlobalVariable = self.global_variables[handle].clone();
+            let mut gv = self.global_variables[handle].clone();
             if let Some(ref mut iface) = interface {
                 // Have to include global variables in the interface
                 if self.physical_layout.version >= 0x10400 && iface.task_payload != Some(handle) {
@@ -2483,65 +2483,6 @@ impl Writer {
                         .insert(output_type, info.clone());
                 };
                 info
-
-                // We generate the array and pointer types here, even if they weren't in the module's type arena
-                /*let array_type_id = self.id_gen.next();
-                Instruction::type_array(array_type_id, type_id, len_value_id)
-                    .to_words(&mut self.logical_layout.declarations);
-                let array_ptr_type_id = self.id_gen.next();
-                Instruction::type_pointer(
-                    array_ptr_type_id,
-                    spirv::StorageClass::Output,
-                    array_type_id,
-                )
-                .to_words(&mut self.logical_layout.declarations);
-
-                // Create the actual variable
-                let var_id = self.id_gen.next();
-                if self.flags.contains(WriterFlags::DEBUG) {
-                    if let Some(ref name) = ir_module.types[output_type].name {
-                        self.debugs.push(Instruction::name(var_id, name));
-                    }
-                }
-                Instruction::variable(array_ptr_type_id, var_id, spirv::StorageClass::Output, None)
-                    .to_words(&mut self.logical_layout.declarations);
-                if is_primitive {
-                    Instruction::decorate(var_id, spirv::Decoration::PerPrimitiveEXT, &[])
-                        .to_words(&mut self.logical_layout.annotations);
-                }
-
-                let info = super::MeshOutputInfo {
-                    index_of_length_decl: len_literal_idx,
-                    array_type: array_type_id,
-                    var_id,
-                    inner_type: type_id,
-                    ptr_type: ptr_type_id,
-                    array_ptr_type: array_ptr_type_id,
-                };
-                entry.insert(info);
-
-                if let crate::TypeInner::Struct { ref members, .. } =
-                    ir_module.types[output_type].inner
-                {
-                    for (idx, member) in members.iter().enumerate() {
-                        if member.binding.is_none() {
-                            continue;
-                        }
-                        let binding = self.map_binding(
-                            ir_module,
-                            crate::ShaderStage::Mesh,
-                            spirv::StorageClass::Output,
-                            member.ty,
-                            member.binding.as_ref().unwrap(),
-                        )?;
-                        self.write_binding_struct_member(type_id, idx as Word, binding);
-                    }
-                } else {
-                    unreachable!("Mesh output type isn't a struct");
-                }
-                self.decorate(type_id, spirv::Decoration::Block, &[]);
-
-                info*/
             }
         };
 
@@ -2813,9 +2754,19 @@ impl Writer {
         let mut has_ray_query = ir_module.special_types.ray_desc.is_some()
             | ir_module.special_types.ray_intersection.is_some();
         let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
+        // Ways mesh shaders are required:
+        // * Mesh entry point used
+        // * Mesh function like setVertex used outside mesh entry point, this is handled elsewhere
+        // * Task payload global variable
+        // * Fragment shader with per primitive data (currently unhandle by naga in general)
+
+        // TODO: check for that last condition
         let has_mesh_shaders = ir_module.entry_points.iter().any(|entry| {
             entry.stage == crate::ShaderStage::Mesh || entry.stage == crate::ShaderStage::Task
-        });
+        }) || ir_module
+            .global_variables
+            .iter()
+            .any(|gvar| gvar.1.space == crate::AddressSpace::TaskPayload);
 
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
             // spirv does not know whether these have vertex return - that is done by us

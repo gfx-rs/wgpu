@@ -177,7 +177,8 @@ impl super::AddressSpace {
             crate::AddressSpace::Storage { access } => access,
             crate::AddressSpace::Handle => Sa::LOAD,
             crate::AddressSpace::PushConstant => Sa::LOAD,
-            // TODO: change this to reflect the different accesses by shader stage
+            // TaskPayload isn't always writable, but this is checked for elsewhere,
+            // when not using multiple payloads and matching the entry payload is checked.
             crate::AddressSpace::TaskPayload => Sa::LOAD | Sa::STORE,
         }
     }
