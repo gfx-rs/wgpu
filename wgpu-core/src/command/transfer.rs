@@ -363,6 +363,59 @@ pub(crate) fn validate_linear_texture_data(
     Ok((bytes_in_copy, image_stride_bytes))
 }
 
+/// Validation for texture/buffer copies.
+///
+/// This implements the following checks from WebGPU's [validating texture buffer copy][vtbc]
+/// algorithm:
+///  * The texture must not be multisampled.
+///  * The copy must be from/to a single aspect of the texture.
+///  * If `aligned` is true, the buffer offset must be aligned appropriately.
+///
+/// Other checks in this algorithm are enforced elsewhere.
+///
+/// [vtbc]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-buffer-copy
+pub(crate) fn validate_texture_buffer_copy<T>(
+    texture_copy_view: &wgt::TexelCopyTextureInfo<T>,
+    aspect: hal::FormatAspects,
+    desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    offset: BufferAddress,
+    aligned: bool,
+) -> Result<(), TransferError> {
+    if desc.sample_count != 1 {
+        return Err(TransferError::InvalidSampleCount {
+            sample_count: desc.sample_count,
+        });
+    }
+
+    if !aspect.is_one() {
+        return Err(TransferError::CopyAspectNotOne);
+    }
+
+    let mut offset_alignment = if desc.format.is_depth_stencil_format() {
+        4
+    } else {
+        desc.format
+            .block_copy_size(Some(texture_copy_view.aspect))
+            .unwrap_or(1)
+    };
+
+    // TODO(https://github.com/gfx-rs/wgpu/issues/7947): This does not match the spec.
+    // The spec imposes no alignment requirement if `!aligned`, and otherwise
+    // imposes only the `offset_alignment` as calculated above. wgpu currently
+    // can panic on alignments <4B, so we reject them here to avoid a panic.
+    if aligned {
+        offset_alignment = offset_alignment.max(4);
+    } else {
+        offset_alignment = 4;
+    }
+
+    if offset % u64::from(offset_alignment) != 0 {
+        return Err(TransferError::UnalignedBufferOffset(offset));
+    }
+
+    Ok(())
+}
+
 /// Validate the extent and alignment of a texture copy.
 ///
 /// Copied with minor modifications from WebGPU standard. This mostly follows
@@ -884,10 +937,6 @@ impl Global {
                 .map(|pending| pending.into_hal(dst_raw))
                 .collect::<Vec<_>>();
 
-            if !dst_base.aspect.is_one() {
-                return Err(TransferError::CopyAspectNotOne.into());
-            }
-
             if !conv::is_valid_copy_dst_texture_format(dst_texture.desc.format, destination.aspect)
             {
                 return Err(TransferError::CopyToForbiddenTextureFormat {
@@ -896,6 +945,14 @@ impl Global {
                 }
                 .into());
             }
+
+            validate_texture_buffer_copy(
+                destination,
+                dst_base.aspect,
+                &dst_texture.desc,
+                source.layout.offset,
+                true, // alignment required for buffer offset
+            )?;
 
             let (required_buffer_bytes_in_copy, bytes_per_array_layer) =
                 validate_linear_texture_data(
@@ -999,22 +1056,13 @@ impl Global {
             src_texture
                 .check_usage(TextureUsages::COPY_SRC)
                 .map_err(TransferError::MissingTextureUsage)?;
-            if src_texture.desc.sample_count != 1 {
-                return Err(TransferError::InvalidSampleCount {
-                    sample_count: src_texture.desc.sample_count,
-                }
-                .into());
-            }
+
             if source.mip_level >= src_texture.desc.mip_level_count {
                 return Err(TransferError::InvalidMipLevel {
                     requested: source.mip_level,
                     count: src_texture.desc.mip_level_count,
                 }
                 .into());
-            }
-
-            if !src_base.aspect.is_one() {
-                return Err(TransferError::CopyAspectNotOne.into());
             }
 
             if !conv::is_valid_copy_src_texture_format(src_texture.desc.format, source.aspect) {
@@ -1024,6 +1072,14 @@ impl Global {
                 }
                 .into());
             }
+
+            validate_texture_buffer_copy(
+                source,
+                src_base.aspect,
+                &src_texture.desc,
+                destination.layout.offset,
+                true, // alignment required for buffer offset
+            )?;
 
             let (required_buffer_bytes_in_copy, bytes_per_array_layer) =
                 validate_linear_texture_data(

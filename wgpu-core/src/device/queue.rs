@@ -19,9 +19,9 @@ use crate::device::trace::Action;
 use crate::{
     api_log,
     command::{
-        extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
-        ClearError, CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
-        TexelCopyTextureInfo, TransferError,
+        extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
+        validate_texture_copy_range, ClearError, CommandAllocator, CommandBuffer, CommandEncoder,
+        CommandEncoderError, CopySide, TexelCopyTextureInfo, TransferError,
     },
     conv,
     device::{DeviceError, WaitIdleError},
@@ -737,10 +737,6 @@ impl Queue {
 
         let (selector, dst_base) = extract_texture_selector(&destination, size, &dst)?;
 
-        if !dst_base.aspect.is_one() {
-            return Err(TransferError::CopyAspectNotOne.into());
-        }
-
         if !conv::is_valid_copy_dst_texture_format(dst.desc.format, destination.aspect) {
             return Err(TransferError::CopyToForbiddenTextureFormat {
                 format: dst.desc.format,
@@ -748,6 +744,14 @@ impl Queue {
             }
             .into());
         }
+
+        validate_texture_buffer_copy(
+            &destination,
+            dst_base.aspect,
+            &dst.desc,
+            data_layout.offset,
+            false, // alignment not required for buffer offset
+        )?;
 
         // Note: `_source_bytes_per_array_layer` is ignored since we
         // have a staging copy, and it can have a different value.
