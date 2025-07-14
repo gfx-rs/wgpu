@@ -107,7 +107,7 @@ The mesh shader can write to vertices using the `setVertex(idx: u32, vertex: Ver
 
 ### Fragment shader
 
-Fragment shaders can access vertex output data normally. They can also access primitive output data, provided the input is decorated with `@per_primitive`. The `@per_primitive` attribute can be applied to a value directly, such as `@per_primitive @location(1) value: vec4<f32>`, to a struct such as `@per_primitive primitive_input: PrimitiveInput` where `PrimitiveInput` is a struct containing fields decorated with `@location` and `@builtin`, or to members of a struct that are themselves decorated with `@location` or `@builtin`.
+Fragment shaders can access vertex output data as if it is from a vertex shader. They can also access primitive output data, provided the input is decorated with `@per_primitive`. The `@per_primitive` attribute can be applied to a value directly, such as `@per_primitive @location(1) value: vec4<f32>`, to a struct such as `@per_primitive primitive_input: PrimitiveInput` where `PrimitiveInput` is a struct containing fields decorated with `@location` and `@builtin`, or to members of a struct that are themselves decorated with `@location` or `@builtin`.
 
 The primitive state is part of the fragment input and must match the output of the mesh shader in the pipeline. Using `@per_primitive` also requires enabling the mesh shader extension.
 
@@ -184,7 +184,7 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 	setPrimitive(0, p);
 }
 @fragment
-fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
+fn fs_main(vertex: VertexOutput, @per_primitive primitive: PrimitiveInput) -> @location(0) vec4<f32> {
 	return vertex.color * primitive.colorMask;
 }
 ```
