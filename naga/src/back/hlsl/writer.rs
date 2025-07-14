@@ -936,12 +936,12 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_type(module, global.ty)?;
                 ""
             }
-            // TODO: verify this is correct
-            crate::AddressSpace::WorkGroup | crate::AddressSpace::TaskPayload => {
+            crate::AddressSpace::WorkGroup => {
                 write!(self.out, "groupshared ")?;
                 self.write_type(module, global.ty)?;
                 ""
             }
+            crate::AddressSpace::TaskPayload => unimplemented!(),
             crate::AddressSpace::Uniform => {
                 // constant buffer declarations are expected to be inlined, e.g.
                 // `cbuffer foo: register(b0) { field1: type1; }`

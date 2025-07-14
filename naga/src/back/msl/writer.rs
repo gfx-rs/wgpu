@@ -591,8 +591,7 @@ impl crate::AddressSpace {
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
             Self::Storage { .. } => true,
-            // TODO: investigate this more
-            Self::TaskPayload => true,
+            Self::TaskPayload => unimplemented!(),
             // These should always be read-write.
             Self::Private | Self::WorkGroup => false,
             // These translate to `constant` address space, no need for qualifiers.
@@ -6180,7 +6179,6 @@ template <typename A>
                     LocationMode::Uniform,
                     false,
                 ),
-                // TODO: figure out what the location mode stuff means and stuff
                 crate::ShaderStage::Task | crate::ShaderStage::Mesh => unimplemented!(),
             };
 
@@ -6245,7 +6243,6 @@ template <typename A>
                             }
                         }
                         crate::AddressSpace::TaskPayload => {
-                            // TODO: figure this out
                             unimplemented!()
                         }
                         crate::AddressSpace::Function

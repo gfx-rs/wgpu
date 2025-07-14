@@ -186,10 +186,11 @@ impl<W: Write> Writer<W> {
         for (index, ep) in module.entry_points.iter().enumerate() {
             let attributes = match ep.stage {
                 ShaderStage::Vertex | ShaderStage::Fragment => vec![Attribute::Stage(ep.stage)],
-                ShaderStage::Compute | ShaderStage::Mesh | ShaderStage::Task => vec![
+                ShaderStage::Compute => vec![
                     Attribute::Stage(ep.stage),
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
+                ShaderStage::Mesh | ShaderStage::Task => unreachable!(),
             };
 
             self.write_attributes(&attributes)?;
