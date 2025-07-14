@@ -87,11 +87,13 @@ This shader stage can be selected by marking a function with `@mesh`. Mesh shade
 
 Mesh shaders can be marked with `@payload(someVar)` similar to task shaders. Unlike task shaders, mesh shaders cannot write to this memory. Declaring `@payload` in a pipeline with no task shader, in a pipeline with a task shader that doesn't declare `@payload`, or in a task shader with an `@payload` that is statically sized and smaller than the mesh shader payload is illegal.
 
-Mesh shaders must be marked with `@vertex_output(OutputType, numOutputs)`, where `numOutputs` is the maximum number of vertices to be output by a mesh shader, and `OutputType` is the data associated with vertices, similar to a standard vertex shader output.
+Mesh shaders must be marked with `@vertex_output(OutputType, numOutputs)`, where `numOutputs` is the maximum number of vertices to be output by a mesh shader, and `OutputType` is the data associated with vertices, similar to a standard vertex shader output, and must be a struct.
 
 Mesh shaders must also be marked with `@primitive_output(OutputType, numOutputs)`, which is similar to `@vertex_output` except it describes the primitive outputs.
 
 ### Mesh shader outputs
+
+Vertex outputs from mesh shaders function identically to outputs of vertex shaders, and as such must have a field with `@builtin(position)`.
 
 Primitive outputs from mesh shaders have some additional builtins they can set. These include `@builtin(cull_primitive)`, which must be a boolean value. If this is set to true, then the primitive is skipped during rendering.
 
@@ -105,7 +107,9 @@ The mesh shader can write to vertices using the `setVertex(idx: u32, vertex: Ver
 
 ### Fragment shader
 
-Fragment shaders may now be passed the primitive info from a mesh shader the same was as they are passed vertex inputs, for example `fn fs_main(vertex: VertexOutput, primitive: PrimitiveOutput)`. The primitive state is part of the fragment input and must match the output of the mesh shader in the pipeline.
+Fragment shaders can access vertex output data normally. They can also access primitive output data, provided the input is decorated with `@per_primitive`. The `@per_primitive` attribute can be applied to a value directly, such as `@per_primitive @location(1) value: vec4<f32>`, to a struct such as `@per_primitive primitive_input: PrimitiveInput` where `PrimitiveInput` is a struct containing fields decorated with `@location` and `@builtin`, or to members of a struct that are themselves decorated with `@location` or `@builtin`.
+
+The primitive state is part of the fragment input and must match the output of the mesh shader in the pipeline. Using `@per_primitive` also requires enabling the mesh shader extension.
 
 ### Full example
 
@@ -142,9 +146,7 @@ struct PrimitiveOutput {
 struct PrimitiveInput {
 	@location(1) colorMask: vec4<f32>,
 }
-fn test_function(input: u32) {
 
-}
 @task
 @payload(taskPayload)
 @workgroup_size(1)
@@ -162,8 +164,6 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 	setMeshOutputs(3, 1);
 	workgroupData = 2.0;
 	var v: VertexOutput;
-
-	test_function(1);
 
 	v.position = positions[0];
 	v.color = colors[0] * taskPayload.colorMask;
