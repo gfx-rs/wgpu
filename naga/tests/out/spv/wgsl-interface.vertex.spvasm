@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 40
+; Bound: 38
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -17,8 +17,8 @@ OpMemberDecorate %13 0 Offset 0
 OpDecorate %15 BuiltIn VertexIndex
 OpDecorate %18 BuiltIn InstanceIndex
 OpDecorate %20 Location 10
-OpDecorate %22 Invariant
 OpDecorate %22 BuiltIn Position
+OpDecorate %22 Invariant
 OpDecorate %24 Location 1
 OpDecorate %25 BuiltIn PointSize
 %2 = OpTypeVoid
@@ -61,7 +61,5 @@ OpBranch %31
 OpStore %22 %36
 %37 = OpCompositeExtract  %3  %35 1
 OpStore %24 %37
-%38 = OpCompositeExtract  %4  %35 0
-%39 = OpCompositeExtract  %3  %35 1
 OpReturn
 OpFunctionEnd

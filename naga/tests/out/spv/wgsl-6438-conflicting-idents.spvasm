@@ -1,19 +1,19 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 38
+; Bound: 36
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %14 "vs" %8 %11 %11 %13 %13
-OpEntryPoint Fragment %35 "fs" %33
-OpExecutionMode %35 OriginUpperLeft
+OpEntryPoint Fragment %33 "fs" %31
+OpExecutionMode %33 OriginUpperLeft
 OpMemberDecorate %6 0 Offset 0
 OpMemberDecorate %6 1 Offset 16
 OpDecorate %8 Location 0
 OpDecorate %11 BuiltIn Position
 OpDecorate %13 Location 0
-OpDecorate %33 Location 0
+OpDecorate %31 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %3 = OpTypeVector %4 4
@@ -32,9 +32,9 @@ OpDecorate %33 Location 0
 %22 = OpTypePointer Function %3
 %25 = OpTypeInt 32 0
 %24 = OpConstant  %25  0
-%34 = OpTypePointer Output %3
-%33 = OpVariable  %34  Output
-%36 = OpConstantComposite  %3  %17 %16 %16 %17
+%32 = OpTypePointer Output %3
+%31 = OpVariable  %32  Output
+%34 = OpConstantComposite  %3  %17 %16 %16 %17
 %14 = OpFunction  %2  None %15
 %7 = OpLabel
 %18 = OpVariable  %19  Function %20
@@ -49,14 +49,12 @@ OpStore %26 %23
 OpStore %11 %28
 %29 = OpCompositeExtract  %5  %27 1
 OpStore %13 %29
-%30 = OpCompositeExtract  %3  %27 0
-%31 = OpCompositeExtract  %5  %27 1
 OpReturn
 OpFunctionEnd
-%35 = OpFunction  %2  None %15
-%32 = OpLabel
-OpBranch %37
-%37 = OpLabel
-OpStore %33 %36
+%33 = OpFunction  %2  None %15
+%30 = OpLabel
+OpBranch %35
+%35 = OpLabel
+OpStore %31 %34
 OpReturn
 OpFunctionEnd

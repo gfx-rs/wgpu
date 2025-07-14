@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 52
+; Bound: 49
 OpCapability Shader
 OpCapability SampleRateShading
 %1 = OpExtInstImport "GLSL.std.450"
@@ -17,8 +17,8 @@ OpMemberDecorate %7 2 Offset 8
 OpDecorate %9 ArrayStride 4
 OpMemberDecorate %12 0 Offset 0
 OpMemberDecorate %13 0 Offset 0
-OpDecorate %16 Invariant
 OpDecorate %16 BuiltIn FragCoord
+OpDecorate %16 Invariant
 OpDecorate %19 Location 1
 OpDecorate %22 BuiltIn FrontFacing
 OpDecorate %22 Flat
@@ -81,8 +81,5 @@ OpStore %30 %46
 OpStore %32 %47
 %48 = OpCompositeExtract  %3  %43 2
 OpStore %33 %48
-%49 = OpCompositeExtract  %3  %43 0
-%50 = OpCompositeExtract  %6  %43 1
-%51 = OpCompositeExtract  %3  %43 2
 OpReturn
 OpFunctionEnd

@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 29
+; Bound: 27
 OpCapability Shader
 OpCapability ClipDistance
 %1 = OpExtInstImport "GLSL.std.450"
@@ -41,7 +41,5 @@ OpStore %23 %15
 OpStore %10 %25
 %26 = OpCompositeExtract  %5  %24 1
 OpStore %12 %26
-%27 = OpCompositeExtract  %4  %24 0
-%28 = OpCompositeExtract  %5  %24 1
 OpReturn
 OpFunctionEnd
