@@ -5,7 +5,7 @@
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %24 "vert_main" %16 %19 %21 %21 %23 %23
+OpEntryPoint Vertex %24 "vert_main" %16 %19 %21 %23
 OpEntryPoint Fragment %45 "frag_main" %41 %43
 OpEntryPoint Fragment %61 "fs_extra" %60
 OpExecutionMode %45 OriginUpperLeft

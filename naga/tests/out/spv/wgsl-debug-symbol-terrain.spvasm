@@ -7,9 +7,9 @@ OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint GLCompute %367 "gen_terrain_compute" %364
-OpEntryPoint Vertex %442 "gen_terrain_vertex" %435 %438 %438 %440 %440 %441 %441
-OpEntryPoint Fragment %494 "gen_terrain_fragment" %483 %485 %488 %491 %491 %493 %493
-OpEntryPoint Vertex %589 "vs_main" %580 %583 %585 %585 %587 %587 %588 %588
+OpEntryPoint Vertex %442 "gen_terrain_vertex" %435 %438 %440 %441
+OpEntryPoint Fragment %494 "gen_terrain_fragment" %483 %485 %488 %491 %493
+OpEntryPoint Vertex %589 "vs_main" %580 %583 %585 %587 %588
 OpEntryPoint Fragment %615 "fs_main" %607 %609 %611 %613
 OpExecutionMode %367 LocalSize 64 1 1
 OpExecutionMode %494 OriginUpperLeft

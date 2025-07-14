@@ -6,7 +6,7 @@ OpCapability Shader
 OpCapability SampleRateShading
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Fragment %34 "fragment" %16 %19 %22 %25 %28 %30 %30 %32 %32 %33 %33
+OpEntryPoint Fragment %34 "fragment" %16 %19 %22 %25 %28 %30 %32 %33
 OpExecutionMode %34 OriginUpperLeft
 OpExecutionMode %34 DepthReplacing
 OpMemberDecorate %5 0 Offset 0

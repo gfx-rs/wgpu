@@ -6,7 +6,7 @@ OpCapability Shader
 OpCapability SampleRateShading
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %26 "vert_main" %11 %11 %13 %13 %14 %14 %15 %15 %16 %16 %17 %17 %18 %18 %19 %19 %20 %20 %21 %21 %22 %22 %23
+OpEntryPoint Vertex %26 "vert_main" %11 %13 %14 %15 %16 %17 %18 %19 %20 %21 %22 %23
 OpEntryPoint Fragment %128 "frag_main" %101 %104 %107 %109 %112 %115 %118 %120 %122 %124 %126
 OpExecutionMode %128 OriginUpperLeft
 %3 = OpString "interpolate_compat.wgsl"

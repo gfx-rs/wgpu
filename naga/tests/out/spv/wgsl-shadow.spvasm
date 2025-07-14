@@ -6,7 +6,7 @@ OpCapability Shader
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %84 "vs_main" %75 %78 %80 %80 %82 %82 %83 %83
+OpEntryPoint Vertex %84 "vs_main" %75 %78 %80 %82 %83
 OpEntryPoint Fragment %143 "fs_main" %133 %136 %139 %141
 OpEntryPoint Fragment %228 "fs_main_without_storage" %221 %223 %225 %227
 OpExecutionMode %143 OriginUpperLeft
