@@ -919,18 +919,30 @@ impl Writer {
                     .push(self.global_variables[task_payload].var_id);
             }
             if let Some(ref mesh_info) = iface.mesh_info {
-                self.mesh_shader_output_variable(
+                let vert_info = self.mesh_shader_output_variable(
                     ir_module,
                     mesh_info.vertex_output_type,
                     false,
                     mesh_info.max_vertices,
                 )?;
-                self.mesh_shader_output_variable(
+                let prim_info = self.mesh_shader_output_variable(
                     ir_module,
                     mesh_info.primitive_output_type,
                     true,
                     mesh_info.max_primitives,
                 )?;
+
+                for info in [
+                    &vert_info.location_output,
+                    &vert_info.builtin_output,
+                    &prim_info.location_output,
+                    &prim_info.builtin_output,
+                ]
+                .into_iter()
+                .flatten()
+                {
+                    iface.varying_ids.push(info.var_id);
+                }
             }
         }
 
@@ -2317,33 +2329,163 @@ impl Writer {
         is_primitive: bool,
         array_len: Word,
     ) -> Result<super::MeshOutputInfo, Error> {
-        let type_id = self.get_handle_type_id(output_type);
-        let ptr_type_id = self.get_handle_pointer_type_id(output_type, spirv::StorageClass::Output);
-        let u32_type_id = self.get_u32_type_id();
         let entry = if is_primitive {
-            self.mesh_state.primitive_outputs_by_type.entry(output_type)
+            self.mesh_state.primitive_outputs_by_type.get(&output_type)
         } else {
-            self.mesh_state.vertex_outputs_by_type.entry(output_type)
+            self.mesh_state.vertex_outputs_by_type.get(&output_type)
         };
+        // We need mutable access to `self`
         let out = match entry {
-            Entry::Occupied(value) => {
+            Some(value) => {
                 // This is the hacky part lol. We want to make sure the array size is the largest max output
-                // of any of the entry points.
-                let val = *value.get();
+                // of any of the entry points.get
+                let val = value.clone();
                 let len_ref = &mut self.logical_layout.declarations[val.index_of_length_decl];
                 *len_ref = (*len_ref).max(array_len);
                 val
             }
-            Entry::Vacant(entry) => {
+            None => {
                 // We write the literal, and avoid caching as it might change lol
                 let len_value_id = self.id_gen.next();
-                Instruction::constant_32bit(u32_type_id, len_value_id, array_len)
+                let main_type_id = self.get_handle_type_id(output_type);
+                Instruction::constant_32bit(self.get_u32_type_id(), len_value_id, array_len)
                     .to_words(&mut self.logical_layout.declarations);
                 // This is the best part
                 let len_literal_idx = self.logical_layout.declarations.len() - 1;
 
+                let main_ty_ir = &ir_module.types[output_type];
+                let struct_members = match main_ty_ir.inner {
+                    crate::TypeInner::Struct { ref members, .. } => members.clone(),
+                    _ => unreachable!("Mesh output type isn't a struct"),
+                };
+
+                let (location_type_id, builtin_type_id) = {
+                    let mut location_type_id = None;
+                    let mut builtin_type_id = None;
+                    let mut location_ins = Instruction::type_struct(0, &[]);
+                    let mut builtin_ins = Instruction::type_struct(0, &[]);
+                    for member in &struct_members {
+                        let binding = if let &Some(ref b) = &member.binding {
+                            b
+                        } else {
+                            continue;
+                        };
+                        let (subset_type_id, member_idx) =
+                            if matches!(binding, &crate::Binding::Location { .. }) {
+                                if location_type_id.is_none() {
+                                    location_type_id = Some(self.id_gen.next());
+                                    location_ins.result_id = location_type_id;
+                                }
+                                location_ins.add_operand(self.get_handle_type_id(member.ty));
+                                (location_type_id.unwrap(), location_ins.operands.len() - 1)
+                            } else if matches!(binding, &crate::Binding::BuiltIn(..)) {
+                                if builtin_type_id.is_none() {
+                                    builtin_type_id = Some(self.id_gen.next());
+                                    builtin_ins.result_id = builtin_type_id;
+                                }
+                                builtin_ins.add_operand(self.get_handle_type_id(member.ty));
+                                (builtin_type_id.unwrap(), builtin_ins.operands.len() - 1)
+                            } else {
+                                unreachable!()
+                            };
+                        // TODO: update the offset
+                        self.decorate_struct_member(
+                            subset_type_id,
+                            member_idx,
+                            member,
+                            &ir_module.types,
+                        )?;
+                        let binding = self.map_binding(
+                            ir_module,
+                            crate::ShaderStage::Mesh,
+                            spirv::StorageClass::Output,
+                            member.ty,
+                            member.binding.as_ref().unwrap(),
+                        )?;
+                        self.write_binding_struct_member(
+                            subset_type_id,
+                            member_idx as Word,
+                            binding,
+                        );
+                    }
+                    if let Some(location_type_id) = location_type_id {
+                        location_ins.result_id = Some(location_type_id);
+                        location_ins.to_words(&mut self.logical_layout.declarations);
+                        self.decorate(location_type_id, spirv::Decoration::Block, &[]);
+                        if self.flags.contains(WriterFlags::DEBUG) {
+                            if let Some(ref name) = main_ty_ir.name {
+                                let mut n = String::new();
+                                n.push_str("__");
+                                n.push_str(name);
+                                n.push_str("_LocationOutputs");
+                                self.debugs.push(Instruction::name(location_type_id, &n));
+                            }
+                        }
+                    }
+                    if let Some(builtin_type_id) = builtin_type_id {
+                        builtin_ins.result_id = Some(builtin_type_id);
+                        builtin_ins.to_words(&mut self.logical_layout.declarations);
+                        self.decorate(builtin_type_id, spirv::Decoration::Block, &[]);
+                        if self.flags.contains(WriterFlags::DEBUG) {
+                            if let Some(ref name) = main_ty_ir.name {
+                                let mut n = String::new();
+                                n.push_str("__");
+                                n.push_str(name);
+                                n.push_str("_BuiltinOutputs");
+                                self.debugs.push(Instruction::name(builtin_type_id, &n));
+                            }
+                        }
+                    }
+                    (location_type_id, builtin_type_id)
+                };
+
+                let mut to_array_info = |base_id| {
+                    let array_type = self.id_gen.next();
+                    Instruction::type_array(array_type, base_id, len_value_id)
+                        .to_words(&mut self.logical_layout.declarations);
+                    let var_id = self.id_gen.next();
+                    Instruction::variable(
+                        self.get_pointer_type_id(array_type, spirv::StorageClass::Output),
+                        var_id,
+                        spirv::StorageClass::Output,
+                        None,
+                    )
+                    .to_words(&mut self.logical_layout.declarations);
+
+                    if is_primitive {
+                        self.decorate(var_id, spirv::Decoration::PerPrimitiveEXT, &[]);
+                    }
+
+                    super::MeshOutputArrayInfo {
+                        inner_type: base_id,
+                        array_type,
+                        var_id,
+                    }
+                };
+
+                let location_output = location_type_id.map(&mut to_array_info);
+                let builtin_output = builtin_type_id.map(to_array_info);
+
+                let info = super::MeshOutputInfo {
+                    inner_type: main_type_id,
+                    index_of_length_decl: len_literal_idx,
+                    fields: struct_members,
+                    builtin_output,
+                    location_output,
+                };
+                if is_primitive {
+                    self.mesh_state
+                        .primitive_outputs_by_type
+                        .insert(output_type, info.clone());
+                } else {
+                    self.mesh_state
+                        .vertex_outputs_by_type
+                        .insert(output_type, info.clone());
+                };
+                info
+
                 // We generate the array and pointer types here, even if they weren't in the module's type arena
-                let array_type_id = self.id_gen.next();
+                /*let array_type_id = self.id_gen.next();
                 Instruction::type_array(array_type_id, type_id, len_value_id)
                     .to_words(&mut self.logical_layout.declarations);
                 let array_ptr_type_id = self.id_gen.next();
@@ -2399,7 +2541,7 @@ impl Writer {
                 }
                 self.decorate(type_id, spirv::Decoration::Block, &[]);
 
-                info
+                info*/
             }
         };
 

@@ -3704,17 +3704,41 @@ impl BlockContext<'_> {
                         0,
                     )?;
 
-                    let var_ptr = self.gen_id();
-                    block.body.push(Instruction::access_chain(
-                        info.ptr_type,
-                        var_ptr,
-                        info.var_id,
-                        &[self.cached[index]],
-                    ));
+                    let mut builtin_idx = 0;
+                    let mut location_idx = 0;
+                    for (i, member) in info.fields.iter().enumerate() {
+                        let member_ty = self.writer.get_handle_type_id(member.ty);
+                        let (array, idx) = match member.binding {
+                            Some(crate::Binding::BuiltIn(_)) => {
+                                builtin_idx += 1;
+                                (info.builtin_output.unwrap(), builtin_idx - 1)
+                            }
+                            Some(crate::Binding::Location { .. }) => {
+                                location_idx += 1;
+                                (info.location_output.unwrap(), location_idx - 1)
+                            }
+                            None => continue,
+                        };
 
-                    block
-                        .body
-                        .push(Instruction::store(var_ptr, self.cached[value], None));
+                        let idx_const = self.writer.get_constant_scalar(crate::Literal::U32(idx));
+                        let in_value_id = self.gen_id();
+                        block.body.push(Instruction::composite_extract(
+                            member_ty,
+                            in_value_id,
+                            self.cached[value],
+                            &[i as Word],
+                        ));
+                        let out_ptr_id = self.gen_id();
+                        block.body.push(Instruction::access_chain(
+                            self.get_pointer_type_id(member_ty, spirv::StorageClass::Output),
+                            out_ptr_id,
+                            array.var_id,
+                            &[self.cached[index], idx_const],
+                        ));
+                        block
+                            .body
+                            .push(Instruction::store(out_ptr_id, in_value_id, None));
+                    }
                 }
                 Statement::SubgroupBallot {
                     result,

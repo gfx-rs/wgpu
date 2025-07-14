@@ -922,7 +922,7 @@ pub struct WriteMeshInfo {
     pub primitive_outputs_by_type: crate::FastHashMap<Handle<crate::Type>, MeshOutputInfo>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct MeshOutputInfo {
     /// The index of the word that specifies the length of the global variable array. This is very hacky lol
     /// We want to allow the same global variable to be used across entry points of the same output type
@@ -931,8 +931,15 @@ pub struct MeshOutputInfo {
     /// tries to write to it, the function can still be valid if it is never called.
     pub index_of_length_decl: usize,
     pub inner_type: Word,
+    // Structs with elements with layout can't have elements with builtins, and vice versa.
+    // Therefore, we separate it into 2 structs and whatnot
+    pub builtin_output: Option<MeshOutputArrayInfo>,
+    pub location_output: Option<MeshOutputArrayInfo>,
+    pub fields: Vec<crate::StructMember>,
+}
+#[derive(Clone, Copy)]
+pub struct MeshOutputArrayInfo {
+    pub inner_type: Word,
     pub array_type: Word,
-    pub ptr_type: Word,
-    pub array_ptr_type: Word,
     pub var_id: Word,
 }
