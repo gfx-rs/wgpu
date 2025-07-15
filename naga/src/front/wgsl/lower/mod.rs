@@ -7,7 +7,6 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
-use crate::common::ForDebugWithTypes;
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
@@ -18,6 +17,7 @@ use crate::{
     common::wgsl::{TryToWgsl, TypeContext},
     compact::KeepUnused,
 };
+use crate::{common::ForDebugWithTypes, proc::LayoutErrorInner};
 use crate::{ir, proc};
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
@@ -3709,7 +3709,27 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         for member in s.members.iter() {
             let ty = self.resolve_ast_type(member.ty, &mut ctx.as_const())?;
 
-            ctx.layouter.update(ctx.module.to_ctx()).unwrap();
+            ctx.layouter.update(ctx.module.to_ctx()).map_err(|err| {
+                let LayoutErrorInner::TooLarge = err.inner else {
+                    unreachable!("unexpected layout error: {err:?}");
+                };
+                // Since anonymous types of struct members don't get a span,
+                // associate the error with the member. The layouter could have
+                // failed on any type that was pending layout, but if it wasn't
+                // the current struct member, it wasn't a struct member at all,
+                // because we resolve struct members one-by-one.
+                if ty == err.ty {
+                    Box::new(Error::StructMemberTooLarge {
+                        member_name_span: member.name.span,
+                    })
+                } else {
+                    // Lots of type definitions don't get spans, so this error
+                    // message may not be very useful.
+                    Box::new(Error::TypeTooLarge {
+                        span: ctx.module.types.get_span(err.ty),
+                    })
+                }
+            })?;
 
             let member_min_size = ctx.layouter[ty].size;
             let member_min_alignment = ctx.layouter[ty].alignment;
@@ -3761,6 +3781,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             });
 
             offset += member_size;
+            if offset > crate::valid::MAX_TYPE_SIZE {
+                return Err(Box::new(Error::TypeTooLarge { span }));
+            }
         }
 
         let size = struct_alignment.round_up(offset);
@@ -3938,7 +3961,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let base = self.resolve_ast_type(base, &mut ctx.as_const())?;
                 let size = self.array_size(size, ctx)?;
 
-                ctx.layouter.update(ctx.module.to_ctx()).unwrap();
+                // Determine the size of the base type, if needed.
+                ctx.layouter.update(ctx.module.to_ctx()).map_err(|err| {
+                    let LayoutErrorInner::TooLarge = err.inner else {
+                        unreachable!("unexpected layout error: {err:?}");
+                    };
+                    // Lots of type definitions don't get spans, so this error
+                    // message may not be very useful.
+                    Box::new(Error::TypeTooLarge {
+                        span: ctx.module.types.get_span(err.ty),
+                    })
+                })?;
                 let stride = ctx.layouter[base].to_stride();
 
                 ir::TypeInner::Array { base, size, stride }
