@@ -214,21 +214,22 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
                     test.selector.to_string_lossy(),
                     running_on_backend,
                 );
+                continue;
             }
-            _ => {
-                log::info!("Running {}", test.selector.to_string_lossy());
-                shell
-                    .cmd("cargo")
-                    .args(run_flags)
-                    .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
-                    .args(["-p", "cts_runner"])
-                    .args(["--bin", "cts_runner"])
-                    .args(["--", "./tools/run_deno", "--verbose"])
-                    .args([&test.selector])
-                    .run()
-                    .context("CTS failed")?;
-            }
+            _ => {}
         }
+
+        log::info!("Running {}", test.selector.to_string_lossy());
+        shell
+            .cmd("cargo")
+            .args(run_flags)
+            .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
+            .args(["-p", "cts_runner"])
+            .args(["--bin", "cts_runner"])
+            .args(["--", "./tools/run_deno", "--verbose"])
+            .args([&test.selector])
+            .run()
+            .context("CTS failed")?;
     }
 
     if tests.len() > 1 {
