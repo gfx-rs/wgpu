@@ -239,8 +239,8 @@ impl crate::TypeInner {
     ///
     /// Panics if the size exceeds the limit of [`crate::valid::MAX_TYPE_SIZE`].
     /// Validated modules should not contain such types. Code working with
-    /// modules prior to validation should use [`try_size`] and handle the error
-    /// appropriately.
+    /// modules prior to validation should use [`Self::try_size`] and handle the
+    /// error appropriately.
     pub fn size(&self, gctx: super::GlobalCtx) -> u32 {
         self.try_size(gctx).expect("type is too large")
     }
