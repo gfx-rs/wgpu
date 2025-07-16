@@ -34,10 +34,10 @@ OpDecorate %13 ArrayStride 4
 %24 = OpConstant  %7  3.141
 %25 = OpConstant  %7  6.282
 %26 = OpConstant  %7  0.44444445
-%27 = OpConstant  %7  0.0
+%27 = OpConstant  %7  0
 %28 = OpConstantComposite  %8  %26 %27 %27 %27
-%29 = OpConstant  %7  4.0
-%30 = OpConstant  %7  5.0
+%29 = OpConstant  %7  4
+%30 = OpConstant  %7  5
 %31 = OpConstantComposite  %15  %29 %30
 %32 = OpConstantComposite  %12  %17 %18
 %35 = OpTypeFunction %2
@@ -58,8 +58,8 @@ OpDecorate %13 ArrayStride 4
 %86 = OpConstant  %3  30
 %87 = OpConstant  %3  0
 %94 = OpConstantNull  %3
-%97 = OpConstant  %7  1.0
-%98 = OpConstant  %7  2.0
+%97 = OpConstant  %7  1
+%98 = OpConstant  %7  2
 %99 = OpConstantComposite  %8  %98 %97 %97 %97
 %101 = OpTypePointer Function %8
 %106 = OpTypePointer Function %9

@@ -34,7 +34,7 @@ OpDecorate %13 DescriptorSet 0
 OpDecorate %13 Binding 0
 %2 = OpTypeVoid
 %3 = OpTypeRayQueryKHR
-%4 = OpTypeAccelerationStructureNV
+%4 = OpTypeAccelerationStructureKHR
 %5 = OpTypeFloat 32
 %6 = OpTypeVector %5 3
 %7 = OpTypeInt 32 0
@@ -46,17 +46,17 @@ OpDecorate %13 Binding 0
 %14 = OpTypePointer UniformConstant %4
 %13 = OpVariable  %14  UniformConstant
 %17 = OpTypeFunction %2
-%19 = OpConstant  %5  0.0
+%19 = OpConstant  %5  0
 %20 = OpConstantComposite  %6  %19 %19 %19
-%21 = OpConstant  %5  1.0
+%21 = OpConstant  %5  1
 %22 = OpConstantComposite  %6  %19 %21 %19
 %23 = OpConstant  %7  4
 %24 = OpConstant  %7  255
 %25 = OpConstant  %5  0.1
-%26 = OpConstant  %5  100.0
+%26 = OpConstant  %5  100
 %27 = OpConstantComposite  %8  %23 %24 %25 %26 %20 %22
 %28 = OpConstant  %7  3
-%29 = OpConstant  %5  10.0
+%29 = OpConstant  %5  10
 %30 = OpConstant  %7  1
 %32 = OpTypePointer Function %3
 %40 = OpTypePointer Function %12

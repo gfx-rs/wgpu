@@ -106,11 +106,11 @@ OpDecorate %116 BuiltIn LocalInvocationId
 %58 = OpTypeFunction %2
 %59 = OpTypePointer StorageBuffer %9
 %60 = OpConstant  %7  0
-%62 = OpConstant  %4  1.0
+%62 = OpConstant  %4  1
 %63 = OpConstantComposite  %8  %62 %62 %62
 %64 = OpConstant  %23  1
-%65 = OpConstant  %4  2.0
-%66 = OpConstant  %4  3.0
+%65 = OpConstant  %4  2
+%66 = OpConstant  %4  3
 %67 = OpConstantNull  %24
 %69 = OpTypePointer Function %23
 %71 = OpTypePointer StorageBuffer %8
@@ -121,7 +121,7 @@ OpDecorate %116 BuiltIn LocalInvocationId
 %101 = OpTypePointer Uniform %15
 %103 = OpTypePointer Uniform %19
 %105 = OpTypePointer Uniform %22
-%107 = OpConstant  %4  4.0
+%107 = OpConstant  %4  4
 %109 = OpTypePointer Function %4
 %111 = OpTypePointer Function %3
 %113 = OpConstantNull  %5

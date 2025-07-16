@@ -37,7 +37,7 @@ OpDecorate %20 Location 0
 %23 = OpTypeFunction %2
 %24 = OpTypePointer PushConstant %6
 %25 = OpConstant  %3  0
-%27 = OpConstant  %5  1.0
+%27 = OpConstant  %5  1
 %28 = OpTypeVector %5 3
 %29 = OpConstantComposite  %28  %27 %27 %27
 %32 = OpTypePointer PushConstant %3

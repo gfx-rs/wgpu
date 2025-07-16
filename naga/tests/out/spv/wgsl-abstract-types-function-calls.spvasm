@@ -34,7 +34,7 @@ OpDecorate %13 ArrayStride 4
 %62 = OpTypeFunction %2 %13
 %68 = OpTypeFunction %2 %3 %4
 %72 = OpTypeFunction %2
-%73 = OpConstant  %3  0.0
+%73 = OpConstant  %3  0
 %74 = OpConstant  %4  0
 %75 = OpConstant  %5  0
 %76 = OpConstantComposite  %6  %73 %73
