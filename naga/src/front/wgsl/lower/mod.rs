@@ -466,7 +466,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
-    fn as_const_evaluator(&mut self) -> proc::ConstantEvaluator {
+    fn as_const_evaluator(&mut self) -> proc::ConstantEvaluator<'_> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref mut rctx) => {
                 proc::ConstantEvaluator::for_wgsl_function(
@@ -513,7 +513,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn as_diagnostic_display<T>(
         &self,
         value: T,
-    ) -> crate::common::DiagnosticDisplay<(T, proc::GlobalCtx)> {
+    ) -> crate::common::DiagnosticDisplay<(T, proc::GlobalCtx<'_>)> {
         let ctx = self.module.to_ctx();
         crate::common::DiagnosticDisplay((value, ctx))
     }
@@ -982,7 +982,7 @@ impl Components {
         }
     }
 
-    fn single_component(name: &str, name_span: Span) -> Result<u32> {
+    fn single_component(name: &str, name_span: Span) -> Result<'_, u32> {
         let ch = name.chars().next().ok_or(Error::BadAccessor(name_span))?;
         match Self::letter_component(ch) {
             Some(sc) => Ok(sc as u32),
@@ -993,7 +993,7 @@ impl Components {
     /// Construct a `Components` value from a 'member' name, like `"wzy"` or `"x"`.
     ///
     /// Use `name_span` for reporting errors in parsing the component string.
-    fn new(name: &str, name_span: Span) -> Result<Self> {
+    fn new(name: &str, name_span: Span) -> Result<'_, Self> {
         let size = match name.len() {
             1 => return Ok(Components::Single(Self::single_component(name, name_span)?)),
             2 => ir::VectorSize::Bi,

@@ -70,7 +70,7 @@ impl<T: StorageItem> FutureId<'_, T> {
 }
 
 impl<T: StorageItem> Registry<T> {
-    pub(crate) fn prepare(&self, id_in: Option<Id<T::Marker>>) -> FutureId<T> {
+    pub(crate) fn prepare(&self, id_in: Option<Id<T::Marker>>) -> FutureId<'_, T> {
         FutureId {
             id: match id_in {
                 Some(id_in) => {

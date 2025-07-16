@@ -247,7 +247,7 @@ impl SurfaceWrapper {
         }
     }
 
-    fn get(&self) -> Option<&Surface> {
+    fn get(&self) -> Option<&'_ Surface<'static>> {
         self.surface.as_ref()
     }
 

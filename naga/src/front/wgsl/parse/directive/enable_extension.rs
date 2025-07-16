@@ -73,7 +73,7 @@ impl EnableExtension {
     const SUBGROUPS: &'static str = "subgroups";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
-    pub(crate) fn from_ident(word: &str, span: Span) -> Result<Self> {
+    pub(crate) fn from_ident(word: &str, span: Span) -> Result<'_, Self> {
         Ok(match word {
             Self::F16 => Self::Implemented(ImplementedEnableExtension::F16),
             Self::CLIP_DISTANCES => Self::Implemented(ImplementedEnableExtension::ClipDistances),
