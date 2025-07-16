@@ -807,7 +807,7 @@ impl PhysicalDeviceFeatures {
         features.set(
             F::EXPERIMENTAL_RAY_QUERY
             // Although this doesn't really require ray queries, it does not make sense to be enabled if acceleration structures
-            // aren't enabled. 
+            // aren't enabled.
                 | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
             supports_acceleration_structures && caps.supports_extension(khr::ray_query::NAME),
         );
