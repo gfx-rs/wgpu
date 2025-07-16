@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 
 /// Manages `f16` I/O polyfill state and operations.
 #[derive(Default)]
-pub(super) struct F16IoPolyfill {
+pub(in crate::back::spv) struct F16IoPolyfill {
     use_native: bool,
     variable_map: crate::FastHashMap<Word, (Word, Word)>,
 }
