@@ -1,17 +1,18 @@
 /*!
-This module provides functionality polyfills f16 input/output variables
-when the StorageInputOutput16 capability is not available or disabled.
+This module provides functionality polyfills `f16` input/output variables when the
+`StorageInputOutput16` capability is not available or disabled.
 
 It works by:
-1. Declaring f16 I/O variables as f32 in SPIR-V
-2. Converting between f16 and f32 at runtime using OpFConvert
+
+1. Declaring `f16` I/O variables as `f32` in SPIR-V
+2. Converting between `f16` and `f32` at runtime using `OpFConvert`
 3. Maintaining mappings to track which variables need conversion
 */
 
 use crate::back::spv::{Instruction, LocalType, NumericType, Word};
 use alloc::vec::Vec;
 
-/// Manages f16 I/O polyfill state and operations.
+/// Manages `f16` I/O polyfill state and operations.
 #[derive(Default)]
 pub(super) struct F16IoPolyfill {
     use_native: bool,

@@ -743,7 +743,8 @@ impl PhysicalDeviceFeatures {
 
         if let (Some(ref f16_i8), Some(ref bit16)) = (self.shader_float16_int8, self._16bit_storage)
         {
-            // Note storage_input_output16 is not required, we polyfill f16 I/O using f32 types when this capability is not available
+            // Note `storage_input_output16` is not required, we polyfill `f16` I/O using `f32`
+            // types when this capability is not available
             features.set(
                 F::SHADER_F16,
                 f16_i8.shader_float16 != 0
