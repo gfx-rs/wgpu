@@ -202,7 +202,7 @@ pub(super) fn patch_comparison_type(
         return false;
     }
 
-    log::debug!("Flipping comparison for {:?}", var);
+    log::debug!("Flipping comparison for {var:?}");
     let original_ty = &arena[var.ty];
     let original_ty_span = arena.get_span(var.ty);
     let ty_inner = match original_ty.inner {
@@ -279,7 +279,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 
         if image_ops != 0 {
             let other = spirv::ImageOperands::from_bits_truncate(image_ops);
-            log::warn!("Unknown image write ops {:?}", other);
+            log::warn!("Unknown image write ops {other:?}");
             for _ in 1..words_left {
                 self.next()?;
             }
@@ -403,7 +403,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     words_left -= 1;
                 }
                 other => {
-                    log::warn!("Unknown image load op {:?}", other);
+                    log::warn!("Unknown image load op {other:?}");
                     for _ in 0..words_left {
                         self.next()?;
                     }
@@ -546,12 +546,11 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     };
 
                     level = if options.compare {
-                        log::debug!("Assuming {:?} is zero", lod_handle);
+                        log::debug!("Assuming {lod_handle:?} is zero");
                         crate::SampleLevel::Zero
                     } else if is_depth_image {
                         log::debug!(
-                            "Assuming level {:?} converts losslessly to an integer",
-                            lod_handle
+                            "Assuming level {lod_handle:?} converts losslessly to an integer"
                         );
                         let expr = crate::Expression::As {
                             expr: lod_handle,
@@ -588,9 +587,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     );
                     level = if options.compare {
                         log::debug!(
-                            "Assuming gradients {:?} and {:?} are not greater than 1",
-                            grad_x_handle,
-                            grad_y_handle
+                            "Assuming gradients {grad_x_handle:?} and {grad_y_handle:?} are not greater than 1"
                         );
                         crate::SampleLevel::Zero
                     } else {
@@ -616,7 +613,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     words_left -= 1;
                 }
                 other => {
-                    log::warn!("Unknown image sample operand {:?}", other);
+                    log::warn!("Unknown image sample operand {other:?}");
                     for _ in 0..words_left {
                         self.next()?;
                     }

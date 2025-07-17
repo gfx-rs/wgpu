@@ -37,7 +37,7 @@ impl<T, U> HandleMap<T, U> {
         if self.new_index.len() <= handle.index() {
             self.new_index.resize_with(handle.index() + 1, || None);
         }
-        core::mem::replace(&mut self.new_index[handle.index()], Some(value))
+        self.new_index[handle.index()].replace(value)
     }
 }
 

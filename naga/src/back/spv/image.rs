@@ -303,7 +303,7 @@ impl BlockContext<'_> {
                 return Err(Error::Validation("extending vec4 coordinate"));
             }
             ref other => {
-                log::error!("wrong coordinate type {:?}", other);
+                log::error!("wrong coordinate type {other:?}");
                 return Err(Error::Validation("coordinate type"));
             }
         };

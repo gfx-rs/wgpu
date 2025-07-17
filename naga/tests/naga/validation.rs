@@ -1,3 +1,8 @@
+#![allow(
+    // We need to investiagate these.
+    clippy::result_large_err
+)]
+
 use naga::{
     ir,
     valid::{self, ModuleInfo},

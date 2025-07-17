@@ -288,6 +288,15 @@ impl Queue {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::Queue`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Queue")]
+    #[doc = crate::hal_type_metal!("Queue")]
+    #[doc = crate::hal_type_dx12!("Queue")]
+    #[doc = crate::hal_type_gles!("Queue")]
+    ///
     /// # Errors
     ///
     /// This method will return None if:
@@ -303,7 +312,7 @@ impl Queue {
     ///
     /// [`A::Queue`]: hal::Api::Queue
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
     ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
         let queue = self.inner.as_core_opt()?;

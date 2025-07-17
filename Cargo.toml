@@ -54,7 +54,7 @@ ref_as_ptr = "warn"
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.84"
+rust-version = "1.88"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -178,7 +178,7 @@ rustc-hash = { version = "1.1", default-features = false }
 serde_json = "1.0.118"
 serde = { version = "1.0.219", default-features = false }
 shell-words = "1"
-smallvec = "1.9"
+smallvec = "1.13.1"
 spirv = "0.3"
 static_assertions = "1.1"
 strum = { version = "0.27", default-features = false, features = ["derive"] }

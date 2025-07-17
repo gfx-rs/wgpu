@@ -332,7 +332,7 @@ impl Backends {
                 "webgpu" => Self::BROWSER_WEBGPU,
                 "noop" => Self::NOOP,
                 b => {
-                    log::warn!("unknown backend string '{}'", b);
+                    log::warn!("unknown backend string '{b}'");
                     continue;
                 }
             }
@@ -3668,7 +3668,7 @@ impl TextureFormat {
                 // Two chroma bytes per block, one luma byte per block
                 Self::NV12 => 3,
                 f => {
-                    log::warn!("Memory footprint for format {:?} is not implemented", f);
+                    log::warn!("Memory footprint for format {f:?} is not implemented");
                     0
                 }
             },

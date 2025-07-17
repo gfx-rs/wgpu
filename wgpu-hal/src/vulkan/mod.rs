@@ -56,6 +56,8 @@ const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
 pub struct Api;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Vulkan;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;

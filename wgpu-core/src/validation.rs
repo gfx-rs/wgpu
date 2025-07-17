@@ -937,7 +937,7 @@ impl Interface {
                 // the reality is - every shader coming from `glslc` outputs an array
                 // of clip distances and hits this path :(
                 // So we lower it to `log::warn` to be less annoying.
-                log::warn!("Unexpected varying type: {:?}", other);
+                log::warn!("Unexpected varying type: {other:?}");
                 return;
             }
         };

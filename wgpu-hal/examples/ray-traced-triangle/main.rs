@@ -269,7 +269,7 @@ impl<A: hal::Api> Example<A> {
         };
         let surface_caps = unsafe { adapter.surface_capabilities(&surface) }
             .expect("Surface doesn't support presentation");
-        log::info!("Surface caps: {:#?}", surface_caps);
+        log::info!("Surface caps: {surface_caps:#?}");
 
         let hal::OpenDevice { device, queue } = unsafe {
             adapter

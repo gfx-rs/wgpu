@@ -98,13 +98,7 @@ unsafe extern "system" fn egl_debug_proc(
         unsafe { ffi::CStr::from_ptr(message_raw) }.to_string_lossy()
     };
 
-    log::log!(
-        log_severity,
-        "EGL '{}' code 0x{:x}: {}",
-        command,
-        error,
-        message,
-    );
+    log::log!(log_severity, "EGL '{command}' code 0x{error:x}: {message}",);
 }
 
 /// A simple wrapper around an X11 or Wayland display handle.
@@ -239,7 +233,7 @@ fn choose_config(
     let mut attributes = Vec::with_capacity(9);
     for tier_max in (0..tiers.len()).rev() {
         let name = tiers[tier_max].0;
-        log::debug!("\tTrying {}", name);
+        log::debug!("\tTrying {name}");
 
         attributes.clear();
         for &(_, tier_attr) in tiers[..=tier_max].iter() {
@@ -275,7 +269,7 @@ fn choose_config(
                 log::warn!("No config found!");
             }
             Err(e) => {
-                log::error!("error in choose_first_config: {:?}", e);
+                log::error!("error in choose_first_config: {e:?}");
             }
         }
     }
@@ -527,7 +521,7 @@ impl Inner {
             .query_string(Some(display), khronos_egl::EXTENSIONS)
             .unwrap()
             .to_string_lossy();
-        log::debug!("Display vendor {:?}, version {:?}", vendor, version,);
+        log::debug!("Display vendor {vendor:?}, version {version:?}",);
         log::debug!(
             "Display extensions: {:#?}",
             display_extensions.split_whitespace().collect::<Vec<_>>()
@@ -717,11 +711,11 @@ impl Drop for Inner {
             .instance
             .destroy_context(self.egl.display, self.egl.raw)
         {
-            log::warn!("Error in destroy_context: {:?}", e);
+            log::warn!("Error in destroy_context: {e:?}");
         }
 
         if let Err(e) = terminate_display(&self.egl.instance, self.egl.display) {
-            log::warn!("Error in terminate: {:?}", e);
+            log::warn!("Error in terminate: {e:?}");
         }
     }
 }
@@ -1200,7 +1194,7 @@ impl Surface {
                 Some(self.egl.raw),
             )
             .map_err(|e| {
-                log::error!("make_current(surface) failed: {}", e);
+                log::error!("make_current(surface) failed: {e}");
                 crate::SurfaceError::Lost
             })?;
 
@@ -1244,7 +1238,7 @@ impl Surface {
             .instance
             .swap_buffers(self.egl.display, sc.surface)
             .map_err(|e| {
-                log::error!("swap_buffers failed: {}", e);
+                log::error!("swap_buffers failed: {e}");
                 crate::SurfaceError::Lost
                 // TODO: should we unset the current context here?
             })?;
@@ -1252,7 +1246,7 @@ impl Surface {
             .instance
             .make_current(self.egl.display, None, None, None)
             .map_err(|e| {
-                log::error!("make_current(null) failed: {}", e);
+                log::error!("make_current(null) failed: {e}");
                 crate::SurfaceError::Lost
             })?;
 
@@ -1419,7 +1413,7 @@ impl crate::Surface for Surface {
                 match raw_result {
                     Ok(raw) => (raw, wl_window),
                     Err(e) => {
-                        log::warn!("Error in create_window_surface: {:?}", e);
+                        log::warn!("Error in create_window_surface: {e:?}");
                         return Err(crate::SurfaceError::Lost);
                     }
                 }

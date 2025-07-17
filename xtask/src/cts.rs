@@ -1,6 +1,39 @@
+//! Interface for running the WebGPU CTS (Conformance Test Suite) against wgpu.
+//!
+//! To run the default set of tests from `cts_runner/test.lst`:
+//!
+//! ```sh
+//! cargo xtask cts
+//! ```
+//!
+//! To run a specific test selector:
+//!
+//! ```sh
+//! cargo xtask cts 'webgpu:api,operation,command_buffer,basic:*'
+//! ```
+//!
+//! You can also supply your own test list in a file:
+//!
+//! ```sh
+//! cargo xtask cts -f your_tests.lst
+//! ```
+//!
+//! Each line in a test list file is a test selector that will be passed to the
+//! CTS's own command line runner. Note that wildcards may only be used to specify
+//! running all tests in a file, or all subtests in a test.
+//!
+//! A test line may optionally contain a `fails-if(backend)` clause. This
+//! indicates that the test should be skipped on that backend, however, the
+//! runner will only do so if the `--backend` flag is passed to tell it where
+//! it is running.
+//!
+//! Lines starting with `//` or `#` in the test list are treated as comments and
+//! ignored.
+
 use anyhow::{bail, Context};
 use pico_args::Arguments;
-use std::ffi::OsString;
+use regex_lite::{Regex, RegexBuilder};
+use std::{ffi::OsString, sync::LazyLock};
 use xshell::Shell;
 
 /// Path within the repository where the CTS will be checked out.
@@ -15,16 +48,42 @@ const CTS_GIT_URL: &str = "https://github.com/gpuweb/cts.git";
 /// Path to default CTS test list.
 const CTS_DEFAULT_TEST_LIST: &str = "cts_runner/test.lst";
 
+static TEST_LINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    RegexBuilder::new(r#"(?:fails-if\s*\(\s*(?<fails_if>\w+)\s*\)\s+)?(?<selector>.*)"#)
+        .build()
+        .unwrap()
+});
+
+#[derive(Default)]
+struct TestLine {
+    pub selector: OsString,
+    pub fails_if: Option<String>,
+}
+
 pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     let skip_checkout = args.contains("--skip-checkout");
     let llvm_cov = args.contains("--llvm-cov");
+    let running_on_backend = args.opt_value_from_str::<_, String>("--backend")?;
+
+    if running_on_backend.is_none() {
+        log::warn!(
+            "fails-if conditions are only evaluated if a backend is specified with --backend"
+        );
+    }
 
     let mut list_files = Vec::<OsString>::new();
     while let Some(file) = args.opt_value_from_str("-f")? {
         list_files.push(file);
     }
 
-    let mut tests = args.finish();
+    let mut tests = args
+        .finish()
+        .into_iter()
+        .map(|selector| TestLine {
+            selector,
+            ..Default::default()
+        })
+        .collect::<Vec<_>>();
 
     if tests.is_empty() && list_files.is_empty() {
         log::info!("Reading default test list from {CTS_DEFAULT_TEST_LIST}");
@@ -35,7 +94,13 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         tests.extend(shell.read_file(file)?.lines().filter_map(|line| {
             let trimmed = line.trim();
             let is_comment = trimmed.starts_with("//") || trimmed.starts_with("#");
-            (!trimmed.is_empty() && !is_comment).then(|| OsString::from(trimmed))
+            let captures = TEST_LINE_REGEX
+                .captures(trimmed)
+                .expect("Invalid test line: {trimmed}");
+            (!trimmed.is_empty() && !is_comment).then(|| TestLine {
+                selector: OsString::from(&captures["selector"]),
+                fails_if: captures.name("fails_if").map(|m| m.as_str().to_string()),
+            })
         }))
     }
 
@@ -142,7 +207,19 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
 
     log::info!("Running CTS");
     for test in &tests {
-        log::info!("Running {}", test.to_string_lossy());
+        match (&test.fails_if, &running_on_backend) {
+            (Some(backend), Some(running_on_backend)) if backend == running_on_backend => {
+                log::info!(
+                    "Skipping {} on {} backend",
+                    test.selector.to_string_lossy(),
+                    running_on_backend,
+                );
+                continue;
+            }
+            _ => {}
+        }
+
+        log::info!("Running {}", test.selector.to_string_lossy());
         shell
             .cmd("cargo")
             .args(run_flags)
@@ -150,7 +227,7 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
             .args(["-p", "cts_runner"])
             .args(["--bin", "cts_runner"])
             .args(["--", "./tools/run_deno", "--verbose"])
-            .args([test])
+            .args([&test.selector])
             .run()
             .context("CTS failed")?;
     }

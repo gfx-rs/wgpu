@@ -75,7 +75,7 @@ impl RawId {
 /// [`Hub`]: crate::hub::Hub
 /// [`Hub<A>`]: crate::hub::Hub
 /// [`Texture<A>`]: crate::resource::Texture
-/// [`Registry`]: crate::hub::Registry
+/// [`Registry`]: crate::registry::Registry
 /// [`Noop`]: hal::api::Noop
 #[repr(transparent)]
 #[cfg_attr(any(feature = "serde", feature = "trace"), derive(serde::Serialize))]

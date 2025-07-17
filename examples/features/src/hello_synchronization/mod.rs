@@ -28,13 +28,13 @@ async fn run() {
     } = execute(&device, &queue, ARR_SIZE).await;
 
     // Print data
-    log::info!("Patient results: {:?}", patient_workgroup_results);
+    log::info!("Patient results: {patient_workgroup_results:?}");
     if !patient_workgroup_results.iter().any(|e| *e != 16) {
         log::info!("patient_main was patient.");
     } else {
         log::error!("patient_main was not patient!");
     }
-    log::info!("Hasty results: {:?}", hasty_workgroup_results);
+    log::info!("Hasty results: {hasty_workgroup_results:?}");
     if hasty_workgroup_results.iter().any(|e| *e != 16) {
         log::info!("hasty_main was not patient.");
     } else {

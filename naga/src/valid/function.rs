@@ -517,7 +517,7 @@ impl super::Validator {
                         | crate::AtomicFunction::Subtract
                         | crate::AtomicFunction::Exchange { compare: None }
                 ) {
-                    log::error!("Float32 atomic operation {:?} is not supported", fun);
+                    log::error!("Float32 atomic operation {fun:?} is not supported");
                     return Err(AtomicError::InvalidOperator(*fun)
                         .with_span_handle(value, context.expressions)
                         .into_other());
@@ -647,7 +647,7 @@ impl super::Validator {
             crate::TypeInner::Scalar(scalar) => (true, scalar),
             crate::TypeInner::Vector { scalar, .. } => (false, scalar),
             _ => {
-                log::error!("Subgroup operand type {:?}", argument_inner);
+                log::error!("Subgroup operand type {argument_inner:?}");
                 return Err(SubgroupError::InvalidOperand(argument)
                     .with_span_handle(argument, context.expressions)
                     .into_other());
@@ -662,7 +662,7 @@ impl super::Validator {
             (sk::Sint | sk::Uint, sg::And | sg::Or | sg::Xor) => {}
 
             (_, _) => {
-                log::error!("Subgroup operand type {:?}", argument_inner);
+                log::error!("Subgroup operand type {argument_inner:?}");
                 return Err(SubgroupError::InvalidOperand(argument)
                     .with_span_handle(argument, context.expressions)
                     .into_other());
@@ -722,8 +722,7 @@ impl super::Validator {
                     crate::TypeInner::Scalar(crate::Scalar::U32) => {}
                     _ => {
                         log::error!(
-                            "Subgroup gather index type {:?}, expected unsigned int",
-                            index_ty
+                            "Subgroup gather index type {index_ty:?}, expected unsigned int"
                         );
                         return Err(SubgroupError::InvalidOperand(argument)
                             .with_span_handle(index, context.expressions)
@@ -748,7 +747,7 @@ impl super::Validator {
             crate::TypeInner::Scalar ( scalar, .. ) | crate::TypeInner::Vector { scalar, .. }
             if matches!(scalar.kind, crate::ScalarKind::Uint | crate::ScalarKind::Sint | crate::ScalarKind::Float)
         ) {
-            log::error!("Subgroup gather operand type {:?}", argument_inner);
+            log::error!("Subgroup gather operand type {argument_inner:?}");
             return Err(SubgroupError::InvalidOperand(argument)
                 .with_span_handle(argument, context.expressions)
                 .into_other());
@@ -1609,8 +1608,7 @@ impl super::Validator {
                             crate::TypeInner::Scalar(crate::Scalar::BOOL,)
                         ) {
                             log::error!(
-                                "Subgroup ballot predicate type {:?} expected bool",
-                                predicate_inner
+                                "Subgroup ballot predicate type {predicate_inner:?} expected bool"
                             );
                             return Err(SubgroupError::InvalidOperand(predicate)
                                 .with_span_handle(predicate, context.expressions)
@@ -1687,7 +1685,7 @@ impl super::Validator {
         fun_info: &FunctionInfo,
         local_expr_kind: &crate::proc::ExpressionKindTracker,
     ) -> Result<(), LocalVariableError> {
-        log::debug!("var {:?}", var);
+        log::debug!("var {var:?}");
         let type_info = self
             .types
             .get(var.ty.index())

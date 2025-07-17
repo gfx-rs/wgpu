@@ -37,7 +37,7 @@ pub fn output_image_native(image_data: Vec<u8>, texture_dims: (usize, usize), pa
 
     let mut file = std::fs::File::create(&path).unwrap();
     file.write_all(&png_data[..]).unwrap();
-    log::info!("PNG file written to disc as \"{}\".", path);
+    log::info!("PNG file written to disc as \"{path}\".");
 }
 
 /// Effectively a version of `output_image_native` but meant for web browser contexts.
@@ -58,9 +58,8 @@ pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
             Err(e) => {
                 log::error!(
                     "In searching for a staging canvas for outputting an image \
-                    (element with id \"staging-canvas\"), found non-canvas element: {:?}.
-                    Replacing with standard staging canvas.",
-                    e
+                    (element with id \"staging-canvas\"), found non-canvas element: {e:?}.
+                    Replacing with standard staging canvas."
                 );
                 e.remove();
                 create_staging_canvas(&document)
@@ -101,9 +100,8 @@ pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
             Ok(e) => e,
             Err(e) => {
                 log::error!(
-                    "Found an element with the id \"output-image-target\" but it was not an image: {:?}.
+                    "Found an element with the id \"output-image-target\" but it was not an image: {e:?}.
                     Replacing with default image output element.",
-                    e
                 );
                 e.remove();
                 create_output_image_element(&document)

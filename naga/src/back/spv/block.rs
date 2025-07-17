@@ -717,7 +717,7 @@ impl BlockContext<'_> {
                         load_id
                     }
                     ref other => {
-                        log::error!("Unable to access index of {:?}", other);
+                        log::error!("Unable to access index of {other:?}");
                         return Err(Error::FeatureNotImplemented("access index for type"));
                     }
                 }
@@ -1935,7 +1935,7 @@ impl BlockContext<'_> {
             crate::TypeInner::Scalar(scalar) => (scalar, None),
             crate::TypeInner::Vector { scalar, size } => (scalar, Some(size)),
             ref other => {
-                log::error!("As source {:?}", other);
+                log::error!("As source {other:?}");
                 return Err(Error::Validation("Unexpected Expression::As source"));
             }
         };

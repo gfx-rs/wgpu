@@ -39,6 +39,15 @@ impl TextureView {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::TextureView`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("TextureView")]
+    #[doc = crate::hal_type_metal!("TextureView")]
+    #[doc = crate::hal_type_dx12!("TextureView")]
+    #[doc = crate::hal_type_gles!("TextureView")]
+    ///
     /// # Deadlocks
     ///
     /// - The returned guard holds a read-lock on a device-local "destruction"
@@ -61,9 +70,7 @@ impl TextureView {
     ///
     /// [`A::TextureView`]: hal::Api::TextureView
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
-        &self,
-    ) -> Option<impl Deref<Target = A::TextureView>> {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::TextureView>> {
         let view = self.inner.as_core_opt()?;
         unsafe { view.context.texture_view_as_hal::<A>(view) }
     }

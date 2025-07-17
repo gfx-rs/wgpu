@@ -3556,12 +3556,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ir::TypeInner::Pointer { base, .. } => match ctx.module.types[base].inner {
                 ir::TypeInner::Atomic(scalar) => Ok((pointer, scalar)),
                 ref other => {
-                    log::error!("Pointer type to {:?} passed to atomic op", other);
+                    log::error!("Pointer type to {other:?} passed to atomic op");
                     Err(Box::new(Error::InvalidAtomicPointer(span)))
                 }
             },
             ref other => {
-                log::error!("Type {:?} passed to atomic op", other);
+                log::error!("Type {other:?} passed to atomic op");
                 Err(Box::new(Error::InvalidAtomicPointer(span)))
             }
         }
@@ -4190,12 +4190,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ir::TypeInner::Pointer { base, .. } => match ctx.module.types[base].inner {
                 ir::TypeInner::RayQuery { .. } => Ok(pointer),
                 ref other => {
-                    log::error!("Pointer type to {:?} passed to ray query op", other);
+                    log::error!("Pointer type to {other:?} passed to ray query op");
                     Err(Box::new(Error::InvalidRayQueryPointer(span)))
                 }
             },
             ref other => {
-                log::error!("Type {:?} passed to ray query op", other);
+                log::error!("Type {other:?} passed to ray query op");
                 Err(Box::new(Error::InvalidRayQueryPointer(span)))
             }
         }

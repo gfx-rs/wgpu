@@ -1076,6 +1076,13 @@ impl StagingBuffer {
         size: usize,
     ) {
         unsafe {
+            debug_assert!(
+                (src_offset + size as isize) as usize <= data.len(),
+                "src_offset + size must be in-bounds: src_offset = {}, size = {}, data.len() = {}",
+                src_offset,
+                size,
+                data.len()
+            );
             core::ptr::copy_nonoverlapping(
                 data.as_ptr().offset(src_offset),
                 self.ptr.as_ptr().offset(dst_offset),

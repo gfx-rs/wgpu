@@ -13,7 +13,6 @@ use crate::{
     conv,
     device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
-    hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
     pipeline::{
@@ -386,7 +385,7 @@ impl Global {
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
     /// - `hal_buffer` must not have zero size.
-    pub unsafe fn create_buffer_from_hal<A: HalApi>(
+    pub unsafe fn create_buffer_from_hal<A: hal::Api>(
         &self,
         hal_buffer: A::Buffer,
         device_id: DeviceId,
@@ -1834,7 +1833,7 @@ impl Global {
             Ok(())
         }
 
-        log::debug!("configuring surface with {:?}", config);
+        log::debug!("configuring surface with {config:?}");
 
         let error = 'error: {
             // User callbacks must not be called while we are holding locks.
@@ -1969,7 +1968,7 @@ impl Global {
                                 E::Device(device.handle_hal_error(error))
                             }
                             hal::SurfaceError::Other(message) => {
-                                log::error!("surface configuration failed: {}", message);
+                                log::error!("surface configuration failed: {message}");
                                 E::InvalidSurface
                             }
                         }

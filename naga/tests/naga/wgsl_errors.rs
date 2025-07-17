@@ -2,6 +2,10 @@
 Tests for the WGSL front end.
 */
 #![cfg(feature = "wgsl-in")]
+#![allow(
+    // We need to investiagate these.
+    clippy::result_large_err
+)]
 
 use naga::{compact::KeepUnused, valid::Capabilities};
 

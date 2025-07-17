@@ -38,6 +38,15 @@ impl Tlas {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::AccelerationStructure`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("AccelerationStructure")]
+    #[doc = crate::hal_type_metal!("AccelerationStructure")]
+    #[doc = crate::hal_type_dx12!("AccelerationStructure")]
+    #[doc = crate::hal_type_gles!("AccelerationStructure")]
+    ///
     /// # Deadlocks
     ///
     /// - The returned guard holds a read-lock on a device-local "destruction"
@@ -59,7 +68,7 @@ impl Tlas {
     ///
     /// [`A::AccelerationStructure`]: hal::Api::AccelerationStructure
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &mut self,
     ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
         let tlas = self.inner.as_core_opt()?;

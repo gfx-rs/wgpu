@@ -193,7 +193,7 @@ fn create_storage_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
         .enumerate()
         .map(|(e, seg)| {
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(&format!("Storage Buffer-{}", e)),
+                label: Some(&format!("Storage Buffer-{e}")),
                 contents: bytemuck::cast_slice(seg),
                 usage: wgpu::BufferUsages::STORAGE
                     | wgpu::BufferUsages::COPY_DST
@@ -211,7 +211,7 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
             let size = std::mem::size_of_val(chunks[e]) as u64;
 
             device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(&format!("staging buffer-{}", e)),
+                label: Some(&format!("staging buffer-{e}")),
                 size,
                 usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,

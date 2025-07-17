@@ -1239,7 +1239,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, "layout(")?;
 
                         if let Some(layout) = layout {
-                            write!(self.out, "{}, ", layout)?;
+                            write!(self.out, "{layout}, ")?;
                         }
 
                         write!(self.out, "binding = {binding}) ")?;
@@ -1256,7 +1256,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // Either no explicit bindings are supported or we didn't have any.
         // Write just the memory layout.
         if let Some(layout) = layout {
-            write!(self.out, "layout({}) ", layout)?;
+            write!(self.out, "layout({layout}) ")?;
         }
 
         Ok(())
@@ -3707,11 +3707,11 @@ impl<'a, W: Write> Writer<'a, W> {
                             // `Dot4U8Packed`, the code below only introduces parenthesis around
                             // each factor, which aren't strictly needed because both operands are
                             // baked, but which don't hurt either.
-                            write!(self.out, "bitfieldExtract({}(", conversion)?;
+                            write!(self.out, "bitfieldExtract({conversion}(")?;
                             self.write_expr(arg, ctx)?;
                             write!(self.out, "), {}, 8)", i * 8)?;
 
-                            write!(self.out, " * bitfieldExtract({}(", conversion)?;
+                            write!(self.out, " * bitfieldExtract({conversion}(")?;
                             self.write_expr(arg1, ctx)?;
                             write!(self.out, "), {}, 8)", i * 8)?;
 

@@ -249,5 +249,5 @@ fn main() {
     let result: &[f32] = bytemuck::cast_slice(&data);
 
     // Print out the result.
-    println!("Result: {:?}", result);
+    println!("Result: {result:?}");
 }

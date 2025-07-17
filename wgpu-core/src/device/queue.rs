@@ -860,7 +860,6 @@ impl Queue {
                 wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64)
                     .unwrap();
             let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;
-            let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
             for layer in 0..size.depth_or_array_layers {
                 let rows_offset = layer * rows_per_image;
                 for row in rows_offset..rows_offset + height_in_blocks {
@@ -871,7 +870,7 @@ impl Queue {
                             data,
                             src_offset as isize,
                             dst_offset as isize,
-                            copy_bytes_per_row,
+                            bytes_in_last_row as usize,
                         )
                     }
                 }

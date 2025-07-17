@@ -124,7 +124,7 @@ impl Dispatch {
                         CreateShaderModuleError::Device(DeviceError::from_hal(error))
                     }
                     hal::ShaderError::Compilation(ref msg) => {
-                        log::error!("Shader error: {}", msg);
+                        log::error!("Shader error: {msg}");
                         CreateShaderModuleError::Generation
                     }
                 }

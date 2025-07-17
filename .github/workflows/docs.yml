@@ -10,7 +10,7 @@ on:
 
 env:
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.84"
+  REPO_MSRV: "1.88"
 
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
