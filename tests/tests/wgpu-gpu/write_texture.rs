@@ -1,6 +1,6 @@
 //! Tests for texture copy
 
-use wgpu::wgt;
+use wgpu::*;
 use wgpu_test::{gpu_test, GpuTestConfiguration};
 
 #[gpu_test]
