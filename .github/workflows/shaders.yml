@@ -18,6 +18,13 @@ env:
   # We don't include the 4th version number, as it's not used in any URL.
   VULKAN_SDK_VERSION: "1.4.313"
 
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
+
 jobs:
   naga-validate-windows:
     name: "Validate: HLSL"

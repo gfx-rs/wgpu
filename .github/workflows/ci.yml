@@ -46,6 +46,13 @@ env:
   CACHE_SUFFIX: d # cache busting
   WGPU_CI: true
 
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
+
 # We distinguish the following kinds of builds:
 # - native: build for the same target as we compile on
 # - web: build for the Web
