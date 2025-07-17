@@ -22,7 +22,6 @@ use crate::{
 /// resources it uses must remain alive until it has finished executing.
 ///
 /// [`wgpu_hal`]: hal
-/// [`ResourceInfo::submission_index`]: crate::resource::ResourceInfo
 struct ActiveSubmission {
     /// The index of the submission we track.
     ///

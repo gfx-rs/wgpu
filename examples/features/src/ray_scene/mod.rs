@@ -41,7 +41,7 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
         let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
         inner.poll(cx).map(|error| {
             if let Some(e) = error {
-                panic!("Rendering {}", e);
+                panic!("Rendering {e}");
             }
         })
     }
@@ -93,7 +93,7 @@ struct Material {
 
 fn load_model(scene: &mut RawSceneComponents, path: &str) {
     let path = env!("CARGO_MANIFEST_DIR").to_string() + "/src" + path;
-    println!("{}", path);
+    println!("{path}");
     let mut object = obj::Obj::load(path).unwrap();
     object.load_mtls().unwrap();
 

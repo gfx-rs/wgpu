@@ -1833,7 +1833,7 @@ impl Global {
             Ok(())
         }
 
-        log::debug!("configuring surface with {:?}", config);
+        log::debug!("configuring surface with {config:?}");
 
         let error = 'error: {
             // User callbacks must not be called while we are holding locks.
@@ -1968,7 +1968,7 @@ impl Global {
                                 E::Device(device.handle_hal_error(error))
                             }
                             hal::SurfaceError::Other(message) => {
-                                log::error!("surface configuration failed: {}", message);
+                                log::error!("surface configuration failed: {message}");
                                 E::InvalidSurface
                             }
                         }

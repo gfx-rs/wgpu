@@ -1327,7 +1327,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 .device_create_render_pipeline(self.id, &descriptor, None, None);
         if let Some(cause) = error {
             if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
-                log::error!("Shader translation error for stage {:?}: {}", stage, error);
+                log::error!("Shader translation error for stage {stage:?}: {error}");
                 log::error!("Please report it to https://github.com/gfx-rs/wgpu");
             }
             self.context.handle_error(

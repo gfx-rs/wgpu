@@ -33,7 +33,7 @@ fn main() {
         _ => panic!("Provide the dir path as the parameter"),
     };
 
-    log::info!("Loading trace '{:?}'", dir);
+    log::info!("Loading trace '{dir:?}'");
     let file = fs::File::open(dir.join(trace::FILE_NAME)).unwrap();
     let mut actions: Vec<trace::Action> = ron::de::from_reader(file).unwrap();
     actions.reverse(); // allows us to pop from the top
@@ -66,7 +66,7 @@ fn main() {
 
     let (device, queue) = match actions.pop() {
         Some(trace::Action::Init { desc, backend }) => {
-            log::info!("Initializing the device for backend: {:?}", backend);
+            log::info!("Initializing the device for backend: {backend:?}");
             let adapter = global
                 .request_adapter(
                     &wgc::instance::RequestAdapterOptions {
@@ -143,18 +143,18 @@ fn main() {
                                         let error =
                                             global.surface_configure(surface, device, &config);
                                         if let Some(e) = error {
-                                            panic!("{:?}", e);
+                                            panic!("{e:?}");
                                         }
                                     }
                                 }
                                 Some(trace::Action::Present(id)) => {
                                     frame_count += 1;
-                                    log::debug!("Presenting frame {}", frame_count);
+                                    log::debug!("Presenting frame {frame_count}");
                                     global.surface_present(id).unwrap();
                                     target.exit();
                                 }
                                 Some(trace::Action::DiscardSurfaceTexture(id)) => {
-                                    log::debug!("Discarding frame {}", frame_count);
+                                    log::debug!("Discarding frame {frame_count}");
                                     global.surface_texture_discard(id).unwrap();
                                     target.exit();
                                 }
@@ -169,7 +169,7 @@ fn main() {
                                 }
                                 None => {
                                     if !done {
-                                        println!("Finished the end at frame {}", frame_count);
+                                        println!("Finished the end at frame {frame_count}");
                                         done = true;
                                     }
                                     target.exit();
@@ -180,7 +180,7 @@ fn main() {
                             if let Some(config) = resize_config.take() {
                                 let error = global.surface_configure(surface, device, &config);
                                 if let Some(e) = error {
-                                    panic!("{:?}", e);
+                                    panic!("{e:?}");
                                 }
                             }
                         }

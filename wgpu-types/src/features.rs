@@ -1575,10 +1575,10 @@ mod tests {
         use alloc::format;
 
         let feature = Features::CLEAR_TEXTURE;
-        assert_eq!(format!("{}", feature), "CLEAR_TEXTURE");
+        assert_eq!(format!("{feature}"), "CLEAR_TEXTURE");
 
         let feature = Features::CLEAR_TEXTURE | Features::BGRA8UNORM_STORAGE;
-        assert_eq!(format!("{}", feature), "CLEAR_TEXTURE | BGRA8UNORM_STORAGE");
+        assert_eq!(format!("{feature}"), "CLEAR_TEXTURE | BGRA8UNORM_STORAGE");
     }
 
     #[test]

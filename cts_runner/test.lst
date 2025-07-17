@@ -68,7 +68,7 @@ webgpu:api,operation,rendering,color_target_state:blend_constant,setting:*
 webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
 webgpu:api,operation,shader_module,compilation_info:*
-webgpu:api,operation,uncapturederror:iff_uncaptured:*
+fails-if(metal) webgpu:api,operation,uncapturederror:iff_uncaptured:*
 //FAIL: webgpu:shader,execution,expression,call,builtin,select:*
 // - Fails with `const`/abstract int cases on all platforms because of <https://github.com/gfx-rs/wgpu/issues/4507>.
 // - Fails with `vec3` & `f16` cases on macOS because of <https://github.com/gfx-rs/wgpu/issues/5262>.

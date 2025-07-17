@@ -342,10 +342,7 @@ impl super::Device {
                     (source, entry_point)
                 };
                 log::info!(
-                    "Naga generated shader for {:?} at {:?}:\n{}",
-                    entry_point,
-                    naga_stage,
-                    source
+                    "Naga generated shader for {entry_point:?} at {naga_stage:?}:\n{source}"
                 );
 
                 ShaderCacheKey {
@@ -1584,7 +1581,7 @@ impl crate::Device for super::Device {
             let buffer_size = (sampler_indexes.len() * size_of::<u32>()) as u64;
 
             let label = if let Some(label) = desc.label {
-                Cow::Owned(format!("{} (Internal Sampler Index Buffer)", label))
+                Cow::Owned(format!("{label} (Internal Sampler Index Buffer)"))
             } else {
                 Cow::Borrowed("Internal Sampler Index Buffer")
             };
@@ -2123,11 +2120,7 @@ impl crate::Device for super::Device {
                 }
             };
 
-            log::trace!(
-                "Waiting for fence value {} for {:?}",
-                value,
-                remaining_wait_duration
-            );
+            log::trace!("Waiting for fence value {value} for {remaining_wait_duration:?}");
 
             match unsafe {
                 Threading::WaitForSingleObject(
@@ -2145,13 +2138,13 @@ impl crate::Device for super::Device {
                     break Ok(false);
                 }
                 other => {
-                    log::error!("Unexpected wait status: 0x{:?}", other);
+                    log::error!("Unexpected wait status: 0x{other:?}");
                     break Err(crate::DeviceError::Lost);
                 }
             };
 
             fence_value = unsafe { fence.raw.GetCompletedValue() };
-            log::trace!("Wait complete! Fence actual value: {}", fence_value);
+            log::trace!("Wait complete! Fence actual value: {fence_value}");
 
             if fence_value >= value {
                 break Ok(true);

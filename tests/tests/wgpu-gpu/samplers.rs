@@ -114,7 +114,7 @@ fn sampler_creation_failure(ctx: TestingContext) {
 
     for i in 0..failed_count {
         valid(&ctx.device, || {
-            eprintln!("Trying to create sampler {}", i);
+            eprintln!("Trying to create sampler {i}");
             let sampler = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
                 lod_min_clamp: i as f32 * 0.01,
                 // Change the max clamp to ensure the sampler is using different cache slots from
@@ -188,7 +188,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         GroupType::Multi => MULTI_GROUP_BINDINGS,
     };
 
-    let full_shader = format!("{}\n{}", bindings, SAMPLER_CODE);
+    let full_shader = format!("{bindings}\n{SAMPLER_CODE}");
 
     let module = ctx
         .device

@@ -337,7 +337,7 @@ where
         } => {
             let (address, maybe_access) = address_space_str(space);
             if let Some(space) = address {
-                write!(out, "ptr<{}, ", space)?;
+                write!(out, "ptr<{space}, ")?;
                 ctx.write_scalar(scalar, out)?;
                 if let Some(access) = maybe_access {
                     write!(out, ", {access}")?;
@@ -368,14 +368,14 @@ where
         }
         TypeInner::AccelerationStructure { vertex_return } => {
             let caps = if vertex_return { "<vertex_return>" } else { "" };
-            write!(out, "acceleration_structure{}", caps)?
+            write!(out, "acceleration_structure{caps}")?
         }
         TypeInner::Struct { .. } => {
             ctx.write_unnamed_struct(inner, out)?;
         }
         TypeInner::RayQuery { vertex_return } => {
             let caps = if vertex_return { "<vertex_return>" } else { "" };
-            write!(out, "ray_query{}", caps)?
+            write!(out, "ray_query{caps}")?
         }
     }
 

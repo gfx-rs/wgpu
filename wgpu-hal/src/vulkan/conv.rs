@@ -484,7 +484,7 @@ pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> Option<wgt::PresentMode>
         FIFO_LATEST_READY => None,
 
         _ => {
-            log::debug!("Unrecognized present mode {:?}", mode);
+            log::debug!("Unrecognized present mode {mode:?}");
             None
         }
     }

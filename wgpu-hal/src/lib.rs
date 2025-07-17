@@ -225,6 +225,8 @@
     clippy::missing_safety_doc,
     // It gets in the way a lot and does not prevent bugs in practice.
     clippy::pattern_type_mismatch,
+    // We should investigate these.
+    clippy::large_enum_variant
 )]
 #![warn(
     clippy::alloc_instead_of_core,

@@ -1100,11 +1100,7 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
     let _ = std::panic::catch_unwind(|| {
         log::log!(
             log_severity,
-            "GLES: [{}/{}] ID {} : {}",
-            source_str,
-            type_str,
-            id,
-            message
+            "GLES: [{source_str}/{type_str}] ID {id} : {message}"
         );
     });
 

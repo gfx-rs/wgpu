@@ -261,7 +261,7 @@ impl Surface {
                     }
                     hal::SurfaceError::Outdated => Status::Outdated,
                     hal::SurfaceError::Other(msg) => {
-                        log::error!("acquire error: {}", msg);
+                        log::error!("acquire error: {msg}");
                         Status::Lost
                     }
                 },
@@ -309,7 +309,7 @@ impl Surface {
                 }
                 hal::SurfaceError::Outdated => Ok(Status::Outdated),
                 hal::SurfaceError::Other(msg) => {
-                    log::error!("acquire error: {}", msg);
+                    log::error!("acquire error: {msg}");
                     Err(SurfaceError::Invalid)
                 }
             },

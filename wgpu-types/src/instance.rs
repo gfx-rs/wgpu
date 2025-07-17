@@ -13,7 +13,7 @@ use crate::{Backend, DownlevelFlags};
 /// [`InstanceDescriptor::from_env_or_default()`] or [`InstanceDescriptor::with_env()`]. Each type
 /// within this descriptor has its own equivalent methods, so you can select which options you want
 /// to expose to influence from the environment.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct InstanceDescriptor {
     /// Which [`Backends`] to enable.
     ///
@@ -37,17 +37,6 @@ pub struct InstanceDescriptor {
     pub memory_budget_thresholds: MemoryBudgetThresholds,
     /// Options the control the behavior of specific backends.
     pub backend_options: BackendOptions,
-}
-
-impl Default for InstanceDescriptor {
-    fn default() -> Self {
-        Self {
-            backends: Backends::all(),
-            flags: InstanceFlags::default(),
-            memory_budget_thresholds: MemoryBudgetThresholds::default(),
-            backend_options: BackendOptions::default(),
-        }
-    }
 }
 
 impl InstanceDescriptor {

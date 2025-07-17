@@ -553,9 +553,7 @@ impl Device {
                 // This is defensive, as this should never be hit.
                 assert!(
                     current_finished_submission >= wait_submission_index,
-                    "If the queue is empty, the current submission index ({}) should be at least the wait submission index ({})",
-                    current_finished_submission,
-                    wait_submission_index
+                    "If the queue is empty, the current submission index ({current_finished_submission}) should be at least the wait submission index ({wait_submission_index})"
                 );
             }
 
@@ -1772,7 +1770,7 @@ impl Device {
                         pipeline::CreateShaderModuleError::Device(self.handle_hal_error(error))
                     }
                     hal::ShaderError::Compilation(ref msg) => {
-                        log::error!("Shader error: {}", msg);
+                        log::error!("Shader error: {msg}");
                         pipeline::CreateShaderModuleError::Generation
                     }
                 })
@@ -1841,7 +1839,7 @@ impl Device {
                         pipeline::CreateShaderModuleError::Device(self.handle_hal_error(error))
                     }
                     hal::ShaderError::Compilation(ref msg) => {
-                        log::error!("Shader error: {}", msg);
+                        log::error!("Shader error: {msg}");
                         pipeline::CreateShaderModuleError::Generation
                     }
                 })

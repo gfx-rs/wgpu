@@ -116,11 +116,7 @@ fn map_utf16_to_utf8_offset(utf16_offset: u32, text: &str) -> u32 {
     if utf16_i >= utf16_offset {
         text.len() as u32
     } else {
-        log::error!(
-            "UTF16 offset {} is out of bounds for string {}",
-            utf16_offset,
-            text
-        );
+        log::error!("UTF16 offset {utf16_offset} is out of bounds for string {text}");
         u32::MAX
     }
 }
@@ -2493,16 +2489,12 @@ impl dispatch::QueueInterface for WebQueue {
         }
         let write_size = u64::from(size);
         if write_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            log::error!(
-                "Copy size {} does not respect `COPY_BUFFER_ALIGNMENT`",
-                size
-            );
+            log::error!("Copy size {size} does not respect `COPY_BUFFER_ALIGNMENT`");
             return None;
         }
         if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             log::error!(
-                "Buffer offset {} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`",
-                offset
+                "Buffer offset {offset} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`"
             );
             return None;
         }
@@ -2600,7 +2592,7 @@ impl dispatch::QueueInterface for WebQueue {
             match wasm_bindgen_futures::JsFuture::from(promise).await {
                 Ok(_) => callback(),
                 Err(error) => {
-                    log::error!("on_submitted_work_done promise failed: {:?}", error);
+                    log::error!("on_submitted_work_done promise failed: {error:?}");
                     callback();
                 }
             }

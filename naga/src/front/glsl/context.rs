@@ -541,7 +541,7 @@ impl<'a> Context<'a> {
     ) -> Result<(Option<Handle<Expression>>, Span)> {
         let HirExpr { ref kind, meta } = stmt.hir_exprs[expr];
 
-        log::debug!("Lowering {:?} (kind {:?}, pos {:?})", expr, kind, pos);
+        log::debug!("Lowering {expr:?} (kind {kind:?}, pos {pos:?})");
 
         let handle = match *kind {
             HirExprKind::Access { base, index } => {
@@ -636,8 +636,7 @@ impl<'a> Context<'a> {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {:?} and {:?}",
-                                        left_inner, right_inner
+                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
                                     )
                                     .into(),
                                 ),
@@ -835,8 +834,7 @@ impl<'a> Context<'a> {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {:?} and {:?}",
-                                        left_inner, right_inner
+                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
                                     )
                                     .into(),
                                 ),
@@ -916,8 +914,7 @@ impl<'a> Context<'a> {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {:?} and {:?}",
-                                        left_inner, right_inner
+                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
                                     )
                                     .into(),
                                 ),
@@ -1339,13 +1336,7 @@ impl<'a> Context<'a> {
             }
         };
 
-        log::trace!(
-            "Lowered {:?}\n\tKind = {:?}\n\tPos = {:?}\n\tResult = {:?}",
-            expr,
-            kind,
-            pos,
-            handle
-        );
+        log::trace!("Lowered {expr:?}\n\tKind = {kind:?}\n\tPos = {pos:?}\n\tResult = {handle:?}");
 
         Ok((Some(handle), meta))
     }

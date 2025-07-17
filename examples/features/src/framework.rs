@@ -328,7 +328,7 @@ impl FrameCounter {
             let elapsed_ms = elapsed_secs * 1000.0;
             let frame_time = elapsed_ms / self.frame_count as f32;
             let fps = self.frame_count as f32 / elapsed_secs;
-            log::info!("Frame time {:.2}ms ({:.1} FPS)", frame_time, fps);
+            log::info!("Frame time {frame_time:.2}ms ({fps:.1} FPS)");
 
             self.last_printed_instant = new_instant;
             self.frame_count = 0;

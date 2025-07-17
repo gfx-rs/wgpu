@@ -338,7 +338,7 @@ unsafe impl Sync for AdapterShared {}
 impl AdapterShared {
     fn new(device: metal::Device) -> Self {
         let private_caps = PrivateCapabilities::new(&device);
-        log::debug!("{:#?}", private_caps);
+        log::debug!("{private_caps:#?}");
 
         Self {
             disabilities: PrivateDisabilities::new(&device),

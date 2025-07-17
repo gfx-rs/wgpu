@@ -43,6 +43,10 @@
     rust_2018_idioms,
     unsafe_op_in_unsafe_fn
 )]
+#![allow(
+    // We need to investiagate these.
+    clippy::large_enum_variant
+)]
 // NOTE: Keep this in sync with `wgpu-core`.
 #![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
 #![cfg_attr(not(any(wgpu_core, webgpu)), allow(unused))]

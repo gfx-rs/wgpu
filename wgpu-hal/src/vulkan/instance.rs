@@ -360,7 +360,7 @@ impl super::Instance {
         has_nv_optimus: bool,
         drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
-        log::debug!("Instance version: 0x{:x}", instance_api_version);
+        log::debug!("Instance version: 0x{instance_api_version:x}");
 
         let debug_utils = if let Some(debug_utils_create_info) = debug_utils_create_info {
             if extensions.contains(&ext::debug_utils::NAME) {
@@ -664,7 +664,7 @@ impl super::Instance {
             unsafe { entry.enumerate_instance_layer_properties() }
         };
         let instance_layers = instance_layers.map_err(|e| {
-            log::debug!("enumerate_instance_layer_properties: {:?}", e);
+            log::debug!("enumerate_instance_layer_properties: {e:?}");
             crate::InstanceError::with_source(
                 String::from("enumerate_instance_layer_properties() failed"),
                 e,
@@ -962,7 +962,7 @@ impl crate::Instance for super::Instance {
         let raw_devices = match unsafe { self.shared.raw.enumerate_physical_devices() } {
             Ok(devices) => devices,
             Err(err) => {
-                log::error!("enumerate_adapters: {}", err);
+                log::error!("enumerate_adapters: {err}");
                 Vec::new()
             }
         };

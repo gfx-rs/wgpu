@@ -46,7 +46,7 @@ pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
         if let Err(error) = result {
             all_good = false;
             progress_bar.suspend(|| {
-                log::error!("{:#}", error);
+                log::error!("{error:#}");
             });
         }
         progress_bar.inc(1);

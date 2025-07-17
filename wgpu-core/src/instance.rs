@@ -220,9 +220,7 @@ impl Instance {
                 }
                 Err(err) => {
                     log::debug!(
-                        "Instance::create_surface: failed to create surface for {:?}: {:?}",
-                        backend,
-                        err
+                        "Instance::create_surface: failed to create surface for {backend:?}: {err:?}"
                     );
                     errors.insert(*backend, err);
                 }
@@ -415,7 +413,7 @@ impl Instance {
         {
             // NOTE: We might be using `profiling` without any features. The empty backend of this
             // macro emits no code, so unused code linting changes depending on the backend.
-            profiling::scope!("enumerating", &*alloc::format!("{:?}", _backend));
+            profiling::scope!("enumerating", &*alloc::format!("{_backend:?}"));
 
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
             for raw in hal_adapters {
@@ -452,7 +450,7 @@ impl Instance {
             let mut backend_adapters =
                 unsafe { instance.enumerate_adapters(compatible_hal_surface) };
             if backend_adapters.is_empty() {
-                log::debug!("enabled backend `{:?}` has no adapters", backend);
+                log::debug!("enabled backend `{backend:?}` has no adapters");
                 no_adapter_backends |= Backends::from(backend);
                 // by continuing, we avoid setting the further error bits below
                 continue;
@@ -468,7 +466,7 @@ impl Instance {
                     keep
                 });
                 if backend_adapters.is_empty() {
-                    log::debug!("* Backend `{:?}` has no fallback adapters", backend);
+                    log::debug!("* Backend `{backend:?}` has no fallback adapters");
                     no_fallback_backends |= Backends::from(backend);
                     continue;
                 }
@@ -804,11 +802,7 @@ impl Adapter {
             && !caps.downlevel.is_webgpu_compliant()
         {
             let missing_flags = wgt::DownlevelFlags::compliant() - caps.downlevel.flags;
-            log::warn!(
-                "Missing downlevel flags: {:?}\n{}",
-                missing_flags,
-                DOWNLEVEL_WARNING_MESSAGE
-            );
+            log::warn!("Missing downlevel flags: {missing_flags:?}\n{DOWNLEVEL_WARNING_MESSAGE}");
             log::warn!("{:#?}", caps.downlevel);
         }
 

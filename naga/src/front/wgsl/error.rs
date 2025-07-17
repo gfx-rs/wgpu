@@ -690,7 +690,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::UnknownEnableExtension(span, word) => ParseError {
-                message: format!("unknown enable-extension `{}`", word),
+                message: format!("unknown enable-extension `{word}`"),
                 labels: vec![(span, "".into())],
                 notes: vec![
                     "See available extensions at <https://www.w3.org/TR/WGSL/#enable-extension>."
@@ -1078,8 +1078,7 @@ impl<'a> Error<'a> {
                 } = **error;
                 ParseError {
                     message: format!(
-                        "automatic conversions cannot convert `{}` to `{}`",
-                        source_type, dest_type
+                        "automatic conversions cannot convert `{source_type}` to `{dest_type}`"
                     ),
                     labels: vec![
                         (
@@ -1103,15 +1102,13 @@ impl<'a> Error<'a> {
                 } = **error;
                 ParseError {
                     message: format!(
-                        "automatic conversions cannot convert elements of `{}` to `{}`",
-                        source_type, dest_scalar
+                        "automatic conversions cannot convert elements of `{source_type}` to `{dest_scalar}`"
                     ),
                     labels: vec![
                         (
                             dest_span,
                             format!(
-                                "a value with elements of type {} is required here",
-                                dest_scalar
+                                "a value with elements of type {dest_scalar} is required here"
                             )
                             .into(),
                         ),
