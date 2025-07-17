@@ -239,18 +239,18 @@ static WRITE_TEXTURE_VIA_STAGING_BUFFER: GpuTestConfiguration = GpuTestConfigura
         let width = 89;
         let height = 17;
 
-        let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        let tex = ctx.device.create_texture(&TextureDescriptor {
             label: None,
-            dimension: wgpu::TextureDimension::D2,
-            size: wgpu::Extent3d {
+            dimension: TextureDimension::D2,
+            size: Extent3d {
                 width,
                 height,
                 depth_or_array_layers: 1,
             },
-            format: wgpu::TextureFormat::R8Uint,
-            usage: wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::COPY_SRC
-                | wgpu::TextureUsages::TEXTURE_BINDING,
+            format: TextureFormat::R8Uint,
+            usage: TextureUsages::COPY_DST
+                | TextureUsages::COPY_SRC
+                | TextureUsages::TEXTURE_BINDING,
             mip_level_count: 1,
             sample_count: 1,
             view_formats: &[],
@@ -264,19 +264,19 @@ static WRITE_TEXTURE_VIA_STAGING_BUFFER: GpuTestConfiguration = GpuTestConfigura
             .collect::<Vec<_>>();
 
         ctx.queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
+            TexelCopyTextureInfo {
                 texture: &tex,
                 mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
             },
             &write_data,
-            wgpu::TexelCopyBufferLayout {
+            TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(write_bytes_per_row),
                 rows_per_image: Some(19),
             },
-            wgpu::Extent3d {
+            Extent3d {
                 width: write_width,
                 height: write_height,
                 depth_or_array_layers: 1,
@@ -286,33 +286,33 @@ static WRITE_TEXTURE_VIA_STAGING_BUFFER: GpuTestConfiguration = GpuTestConfigura
         ctx.queue.submit(None);
 
         let read_bytes_per_row = wgt::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        let read_buffer = ctx.device.create_buffer(&BufferDescriptor {
             label: None,
             size: (height * read_bytes_per_row) as u64,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            usage: BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
         encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
+            TexelCopyTextureInfo {
                 texture: &tex,
                 mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
             },
-            wgpu::TexelCopyBufferInfo {
+            TexelCopyBufferInfo {
                 buffer: &read_buffer,
-                layout: wgpu::TexelCopyBufferLayout {
+                layout: TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(read_bytes_per_row),
                     rows_per_image: Some(height),
                 },
             },
-            wgpu::Extent3d {
+            Extent3d {
                 width,
                 height,
                 depth_or_array_layers: 1,
@@ -322,8 +322,8 @@ static WRITE_TEXTURE_VIA_STAGING_BUFFER: GpuTestConfiguration = GpuTestConfigura
         ctx.queue.submit(Some(encoder.finish()));
 
         let slice = read_buffer.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| ());
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        slice.map_async(MapMode::Read, |_| ());
+        ctx.async_poll(PollType::wait()).await.unwrap();
         let read_data: Vec<u8> = slice.get_mapped_range().to_vec();
 
         for x in 0..write_width {
