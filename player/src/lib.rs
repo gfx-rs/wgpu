@@ -298,20 +298,8 @@ impl GlobalPlay for wgc::global::Global {
             Action::DestroyShaderModule(id) => {
                 self.shader_module_drop(id);
             }
-            Action::CreateComputePipeline {
-                id,
-                desc,
-                implicit_context,
-            } => {
-                let implicit_ids =
-                    implicit_context
-                        .as_ref()
-                        .map(|ic| wgc::device::ImplicitPipelineIds {
-                            root_id: ic.root_id,
-                            group_ids: &ic.group_ids,
-                        });
-                let (_, error) =
-                    self.device_create_compute_pipeline(device, &desc, Some(id), implicit_ids);
+            Action::CreateComputePipeline { id, desc } => {
+                let (_, error) = self.device_create_compute_pipeline(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -319,20 +307,8 @@ impl GlobalPlay for wgc::global::Global {
             Action::DestroyComputePipeline(id) => {
                 self.compute_pipeline_drop(id);
             }
-            Action::CreateRenderPipeline {
-                id,
-                desc,
-                implicit_context,
-            } => {
-                let implicit_ids =
-                    implicit_context
-                        .as_ref()
-                        .map(|ic| wgc::device::ImplicitPipelineIds {
-                            root_id: ic.root_id,
-                            group_ids: &ic.group_ids,
-                        });
-                let (_, error) =
-                    self.device_create_render_pipeline(device, &desc, Some(id), implicit_ids);
+            Action::CreateRenderPipeline { id, desc } => {
+                let (_, error) = self.device_create_render_pipeline(device, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }

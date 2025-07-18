@@ -90,15 +90,11 @@ pub enum Action<'a> {
     CreateComputePipeline {
         id: id::ComputePipelineId,
         desc: crate::pipeline::ComputePipelineDescriptor<'a>,
-        #[cfg_attr(feature = "replay", serde(default))]
-        implicit_context: Option<super::ImplicitPipelineContext>,
     },
     DestroyComputePipeline(id::ComputePipelineId),
     CreateRenderPipeline {
         id: id::RenderPipelineId,
         desc: crate::pipeline::RenderPipelineDescriptor<'a>,
-        #[cfg_attr(feature = "replay", serde(default))]
-        implicit_context: Option<super::ImplicitPipelineContext>,
     },
     DestroyRenderPipeline(id::RenderPipelineId),
     CreatePipelineCache {

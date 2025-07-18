@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use crate::{
     id::Id,
     identity::IdentityManager,
-    lock::{rank, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    lock::{rank, RwLock, RwLockReadGuard},
     storage::{Element, Storage, StorageItem},
 };
 
@@ -55,6 +55,7 @@ pub(crate) struct FutureId<'a, T: StorageItem> {
 }
 
 impl<T: StorageItem> FutureId<'_, T> {
+    #[cfg(feature = "trace")]
     pub fn id(&self) -> Id<T::Marker> {
         self.id
     }
@@ -86,10 +87,6 @@ impl<T: StorageItem> Registry<T> {
     #[track_caller]
     pub(crate) fn read<'a>(&'a self) -> RwLockReadGuard<'a, Storage<T>> {
         self.storage.read()
-    }
-    #[track_caller]
-    pub(crate) fn write<'a>(&'a self) -> RwLockWriteGuard<'a, Storage<T>> {
-        self.storage.write()
     }
     pub(crate) fn remove(&self, id: Id<T::Marker>) -> T {
         let value = self.storage.write().remove(id);
