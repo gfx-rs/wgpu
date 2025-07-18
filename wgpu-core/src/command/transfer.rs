@@ -640,9 +640,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_buf.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
             let device = &cmd_buf.device;
@@ -809,9 +807,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_buf.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
             let device = &cmd_buf.device;
@@ -967,9 +963,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_buf.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
             let device = &cmd_buf.device;
@@ -1142,9 +1136,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_buf.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
             let device = &cmd_buf.device;

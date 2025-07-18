@@ -280,21 +280,6 @@ ids! {
     pub type TlasId Tlas;
 }
 
-// The CommandBuffer type serves both as encoder and
-// buffer, which is why the 2 functions below exist.
-
-impl CommandEncoderId {
-    pub fn into_command_buffer_id(self) -> CommandBufferId {
-        Id(self.0, PhantomData)
-    }
-}
-
-impl CommandBufferId {
-    pub fn into_command_encoder_id(self) -> CommandEncoderId {
-        Id(self.0, PhantomData)
-    }
-}
-
 #[test]
 fn test_id() {
     let indexes = [0, Index::MAX / 2 - 1, Index::MAX / 2 + 1, Index::MAX];

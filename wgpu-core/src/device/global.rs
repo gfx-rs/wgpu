@@ -9,7 +9,7 @@ use crate::{
         self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
     },
-    command::{self, CommandBuffer},
+    command::{self, CommandEncoder},
     conv,
     device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
@@ -1051,46 +1051,39 @@ impl Global {
         profiling::scope!("Device::create_command_encoder");
 
         let hub = &self.hub;
-        let fid = hub
-            .command_buffers
-            .prepare(id_in.map(|id| id.into_command_buffer_id()));
+        let fid = hub.command_encoders.prepare(id_in);
 
         let device = self.hub.devices.get(device_id);
 
         let error = 'error: {
-            let command_buffer = match device.create_command_encoder(&desc.label) {
-                Ok(command_buffer) => command_buffer,
+            let cmd_enc = match device.create_command_encoder(&desc.label) {
+                Ok(cmd_enc) => cmd_enc,
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(command_buffer);
+            let id = fid.assign(cmd_enc);
             api_log!("Device::create_command_encoder -> {id:?}");
-            return (id.into_command_encoder_id(), None);
+            return (id, None);
         };
 
-        let id = fid.assign(Arc::new(CommandBuffer::new_invalid(
+        let id = fid.assign(Arc::new(CommandEncoder::new_invalid(
             &device,
             &desc.label,
             error.clone().into(),
         )));
-        (id.into_command_encoder_id(), Some(error))
+        (id, Some(error))
     }
 
     pub fn command_encoder_drop(&self, command_encoder_id: id::CommandEncoderId) {
         profiling::scope!("CommandEncoder::drop");
         api_log!("CommandEncoder::drop {command_encoder_id:?}");
-
-        let hub = &self.hub;
-
-        let _cmd_buf = hub
-            .command_buffers
-            .remove(command_encoder_id.into_command_buffer_id());
+        let _cmd_enc = self.hub.command_encoders.remove(command_encoder_id);
     }
 
     pub fn command_buffer_drop(&self, command_buffer_id: id::CommandBufferId) {
         profiling::scope!("CommandBuffer::drop");
         api_log!("CommandBuffer::drop {command_buffer_id:?}");
-        self.command_encoder_drop(command_buffer_id.into_command_encoder_id())
+        let _cmd_buf = self.hub.command_buffers.remove(command_buffer_id);
     }
 
     pub fn device_create_render_bundle_encoder(

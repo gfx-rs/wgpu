@@ -498,7 +498,6 @@ impl GPUDevice {
             error_handler: self.error_handler.clone(),
             id,
             label,
-            finished: Default::default(),
         }
     }
 

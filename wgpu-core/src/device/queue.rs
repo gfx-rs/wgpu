@@ -20,7 +20,7 @@ use crate::{
     api_log,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
-        ClearError, CommandAllocator, CommandBuffer, CommandEncoderError, CopySide,
+        ClearError, CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
         TexelCopyTextureInfo, TransferError,
     },
     conv,
@@ -278,7 +278,7 @@ pub enum TempResource {
 /// [`CommandBuffer`]: hal::Api::CommandBuffer
 /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
 pub(crate) struct EncoderInFlight {
-    inner: crate::command::CommandEncoder,
+    inner: crate::command::InnerCommandEncoder,
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
     /// We only need to keep these resources alive.
@@ -394,12 +394,12 @@ impl PendingWrites {
                 .map_err(|e| device.handle_hal_error(e))?;
 
             let encoder = EncoderInFlight {
-                inner: crate::command::CommandEncoder {
+                inner: crate::command::InnerCommandEncoder {
                     raw: ManuallyDrop::new(mem::replace(&mut self.command_encoder, new_encoder)),
                     list: vec![cmd_buf],
                     device: device.clone(),
                     is_open: false,
-                    hal_label: None,
+                    label: "(wgpu internal) PendingWrites command encoder".into(),
                 },
                 trackers: Tracker::new(),
                 temp_resources: mem::take(&mut self.temp_resources),
@@ -1237,7 +1237,7 @@ impl Queue {
 
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
-                        CommandBuffer::insert_barriers_from_device_tracker(
+                        CommandEncoder::insert_barriers_from_device_tracker(
                             baked.encoder.raw.as_mut(),
                             &mut trackers,
                             &baked.trackers,

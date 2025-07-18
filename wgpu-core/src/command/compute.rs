@@ -7,7 +7,9 @@ use wgt::{
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, str};
 
-use crate::command::{pass, EncoderStateError, PassStateError, TimestampWritesError};
+use crate::command::{
+    pass, CommandEncoder, EncoderStateError, PassStateError, TimestampWritesError,
+};
 use crate::resource::DestroyedResourceError;
 use crate::{binding_model::BindError, resource::RawResourceAccess};
 use crate::{
@@ -18,8 +20,8 @@ use crate::{
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         pass_base, pass_try, validate_and_begin_pipeline_statistics_query, ArcPassTimestampWrites,
-        BasePass, BindGroupStateChange, CommandBuffer, CommandEncoderError, MapPassErr,
-        PassErrorScope, PassTimestampWrites, QueryUseError, StateChange,
+        BasePass, BindGroupStateChange, CommandEncoderError, MapPassErr, PassErrorScope,
+        PassTimestampWrites, QueryUseError, StateChange,
     },
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures},
     global::Global,
@@ -46,12 +48,12 @@ pub struct ComputePass {
     /// All pass data & records is stored here.
     base: ComputeBasePass,
 
-    /// Parent command buffer that this pass records commands into.
+    /// Parent command encoder that this pass records commands into.
     ///
     /// If this is `Some`, then the pass is in WebGPU's "open" state. If it is
     /// `None`, then the pass is in the "ended" state.
     /// See <https://www.w3.org/TR/webgpu/#encoder-state>
-    parent: Option<Arc<CommandBuffer>>,
+    parent: Option<Arc<CommandEncoder>>,
 
     timestamp_writes: Option<ArcPassTimestampWrites>,
 
@@ -61,8 +63,8 @@ pub struct ComputePass {
 }
 
 impl ComputePass {
-    /// If the parent command buffer is invalid, the returned pass will be invalid.
-    fn new(parent: Arc<CommandBuffer>, desc: ArcComputePassDescriptor) -> Self {
+    /// If the parent command encoder is invalid, the returned pass will be invalid.
+    fn new(parent: Arc<CommandEncoder>, desc: ArcComputePassDescriptor) -> Self {
         let ArcComputePassDescriptor {
             label,
             timestamp_writes,
@@ -78,7 +80,7 @@ impl ComputePass {
         }
     }
 
-    fn new_invalid(parent: Arc<CommandBuffer>, label: &Label, err: ComputePassError) -> Self {
+    fn new_invalid(parent: Arc<CommandEncoder>, label: &Label, err: ComputePassError) -> Self {
         Self {
             base: BasePass::new_invalid(label, err),
             parent: Some(parent),
@@ -308,7 +310,7 @@ impl<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder>
                 );
         }
 
-        CommandBuffer::drain_barriers(
+        CommandEncoder::drain_barriers(
             self.general.raw_encoder,
             &mut self.intermediate_trackers,
             self.general.snatch_guard,
@@ -342,7 +344,7 @@ impl Global {
 
         let label = desc.label.as_deref().map(Cow::Borrowed);
 
-        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_buf.data.lock();
 
         match cmd_buf_data.lock_encoder() {
@@ -433,10 +435,7 @@ impl Global {
     ) {
         #[cfg(feature = "trace")]
         {
-            let cmd_buf = self
-                .hub
-                .command_buffers
-                .get(encoder_id.into_command_buffer_id());
+            let cmd_buf = self.hub.command_encoders.get(encoder_id);
             let mut cmd_buf_data = cmd_buf.data.lock();
             let cmd_buf_data = cmd_buf_data.get_inner();
 
@@ -750,10 +749,10 @@ impl Global {
                 ..
             } = state;
 
-            // Stop the current command buffer.
+            // Stop the current command encoder.
             encoder.close().map_pass_err(pass_scope)?;
 
-            // Create a new command buffer, which we will insert _before_ the body of the compute pass.
+            // Create a new command encoder, which we will insert _before_ the body of the compute pass.
             //
             // Use that buffer to insert barriers and clear discarded images.
             let transit = encoder
@@ -766,13 +765,13 @@ impl Global {
                 device,
                 &snatch_guard,
             );
-            CommandBuffer::insert_barriers_from_tracker(
+            CommandEncoder::insert_barriers_from_tracker(
                 transit,
                 tracker,
                 &intermediate_trackers,
                 &snatch_guard,
             );
-            // Close the command buffer, and swap it with the previous.
+            // Close the command encoder, and swap it with the previous.
             encoder.close_and_swap().map_pass_err(pass_scope)?;
 
             Ok(())
@@ -782,7 +781,7 @@ impl Global {
 
 fn set_pipeline(
     state: &mut State,
-    cmd_buf: &CommandBuffer,
+    cmd_buf: &CommandEncoder,
     pipeline: Arc<ComputePipeline>,
 ) -> Result<(), ComputePassErrorInner> {
     pipeline.same_device_as(cmd_buf)?;
@@ -859,7 +858,7 @@ fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorI
 
 fn dispatch_indirect(
     state: &mut State,
-    cmd_buf: &CommandBuffer,
+    cmd_buf: &CommandEncoder,
     buffer: Arc<Buffer>,
     offset: u64,
 ) -> Result<(), ComputePassErrorInner> {

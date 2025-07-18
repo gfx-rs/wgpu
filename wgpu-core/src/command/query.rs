@@ -4,7 +4,7 @@ use core::{iter, mem};
 #[cfg(feature = "trace")]
 use crate::device::trace::Command as TraceCommand;
 use crate::{
-    command::{CommandBuffer, EncoderStateError},
+    command::{CommandEncoder, EncoderStateError},
     device::{DeviceError, MissingFeatures},
     global::Global,
     id,
@@ -307,7 +307,7 @@ pub(super) fn validate_and_begin_pipeline_statistics_query(
     query_set: Arc<QuerySet>,
     raw_encoder: &mut dyn hal::DynCommandEncoder,
     tracker: &mut StatelessTracker<QuerySet>,
-    cmd_buf: &CommandBuffer,
+    cmd_buf: &CommandEncoder,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap>,
     active_query: &mut Option<(Arc<QuerySet>, u32)>,
@@ -363,9 +363,7 @@ impl Global {
     ) -> Result<(), EncoderStateError> {
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_buf.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
             #[cfg(feature = "trace")]
@@ -406,9 +404,7 @@ impl Global {
     ) -> Result<(), EncoderStateError> {
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_buf.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
             #[cfg(feature = "trace")]

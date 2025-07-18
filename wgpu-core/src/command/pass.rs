@@ -3,7 +3,7 @@
 use crate::binding_model::{BindError, BindGroup, PushConstantUploadError};
 use crate::command::bind::Binder;
 use crate::command::memory_init::{CommandBufferTextureMemoryActions, SurfacesInDiscardState};
-use crate::command::{CommandBuffer, QueryResetMap, QueryUseError};
+use crate::command::{CommandEncoder, QueryResetMap, QueryUseError};
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::LateSizedBufferGroup;
@@ -82,7 +82,7 @@ pub(crate) struct BaseState<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
 
 pub(crate) fn set_bind_group<E>(
     state: &mut BaseState,
-    cmd_buf: &CommandBuffer,
+    cmd_buf: &CommandEncoder,
     dynamic_offsets: &[DynamicOffset],
     index: u32,
     num_dynamic_offsets: usize,
@@ -287,7 +287,7 @@ where
 
 pub(crate) fn write_timestamp<E>(
     state: &mut BaseState,
-    cmd_buf: &CommandBuffer,
+    cmd_buf: &CommandEncoder,
     pending_query_resets: Option<&mut QueryResetMap>,
     query_set: Arc<QuerySet>,
     query_index: u32,

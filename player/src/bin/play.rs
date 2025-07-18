@@ -7,6 +7,7 @@ fn main() {
 
     use player::GlobalPlay as _;
     use wgc::device::trace;
+    use wgpu_core::identity::IdentityManager;
 
     use std::{
         fs,
@@ -52,7 +53,8 @@ fn main() {
         .unwrap();
 
     let global = wgc::global::Global::new("player", &wgt::InstanceDescriptor::default());
-    let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
+    let mut command_encoder_id_manager = IdentityManager::new();
+    let mut command_buffer_id_manager = IdentityManager::new();
 
     #[cfg(feature = "winit")]
     let surface = unsafe {
@@ -102,7 +104,14 @@ fn main() {
         unsafe { global.device_start_graphics_debugger_capture(device) };
 
         while let Some(action) = actions.pop() {
-            global.process(device, queue, action, &dir, &mut command_buffer_id_manager);
+            global.process(
+                device,
+                queue,
+                action,
+                &dir,
+                &mut command_encoder_id_manager,
+                &mut command_buffer_id_manager,
+            );
         }
 
         unsafe { global.device_stop_graphics_debugger_capture(device) };
@@ -164,6 +173,7 @@ fn main() {
                                         queue,
                                         action,
                                         &dir,
+                                        &mut command_encoder_id_manager,
                                         &mut command_buffer_id_manager,
                                     );
                                 }

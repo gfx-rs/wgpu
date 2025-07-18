@@ -346,7 +346,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_buffers.get(id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(id);
         let mut cmd_buf_data = cmd_buf.data.lock();
         cmd_buf_data.record_as_hal_mut(|opt_cmd_buf| -> R {
             hal_command_encoder_callback(opt_cmd_buf.and_then(|cmd_buf| {

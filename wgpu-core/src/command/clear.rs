@@ -6,7 +6,7 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     api_log,
     command::EncoderStateError,
-    device::DeviceError,
+    device::{DeviceError, MissingFeatures},
     get_lowest_common_denom,
     global::Global,
     id::{BufferId, CommandEncoderId, TextureId},
@@ -30,10 +30,10 @@ use wgt::{
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ClearError {
-    #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
-    MissingClearTextureFeature,
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
     #[error("{0} can not be cleared")]
     NoValidTextureClearMode(ResourceErrorIdent),
     #[error("Buffer clear size {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
@@ -84,12 +84,12 @@ impl WebGpuError for ClearError {
     fn webgpu_error_type(&self) -> ErrorType {
         let e: &dyn WebGpuError = match self {
             Self::DestroyedResource(e) => e,
+            Self::MissingFeatures(e) => e,
             Self::MissingBufferUsage(e) => e,
             Self::Device(e) => e,
             Self::EncoderState(e) => e,
             Self::InvalidResource(e) => e,
             Self::NoValidTextureClearMode(..)
-            | Self::MissingClearTextureFeature
             | Self::UnalignedFillSize(..)
             | Self::UnalignedBufferOffset(..)
             | Self::OffsetPlusSizeExceeds64BitBounds { .. }
@@ -115,9 +115,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_buf.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
             #[cfg(feature = "trace")]
@@ -202,9 +200,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_buf.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
             #[cfg(feature = "trace")]
@@ -217,9 +213,9 @@ impl Global {
 
             cmd_buf.device.check_is_valid()?;
 
-            if !cmd_buf.support_clear_texture {
-                return Err(ClearError::MissingClearTextureFeature);
-            }
+            cmd_buf
+                .device
+                .require_features(wgt::Features::CLEAR_TEXTURE)?;
 
             let dst_texture = hub.textures.get(dst).get()?;
 

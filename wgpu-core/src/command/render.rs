@@ -11,8 +11,8 @@ use wgt::{
 
 use crate::command::{
     pass, pass_base, pass_try, validate_and_begin_occlusion_query,
-    validate_and_begin_pipeline_statistics_query, EncoderStateError, PassStateError,
-    TimestampWritesError,
+    validate_and_begin_pipeline_statistics_query, EncoderStateError, InnerCommandEncoder,
+    PassStateError, TimestampWritesError,
 };
 use crate::pipeline::{RenderPipeline, VertexStep};
 use crate::resource::RawResourceAccess;
@@ -24,8 +24,8 @@ use crate::{
         bind::Binder,
         end_occlusion_query, end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandBuffer, CommandEncoderError,
-        DrawError, ExecutionError, MapPassErr, PassErrorScope, PassTimestampWrites, QueryUseError,
+        ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoderError, DrawError,
+        ExecutionError, MapPassErr, PassErrorScope, PassTimestampWrites, QueryUseError,
         RenderCommandError, StateChange,
     },
     device::{
@@ -258,12 +258,12 @@ pub struct RenderPass {
     /// All pass data & records is stored here.
     base: BasePass<ArcRenderCommand, RenderPassError>,
 
-    /// Parent command buffer that this pass records commands into.
+    /// Parent command encoder that this pass records commands into.
     ///
     /// If this is `Some`, then the pass is in WebGPU's "open" state. If it is
     /// `None`, then the pass is in the "ended" state.
     /// See <https://www.w3.org/TR/webgpu/#encoder-state>
-    parent: Option<Arc<CommandBuffer>>,
+    parent: Option<Arc<CommandEncoder>>,
 
     color_attachments:
         ArrayVec<Option<ArcRenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
@@ -277,8 +277,8 @@ pub struct RenderPass {
 }
 
 impl RenderPass {
-    /// If the parent command buffer is invalid, the returned pass will be invalid.
-    fn new(parent: Arc<CommandBuffer>, desc: ArcRenderPassDescriptor) -> Self {
+    /// If the parent command encoder is invalid, the returned pass will be invalid.
+    fn new(parent: Arc<CommandEncoder>, desc: ArcRenderPassDescriptor) -> Self {
         let ArcRenderPassDescriptor {
             label,
             timestamp_writes,
@@ -300,7 +300,7 @@ impl RenderPass {
         }
     }
 
-    fn new_invalid(parent: Arc<CommandBuffer>, label: &Label, err: RenderPassError) -> Self {
+    fn new_invalid(parent: Arc<CommandEncoder>, label: &Label, err: RenderPassError) -> Self {
         Self {
             base: BasePass::new_invalid(label, err),
             parent: Some(parent),
@@ -955,7 +955,7 @@ impl RenderPassInfo {
         mut depth_stencil_attachment: Option<ArcRenderPassDepthStencilAttachment>,
         mut timestamp_writes: Option<ArcPassTimestampWrites>,
         mut occlusion_query_set: Option<Arc<QuerySet>>,
-        encoder: &mut CommandEncoder,
+        encoder: &mut InnerCommandEncoder,
         trackers: &mut Tracker,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         pending_query_resets: &mut QueryResetMap,
@@ -1665,7 +1665,7 @@ impl Global {
         let scope = PassErrorScope::Pass;
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
+        let cmd_buf = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_buf.data.lock();
 
         match cmd_buf_data.lock_encoder() {
@@ -1739,10 +1739,7 @@ impl Global {
     ) {
         #[cfg(feature = "trace")]
         {
-            let cmd_buf = self
-                .hub
-                .command_buffers
-                .get(encoder_id.into_command_buffer_id());
+            let cmd_buf = self.hub.command_encoders.get(encoder_id);
             let mut cmd_buf_data = cmd_buf.data.lock();
             let cmd_buf_data = cmd_buf_data.get_inner();
 
@@ -2233,7 +2230,7 @@ impl Global {
 
                 cmd_buf_data.pending_query_resets.reset_queries(transit);
 
-                CommandBuffer::insert_barriers_from_scope(transit, tracker, &scope, snatch_guard);
+                CommandEncoder::insert_barriers_from_scope(transit, tracker, &scope, snatch_guard);
 
                 if let Some(ref indirect_validation) = device.indirect_validation {
                     indirect_validation
@@ -2259,7 +2256,7 @@ impl Global {
 
 fn set_pipeline(
     state: &mut State,
-    cmd_buf: &Arc<CommandBuffer>,
+    cmd_buf: &Arc<CommandEncoder>,
     pipeline: Arc<RenderPipeline>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::set_pipeline {}", pipeline.error_ident());
@@ -2326,7 +2323,7 @@ fn set_pipeline(
 // This function is duplicative of `bundle::set_index_buffer`.
 fn set_index_buffer(
     state: &mut State,
-    cmd_buf: &Arc<CommandBuffer>,
+    cmd_buf: &Arc<CommandEncoder>,
     buffer: Arc<crate::resource::Buffer>,
     index_format: IndexFormat,
     offset: u64,
@@ -2374,7 +2371,7 @@ fn set_index_buffer(
 // This function is duplicative of `render::set_vertex_buffer`.
 fn set_vertex_buffer(
     state: &mut State,
-    cmd_buf: &Arc<CommandBuffer>,
+    cmd_buf: &Arc<CommandEncoder>,
     slot: u32,
     buffer: Arc<crate::resource::Buffer>,
     offset: u64,
@@ -2607,7 +2604,7 @@ fn multi_draw_indirect(
     state: &mut State,
     indirect_draw_validation_resources: &mut crate::indirect_validation::DrawResources,
     indirect_draw_validation_batcher: &mut crate::indirect_validation::DrawBatcher,
-    cmd_buf: &Arc<CommandBuffer>,
+    cmd_buf: &Arc<CommandEncoder>,
     indirect_buffer: Arc<crate::resource::Buffer>,
     offset: u64,
     count: u32,
@@ -2788,7 +2785,7 @@ fn multi_draw_indirect(
 
 fn multi_draw_indirect_count(
     state: &mut State,
-    cmd_buf: &Arc<CommandBuffer>,
+    cmd_buf: &Arc<CommandEncoder>,
     indirect_buffer: Arc<crate::resource::Buffer>,
     offset: u64,
     count_buffer: Arc<crate::resource::Buffer>,
@@ -2901,7 +2898,7 @@ fn execute_bundle(
     state: &mut State,
     indirect_draw_validation_resources: &mut crate::indirect_validation::DrawResources,
     indirect_draw_validation_batcher: &mut crate::indirect_validation::DrawBatcher,
-    cmd_buf: &Arc<CommandBuffer>,
+    cmd_buf: &Arc<CommandEncoder>,
     bundle: Arc<super::RenderBundle>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::execute_bundle {}", bundle.error_ident());
