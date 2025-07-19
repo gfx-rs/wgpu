@@ -1129,6 +1129,8 @@ impl crate::Surface for super::Surface {
             }
         };
 
+        log::error!("Got swapchain image {index}");
+
         drop(locked_swapchain_semaphores);
         // We only advance the surface semaphores if we successfully acquired an image, otherwise
         // we should try to re-acquire using the same semaphores.

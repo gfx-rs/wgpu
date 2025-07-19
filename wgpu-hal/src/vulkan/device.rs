@@ -577,8 +577,8 @@ impl super::Device {
         // semaphores, since we prospectively need to provide the call to
         // acquire the next image with an unsignaled semaphore.
         let surface_semaphores = (0..=images.len())
-            .map(|_| {
-                super::SwapchainImageSemaphores::new(&self.shared)
+            .map(|i| {
+                super::SwapchainImageSemaphores::new(&self.shared, i)
                     .map(Mutex::new)
                     .map(Arc::new)
             })
@@ -3004,11 +3004,19 @@ impl crate::Device for super::Device {
 }
 
 impl super::DeviceShared {
-    pub(super) fn new_binary_semaphore(&self) -> Result<vk::Semaphore, crate::DeviceError> {
+    pub(super) fn new_binary_semaphore(
+        &self,
+        name: &str,
+    ) -> Result<vk::Semaphore, crate::DeviceError> {
         unsafe {
-            self.raw
+            let semaphore = self
+                .raw
                 .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
-                .map_err(super::map_host_device_oom_err)
+                .map_err(super::map_host_device_oom_err)?;
+
+            self.set_object_name(semaphore, name);
+
+            Ok(semaphore)
         }
     }
 

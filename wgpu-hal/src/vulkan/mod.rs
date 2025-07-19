@@ -262,16 +262,22 @@ struct SwapchainImageSemaphores {
     ///
     /// [`acquire`]: SwapchainImageSemaphores::acquire
     previously_used_submission_index: crate::FenceValue,
+
+    /// Which image this semaphore set is used for.
+    frame_index: usize,
 }
 
 impl SwapchainImageSemaphores {
-    fn new(device: &DeviceShared) -> Result<Self, crate::DeviceError> {
+    fn new(device: &DeviceShared, frame_index: usize) -> Result<Self, crate::DeviceError> {
         Ok(Self {
-            acquire: device.new_binary_semaphore()?,
+            acquire: device.new_binary_semaphore(&format!(
+                "SwapchainImageSemaphore: Image {frame_index} acquire"
+            ))?,
             should_wait_for_acquire: true,
             present: Vec::new(),
             present_index: 0,
             previously_used_submission_index: 0,
+            frame_index,
         })
     }
 
@@ -304,7 +310,10 @@ impl SwapchainImageSemaphores {
         let sem = match self.present.get(self.present_index) {
             Some(sem) => *sem,
             None => {
-                let sem = device.new_binary_semaphore()?;
+                let sem = device.new_binary_semaphore(&format!(
+                    "SwapchainImageSemaphore: Image {} present semaphore {}",
+                    self.frame_index, self.present_index
+                ))?;
                 self.present.push(sem);
                 sem
             }
@@ -721,7 +730,7 @@ impl RelaySemaphores {
     fn new(device: &DeviceShared) -> Result<Self, crate::DeviceError> {
         Ok(Self {
             wait: None,
-            signal: device.new_binary_semaphore()?,
+            signal: device.new_binary_semaphore("RelaySemaphores: 1")?,
         })
     }
 
@@ -736,7 +745,7 @@ impl RelaySemaphores {
                 // The second submission should wait on `old.signal`, and then
                 // signal a new semaphore which we'll create now.
                 self.wait = Some(old.signal);
-                self.signal = device.new_binary_semaphore()?;
+                self.signal = device.new_binary_semaphore("RelaySemaphores: 2")?;
             }
             Some(ref mut wait) => {
                 // What this submission signals, the next should wait.
