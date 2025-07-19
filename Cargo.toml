@@ -249,6 +249,10 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLTexture",
     "MTLTypes",
     "MTLVertexDescriptor",
+    "MTLAccelerationStructure",
+    "MTLAccelerationStructureTypes",
+    "MTLAccelerationStructureCommandEncoder",
+    "MTLResidencySet",
 ] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
