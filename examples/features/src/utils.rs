@@ -203,23 +203,28 @@ pub(crate) async fn get_adapter_with_capabilities_or_from_env(
             );
         adapter
     } else {
-        let adapters = instance.enumerate_adapters(Backends::all());
-
         let mut chosen_adapter = None;
-        for adapter in adapters {
-            if let Some(surface) = surface {
-                if !adapter.is_surface_supported(surface) {
-                    continue;
-                }
-            }
 
-            let required_features = *required_features;
-            let adapter_features = adapter.features();
-            if !adapter_features.contains(required_features) {
-                continue;
-            } else {
-                chosen_adapter = Some(adapter);
-                break;
+        if let Some(surface) = surface {
+            chosen_adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptionsBase {
+                    compatible_surface: Some(surface),
+                    ..Default::default()
+                })
+                .await
+                .ok();
+        } else {
+            let adapters = instance.enumerate_adapters(Backends::all());
+
+            for adapter in adapters {
+                let required_features = *required_features;
+                let adapter_features = adapter.features();
+                if !adapter_features.contains(required_features) {
+                    continue;
+                } else {
+                    chosen_adapter = Some(adapter);
+                    break;
+                }
             }
         }
 

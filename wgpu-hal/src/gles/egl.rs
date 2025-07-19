@@ -291,6 +291,12 @@ struct EglContext {
 
 impl EglContext {
     fn make_current(&self) {
+        log::trace!(
+            "Make current on {:?} {:?} {:?}",
+            self.display,
+            self.pbuffer,
+            self.raw
+        );
         self.instance
             .make_current(self.display, self.pbuffer, self.pbuffer, Some(self.raw))
             .unwrap();
@@ -697,6 +703,7 @@ impl Inner {
             version,
             supports_native_window,
             config,
+            // Will in some scenarios be overwritten by the caller after this function returns.
             wl_display: None,
             srgb_kind,
             force_gles_minor_version,
@@ -839,7 +846,10 @@ impl crate::Instance for Instance {
 
         let (display, display_owner, wsi_kind) =
             if let (Some(library), Some(egl)) = (wayland_library, egl1_5) {
-                log::info!("Using Wayland platform");
+                // XXX: Drop this code and convert `Inner` to an `Option` so that we can
+                // force-initialize this whenever the "RawDisplayHandle" is available (currently
+                // only via the surface)...
+                log::error!("Using Wayland platform, creating nonfunctional bogus display first");
                 let display_attributes = [khronos_egl::ATTRIB_NONE];
                 let display = unsafe {
                     egl.get_platform_display(
@@ -969,6 +979,7 @@ impl crate::Instance for Instance {
                     )
                     .unwrap();
 
+                // TODO: Why?
                 let ret = unsafe {
                     ndk_sys::ANativeWindow_setBuffersGeometry(
                         handle
@@ -1013,6 +1024,7 @@ impl crate::Instance for Instance {
                             .unwrap()
                             .get_platform_display(
                                 EGL_PLATFORM_WAYLAND_KHR,
+                                // khronos_egl::DEFAULT_DISPLAY,
                                 display_handle.display.as_ptr(),
                                 &display_attributes,
                             )
@@ -1056,9 +1068,22 @@ impl crate::Instance for Instance {
 
     unsafe fn enumerate_adapters(
         &self,
-        _surface_hint: Option<&Surface>,
+        surface_hint: Option<&Surface>,
     ) -> Vec<crate::ExposedAdapter<super::Api>> {
         let inner = self.inner.lock();
+
+        if let Some(surface) = surface_hint {
+            assert_eq!(surface.egl.raw, inner.egl.raw);
+        } else
+        // if inner.??? == Wayland
+        {
+            // This is a trick from Web, but it's too restrictive and not needed if the user
+            // initializes in the right order.
+            // TODO: We can probably also allow the user through if inner.wl_surface is not NULL?
+            log::info!("Returning zero adapters on Wayland unless a surface is passed");
+            return vec![];
+        }
+
         inner.egl.make_current();
 
         let mut gl = unsafe {
@@ -1313,6 +1338,7 @@ impl crate::Surface for Surface {
                         let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> =
                             unsafe { library.get(c"wl_egl_window_create".to_bytes()) }.unwrap();
                         let window =
+                        // XXX: Why hardcode a random size here, over using config.extent?
                             unsafe { wl_egl_window_create(handle.surface.as_ptr(), 640, 480) }
                                 .cast();
                         wl_window = Some(window);

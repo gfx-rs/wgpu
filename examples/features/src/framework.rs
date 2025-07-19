@@ -141,10 +141,16 @@ impl SurfaceWrapper {
     /// On wasm, we need to create the surface here, as the WebGL backend needs
     /// a surface (and hence a canvas) to be present to create the adapter.
     ///
+    /// On Wayland our context creation (both inside the [`Instance`] and [`Adapter`]) requires
+    /// access to the `RawDisplayHandle`.  Since this is currently not provided, a compatible
+    /// context is set up via the surface instead.
+    ///
     /// We cannot unconditionally create a surface here, as Android requires
-    /// us to wait until we receive the `Resumed` event to do so.
+    /// us to wait until we receive [`Event::Resumed`] to do so.
     fn pre_adapter(&mut self, instance: &Instance, window: Arc<Window>) {
-        if cfg!(target_arch = "wasm32") {
+        // XXX: Also needed for EGL+Wayland!
+        // if cfg!(target_arch = "wasm32") {
+        if !cfg!(target_os = "android") {
             self.surface = Some(instance.create_surface(window).unwrap());
         }
     }
@@ -153,6 +159,8 @@ impl SurfaceWrapper {
     fn start_condition(e: &Event<()>) -> bool {
         match e {
             // On all other platforms, we can create the surface immediately.
+            // XXX: winit was improved to consistently emit a Resumed event on all platforms, which
+            // is the right place to create surfaces...  Most platforms emit it right after Init.
             Event::NewEvents(StartCause::Init) => !cfg!(target_os = "android"),
             // On android we need to wait for a resumed event to create the surface.
             Event::Resumed => cfg!(target_os = "android"),
@@ -174,13 +182,9 @@ impl SurfaceWrapper {
         log::info!("Surface resume {window_size:?}");
 
         // We didn't create the surface in pre_adapter, so we need to do so now.
-        if !cfg!(target_arch = "wasm32") {
-            self.surface = Some(context.instance.create_surface(window).unwrap());
-        }
-
-        // From here on, self.surface should be Some.
-
-        let surface = self.surface.as_ref().unwrap();
+        let surface = self
+            .surface
+            .get_or_insert_with(|| context.instance.create_surface(window).unwrap());
 
         // Get the default configuration,
         let mut config = surface
