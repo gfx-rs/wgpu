@@ -3,7 +3,7 @@ name: Publish
 on:
   pull_request:
     paths:
-      - '.github/workflows/publish.yml'
+      - ".github/workflows/publish.yml"
   push:
     branches:
       - trunk
@@ -12,6 +12,13 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
+
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
 jobs:
   publish:

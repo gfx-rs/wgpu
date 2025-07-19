@@ -1321,10 +1321,10 @@ impl dispatch::DeviceInterface for CoreDevice {
             cache: desc.cache.map(|cache| cache.inner.as_core().id),
         };
 
-        let (id, error) =
-            self.context
-                .0
-                .device_create_render_pipeline(self.id, &descriptor, None, None);
+        let (id, error) = self
+            .context
+            .0
+            .device_create_render_pipeline(self.id, &descriptor, None);
         if let Some(cause) = error {
             if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
                 log::error!("Shader translation error for stage {stage:?}: {error}");
@@ -1372,10 +1372,10 @@ impl dispatch::DeviceInterface for CoreDevice {
             cache: desc.cache.map(|cache| cache.inner.as_core().id),
         };
 
-        let (id, error) =
-            self.context
-                .0
-                .device_create_compute_pipeline(self.id, &descriptor, None, None);
+        let (id, error) = self
+            .context
+            .0
+            .device_create_compute_pipeline(self.id, &descriptor, None);
         if let Some(cause) = error {
             if let wgc::pipeline::CreateComputePipelineError::Internal(ref error) = cause {
                 log::error!(

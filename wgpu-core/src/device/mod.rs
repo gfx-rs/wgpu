@@ -3,8 +3,6 @@ use core::{fmt, num::NonZeroU32};
 
 use crate::{
     binding_model,
-    hub::Hub,
-    id::{BindGroupLayoutId, PipelineLayoutId},
     ray_tracing::BlasCompactReadyPendingClosure,
     resource::{
         Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
@@ -382,31 +380,6 @@ pub struct MissingDownlevelFlags(pub wgt::DownlevelFlags);
 impl WebGpuError for MissingDownlevelFlags {
     fn webgpu_error_type(&self) -> ErrorType {
         ErrorType::Validation
-    }
-}
-
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImplicitPipelineContext {
-    pub root_id: PipelineLayoutId,
-    pub group_ids: ArrayVec<BindGroupLayoutId, { hal::MAX_BIND_GROUPS }>,
-}
-
-pub struct ImplicitPipelineIds<'a> {
-    pub root_id: PipelineLayoutId,
-    pub group_ids: &'a [BindGroupLayoutId],
-}
-
-impl ImplicitPipelineIds<'_> {
-    fn prepare(self, hub: &Hub) -> ImplicitPipelineContext {
-        ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare(Some(self.root_id)).id(),
-            group_ids: self
-                .group_ids
-                .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare(Some(*id_in)).id())
-                .collect(),
-        }
     }
 }
 

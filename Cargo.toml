@@ -95,7 +95,7 @@ approx = "0.5"
 arbitrary = "1.4"
 argh = "0.1.13"
 arrayvec = { version = "0.7.1", default-features = false }
-bincode = "1"
+bincode = "2"
 bit-set = { version = "0.8", default-features = false }
 bit-vec = { version = "0.8", default-features = false }
 bitflags = "2.9"
@@ -103,7 +103,7 @@ bytemuck = { version = "1.22", features = [
     "extern_crate_alloc",
     "min_const_generics",
 ] }
-cargo_metadata = "0.20"
+cargo_metadata = "0.21"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.6"
@@ -183,10 +183,10 @@ spirv = "0.3"
 static_assertions = "1.1"
 strum = { version = "0.27", default-features = false, features = ["derive"] }
 syn = "2.0.98"
-toml = "0.8.9"
+toml = "0.9.0"
 trybuild = "1"
 tracy-client = "0.18"
-thiserror = { version = "2.0.3", default-features = false }
+thiserror = { version = "2.0.11", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.29", features = ["android-native-activity"] }

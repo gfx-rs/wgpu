@@ -13,6 +13,13 @@ env:
   RUST_BACKTRACE: full
   MSRV: "1.88"
 
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
+
 jobs:
   cts:
     strategy:
