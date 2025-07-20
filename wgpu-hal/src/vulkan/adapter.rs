@@ -2162,6 +2162,9 @@ impl super::Adapter {
                 self.private_caps.maximum_samplers,
             )),
             memory_allocations_counter: Default::default(),
+
+            texture_identity_factory: super::ResourceIdentityFactory::new(),
+            texture_view_identity_factory: super::ResourceIdentityFactory::new(),
         });
 
         let relay_semaphores = super::RelaySemaphores::new(&shared)?;

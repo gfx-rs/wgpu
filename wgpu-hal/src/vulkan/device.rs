@@ -603,6 +603,7 @@ impl super::Device {
     ///   `drop_callback` is [`Some`], `vk_image` must be valid until the callback is called.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
     pub unsafe fn texture_from_raw(
+        &self,
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
         drop_callback: Option<crate::DropCallback>,
@@ -624,6 +625,8 @@ impl super::Device {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
         }
 
+        let identity = self.shared.texture_identity_factory.next();
+
         let drop_guard = crate::DropGuard::from_option(drop_callback);
 
         super::Texture {
@@ -633,6 +636,7 @@ impl super::Device {
             block: None,
             format: desc.format,
             copy_size: desc.copy_extent(),
+            identity,
         }
     }
 
@@ -796,6 +800,8 @@ impl super::Device {
             unsafe { self.shared.set_object_name(image.raw, label) };
         }
 
+        let identity = self.shared.texture_identity_factory.next();
+
         self.counters.textures.add(1);
 
         Ok(super::Texture {
@@ -805,6 +811,7 @@ impl super::Device {
             block: None,
             format: desc.format,
             copy_size: image.copy_size,
+            identity,
         })
     }
 
@@ -1274,6 +1281,8 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(image.raw, label) };
         }
 
+        let identity = self.shared.texture_identity_factory.next();
+
         self.counters.textures.add(1);
 
         Ok(super::Texture {
@@ -1283,6 +1292,7 @@ impl crate::Device for super::Device {
             block: Some(block),
             format: desc.format,
             copy_size: image.copy_size,
+            identity,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
@@ -1335,6 +1345,8 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
+        let identity = self.shared.texture_view_identity_factory.next();
+
         self.counters.texture_views.add(1);
 
         Ok(super::TextureView {
@@ -1345,6 +1357,8 @@ impl crate::Device for super::Device {
             raw_format,
             base_mip_level: desc.range.base_mip_level,
             dimension: desc.dimension,
+            texture_identity: texture.identity,
+            view_identity: identity,
         })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {

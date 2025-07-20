@@ -651,6 +651,14 @@ struct DeviceShared {
     render_passes: Mutex<FastHashMap<RenderPassKey, vk::RenderPass>>,
     sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
+
+    /// Because we have cached framebuffers which are not deleted from until
+    /// the device is destroyed, if the implementation of vulkan re-uses handles
+    /// we need some way to differentiate between the old handle and the new handle.
+    /// This factory allows us to have a dedicated identity value for each texture.
+    texture_identity_factory: ResourceIdentityFactory<vk::Image>,
+    /// As above, for texture views.
+    texture_view_identity_factory: ResourceIdentityFactory<vk::ImageView>,
 }
 
 impl Drop for DeviceShared {
@@ -864,6 +872,7 @@ pub struct Texture {
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
     format: wgt::TextureFormat,
     copy_size: crate::CopyExtent,
+    identity: ResourceIdentity<vk::Image>,
 }
 
 impl crate::DynTexture for Texture {}
@@ -886,6 +895,8 @@ pub struct TextureView {
     raw_format: vk::Format,
     base_mip_level: u32,
     dimension: wgt::TextureViewDimension,
+    texture_identity: ResourceIdentity<vk::Image>,
+    view_identity: ResourceIdentity<vk::ImageView>,
 }
 
 impl crate::DynTextureView for TextureView {}
@@ -896,6 +907,14 @@ impl TextureView {
     /// - The image view handle must not be manually destroyed
     pub unsafe fn raw_handle(&self) -> vk::ImageView {
         self.raw
+    }
+
+    /// Returns the raw texture view, along with its identity.
+    fn identified_raw_view(&self) -> IdentifiedTextureView {
+        IdentifiedTextureView {
+            raw: self.raw,
+            identity: self.view_identity,
+        }
     }
 }
 
@@ -956,16 +975,97 @@ impl Temp {
     }
 }
 
+/// Generates unique IDs for each resource of type `T`.
+///
+/// Because vk handles are not permanently unique, this
+/// provides a way to generate unique IDs for each resource.
+struct ResourceIdentityFactory<T> {
+    #[cfg(not(target_has_atomic = "64"))]
+    next_id: Mutex<u64>,
+    #[cfg(target_has_atomic = "64")]
+    next_id: core::sync::atomic::AtomicU64,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> ResourceIdentityFactory<T> {
+    fn new() -> Self {
+        Self {
+            #[cfg(not(target_has_atomic = "64"))]
+            next_id: Mutex::new(0),
+            #[cfg(target_has_atomic = "64")]
+            next_id: core::sync::atomic::AtomicU64::new(0),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Returns a new unique ID for a resource of type `T`.
+    fn next(&self) -> ResourceIdentity<T> {
+        #[cfg(not(target_has_atomic = "64"))]
+        {
+            let mut next_id = self.next_id.lock();
+            let id = *next_id;
+            *next_id += 1;
+            ResourceIdentity {
+                id,
+                _phantom: PhantomData,
+            }
+        }
+
+        #[cfg(target_has_atomic = "64")]
+        ResourceIdentity {
+            id: self
+                .next_id
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+/// A unique identifier for a resource of type `T`.
+///
+/// This is used as a hashable key for resources, which
+/// is permanently unique through the lifetime of the program.
+#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
+struct ResourceIdentity<T> {
+    id: u64,
+    _phantom: PhantomData<T>,
+}
+
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct FramebufferKey {
     raw_pass: vk::RenderPass,
-    attachments: ArrayVec<vk::ImageView, { MAX_TOTAL_ATTACHMENTS }>,
+    /// Because this is used as a key in a hash map, we need to include the identity
+    /// so that this hashes differently, even if the ImageView handles are the same
+    /// between different views.
+    attachment_identities: ArrayVec<ResourceIdentity<vk::ImageView>, { MAX_TOTAL_ATTACHMENTS }>,
+    /// While this is redundant for calculating the hash, we need access to an array
+    /// of all the raw ImageViews when we are creating the actual framebuffer,
+    /// so we store this here.
+    attachment_views: ArrayVec<vk::ImageView, { MAX_TOTAL_ATTACHMENTS }>,
     extent: wgt::Extent3d,
+}
+
+impl FramebufferKey {
+    fn push_view(&mut self, view: IdentifiedTextureView) {
+        self.attachment_identities.push(view.identity);
+        self.attachment_views.push(view.raw);
+    }
+}
+
+/// A texture view paired with its identity.
+#[derive(Copy, Clone)]
+struct IdentifiedTextureView {
+    raw: vk::ImageView,
+    identity: ResourceIdentity<vk::ImageView>,
 }
 
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct TempTextureViewKey {
     texture: vk::Image,
+    /// As this is used in a hashmap, we need to
+    /// include the identity so that this hashes differently,
+    /// even if the Image handles are the same between different images.
+    texture_identity: ResourceIdentity<vk::Image>,
     format: vk::Format,
     mip_level: u32,
     depth_slice: u32,
@@ -1008,7 +1108,7 @@ pub struct CommandEncoder {
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
 
     framebuffers: FastHashMap<FramebufferKey, vk::Framebuffer>,
-    temp_texture_views: FastHashMap<TempTextureViewKey, vk::ImageView>,
+    temp_texture_views: FastHashMap<TempTextureViewKey, IdentifiedTextureView>,
 
     counters: Arc<wgt::HalCounters>,
 }
@@ -1037,7 +1137,7 @@ impl Drop for CommandEncoder {
         }
 
         for (_, view) in self.temp_texture_views.drain() {
-            unsafe { self.device.raw.destroy_image_view(view, None) };
+            unsafe { self.device.raw.destroy_image_view(view.raw, None) };
         }
 
         self.counters.command_encoders.sub(1);

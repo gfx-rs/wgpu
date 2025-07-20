@@ -1139,6 +1139,8 @@ impl crate::Surface for super::Surface {
             return Err(crate::SurfaceError::Outdated);
         }
 
+        let identity = swapchain.device.texture_identity_factory.next();
+
         let texture = super::SurfaceTexture {
             index,
             texture: super::Texture {
@@ -1152,6 +1154,7 @@ impl crate::Surface for super::Surface {
                     height: swapchain.config.extent.height,
                     depth: 1,
                 },
+                identity,
             },
             surface_semaphores: swapchain_semaphores_arc,
         };
