@@ -573,16 +573,19 @@ impl super::Device {
         let images =
             unsafe { functor.get_swapchain_images(raw) }.map_err(super::map_host_device_oom_err)?;
 
-        // NOTE: It's important that we define at least images.len() wait
-        // semaphores, since we prospectively need to provide the call to
-        // acquire the next image with an unsignaled semaphore.
-        let surface_semaphores = (0..=images.len())
+        // NOTE: It's important that we define the same number of acquire/present semaphores
+        // as we will need to index into them with the image index.
+        let acquire_semaphores = (0..=images.len())
             .map(|i| {
-                super::SwapchainImageSemaphores::new(&self.shared, i)
+                super::SwapchainAcquireSemaphore::new(&self.shared, i)
                     .map(Mutex::new)
                     .map(Arc::new)
             })
             .collect::<Result<Vec<_>, _>>()?;
+
+        let present_semaphores = (0..=images.len())
+            .map(|i| Arc::new(Mutex::new(super::SwapchainPresentSemaphores::new(i))))
+            .collect::<Vec<_>>();
 
         Ok(super::Swapchain {
             raw,
@@ -590,8 +593,9 @@ impl super::Device {
             device: Arc::clone(&self.shared),
             images,
             config: config.clone(),
-            surface_semaphores,
-            next_semaphore_index: 0,
+            acquire_semaphores,
+            next_acquire_index: 0,
+            present_semaphores,
             next_present_time: None,
         })
     }

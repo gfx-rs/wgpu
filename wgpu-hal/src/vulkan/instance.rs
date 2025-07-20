@@ -188,9 +188,18 @@ impl super::Swapchain {
         };
 
         // We cannot take this by value, as the function returns `self`.
-        for semaphore in self.surface_semaphores.drain(..) {
+        for semaphore in self.acquire_semaphores.drain(..) {
             let arc_removed = Arc::into_inner(semaphore).expect(
-                "Trying to destroy a SurfaceSemaphores that is still in use by a SurfaceTexture",
+                "Trying to destroy a SurfaceAcquireSemaphores that is still in use by a SurfaceTexture",
+            );
+            let mutex_removed = arc_removed.into_inner();
+
+            unsafe { mutex_removed.destroy(device) };
+        }
+
+        for semaphore in self.present_semaphores.drain(..) {
+            let arc_removed = Arc::into_inner(semaphore).expect(
+                "Trying to destroy a SurfacePresentSemaphores that is still in use by a SurfaceTexture",
             );
             let mutex_removed = arc_removed.into_inner();
 
@@ -1074,9 +1083,9 @@ impl crate::Surface for super::Surface {
             timeout_ns = u64::MAX;
         }
 
-        let swapchain_semaphores_arc = swapchain.get_surface_semaphores();
+        let acquire_semaphore_arc = swapchain.get_acquire_semaphore();
         // Nothing should be using this, so we don't block, but panic if we fail to lock.
-        let locked_swapchain_semaphores = swapchain_semaphores_arc
+        let acquire_semaphore_guard = acquire_semaphore_arc
             .try_lock()
             .expect("Failed to lock a SwapchainSemaphores.");
 
@@ -1095,7 +1104,7 @@ impl crate::Surface for super::Surface {
         // `vkAcquireNextImageKHR` again.
         swapchain.device.wait_for_fence(
             fence,
-            locked_swapchain_semaphores.previously_used_submission_index,
+            acquire_semaphore_guard.previously_used_submission_index,
             timeout_ns,
         )?;
 
@@ -1105,7 +1114,7 @@ impl crate::Surface for super::Surface {
             swapchain.functor.acquire_next_image(
                 swapchain.raw,
                 timeout_ns,
-                locked_swapchain_semaphores.acquire,
+                acquire_semaphore_guard.acquire,
                 vk::Fence::null(),
             )
         } {
@@ -1129,12 +1138,12 @@ impl crate::Surface for super::Surface {
             }
         };
 
-        log::error!("Got swapchain image {index}");
-
-        drop(locked_swapchain_semaphores);
+        drop(acquire_semaphore_guard);
         // We only advance the surface semaphores if we successfully acquired an image, otherwise
         // we should try to re-acquire using the same semaphores.
-        swapchain.advance_surface_semaphores();
+        swapchain.advance_acquire_semaphore();
+
+        let present_semaphore_arc = swapchain.get_present_semaphores(index);
 
         // special case for Intel Vulkan returning bizarre values (ugh)
         if swapchain.device.vendor_id == crate::auxil::db::intel::VENDOR && index > 0x100 {
@@ -1155,7 +1164,8 @@ impl crate::Surface for super::Surface {
                     depth: 1,
                 },
             },
-            surface_semaphores: swapchain_semaphores_arc,
+            acquire_semaphores: acquire_semaphore_arc,
+            present_semaphores: present_semaphore_arc,
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,
