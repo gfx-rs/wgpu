@@ -1198,6 +1198,16 @@ bitflags::bitflags! {
         /// Not Supported by:
         /// - GL ES / WebGL
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
+
+        /// Supports WGSL builtins for multi-draw indirect count, i.e. `@builtin(vertex_index)`
+        /// and `@builtin(instance_index)`.
+        ///
+        /// Supported by:
+        /// - Vulkan
+        ///
+        /// Not Supported by:
+        /// - DX12
+        const MULTI_DRAW_INDIRECT_COUNT_BUILTINS = 1 << 23;
     }
 }
 
