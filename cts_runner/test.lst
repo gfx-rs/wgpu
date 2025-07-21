@@ -53,6 +53,7 @@ webgpu:api,validation,image_copy,texture_related:format:dimension="1d";*
 webgpu:api,validation,queue,submit:command_buffer,device_mismatch:*
 webgpu:api,validation,queue,submit:command_buffer,duplicate_buffers:*
 webgpu:api,validation,queue,submit:command_buffer,submit_invalidates:*
+webgpu:api,validation,queue,writeTexture:sample_count:*
 //FAIL: webgpu:api,validation,queue,submit:command_buffer,invalid_submit_invalidates:*
 // https://github.com/gfx-rs/wgpu/issues/3911#issuecomment-2972995675
 webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*

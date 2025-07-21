@@ -732,6 +732,13 @@ impl Queue {
 
         self.same_device_as(dst.as_ref())?;
 
+        if dst.desc.sample_count != 1 {
+            return Err(TransferError::InvalidSampleCount {
+                sample_count: dst.desc.sample_count,
+            }
+            .into());
+        }
+
         dst.check_usage(wgt::TextureUsages::COPY_DST)
             .map_err(TransferError::MissingTextureUsage)?;
 
