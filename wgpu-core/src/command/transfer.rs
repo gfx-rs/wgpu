@@ -640,10 +640,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            let device = &cmd_buf.device;
+            let device = &cmd_enc.device;
             device.check_is_valid()?;
 
             if source == destination {
@@ -665,7 +665,7 @@ impl Global {
 
             let src_buffer = hub.buffers.get(source).get()?;
 
-            src_buffer.same_device_as(cmd_buf.as_ref())?;
+            src_buffer.same_device_as(cmd_enc.as_ref())?;
 
             let src_pending = cmd_buf_data
                 .trackers
@@ -682,7 +682,7 @@ impl Global {
 
             let dst_buffer = hub.buffers.get(destination).get()?;
 
-            dst_buffer.same_device_as(cmd_buf.as_ref())?;
+            dst_buffer.same_device_as(cmd_enc.as_ref())?;
 
             let dst_pending = cmd_buf_data
                 .trackers
@@ -807,10 +807,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            let device = &cmd_buf.device;
+            let device = &cmd_enc.device;
             device.check_is_valid()?;
 
             #[cfg(feature = "trace")]
@@ -825,8 +825,8 @@ impl Global {
             let dst_texture = hub.textures.get(destination.texture).get()?;
             let src_buffer = hub.buffers.get(source.buffer).get()?;
 
-            dst_texture.same_device_as(cmd_buf.as_ref())?;
-            src_buffer.same_device_as(cmd_buf.as_ref())?;
+            dst_texture.same_device_as(cmd_enc.as_ref())?;
+            src_buffer.same_device_as(cmd_enc.as_ref())?;
 
             let (hal_copy_size, array_layer_count) = validate_texture_copy_range(
                 destination,
@@ -963,10 +963,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            let device = &cmd_buf.device;
+            let device = &cmd_enc.device;
             device.check_is_valid()?;
 
             #[cfg(feature = "trace")]
@@ -981,8 +981,8 @@ impl Global {
             let src_texture = hub.textures.get(source.texture).get()?;
             let dst_buffer = hub.buffers.get(destination.buffer).get()?;
 
-            src_texture.same_device_as(cmd_buf.as_ref())?;
-            dst_buffer.same_device_as(cmd_buf.as_ref())?;
+            src_texture.same_device_as(cmd_enc.as_ref())?;
+            dst_buffer.same_device_as(cmd_enc.as_ref())?;
 
             let (hal_copy_size, array_layer_count) = validate_texture_copy_range(
                 source,
@@ -1136,10 +1136,10 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            let device = &cmd_buf.device;
+            let device = &cmd_enc.device;
             device.check_is_valid()?;
 
             let snatch_guard = device.snatchable_lock.read();
@@ -1156,8 +1156,8 @@ impl Global {
             let src_texture = hub.textures.get(source.texture).get()?;
             let dst_texture = hub.textures.get(destination.texture).get()?;
 
-            src_texture.same_device_as(cmd_buf.as_ref())?;
-            dst_texture.same_device_as(cmd_buf.as_ref())?;
+            src_texture.same_device_as(cmd_enc.as_ref())?;
+            dst_texture.same_device_as(cmd_enc.as_ref())?;
 
             // src and dst texture format must be copy-compatible
             // https://gpuweb.github.io/gpuweb/#copy-compatible

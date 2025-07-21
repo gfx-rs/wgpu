@@ -1180,18 +1180,18 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::PushDebugGroup(label.to_owned()));
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
             let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-            if !cmd_buf
+            if !cmd_enc
                 .device
                 .instance_flags
                 .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
@@ -1215,17 +1215,17 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
-            if !cmd_buf
+            if !cmd_enc
                 .device
                 .instance_flags
                 .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
@@ -1249,18 +1249,18 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::PopDebugGroup);
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
             let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-            if !cmd_buf
+            if !cmd_enc
                 .device
                 .instance_flags
                 .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)

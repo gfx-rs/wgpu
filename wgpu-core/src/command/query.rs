@@ -307,12 +307,12 @@ pub(super) fn validate_and_begin_pipeline_statistics_query(
     query_set: Arc<QuerySet>,
     raw_encoder: &mut dyn hal::DynCommandEncoder,
     tracker: &mut StatelessTracker<QuerySet>,
-    cmd_buf: &CommandEncoder,
+    cmd_enc: &CommandEncoder,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap>,
     active_query: &mut Option<(Arc<QuerySet>, u32)>,
 ) -> Result<(), QueryUseError> {
-    query_set.same_device_as(cmd_buf)?;
+    query_set.same_device_as(cmd_enc)?;
 
     let needs_reset = reset_state.is_none();
     query_set.validate_query(
@@ -363,8 +363,8 @@ impl Global {
     ) -> Result<(), EncoderStateError> {
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
@@ -374,16 +374,16 @@ impl Global {
                 });
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
-            cmd_buf
+            cmd_enc
                 .device
                 .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
 
             let raw_encoder = cmd_buf_data.encoder.open()?;
 
             let query_set = hub.query_sets.get(query_set_id).get()?;
-            query_set.same_device_as(cmd_buf.as_ref())?;
+            query_set.same_device_as(cmd_enc.as_ref())?;
 
             query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
 
@@ -404,8 +404,8 @@ impl Global {
     ) -> Result<(), EncoderStateError> {
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
@@ -418,7 +418,7 @@ impl Global {
                 });
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
             if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
                 return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
@@ -426,11 +426,11 @@ impl Global {
 
             let query_set = hub.query_sets.get(query_set_id).get()?;
 
-            query_set.same_device_as(cmd_buf.as_ref())?;
+            query_set.same_device_as(cmd_enc.as_ref())?;
 
             let dst_buffer = hub.buffers.get(destination).get()?;
 
-            dst_buffer.same_device_as(cmd_buf.as_ref())?;
+            dst_buffer.same_device_as(cmd_enc.as_ref())?;
 
             let snatch_guard = dst_buffer.device.snatchable_lock.read();
             dst_buffer.check_destroyed(&snatch_guard)?;
@@ -508,7 +508,7 @@ impl Global {
 
             if matches!(query_set.desc.ty, wgt::QueryType::Timestamp) {
                 // Timestamp normalization is only needed for timestamps.
-                cmd_buf
+                cmd_enc
                     .device
                     .timestamp_normalizer
                     .get()

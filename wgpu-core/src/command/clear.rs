@@ -115,19 +115,19 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::ClearBuffer { dst, offset, size });
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
             let dst_buffer = hub.buffers.get(dst).get()?;
 
-            dst_buffer.same_device_as(cmd_buf.as_ref())?;
+            dst_buffer.same_device_as(cmd_enc.as_ref())?;
 
             let dst_pending = cmd_buf_data
                 .trackers
@@ -200,8 +200,8 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_encoders.get(command_encoder_id);
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
@@ -211,15 +211,15 @@ impl Global {
                 });
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
-            cmd_buf
+            cmd_enc
                 .device
                 .require_features(wgt::Features::CLEAR_TEXTURE)?;
 
             let dst_texture = hub.textures.get(dst).get()?;
 
-            dst_texture.same_device_as(cmd_buf.as_ref())?;
+            dst_texture.same_device_as(cmd_enc.as_ref())?;
 
             // Check if subresource aspects are valid.
             let clear_aspects =
@@ -256,7 +256,7 @@ impl Global {
                 });
             }
 
-            let device = &cmd_buf.device;
+            let device = &cmd_enc.device;
             device.check_is_valid()?;
             let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
 
