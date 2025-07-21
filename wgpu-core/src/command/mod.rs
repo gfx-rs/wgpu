@@ -86,6 +86,8 @@ pub(crate) enum CommandEncoderStatus {
     /// <https://www.w3.org/TR/webgpu/#encoder-state-locked>
     Locked(CommandBufferMutable),
 
+    Consumed,
+
     /// Command recording is complete, and the buffer is ready for submission.
     ///
     /// [`Global::command_encoder_finish`] transitions a
@@ -145,9 +147,7 @@ impl CommandEncoderStatus {
             // Encoder is ended. Invalidate the encoder, do not record anything,
             // and return an immediate validation error.
             Self::Finished(_) => Err(self.invalidate(EncoderStateError::Ended)),
-            Self::Error(CommandEncoderError::State(EncoderStateError::Ended)) => {
-                Err(EncoderStateError::Ended)
-            }
+            Self::Consumed => Err(EncoderStateError::Ended),
             // Encoder is already invalid. Do not record anything, but do not
             // return an immediate validation error.
             Self::Error(_) => Ok(()),
@@ -176,7 +176,7 @@ impl CommandEncoderStatus {
                 self.invalidate(EncoderStateError::Ended);
                 f(None)
             }
-            Self::Error(CommandEncoderError::State(EncoderStateError::Ended)) => f(None),
+            Self::Consumed => f(None),
             Self::Error(_) => f(None),
             Self::Transitioning => unreachable!(),
         }
@@ -190,6 +190,7 @@ impl CommandEncoderStatus {
             // playing back a recorded trace. If only to avoid having to
             // implement serialization for all the error types, we don't support
             // storing the errors in a trace.
+            Self::Consumed => unreachable!("command encoder is consumed"),
             Self::Error(_) => unreachable!("passes in a trace do not store errors"),
             Self::Transitioning => unreachable!(),
         }
@@ -214,7 +215,7 @@ impl CommandEncoderStatus {
                 Err(EncoderStateError::Ended)
             }
             Self::Locked(_) => Err(self.invalidate(EncoderStateError::Locked)),
-            st @ Self::Error(CommandEncoderError::State(EncoderStateError::Ended)) => {
+            st @ Self::Consumed => {
                 *self = st;
                 Err(EncoderStateError::Ended)
             }
@@ -262,7 +263,7 @@ impl CommandEncoderStatus {
                 *self = Self::Error(EncoderStateError::Unlocked.into());
                 Err(EncoderStateError::Unlocked)
             }
-            st @ Self::Error(CommandEncoderError::State(EncoderStateError::Ended)) => {
+            st @ Self::Consumed => {
                 *self = st;
                 Err(EncoderStateError::Ended)
             }
@@ -276,21 +277,22 @@ impl CommandEncoderStatus {
         }
     }
 
-    fn finish(&mut self) -> Result<(), CommandEncoderError> {
-        match mem::replace(self, Self::Transitioning) {
+    fn finish(&mut self) -> Self {
+        // Replace our state with `Consumed`, and return either the inner
+        // state or an error, to be transferred to the command buffer.
+        match mem::replace(self, Self::Consumed) {
             Self::Recording(mut inner) => {
-                if let Err(e) = inner.encoder.close_if_open() {
-                    Err(self.invalidate(e.into()))
+                if let Err(err) = inner.encoder.close_if_open() {
+                    Self::Error(err.into())
                 } else {
-                    *self = Self::Finished(inner);
                     // Note: if we want to stop tracking the swapchain texture view,
                     // this is the place to do it.
-                    Ok(())
+                    Self::Finished(inner)
                 }
             }
-            Self::Finished(_) => Err(self.invalidate(EncoderStateError::Ended.into())),
-            Self::Locked(_) => Err(self.invalidate(EncoderStateError::Locked.into())),
-            Self::Error(err) => Err(self.invalidate(err)),
+            Self::Consumed | Self::Finished(_) => Self::Error(EncoderStateError::Ended.into()),
+            Self::Locked(_) => Self::Error(EncoderStateError::Locked.into()),
+            st @ Self::Error(_) => st,
             Self::Transitioning => unreachable!(),
         }
     }
@@ -828,10 +830,7 @@ impl CommandBuffer {
         ) {
             St::Finished(command_buffer_mutable) => Ok(command_buffer_mutable),
             St::Error(err) => Err(err),
-            St::Recording(_) | St::Locked(_) => {
-                Err(InvalidResourceError(self.error_ident()).into())
-            }
-            St::Transitioning => unreachable!(),
+            St::Recording(_) | St::Locked(_) | St::Consumed | St::Transitioning => unreachable!(),
         }
     }
 }
@@ -1143,21 +1142,14 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
 
-        let mut data_guard = cmd_enc.data.lock();
+        let data = cmd_enc.data.lock().finish();
 
         // Errors related to destroyed resources are not reported until the
         // command buffer is submitted.
-        let error = match data_guard.finish() {
-            Err(e) if !e.is_destroyed_error() => Some(e),
+        let error = match data {
+            CommandEncoderStatus::Error(ref e) if !e.is_destroyed_error() => Some(e.clone()),
             _ => None,
         };
-
-        let data = mem::replace(
-            &mut *data_guard,
-            CommandEncoderStatus::Error(EncoderStateError::Ended.into()),
-        );
-
-        drop(data_guard);
 
         let cmd_buf = CommandBuffer {
             device: cmd_enc.device.clone(),
