@@ -554,6 +554,7 @@ fn handle_texture_init(
                 &device.alignments,
                 device.zero_buffer.as_ref(),
                 snatch_guard,
+                device.instance_flags,
             )?;
         }
     }

@@ -22,6 +22,7 @@ use crate::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
         DeviceMismatch, HostMap, MissingDownlevelFlags, MissingFeatures,
     },
+    hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     lock::{rank, Mutex, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
@@ -1017,7 +1018,7 @@ impl StagingBuffer {
     pub(crate) fn new(device: &Arc<Device>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
         profiling::scope!("StagingBuffer::new");
         let stage_desc = hal::BufferDescriptor {
-            label: crate::hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
+            label: hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
             size: size.get(),
             usage: wgt::BufferUses::MAP_WRITE | wgt::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,

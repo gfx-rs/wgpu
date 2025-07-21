@@ -149,6 +149,7 @@ pub(crate) fn fixup_discarded_surfaces<InitIter: Iterator<Item = TextureSurfaceD
             &device.alignments,
             device.zero_buffer.as_ref(),
             snatch_guard,
+            device.instance_flags,
         )
         .unwrap();
     }
@@ -304,6 +305,7 @@ impl BakedCommands {
                     &device.alignments,
                     device.zero_buffer.as_ref(),
                     snatch_guard,
+                    device.instance_flags,
                 );
 
                 // A Texture can be destroyed between the command recording

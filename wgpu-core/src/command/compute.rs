@@ -756,7 +756,10 @@ impl Global {
             //
             // Use that buffer to insert barriers and clear discarded images.
             let transit = encoder
-                .open_pass(Some("(wgpu internal) Pre Pass"))
+                .open_pass(hal_label(
+                    Some("(wgpu internal) Pre Pass"),
+                    self.instance.flags,
+                ))
                 .map_pass_err(pass_scope)?;
             fixup_discarded_surfaces(
                 pending_discard_init_fixups.into_iter(),
