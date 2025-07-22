@@ -1475,7 +1475,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebQueueWriteBuffer => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBufferMappedRange => .ident);
 
 impl dispatch::InstanceInterface for ContextWebGpu {
-    fn new(desc: &crate::InstanceDescriptor) -> Self
+    fn new(desc: crate::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {

@@ -25,7 +25,7 @@ impl Counter {
 pub struct CustomInstance(pub Counter);
 
 impl InstanceInterface for CustomInstance {
-    fn new(__desc: &wgpu::InstanceDescriptor) -> Self
+    fn new(__desc: wgpu::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {

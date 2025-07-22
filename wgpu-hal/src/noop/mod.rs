@@ -88,7 +88,7 @@ impl core::borrow::Borrow<dyn crate::DynTexture> for Resource {
 impl crate::Instance for Context {
     type A = Api;
 
-    unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+    unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         let crate::InstanceDescriptor {
             backend_options:
                 wgt::BackendOptions {
@@ -99,6 +99,7 @@ impl crate::Instance for Context {
             flags: _,
             memory_budget_thresholds: _,
             telemetry: _,
+            display: _,
         } = *desc;
         if enable {
             Ok(Context)

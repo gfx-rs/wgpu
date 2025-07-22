@@ -33,7 +33,7 @@ pub struct Global {
 impl Global {
     pub fn new(
         name: &str,
-        instance_desc: &wgt::InstanceDescriptor,
+        instance_desc: wgt::InstanceDescriptor,
         telemetry: Option<hal::Telemetry>,
     ) -> Self {
         profiling::scope!("Global::new");

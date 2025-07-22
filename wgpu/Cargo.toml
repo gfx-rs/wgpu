@@ -160,7 +160,7 @@ fragile-send-sync-non-atomic-wasm = [
 
 ## Use web-specific libraries on WASM
 ##
-## Those libraties (wasm-bindgen, web-sys, js-sys) can only be used when there is a JavaScript
+## Those libraries (wasm-bindgen, web-sys, js-sys) can only be used when there is a JavaScript
 ## context around the WASM VM, e.g., when the WASM binary is used in a browser.
 web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
 
@@ -210,9 +210,8 @@ static_assertions.workspace = true
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Needed for only wgpu-core backend. Not optional as only wgpu-core backend exists on native platforms.
 wgpu-core = { workspace = true, features = [
-    "raw-window-handle",
     "renderdoc",
-    "wgsl",              # needed for indirect draw/dispatch validation
+    "wgsl",            # needed for indirect draw/dispatch validation
     "portable-atomic",
 ] }
 wgpu-hal.workspace = true
@@ -232,9 +231,7 @@ web-sys = { workspace = true, optional = true, features = [
 ] }
 
 # Needed for only wgpu-core backend. Optional as webgl is optional on WebAssembly.
-wgpu-core = { workspace = true, optional = true, features = [
-    "raw-window-handle",
-] }
+wgpu-core = { workspace = true, optional = true }
 wgpu-hal = { workspace = true, optional = true }
 
 smallvec = { workspace = true, optional = true }
@@ -246,7 +243,7 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 # Emscripten #
 ##############
 [target.'cfg(target_os = "emscripten")'.dependencies]
-wgpu-core = { workspace = true, features = ["raw-window-handle"] }
+wgpu-core.workspace = true
 wgpu-hal.workspace = true
 
 smallvec.workspace = true

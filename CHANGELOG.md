@@ -51,6 +51,11 @@ Bottom level categories:
 
 - Fixed validation of the texture format in GPUDepthStencilState when neither depth nor stencil is actually enabled. By @andyleiserson in [#8766](https://github.com/gfx-rs/wgpu/pull/8766).
 
+#### GLES
+
+- `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
+  Note that the existing workaround to create surfaces before the adapter is no longer valid.
+
 ### Documentation
 
 #### General
