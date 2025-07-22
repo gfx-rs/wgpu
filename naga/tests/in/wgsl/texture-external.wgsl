@@ -12,6 +12,16 @@ fn test(t: texture_external) -> vec4<f32> {
 }
 
 @fragment
-fn main() -> @location(0) vec4<f32> {
+fn fragment_main() -> @location(0) vec4<f32> {
   return test(tex);
+}
+
+@vertex
+fn vertex_main() -> @builtin(position) vec4<f32> {
+  return test(tex);
+}
+
+@compute @workgroup_size(1)
+fn compute_main() {
+  test(tex);
 }
