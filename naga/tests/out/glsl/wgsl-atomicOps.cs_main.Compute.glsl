@@ -9,11 +9,11 @@ struct Struct {
     uint atomic_scalar;
     int atomic_arr[2];
 };
-struct _atomic_compare_exchange_resultUint4_ {
+struct _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e {
     uint old_value;
     bool exchanged;
 };
-struct _atomic_compare_exchange_resultSint4_ {
+struct _atomic_compare_exchange_result_u003c_Sint_u002c_4_u003e {
     int old_value;
     bool exchanged;
 };
@@ -135,21 +135,21 @@ void main() {
     int _e295 = atomicExchange(workgroup_atomic_arr[1], 1);
     uint _e299 = atomicExchange(workgroup_struct.atomic_scalar, 1u);
     int _e304 = atomicExchange(workgroup_struct.atomic_arr[1], 1);
-    _atomic_compare_exchange_resultUint4_ _e308; _e308.old_value = atomicCompSwap(_group_0_binding_0_cs, 1u, 2u);
+    _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e _e308; _e308.old_value = atomicCompSwap(_group_0_binding_0_cs, 1u, 2u);
     _e308.exchanged = (_e308.old_value == 1u);
-    _atomic_compare_exchange_resultSint4_ _e313; _e313.old_value = atomicCompSwap(_group_0_binding_1_cs[1], 1, 2);
+    _atomic_compare_exchange_result_u003c_Sint_u002c_4_u003e _e313; _e313.old_value = atomicCompSwap(_group_0_binding_1_cs[1], 1, 2);
     _e313.exchanged = (_e313.old_value == 1);
-    _atomic_compare_exchange_resultUint4_ _e318; _e318.old_value = atomicCompSwap(_group_0_binding_2_cs.atomic_scalar, 1u, 2u);
+    _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e _e318; _e318.old_value = atomicCompSwap(_group_0_binding_2_cs.atomic_scalar, 1u, 2u);
     _e318.exchanged = (_e318.old_value == 1u);
-    _atomic_compare_exchange_resultSint4_ _e324; _e324.old_value = atomicCompSwap(_group_0_binding_2_cs.atomic_arr[1], 1, 2);
+    _atomic_compare_exchange_result_u003c_Sint_u002c_4_u003e _e324; _e324.old_value = atomicCompSwap(_group_0_binding_2_cs.atomic_arr[1], 1, 2);
     _e324.exchanged = (_e324.old_value == 1);
-    _atomic_compare_exchange_resultUint4_ _e328; _e328.old_value = atomicCompSwap(workgroup_atomic_scalar, 1u, 2u);
+    _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e _e328; _e328.old_value = atomicCompSwap(workgroup_atomic_scalar, 1u, 2u);
     _e328.exchanged = (_e328.old_value == 1u);
-    _atomic_compare_exchange_resultSint4_ _e333; _e333.old_value = atomicCompSwap(workgroup_atomic_arr[1], 1, 2);
+    _atomic_compare_exchange_result_u003c_Sint_u002c_4_u003e _e333; _e333.old_value = atomicCompSwap(workgroup_atomic_arr[1], 1, 2);
     _e333.exchanged = (_e333.old_value == 1);
-    _atomic_compare_exchange_resultUint4_ _e338; _e338.old_value = atomicCompSwap(workgroup_struct.atomic_scalar, 1u, 2u);
+    _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e _e338; _e338.old_value = atomicCompSwap(workgroup_struct.atomic_scalar, 1u, 2u);
     _e338.exchanged = (_e338.old_value == 1u);
-    _atomic_compare_exchange_resultSint4_ _e344; _e344.old_value = atomicCompSwap(workgroup_struct.atomic_arr[1], 1, 2);
+    _atomic_compare_exchange_result_u003c_Sint_u002c_4_u003e _e344; _e344.old_value = atomicCompSwap(workgroup_struct.atomic_arr[1], 1, 2);
     _e344.exchanged = (_e344.old_value == 1);
     return;
 }

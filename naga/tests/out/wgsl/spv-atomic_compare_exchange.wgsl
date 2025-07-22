@@ -61,6 +61,6 @@ fn function() {
 }
 
 @compute @workgroup_size(32, 1, 1) 
-fn stagetest_atomic_compare_exchange() {
+fn stage_u003a_u003a_test_atomic_compare_exchange() {
     function();
 }

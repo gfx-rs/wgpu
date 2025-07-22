@@ -1,9 +1,9 @@
-struct _atomic_compare_exchange_resultSint4_ {
+struct _atomic_compare_exchange_result_u003c_Sint_u002c_4_u003e {
     int old_value;
     bool exchanged;
 };
 
-struct _atomic_compare_exchange_resultUint4_ {
+struct _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e {
     uint old_value;
     bool exchanged;
 };
@@ -54,7 +54,7 @@ void test_atomic_compare_exchange_i32_()
                     int new_ = asint((asfloat(_e14) + 1.0));
                     uint _e20 = i;
                     int _e22 = old;
-                    _atomic_compare_exchange_resultSint4_ _e23; arr_i32_.InterlockedCompareExchange(_e20*4, _e22, new_, _e23.old_value);
+                    _atomic_compare_exchange_result_u003c_Sint_u002c_4_u003e _e23; arr_i32_.InterlockedCompareExchange(_e20*4, _e22, new_, _e23.old_value);
                     _e23.exchanged = (_e23.old_value == _e22);
                     old = _e23.old_value;
                     exchanged = _e23.exchanged;
@@ -106,7 +106,7 @@ void test_atomic_compare_exchange_u32_()
                     uint new_1 = asuint((asfloat(_e14) + 1.0));
                     uint _e20 = i_1;
                     uint _e22 = old_1;
-                    _atomic_compare_exchange_resultUint4_ _e23; arr_u32_.InterlockedCompareExchange(_e20*4, _e22, new_1, _e23.old_value);
+                    _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e _e23; arr_u32_.InterlockedCompareExchange(_e20*4, _e22, new_1, _e23.old_value);
                     _e23.exchanged = (_e23.old_value == _e22);
                     old_1 = _e23.old_value;
                     exchanged_1 = _e23.exchanged;

@@ -19,7 +19,7 @@ void function()
 }
 
 [numthreads(32, 1, 1)]
-void cullfetch_depth()
+void cull_u003a_u003a_fetch_depth()
 {
     function();
 }

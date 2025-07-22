@@ -5,13 +5,13 @@ struct NagaConstants {
 };
 ConstantBuffer<NagaConstants> _NagaConstants: register(b0, space1);
 
-struct _atomic_compare_exchange_resultSint8_ {
+struct _atomic_compare_exchange_result_u003c_Sint_u002c_8_u003e {
     int64_t old_value;
     bool exchanged;
     int _end_pad_0;
 };
 
-struct _atomic_compare_exchange_resultUint8_ {
+struct _atomic_compare_exchange_result_u003c_Uint_u002c_8_u003e {
     uint64_t old_value;
     bool exchanged;
     int _end_pad_0;
@@ -63,7 +63,7 @@ void test_atomic_compare_exchange_i64_()
                     int64_t new_ = (_e14 + 10L);
                     uint _e19 = i;
                     int64_t _e21 = old;
-                    _atomic_compare_exchange_resultSint8_ _e22; arr_i64_.InterlockedCompareExchange64(_e19*8, _e21, new_, _e22.old_value);
+                    _atomic_compare_exchange_result_u003c_Sint_u002c_8_u003e _e22; arr_i64_.InterlockedCompareExchange64(_e19*8, _e21, new_, _e22.old_value);
                     _e22.exchanged = (_e22.old_value == _e21);
                     old = _e22.old_value;
                     exchanged = _e22.exchanged;
@@ -115,7 +115,7 @@ void test_atomic_compare_exchange_u64_()
                     uint64_t new_1 = (_e14 + 10uL);
                     uint _e19 = i_1;
                     uint64_t _e21 = old_1;
-                    _atomic_compare_exchange_resultUint8_ _e22; arr_u64_.InterlockedCompareExchange64(_e19*8, _e21, new_1, _e22.old_value);
+                    _atomic_compare_exchange_result_u003c_Uint_u002c_8_u003e _e22; arr_u64_.InterlockedCompareExchange64(_e19*8, _e21, new_1, _e22.old_value);
                     _e22.exchanged = (_e22.old_value == _e21);
                     old_1 = _e22.old_value;
                     exchanged_1 = _e22.exchanged;
