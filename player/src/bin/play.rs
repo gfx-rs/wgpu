@@ -12,6 +12,7 @@ fn main() {
     use std::{
         fs,
         path::{Path, PathBuf},
+        process::exit,
     };
 
     #[cfg(feature = "winit")]
@@ -29,13 +30,28 @@ fn main() {
     //TODO: setting for the backend bits
     //TODO: setting for the target frame, or controls
 
-    let dir = match std::env::args().nth(1) {
-        Some(arg) if Path::new(&arg).is_dir() => PathBuf::from(arg),
-        _ => panic!("Provide the dir path as the parameter"),
+    const HELP: &str = "\
+    Usage: play <trace directory> | <trace file>\n\
+    \n\
+    Play a wgpu trace from the specified file or directory. If the trace contains\n\
+    buffers, textures, or shaders, the directory form must be used.\n";
+
+    let (dir, trace) = match std::env::args().nth(1) {
+        Some(arg) if Path::new(&arg).is_dir() => (
+            PathBuf::from(arg.clone()),
+            PathBuf::from(arg).join(trace::FILE_NAME),
+        ),
+        Some(arg) if Path::new(&arg).is_file() => {
+            (PathBuf::from("/nonexistent"), PathBuf::from(arg))
+        }
+        _ => {
+            eprintln!("{HELP}");
+            exit(1);
+        }
     };
 
-    log::info!("Loading trace '{dir:?}'");
-    let file = fs::File::open(dir.join(trace::FILE_NAME)).unwrap();
+    log::info!("Loading trace '{trace:?}'");
+    let file = fs::File::open(trace).unwrap();
     let mut actions: Vec<trace::Action> = ron::de::from_reader(file).unwrap();
     actions.reverse(); // allows us to pop from the top
     log::info!("Found {} actions", actions.len());
@@ -66,37 +82,39 @@ fn main() {
     }
     .unwrap();
 
-    let (device, queue) = match actions.pop() {
-        Some(trace::Action::Init { desc, backend }) => {
-            log::info!("Initializing the device for backend: {backend:?}");
-            let adapter = global
-                .request_adapter(
-                    &wgc::instance::RequestAdapterOptions {
-                        power_preference: wgt::PowerPreference::None,
-                        force_fallback_adapter: false,
-                        #[cfg(feature = "winit")]
-                        compatible_surface: Some(surface),
-                        #[cfg(not(feature = "winit"))]
-                        compatible_surface: None,
-                    },
-                    wgt::Backends::from(backend),
-                    Some(wgc::id::AdapterId::zip(0, 1)),
-                )
-                .expect("Unable to find an adapter for selected backend");
-
-            let info = global.adapter_get_info(adapter);
-            log::info!("Picked '{}'", info.name);
-            let device_id = wgc::id::Id::zip(0, 1);
-            let queue_id = wgc::id::Id::zip(0, 1);
-            let res =
-                global.adapter_request_device(adapter, &desc, Some(device_id), Some(queue_id));
-            if let Err(e) = res {
-                panic!("{e:?}");
+    let (backends, device_desc) =
+        match actions.pop_if(|action| matches!(action, trace::Action::Init { .. })) {
+            Some(trace::Action::Init { desc, backend }) => {
+                log::info!("Initializing the device for backend: {backend:?}");
+                (wgt::Backends::from(backend), desc)
             }
-            (device_id, queue_id)
-        }
-        _ => panic!("Expected Action::Init"),
-    };
+            Some(_) => unreachable!(),
+            None => (wgt::Backends::all(), wgt::DeviceDescriptor::default()),
+        };
+
+    let adapter = global
+        .request_adapter(
+            &wgc::instance::RequestAdapterOptions {
+                #[cfg(feature = "winit")]
+                compatible_surface: Some(surface),
+                #[cfg(not(feature = "winit"))]
+                compatible_surface: None,
+                ..Default::default()
+            },
+            backends,
+            Some(wgc::id::AdapterId::zip(0, 1)),
+        )
+        .expect("Unable to obtain an adapter");
+
+    let info = global.adapter_get_info(adapter);
+    log::info!("Using '{}'", info.name);
+
+    let device = wgc::id::Id::zip(0, 1);
+    let queue = wgc::id::Id::zip(0, 1);
+    let res = global.adapter_request_device(adapter, &device_desc, Some(device), Some(queue));
+    if let Err(e) = res {
+        panic!("{e:?}");
+    }
 
     log::info!("Executing actions");
     #[cfg(not(feature = "winit"))]
