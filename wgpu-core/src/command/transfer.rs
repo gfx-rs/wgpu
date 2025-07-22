@@ -483,13 +483,12 @@ pub(crate) fn validate_texture_copy_range<T>(
 /// [srtc]: https://gpuweb.github.io/gpuweb/#abstract-opdef-set-of-subresources-for-texture-copy
 pub(crate) fn validate_copy_within_same_texture<T>(
     src: &wgt::TexelCopyTextureInfo<T>,
-    src_format: wgt::TextureFormat,
     dst: &wgt::TexelCopyTextureInfo<T>,
-    dst_format: wgt::TextureFormat,
+    format: wgt::TextureFormat,
     array_layer_count: u32,
 ) -> Result<(), TransferError> {
-    let src_aspects = hal::FormatAspects::new(src_format, src.aspect);
-    let dst_aspects = hal::FormatAspects::new(dst_format, dst.aspect);
+    let src_aspects = hal::FormatAspects::new(format, src.aspect);
+    let dst_aspects = hal::FormatAspects::new(format, dst.aspect);
     if (src_aspects & dst_aspects).is_empty() {
         // Copying between different aspects (if it even makes sense), is okay.
         return Ok(());
@@ -499,6 +498,11 @@ pub(crate) fn validate_copy_within_same_texture<T>(
         || dst.origin.z >= src.origin.z + array_layer_count
     {
         // Copying between non-overlapping layer ranges is okay.
+        return Ok(());
+    }
+
+    if src.mip_level != dst.mip_level {
+        // Copying between different mip levels is okay.
         return Ok(());
     }
 
@@ -922,40 +926,19 @@ impl Global {
                 ),
             );
 
-            let regions = if dst_base.aspect == hal::FormatAspects::DEPTH_STENCIL {
-                vec![
+            let regions = (0..array_layer_count)
+                .map(|rel_array_layer| {
+                    let mut texture_base = dst_base.clone();
+                    texture_base.array_layer += rel_array_layer;
+                    let mut buffer_layout = source.layout;
+                    buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
                     hal::BufferTextureCopy {
-                        texture_base: hal::TextureCopyBase {
-                            aspect: hal::FormatAspects::DEPTH,
-                            ..dst_base
-                        },
-                        buffer_layout: source.layout,
+                        buffer_layout,
+                        texture_base,
                         size: hal_copy_size,
-                    },
-                    hal::BufferTextureCopy {
-                        texture_base: hal::TextureCopyBase {
-                            aspect: hal::FormatAspects::STENCIL,
-                            ..dst_base
-                        },
-                        buffer_layout: source.layout,
-                        size: hal_copy_size,
-                    },
-                ]
-            } else {
-                (0..array_layer_count)
-                    .map(|rel_array_layer| {
-                        let mut texture_base = dst_base.clone();
-                        texture_base.array_layer += rel_array_layer;
-                        let mut buffer_layout = source.layout;
-                        buffer_layout.offset += rel_array_layer as u64 * bytes_per_array_layer;
-                        hal::BufferTextureCopy {
-                            buffer_layout,
-                            texture_base,
-                            size: hal_copy_size,
-                        }
-                    })
-                    .collect()
-            };
+                    }
+                })
+                .collect::<Vec<_>>();
 
             let cmd_buf_raw = cmd_buf_data.encoder.open()?;
             unsafe {
@@ -1212,9 +1195,8 @@ impl Global {
             if Arc::as_ptr(&src_texture) == Arc::as_ptr(&dst_texture) {
                 validate_copy_within_same_texture(
                     source,
-                    src_texture.desc.format,
                     destination,
-                    dst_texture.desc.format,
+                    src_texture.desc.format,
                     array_layer_count,
                 )?;
             }
