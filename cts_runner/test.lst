@@ -10,21 +10,7 @@ webgpu:api,validation,encoding,beginRenderPass:*
 webgpu:api,validation,encoding,cmds,clearBuffer:*
 webgpu:api,validation,encoding,cmds,compute_pass:set_pipeline:*
 webgpu:api,validation,encoding,cmds,compute_pass:dispatch_sizes:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_with_invalid_or_destroyed_texture:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture,device_mismatch:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:mipmap_level:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture_usage:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:sample_count:*
-//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:multisampled_copy_restrictions:*
-// texture_format_compatibility fails on Windows and Mac in CI.
-// It passes locally on Mac. It is also a relatively long test.
-//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture_format_compatibility:*
-//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:depth_stencil_copy_restrictions:*
-//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:*
-//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_within_same_texture:*
-//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_aspects:*
-// Fails on Windows, https://github.com/gfx-rs/wgpu/issues/7844.
-//FAIL: webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges_with_compressed_texture_formats:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:*
 webgpu:api,validation,encoding,cmds,index_access:*
 //FAIL: webgpu:api,validation,encoding,cmds,render,draw:*
 webgpu:api,validation,encoding,cmds,render,draw:index_buffer_OOB:*

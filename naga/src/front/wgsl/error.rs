@@ -409,6 +409,12 @@ pub(crate) enum Error<'a> {
         accept_span: Span,
         accept_type: String,
     },
+    StructMemberTooLarge {
+        member_name_span: Span,
+    },
+    TypeTooLarge {
+        span: Span,
+    },
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -1366,6 +1372,22 @@ impl<'a> Error<'a> {
                     (accept_span, format!("accept value of type {accept_type}").into()),
                 ],
                 notes: vec![],
+            },
+            Error::StructMemberTooLarge { member_name_span } => ParseError {
+                message: "struct member is too large".into(),
+                labels: vec![(member_name_span, "this member exceeds the maximum size".into())],
+                notes: vec![format!(
+                    "the maximum size is {} bytes",
+                    crate::valid::MAX_TYPE_SIZE
+                )],
+            },
+            Error::TypeTooLarge { span } => ParseError {
+                message: "type is too large".into(),
+                labels: vec![(span, "this type exceeds the maximum size".into())],
+                notes: vec![format!(
+                    "the maximum size is {} bytes",
+                    crate::valid::MAX_TYPE_SIZE
+                )],
             },
         }
     }

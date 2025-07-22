@@ -53,6 +53,12 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
+### Changes
+
+#### Naga
+
+Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
+
 ## v26.0.1 (2025-07-10)
 
 ### Bug Fixes

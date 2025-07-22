@@ -411,6 +411,18 @@ impl VectorSize {
     pub const MAX: usize = Self::Quad as usize;
 }
 
+impl From<VectorSize> for u8 {
+    fn from(size: VectorSize) -> u8 {
+        size as u8
+    }
+}
+
+impl From<VectorSize> for u32 {
+    fn from(size: VectorSize) -> u32 {
+        size as u32
+    }
+}
+
 /// Primitive type for a scalar.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]

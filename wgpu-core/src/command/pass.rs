@@ -3,7 +3,7 @@
 use crate::binding_model::{BindError, BindGroup, PushConstantUploadError};
 use crate::command::bind::Binder;
 use crate::command::memory_init::{CommandBufferTextureMemoryActions, SurfacesInDiscardState};
-use crate::command::{CommandBuffer, QueryResetMap, QueryUseError};
+use crate::command::{CommandEncoder, QueryResetMap, QueryUseError};
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::LateSizedBufferGroup;
@@ -52,15 +52,15 @@ impl WebGpuError for InvalidPopDebugGroup {
     }
 }
 
-pub(crate) struct BaseState<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
-    pub(crate) device: &'cmd_buf Arc<Device>,
+pub(crate) struct BaseState<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder> {
+    pub(crate) device: &'cmd_enc Arc<Device>,
 
     pub(crate) raw_encoder: &'raw_encoder mut dyn hal::DynCommandEncoder,
 
-    pub(crate) tracker: &'cmd_buf mut Tracker,
-    pub(crate) buffer_memory_init_actions: &'cmd_buf mut Vec<BufferInitTrackerAction>,
-    pub(crate) texture_memory_actions: &'cmd_buf mut CommandBufferTextureMemoryActions,
-    pub(crate) as_actions: &'cmd_buf mut Vec<AsAction>,
+    pub(crate) tracker: &'cmd_enc mut Tracker,
+    pub(crate) buffer_memory_init_actions: &'cmd_enc mut Vec<BufferInitTrackerAction>,
+    pub(crate) texture_memory_actions: &'cmd_enc mut CommandBufferTextureMemoryActions,
+    pub(crate) as_actions: &'cmd_enc mut Vec<AsAction>,
 
     /// Immediate texture inits required because of prior discards. Need to
     /// be inserted before texture reads.
@@ -82,7 +82,7 @@ pub(crate) struct BaseState<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
 
 pub(crate) fn set_bind_group<E>(
     state: &mut BaseState,
-    cmd_buf: &CommandBuffer,
+    cmd_enc: &CommandEncoder,
     dynamic_offsets: &[DynamicOffset],
     index: u32,
     num_dynamic_offsets: usize,
@@ -129,7 +129,7 @@ where
     let bind_group = bind_group.unwrap();
     let bind_group = state.tracker.bind_groups.insert_single(bind_group);
 
-    bind_group.same_device_as(cmd_buf)?;
+    bind_group.same_device_as(cmd_enc)?;
 
     bind_group.validate_dynamic_bindings(index, &state.temp_offsets)?;
 
@@ -287,7 +287,7 @@ where
 
 pub(crate) fn write_timestamp<E>(
     state: &mut BaseState,
-    cmd_buf: &CommandBuffer,
+    cmd_enc: &CommandEncoder,
     pending_query_resets: Option<&mut QueryResetMap>,
     query_set: Arc<QuerySet>,
     query_index: u32,
@@ -300,7 +300,7 @@ where
         query_set.error_ident()
     );
 
-    query_set.same_device_as(cmd_buf)?;
+    query_set.same_device_as(cmd_enc)?;
 
     state
         .device

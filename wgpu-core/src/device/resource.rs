@@ -1859,7 +1859,7 @@ impl Device {
     pub(crate) fn create_command_encoder(
         self: &Arc<Self>,
         label: &crate::Label,
-    ) -> Result<Arc<command::CommandBuffer>, DeviceError> {
+    ) -> Result<Arc<command::CommandEncoder>, DeviceError> {
         self.check_is_valid()?;
 
         let queue = self.get_queue().unwrap();
@@ -1869,11 +1869,11 @@ impl Device {
             .acquire_encoder(self.raw(), queue.raw())
             .map_err(|e| self.handle_hal_error(e))?;
 
-        let command_buffer = command::CommandBuffer::new(encoder, self, label);
+        let cmd_enc = command::CommandEncoder::new(encoder, self, label);
 
-        let command_buffer = Arc::new(command_buffer);
+        let cmd_enc = Arc::new(cmd_enc);
 
-        Ok(command_buffer)
+        Ok(cmd_enc)
     }
 
     /// Generate information about late-validated buffer bindings for pipelines.

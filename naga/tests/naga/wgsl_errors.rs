@@ -7,7 +7,10 @@ Tests for the WGSL front end.
     clippy::result_large_err
 )]
 
-use naga::{compact::KeepUnused, valid::Capabilities};
+use naga::{
+    compact::KeepUnused,
+    valid::{self, Capabilities},
+};
 
 #[track_caller]
 fn check(input: &str, snapshot: &str) {
@@ -3744,5 +3747,143 @@ fn invalid_clip_distances() {
             ..
         }),
         naga::valid::Capabilities::CLIP_DISTANCE
+    }
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn max_type_size_large_array() {
+    // The total size of an array is not resolved until validation. Type aliases
+    // don't get spans so the error isn't very helpful.
+    check_validation! {
+        "alias LargeArray = array<u32, (1 << 28) + 1>;":
+        Err(naga::valid::ValidationError::Layouter(
+                naga::proc::LayoutError {
+                    inner: naga::proc::LayoutErrorInner::TooLarge,
+                    ..
+                }
+        ))
+    }
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn max_type_size_array_of_arrays() {
+    // If the size of the base type of an array is oversize, the error is raised
+    // during lowering. Anonymous types don't get spans so this error isn't very
+    // helpful.
+    check(
+        "alias ArrayOfArrays = array<array<u32, (1 << 28) + 1>, 22>;",
+        r#"error: type is too large
+ = note: the maximum size is 1073741824 bytes
+
+"#,
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn max_type_size_override_array() {
+    // The validation that occurs after override processing should reject any
+    // arrays that were overridden to be larger than the maximum size. Type
+    // aliases don't get spans so the error isn't very helpful.
+    let source = r#"
+            override SIZE: u32 = 1;
+            alias ArrayOfOverrideArrays = array<u32, SIZE>;
+
+            var<workgroup> global: ArrayOfOverrideArrays;
+
+            @compute @workgroup_size(64)
+            fn main() {
+                let used = &global;
+            }
+        "#;
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .expect("module should validate");
+
+    let overrides = hashbrown::HashMap::from([(String::from("SIZE"), f64::from((1 << 28) + 1))]);
+    let err = naga::back::pipeline_constants::process_overrides(&module, &info, None, &overrides)
+        .unwrap_err();
+    let naga::back::pipeline_constants::PipelineConstantError::ValidationError(err) = err else {
+        panic!("expected a validation error, got {err:?}");
+    };
+    assert!(matches!(
+        err.into_inner(),
+        naga::valid::ValidationError::Layouter(naga::proc::LayoutError {
+            inner: naga::proc::LayoutErrorInner::TooLarge,
+            ..
+        }),
+    ));
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn max_type_size_array_in_struct() {
+    // If a struct member is oversize, the error is raised during lowering.
+    // For struct members we can associate the error with the member.
+    check(
+        r#"
+            struct ContainsLargeArray {
+                arr: array<u32, (1 << 28) + 1>,
+            }
+        "#,
+        r#"error: struct member is too large
+  ┌─ wgsl:3:17
+  │
+3 │                 arr: array<u32, (1 << 28) + 1>,
+  │                 ^^^ this member exceeds the maximum size
+  │
+  = note: the maximum size is 1073741824 bytes
+
+"#,
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn max_type_size_two_arrays_in_struct() {
+    // The total size of a struct is checked during lowering. For a struct,
+    // we can associate the error with the struct itself.
+    check(
+        r#"
+            struct TwoArrays {
+                arr1: array<u32, 1 << 27>,
+                arr2: array<u32, (1 << 27) + 1>,
+            }
+        "#,
+        "error: type is too large
+  ┌─ wgsl:2:13
+  │\x20\x20
+2 │ ╭             struct TwoArrays {
+3 │ │                 arr1: array<u32, 1 << 27>,
+4 │ │                 arr2: array<u32, (1 << 27) + 1>,
+  │ ╰───────────────────────────────────────────────^ this type exceeds the maximum size
+  │\x20\x20
+  = note: the maximum size is 1073741824 bytes
+
+",
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn max_type_size_array_of_structs() {
+    // The total size of an array is not resolved until validation. Type aliases
+    // don't get spans so the error isn't very helpful.
+    check_validation! {
+        r#"
+            struct NotVeryBigStruct {
+                data: u32,
+            }
+            alias BigArrayOfStructs = array<NotVeryBigStruct, (1 << 28) + 1>;
+        "#:
+        Err(naga::valid::ValidationError::Layouter(
+                naga::proc::LayoutError {
+                    inner: naga::proc::LayoutErrorInner::TooLarge,
+                    ..
+                }
+        ))
     }
 }

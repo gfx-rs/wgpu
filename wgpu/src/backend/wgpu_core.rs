@@ -580,7 +580,6 @@ pub struct CoreCommandEncoder {
     pub(crate) context: ContextWgpuCore,
     id: wgc::id::CommandEncoderId,
     error_sink: ErrorSink,
-    open: bool,
 }
 
 #[derive(Debug)]
@@ -1588,7 +1587,6 @@ impl dispatch::DeviceInterface for CoreDevice {
             context: self.context.clone(),
             id,
             error_sink: Arc::clone(&self.error_sink),
-            open: true,
         }
         .into()
     }
@@ -2390,8 +2388,10 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
 
     fn finish(&mut self) -> dispatch::DispatchCommandBuffer {
         let descriptor = wgt::CommandBufferDescriptor::default();
-        self.open = false; // prevent the drop
-        let (id, error) = self.context.0.command_encoder_finish(self.id, &descriptor);
+        let (id, error) = self
+            .context
+            .0
+            .command_encoder_finish(self.id, &descriptor, None);
         if let Some(cause) = error {
             self.context
                 .handle_error_nolabel(&self.error_sink, cause, "a CommandEncoder");
@@ -2646,9 +2646,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
 
 impl Drop for CoreCommandEncoder {
     fn drop(&mut self) {
-        if self.open {
-            self.context.0.command_encoder_drop(self.id)
-        }
+        self.context.0.command_encoder_drop(self.id)
     }
 }
 

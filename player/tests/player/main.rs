@@ -20,6 +20,7 @@ use std::{
     path::{Path, PathBuf},
     slice,
 };
+use wgc::identity::IdentityManager;
 
 #[derive(serde::Deserialize)]
 struct RawId {
@@ -104,7 +105,8 @@ impl Test<'_> {
             panic!("{e:?}");
         }
 
-        let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
+        let mut command_encoder_id_manager = IdentityManager::new();
+        let mut command_buffer_id_manager = IdentityManager::new();
         println!("\t\t\tRunning...");
         for action in self.actions {
             global.process(
@@ -112,6 +114,7 @@ impl Test<'_> {
                 queue_id,
                 action,
                 dir,
+                &mut command_encoder_id_manager,
                 &mut command_buffer_id_manager,
             );
         }
