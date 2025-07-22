@@ -1033,7 +1033,7 @@ impl super::PrivateCapabilities {
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
         // Metal doesn't support the `MULTI_DRAW_INDIRECT_COUNT` extension
-        downlevel -= wgt::DownlevelFlags::MULTI_DRAW_INDIRECT_COUNT_BUILTINS;
+        downlevel.flags -= wgt::DownlevelFlags::MULTI_DRAW_INDIRECT_COUNT_BUILTINS;
 
         let base = wgt::Limits::default();
         crate::Capabilities {
