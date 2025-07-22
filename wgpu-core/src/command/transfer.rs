@@ -371,7 +371,14 @@ pub(crate) fn validate_linear_texture_data(
 ///  * The copy must be from/to a single aspect of the texture.
 ///  * If `aligned` is true, the buffer offset must be aligned appropriately.
 ///
-/// Other checks in this algorithm are enforced elsewhere.
+/// The following steps in the algorithm are implemented elsewhere:
+///  * Invocation of other validation algorithms.
+///  * The texture usage (COPY_DST / COPY_SRC) check.
+///  * The check for non-copyable depth/stencil formats. The caller must perform
+///    this check using `is_valid_copy_src_format` / `is_valid_copy_dst_format`
+///    before calling this function. This function will panic if
+///    [`wgt::TextureFormat::block_copy_size`] returns `None` due to a
+///    non-copyable format.
 ///
 /// [vtbc]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-buffer-copy
 pub(crate) fn validate_texture_buffer_copy<T>(
@@ -394,9 +401,13 @@ pub(crate) fn validate_texture_buffer_copy<T>(
     let mut offset_alignment = if desc.format.is_depth_stencil_format() {
         4
     } else {
+        // The case where `block_copy_size` returns `None` is currently
+        // unreachable both for the reason in the expect message, and also
+        // because the currently-defined non-copyable formats are depth/stencil
+        // formats so would take the `if` branch.
         desc.format
             .block_copy_size(Some(texture_copy_view.aspect))
-            .unwrap_or(1)
+            .expect("non-copyable formats should have been rejected previously")
     };
 
     // TODO(https://github.com/gfx-rs/wgpu/issues/7947): This does not match the spec.
