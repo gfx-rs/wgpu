@@ -1005,7 +1005,8 @@ impl crate::DynSampler for Sampler {}
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
     desc_count: gpu_descriptor::DescriptorTotalCount,
-    types: Box<[(vk::DescriptorType, u32)]>,
+    /// Sorted list of entries.
+    entries: Box<[wgt::BindGroupLayoutEntry]>,
     /// Map of binding index to size,
     binding_arrays: Vec<(u32, NonZeroU32)>,
 }
