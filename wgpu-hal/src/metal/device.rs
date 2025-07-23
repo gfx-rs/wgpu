@@ -1017,7 +1017,7 @@ impl crate::Device for super::Device {
                 // Obtain the locked device from shared
                 let device = self.shared.device.lock();
                 let library = device
-                    .new_library_with_source(&source, &options)
+                    .new_library_with_source(source, &options)
                     .map_err(|e| crate::ShaderError::Compilation(format!("MSL: {e:?}")))?;
                 let function = library.get_function(&entry_point, None).map_err(|_| {
                     crate::ShaderError::Compilation(format!(
