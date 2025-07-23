@@ -198,7 +198,7 @@ impl super::CommandEncoder {
             self.pass.dirty_root_elements ^= 1 << index;
 
             match self.pass.root_elements[index as usize] {
-                super::RootElement::Empty => log::error!("Root index {} is not bound", index),
+                super::RootElement::Empty => log::error!("Root index {index} is not bound"),
                 super::RootElement::Constant => {
                     let info = self.pass.layout.root_constant_info.as_ref().unwrap();
 

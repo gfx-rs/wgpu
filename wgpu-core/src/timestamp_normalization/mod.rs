@@ -177,7 +177,7 @@ impl TimestampNormalizer {
                         CreateShaderModuleError::Device(device.handle_hal_error(error))
                     }
                     hal::ShaderError::Compilation(ref msg) => {
-                        log::error!("Shader error: {}", msg);
+                        log::error!("Shader error: {msg}");
                         CreateShaderModuleError::Generation
                     }
                 })?;
@@ -274,8 +274,7 @@ impl TimestampNormalizer {
             let bg_label_alloc;
             let label = match buffer_label {
                 Some(label) => {
-                    bg_label_alloc =
-                        alloc::format!("Timestamp normalization bind group ({})", label);
+                    bg_label_alloc = alloc::format!("Timestamp normalization bind group ({label})");
                     &*bg_label_alloc
                 }
                 None => "Timestamp normalization bind group",
@@ -290,6 +289,7 @@ impl TimestampNormalizer {
                     samplers: &[],
                     textures: &[],
                     acceleration_structures: &[],
+                    external_textures: &[],
                     entries: &[hal::BindGroupEntry {
                         binding: 0,
                         resource_index: 0,

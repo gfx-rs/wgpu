@@ -158,6 +158,15 @@ impl Surface<'_> {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::Surface`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Surface")]
+    #[doc = crate::hal_type_metal!("Surface")]
+    #[doc = crate::hal_type_dx12!("Surface")]
+    #[doc = crate::hal_type_gles!("Surface")]
+    ///
     /// # Errors
     ///
     /// This method will return None if:
@@ -173,7 +182,7 @@ impl Surface<'_> {
     ///
     /// [`A::Surface`]: hal::Api::Surface
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
     ) -> Option<impl Deref<Target = A::Surface> + WasmNotSendSync> {
         let core_surface = self.inner.as_core_opt()?;

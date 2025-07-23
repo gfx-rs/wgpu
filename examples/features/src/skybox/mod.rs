@@ -299,11 +299,7 @@ impl crate::framework::Example for Example {
         let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
 
         log::debug!(
-            "Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
-            skybox_format,
-            IMAGE_SIZE,
-            IMAGE_SIZE,
-            max_mips,
+            "Copying {skybox_format:?} skybox images of size {IMAGE_SIZE}, {IMAGE_SIZE}, 6 with {max_mips} mips to gpu",
         );
 
         let bytes = match skybox_format {

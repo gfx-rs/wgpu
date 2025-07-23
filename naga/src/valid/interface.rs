@@ -309,7 +309,7 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::InvalidBuiltInStage(built_in));
                 }
                 if !type_good {
-                    log::warn!("Wrong builtin type: {:?}", ty_inner);
+                    log::warn!("Wrong builtin type: {ty_inner:?}");
                     return Err(VaryingError::InvalidBuiltInType(built_in));
                 }
             }
@@ -501,7 +501,7 @@ impl super::Validator {
     ) -> Result<(), GlobalVariableError> {
         use super::TypeFlags;
 
-        log::debug!("var {:?}", var);
+        log::debug!("var {var:?}");
         let inner_ty = match gctx.types[var.ty].inner {
             // A binding array is (mostly) supposed to behave the same as a
             // series of individually bound resources, so we can (mostly)
@@ -795,12 +795,8 @@ impl super::Validator {
                 crate::AddressSpace::PushConstant => GlobalUse::READ,
             };
             if !allowed_usage.contains(usage) {
-                log::warn!("\tUsage error for: {:?}", var);
-                log::warn!(
-                    "\tAllowed usage: {:?}, requested: {:?}",
-                    allowed_usage,
-                    usage
-                );
+                log::warn!("\tUsage error for: {var:?}");
+                log::warn!("\tAllowed usage: {allowed_usage:?}, requested: {usage:?}");
                 return Err(EntryPointError::InvalidGlobalUsage(var_handle, usage)
                     .with_span_handle(var_handle, &module.global_variables));
             }

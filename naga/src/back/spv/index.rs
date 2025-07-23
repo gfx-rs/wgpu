@@ -277,7 +277,7 @@ impl BlockContext<'_> {
                 Ok(MaybeKnown::Computed(length_id))
             }
             Err(err) => {
-                log::error!("Sequence length for {:?} failed: {}", sequence, err);
+                log::error!("Sequence length for {sequence:?} failed: {err}");
                 Err(Error::Validation("indexable length"))
             }
         }

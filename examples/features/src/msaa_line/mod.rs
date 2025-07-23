@@ -47,7 +47,7 @@ impl Example {
         vertex_buffer: &wgpu::Buffer,
         vertex_count: u32,
     ) -> wgpu::RenderBundle {
-        log::info!("sample_count: {}", sample_count);
+        log::info!("sample_count: {sample_count}");
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(pipeline_layout),

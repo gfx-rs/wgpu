@@ -47,6 +47,8 @@ pub struct Api;
 type ResourceIndex = u32;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Metal;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;
@@ -336,7 +338,7 @@ unsafe impl Sync for AdapterShared {}
 impl AdapterShared {
     fn new(device: metal::Device) -> Self {
         let private_caps = PrivateCapabilities::new(&device);
-        log::debug!("{:#?}", private_caps);
+        log::debug!("{private_caps:#?}");
 
         Self {
             disabilities: PrivateDisabilities::new(&device),

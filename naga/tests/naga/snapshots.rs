@@ -357,7 +357,7 @@ impl Input {
                 "spvasm" => params.targets = Some(Targets::non_wgsl_default()),
                 "vert" | "frag" | "comp" => params.targets = Some(Targets::non_wgsl_default()),
                 e => {
-                    panic!("Unknown extension: {}", e);
+                    panic!("Unknown extension: {e}");
                 }
             }
         }

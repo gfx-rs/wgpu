@@ -225,6 +225,7 @@ pub(crate) struct TrackerIndexAllocators {
     pub buffers: Arc<SharedTrackerIndexAllocator>,
     pub textures: Arc<SharedTrackerIndexAllocator>,
     pub texture_views: Arc<SharedTrackerIndexAllocator>,
+    pub external_textures: Arc<SharedTrackerIndexAllocator>,
     pub samplers: Arc<SharedTrackerIndexAllocator>,
     pub bind_groups: Arc<SharedTrackerIndexAllocator>,
     pub compute_pipelines: Arc<SharedTrackerIndexAllocator>,
@@ -241,6 +242,7 @@ impl TrackerIndexAllocators {
             buffers: Arc::new(SharedTrackerIndexAllocator::new()),
             textures: Arc::new(SharedTrackerIndexAllocator::new()),
             texture_views: Arc::new(SharedTrackerIndexAllocator::new()),
+            external_textures: Arc::new(SharedTrackerIndexAllocator::new()),
             samplers: Arc::new(SharedTrackerIndexAllocator::new()),
             bind_groups: Arc::new(SharedTrackerIndexAllocator::new()),
             compute_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
@@ -436,6 +438,7 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 pub(crate) struct BindGroupStates {
     pub buffers: BufferBindGroupState,
     pub views: TextureViewBindGroupState,
+    pub external_textures: StatelessTracker<resource::ExternalTexture>,
     pub samplers: StatelessTracker<resource::Sampler>,
     pub acceleration_structures: StatelessTracker<resource::Tlas>,
 }
@@ -445,6 +448,7 @@ impl BindGroupStates {
         Self {
             buffers: BufferBindGroupState::new(),
             views: TextureViewBindGroupState::new(),
+            external_textures: StatelessTracker::new(),
             samplers: StatelessTracker::new(),
             acceleration_structures: StatelessTracker::new(),
         }

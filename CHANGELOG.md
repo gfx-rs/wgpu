@@ -56,6 +56,12 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 ### General
 - Added `Features::EXPERIMENTAL_PRECOMPILED_SHADERS`, replacing existing passthrough types with a unified `CreateShaderModuleDescriptorPassthrough` which allows passing multiple shader codes for different backends. By @SupaMaggie70Incorporated in [#7834](https://github.com/gfx-rs/wgpu/pull/7834)
 
+### Changes
+
+#### Naga
+
+Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
+
 ## v26.0.1 (2025-07-10)
 
 ### Bug Fixes

@@ -332,7 +332,7 @@ impl Backends {
                 "webgpu" => Self::BROWSER_WEBGPU,
                 "noop" => Self::NOOP,
                 b => {
-                    log::warn!("unknown backend string '{}'", b);
+                    log::warn!("unknown backend string '{b}'");
                     continue;
                 }
             }
@@ -3668,7 +3668,7 @@ impl TextureFormat {
                 // Two chroma bytes per block, one luma byte per block
                 Self::NV12 => 3,
                 f => {
-                    log::warn!("Memory footprint for format {:?} is not implemented", f);
+                    log::warn!("Memory footprint for format {f:?} is not implemented");
                     0
                 }
             },
@@ -6198,6 +6198,77 @@ impl<L, V> TextureDescriptor<L, V> {
         match self.dimension {
             TextureDimension::D1 | TextureDimension::D3 => 1,
             TextureDimension::D2 => self.size.depth_or_array_layers,
+        }
+    }
+}
+
+/// Format of an `ExternalTexture`. This indicates the number of underlying
+/// planes used by the `ExternalTexture` as well as each plane's format.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ExternalTextureFormat {
+    /// Single [`TextureFormat::Rgba8Unorm`] or [`TextureFormat::Bgra8Unorm`] format plane.
+    Rgba,
+    /// [`TextureFormat::R8Unorm`] Y plane, and [`TextureFormat::Rg8Unorm`]
+    /// interleaved CbCr plane.
+    Nv12,
+    /// Separate [`TextureFormat::R8Unorm`] Y, Cb, and Cr planes.
+    Yu12,
+}
+
+/// Describes an [`ExternalTexture`](../wgpu/struct.ExternalTexture.html).
+///
+/// Corresponds to [WebGPU `GPUExternalTextureDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturedescriptor).
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ExternalTextureDescriptor<L> {
+    /// Debug label of the external texture. This will show up in graphics
+    /// debuggers for easy identification.
+    pub label: L,
+    /// Width of the external texture. Note that both this and `height` may
+    /// not match the dimensions of the underlying texture(s). This could be
+    /// due to a crop rect or rotation.
+    pub width: u32,
+    /// Height of the external texture.
+    pub height: u32,
+    /// Format of the external texture.
+    pub format: ExternalTextureFormat,
+    /// 4x4 column-major matrix with which to convert sampled YCbCr values
+    /// to RGBA.
+    /// This is ignored when `format` is [`ExternalTextureFormat::Rgba`].
+    pub yuv_conversion_matrix: [f32; 16],
+    /// 3x2 column-major matrix with which to multiply normalized texture
+    /// coordinates prior to sampling from the external texture.
+    pub sample_transform: [f32; 6],
+    /// 3x2 column-major matrix with which to multiply unnormalized texture
+    /// coordinates prior to loading from the external texture.
+    pub load_transform: [f32; 6],
+}
+
+impl<L> ExternalTextureDescriptor<L> {
+    /// Takes a closure and maps the label of the external texture descriptor into another.
+    #[must_use]
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> ExternalTextureDescriptor<K> {
+        ExternalTextureDescriptor {
+            label: fun(&self.label),
+            width: self.width,
+            height: self.height,
+            format: self.format,
+            yuv_conversion_matrix: self.yuv_conversion_matrix,
+            sample_transform: self.sample_transform,
+            load_transform: self.load_transform,
+        }
+    }
+
+    /// The number of underlying planes used by the external texture.
+    pub fn num_planes(&self) -> usize {
+        match self.format {
+            ExternalTextureFormat::Rgba => 1,
+            ExternalTextureFormat::Nv12 => 2,
+            ExternalTextureFormat::Yu12 => 3,
         }
     }
 }

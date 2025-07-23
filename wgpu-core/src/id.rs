@@ -34,16 +34,20 @@ const _: () = {
 #[cfg_attr(
     any(feature = "serde", feature = "replay"),
     derive(serde::Deserialize),
-    serde(from = "SerialId")
+    serde(try_from = "SerialId")
 )]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RawId(NonZeroU64);
 
 impl RawId {
     /// Zip together an identifier and return its raw underlying representation.
+    ///
+    /// # Panics
+    ///
+    /// If both ID components are zero.
     pub fn zip(index: Index, epoch: Epoch) -> RawId {
         let v = (index as u64) | ((epoch as u64) << 32);
-        Self(NonZeroU64::new(v).unwrap())
+        Self(NonZeroU64::new(v).expect("IDs may not be zero"))
     }
 
     /// Unzip a raw identifier into its components.
@@ -75,7 +79,7 @@ impl RawId {
 /// [`Hub`]: crate::hub::Hub
 /// [`Hub<A>`]: crate::hub::Hub
 /// [`Texture<A>`]: crate::resource::Texture
-/// [`Registry`]: crate::hub::Registry
+/// [`Registry`]: crate::registry::Registry
 /// [`Noop`]: hal::api::Noop
 #[repr(transparent)]
 #[cfg_attr(any(feature = "serde", feature = "trace"), derive(serde::Serialize))]
@@ -101,10 +105,22 @@ impl From<RawId> for SerialId {
     }
 }
 
-impl From<SerialId> for RawId {
-    fn from(id: SerialId) -> Self {
-        match id {
-            SerialId::Id(index, epoch) => RawId::zip(index, epoch),
+pub struct ZeroIdError;
+
+impl fmt::Display for ZeroIdError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "IDs may not be zero")
+    }
+}
+
+impl TryFrom<SerialId> for RawId {
+    type Error = ZeroIdError;
+    fn try_from(id: SerialId) -> Result<Self, ZeroIdError> {
+        let SerialId::Id(index, epoch) = id;
+        if index == 0 && epoch == 0 {
+            Err(ZeroIdError)
+        } else {
+            Ok(RawId::zip(index, epoch))
         }
     }
 }
@@ -245,6 +261,7 @@ ids! {
     pub type StagingBufferId StagingBuffer;
     pub type TextureViewId TextureView;
     pub type TextureId Texture;
+    pub type ExternalTextureId ExternalTexture;
     pub type SamplerId Sampler;
     pub type BindGroupLayoutId BindGroupLayout;
     pub type PipelineLayoutId PipelineLayout;
@@ -262,21 +279,6 @@ ids! {
     pub type QuerySetId QuerySet;
     pub type BlasId Blas;
     pub type TlasId Tlas;
-}
-
-// The CommandBuffer type serves both as encoder and
-// buffer, which is why the 2 functions below exist.
-
-impl CommandEncoderId {
-    pub fn into_command_buffer_id(self) -> CommandBufferId {
-        Id(self.0, PhantomData)
-    }
-}
-
-impl CommandBufferId {
-    pub fn into_command_encoder_id(self) -> CommandEncoderId {
-        Id(self.0, PhantomData)
-    }
 }
 
 #[test]

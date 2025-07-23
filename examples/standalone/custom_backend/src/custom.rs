@@ -184,6 +184,14 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn create_external_texture(
+        &self,
+        _desc: &wgpu::ExternalTextureDescriptor<'_>,
+        _planes: &[&wgpu::TextureView],
+    ) -> wgpu::custom::DispatchExternalTexture {
+        unimplemented!()
+    }
+
     fn create_blas(
         &self,
         _desc: &wgpu::CreateBlasDescriptor<'_>,

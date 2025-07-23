@@ -124,7 +124,7 @@ impl Dispatch {
                         CreateShaderModuleError::Device(DeviceError::from_hal(error))
                     }
                     hal::ShaderError::Compilation(ref msg) => {
-                        log::error!("Shader error: {}", msg);
+                        log::error!("Shader error: {msg}");
                         CreateShaderModuleError::Generation
                     }
                 }
@@ -241,6 +241,7 @@ impl Dispatch {
             samplers: &[],
             textures: &[],
             acceleration_structures: &[],
+            external_textures: &[],
         };
         let dst_bind_group = unsafe {
             device
@@ -284,6 +285,7 @@ impl Dispatch {
             samplers: &[],
             textures: &[],
             acceleration_structures: &[],
+            external_textures: &[],
         };
         unsafe {
             device

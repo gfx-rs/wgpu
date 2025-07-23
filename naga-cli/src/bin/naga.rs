@@ -538,8 +538,8 @@ fn run() -> anyhow::Result<()> {
                 use naga::valid::Capabilities as C;
                 let missing = match Path::new(path).extension().and_then(|ex| ex.to_str()) {
                     Some("wgsl") => C::CLIP_DISTANCE | C::CULL_DISTANCE,
-                    Some("metal") => C::CULL_DISTANCE,
-                    _ => C::empty(),
+                    Some("metal") => C::CULL_DISTANCE | C::TEXTURE_EXTERNAL,
+                    _ => C::TEXTURE_EXTERNAL,
                 };
                 caps & !missing
             });
@@ -643,7 +643,7 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
 
     Ok(match input_kind {
         InputKind::Bincode => Parsed {
-            module: bincode::deserialize(&input)?,
+            module: bincode::serde::decode_from_slice(&input, bincode::config::standard())?.0,
             input_text: None,
             language: naga::back::spv::SourceLanguage::Unknown,
         },
@@ -747,8 +747,8 @@ fn write_output(
             }
         }
         "bin" => {
-            let file = fs::File::create(output_path)?;
-            bincode::serialize_into(file, module)?;
+            let mut file = fs::File::create(output_path)?;
+            bincode::serde::encode_into_std_write(module, &mut file, bincode::config::standard())?;
         }
         "metal" => {
             use naga::back::msl;

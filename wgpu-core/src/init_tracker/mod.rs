@@ -221,7 +221,7 @@ where
     }
 
     // Returns an iterator over the uninitialized ranges in a query range.
-    pub(crate) fn uninitialized(&mut self, drain_range: Range<Idx>) -> UninitializedIter<Idx> {
+    pub(crate) fn uninitialized(&mut self, drain_range: Range<Idx>) -> UninitializedIter<'_, Idx> {
         let index = self
             .uninitialized_ranges
             .partition_point(|r| r.end <= drain_range.start);
@@ -233,7 +233,7 @@ where
     }
 
     // Drains uninitialized ranges in a query range.
-    pub(crate) fn drain(&mut self, drain_range: Range<Idx>) -> InitTrackerDrain<Idx> {
+    pub(crate) fn drain(&mut self, drain_range: Range<Idx>) -> InitTrackerDrain<'_, Idx> {
         let index = self
             .uninitialized_ranges
             .partition_point(|r| r.end <= drain_range.start);

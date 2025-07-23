@@ -328,7 +328,7 @@ impl super::Adapter {
                 tier3_practical_descriptor_limit,
             ),
             other => {
-                log::warn!("Unknown resource binding tier {:?}", other);
+                log::warn!("Unknown resource binding tier {other:?}");
                 (
                     Direct3D12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
                     8,

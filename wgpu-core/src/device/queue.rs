@@ -20,7 +20,7 @@ use crate::{
     api_log,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
-        ClearError, CommandAllocator, CommandBuffer, CommandEncoderError, CopySide,
+        ClearError, CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
         TexelCopyTextureInfo, TransferError,
     },
     conv,
@@ -278,7 +278,7 @@ pub enum TempResource {
 /// [`CommandBuffer`]: hal::Api::CommandBuffer
 /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
 pub(crate) struct EncoderInFlight {
-    inner: crate::command::CommandEncoder,
+    inner: crate::command::InnerCommandEncoder,
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
     /// We only need to keep these resources alive.
@@ -394,12 +394,12 @@ impl PendingWrites {
                 .map_err(|e| device.handle_hal_error(e))?;
 
             let encoder = EncoderInFlight {
-                inner: crate::command::CommandEncoder {
+                inner: crate::command::InnerCommandEncoder {
                     raw: ManuallyDrop::new(mem::replace(&mut self.command_encoder, new_encoder)),
                     list: vec![cmd_buf],
                     device: device.clone(),
                     is_open: false,
-                    hal_label: None,
+                    label: "(wgpu internal) PendingWrites command encoder".into(),
                 },
                 trackers: Tracker::new(),
                 temp_resources: mem::take(&mut self.temp_resources),
@@ -717,11 +717,6 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring write_texture of size 0");
-            return Ok(());
-        }
-
         let dst = destination.texture.get()?;
         let destination = wgt::TexelCopyTextureInfo {
             texture: (),
@@ -774,6 +769,13 @@ impl Queue {
 
         let snatch_guard = self.device.snatchable_lock.read();
 
+        let dst_raw = dst.try_raw(&snatch_guard)?;
+
+        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
+            log::trace!("Ignoring write_texture of size 0");
+            return Ok(());
+        }
+
         let mut pending_writes = self.pending_writes.lock();
         let encoder = pending_writes.activate();
 
@@ -819,8 +821,6 @@ impl Queue {
             }
         }
 
-        let dst_raw = dst.try_raw(&snatch_guard)?;
-
         let (block_width, block_height) = dst.desc.format.block_dimensions();
         let width_in_blocks = size.width / block_width;
         let height_in_blocks = size.height / block_height;
@@ -860,7 +860,6 @@ impl Queue {
                 wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64)
                     .unwrap();
             let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;
-            let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
             for layer in 0..size.depth_or_array_layers {
                 let rows_offset = layer * rows_per_image;
                 for row in rows_offset..rows_offset + height_in_blocks {
@@ -871,7 +870,7 @@ impl Queue {
                             data,
                             src_offset as isize,
                             dst_offset as isize,
-                            copy_bytes_per_row,
+                            bytes_in_last_row as usize,
                         )
                     }
                 }
@@ -1238,7 +1237,7 @@ impl Queue {
 
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
-                        CommandBuffer::insert_barriers_from_device_tracker(
+                        CommandEncoder::insert_barriers_from_device_tracker(
                             baked.encoder.raw.as_mut(),
                             &mut trackers,
                             &baked.trackers,

@@ -317,7 +317,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         for (group, bt) in self.options.dynamic_storage_buffer_offsets_targets.iter() {
-            writeln!(self.out, "struct __dynamic_buffer_offsetsTy{} {{", group)?;
+            writeln!(self.out, "struct __dynamic_buffer_offsetsTy{group} {{")?;
             for i in 0..bt.size {
                 writeln!(self.out, "{}uint _{};", back::INDENT, i)?;
             }
@@ -706,7 +706,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let members = match module.types[result.ty].inner {
             TypeInner::Struct { ref members, .. } => members,
             ref other => {
-                log::error!("Unexpected {:?} output type without a binding", other);
+                log::error!("Unexpected {other:?} output type without a binding");
                 &empty[..]
             }
         };
@@ -1433,7 +1433,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     let array_return_type = self.namer.call(&format!("ret_{name}"));
                     write!(self.out, "typedef ")?;
                     self.write_type(module, result.ty)?;
-                    write!(self.out, " {}", array_return_type)?;
+                    write!(self.out, " {array_return_type}")?;
                     self.write_array_size(module, base, size)?;
                     writeln!(self.out, ";")?;
                     Some(array_return_type)

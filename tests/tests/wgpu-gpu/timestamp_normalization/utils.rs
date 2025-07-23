@@ -51,8 +51,7 @@ fn assert_u64_mul_u32(left: u64, right: u32, computed: Uint96) {
 
     assert_eq!(
         computed, real,
-        "{left} * {right} should be {real} but is {}",
-        computed
+        "{left} * {right} should be {real} but is {computed}"
     );
 }
 

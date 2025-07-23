@@ -345,6 +345,11 @@ impl<D: Device + DynResource> DynDevice for D {
             .iter()
             .map(|a| a.expect_downcast_ref())
             .collect();
+        let external_textures: Vec<_> = desc
+            .external_textures
+            .iter()
+            .map(|et| et.clone().expect_downcast())
+            .collect();
 
         let desc = BindGroupDescriptor {
             label: desc.label.to_owned(),
@@ -354,6 +359,7 @@ impl<D: Device + DynResource> DynDevice for D {
             textures: &textures,
             entries: desc.entries,
             acceleration_structures: &acceleration_structures,
+            external_textures: &external_textures,
         };
 
         unsafe { D::create_bind_group(self, &desc) }

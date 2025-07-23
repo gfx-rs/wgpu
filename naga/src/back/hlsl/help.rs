@@ -195,6 +195,7 @@ impl<W: Write> super::Writer<'_, W> {
                 let storage_format_str = format.to_hlsl_str();
                 write!(self.out, "<{storage_format_str}>")?
             }
+            crate::ImageClass::External => unimplemented!(),
         }
         Ok(())
     }
@@ -290,6 +291,7 @@ impl<W: Write> super::Writer<'_, W> {
             crate::ImageClass::Depth { multi: false } => "Depth",
             crate::ImageClass::Sampled { multi: false, .. } => "",
             crate::ImageClass::Storage { .. } => "RW",
+            crate::ImageClass::External => unimplemented!(),
         };
         let arrayed_str = if query.arrayed { "Array" } else { "" };
         let query_str = match query.query {
@@ -349,6 +351,7 @@ impl<W: Write> super::Writer<'_, W> {
         let extra_coords = match wiq.class {
             crate::ImageClass::Storage { .. } => 0,
             crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => 1,
+            crate::ImageClass::External => unimplemented!(),
         };
 
         // GetDimensions Overloaded Methods

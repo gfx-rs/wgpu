@@ -208,6 +208,15 @@ impl Buffer {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::Buffer`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Buffer")]
+    #[doc = crate::hal_type_metal!("Buffer")]
+    #[doc = crate::hal_type_dx12!("Buffer")]
+    #[doc = crate::hal_type_gles!("Buffer")]
+    ///
     /// # Deadlocks
     ///
     /// - The returned guard holds a read-lock on a device-local "destruction"
@@ -230,7 +239,7 @@ impl Buffer {
     ///
     /// [`A::Buffer`]: hal::Api::Buffer
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
     ) -> Option<impl Deref<Target = A::Buffer> + WasmNotSendSync> {
         let buffer = self.inner.as_core_opt()?;

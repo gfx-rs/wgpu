@@ -193,10 +193,6 @@ pub type ImplicitBindGroupCount = u8;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImplicitLayoutError {
-    #[error("The implicit_pipeline_ids arg is required")]
-    MissingImplicitPipelineIds,
-    #[error("Missing IDs for deriving {0} bind groups")]
-    MissingIds(ImplicitBindGroupCount),
     #[error("Unable to reflect the shader {0:?} interface")]
     ReflectionError(wgt::ShaderStages),
     #[error(transparent)]
@@ -208,9 +204,7 @@ pub enum ImplicitLayoutError {
 impl WebGpuError for ImplicitLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
         let e: &dyn WebGpuError = match self {
-            Self::MissingImplicitPipelineIds | Self::MissingIds(_) | Self::ReflectionError(_) => {
-                return ErrorType::Validation
-            }
+            Self::ReflectionError(_) => return ErrorType::Validation,
             Self::BindGroup(e) => e,
             Self::Pipeline(e) => e,
         };

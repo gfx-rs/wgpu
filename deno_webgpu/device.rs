@@ -498,7 +498,6 @@ impl GPUDevice {
             error_handler: self.error_handler.clone(),
             id,
             label,
-            finished: Default::default(),
         }
     }
 
@@ -651,7 +650,7 @@ impl GPUDevice {
 
         let (id, err) =
             self.instance
-                .device_create_compute_pipeline(self.id, &wgpu_descriptor, None, None);
+                .device_create_compute_pipeline(self.id, &wgpu_descriptor, None);
 
         self.error_handler.push_error(err);
 
@@ -818,7 +817,7 @@ impl GPUDevice {
 
         let (id, err) =
             self.instance
-                .device_create_render_pipeline(self.id, &wgpu_descriptor, None, None);
+                .device_create_render_pipeline(self.id, &wgpu_descriptor, None);
 
         self.error_handler.push_error(err);
 

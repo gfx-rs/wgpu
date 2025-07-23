@@ -3,12 +3,13 @@ name: CI
 on:
   push:
     branches-ignore: [
-        # We don't need to run on renovate PRs.
+        # Renovate branches are always PRs, so they will be covered
+        # by the pull_request event.
         "renovate/**",
-        # This is the branch the merge queue creates.
+        # Branches with the `gh-readonly-queue` prefix are used by the
+        # merge queue, so they are already covered by the `merge_group` event.
         "gh-readonly-queue/**",
       ]
-    tags: [v0.*]
   pull_request:
   merge_group:
 
@@ -25,7 +26,7 @@ env:
   MESA_VERSION: "24.3.4"
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.84"
+  REPO_MSRV: "1.88"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
   CORE_MSRV: "1.82.0"
@@ -37,7 +38,7 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   WGPU_DX12_COMPILER: dxc
-  RUST_LOG: debug
+  RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: -D warnings
@@ -45,6 +46,13 @@ env:
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
   CACHE_SUFFIX: d # cache busting
   WGPU_CI: true
+
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
 # We distinguish the following kinds of builds:
 # - native: build for the same target as we compile on
@@ -115,60 +123,60 @@ jobs:
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             tier: 1
             kind: native
 
           - name: Linux aarch64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
             tier: 1
             kind: native
 
           # Android
           - name: Android aarch64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: aarch64-linux-android
             tier: 2
             kind: native
 
           # Android
           - name: Android ARMv7
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: armv7-linux-androideabi
             tier: 2
             kind: wgpu-only
 
           # Android
           - name: Android x86_64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: x86_64-linux-android
             tier: 2
             kind: wgpu-only
 
           # OpenHarmony
           - name: OpenHarmony aarch64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: aarch64-unknown-linux-ohos
             tier: 2
             kind: native
 
           # WebGPU/WebGL
           - name: WebAssembly
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: wasm32-unknown-unknown
             tier: 2
             kind: web
 
           - name: Emscripten
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: wasm32-unknown-emscripten
             tier: 2
             kind: wgpu-only
 
           - name: WebAssembly Core 1.0
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: wasm32v1-none
             tier: 2
             kind: no_std
@@ -176,7 +184,7 @@ jobs:
           # 32-bit PowerPC Linux
           # Included to test support for `portable-atomic`
           - name: Linux ppc32
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: powerpc-unknown-linux-gnu
             tier: 2
             kind: wgpu-only
@@ -357,7 +365,7 @@ jobs:
 
           # Linux
           - name: Linux x86_64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
 
     name: MSRV Check ${{ matrix.name }}
@@ -412,7 +420,7 @@ jobs:
     timeout-minutes: 10
 
     name: MSRV Minimal Versions
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       # Override flags to NOT include `-D warnings`, because warnings may be due to harmless problems in deps.
       # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.

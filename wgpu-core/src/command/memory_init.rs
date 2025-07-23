@@ -40,7 +40,7 @@ pub(crate) struct CommandBufferTextureMemoryActions {
 }
 
 impl CommandBufferTextureMemoryActions {
-    pub(crate) fn drain_init_actions(&mut self) -> Drain<TextureInitTrackerAction> {
+    pub(crate) fn drain_init_actions(&mut self) -> Drain<'_, TextureInitTrackerAction> {
         self.init_actions.drain(..)
     }
 

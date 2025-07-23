@@ -435,16 +435,20 @@ impl RenderBundleEncoder {
                     .map_pass_err(scope)?;
                 }
                 RenderCommand::DrawIndirect { .. }
-                | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
-                RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
-                RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
-                RenderCommand::PopDebugGroup => unimplemented!(),
+                | RenderCommand::MultiDrawIndirectCount { .. }
+                | RenderCommand::PushDebugGroup { color: _, len: _ }
+                | RenderCommand::InsertDebugMarker { color: _, len: _ }
+                | RenderCommand::PopDebugGroup => {
+                    unimplemented!("not supported by a render bundle")
+                }
                 // Must check the TIMESTAMP_QUERY_INSIDE_PASSES feature
                 RenderCommand::WriteTimestamp { .. }
                 | RenderCommand::BeginOcclusionQuery { .. }
                 | RenderCommand::EndOcclusionQuery
                 | RenderCommand::BeginPipelineStatisticsQuery { .. }
-                | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
+                | RenderCommand::EndPipelineStatisticsQuery => {
+                    unimplemented!("not supported by a render bundle")
+                }
                 RenderCommand::ExecuteBundle(_)
                 | RenderCommand::SetBlendConstant(_)
                 | RenderCommand::SetStencilReference(_)

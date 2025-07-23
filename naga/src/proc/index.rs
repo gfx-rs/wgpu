@@ -99,8 +99,8 @@ pub struct BoundsCheckPolicies {
     ///
     /// [`GlobalVariable`]: crate::GlobalVariable
     /// [`space`]: crate::GlobalVariable::space
-    /// [`Restrict`]: crate::back::BoundsCheckPolicy::Restrict
-    /// [`ReadZeroSkipWrite`]: crate::back::BoundsCheckPolicy::ReadZeroSkipWrite
+    /// [`Restrict`]: crate::proc::BoundsCheckPolicy::Restrict
+    /// [`ReadZeroSkipWrite`]: crate::proc::BoundsCheckPolicy::ReadZeroSkipWrite
     /// [`Access`]: crate::Expression::Access
     /// [`AccessIndex`]: crate::Expression::AccessIndex
     /// [`Storage`]: crate::AddressSpace::Storage

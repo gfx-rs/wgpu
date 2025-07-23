@@ -139,7 +139,7 @@ impl crate::Surface for super::Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
-        log::debug!("build swapchain {:?}", config);
+        log::debug!("build swapchain {config:?}");
 
         let caps = &device.shared.private_caps;
         *self.swapchain_format.write() = Some(config.format);

@@ -164,7 +164,7 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     }
     while let Some(handle) = module_tracer.functions_pending.pop() {
         let function = &module.functions[handle];
-        log::trace!("tracing function {:?}", function);
+        log::trace!("tracing function {function:?}");
         let mut function_tracer = module_tracer.as_function(function);
         function_tracer.trace();
         function_maps.insert(handle, FunctionMap::from(function_tracer));
@@ -460,7 +460,7 @@ impl<'module> ModuleTracer<'module> {
         }
     }
 
-    fn as_type(&mut self) -> types::TypeTracer {
+    fn as_type(&mut self) -> types::TypeTracer<'_> {
         types::TypeTracer {
             overrides: &self.module.overrides,
             types_used: &mut self.types_used,
@@ -469,7 +469,7 @@ impl<'module> ModuleTracer<'module> {
         }
     }
 
-    fn as_const_expression(&mut self) -> expressions::ExpressionTracer {
+    fn as_const_expression(&mut self) -> expressions::ExpressionTracer<'_> {
         expressions::ExpressionTracer {
             constants: &self.module.constants,
             overrides: &self.module.overrides,
@@ -680,7 +680,7 @@ fn type_expression_interdependence() {
     };
     let mut type_name_counter = 0;
     let mut type_needed = |module: &mut crate::Module, handle| {
-        let name = Some(format!("type{}", type_name_counter));
+        let name = Some(format!("type{type_name_counter}"));
         type_name_counter += 1;
         module.types.insert(
             crate::Type {
@@ -696,7 +696,7 @@ fn type_expression_interdependence() {
     };
     let mut override_name_counter = 0;
     let mut expression_needed = |module: &mut crate::Module, handle| {
-        let name = Some(format!("override{}", override_name_counter));
+        let name = Some(format!("override{override_name_counter}"));
         override_name_counter += 1;
         module.overrides.append(
             crate::Override {

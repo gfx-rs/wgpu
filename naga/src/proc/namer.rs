@@ -201,7 +201,7 @@ impl Namer {
         self.keywords_case_insensitive.extend(
             reserved_keywords_case_insensitive
                 .iter()
-                .map(|string| (AsciiUniCase(*string))),
+                .map(|string| AsciiUniCase(*string)),
         );
 
         // Choose fallback names for anonymous entry point return types.

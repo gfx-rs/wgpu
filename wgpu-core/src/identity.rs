@@ -33,7 +33,6 @@ enum IdSource {
 ///   ids with new index values. Freed vector entries get reused.
 ///
 /// [`Id`]: crate::id::Id
-/// [`Backend`]: wgt::Backend;
 /// [`alloc`]: IdentityValues::alloc
 /// [`release`]: IdentityValues::release
 #[derive(Debug)]

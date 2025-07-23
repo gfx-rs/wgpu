@@ -1176,6 +1176,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Ic::Depth { multi: true } => ("sampler", float, "MS", ""),
             Ic::Depth { multi: false } => ("sampler", float, "", "Shadow"),
             Ic::Storage { format, .. } => ("image", format.into(), "", ""),
+            Ic::External => unimplemented!(),
         };
 
         let precision = if self.options.version.is_es() {
@@ -1238,7 +1239,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         write!(self.out, "layout(")?;
 
                         if let Some(layout) = layout {
-                            write!(self.out, "{}, ", layout)?;
+                            write!(self.out, "{layout}, ")?;
                         }
 
                         write!(self.out, "binding = {binding}) ")?;
@@ -1255,7 +1256,7 @@ impl<'a, W: Write> Writer<'a, W> {
         // Either no explicit bindings are supported or we didn't have any.
         // Write just the memory layout.
         if let Some(layout) = layout {
-            write!(self.out, "layout({}) ", layout)?;
+            write!(self.out, "layout({layout}) ")?;
         }
 
         Ok(())
@@ -3302,6 +3303,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 write!(self.out, "imageSize(")?;
                                 self.write_expr(image, ctx)?;
                             }
+                            ImageClass::External => unimplemented!(),
                         }
                         write!(self.out, ")")?;
                         if components != 1 || self.options.version.is_es() {
@@ -3317,6 +3319,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         let fun_name = match class {
                             ImageClass::Sampled { .. } | ImageClass::Depth { .. } => "textureSize",
                             ImageClass::Storage { .. } => "imageSize",
+                            ImageClass::External => unimplemented!(),
                         };
                         write!(self.out, "{fun_name}(")?;
                         self.write_expr(image, ctx)?;
@@ -3336,6 +3339,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 "textureSamples"
                             }
                             ImageClass::Storage { .. } => "imageSamples",
+                            ImageClass::External => unimplemented!(),
                         };
                         write!(self.out, "{fun_name}(")?;
                         self.write_expr(image, ctx)?;
@@ -3698,11 +3702,11 @@ impl<'a, W: Write> Writer<'a, W> {
                             // `Dot4U8Packed`, the code below only introduces parenthesis around
                             // each factor, which aren't strictly needed because both operands are
                             // baked, but which don't hurt either.
-                            write!(self.out, "bitfieldExtract({}(", conversion)?;
+                            write!(self.out, "bitfieldExtract({conversion}(")?;
                             self.write_expr(arg, ctx)?;
                             write!(self.out, "), {}, 8)", i * 8)?;
 
-                            write!(self.out, " * bitfieldExtract({}(", conversion)?;
+                            write!(self.out, " * bitfieldExtract({conversion}(")?;
                             self.write_expr(arg1, ctx)?;
                             write!(self.out, "), {}, 8)", i * 8)?;
 
@@ -4618,6 +4622,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     "WGSL `textureLoad` from depth textures is not supported in GLSL".to_string(),
                 ))
             }
+            crate::ImageClass::External => unimplemented!(),
         };
 
         // openGL es doesn't have 1D images so we need workaround it
