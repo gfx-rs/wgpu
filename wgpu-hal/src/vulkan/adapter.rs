@@ -1161,13 +1161,14 @@ impl PhysicalDeviceProperties {
             .min(limits.max_compute_work_group_count[1])
             .min(limits.max_compute_work_group_count[2]);
 
-        // Prevent very large buffers on mesa and most android devices.
+        // Prevent very large buffers on mesa and most android devices, and in all cases
+        // don't risk confusing JS by exceeding the range of a double.
         let is_nvidia = self.properties.vendor_id == crate::auxil::db::nvidia::VENDOR;
         let max_buffer_size =
             if (cfg!(target_os = "linux") || cfg!(target_os = "android")) && !is_nvidia {
                 i32::MAX as u64
             } else {
-                u64::MAX
+                1u64 << 52
             };
 
         let mut max_binding_array_elements = 0;

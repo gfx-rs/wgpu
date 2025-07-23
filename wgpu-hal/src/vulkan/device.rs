@@ -236,7 +236,7 @@ impl super::DeviceShared {
         &self,
         buffer: &'a super::Buffer,
         ranges: I,
-    ) -> Option<impl 'a + Iterator<Item = vk::MappedMemoryRange>> {
+    ) -> Option<impl 'a + Iterator<Item = vk::MappedMemoryRange<'a>>> {
         let block = buffer.block.as_ref()?.lock();
         let mask = self.private_caps.non_coherent_map_mask;
         Some(ranges.map(move |range| {
