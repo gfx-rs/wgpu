@@ -392,8 +392,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         }
 
         // Write all globals
-        for (ty, _) in module.global_variables.iter() {
-            self.write_global(module, ty)?;
+        for (global, _) in module.global_variables.iter() {
+            self.write_global(module, global)?;
         }
 
         if !module.global_variables.is_empty() {
