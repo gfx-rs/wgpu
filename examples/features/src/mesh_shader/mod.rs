@@ -1,15 +1,15 @@
 use std::{io::Write, process::Stdio};
 
 // Same as in mesh shader tests
-fn compile_spv_asm(device: &wgpu::Device, data: &[u8]) -> wgpu::ShaderModule {
-    let cmd = std::process::Command::new("spirv-as")
-        .args(["-", "-o", "-"])
+fn compile_glsl(device: &wgpu::Device, data: &[u8]) -> wgpu::ShaderModule {
+    let cmd = std::process::Command::new("glslc")
+        .args(["-", "-o", "-", "--target-env=vulkan1.2"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
         .expect("Failed to call spirv-as");
     cmd.stdin.as_ref().unwrap().write_all(data).unwrap();
-    let output = cmd.wait_with_output().expect("Error waiting for spirv-as");
+    let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
         device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
@@ -37,9 +37,9 @@ impl crate::framework::Example for Example {
             push_constant_ranges: &[],
         });
         let (ts, ms, fs) = (
-            compile_spv_asm(device, include_bytes!("shader.task.spv.asm")),
-            compile_spv_asm(device, include_bytes!("shader.mesh.spv.asm")),
-            compile_spv_asm(device, include_bytes!("shader.frag.spv.asm")),
+            compile_glsl(device, include_bytes!("shader.task")),
+            compile_glsl(device, include_bytes!("shader.mesh")),
+            compile_glsl(device, include_bytes!("shader.frag")),
         );
         let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
             label: None,
@@ -70,9 +70,6 @@ impl crate::framework::Example for Example {
             cache: None,
         });
         Self { pipeline }
-    }
-    fn optional_features() -> wgpu::Features {
-        wgpu::Features::empty()
     }
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
