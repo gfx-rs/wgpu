@@ -1001,14 +1001,25 @@ pub struct Sampler {
 
 impl crate::DynSampler for Sampler {}
 
+/// Information about a binding within a specific BindGroupLayout / BindGroup.
+/// This will be used to construct a [`naga::back::spv::BindingInfo`], where
+/// the descriptor set value will be taken from the index of the group.
+#[derive(Copy, Clone, Debug)]
+struct BindingInfo {
+    binding: u32,
+    binding_array_size: Option<NonZeroU32>,
+}
+
 #[derive(Debug)]
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
     desc_count: gpu_descriptor::DescriptorTotalCount,
     /// Sorted list of entries.
     entries: Box<[wgt::BindGroupLayoutEntry]>,
-    /// Map of binding index to size,
-    binding_arrays: Vec<(u32, NonZeroU32)>,
+    /// Map of original binding index to remapped binding index and optional
+    /// array size.
+    binding_map: Vec<(u32, BindingInfo)>,
+    contains_binding_arrays: bool,
 }
 
 impl crate::DynBindGroupLayout for BindGroupLayout {}
@@ -1016,7 +1027,7 @@ impl crate::DynBindGroupLayout for BindGroupLayout {}
 #[derive(Debug)]
 pub struct PipelineLayout {
     raw: vk::PipelineLayout,
-    binding_arrays: naga::back::spv::BindingMap,
+    binding_map: naga::back::spv::BindingMap,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
