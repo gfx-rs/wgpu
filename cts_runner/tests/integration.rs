@@ -34,7 +34,7 @@ impl Display for JsError {
 
 impl Debug for JsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 

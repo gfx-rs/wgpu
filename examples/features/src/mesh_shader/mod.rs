@@ -8,7 +8,7 @@ fn compile_glsl(
 ) -> wgpu::ShaderModule {
     let cmd = std::process::Command::new("glslc")
         .args([
-            &format!("-fshader-stage={}", shader_stage),
+            &format!("-fshader-stage={shader_stage}"),
             "-",
             "-o",
             "-",
