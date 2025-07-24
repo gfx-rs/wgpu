@@ -1,14 +1,26 @@
 use std::{io::Write, process::Stdio};
 
 // Same as in mesh shader tests
-fn compile_glsl(device: &wgpu::Device, data: &[u8]) -> wgpu::ShaderModule {
+fn compile_glsl(
+    device: &wgpu::Device,
+    data: &[u8],
+    shader_stage: &'static str,
+) -> wgpu::ShaderModule {
     let cmd = std::process::Command::new("glslc")
-        .args(["-", "-o", "-", "--target-env=vulkan1.2"])
+        .args([
+            &format!("-fshader-stage={}", shader_stage),
+            "-",
+            "-o",
+            "-",
+            "--target-env=vulkan1.2",
+            "--target-spv=spv1.4",
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .expect("Failed to call spirv-as");
+        .expect("Failed to call glslc");
     cmd.stdin.as_ref().unwrap().write_all(data).unwrap();
+    println!("{shader_stage}");
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
@@ -37,9 +49,9 @@ impl crate::framework::Example for Example {
             push_constant_ranges: &[],
         });
         let (ts, ms, fs) = (
-            compile_glsl(device, include_bytes!("shader.task")),
-            compile_glsl(device, include_bytes!("shader.mesh")),
-            compile_glsl(device, include_bytes!("shader.frag")),
+            compile_glsl(device, include_bytes!("shader.task"), "task"),
+            compile_glsl(device, include_bytes!("shader.mesh"), "mesh"),
+            compile_glsl(device, include_bytes!("shader.frag"), "frag"),
         );
         let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
             label: None,
