@@ -75,17 +75,17 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_KHR_buffer_device_address`, promoted to Vulkan 1.2.
     ///
     /// We only use this feature for
-    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`], which requires
+    /// [`Features::EXPERIMENTAL_RAY_QUERY`], which requires
     /// `VK_KHR_acceleration_structure`, which depends on
     /// `VK_KHR_buffer_device_address`, so [`Instance::expose_adapter`] only
     /// bothers to check if `VK_KHR_acceleration_structure` is available,
     /// leaving this `None`.
     ///
     /// However, we do populate this when creating a device if
-    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] is requested.
+    /// [`Features::EXPERIMENTAL_RAY_QUERY`] is requested.
     ///
     /// [`Instance::expose_adapter`]: super::Instance::expose_adapter
-    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::EXPERIMENTAL_RAY_QUERY`]: wgt::Features::EXPERIMENTAL_RAY_QUERY
     buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR<'static>>,
 
     /// Features provided by `VK_KHR_ray_query`,
@@ -799,17 +799,17 @@ impl PhysicalDeviceFeatures {
 
         features.set(F::DEPTH32FLOAT_STENCIL8, texture_d32_s8);
 
-        features.set(
-            F::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-                | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
-            caps.supports_extension(khr::deferred_host_operations::NAME)
-                && caps.supports_extension(khr::acceleration_structure::NAME)
-                && caps.supports_extension(khr::buffer_device_address::NAME),
-        );
+        let supports_acceleration_structures = caps
+            .supports_extension(khr::deferred_host_operations::NAME)
+            && caps.supports_extension(khr::acceleration_structure::NAME)
+            && caps.supports_extension(khr::buffer_device_address::NAME);
 
         features.set(
-            F::EXPERIMENTAL_RAY_QUERY,
-            caps.supports_extension(khr::ray_query::NAME),
+            F::EXPERIMENTAL_RAY_QUERY
+            // Although this doesn't really require ray queries, it does not make sense to be enabled if acceleration structures
+            // aren't enabled.
+                | F::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+            supports_acceleration_structures && caps.supports_extension(khr::ray_query::NAME),
         );
 
         let rg11b10ufloat_renderable = supports_format(
@@ -1098,17 +1098,11 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::draw_indirect_count::NAME);
         }
 
-        // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` and `VK_KHR_buffer_device_address` if the feature `RAY_TRACING` was requested
-        if requested_features
-            .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-        {
+        // Require `VK_KHR_deferred_host_operations`, `VK_KHR_acceleration_structure` `VK_KHR_buffer_device_address` (for acceleration structures) and`VK_KHR_ray_query` if `EXPERIMENTAL_RAY_QUERY` was requested
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
             extensions.push(khr::deferred_host_operations::NAME);
             extensions.push(khr::acceleration_structure::NAME);
             extensions.push(khr::buffer_device_address::NAME);
-        }
-
-        // Require `VK_KHR_ray_query` if the associated feature was requested
-        if requested_features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
             extensions.push(khr::ray_query::NAME);
         }
 
@@ -1720,7 +1714,7 @@ impl super::Instance {
         };
         let queue_flags = queue_families.first()?.queue_flags;
         if !queue_flags.contains(vk::QueueFlags::GRAPHICS) {
-            log::warn!("The first queue only exposes {:?}", queue_flags);
+            log::warn!("The first queue only exposes {queue_flags:?}");
             return None;
         }
 
@@ -1848,10 +1842,10 @@ impl super::Adapter {
             });
 
         if !unsupported_extensions.is_empty() {
-            log::warn!("Missing extensions: {:?}", unsupported_extensions);
+            log::warn!("Missing extensions: {unsupported_extensions:?}");
         }
 
-        log::debug!("Supported extensions: {:?}", supported_extensions);
+        log::debug!("Supported extensions: {supported_extensions:?}");
         supported_extensions
     }
 
@@ -2188,6 +2182,9 @@ impl super::Adapter {
                 self.private_caps.maximum_samplers,
             )),
             memory_allocations_counter: Default::default(),
+
+            texture_identity_factory: super::ResourceIdentityFactory::new(),
+            texture_view_identity_factory: super::ResourceIdentityFactory::new(),
         });
 
         let relay_semaphores = super::RelaySemaphores::new(&shared)?;
@@ -2536,7 +2533,7 @@ impl crate::Adapter for super::Adapter {
                 Ok(true) => (),
                 Ok(false) => return None,
                 Err(e) => {
-                    log::error!("get_physical_device_surface_support: {}", e);
+                    log::error!("get_physical_device_surface_support: {e}");
                     return None;
                 }
             }
@@ -2551,7 +2548,7 @@ impl crate::Adapter for super::Adapter {
             } {
                 Ok(caps) => caps,
                 Err(e) => {
-                    log::error!("get_physical_device_surface_capabilities: {}", e);
+                    log::error!("get_physical_device_surface_capabilities: {e}");
                     return None;
                 }
             }
@@ -2585,7 +2582,7 @@ impl crate::Adapter for super::Adapter {
             } {
                 Ok(present_modes) => present_modes,
                 Err(e) => {
-                    log::error!("get_physical_device_surface_present_modes: {}", e);
+                    log::error!("get_physical_device_surface_present_modes: {e}");
                     // Per definition of `SurfaceCapabilities`, there must be at least one present mode.
                     return None;
                 }
@@ -2601,7 +2598,7 @@ impl crate::Adapter for super::Adapter {
             } {
                 Ok(formats) => formats,
                 Err(e) => {
-                    log::error!("get_physical_device_surface_formats: {}", e);
+                    log::error!("get_physical_device_surface_formats: {e}");
                     // Per definition of `SurfaceCapabilities`, there must be at least one present format.
                     return None;
                 }

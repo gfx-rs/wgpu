@@ -21,13 +21,13 @@ use crate::{
     device::{
         bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
     },
-    id::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId, TlasId},
+    id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
-        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        MissingTextureUsageError, RawResourceAccess, ResourceErrorIdent, Sampler, TextureView,
-        Tlas, TrackingData,
+        Buffer, DestroyedResourceError, ExternalTexture, InvalidResourceError, Labeled,
+        MissingBufferUsageError, MissingTextureUsageError, RawResourceAccess, ResourceErrorIdent,
+        Sampler, TextureView, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -95,8 +95,39 @@ impl WebGpuError for CreateBindGroupLayoutError {
     }
 }
 
-//TODO: refactor this to move out `enum BindingError`.
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum BindingError {
+    #[error(transparent)]
+    DestroyedResource(#[from] DestroyedResourceError),
+    #[error("Buffer {buffer}: Binding with size {binding_size} at offset {offset} would overflow buffer size of {buffer_size}")]
+    BindingRangeTooLarge {
+        buffer: ResourceErrorIdent,
+        offset: wgt::BufferAddress,
+        binding_size: u64,
+        buffer_size: u64,
+    },
+    #[error("Buffer {buffer}: Binding offset {offset} is greater than buffer size {buffer_size}")]
+    BindingOffsetTooLarge {
+        buffer: ResourceErrorIdent,
+        offset: wgt::BufferAddress,
+        buffer_size: u64,
+    },
+}
 
+impl WebGpuError for BindingError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
+            Self::BindingRangeTooLarge { .. } | Self::BindingOffsetTooLarge { .. } => {
+                ErrorType::Validation
+            }
+        }
+    }
+}
+
+// TODO: there may be additional variants here that can be extracted into
+// `BindingError`.
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateBindGroupError {
@@ -104,6 +135,8 @@ pub enum CreateBindGroupError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
+    #[error(transparent)]
+    BindingError(#[from] BindingError),
     #[error(
         "Binding count declared with at most {expected} items, but {actual} items were provided"
     )]
@@ -114,12 +147,6 @@ pub enum CreateBindGroupError {
     BindingArrayLengthMismatch { actual: usize, expected: usize },
     #[error("Array binding provided zero elements")]
     BindingArrayZeroLength,
-    #[error("The bound range {range:?} of {buffer} overflows its size ({size})")]
-    BindingRangeTooLarge {
-        buffer: ResourceErrorIdent,
-        range: Range<wgt::BufferAddress>,
-        size: u64,
-    },
     #[error("Binding size {actual} of {buffer} is less than minimum {min}")]
     BindingSizeTooSmall {
         buffer: ResourceErrorIdent,
@@ -234,6 +261,7 @@ impl WebGpuError for CreateBindGroupError {
         let e: &dyn WebGpuError = match self {
             Self::Device(e) => e,
             Self::DestroyedResource(e) => e,
+            Self::BindingError(e) => e,
             Self::MissingBufferUsage(e) => e,
             Self::MissingTextureUsage(e) => e,
             Self::ResourceUsageCompatibility(e) => e,
@@ -241,7 +269,6 @@ impl WebGpuError for CreateBindGroupError {
             Self::BindingArrayPartialLengthMismatch { .. }
             | Self::BindingArrayLengthMismatch { .. }
             | Self::BindingArrayZeroLength
-            | Self::BindingRangeTooLarge { .. }
             | Self::BindingSizeTooSmall { .. }
             | Self::BindingsNumMismatch { .. }
             | Self::BindingZeroSize(_)
@@ -567,8 +594,14 @@ impl BindingTypeMaxCountValidator {
 /// cbindgen:ignore
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BindGroupEntry<'a, B = BufferId, S = SamplerId, TV = TextureViewId, TLAS = TlasId>
-where
+pub struct BindGroupEntry<
+    'a,
+    B = BufferId,
+    S = SamplerId,
+    TV = TextureViewId,
+    TLAS = TlasId,
+    ET = ExternalTextureId,
+> where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
@@ -581,15 +614,21 @@ where
     pub binding: u32,
     #[cfg_attr(
         feature = "serde",
-        serde(bound(deserialize = "BindingResource<'a, B, S, TV, TLAS>: Deserialize<'de>"))
+        serde(bound(deserialize = "BindingResource<'a, B, S, TV, TLAS, ET>: Deserialize<'de>"))
     )]
     /// Resource to attach to the binding
-    pub resource: BindingResource<'a, B, S, TV, TLAS>,
+    pub resource: BindingResource<'a, B, S, TV, TLAS, ET>,
 }
 
 /// cbindgen:ignore
-pub type ResolvedBindGroupEntry<'a> =
-    BindGroupEntry<'a, Arc<Buffer>, Arc<Sampler>, Arc<TextureView>, Arc<Tlas>>;
+pub type ResolvedBindGroupEntry<'a> = BindGroupEntry<
+    'a,
+    Arc<Buffer>,
+    Arc<Sampler>,
+    Arc<TextureView>,
+    Arc<Tlas>,
+    Arc<ExternalTexture>,
+>;
 
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug)]
@@ -601,6 +640,7 @@ pub struct BindGroupDescriptor<
     S = SamplerId,
     TV = TextureViewId,
     TLAS = TlasId,
+    ET = ExternalTextureId,
 > where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
@@ -608,8 +648,8 @@ pub struct BindGroupDescriptor<
     <[BufferBinding<B>] as ToOwned>::Owned: fmt::Debug,
     <[S] as ToOwned>::Owned: fmt::Debug,
     <[TV] as ToOwned>::Owned: fmt::Debug,
-    [BindGroupEntry<'a, B, S, TV, TLAS>]: ToOwned,
-    <[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: fmt::Debug,
+    [BindGroupEntry<'a, B, S, TV, TLAS, ET>]: ToOwned,
+    <[BindGroupEntry<'a, B, S, TV, TLAS, ET>] as ToOwned>::Owned: fmt::Debug,
 {
     /// Debug label of the bind group.
     ///
@@ -620,11 +660,12 @@ pub struct BindGroupDescriptor<
     #[cfg_attr(
         feature = "serde",
         serde(bound(
-            deserialize = "<[BindGroupEntry<'a, B, S, TV, TLAS>] as ToOwned>::Owned: Deserialize<'de>"
+            deserialize = "<[BindGroupEntry<'a, B, S, TV, TLAS, ET>] as ToOwned>::Owned: Deserialize<'de>"
         ))
     )]
     /// The resources to bind to this bind group.
-    pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS>]>,
+    #[allow(clippy::type_complexity)]
+    pub entries: Cow<'a, [BindGroupEntry<'a, B, S, TV, TLAS, ET>]>,
 }
 
 /// cbindgen:ignore
@@ -635,6 +676,7 @@ pub type ResolvedBindGroupDescriptor<'a> = BindGroupDescriptor<
     Arc<Sampler>,
     Arc<TextureView>,
     Arc<Tlas>,
+    Arc<ExternalTexture>,
 >;
 
 /// Describes a [`BindGroupLayout`].
@@ -978,8 +1020,14 @@ pub type ResolvedBufferBinding = BufferBinding<Arc<Buffer>>;
 // They're different enough that it doesn't make sense to share a common type
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum BindingResource<'a, B = BufferId, S = SamplerId, TV = TextureViewId, TLAS = TlasId>
-where
+pub enum BindingResource<
+    'a,
+    B = BufferId,
+    S = SamplerId,
+    TV = TextureViewId,
+    TLAS = TlasId,
+    ET = ExternalTextureId,
+> where
     [BufferBinding<B>]: ToOwned,
     [S]: ToOwned,
     [TV]: ToOwned,
@@ -1006,10 +1054,17 @@ where
     )]
     TextureViewArray(Cow<'a, [TV]>),
     AccelerationStructure(TLAS),
+    ExternalTexture(ET),
 }
 
-pub type ResolvedBindingResource<'a> =
-    BindingResource<'a, Arc<Buffer>, Arc<Sampler>, Arc<TextureView>, Arc<Tlas>>;
+pub type ResolvedBindingResource<'a> = BindingResource<
+    'a,
+    Arc<Buffer>,
+    Arc<Sampler>,
+    Arc<TextureView>,
+    Arc<Tlas>,
+    Arc<ExternalTexture>,
+>;
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]

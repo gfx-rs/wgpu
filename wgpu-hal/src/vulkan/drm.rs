@@ -54,7 +54,7 @@ impl super::Instance {
         let raw_devices = match unsafe { self.shared.raw.enumerate_physical_devices() } {
             Ok(devices) => devices,
             Err(err) => {
-                log::error!("enumerate_adapters: {}", err);
+                log::error!("enumerate_adapters: {err}");
                 Vec::new()
             }
         };

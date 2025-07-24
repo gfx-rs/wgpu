@@ -226,8 +226,7 @@ impl SamplerHeap {
         let Entry::Occupied(mut hash_map_entry) = state.mapping.entry(HashableSamplerDesc(desc))
         else {
             log::error!(
-                "Tried to destroy a sampler that doesn't exist. Sampler description: {:#?}",
-                desc
+                "Tried to destroy a sampler that doesn't exist. Sampler description: {desc:#?}"
             );
             return;
         };

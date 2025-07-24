@@ -13,11 +13,11 @@ OpExecutionMode %8 LocalSize 1 1 1
 %6 = OpTypeInt 32 1
 %5 = OpTypeVector %6 2
 %9 = OpTypeFunction %2
-%10 = OpConstant  %4  1.0
+%10 = OpConstant  %4  1
 %11 = OpConstant  %6  1
 %12 = OpConstant  %6  2
 %13 = OpConstantComposite  %5  %11 %12
-%14 = OpConstant  %4  0.0
+%14 = OpConstant  %4  0
 %15 = OpConstantComposite  %3  %10 %14
 %16 = OpConstantComposite  %3  %14 %10
 %18 = OpTypePointer Function %5

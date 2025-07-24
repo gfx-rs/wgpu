@@ -6,7 +6,6 @@ use hal::DynResource;
 use crate::{
     device::Device,
     global::Global,
-    hal_api::HalApi,
     id::{
         AdapterId, BlasId, BufferId, CommandEncoderId, DeviceId, QueueId, SurfaceId, TextureId,
         TextureViewId, TlasId,
@@ -226,7 +225,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw buffer handle must not be manually destroyed
-    pub unsafe fn buffer_as_hal<A: HalApi>(
+    pub unsafe fn buffer_as_hal<A: hal::Api>(
         &self,
         id: BufferId,
     ) -> Option<impl Deref<Target = A::Buffer>> {
@@ -242,7 +241,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw texture handle must not be manually destroyed
-    pub unsafe fn texture_as_hal<A: HalApi>(
+    pub unsafe fn texture_as_hal<A: hal::Api>(
         &self,
         id: TextureId,
     ) -> Option<impl Deref<Target = A::Texture>> {
@@ -258,7 +257,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw texture view handle must not be manually destroyed
-    pub unsafe fn texture_view_as_hal<A: HalApi>(
+    pub unsafe fn texture_view_as_hal<A: hal::Api>(
         &self,
         id: TextureViewId,
     ) -> Option<impl Deref<Target = A::TextureView>> {
@@ -274,7 +273,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw adapter handle must not be manually destroyed
-    pub unsafe fn adapter_as_hal<A: HalApi>(
+    pub unsafe fn adapter_as_hal<A: hal::Api>(
         &self,
         id: AdapterId,
     ) -> Option<impl Deref<Target = A::Adapter>> {
@@ -291,7 +290,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw device handle must not be manually destroyed
-    pub unsafe fn device_as_hal<A: HalApi>(
+    pub unsafe fn device_as_hal<A: hal::Api>(
         &self,
         id: DeviceId,
     ) -> Option<impl Deref<Target = A::Device>> {
@@ -305,7 +304,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw fence handle must not be manually destroyed
-    pub unsafe fn device_fence_as_hal<A: HalApi>(
+    pub unsafe fn device_fence_as_hal<A: hal::Api>(
         &self,
         id: DeviceId,
     ) -> Option<impl Deref<Target = A::Fence>> {
@@ -318,7 +317,7 @@ impl Global {
 
     /// # Safety
     /// - The raw surface handle must not be manually destroyed
-    pub unsafe fn surface_as_hal<A: HalApi>(
+    pub unsafe fn surface_as_hal<A: hal::Api>(
         &self,
         id: SurfaceId,
     ) -> Option<impl Deref<Target = A::Surface>> {
@@ -335,7 +334,7 @@ impl Global {
     ///
     /// - The raw command encoder handle must not be manually destroyed
     pub unsafe fn command_encoder_as_hal_mut<
-        A: HalApi,
+        A: hal::Api,
         F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
         R,
     >(
@@ -347,8 +346,8 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_buffers.get(id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_as_hal_mut(|opt_cmd_buf| -> R {
             hal_command_encoder_callback(opt_cmd_buf.and_then(|cmd_buf| {
                 cmd_buf
@@ -363,7 +362,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw queue handle must not be manually destroyed
-    pub unsafe fn queue_as_hal<A: HalApi>(
+    pub unsafe fn queue_as_hal<A: hal::Api>(
         &self,
         id: QueueId,
     ) -> Option<impl Deref<Target = A::Queue>> {
@@ -377,7 +376,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw blas handle must not be manually destroyed
-    pub unsafe fn blas_as_hal<A: HalApi>(
+    pub unsafe fn blas_as_hal<A: hal::Api>(
         &self,
         id: BlasId,
     ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
@@ -393,7 +392,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw tlas handle must not be manually destroyed
-    pub unsafe fn tlas_as_hal<A: HalApi>(
+    pub unsafe fn tlas_as_hal<A: hal::Api>(
         &self,
         id: TlasId,
     ) -> Option<impl Deref<Target = A::AccelerationStructure>> {

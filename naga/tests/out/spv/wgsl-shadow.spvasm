@@ -267,8 +267,8 @@ OpDecorate %227 Location 0
 %40 = OpTypePointer UniformConstant %21
 %39 = OpVariable  %40  UniformConstant
 %45 = OpTypeFunction %4 %7 %6
-%48 = OpConstant  %4  0.0
-%49 = OpConstant  %4  1.0
+%48 = OpConstant  %4  0
+%49 = OpConstant  %4  1
 %50 = OpConstant  %4  0.5
 %51 = OpConstant  %4  -0.5
 %52 = OpConstantComposite  %22  %50 %51

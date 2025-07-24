@@ -294,13 +294,10 @@ fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> Option<H
                 log.write_acquisition(held_lock, new_rank, location);
             }
 
-            core::mem::replace(
-                held_lock,
-                Some(HeldLock {
-                    rank: new_rank,
-                    location,
-                }),
-            )
+            held_lock.replace(HeldLock {
+                rank: new_rank,
+                location,
+            })
         }
     })
 }

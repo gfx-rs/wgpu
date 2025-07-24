@@ -159,10 +159,8 @@ static QUERY_SET_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
 static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            .features(Features::EXPERIMENTAL_RAY_QUERY)
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
-            // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "AMD"))
             // see comment at the top of the file
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )
@@ -203,10 +201,8 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
 static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            .features(Features::EXPERIMENTAL_RAY_QUERY)
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
-            // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "AMD"))
             // see comment at the top of the file
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )

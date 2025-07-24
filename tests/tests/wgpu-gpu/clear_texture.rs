@@ -209,12 +209,7 @@ async fn single_texture_clear_test(
     size: wgpu::Extent3d,
     dimension: wgpu::TextureDimension,
 ) {
-    log::info!(
-        "clearing texture with {:?}, dimension {:?}, size {:?}",
-        format,
-        dimension,
-        size
-    );
+    log::info!("clearing texture with {format:?}, dimension {dimension:?}, size {size:?}");
 
     let extra_usages = match format {
         wgpu::TextureFormat::Depth24Plus | wgpu::TextureFormat::Depth24PlusStencil8 => {

@@ -17,11 +17,12 @@ use wgt::{
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::BindGroup,
+    binding_model::{BindGroup, BindingError},
     device::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
         DeviceMismatch, HostMap, MissingDownlevelFlags, MissingFeatures,
     },
+    hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     lock::{rank, Mutex, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
@@ -494,6 +495,82 @@ impl Buffer {
         }
     }
 
+    /// Resolve the size of a binding for buffer with `offset` and `size`.
+    ///
+    /// If `size` is `None`, then the remainder of the buffer starting from
+    /// `offset` is used.
+    ///
+    /// If the binding would overflow the buffer, then an error is returned.
+    ///
+    /// Zero-size bindings are permitted here for historical reasons. Although
+    /// zero-size bindings are permitted by WebGPU, they are not permitted by
+    /// some backends. See [`Buffer::binding`] and
+    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+    pub fn resolve_binding_size(
+        &self,
+        offset: wgt::BufferAddress,
+        binding_size: Option<wgt::BufferSize>,
+    ) -> Result<u64, BindingError> {
+        let buffer_size = self.size;
+
+        match binding_size {
+            Some(binding_size) => match offset.checked_add(binding_size.get()) {
+                Some(end) if end <= buffer_size => Ok(binding_size.get()),
+                _ => Err(BindingError::BindingRangeTooLarge {
+                    buffer: self.error_ident(),
+                    offset,
+                    binding_size: binding_size.get(),
+                    buffer_size,
+                }),
+            },
+            None => {
+                buffer_size
+                    .checked_sub(offset)
+                    .ok_or_else(|| BindingError::BindingOffsetTooLarge {
+                        buffer: self.error_ident(),
+                        offset,
+                        buffer_size,
+                    })
+            }
+        }
+    }
+
+    /// Create a new [`hal::BufferBinding`] for the buffer with `offset` and
+    /// `binding_size`.
+    ///
+    /// If `binding_size` is `None`, then the remainder of the buffer starting
+    /// from `offset` is used.
+    ///
+    /// If the binding would overflow the buffer, then an error is returned.
+    ///
+    /// A zero-size binding at the end of the buffer is permitted here for historical reasons. Although
+    /// zero-size bindings are permitted by WebGPU, they are not permitted by
+    /// some backends. The zero-size binding need to be quashed or remapped to a
+    /// non-zero size, either universally in wgpu-core, or in specific backends
+    /// that do not support them. See
+    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+    ///
+    /// Although it seems like it would be simpler and safer to use the resolved
+    /// size in the returned [`hal::BufferBinding`], doing this (and removing
+    /// redundant logic in backends to resolve the implicit size) was observed
+    /// to cause problems in certain CTS tests, so an implicit size
+    /// specification is preserved in the output.
+    pub fn binding<'a>(
+        &'a self,
+        offset: wgt::BufferAddress,
+        binding_size: Option<wgt::BufferSize>,
+        snatch_guard: &'a SnatchGuard,
+    ) -> Result<(hal::BufferBinding<'a, dyn hal::DynBuffer>, u64), BindingError> {
+        let buf_raw = self.try_raw(snatch_guard)?;
+        let resolved_size = self.resolve_binding_size(offset, binding_size)?;
+        // SAFETY: The offset and size passed to hal::BufferBinding::new_unchecked must
+        // define a binding contained within the buffer.
+        Ok((
+            hal::BufferBinding::new_unchecked(buf_raw, offset, binding_size),
+            resolved_size,
+        ))
+    }
+
     /// Returns the mapping callback in case of error so that the callback can be fired outside
     /// of the locks that are held in this function.
     pub(crate) fn map_async(
@@ -941,7 +1018,7 @@ impl StagingBuffer {
     pub(crate) fn new(device: &Arc<Device>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
         profiling::scope!("StagingBuffer::new");
         let stage_desc = hal::BufferDescriptor {
-            label: crate::hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
+            label: hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
             size: size.get(),
             usage: wgt::BufferUses::MAP_WRITE | wgt::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,
@@ -1000,6 +1077,13 @@ impl StagingBuffer {
         size: usize,
     ) {
         unsafe {
+            debug_assert!(
+                (src_offset + size as isize) as usize <= data.len(),
+                "src_offset + size must be in-bounds: src_offset = {}, size = {}, data.len() = {}",
+                src_offset,
+                size,
+                data.len()
+            );
             core::ptr::copy_nonoverlapping(
                 data.as_ptr().offset(src_offset),
                 self.ptr.as_ptr().offset(dst_offset),
@@ -1711,6 +1795,100 @@ crate::impl_labeled!(TextureView);
 crate::impl_parent_device!(TextureView);
 crate::impl_storage_item!(TextureView);
 crate::impl_trackable!(TextureView);
+
+pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;
+
+#[derive(Debug)]
+pub struct ExternalTexture {
+    pub(crate) device: Arc<Device>,
+    /// Between 1 and 3 (inclusive) planes of texture data.
+    pub(crate) planes: arrayvec::ArrayVec<Arc<TextureView>, 3>,
+    /// Buffer containing a [`crate::device::resource::ExternalTextureParams`]
+    /// describing the external texture.
+    pub(crate) params: Arc<Buffer>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
+}
+
+impl Drop for ExternalTexture {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw {}", self.error_ident());
+    }
+}
+
+impl ExternalTexture {
+    pub(crate) fn destroy(self: &Arc<Self>) {
+        self.params.destroy();
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum CreateExternalTextureError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    CreateBuffer(#[from] CreateBufferError),
+    #[error(transparent)]
+    QueueWrite(#[from] queue::QueueWriteError),
+    #[error("External texture format {format:?} expects {expected} planes, but given {provided}")]
+    IncorrectPlaneCount {
+        format: wgt::ExternalTextureFormat,
+        expected: usize,
+        provided: usize,
+    },
+    #[error("External texture planes cannot be multisampled, but given view with samples = {0}")]
+    InvalidPlaneMultisample(u32),
+    #[error("External texture planes expect a filterable float sample type, but given view with format {format:?} (sample type {sample_type:?})")]
+    InvalidPlaneSampleType {
+        format: wgt::TextureFormat,
+        sample_type: wgt::TextureSampleType,
+    },
+    #[error("External texture planes expect 2D dimension, but given view with dimension = {0:?}")]
+    InvalidPlaneDimension(wgt::TextureViewDimension),
+    #[error(transparent)]
+    MissingTextureUsage(#[from] MissingTextureUsageError),
+    #[error("External texture format {format:?} plane {plane} expects format with {expected} components but given view with format {provided:?} ({} components)",
+        provided.components())]
+    InvalidPlaneFormat {
+        format: wgt::ExternalTextureFormat,
+        plane: usize,
+        expected: u8,
+        provided: wgt::TextureFormat,
+    },
+}
+
+impl WebGpuError for CreateExternalTextureError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            CreateExternalTextureError::Device(e) => e,
+            CreateExternalTextureError::MissingFeatures(e) => e,
+            CreateExternalTextureError::InvalidResource(e) => e,
+            CreateExternalTextureError::CreateBuffer(e) => e,
+            CreateExternalTextureError::QueueWrite(e) => e,
+            CreateExternalTextureError::MissingTextureUsage(e) => e,
+            CreateExternalTextureError::IncorrectPlaneCount { .. }
+            | CreateExternalTextureError::InvalidPlaneMultisample(_)
+            | CreateExternalTextureError::InvalidPlaneSampleType { .. }
+            | CreateExternalTextureError::InvalidPlaneDimension(_)
+            | CreateExternalTextureError::InvalidPlaneFormat { .. } => {
+                return ErrorType::Validation
+            }
+        };
+        e.webgpu_error_type()
+    }
+}
+
+crate::impl_resource_type!(ExternalTexture);
+crate::impl_labeled!(ExternalTexture);
+crate::impl_parent_device!(ExternalTexture);
+crate::impl_storage_item!(ExternalTexture);
+crate::impl_trackable!(ExternalTexture);
 
 /// Describes a [`Sampler`]
 #[derive(Clone, Debug, PartialEq)]

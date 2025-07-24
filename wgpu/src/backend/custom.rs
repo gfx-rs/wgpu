@@ -79,6 +79,7 @@ dyn_type!(pub ref struct DynTextureView(dyn TextureViewInterface));
 dyn_type!(pub ref struct DynSampler(dyn SamplerInterface));
 dyn_type!(pub ref struct DynBuffer(dyn BufferInterface));
 dyn_type!(pub ref struct DynTexture(dyn TextureInterface));
+dyn_type!(pub ref struct DynExternalTexture(dyn ExternalTextureInterface));
 dyn_type!(pub ref struct DynBlas(dyn BlasInterface));
 dyn_type!(pub ref struct DynTlas(dyn TlasInterface));
 dyn_type!(pub ref struct DynQuerySet(dyn QuerySetInterface));

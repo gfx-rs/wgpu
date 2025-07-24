@@ -14,7 +14,9 @@ use winit::{
 
 use std::{
     borrow::{Borrow, Cow},
-    iter, ptr,
+    iter,
+    num::NonZeroU64,
+    ptr,
     time::Instant,
 };
 
@@ -121,7 +123,7 @@ impl<A: hal::Api> Example<A> {
 
         let surface_caps = unsafe { adapter.surface_capabilities(&surface) }
             .ok_or("failed to get surface capabilities")?;
-        log::info!("Surface caps: {:#?}", surface_caps);
+        log::info!("Surface caps: {surface_caps:#?}");
 
         let hal::OpenDevice { device, queue } = unsafe {
             adapter
@@ -447,11 +449,12 @@ impl<A: hal::Api> Example<A> {
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
         let global_group = {
-            let global_buffer_binding = hal::BufferBinding {
-                buffer: &global_buffer,
-                offset: 0,
-                size: None,
-            };
+            // SAFETY: This is the same size that was specified for buffer creation.
+            let global_buffer_binding = hal::BufferBinding::new_unchecked(
+                &global_buffer,
+                0,
+                NonZeroU64::new(global_buffer_desc.size),
+            );
             let texture_binding = hal::TextureBinding {
                 view: &texture_view,
                 usage: wgpu_types::TextureUses::RESOURCE,
@@ -463,6 +466,7 @@ impl<A: hal::Api> Example<A> {
                 samplers: &[&sampler],
                 textures: &[texture_binding],
                 acceleration_structures: &[],
+                external_textures: &[],
                 entries: &[
                     hal::BindGroupEntry {
                         binding: 0,
@@ -485,11 +489,12 @@ impl<A: hal::Api> Example<A> {
         };
 
         let local_group = {
-            let local_buffer_binding = hal::BufferBinding {
-                buffer: &local_buffer,
-                offset: 0,
-                size: wgpu_types::BufferSize::new(size_of::<Locals>() as _),
-            };
+            // SAFETY: The size must fit within the buffer.
+            let local_buffer_binding = hal::BufferBinding::new_unchecked(
+                &local_buffer,
+                0,
+                wgpu_types::BufferSize::new(size_of::<Locals>() as _),
+            );
             let local_group_desc = hal::BindGroupDescriptor {
                 label: Some("local"),
                 layout: &local_group_layout,
@@ -497,6 +502,7 @@ impl<A: hal::Api> Example<A> {
                 samplers: &[],
                 textures: &[],
                 acceleration_structures: &[],
+                external_textures: &[],
                 entries: &[hal::BindGroupEntry {
                     binding: 0,
                     resource_index: 0,

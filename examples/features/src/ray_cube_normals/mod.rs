@@ -113,7 +113,7 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
         let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
         inner.poll(cx).map(|error| {
             if let Some(e) = error {
-                panic!("Rendering {}", e);
+                panic!("Rendering {e}");
             }
         })
     }
@@ -133,9 +133,7 @@ impl crate::framework::Example for Example {
     // Don't want srgb, so normals show up better.
     const SRGB: bool = false;
     fn required_features() -> wgpu::Features {
-        wgpu::Features::EXPERIMENTAL_RAY_QUERY
-            | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-            | wgpu::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN
+        wgpu::Features::EXPERIMENTAL_RAY_QUERY | wgpu::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {

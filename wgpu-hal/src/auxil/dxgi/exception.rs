@@ -80,7 +80,7 @@ unsafe extern "system" fn output_debug_string_handler(
     }
 
     let _ = std::panic::catch_unwind(|| {
-        log::log!(level, "{}", message);
+        log::log!(level, "{message}");
     });
 
     #[cfg(feature = "validation_canary")]

@@ -135,14 +135,12 @@ impl Draw {
                 resource_index: 0,
                 count: 1,
             }],
-            buffers: &[hal::BufferBinding {
-                buffer,
-                offset: 0,
-                size: Some(binding_size),
-            }],
+            // SAFETY: We calculated the binding size to fit within the buffer.
+            buffers: &[hal::BufferBinding::new_unchecked(buffer, 0, binding_size)],
             samplers: &[],
             textures: &[],
             acceleration_structures: &[],
+            external_textures: &[],
         };
         unsafe {
             device
@@ -512,7 +510,7 @@ fn create_validation_module(
                 CreateShaderModuleError::Device(DeviceError::from_hal(error))
             }
             hal::ShaderError::Compilation(ref msg) => {
-                log::error!("Shader error: {}", msg);
+                log::error!("Shader error: {msg}");
                 CreateShaderModuleError::Generation
             }
         },
@@ -684,14 +682,16 @@ fn create_buffer_and_bind_group(
             resource_index: 0,
             count: 1,
         }],
-        buffers: &[hal::BufferBinding {
-            buffer: buffer.as_ref(),
-            offset: 0,
-            size: Some(BUFFER_SIZE),
-        }],
+        // SAFETY: We just created the buffer with this size.
+        buffers: &[hal::BufferBinding::new_unchecked(
+            buffer.as_ref(),
+            0,
+            BUFFER_SIZE,
+        )],
         samplers: &[],
         textures: &[],
         acceleration_structures: &[],
+        external_textures: &[],
     };
     let bind_group = unsafe { device.create_bind_group(&bind_group_desc) }?;
     Ok(BufferPoolEntry { buffer, bind_group })

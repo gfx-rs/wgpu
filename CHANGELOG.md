@@ -40,6 +40,44 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+#### `EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE` has been merged into `EXPERIMENTAL_RAY_QUERY`
+
+We have merged the acceleration structure feature into the `RayQuery` feature. This is to help work around an AMD driver bug and reduce the feature complexity of ray tracing. In the future when ray tracing pipelines are implemented, if either feature is enabled, acceleration structures will be available.
+
+```diff
+- Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
++ Features::EXPERIMENTAL_RAY_QUERY
+```
+
+By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
+
+### Changes
+
+#### Naga
+
+Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
+
+## v26.0.2 (2025-07-23)
+
+### Bug Fixes
+
+- Fixed vulkan validation error regarding the swapchain in latest SDK. By @cwfitzgerald in [#7971](https://github.com/gfx-rs/wgpu/pull/7971).
+- Fixed flickering on AMD devices and crashes inside Renderdoc due to incorrect caching of `VkFramebuffer`s when the driver re-used image view handles. By @cwfitzgerald in [#7972](https://github.com/gfx-rs/wgpu/pull/7972).
+> [!WARNING]
+> There is formally a breaking change in `wgpu_hal::vulkan::Device::texture_from_raw` as there is now a `&self` receiver where
+> there previously wasn't one. This will not affect you unless you explicitly use this api. We have gone ahead with the release
+> as the bug was pervasive and made wgpu unusable for the affected people on v26.
+
+## v26.0.1 (2025-07-10)
+
+### Bug Fixes
+
+- Fixed build error inside `wgpu::util::initialize_adapter_from_env` when `std` feature is not enabled. By @kpreid in [#7918](https://github.com/gfx-rs/wgpu/pull/7918).
+- Fixed build error occurring when the `profiling` dependency is configured to have profiling active. By @kpreid in [#7916](https://github.com/gfx-rs/wgpu/pull/7916).
+- Emit a validation error instead of panicking when a query set index is OOB. By @ErichDonGubler in [#7908](https://github.com/gfx-rs/wgpu/pull/7908).
+
 ## v26.0.0 (2025-07-09)
 
 ### Major Features

@@ -67,17 +67,14 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
 
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(
             |cmd_buf_data| -> Result<(), BuildAccelerationStructureError> {
-                let device = &cmd_buf.device;
+                let device = &cmd_enc.device;
                 device.check_is_valid()?;
-                device
-                    .require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+                device.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
                 let mut build_command = AsBuild::default();
 
@@ -110,9 +107,7 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
 
         let mut build_command = AsBuild::default();
 
@@ -202,7 +197,7 @@ impl Global {
             }
         });
 
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
@@ -212,9 +207,9 @@ impl Global {
                 });
             }
 
-            let device = &cmd_buf.device;
+            let device = &cmd_enc.device;
             device.check_is_valid()?;
-            device.require_features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)?;
+            device.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
             let mut buf_storage = Vec::new();
             iter_blas(

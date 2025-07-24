@@ -6,9 +6,10 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     api_log,
     command::EncoderStateError,
-    device::DeviceError,
+    device::{DeviceError, MissingFeatures},
     get_lowest_common_denom,
     global::Global,
+    hal_label,
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
@@ -30,10 +31,10 @@ use wgt::{
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ClearError {
-    #[error("To use clear_texture the CLEAR_TEXTURE feature needs to be enabled")]
-    MissingClearTextureFeature,
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
     #[error("{0} can not be cleared")]
     NoValidTextureClearMode(ResourceErrorIdent),
     #[error("Buffer clear size {0:?} is not a multiple of `COPY_BUFFER_ALIGNMENT`")]
@@ -84,12 +85,12 @@ impl WebGpuError for ClearError {
     fn webgpu_error_type(&self) -> ErrorType {
         let e: &dyn WebGpuError = match self {
             Self::DestroyedResource(e) => e,
+            Self::MissingFeatures(e) => e,
             Self::MissingBufferUsage(e) => e,
             Self::Device(e) => e,
             Self::EncoderState(e) => e,
             Self::InvalidResource(e) => e,
             Self::NoValidTextureClearMode(..)
-            | Self::MissingClearTextureFeature
             | Self::UnalignedFillSize(..)
             | Self::UnalignedBufferOffset(..)
             | Self::OffsetPlusSizeExceeds64BitBounds { .. }
@@ -115,21 +116,19 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::ClearBuffer { dst, offset, size });
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
             let dst_buffer = hub.buffers.get(dst).get()?;
 
-            dst_buffer.same_device_as(cmd_buf.as_ref())?;
+            dst_buffer.same_device_as(cmd_enc.as_ref())?;
 
             let dst_pending = cmd_buf_data
                 .trackers
@@ -202,10 +201,8 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
@@ -215,15 +212,15 @@ impl Global {
                 });
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
-            if !cmd_buf.support_clear_texture {
-                return Err(ClearError::MissingClearTextureFeature);
-            }
+            cmd_enc
+                .device
+                .require_features(wgt::Features::CLEAR_TEXTURE)?;
 
             let dst_texture = hub.textures.get(dst).get()?;
 
-            dst_texture.same_device_as(cmd_buf.as_ref())?;
+            dst_texture.same_device_as(cmd_enc.as_ref())?;
 
             // Check if subresource aspects are valid.
             let clear_aspects =
@@ -260,7 +257,7 @@ impl Global {
                 });
             }
 
-            let device = &cmd_buf.device;
+            let device = &cmd_enc.device;
             device.check_is_valid()?;
             let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
 
@@ -276,6 +273,7 @@ impl Global {
                 &device.alignments,
                 device.zero_buffer.as_ref(),
                 &snatch_guard,
+                device.instance_flags,
             )?;
 
             Ok(())
@@ -291,6 +289,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
     alignments: &hal::Alignments,
     zero_buffer: &dyn hal::DynBuffer,
     snatch_guard: &SnatchGuard<'_>,
+    instance_flags: wgt::InstanceFlags,
 ) -> Result<(), ClearError> {
     let dst_raw = dst_texture.try_raw(snatch_guard)?;
 
@@ -349,11 +348,11 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
         ),
         TextureClearMode::Surface { .. } => {
             drop(clear_mode);
-            clear_texture_via_render_passes(dst_texture, range, true, encoder)?
+            clear_texture_via_render_passes(dst_texture, range, true, encoder, instance_flags)?
         }
         TextureClearMode::RenderPass { is_color, .. } => {
             drop(clear_mode);
-            clear_texture_via_render_passes(dst_texture, range, is_color, encoder)?
+            clear_texture_via_render_passes(dst_texture, range, is_color, encoder, instance_flags)?
         }
         TextureClearMode::None => {
             return Err(ClearError::NoValidTextureClearMode(
@@ -463,6 +462,7 @@ fn clear_texture_via_render_passes(
     range: TextureInitRange,
     is_color: bool,
     encoder: &mut dyn hal::DynCommandEncoder,
+    instance_flags: wgt::InstanceFlags,
 ) -> Result<(), ClearError> {
     assert_eq!(dst_texture.desc.dimension, wgt::TextureDimension::D2);
 
@@ -517,7 +517,10 @@ fn clear_texture_via_render_passes(
             unsafe {
                 encoder
                     .begin_render_pass(&hal::RenderPassDescriptor {
-                        label: Some("(wgpu internal) clear_texture clear pass"),
+                        label: hal_label(
+                            Some("(wgpu internal) clear_texture clear pass"),
+                            instance_flags,
+                        ),
                         extent,
                         sample_count: dst_texture.desc.sample_count,
                         color_attachments,

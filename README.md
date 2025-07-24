@@ -149,8 +149,8 @@ On Linux, you can point to them using `LD_LIBRARY_PATH` environment.
 
 Due to complex dependants, we have two MSRV policies:
 
-- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.76**.
-- The rest of the workspace has an MSRV of **1.84**.
+- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.82**.
+- The rest of the workspace has an MSRV of **1.88**.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.

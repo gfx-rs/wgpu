@@ -36,6 +36,7 @@ use wgt::PushConstantRange;
 
 use crate::{
     device::{Device, DeviceError},
+    hal_label,
     pipeline::{CreateComputePipelineError, CreateShaderModuleError},
     resource::Buffer,
     snatch::SnatchGuard,
@@ -112,7 +113,10 @@ impl TimestampNormalizer {
             let temporary_bind_group_layout = device
                 .raw()
                 .create_bind_group_layout(&hal::BindGroupLayoutDescriptor {
-                    label: Some("Timestamp Normalization Bind Group Layout"),
+                    label: hal_label(
+                        Some("Timestamp Normalization Bind Group Layout"),
+                        device.instance_flags,
+                    ),
                     flags: hal::BindGroupLayoutFlags::empty(),
                     entries: &[wgt::BindGroupLayoutEntry {
                         binding: 0,
@@ -177,7 +181,7 @@ impl TimestampNormalizer {
                         CreateShaderModuleError::Device(device.handle_hal_error(error))
                     }
                     hal::ShaderError::Compilation(ref msg) => {
-                        log::error!("Shader error: {}", msg);
+                        log::error!("Shader error: {msg}");
                         CreateShaderModuleError::Generation
                     }
                 })?;
@@ -242,12 +246,16 @@ impl TimestampNormalizer {
         }
     }
 
-    pub fn create_normalization_bind_group(
+    /// Create a bind group for normalizing timestamps in `buffer`.
+    ///
+    /// This function is unsafe because it does not know that `buffer_size` is
+    /// the true size of the buffer.
+    pub unsafe fn create_normalization_bind_group(
         &self,
         device: &Device,
         buffer: &dyn hal::DynBuffer,
         buffer_label: Option<&str>,
-        buffer_size: u64,
+        buffer_size: wgt::BufferSize,
         buffer_usages: wgt::BufferUsages,
     ) -> Result<TimestampNormalizationBindGroup, DeviceError> {
         unsafe {
@@ -263,15 +271,14 @@ impl TimestampNormalizer {
             // at once to normalize the timestamps, we can't use it. We force the buffer to fail
             // to allocate. The lowest max binding size is 128MB, and query sets must be small
             // (no more than 4096), so this should never be hit in practice by sane programs.
-            if buffer_size > device.adapter.limits().max_storage_buffer_binding_size as u64 {
+            if buffer_size.get() > device.adapter.limits().max_storage_buffer_binding_size as u64 {
                 return Err(DeviceError::OutOfMemory);
             }
 
             let bg_label_alloc;
             let label = match buffer_label {
                 Some(label) => {
-                    bg_label_alloc =
-                        alloc::format!("Timestamp normalization bind group ({})", label);
+                    bg_label_alloc = alloc::format!("Timestamp normalization bind group ({label})");
                     &*bg_label_alloc
                 }
                 None => "Timestamp normalization bind group",
@@ -280,16 +287,13 @@ impl TimestampNormalizer {
             let bg = device
                 .raw()
                 .create_bind_group(&hal::BindGroupDescriptor {
-                    label: Some(label),
+                    label: hal_label(Some(label), device.instance_flags),
                     layout: &*state.temporary_bind_group_layout,
-                    buffers: &[hal::BufferBinding {
-                        buffer,
-                        offset: 0,
-                        size: None,
-                    }],
+                    buffers: &[hal::BufferBinding::new_unchecked(buffer, 0, buffer_size)],
                     samplers: &[],
                     textures: &[],
                     acceleration_structures: &[],
+                    external_textures: &[],
                     entries: &[hal::BindGroupEntry {
                         binding: 0,
                         resource_index: 0,
@@ -331,7 +335,10 @@ impl TimestampNormalizer {
         unsafe {
             encoder.transition_buffers(barrier.as_slice());
             encoder.begin_compute_pass(&hal::ComputePassDescriptor {
-                label: Some("Timestamp normalization pass"),
+                label: hal_label(
+                    Some("Timestamp normalization pass"),
+                    buffer.device.instance_flags,
+                ),
                 timestamp_writes: None,
             });
             encoder.set_compute_pipeline(&*state.pipeline);

@@ -321,6 +321,7 @@ impl Display for TypeContext<'_> {
                         };
                         ("texture", "", format.into(), access)
                     }
+                    crate::ImageClass::External => unimplemented!(),
                 };
                 let base_name = scalar.to_msl_name();
                 let array_str = if arrayed { "_array" } else { "" };
@@ -1150,7 +1151,7 @@ impl<W: Write> Writer<W> {
                 //TODO: do we support Zero on `Sampled` image classes?
             }
             _ if !has_levels => {
-                log::warn!("1D image can't be sampled with level {:?}", level);
+                log::warn!("1D image can't be sampled with level {level:?}");
             }
             crate::SampleLevel::Exact(h) => {
                 write!(self.out, ", {NAMESPACE}::level(")?;
@@ -1397,7 +1398,7 @@ impl<W: Write> Writer<W> {
         } else {
             fun.to_msl()
         };
-        write!(self.out, ".atomic_{}(", op)?;
+        write!(self.out, ".atomic_{op}(")?;
         // coordinates in IR are int, but Metal expects uint
         self.put_cast_to_uint_scalar_or_vector(address.coordinate, &context.expression)?;
         write!(self.out, ", ")?;
@@ -2352,7 +2353,7 @@ impl<W: Write> Writer<W> {
                                 arg1.unwrap(),
                                 4,
                                 |writer, arg, index| {
-                                    write!(writer.out, "({}(", conversion)?;
+                                    write!(writer.out, "({conversion}(")?;
                                     writer.put_expression(arg, context, true)?;
                                     if index == 3 {
                                         write!(writer.out, ") >> 24)")?;
@@ -3420,7 +3421,7 @@ impl<W: Write> Writer<W> {
                 put_numeric_type(&mut self.out, scalar, &[rows, columns])?;
             }
             TypeResolution::Value(ref other) => {
-                log::warn!("Type {:?} isn't a known local", other); //TEMP!
+                log::warn!("Type {other:?} isn't a known local"); //TEMP!
                 return Err(Error::FeatureNotImplemented("weird local type".to_string()));
             }
         }
@@ -6637,6 +6638,7 @@ template <typename A>
                                             "read-write textures".to_string(),
                                         ));
                                     }
+                                    crate::ImageClass::External => unimplemented!(),
                                 },
                                 _ => {
                                     return Err(Error::UnsupportedArrayOfType(base));

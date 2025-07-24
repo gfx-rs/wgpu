@@ -89,7 +89,7 @@ pub fn enumerate_adapters(factory: DxgiFactory) -> Vec<DxgiAdapter> {
             Ok(a) => a,
             Err(e) if e.code() == Dxgi::DXGI_ERROR_NOT_FOUND => break,
             Err(e) => {
-                log::error!("Failed enumerating adapters: {}", e);
+                log::error!("Failed enumerating adapters: {e}");
                 break;
             }
         };

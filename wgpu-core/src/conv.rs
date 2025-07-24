@@ -2,6 +2,9 @@ use wgt::TextureFormatFeatures;
 
 use crate::resource::{self, TextureDescriptor};
 
+// Some core-only texture format helpers. The helper methods on `TextureFormat`
+// defined in wgpu-types may need to be modified along with the ones here.
+
 pub fn is_valid_copy_src_texture_format(
     format: wgt::TextureFormat,
     aspect: wgt::TextureAspect,

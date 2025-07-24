@@ -116,11 +116,7 @@ fn map_utf16_to_utf8_offset(utf16_offset: u32, text: &str) -> u32 {
     if utf16_i >= utf16_offset {
         text.len() as u32
     } else {
-        log::error!(
-            "UTF16 offset {} is out of bounds for string {}",
-            utf16_offset,
-            text
-        );
+        log::error!("UTF16 offset {utf16_offset} is out of bounds for string {text}");
         u32::MAX
     }
 }
@@ -1270,6 +1266,12 @@ pub struct WebTexture {
 }
 
 #[derive(Debug)]
+pub struct WebExternalTexture {
+    /// Unique identifier for this ExternalTexture.
+    ident: crate::cmp::Identifier,
+}
+
+#[derive(Debug)]
 pub struct WebBlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
@@ -1402,6 +1404,7 @@ impl_send_sync!(WebTextureView);
 impl_send_sync!(WebSampler);
 impl_send_sync!(WebBuffer);
 impl_send_sync!(WebTexture);
+impl_send_sync!(WebExternalTexture);
 impl_send_sync!(WebBlas);
 impl_send_sync!(WebTlas);
 impl_send_sync!(WebQuerySet);
@@ -1431,6 +1434,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebTextureView => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebSampler => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBuffer => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebTexture => .ident);
+crate::cmp::impl_eq_ord_hash_proxy!(WebExternalTexture => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBlas => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebTlas => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebQuerySet => .ident);
@@ -2019,6 +2023,9 @@ impl dispatch::DeviceInterface for WebDevice {
                     crate::BindingResource::AccelerationStructure(_) => {
                         unimplemented!("Raytracing not implemented for web")
                     }
+                    crate::BindingResource::ExternalTexture(_) => {
+                        unimplemented!("ExternalTexture not implemented for web")
+                    }
                 };
 
                 webgpu_sys::GpuBindGroupEntry::new(binding.binding, &mapped_resource)
@@ -2260,6 +2267,14 @@ impl dispatch::DeviceInterface for WebDevice {
         .into()
     }
 
+    fn create_external_texture(
+        &self,
+        _desc: &crate::ExternalTextureDescriptor<'_>,
+        _planes: &[&crate::TextureView],
+    ) -> dispatch::DispatchExternalTexture {
+        unimplemented!("ExternalTexture not implemented for web");
+    }
+
     fn create_blas(
         &self,
         _desc: &crate::CreateBlasDescriptor<'_>,
@@ -2389,6 +2404,9 @@ impl dispatch::DeviceInterface for WebDevice {
             );
         });
         let _ = self.inner.lost().then(&closure);
+        // Release memory management of this closure from Rust to the JS GC.
+        // TODO: This will leak if weak references is not supported.
+        closure.forget();
     }
 
     fn on_uncaptured_error(&self, handler: Box<dyn crate::UncapturedErrorHandler>) {
@@ -2398,7 +2416,8 @@ impl dispatch::DeviceInterface for WebDevice {
         }) as Box<dyn FnMut(_)>);
         self.inner
             .set_onuncapturederror(Some(f.as_ref().unchecked_ref()));
-        // TODO: This will leak the memory associated with the error handler by default.
+        // Release memory management of this closure from Rust to the JS GC.
+        // TODO: This will leak if weak references is not supported.
         f.forget();
     }
 
@@ -2506,16 +2525,12 @@ impl dispatch::QueueInterface for WebQueue {
         }
         let write_size = u64::from(size);
         if write_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            log::error!(
-                "Copy size {} does not respect `COPY_BUFFER_ALIGNMENT`",
-                size
-            );
+            log::error!("Copy size {size} does not respect `COPY_BUFFER_ALIGNMENT`");
             return None;
         }
         if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             log::error!(
-                "Buffer offset {} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`",
-                offset
+                "Buffer offset {offset} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`"
             );
             return None;
         }
@@ -2613,7 +2628,7 @@ impl dispatch::QueueInterface for WebQueue {
             match wasm_bindgen_futures::JsFuture::from(promise).await {
                 Ok(_) => callback(),
                 Err(error) => {
-                    log::error!("on_submitted_work_done promise failed: {:?}", error);
+                    log::error!("on_submitted_work_done promise failed: {error:?}");
                     callback();
                 }
             }
@@ -2769,6 +2784,17 @@ impl dispatch::TextureInterface for WebTexture {
 impl Drop for WebTexture {
     fn drop(&mut self) {
         // no-op
+    }
+}
+
+impl dispatch::ExternalTextureInterface for WebExternalTexture {
+    fn destroy(&self) {
+        unimplemented!("ExternalTexture not implemented for web");
+    }
+}
+impl Drop for WebExternalTexture {
+    fn drop(&mut self) {
+        unimplemented!("ExternalTexture not implemented for web");
     }
 }
 

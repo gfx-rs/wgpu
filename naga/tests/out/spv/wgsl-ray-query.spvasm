@@ -43,7 +43,7 @@ OpMemberDecorate %18 0 Offset 0
 %2 = OpTypeVoid
 %3 = OpTypeFloat 32
 %4 = OpTypeVector %3 3
-%5 = OpTypeAccelerationStructureNV
+%5 = OpTypeAccelerationStructureKHR
 %6 = OpTypeInt 32 0
 %7 = OpTypeVector %3 2
 %8 = OpTypeBool
@@ -62,7 +62,7 @@ OpMemberDecorate %18 0 Offset 0
 %27 = OpConstant  %6  4
 %28 = OpConstant  %6  255
 %29 = OpConstant  %3  0.1
-%30 = OpConstant  %3  100.0
+%30 = OpConstant  %3  100
 %32 = OpTypePointer Function %11
 %45 = OpTypeVector %6 2
 %46 = OpTypePointer Function %45
@@ -89,9 +89,9 @@ OpMemberDecorate %18 0 Offset 0
 %113 = OpConstant  %6  7
 %115 = OpConstant  %6  8
 %123 = OpTypeFunction %4 %4 %10
-%124 = OpConstant  %3  1.0
+%124 = OpConstant  %3  1
 %125 = OpConstant  %3  2.4
-%126 = OpConstant  %3  0.0
+%126 = OpConstant  %3  0
 %141 = OpTypeFunction %2
 %143 = OpTypePointer StorageBuffer %13
 %145 = OpConstantComposite  %4  %126 %126 %126
@@ -99,7 +99,7 @@ OpMemberDecorate %18 0 Offset 0
 %149 = OpTypePointer StorageBuffer %6
 %154 = OpTypePointer StorageBuffer %4
 %162 = OpConstantComposite  %12  %27 %28 %29 %30 %145 %146
-%163 = OpConstant  %3  10.0
+%163 = OpConstant  %3  10
 %76 = OpFunction  %10  None %75
 %78 = OpFunctionParameter  %32
 %79 = OpLabel

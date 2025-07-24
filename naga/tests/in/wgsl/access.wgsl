@@ -35,6 +35,9 @@ var<uniform> baz: Baz;
 var<storage,read_write> qux: vec2<i32>;
 
 fn test_matrix_within_struct_accesses() {
+    // Test HLSL accesses to Cx2 matrices. There are additional tests
+    // in `hlsl_mat_cx2.wgsl`.
+
     var idx = 1;
 
     idx--;

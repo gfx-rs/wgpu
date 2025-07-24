@@ -190,10 +190,6 @@ pub type ImplicitBindGroupCount = u8;
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImplicitLayoutError {
-    #[error("The implicit_pipeline_ids arg is required")]
-    MissingImplicitPipelineIds,
-    #[error("Missing IDs for deriving {0} bind groups")]
-    MissingIds(ImplicitBindGroupCount),
     #[error("Unable to reflect the shader {0:?} interface")]
     ReflectionError(wgt::ShaderStages),
     #[error(transparent)]
@@ -205,9 +201,7 @@ pub enum ImplicitLayoutError {
 impl WebGpuError for ImplicitLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
         let e: &dyn WebGpuError = match self {
-            Self::MissingImplicitPipelineIds | Self::MissingIds(_) | Self::ReflectionError(_) => {
-                return ErrorType::Validation
-            }
+            Self::ReflectionError(_) => return ErrorType::Validation,
             Self::BindGroup(e) => e,
             Self::Pipeline(e) => e,
         };
@@ -369,6 +363,17 @@ pub struct VertexBufferLayout<'a> {
     pub step_mode: wgt::VertexStepMode,
     /// The list of attributes which comprise a single vertex.
     pub attributes: Cow<'a, [wgt::VertexAttribute]>,
+}
+
+/// A null vertex buffer layout that may be placed in unused slots.
+impl Default for VertexBufferLayout<'_> {
+    fn default() -> Self {
+        Self {
+            array_stride: Default::default(),
+            step_mode: Default::default(),
+            attributes: Cow::Borrowed(&[]),
+        }
+    }
 }
 
 /// Describes the vertex process in a render pipeline.
@@ -627,7 +632,7 @@ pub enum CreateRenderPipelineError {
         given: u32,
         limit: u32,
     },
-    #[error("Vertex buffer {index} stride {stride} does not respect `VERTEX_STRIDE_ALIGNMENT`")]
+    #[error("Vertex buffer {index} stride {stride} does not respect `VERTEX_ALIGNMENT`")]
     UnalignedVertexStride {
         index: u32,
         stride: wgt::BufferAddress,

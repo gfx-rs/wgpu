@@ -188,9 +188,18 @@ impl super::Swapchain {
         };
 
         // We cannot take this by value, as the function returns `self`.
-        for semaphore in self.surface_semaphores.drain(..) {
+        for semaphore in self.acquire_semaphores.drain(..) {
             let arc_removed = Arc::into_inner(semaphore).expect(
-                "Trying to destroy a SurfaceSemaphores that is still in use by a SurfaceTexture",
+                "Trying to destroy a SurfaceAcquireSemaphores that is still in use by a SurfaceTexture",
+            );
+            let mutex_removed = arc_removed.into_inner();
+
+            unsafe { mutex_removed.destroy(device) };
+        }
+
+        for semaphore in self.present_semaphores.drain(..) {
+            let arc_removed = Arc::into_inner(semaphore).expect(
+                "Trying to destroy a SurfacePresentSemaphores that is still in use by a SurfaceTexture",
             );
             let mutex_removed = arc_removed.into_inner();
 
@@ -360,7 +369,7 @@ impl super::Instance {
         has_nv_optimus: bool,
         drop_callback: Option<crate::DropCallback>,
     ) -> Result<Self, crate::InstanceError> {
-        log::debug!("Instance version: 0x{:x}", instance_api_version);
+        log::debug!("Instance version: 0x{instance_api_version:x}");
 
         let debug_utils = if let Some(debug_utils_create_info) = debug_utils_create_info {
             if extensions.contains(&ext::debug_utils::NAME) {
@@ -664,7 +673,7 @@ impl super::Instance {
             unsafe { entry.enumerate_instance_layer_properties() }
         };
         let instance_layers = instance_layers.map_err(|e| {
-            log::debug!("enumerate_instance_layer_properties: {:?}", e);
+            log::debug!("enumerate_instance_layer_properties: {e:?}");
             crate::InstanceError::with_source(
                 String::from("enumerate_instance_layer_properties() failed"),
                 e,
@@ -962,7 +971,7 @@ impl crate::Instance for super::Instance {
         let raw_devices = match unsafe { self.shared.raw.enumerate_physical_devices() } {
             Ok(devices) => devices,
             Err(err) => {
-                log::error!("enumerate_adapters: {}", err);
+                log::error!("enumerate_adapters: {err}");
                 Vec::new()
             }
         };
@@ -1074,9 +1083,9 @@ impl crate::Surface for super::Surface {
             timeout_ns = u64::MAX;
         }
 
-        let swapchain_semaphores_arc = swapchain.get_surface_semaphores();
+        let acquire_semaphore_arc = swapchain.get_acquire_semaphore();
         // Nothing should be using this, so we don't block, but panic if we fail to lock.
-        let locked_swapchain_semaphores = swapchain_semaphores_arc
+        let acquire_semaphore_guard = acquire_semaphore_arc
             .try_lock()
             .expect("Failed to lock a SwapchainSemaphores.");
 
@@ -1095,7 +1104,7 @@ impl crate::Surface for super::Surface {
         // `vkAcquireNextImageKHR` again.
         swapchain.device.wait_for_fence(
             fence,
-            locked_swapchain_semaphores.previously_used_submission_index,
+            acquire_semaphore_guard.previously_used_submission_index,
             timeout_ns,
         )?;
 
@@ -1105,7 +1114,7 @@ impl crate::Surface for super::Surface {
             swapchain.functor.acquire_next_image(
                 swapchain.raw,
                 timeout_ns,
-                locked_swapchain_semaphores.acquire,
+                acquire_semaphore_guard.acquire,
                 vk::Fence::null(),
             )
         } {
@@ -1129,15 +1138,19 @@ impl crate::Surface for super::Surface {
             }
         };
 
-        drop(locked_swapchain_semaphores);
+        drop(acquire_semaphore_guard);
         // We only advance the surface semaphores if we successfully acquired an image, otherwise
         // we should try to re-acquire using the same semaphores.
-        swapchain.advance_surface_semaphores();
+        swapchain.advance_acquire_semaphore();
+
+        let present_semaphore_arc = swapchain.get_present_semaphores(index);
 
         // special case for Intel Vulkan returning bizarre values (ugh)
         if swapchain.device.vendor_id == crate::auxil::db::intel::VENDOR && index > 0x100 {
             return Err(crate::SurfaceError::Outdated);
         }
+
+        let identity = swapchain.device.texture_identity_factory.next();
 
         let texture = super::SurfaceTexture {
             index,
@@ -1152,8 +1165,10 @@ impl crate::Surface for super::Surface {
                     height: swapchain.config.extent.height,
                     depth: 1,
                 },
+                identity,
             },
-            surface_semaphores: swapchain_semaphores_arc,
+            acquire_semaphores: acquire_semaphore_arc,
+            present_semaphores: present_semaphore_arc,
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,

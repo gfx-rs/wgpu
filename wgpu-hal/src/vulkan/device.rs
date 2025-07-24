@@ -573,16 +573,19 @@ impl super::Device {
         let images =
             unsafe { functor.get_swapchain_images(raw) }.map_err(super::map_host_device_oom_err)?;
 
-        // NOTE: It's important that we define at least images.len() wait
-        // semaphores, since we prospectively need to provide the call to
-        // acquire the next image with an unsignaled semaphore.
-        let surface_semaphores = (0..=images.len())
-            .map(|_| {
-                super::SwapchainImageSemaphores::new(&self.shared)
+        // NOTE: It's important that we define the same number of acquire/present semaphores
+        // as we will need to index into them with the image index.
+        let acquire_semaphores = (0..=images.len())
+            .map(|i| {
+                super::SwapchainAcquireSemaphore::new(&self.shared, i)
                     .map(Mutex::new)
                     .map(Arc::new)
             })
             .collect::<Result<Vec<_>, _>>()?;
+
+        let present_semaphores = (0..=images.len())
+            .map(|i| Arc::new(Mutex::new(super::SwapchainPresentSemaphores::new(i))))
+            .collect::<Vec<_>>();
 
         Ok(super::Swapchain {
             raw,
@@ -590,8 +593,9 @@ impl super::Device {
             device: Arc::clone(&self.shared),
             images,
             config: config.clone(),
-            surface_semaphores,
-            next_semaphore_index: 0,
+            acquire_semaphores,
+            next_acquire_index: 0,
+            present_semaphores,
             next_present_time: None,
         })
     }
@@ -603,6 +607,7 @@ impl super::Device {
     ///   `drop_callback` is [`Some`], `vk_image` must be valid until the callback is called.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
     pub unsafe fn texture_from_raw(
+        &self,
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
         drop_callback: Option<crate::DropCallback>,
@@ -624,6 +629,8 @@ impl super::Device {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
         }
 
+        let identity = self.shared.texture_identity_factory.next();
+
         let drop_guard = crate::DropGuard::from_option(drop_callback);
 
         super::Texture {
@@ -633,6 +640,7 @@ impl super::Device {
             block: None,
             format: desc.format,
             copy_size: desc.copy_extent(),
+            identity,
         }
     }
 
@@ -796,6 +804,8 @@ impl super::Device {
             unsafe { self.shared.set_object_name(image.raw, label) };
         }
 
+        let identity = self.shared.texture_identity_factory.next();
+
         self.counters.textures.add(1);
 
         Ok(super::Texture {
@@ -805,6 +815,7 @@ impl super::Device {
             block: None,
             format: desc.format,
             copy_size: image.copy_size,
+            identity,
         })
     }
 
@@ -1274,6 +1285,8 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(image.raw, label) };
         }
 
+        let identity = self.shared.texture_identity_factory.next();
+
         self.counters.textures.add(1);
 
         Ok(super::Texture {
@@ -1283,6 +1296,7 @@ impl crate::Device for super::Device {
             block: Some(block),
             format: desc.format,
             copy_size: image.copy_size,
+            identity,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
@@ -1335,6 +1349,8 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
+        let identity = self.shared.texture_view_identity_factory.next();
+
         self.counters.texture_views.add(1);
 
         Ok(super::TextureView {
@@ -1345,6 +1361,8 @@ impl crate::Device for super::Device {
             raw_format,
             base_mip_level: desc.range.base_mip_level,
             dimension: desc.dimension,
+            texture_identity: texture.identity,
+            view_identity: identity,
         })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
@@ -2829,11 +2847,19 @@ impl crate::Device for super::Device {
 }
 
 impl super::DeviceShared {
-    pub(super) fn new_binary_semaphore(&self) -> Result<vk::Semaphore, crate::DeviceError> {
+    pub(super) fn new_binary_semaphore(
+        &self,
+        name: &str,
+    ) -> Result<vk::Semaphore, crate::DeviceError> {
         unsafe {
-            self.raw
+            let semaphore = self
+                .raw
                 .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
-                .map_err(super::map_host_device_oom_err)
+                .map_err(super::map_host_device_oom_err)?;
+
+            self.set_object_name(semaphore, name);
+
+            Ok(semaphore)
         }
     }
 

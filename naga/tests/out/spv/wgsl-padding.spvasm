@@ -107,7 +107,7 @@ OpDecorate %25 BuiltIn Position
 %30 = OpConstant  %10  0
 %32 = OpTypePointer Uniform %11
 %34 = OpTypePointer Uniform %13
-%36 = OpConstant  %4  1.0
+%36 = OpConstant  %4  1
 %37 = OpConstantComposite  %14  %36 %36 %36 %36
 %39 = OpTypePointer Uniform %4
 %40 = OpConstant  %10  1

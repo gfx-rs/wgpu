@@ -31,6 +31,8 @@ pub struct Fence {
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Noop;
+
     type Instance = Context;
     type Surface = Context;
     type Adapter = Context;

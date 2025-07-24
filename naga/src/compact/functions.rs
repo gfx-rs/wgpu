@@ -56,7 +56,7 @@ impl FunctionTracer<'_> {
         self.as_expression().trace_expressions();
     }
 
-    fn as_expression(&mut self) -> super::expressions::ExpressionTracer {
+    fn as_expression(&mut self) -> super::expressions::ExpressionTracer<'_> {
         super::expressions::ExpressionTracer {
             constants: self.constants,
             overrides: self.overrides,

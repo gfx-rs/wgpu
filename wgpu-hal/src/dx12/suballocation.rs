@@ -106,7 +106,7 @@ impl Allocator {
         };
 
         let allocator = gpu_allocator::d3d12::Allocator::new(&allocator_desc).inspect_err(|e| {
-            log::error!("Failed to create d3d12 allocator, error: {}", e);
+            log::error!("Failed to create d3d12 allocator, error: {e}");
         })?;
 
         Ok(Self {
@@ -627,7 +627,7 @@ impl From<gpu_allocator::AllocationError> for crate::DeviceError {
         match result {
             gpu_allocator::AllocationError::OutOfMemory => Self::OutOfMemory,
             gpu_allocator::AllocationError::FailedToMap(e) => {
-                log::error!("DX12 gpu-allocator: Failed to map: {}", e);
+                log::error!("DX12 gpu-allocator: Failed to map: {e}");
                 Self::Lost
             }
             gpu_allocator::AllocationError::NoCompatibleMemoryTypeFound => {
@@ -639,15 +639,12 @@ impl From<gpu_allocator::AllocationError> for crate::DeviceError {
                 Self::Lost
             }
             gpu_allocator::AllocationError::InvalidAllocatorCreateDesc(e) => {
-                log::error!(
-                    "DX12 gpu-allocator: Invalid Allocator Creation Description: {}",
-                    e
-                );
+                log::error!("DX12 gpu-allocator: Invalid Allocator Creation Description: {e}");
                 Self::Lost
             }
 
             gpu_allocator::AllocationError::Internal(e) => {
-                log::error!("DX12 gpu-allocator: Internal Error: {}", e);
+                log::error!("DX12 gpu-allocator: Internal Error: {e}");
                 Self::Lost
             }
             gpu_allocator::AllocationError::BarrierLayoutNeedsDevice10

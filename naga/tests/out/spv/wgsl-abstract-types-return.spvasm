@@ -20,7 +20,7 @@ OpDecorate %7 ArrayStride 4
 %16 = OpTypeFunction %4
 %17 = OpConstant  %4  1
 %21 = OpTypeFunction %5
-%22 = OpConstant  %5  1.0
+%22 = OpConstant  %5  1
 %29 = OpTypeFunction %6
 %30 = OpConstantComposite  %6  %22 %22
 %34 = OpTypeFunction %7

@@ -3,8 +3,6 @@ use core::{fmt, num::NonZeroU32};
 
 use crate::{
     binding_model,
-    hub::Hub,
-    id::{BindGroupLayoutId, PipelineLayoutId},
     ray_tracing::BlasCompactReadyPendingClosure,
     resource::{
         Buffer, BufferAccessError, BufferAccessResult, BufferMapOperation, Labeled,
@@ -385,32 +383,19 @@ impl WebGpuError for MissingDownlevelFlags {
     }
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ImplicitPipelineContext {
-    pub root_id: PipelineLayoutId,
-    pub group_ids: ArrayVec<BindGroupLayoutId, { hal::MAX_BIND_GROUPS }>,
-}
-
-pub struct ImplicitPipelineIds<'a> {
-    pub root_id: PipelineLayoutId,
-    pub group_ids: &'a [BindGroupLayoutId],
-}
-
-impl ImplicitPipelineIds<'_> {
-    fn prepare(self, hub: &Hub) -> ImplicitPipelineContext {
-        ImplicitPipelineContext {
-            root_id: hub.pipeline_layouts.prepare(Some(self.root_id)).id(),
-            group_ids: self
-                .group_ids
-                .iter()
-                .map(|id_in| hub.bind_group_layouts.prepare(Some(*id_in)).id())
-                .collect(),
-        }
-    }
-}
-
-/// Create a validator with the given validation flags.
+/// Create a validator for Naga [`Module`]s.
+///
+/// Create a Naga [`Validator`] that ensures that each [`naga::Module`]
+/// presented to it is valid, and uses no features not included in
+/// `features` and `downlevel`.
+///
+/// The validator can only catch invalid modules and feature misuse
+/// reliably when the `flags` argument includes all the flags in
+/// [`ValidationFlags::default()`].
+///
+/// [`Validator`]: naga::valid::Validator
+/// [`Module`]: naga::Module
+/// [`ValidationFlags::default()`]: naga::valid::ValidationFlags::default
 pub fn create_validator(
     features: wgt::Features,
     downlevel: wgt::DownlevelFlags,
@@ -520,6 +505,10 @@ pub fn create_validator(
     caps.set(
         Caps::RAY_HIT_VERTEX_POSITION,
         features.intersects(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN),
+    );
+    caps.set(
+        Caps::TEXTURE_EXTERNAL,
+        features.intersects(wgt::Features::EXTERNAL_TEXTURE),
     );
 
     naga::valid::Validator::new(flags, caps)

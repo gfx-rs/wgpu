@@ -100,8 +100,8 @@ OpMemberDecorate %41 0 Offset 0
 %20 = OpTypeArray %3 %21
 %22 = OpTypeStruct %20
 %23 = OpTypeStruct %3 %3 %8 %3 %3 %4
-%24 = OpConstant  %3  2.1524e-41
-%25 = OpConstant  %3  2.7121e-41
+%24 = OpConstant  %3  0.000000000000000000000000000000000000000021524
+%25 = OpConstant  %3  0.000000000000000000000000000000000000000027121
 %27 = OpTypePointer Private %3
 %26 = OpVariable  %27  Private %24
 %29 = OpTypeStruct %19
@@ -124,13 +124,13 @@ OpMemberDecorate %41 0 Offset 0
 %48 = OpConstant  %4  0
 %50 = OpTypePointer StorageBuffer %19
 %52 = OpTypePointer StorageBuffer %22
-%56 = OpConstant  %3  8.8991e-41
-%57 = OpConstant  %3  2.4753e-41
+%56 = OpConstant  %3  0.000000000000000000000000000000000000000088991
+%57 = OpConstant  %3  0.000000000000000000000000000000000000000024753
 %58 = OpConstant  %5  65504
 %59 = OpConstant  %5  -65504
 %60 = OpConstant  %4  65504
-%61 = OpConstant  %6  65504.0
-%62 = OpConstant  %6  -65504.0
+%61 = OpConstant  %6  65504
+%62 = OpConstant  %6  -65504
 %64 = OpTypePointer Function %23
 %65 = OpConstantNull  %23
 %67 = OpTypePointer Function %3
@@ -192,7 +192,7 @@ OpMemberDecorate %41 0 Offset 0
 %474 = OpTypeMatrix %344 4
 %496 = OpTypeMatrix %350 4
 %519 = OpTypeFunction %2
-%525 = OpConstant  %3  2.2959e-41
+%525 = OpConstant  %3  0.000000000000000000000000000000000000000022959
 %528 = OpConstant  %4  7
 %45 = OpFunction  %3  None %46
 %44 = OpFunctionParameter  %3

@@ -25,7 +25,7 @@ pub(crate) fn check_all_programs(programs: &[Program]) -> anyhow::Result<()> {
             }
             Err(e) => {
                 log::error!("Checking for {binary_name} in PATH: ❌");
-                panic!("Unknown IO error: {:?}", e);
+                panic!("Unknown IO error: {e:?}");
             }
         }
     }

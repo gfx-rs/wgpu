@@ -46,6 +46,10 @@ impl From<&ResourceType> for BindingTypeName {
     fn from(ty: &ResourceType) -> BindingTypeName {
         match ty {
             ResourceType::Buffer { .. } => BindingTypeName::Buffer,
+            ResourceType::Texture {
+                class: naga::ImageClass::External,
+                ..
+            } => BindingTypeName::ExternalTexture,
             ResourceType::Texture { .. } => BindingTypeName::Texture,
             ResourceType::Sampler { .. } => BindingTypeName::Sampler,
             ResourceType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
@@ -594,6 +598,7 @@ impl Resource {
                             access: naga_access,
                         }
                     }
+                    BindingType::ExternalTexture => naga::ImageClass::External,
                     _ => {
                         return Err(BindingError::WrongType {
                             binding: (&entry.ty).into(),
@@ -701,6 +706,7 @@ impl Resource {
                             f
                         },
                     },
+                    naga::ImageClass::External => BindingType::ExternalTexture,
                 }
             }
             ResourceType::AccelerationStructure { vertex_return } => {
@@ -937,7 +943,7 @@ impl Interface {
                 // the reality is - every shader coming from `glslc` outputs an array
                 // of clip distances and hits this path :(
                 // So we lower it to `log::warn` to be less annoying.
-                log::warn!("Unexpected varying type: {:?}", other);
+                log::warn!("Unexpected varying type: {other:?}");
                 return;
             }
         };

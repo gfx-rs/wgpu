@@ -703,7 +703,7 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
-    pub fn to_ctx(&self) -> crate::proc::GlobalCtx {
+    pub fn to_ctx(&self) -> crate::proc::GlobalCtx<'_> {
         crate::proc::GlobalCtx {
             types: self.types,
             constants: self.constants,
@@ -844,7 +844,7 @@ impl<'a> ConstantEvaluator<'a> {
         expr: &Expression,
         span: Span,
     ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
-        log::trace!("try_eval_and_append: {:?}", expr);
+        log::trace!("try_eval_and_append: {expr:?}");
         match *expr {
             Expression::Constant(c) if self.is_global_arena() => {
                 // "See through" the constant and use its initializer.
@@ -2816,11 +2816,11 @@ fn first_leading_bit_smoke() {
 trait TryFromAbstract<T>: Sized {
     /// Convert an abstract literal `value` to `Self`.
     ///
-    /// Since Naga's `AbstractInt` and `AbstractFloat` exist to support
+    /// Since Naga's [`AbstractInt`] and [`AbstractFloat`] exist to support
     /// WGSL, we follow WGSL's conversion rules here:
     ///
     /// - WGSL §6.1.2. Conversion Rank says that automatic conversions
-    ///   from `AbstractInt` to an integer type are either lossless or an
+    ///   from [`AbstractInt`] to an integer type are either lossless or an
     ///   error.
     ///
     /// - WGSL §15.7.6 Floating Point Conversion says that conversions
@@ -2834,7 +2834,7 @@ trait TryFromAbstract<T>: Sized {
     ///   conversion from AbstractFloat to integer types.
     ///
     /// [`AbstractInt`]: crate::Literal::AbstractInt
-    /// [`Float`]: crate::Literal::Float
+    /// [`AbstractFloat`]: crate::Literal::AbstractFloat
     fn try_from_abstract(value: T) -> Result<Self, ConstantEvaluatorError>;
 }
 

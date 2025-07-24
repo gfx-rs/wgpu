@@ -83,7 +83,7 @@ async fn map_test(
     after_unmap: bool,
     after_destroy: bool,
 ) {
-    log::info!("map_test usage_type:{usage_type} map_mode_type:{:?} before_unmap:{before_unmap} before_destroy:{before_destroy} after_unmap:{after_unmap} after_destroy:{after_destroy}", map_mode_type);
+    log::info!("map_test usage_type:{usage_type} map_mode_type:{map_mode_type:?} before_unmap:{before_unmap} before_destroy:{before_destroy} after_unmap:{after_unmap} after_destroy:{after_destroy}");
 
     let size = 8;
     let usage = match usage_type {

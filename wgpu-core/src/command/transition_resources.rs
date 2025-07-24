@@ -2,7 +2,7 @@ use thiserror::Error;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
-    command::{CommandBuffer, CommandEncoderError, EncoderStateError},
+    command::{CommandEncoder, CommandEncoderError, EncoderStateError},
     device::DeviceError,
     global::Global,
     id::{BufferId, CommandEncoderId, TextureId},
@@ -22,13 +22,11 @@ impl Global {
         let hub = &self.hub;
 
         // Lock command encoder for recording
-        let cmd_buf = hub
-            .command_buffers
-            .get(command_encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
             // Get and lock device
-            let device = &cmd_buf.device;
+            let device = &cmd_enc.device;
             device.check_is_valid()?;
             let snatch_guard = &device.snatchable_lock.read();
 
@@ -40,7 +38,7 @@ impl Global {
             // Process buffer transitions
             for buffer_transition in buffer_transitions {
                 let buffer = hub.buffers.get(buffer_transition.buffer).get()?;
-                buffer.same_device_as(cmd_buf.as_ref())?;
+                buffer.same_device_as(cmd_enc.as_ref())?;
 
                 usage_scope
                     .buffers
@@ -50,7 +48,7 @@ impl Global {
             // Process texture transitions
             for texture_transition in texture_transitions {
                 let texture = hub.textures.get(texture_transition.texture).get()?;
-                texture.same_device_as(cmd_buf.as_ref())?;
+                texture.same_device_as(cmd_enc.as_ref())?;
 
                 unsafe {
                     usage_scope.textures.merge_single(
@@ -63,7 +61,7 @@ impl Global {
 
             // Record any needed barriers based on tracker data
             let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-            CommandBuffer::insert_barriers_from_scope(
+            CommandEncoder::insert_barriers_from_scope(
                 cmd_buf_raw,
                 &mut cmd_buf_data.trackers,
                 &usage_scope,
