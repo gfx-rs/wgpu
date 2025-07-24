@@ -6,6 +6,7 @@ const vec4[3] positions = {vec4(0., 1.0, 0., 1.0), vec4(-1.0, -1.0, 0., 1.0),
 const vec4[3] colors = {vec4(0., 1., 0., 1.), vec4(0., 0., 1., 1.),
                         vec4(1., 0., 0., 1.)};
 
+# This is an inefficient workgroup size. Ideally the total thread count would be a multiple of 64
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 struct PayloadData {
   vec4 colorMask;

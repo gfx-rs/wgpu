@@ -1057,12 +1057,10 @@ impl Limits {
         compare!(max_push_constant_size, Less);
         compare!(max_non_sampler_bindings, Less);
 
-        if self.max_task_workgroup_total_count > 0 {
-            compare!(max_task_workgroup_total_count, Less);
-            compare!(max_task_workgroups_per_dimension, Less);
-            compare!(max_mesh_multiview_count, Less);
-            compare!(max_mesh_output_layers, Less);
-        }
+        compare!(max_task_workgroup_total_count, Less);
+        compare!(max_task_workgroups_per_dimension, Less);
+        compare!(max_mesh_multiview_count, Less);
+        compare!(max_mesh_output_layers, Less);
 
         compare!(max_blas_primitive_count, Less);
         compare!(max_blas_geometry_count, Less);

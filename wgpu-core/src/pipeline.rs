@@ -455,7 +455,7 @@ pub struct RenderPipelineDescriptor<
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
 }
-/// Describes a render (graphics) pipeline.
+/// Describes a mesh shader pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MeshPipelineDescriptor<

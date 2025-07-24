@@ -43,6 +43,7 @@ These examples use a common framework to handle wgpu init, window creation, and 
 - `ray_cube_fragment` - Demonstrates using ray queries with a fragment shader.
 - `ray_scene` - Demonstrates using ray queries and model loading
 - `ray_shadows` - Demonstrates a simple use of ray queries - high quality shadows - uses a light set with push constants to raytrace through an untransformed scene and detect whether there is something obstructing the light.
+- `mesh_shader` - This example renders a triangle to a window with mesh shaders, while showcasing most mesh shader related features(task shaders, payloads, per primitive data).
 
 #### Compute
 
