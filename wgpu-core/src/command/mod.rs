@@ -565,7 +565,7 @@ impl InnerCommandEncoder {
     pub(crate) fn open(&mut self) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
         if !self.is_open {
             self.is_open = true;
-            let hal_label = hal_label(Some(&self.label), self.device.instance_flags);
+            let hal_label = hal_label(Some(self.label.as_str()), self.device.instance_flags);
             unsafe { self.raw.begin_encoding(hal_label) }
                 .map_err(|e| self.device.handle_hal_error(e))?;
         }

@@ -459,7 +459,19 @@ impl crate::TypeInner {
 }
 
 impl Validator {
-    /// Construct a new validator instance.
+    /// Create a validator for Naga [`Module`]s.
+    ///
+    /// The `flags` argument indicates which stages of validation the
+    /// returned `Validator` should perform. Skipping stages can make
+    /// validation somewhat faster, but the validator may not reject some
+    /// invalid modules. Regardless of `flags`, validation always returns
+    /// a usable [`ModuleInfo`] value on success.
+    ///
+    /// If `flags` contains everything in `ValidationFlags::default()`,
+    /// then the returned Naga [`Validator`] will reject any [`Module`]
+    /// that would use capabilities not included in `capabilities`.
+    ///
+    /// [`Module`]: crate::Module
     pub fn new(flags: ValidationFlags, capabilities: Capabilities) -> Self {
         let subgroup_operations = if capabilities.contains(Capabilities::SUBGROUP) {
             use SubgroupOperationSet as S;

@@ -34,6 +34,28 @@ webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_grou
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:buffer_binding,render_pipeline:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:sampler_binding,render_pipeline:*
 webgpu:api,validation,encoding,queries,general:occlusion_query,query_index:*
+webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_usage_and_aspect:*
+webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_buffer_size:*
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_buffer_offset:format="depth32float";aspect="depth-only";copyType="CopyT2B"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_buffer_offset:format="depth24plus-stencil8";aspect="stencil-only";copyType="CopyB2T"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_buffer_offset:format="depth24plus-stencil8";aspect="stencil-only";copyType="CopyT2B"
+//mix of PASS and FAIL: other subtests of copy_buffer_offset. Related bugs:
+// https://github.com/gfx-rs/wgpu/issues/7946, https://github.com/gfx-rs/wgpu/issues/7947
+webgpu:api,validation,image_copy,buffer_texture_copies:sample_count:*
+webgpu:api,validation,image_copy,buffer_texture_copies:texture_buffer_usages:*
+webgpu:api,validation,image_copy,buffer_texture_copies:device_mismatch:*
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="rgba8unorm";copyType="CopyB2T";dimension="2d"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="rgba8unorm";copyType="CopyT2B";dimension="2d"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="rgba8unorm";copyType="CopyB2T";dimension="3d"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="rgba8unorm";copyType="CopyT2B";dimension="3d"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="bgra8unorm";copyType="CopyB2T";dimension="2d"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="bgra8unorm";copyType="CopyT2B";dimension="2d"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="astc-4x4-unorm";copyType="CopyT2B";dimension="2d"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="astc-4x4-unorm";copyType="CopyB2T";dimension="2d"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="astc-4x4-unorm";copyType="CopyT2B";dimension="3d"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="astc-4x4-unorm";copyType="CopyB2T";dimension="3d"
+//mix of PASS and FAIL: other subtests of offset_and_bytesPerRow. Related bugs:
+// https://github.com/gfx-rs/wgpu/issues/7946, https://github.com/gfx-rs/wgpu/issues/7947
 webgpu:api,validation,image_copy,layout_related:copy_end_overflows_u64:*
 webgpu:api,validation,image_copy,texture_related:format:dimension="1d";*
 webgpu:api,validation,queue,submit:command_buffer,device_mismatch:*

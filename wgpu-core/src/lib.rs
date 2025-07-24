@@ -141,7 +141,7 @@ impl<'a> LabelHelpers<'a> for Label<'a> {
     }
 }
 
-pub fn hal_label(opt: Option<&str>, flags: wgt::InstanceFlags) -> Option<&str> {
+pub fn hal_label<T: AsRef<str>>(opt: Option<T>, flags: wgt::InstanceFlags) -> Option<T> {
     if flags.contains(wgt::InstanceFlags::DISCARD_HAL_LABELS) {
         return None;
     }

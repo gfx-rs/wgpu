@@ -383,7 +383,19 @@ impl WebGpuError for MissingDownlevelFlags {
     }
 }
 
-/// Create a validator with the given validation flags.
+/// Create a validator for Naga [`Module`]s.
+///
+/// Create a Naga [`Validator`] that ensures that each [`naga::Module`]
+/// presented to it is valid, and uses no features not included in
+/// `features` and `downlevel`.
+///
+/// The validator can only catch invalid modules and feature misuse
+/// reliably when the `flags` argument includes all the flags in
+/// [`ValidationFlags::default()`].
+///
+/// [`Validator`]: naga::valid::Validator
+/// [`Module`]: naga::Module
+/// [`ValidationFlags::default()`]: naga::valid::ValidationFlags::default
 pub fn create_validator(
     features: wgt::Features,
     downlevel: wgt::DownlevelFlags,

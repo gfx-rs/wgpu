@@ -776,7 +776,7 @@ impl Adapter {
         let device = Device::new(hal_device.device, self, desc, instance_flags)?;
         let device = Arc::new(device);
 
-        let queue = Queue::new(device.clone(), hal_device.queue)?;
+        let queue = Queue::new(device.clone(), hal_device.queue, instance_flags)?;
         let queue = Arc::new(queue);
 
         device.set_queue(&queue);

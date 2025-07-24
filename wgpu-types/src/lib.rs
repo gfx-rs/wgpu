@@ -2608,6 +2608,8 @@ impl TextureAspect {
     }
 }
 
+// There are some additional texture format helpers in `wgpu-core/src/conv.rs`,
+// that may need to be modified along with the ones here.
 impl TextureFormat {
     /// Returns the aspect-specific format of the original format
     ///

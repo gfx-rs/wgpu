@@ -34,7 +34,7 @@ fn populate_atomic_result() {
     // the differences between the test cases.
     fn try_variant(
         variant: Variant,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -135,7 +135,7 @@ fn populate_call_result() {
     // the differences between the test cases.
     fn try_variant(
         variant: Variant,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -211,9 +211,7 @@ fn emit_workgroup_uniform_load_result() {
     //
     // Looking at uses of the `wg_load` makes it easy to identify the
     // differences between the two variants.
-    fn variant(
-        wg_load: bool,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    fn variant(wg_load: bool) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -284,7 +282,7 @@ fn builtin_cross_product_args() {
     fn variant(
         size: VectorSize,
         arity: usize,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_vec3f = module.types.insert(
@@ -546,7 +544,7 @@ fn main(input: VertexOutput) {{
 
 #[allow(dead_code)]
 struct BindingArrayFixture {
-    module: naga::Module,
+    module: Module,
     span: naga::Span,
     ty_u32: naga::Handle<naga::Type>,
     ty_array: naga::Handle<naga::Type>,
@@ -556,7 +554,7 @@ struct BindingArrayFixture {
 
 impl BindingArrayFixture {
     fn new() -> Self {
-        let mut module = naga::Module::default();
+        let mut module = Module::default();
         let span = naga::Span::default();
         let ty_u32 = module.types.insert(
             naga::Type {
@@ -694,7 +692,7 @@ error: Function [1] 'main' is invalid
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn bad_texture_dimensions_level() {
-    fn validate(level: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
+    fn validate(level: &str) -> Result<ModuleInfo, naga::valid::ValidationError> {
         let source = format!(
             r#"
             @group(0) @binding(0)
@@ -710,9 +708,7 @@ fn bad_texture_dimensions_level() {
             .map_err(|err| err.into_inner()) // discard spans
     }
 
-    fn is_bad_level_error(
-        result: Result<naga::valid::ModuleInfo, naga::valid::ValidationError>,
-    ) -> bool {
+    fn is_bad_level_error(result: Result<ModuleInfo, naga::valid::ValidationError>) -> bool {
         matches!(
             result,
             Err(naga::valid::ValidationError::Function {
@@ -739,7 +735,7 @@ fn arity_check() {
     use naga::Span;
     let _ = env_logger::builder().is_test(true).try_init();
 
-    type Result = core::result::Result<naga::valid::ModuleInfo, naga::valid::ValidationError>;
+    type Result = core::result::Result<ModuleInfo, naga::valid::ValidationError>;
 
     fn validate(fun: ir::MathFunction, args: &[usize]) -> Result {
         let nowhere = Span::default();
@@ -924,6 +920,7 @@ fn main() {
 /// Parse and validate the module defined in `source`.
 ///
 /// Panics if unsuccessful.
+#[cfg(feature = "wgsl-in")]
 fn parse_validate(source: &str) -> (Module, ModuleInfo) {
     let module = naga::front::wgsl::parse_str(source).expect("module should parse");
     let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
@@ -947,6 +944,7 @@ fn parse_validate(source: &str) -> (Module, ModuleInfo) {
 ///
 /// The optional `unused_body` can introduce additional objects to the module,
 /// to verify that they are adjusted correctly by compaction.
+#[cfg(feature = "wgsl-in")]
 fn override_test(test_case: &str, unused_body: Option<&str>) {
     use hashbrown::HashMap;
     use naga::back::pipeline_constants::PipelineConstantError;
