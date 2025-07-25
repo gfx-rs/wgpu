@@ -979,8 +979,10 @@ impl Limits {
             // This very likely is never a real limiter
             max_task_workgroup_total_count: 65536,
             max_task_workgroups_per_dimension: 256,
-            max_mesh_multiview_count: 1,
-            max_mesh_output_layers: 1024,
+            // llvmpipe reports 0 multiview count, which just means no multiview is allowed
+            max_mesh_multiview_count: 0,
+            // llvmpipe once again requires this to be 8. My 3060 supports well over 1024 which is what I originally planned
+            max_mesh_output_layers: 8,
             ..self
         }
     }
