@@ -981,7 +981,7 @@ impl Limits {
             max_task_workgroups_per_dimension: 256,
             // llvmpipe reports 0 multiview count, which just means no multiview is allowed
             max_mesh_multiview_count: 0,
-            // llvmpipe once again requires this to be 8. My 3060 supports well over 1024 which is what I originally planned
+            // llvmpipe once again requires this to be 8. An RTX 3060 supports well over 1024.
             max_mesh_output_layers: 8,
             ..self
         }
