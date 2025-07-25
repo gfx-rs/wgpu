@@ -67,6 +67,6 @@ fn function() {
 }
 
 @compute @workgroup_size(32, 1, 1) 
-fn stage_u003a_u003a_test_atomic_load_and_store() {
+fn stage_test_atomic_load_and_store() {
     function();
 }

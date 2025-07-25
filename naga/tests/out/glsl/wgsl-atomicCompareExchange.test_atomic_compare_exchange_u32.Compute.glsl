@@ -5,11 +5,11 @@ precision highp int;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-struct _atomic_compare_exchange_result_u003c_Sint_u002c_4_u003e {
+struct _atomic_compare_exchange_result_Sint_4_ {
     int old_value;
     bool exchanged;
 };
-struct _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e {
+struct _atomic_compare_exchange_result_Uint_4_ {
     uint old_value;
     bool exchanged;
 };
@@ -50,7 +50,7 @@ void main() {
                     uint new = floatBitsToUint((uintBitsToFloat(_e14) + 1.0));
                     uint _e20 = i_1;
                     uint _e22 = old_1;
-                    _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e _e23; _e23.old_value = atomicCompSwap(_group_0_binding_1_cs[_e20], _e22, new);
+                    _atomic_compare_exchange_result_Uint_4_ _e23; _e23.old_value = atomicCompSwap(_group_0_binding_1_cs[_e20], _e22, new);
                     _e23.exchanged = (_e23.old_value == _e22);
                     old_1 = _e23.old_value;
                     exchanged_1 = _e23.exchanged;

@@ -21,6 +21,6 @@ fn function() {
 }
 
 @compute @workgroup_size(32, 1, 1) 
-fn stage_u003a_u003a_test_atomic_i_add_sub() {
+fn stage_test_atomic_i_add_sub() {
     function();
 }

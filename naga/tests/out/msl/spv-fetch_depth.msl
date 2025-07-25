@@ -22,7 +22,7 @@ void function(
     return;
 }
 
-kernel void cull_u003a_u003a_fetch_depth(
+kernel void cull_fetch_depth(
   device type_2& global [[user(fake0)]]
 , device type_4 const& global_1 [[user(fake0)]]
 , metal::depth2d<float, metal::access::sample> global_2 [[user(fake0)]]

@@ -4,14 +4,14 @@
 
 using metal::uint;
 
-struct _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e {
+struct _atomic_compare_exchange_result_Uint_4_ {
     uint old_value;
     bool exchanged;
     char _pad2[3];
 };
 
 template <typename A>
-_atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e naga_atomic_compare_exchange_weak_explicit(
+_atomic_compare_exchange_result_Uint_4_ naga_atomic_compare_exchange_weak_explicit(
     device A *atomic_ptr,
     uint cmp,
     uint v
@@ -20,10 +20,10 @@ _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e naga_atomic_compare_exc
         atomic_ptr, &cmp, v,
         metal::memory_order_relaxed, metal::memory_order_relaxed
     );
-    return _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e{cmp, swapped};
+    return _atomic_compare_exchange_result_Uint_4_{cmp, swapped};
 }
 template <typename A>
-_atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e naga_atomic_compare_exchange_weak_explicit(
+_atomic_compare_exchange_result_Uint_4_ naga_atomic_compare_exchange_weak_explicit(
     threadgroup A *atomic_ptr,
     uint cmp,
     uint v
@@ -32,7 +32,7 @@ _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e naga_atomic_compare_exc
         atomic_ptr, &cmp, v,
         metal::memory_order_relaxed, metal::memory_order_relaxed
     );
-    return _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e{cmp, swapped};
+    return _atomic_compare_exchange_result_Uint_4_{cmp, swapped};
 }
 constant int o = 2;
 
@@ -44,6 +44,6 @@ kernel void f(
         metal::atomic_store_explicit(&a, 0, metal::memory_order_relaxed);
     }
     metal::threadgroup_barrier(metal::mem_flags::mem_threadgroup);
-    _atomic_compare_exchange_result_u003c_Uint_u002c_4_u003e _e5 = naga_atomic_compare_exchange_weak_explicit(&a, 2u, 1u);
+    _atomic_compare_exchange_result_Uint_4_ _e5 = naga_atomic_compare_exchange_weak_explicit(&a, 2u, 1u);
     return;
 }

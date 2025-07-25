@@ -21,6 +21,6 @@ fn function() {
 }
 
 @compute @workgroup_size(32, 1, 1) 
-fn cull_u003a_u003a_fetch_depth() {
+fn cull_fetch_depth() {
     function();
 }

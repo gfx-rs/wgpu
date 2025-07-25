@@ -5,7 +5,7 @@
     ],
     compute:[
         (
-            entry_point:"cull_u003a_u003a_fetch_depth",
+            entry_point:"cull_fetch_depth",
             target_profile:"cs_5_1",
         ),
     ],

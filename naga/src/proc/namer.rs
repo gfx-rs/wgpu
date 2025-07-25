@@ -119,6 +119,12 @@ impl Namer {
             Cow::Borrowed(string)
         } else {
             let mut filtered = string.chars().fold(String::new(), |mut s, c| {
+                let c = match c {
+                    // Make several common characters in C++-ish types become snake case
+                    // separators.
+                    ':' | '<' | '>' | ',' => '_',
+                    c => c,
+                };
                 let had_underscore_at_end = s.ends_with('_');
                 if had_underscore_at_end && c == '_' {
                     return s;
