@@ -281,27 +281,36 @@ impl ContextWgpuCore {
             source,
             label: label.unwrap_or_default().to_string(),
         });
-        let mut sink = sink_mutex.lock();
-        let description = || self.format_error(&*source);
-        let error = match error_type {
-            ErrorType::Internal => {
-                let description = description();
-                crate::Error::Internal {
-                    source,
-                    description,
+        let final_error_handling = {
+            let mut sink = sink_mutex.lock();
+            let description = || self.format_error(&*source);
+            let error = match error_type {
+                ErrorType::Internal => {
+                    let description = description();
+                    crate::Error::Internal {
+                        source,
+                        description,
+                    }
                 }
-            }
-            ErrorType::OutOfMemory => crate::Error::OutOfMemory { source },
-            ErrorType::Validation => {
-                let description = description();
-                crate::Error::Validation {
-                    source,
-                    description,
+                ErrorType::OutOfMemory => crate::Error::OutOfMemory { source },
+                ErrorType::Validation => {
+                    let description = description();
+                    crate::Error::Validation {
+                        source,
+                        description,
+                    }
                 }
-            }
-            ErrorType::DeviceLost => return, // will be surfaced via callback
+                ErrorType::DeviceLost => return, // will be surfaced via callback
+            };
+            sink.handle_error_or_return_handler(error)
         };
-        sink.handle_error(error);
+
+        if let Some(f) = final_error_handling {
+            // If the user has provided their own `uncaptured_handler` callback, invoke it now,
+            // having released our lock on `sink_mutex`. See the comments on
+            // `handle_error_or_return_handler` for details.
+            f();
+        }
     }
 
     #[inline]
@@ -628,8 +637,18 @@ impl ErrorSinkRaw {
         }
     }
 
+    /// Deliver the error to
+    ///
+    /// * the innermost error scope, if any, or
+    /// * the uncaptured error handler, if there is one, or
+    /// * [`default_error_handler()`].
+    ///
+    /// If a closure is returned, the caller should call it immediately after dropping the
+    /// [`ErrorSink`] mutex guard. This makes sure that the user callback is not called with
+    /// a wgpu mutex held.
     #[track_caller]
-    fn handle_error(&mut self, err: crate::Error) {
+    #[must_use]
+    fn handle_error_or_return_handler(&mut self, err: crate::Error) -> Option<impl FnOnce()> {
         let filter = match err {
             crate::Error::OutOfMemory { .. } => crate::ErrorFilter::OutOfMemory,
             crate::Error::Validation { .. } => crate::ErrorFilter::Validation,
@@ -645,13 +664,15 @@ impl ErrorSinkRaw {
                 if scope.error.is_none() {
                     scope.error = Some(err);
                 }
+                None
             }
             None => {
-                if let Some(custom_handler) = self.uncaptured_handler.as_ref() {
-                    (custom_handler)(err);
+                if let Some(custom_handler) = &self.uncaptured_handler {
+                    let custom_handler = Arc::clone(custom_handler);
+                    Some(move || (custom_handler)(err))
                 } else {
                     // direct call preserves #[track_caller] where dyn can't
-                    default_error_handler(err);
+                    default_error_handler(err)
                 }
             }
         }
@@ -665,7 +686,7 @@ impl fmt::Debug for ErrorSinkRaw {
 }
 
 #[track_caller]
-fn default_error_handler(err: crate::Error) {
+fn default_error_handler(err: crate::Error) -> ! {
     log::error!("Handling wgpu errors as fatal by default");
     panic!("wgpu error: {err}\n");
 }
