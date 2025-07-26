@@ -714,9 +714,11 @@ impl From<wgc::instance::RequestDeviceError> for RequestDeviceError {
     }
 }
 
-/// Type for the callback of uncaptured error handler
-pub trait UncapturedErrorHandler: Fn(Error) + Send + 'static {}
-impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + 'static {}
+/// The callback of [`Device::on_uncaptured_error()`].
+///
+/// It must be a function with this signature.
+pub trait UncapturedErrorHandler: Fn(Error) + Send + Sync + 'static {}
+impl<T> UncapturedErrorHandler for T where T: Fn(Error) + Send + Sync + 'static {}
 
 /// Kinds of [`Error`]s a [`Device::push_error_scope()`] may be configured to catch.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd)]

@@ -72,6 +72,8 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
   - Copies of depth/stencil formats must be 4B aligned.
 - The offset for `set_vertex_buffer` and `set_index_buffer` must be 4B aligned. By @andyleiserson in [#7929](https://github.com/gfx-rs/wgpu/pull/7929).
 - The offset and size of bindings are validated as fitting within the underlying buffer in more cases. By @andyleiserson in [#7911](https://github.com/gfx-rs/wgpu/pull/7911).
+- The function you pass to `Device::on_uncaptured_error()` must now implement `Sync` in addition to `Send`.
+  By @kpreid in [#8011](https://github.com/gfx-rs/wgpu/pull/8011).
 
 #### Naga
 
