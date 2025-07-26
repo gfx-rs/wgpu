@@ -10,6 +10,7 @@ use alloc::{
     format,
     rc::Rc,
     string::{String, ToString as _},
+    sync::Arc,
     vec,
     vec::Vec,
 };
@@ -2409,7 +2410,7 @@ impl dispatch::DeviceInterface for WebDevice {
         closure.forget();
     }
 
-    fn on_uncaptured_error(&self, handler: Box<dyn crate::UncapturedErrorHandler>) {
+    fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>) {
         let f = Closure::wrap(Box::new(move |event: webgpu_sys::GpuUncapturedErrorEvent| {
             let error = crate::Error::from_js(event.error().value_of());
             handler(error);

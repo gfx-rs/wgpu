@@ -240,7 +240,7 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
-    fn on_uncaptured_error(&self, _handler: Box<dyn wgpu::UncapturedErrorHandler>) {
+    fn on_uncaptured_error(&self, _handler: Arc<dyn wgpu::UncapturedErrorHandler>) {
         unimplemented!()
     }
 

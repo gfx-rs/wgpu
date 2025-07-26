@@ -407,8 +407,8 @@ impl Device {
         QuerySet { inner: query_set }
     }
 
-    /// Set a callback for errors that are not handled in error scopes.
-    pub fn on_uncaptured_error(&self, handler: Box<dyn UncapturedErrorHandler>) {
+    /// Set a callback which will be called for all errors that are not handled in error scopes.
+    pub fn on_uncaptured_error(&self, handler: Arc<dyn UncapturedErrorHandler>) {
         self.inner.on_uncaptured_error(handler)
     }
 

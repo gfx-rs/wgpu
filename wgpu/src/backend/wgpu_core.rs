@@ -617,7 +617,7 @@ struct ErrorScope {
 
 struct ErrorSinkRaw {
     scopes: Vec<ErrorScope>,
-    uncaptured_handler: Option<Box<dyn crate::UncapturedErrorHandler>>,
+    uncaptured_handler: Option<Arc<dyn crate::UncapturedErrorHandler>>,
 }
 
 impl ErrorSinkRaw {
@@ -1757,7 +1757,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             .device_set_device_lost_closure(self.id, device_lost_callback);
     }
 
-    fn on_uncaptured_error(&self, handler: Box<dyn crate::UncapturedErrorHandler>) {
+    fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>) {
         let mut error_sink = self.error_sink.lock();
         error_sink.uncaptured_handler = Some(handler);
     }
