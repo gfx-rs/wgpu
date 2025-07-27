@@ -230,6 +230,9 @@ impl GPUDevice {
         .into_iter()
         .map(Into::into)
         .collect::<Vec<_>>(),
+      texture_binding_view_dimension: descriptor
+        .texture_binding_view_dimension
+        .map(Into::into),
     };
 
     // 2. ? Validate texture format required features of descriptor.format with this.[[device]].

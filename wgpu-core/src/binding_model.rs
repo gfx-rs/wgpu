@@ -246,6 +246,12 @@ pub enum CreateBindGroupError {
         layout_dimension: wgt::TextureViewDimension,
         view_dimension: wgt::TextureViewDimension,
     },
+    #[error("Texture binding {binding} is given a view with dimension = {view_dimension:?}, but the texture was created with texture_binding_view_dimension = {texture_binding_view_dimension:?}")]
+    InvalidTextureBindingViewDimension {
+        binding: u32,
+        view_dimension: wgt::TextureViewDimension,
+        texture_binding_view_dimension: wgt::TextureViewDimension,
+    },
     #[error("Storage texture binding {binding} expects format = {layout_format:?}, but given a view with format = {view_format:?}")]
     InvalidStorageTextureFormat {
         binding: u32,
@@ -321,7 +327,8 @@ impl WebGpuError for CreateBindGroupError {
             | Self::DepthStencilAspect
             | Self::MissingTLASVertexReturn { .. }
             | Self::InvalidExternalTextureMipLevelCount { .. }
-            | Self::InvalidExternalTextureFormat { .. } => ErrorType::Validation,
+            | Self::InvalidExternalTextureFormat { .. }
+            | Self::InvalidTextureBindingViewDimension { .. } => ErrorType::Validation,
         }
     }
 }

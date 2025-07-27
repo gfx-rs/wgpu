@@ -351,6 +351,9 @@ impl Device {
     ///   the moment of wrap.
     /// - `cleared` must not be `true` unless the resource's contents are
     ///   actually valid/defined
+    /// - On devices without [`ARBITRARY_BINDING_VIEW_DIMENSIONS`](crate::DownlevelFlags::ARBITRARY_BINDING_VIEW_DIMENSIONS),
+    ///   `hal_texture`'s GL target must match `desc.texture_binding_view_dimension`, or the
+    ///   one inferred from the texture's dimension and layer count if it is `None`.
     #[cfg(wgpu_core)]
     #[must_use]
     pub unsafe fn create_texture_from_hal<A: hal::Api>(
@@ -476,6 +479,7 @@ impl Device {
             usage: wgt::TextureUses::empty(),
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: desc.view_formats.to_vec(),
+            texture_binding_view_dimension: Some(view_dimension),
         };
 
         let hal_texture = {
