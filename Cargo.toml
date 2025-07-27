@@ -215,7 +215,7 @@ gpu-allocator = { version = "0.28", default-features = false, features = [
 ] }
 range-alloc = "0.1"
 mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
-windows-core = { version = "0.59", default-features = false }
+windows-core = { version = "0.61", default-features = false }
 
 # Gles dependencies
 khronos-egl = "6"
@@ -225,7 +225,7 @@ glutin-winit = { version = "0.4", default-features = false }
 glutin_wgl_sys = "0.6"
 
 # DX12 and GLES dependencies
-windows = { version = "0.59", default-features = false }
+windows = { version = "0.61", default-features = false }
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.5"
