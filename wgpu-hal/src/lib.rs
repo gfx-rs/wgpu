@@ -2206,6 +2206,8 @@ pub struct TextureDescriptor<'a> {
     pub format: wgt::TextureFormat,
     pub usage: wgt::TextureUses,
     pub memory_flags: MemoryFlags,
+    /// For compatibility mode (#8124), views created from this texture must have this as their `dimension`.
+    pub texture_binding_view_dimension: Option<wgt::TextureViewDimension>,
     /// Allows views of this texture to have a different format
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,

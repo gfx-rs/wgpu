@@ -528,6 +528,8 @@ pub struct TextureDescriptor<L, V> {
     ///
     /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
     pub view_formats: V,
+    /// For compatibility mode/gles (#8124), views created from this texture must have this as their `dimension`.
+    pub texture_binding_view_dimension: Option<TextureViewDimension>,
 }
 
 impl<L, V> TextureDescriptor<L, V> {
@@ -546,6 +548,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: self.view_formats.clone(),
+            texture_binding_view_dimension: self.texture_binding_view_dimension,
         }
     }
 
@@ -565,6 +568,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: v_fun(&self.view_formats),
+            texture_binding_view_dimension: self.texture_binding_view_dimension,
         }
     }
 
@@ -587,6 +591,7 @@ impl<L, V> TextureDescriptor<L, V> {
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
     ///   view_formats: &[],
+    ///   texture_binding_view_dimension: None,
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
