@@ -93,7 +93,7 @@ use hashbrown::HashMap;
 use parking_lot::{Mutex, RwLock};
 use suballocation::Allocator;
 use windows::{
-    core::{Free, Interface},
+    core::{Free as _, Interface},
     Win32::{
         Foundation,
         Graphics::{Direct3D, Direct3D12, DirectComposition, Dxgi},
