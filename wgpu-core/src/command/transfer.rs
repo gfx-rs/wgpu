@@ -351,10 +351,11 @@ pub(crate) fn validate_linear_texture_data(
         }
     }
 
-    if offset + bytes_in_copy > buffer_size {
+    // Avoid underflow in the subtraction by checking bytes_in_copy against buffer_size first.
+    if bytes_in_copy > buffer_size || offset > buffer_size - bytes_in_copy {
         return Err(TransferError::BufferOverrun {
             start_offset: offset,
-            end_offset: offset + bytes_in_copy,
+            end_offset: offset.wrapping_add(bytes_in_copy),
             buffer_size,
             side: buffer_side,
         });
