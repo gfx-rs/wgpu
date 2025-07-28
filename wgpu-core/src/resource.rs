@@ -912,6 +912,8 @@ pub enum CreateBufferError {
     MaxBufferSize { requested: u64, maximum: u64 },
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
     #[error("Failed to create bind group for indirect buffer validation: {0}")]
     IndirectValidationBindGroup(DeviceError),
 }
@@ -929,6 +931,7 @@ impl WebGpuError for CreateBufferError {
             Self::AccessError(e) => e,
             Self::MissingDownlevelFlags(e) => e,
             Self::IndirectValidationBindGroup(e) => e,
+            Self::MissingFeatures(e) => e,
 
             Self::UnalignedSize
             | Self::InvalidUsage(_)

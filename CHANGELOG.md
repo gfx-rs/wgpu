@@ -55,6 +55,10 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 ### Changes
 
+#### Gemeral
+
+- Prevent resources for acceleration structures being created if acceleration structures are not enabled. By @Vecvec in [#8036](https://github.com/gfx-rs/wgpu/pull/8036).
+
 #### Naga
 
 Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).

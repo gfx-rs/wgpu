@@ -795,6 +795,13 @@ impl Device {
             });
         }
 
+        if desc
+            .usage
+            .intersects(wgt::BufferUsages::BLAS_INPUT | wgt::BufferUsages::TLAS_INPUT)
+        {
+            self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)?;
+        }
+
         if desc.usage.contains(wgt::BufferUsages::INDEX)
             && desc.usage.contains(
                 wgt::BufferUsages::VERTEX
@@ -2303,7 +2310,22 @@ impl Device {
                         },
                     )
                 }
-                Bt::AccelerationStructure { .. } => (None, WritableStorage::No),
+                Bt::AccelerationStructure { vertex_return } => {
+                    self.require_features(wgt::Features::EXPERIMENTAL_RAY_QUERY)
+                        .map_err(|e| binding_model::CreateBindGroupLayoutError::Entry {
+                            binding: entry.binding,
+                            error: e.into(),
+                        })?;
+                    if vertex_return {
+                        self.require_features(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)
+                            .map_err(|e| binding_model::CreateBindGroupLayoutError::Entry {
+                                binding: entry.binding,
+                                error: e.into(),
+                            })?;
+                    }
+
+                    (None, WritableStorage::No)
+                }
                 Bt::ExternalTexture => {
                     self.require_features(wgt::Features::EXTERNAL_TEXTURE)
                         .map_err(|e| binding_model::CreateBindGroupLayoutError::Entry {
