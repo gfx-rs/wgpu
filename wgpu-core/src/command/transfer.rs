@@ -454,7 +454,8 @@ pub(crate) fn validate_texture_copy_range<T>(
     // physical size can be larger than the virtual
     let extent = extent_virtual.physical_size(desc.format);
 
-    // Multisampled and depth-stencil formats do not support partial copies.
+    // Multisampled and depth-stencil formats do not support partial copies
+    // on x and y dimensions, but do support copying a single mip level.
     let requires_exact_size = desc.format.is_depth_stencil_format() || desc.sample_count > 1;
 
     // Return `Ok` if a run `size` texels long starting at `start_offset` is
@@ -462,7 +463,8 @@ pub(crate) fn validate_texture_copy_range<T>(
     let check_dimension = |dimension: TextureErrorDimension,
                            start_offset: u32,
                            size: u32,
-                           texture_size: u32|
+                           texture_size: u32,
+                           requires_exact_size: bool|
      -> Result<(), TransferError> {
         if requires_exact_size && (start_offset != 0 || size != texture_size) {
             Err(TransferError::UnsupportedPartialTransfer {
@@ -494,18 +496,21 @@ pub(crate) fn validate_texture_copy_range<T>(
         texture_copy_view.origin.x,
         copy_size.width,
         extent.width,
+        requires_exact_size,
     )?;
     check_dimension(
         TextureErrorDimension::Y,
         texture_copy_view.origin.y,
         copy_size.height,
         extent.height,
+        requires_exact_size,
     )?;
     check_dimension(
         TextureErrorDimension::Z,
         texture_copy_view.origin.z,
         copy_size.depth_or_array_layers,
         extent.depth_or_array_layers,
+        false, // partial copy always allowed on Z/mip dimension
     )?;
 
     if texture_copy_view.origin.x % block_width != 0 {
