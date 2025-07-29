@@ -5,7 +5,11 @@ webgpu:api,operation,compute,basic:memcpy:*
 //FAIL: webgpu:api,operation,compute,basic:large_dispatch:*
 webgpu:api,operation,compute_pipeline,overrides:*
 webgpu:api,operation,device,lost:*
-webgpu:api,operation,render_pass,storeOp:*
+// This is all the storeOp tests, but some of them fail if run in a single invocation.
+webgpu:api,operation,render_pass,storeOp:render_pass_store_op,color_attachment_with_depth_stencil_attachment:*
+webgpu:api,operation,render_pass,storeOp:render_pass_store_op,color_attachment_only:*
+webgpu:api,operation,render_pass,storeOp:render_pass_store_op,multiple_color_attachments:*
+webgpu:api,operation,render_pass,storeOp:render_pass_store_op,depth_stencil_attachment_only:*
 webgpu:api,validation,encoding,beginComputePass:*
 webgpu:api,validation,encoding,beginRenderPass:*
 webgpu:api,validation,encoding,cmds,clearBuffer:*
