@@ -455,7 +455,7 @@ pub(crate) fn validate_texture_copy_range<T>(
     let extent = extent_virtual.physical_size(desc.format);
 
     // Multisampled and depth-stencil formats do not support partial copies
-    // on x and y dimensions, but do support copying a single mip level.
+    // on x and y dimensions, but do support copying a subset of layers.
     let requires_exact_size = desc.format.is_depth_stencil_format() || desc.sample_count > 1;
 
     // Return `Ok` if a run `size` texels long starting at `start_offset` is
@@ -510,7 +510,7 @@ pub(crate) fn validate_texture_copy_range<T>(
         texture_copy_view.origin.z,
         copy_size.depth_or_array_layers,
         extent.depth_or_array_layers,
-        false, // partial copy always allowed on Z/mip dimension
+        false, // partial copy always allowed on Z/layer dimension
     )?;
 
     if texture_copy_view.origin.x % block_width != 0 {

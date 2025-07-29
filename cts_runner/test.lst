@@ -6,6 +6,7 @@ webgpu:api,operation,compute,basic:memcpy:*
 webgpu:api,operation,compute_pipeline,overrides:*
 webgpu:api,operation,device,lost:*
 // This is all the storeOp tests, but some of them fail if run in a single invocation.
+// https://github.com/gfx-rs/wgpu/issues/8021
 webgpu:api,operation,render_pass,storeOp:render_pass_store_op,color_attachment_with_depth_stencil_attachment:*
 webgpu:api,operation,render_pass,storeOp:render_pass_store_op,color_attachment_only:*
 webgpu:api,operation,render_pass,storeOp:render_pass_store_op,multiple_color_attachments:*
