@@ -72,12 +72,14 @@ pub type ShaderLocation = u32;
 /// [dynamic bind group offsets](../wgpu/struct.RenderPass.html#method.set_bind_group).
 pub type DynamicOffset = u32;
 
-/// Buffer-to-texture copies must have [`bytes_per_row`] aligned to this number.
+/// Buffer-texture copies must have [`bytes_per_row`] aligned to this number.
 ///
-/// This doesn't apply to [`Queue::write_texture`][Qwt], only to [`copy_buffer_to_texture()`].
+/// This doesn't apply to [`Queue::write_texture`][Qwt], only to [`copy_buffer_to_texture()`]
+/// and [`copy_texture_to_buffer()`].
 ///
 /// [`bytes_per_row`]: TexelCopyBufferLayout::bytes_per_row
 /// [`copy_buffer_to_texture()`]: ../wgpu/struct.Queue.html#method.copy_buffer_to_texture
+/// [`copy_texture_to_buffer()`]: ../wgpu/struct.Queue.html#method.copy_texture_to_buffer
 /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 
