@@ -133,6 +133,8 @@ pub enum TypeError {
     InvalidDynamicArray(String, Handle<crate::Type>),
     #[error("The base handle {0:?} has to be a struct")]
     BindingArrayBaseTypeNotStruct(Handle<crate::Type>),
+    #[error("Binding arrays of external textures are not yet supported")]
+    BindingArrayBaseExternalTextures,
     #[error("Structure member[{index}] at {offset} overlaps the previous member")]
     MemberOverlap { index: u32, offset: u32 },
     #[error(
@@ -802,6 +804,17 @@ impl super::Validator {
                         crate::TypeInner::Struct { .. } => {}
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
                     };
+                }
+                if matches!(
+                    gctx.types[base].inner,
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::External,
+                        ..
+                    }
+                ) {
+                    // Binding arrays of external textures are not yet supported.
+                    // https://github.com/gfx-rs/wgpu/issues/8027
+                    return Err(TypeError::BindingArrayBaseExternalTextures);
                 }
 
                 if !base_info.flags.contains(TypeFlags::CREATION_RESOLVED) {
