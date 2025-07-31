@@ -59,6 +59,12 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
 
+## v26.0.3 (2025-07-30)
+
+### Bug Fixes
+
+- Fixed memory leak in vulkan backend. By @cwfitzgerald in [#8031](https://github.com/gfx-rs/wgpu/pull/8031).
+
 ## v26.0.2 (2025-07-23)
 
 ### Bug Fixes
