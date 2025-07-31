@@ -11,8 +11,8 @@ use wgt::{
 
 use crate::command::{
     pass, pass_base, pass_try, validate_and_begin_occlusion_query,
-    validate_and_begin_pipeline_statistics_query, EncoderStateError, InnerCommandEncoder,
-    PassStateError, TimestampWritesError,
+    validate_and_begin_pipeline_statistics_query, DebugGroupError, EncoderStateError,
+    InnerCommandEncoder, PassStateError, TimestampWritesError,
 };
 use crate::pipeline::{RenderPipeline, VertexStep};
 use crate::resource::RawResourceAccess;
@@ -671,6 +671,8 @@ pub enum RenderPassErrorInner {
     EncoderState(#[from] EncoderStateError),
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
+    #[error(transparent)]
+    DebugGroupError(#[from] DebugGroupError),
     #[error("The format of the {location} ({format:?}) is not resolvable")]
     UnsupportedResolveTargetFormat {
         location: AttachmentErrorLocation,
@@ -737,8 +739,6 @@ pub enum RenderPassErrorInner {
         end_count_offset: u64,
         count_buffer_size: u64,
     },
-    #[error(transparent)]
-    InvalidPopDebugGroup(#[from] pass::InvalidPopDebugGroup),
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error("Render bundle has incompatible targets, {0}")]
@@ -842,6 +842,7 @@ impl WebGpuError for RenderPassError {
             RenderPassErrorInner::Device(e) => e,
             RenderPassErrorInner::ColorAttachment(e) => e,
             RenderPassErrorInner::EncoderState(e) => e,
+            RenderPassErrorInner::DebugGroupError(e) => e,
             RenderPassErrorInner::MissingFeatures(e) => e,
             RenderPassErrorInner::MissingDownlevelFlags(e) => e,
             RenderPassErrorInner::RenderCommand(e) => e,
@@ -854,7 +855,6 @@ impl WebGpuError for RenderPassError {
             RenderPassErrorInner::InvalidAttachment(e) => e,
             RenderPassErrorInner::TimestampWrites(e) => e,
             RenderPassErrorInner::InvalidValuesOffset(e) => e,
-            RenderPassErrorInner::InvalidPopDebugGroup(e) => e,
 
             RenderPassErrorInner::InvalidParentEncoder
             | RenderPassErrorInner::UnsupportedResolveTargetFormat { .. }
@@ -2218,6 +2218,13 @@ impl Global {
                             .map_pass_err(scope)?;
                         }
                     }
+                }
+
+                if state.general.debug_scope_depth > 0 {
+                    Err(
+                        RenderPassErrorInner::DebugGroupError(DebugGroupError::MissingPop)
+                            .map_pass_err(pass_scope),
+                    )?;
                 }
 
                 state

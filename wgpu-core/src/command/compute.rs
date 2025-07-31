@@ -8,7 +8,7 @@ use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, str};
 
 use crate::command::{
-    pass, CommandEncoder, EncoderStateError, PassStateError, TimestampWritesError,
+    pass, CommandEncoder, DebugGroupError, EncoderStateError, PassStateError, TimestampWritesError,
 };
 use crate::resource::DestroyedResourceError;
 use crate::{binding_model::BindError, resource::RawResourceAccess};
@@ -146,6 +146,8 @@ pub enum ComputePassErrorInner {
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
     #[error(transparent)]
+    DebugGroupError(#[from] DebugGroupError),
+    #[error(transparent)]
     BindGroupIndexOutOfRange(#[from] pass::BindGroupIndexOutOfRange),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
@@ -161,8 +163,6 @@ pub enum ComputePassErrorInner {
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
-    #[error(transparent)]
-    InvalidPopDebugGroup(#[from] pass::InvalidPopDebugGroup),
     #[error(transparent)]
     Dispatch(#[from] DispatchError),
     #[error(transparent)]
@@ -226,6 +226,7 @@ impl WebGpuError for ComputePassError {
         let e: &dyn WebGpuError = match inner {
             ComputePassErrorInner::Device(e) => e,
             ComputePassErrorInner::EncoderState(e) => e,
+            ComputePassErrorInner::DebugGroupError(e) => e,
             ComputePassErrorInner::DestroyedResource(e) => e,
             ComputePassErrorInner::ResourceUsageCompatibility(e) => e,
             ComputePassErrorInner::MissingBufferUsage(e) => e,
@@ -238,7 +239,6 @@ impl WebGpuError for ComputePassError {
             ComputePassErrorInner::InvalidResource(e) => e,
             ComputePassErrorInner::TimestampWrites(e) => e,
             ComputePassErrorInner::InvalidValuesOffset(e) => e,
-            ComputePassErrorInner::InvalidPopDebugGroup(e) => e,
 
             ComputePassErrorInner::InvalidParentEncoder
             | ComputePassErrorInner::BindGroupIndexOutOfRange { .. }
@@ -732,6 +732,13 @@ impl Global {
                         .map_pass_err(scope)?;
                     }
                 }
+            }
+
+            if state.general.debug_scope_depth > 0 {
+                Err(
+                    ComputePassErrorInner::DebugGroupError(DebugGroupError::MissingPop)
+                        .map_pass_err(pass_scope),
+                )?;
             }
 
             unsafe {
