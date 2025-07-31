@@ -15,9 +15,9 @@ content should not be able to use the GPU APIs to access data or interfaces
 outside the intended scope for interaction with web content.
 
 While the WGPU maintainers have discretion in assigning a severity to
-individual vulnerabilities, it is generally considered a security vulnerability
-in WGPU if Javascript or WebAssembly code running with privileges of ordinary
-web content is able to:
+individual vulnerabilities, it is generally considered a high-severity vulnerability
+in WGPU if JavaScript or WebAssembly code running with privileges of ordinary
+web content, in a web browser that is using `wgpu` to provide the WebGPU API to that content, is able to:
 
 - Access data associated with native applications other than the user agent,
   or associated with other web origins.
@@ -29,7 +29,7 @@ web content is able to:
 The WGPU Rust API offers some functionality, both supported and experimental,
 that is not part of the WebGPU standard and is not made available in Javascript
 environments using WGPU. Associated vulnerabilities may be assigned lower
-severity than vulnerabilities that apply to a Javascript WebGPU implementation
+severity than vulnerabilities that apply to a WebGPU implementation exposed to JavaScript
 based on WGPU.
 
 
