@@ -1611,11 +1611,13 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
-            let data_path = trace.make_binary("bin", data);
+            use crate::device::trace::DataKind;
+            let range = buffer_offset..buffer_offset + data.len() as u64;
+            let data = trace.make_binary(DataKind::Bin, data);
             trace.add(Action::WriteBuffer {
                 id: buffer.to_trace(),
-                data: data_path,
-                range: buffer_offset..buffer_offset + data.len() as u64,
+                data,
+                range,
                 queued: true,
             });
         }
@@ -1682,10 +1684,11 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
-            let data_path = trace.make_binary("bin", data);
+            use crate::device::trace::DataKind;
+            let data = trace.make_binary(DataKind::Bin, data);
             trace.add(Action::WriteTexture {
                 to: destination.to_trace(),
-                data: data_path,
+                data,
                 layout: *data_layout,
                 size: *size,
             });

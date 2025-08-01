@@ -127,7 +127,7 @@ fn main() {
         unsafe { device.start_graphics_debugger_capture() };
 
         while let Some(action) = actions.pop() {
-            player.process(&device, &queue, action, &dir);
+            player.process(&device, &queue, action, trace::DiskTraceLoader::new(&dir));
         }
 
         unsafe { device.stop_graphics_debugger_capture() };
@@ -183,7 +183,12 @@ fn main() {
                                     target.exit();
                                 }
                                 Some(action) => {
-                                    player.process(&device, &queue, action, &dir);
+                                    player.process(
+                                        &device,
+                                        &queue,
+                                        action,
+                                        trace::DiskTraceLoader::new(&dir),
+                                    );
                                 }
                                 None => {
                                     if !done {

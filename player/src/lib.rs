@@ -6,14 +6,14 @@
 extern crate wgpu_core as wgc;
 extern crate wgpu_types as wgt;
 
-use std::{borrow::Cow, convert::Infallible, fs, path::Path, sync::Arc};
+use std::{borrow::Cow, convert::Infallible, sync::Arc};
 
 use hashbrown::HashMap;
 
 use wgc::{
     binding_model::BindingResource,
     command::{ArcCommand, ArcReferences, BasePass, Command, PointerReferences},
-    device::trace,
+    device::trace::{self, DataKind, DataLoader},
     id::PointerId,
 };
 
@@ -94,7 +94,7 @@ impl Player {
         device: &Arc<wgc::device::Device>,
         queue: &Arc<wgc::device::queue::Queue>,
         action: trace::Action<PointerReferences>,
-        dir: &Path,
+        loader: impl DataLoader,
     ) {
         use wgc::device::trace::Action;
         log::debug!("action {action:?}");
@@ -226,15 +226,17 @@ impl Player {
                 let _bind_group = self.bind_groups.remove(&id).expect("invalid bind group");
             }
             Action::CreateShaderModule { id, desc, data } => {
-                log::debug!("Creating shader from {data}");
-                let code = fs::read_to_string(dir.join(&data)).unwrap();
-                let source = if data.ends_with(".wgsl") {
-                    wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code.clone()))
-                } else if data.ends_with(".ron") {
+                let code = loader.load_utf8(&data);
+                let source = if data.kind() == DataKind::Wgsl {
+                    wgc::pipeline::ShaderModuleSource::Wgsl(code.clone())
+                } else if data.kind() == DataKind::Ron {
                     let module = ron::de::from_str(&code).unwrap();
                     wgc::pipeline::ShaderModuleSource::Naga(module)
                 } else {
-                    panic!("Unknown shader {data}");
+                    panic!(
+                        "Unknown data kind for CreateShaderModule: {:?}",
+                        data.kind()
+                    );
                 };
                 match device.create_shader_module(&desc, source) {
                     Ok(module) => self.shader_modules.insert(id, module),
@@ -250,8 +252,8 @@ impl Player {
                 runtime_checks,
             } => {
                 let spirv = data.iter().find_map(|a| {
-                    if a.ends_with(".spv") {
-                        let data = fs::read(dir.join(a)).unwrap();
+                    if a.kind() == DataKind::Spv {
+                        let data = loader.load(a);
                         assert!(data.len().is_multiple_of(4));
 
                         Some(Cow::Owned(bytemuck::pod_collect_to_vec(&data)))
@@ -259,46 +261,21 @@ impl Player {
                         None
                     }
                 });
-                let dxil = data.iter().find_map(|a| {
-                    if a.ends_with(".dxil") {
-                        let vec = std::fs::read(dir.join(a)).unwrap();
-                        Some(Cow::Owned(vec))
-                    } else {
-                        None
-                    }
-                });
-                let hlsl = data.iter().find_map(|a| {
-                    if a.ends_with(".hlsl") {
-                        let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
-                    } else {
-                        None
-                    }
-                });
-                let msl = data.iter().find_map(|a| {
-                    if a.ends_with(".msl") {
-                        let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
-                    } else {
-                        None
-                    }
-                });
-                let glsl = data.iter().find_map(|a| {
-                    if a.ends_with(".glsl") {
-                        let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
-                    } else {
-                        None
-                    }
-                });
-                let wgsl = data.iter().find_map(|a| {
-                    if a.ends_with(".wgsl") {
-                        let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
-                    } else {
-                        None
-                    }
-                });
+                let dxil = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::Dxil).then(|| loader.load(a)));
+                let hlsl = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::Hlsl).then(|| loader.load_utf8(a)));
+                let msl = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::Msl).then(|| loader.load_utf8(a)));
+                let glsl = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::Glsl).then(|| loader.load_utf8(a)));
+                let wgsl = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::Wgsl).then(|| loader.load_utf8(a)));
                 let desc = wgt::CreateShaderModuleDescriptorPassthrough {
                     entry_point,
                     label,
@@ -382,7 +359,7 @@ impl Player {
                 queued,
             } => {
                 let buffer = self.resolve_buffer_id(id);
-                let bin = std::fs::read(dir.join(data)).unwrap();
+                let bin = loader.load(&data);
                 let size = (range.end - range.start) as usize;
                 if queued {
                     queue
@@ -401,7 +378,7 @@ impl Player {
                 size,
             } => {
                 let to = self.resolve_texel_copy_texture_info(to);
-                let bin = std::fs::read(dir.join(data)).unwrap();
+                let bin = loader.load(&data);
                 queue
                     .write_texture(to, &bin, &layout, &size)
                     .expect("Queue::write_texture error");

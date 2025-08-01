@@ -95,9 +95,13 @@ pub enum Trace {
     #[default]
     Off,
 
-    /// Tracing enabled.
+    /// Write trace to disk.
     #[cfg(feature = "trace")]
     // This must be owned rather than `&'a Path`, because if it were that, then the lifetime
     // parameter would be unused when the "trace" feature is disabled, which is prohibited.
     Directory(std::path::PathBuf),
+
+    /// Store trace in memory.
+    #[cfg(feature = "trace")]
+    Memory,
 }
