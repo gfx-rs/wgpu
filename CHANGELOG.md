@@ -65,6 +65,10 @@ Naga now requires that no type be larger than 1 GB. This limit may be lowered in
 
 ### Bug Fixes
 
+#### General
+
+- Validate that effective buffer binding size is aligned to 4 when creating bind groups with buffer entries.. By @ErichDonGubler in [8041](https://github.com/gfx-rs/wgpu/pull/8041).
+
 #### Vulkan
 
 Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8043](https://github.com/gfx-rs/wgpu/pull/8043).

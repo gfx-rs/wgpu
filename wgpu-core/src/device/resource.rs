@@ -2470,6 +2470,20 @@ impl Device {
             ),
         };
 
+        if matches!(binding_ty, wgt::BufferBindingType::Storage { .. }) {
+            let storage_buf_size_alignment = 4;
+            let effective_buffer_binding_size = bb
+                .size
+                .map_or_else(|| bb.buffer.size - bb.offset, |s| s.get());
+
+            if effective_buffer_binding_size.get() % u64::from(storage_buf_size_alignment) != 0 {
+                return Err(Error::UnalignedEffectiveBufferBindingSizeForStorage {
+                    alignment: storage_buf_size_alignment,
+                    size: effective_buffer_binding_size,
+                });
+            }
+        }
+
         let (align, align_limit_name) =
             binding_model::buffer_binding_type_alignment(&self.limits, binding_ty);
         if bb.offset % align as u64 != 0 {

@@ -19,6 +19,7 @@ webgpu:api,operation,render_pass,storeOp:render_pass_store_op,color_attachment_w
 webgpu:api,operation,render_pass,storeOp:render_pass_store_op,color_attachment_only:*
 webgpu:api,operation,render_pass,storeOp:render_pass_store_op,multiple_color_attachments:*
 webgpu:api,operation,render_pass,storeOp:render_pass_store_op,depth_stencil_attachment_only:*
+webgpu:api,validation,createBindGroup:buffer,effective_buffer_binding_size:*
 webgpu:api,validation,encoding,beginComputePass:*
 webgpu:api,validation,encoding,beginRenderPass:*
 webgpu:api,validation,encoding,cmds,clearBuffer:*
