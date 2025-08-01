@@ -33,43 +33,13 @@ impl InnerState {
     /// Creates a DirectComposition device and a target for the given window handle.
     /// From a Direct3D 12 device, it creates a Direct3D 11 device and then a DirectComposition device.
     pub unsafe fn init(hwnd: &HWND, device: &super::Device) -> Result<Self, crate::SurfaceError> {
-        let mut d3d11_device = None;
-        {
-            profiling::scope!("Direct3D11on12::D3D11On12CreateDevice");
-            unsafe {
-                Direct3D11on12::D3D11On12CreateDevice(
-                    &device.raw,
-                    Direct3D11::D3D11_CREATE_DEVICE_BGRA_SUPPORT.0,
-                    None,
-                    None,
-                    0,
-                    Some(&mut d3d11_device),
-                    None,
-                    None,
-                )
-            }
-            .map_err(|err| {
-                log::error!("Direct3D11on12::D3D11On12CreateDevice failed: {err}");
-                crate::SurfaceError::Other("Direct3D11on12::D3D11On12CreateDevice")
-            })?;
-        }
-        let d3d11_device = d3d11_device.unwrap();
-
-        let dxgi_device = {
-            profiling::scope!("IDXGIDevice::QueryInterface");
-            d3d11_device.cast::<Dxgi::IDXGIDevice>().map_err(|err| {
-                log::error!("IDXGIDevice::QueryInterface failed: {err}");
-                crate::SurfaceError::Other("IDXGIDevice::QueryInterface")
-            })?
-        };
-
         let dcomp_device = {
             profiling::scope!("DirectComposition::DCompositionCreateDevice");
             unsafe {
-                DirectComposition::DCompositionCreateDevice::<
+                DirectComposition::DCompositionCreateDevice2::<
                     _,
                     DirectComposition::IDCompositionDevice,
-                >(&dxgi_device)
+                >(None)
             }
             .map_err(|err| {
                 log::error!("DirectComposition::DCompositionCreateDevice failed: {err}");
