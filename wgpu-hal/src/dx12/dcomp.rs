@@ -11,10 +11,9 @@ impl DCompState {
     pub unsafe fn get_or_init(
         &mut self,
         hwnd: &HWND,
-        device: &super::Device,
     ) -> Result<&mut InnerState, crate::SurfaceError> {
         if self.inner.is_none() {
-            self.inner = Some(unsafe { InnerState::init(hwnd, device) }?);
+            self.inner = Some(unsafe { InnerState::init(hwnd) }?);
         }
         Ok(self.inner.as_mut().unwrap())
     }
@@ -29,7 +28,7 @@ pub struct InnerState {
 
 impl InnerState {
     /// Creates a DirectComposition device and a target for the given window handle.
-    pub unsafe fn init(hwnd: &HWND, device: &super::Device) -> Result<Self, crate::SurfaceError> {
+    pub unsafe fn init(hwnd: &HWND) -> Result<Self, crate::SurfaceError> {
         let dcomp_device: DirectComposition::IDCompositionDevice = {
             profiling::scope!("DirectComposition::DCompositionCreateDevice");
             unsafe { DirectComposition::DCompositionCreateDevice2(None) }.map_err(|err| {
