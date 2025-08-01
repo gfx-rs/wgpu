@@ -1336,7 +1336,7 @@ impl crate::Surface for Surface {
                         dcomp_state,
                     } => {
                         let mut dcomp_state = dcomp_state.lock();
-                        let dcomp_state = dcomp_state.get_or_init(handle, device)?;
+                        let dcomp_state = unsafe { dcomp_state.get_or_init(handle, device) }?;
                         // Set the new swap chain as the content for the backing visual
                         // and commit the changes to the composition visual tree.
                         {

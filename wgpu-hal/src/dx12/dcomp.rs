@@ -1,8 +1,4 @@
-use windows::Win32::{
-    Foundation::HWND,
-    Graphics::{Direct3D11, Direct3D11on12, DirectComposition, Dxgi},
-};
-use windows_core::Interface as _;
+use windows::Win32::{Foundation::HWND, Graphics::DirectComposition};
 
 #[derive(Default)]
 pub struct DCompState {
@@ -10,7 +6,9 @@ pub struct DCompState {
 }
 
 impl DCompState {
-    pub fn get_or_init(
+    /// This will create a DirectComposition device and a target for the window handle if not already initialized.
+    /// If the device is already initialized, it will return the existing state.
+    pub unsafe fn get_or_init(
         &mut self,
         hwnd: &HWND,
         device: &super::Device,
@@ -31,14 +29,10 @@ pub struct InnerState {
 
 impl InnerState {
     /// Creates a DirectComposition device and a target for the given window handle.
-    /// From a Direct3D 12 device, it creates a Direct3D 11 device and then a DirectComposition device.
     pub unsafe fn init(hwnd: &HWND, device: &super::Device) -> Result<Self, crate::SurfaceError> {
         let dcomp_device: DirectComposition::IDCompositionDevice = {
             profiling::scope!("DirectComposition::DCompositionCreateDevice");
-            unsafe {
-                DirectComposition::DCompositionCreateDevice2(None)
-            }
-            .map_err(|err| {
+            unsafe { DirectComposition::DCompositionCreateDevice2(None) }.map_err(|err| {
                 log::error!("DirectComposition::DCompositionCreateDevice failed: {err}");
                 crate::SurfaceError::Other("DirectComposition::DCompositionCreateDevice")
             })?
