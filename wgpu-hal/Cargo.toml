@@ -145,8 +145,6 @@ dx12 = [
     "windows/Win32_Graphics_Direct3D_Dxc",
     "windows/Win32_Graphics_Direct3D",
     "windows/Win32_Graphics_Direct3D12",
-    "windows/Win32_Graphics_Direct3D11",
-    "windows/Win32_Graphics_Direct3D11on12",
     "windows/Win32_Graphics_DirectComposition",
     "windows/Win32_Graphics_Dxgi_Common",
     "windows/Win32_Security",
