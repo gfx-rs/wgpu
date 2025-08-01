@@ -2520,7 +2520,10 @@ fn set_viewport(
         }
         .into());
     }
-    if !(0.0..=1.0).contains(&depth_min) || !(0.0..=1.0).contains(&depth_max) {
+    if !(0.0..=1.0).contains(&depth_min)
+        || !(0.0..=1.0).contains(&depth_max)
+        || depth_min > depth_max
+    {
         return Err(RenderCommandError::InvalidViewportDepth(depth_min, depth_max).into());
     }
     let r = hal::Rect {

@@ -29,6 +29,7 @@ webgpu:api,validation,encoding,cmds,index_access:*
 //FAIL: webgpu:api,validation,encoding,cmds,render,draw:*
 webgpu:api,validation,encoding,cmds,render,draw:index_buffer_OOB:*
 webgpu:api,validation,encoding,cmds,render,draw:unused_buffer_bound:*
+webgpu:api,validation,encoding,cmds,render,dynamic_state:*
 webgpu:api,validation,encoding,cmds,render,setIndexBuffer:*
 webgpu:api,validation,encoding,cmds,render,setVertexBuffer:*
 webgpu:api,validation,encoding,encoder_state:*
