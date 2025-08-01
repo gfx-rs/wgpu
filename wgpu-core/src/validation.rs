@@ -8,7 +8,10 @@ use core::fmt;
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
 use thiserror::Error;
-use wgt::{BindGroupLayoutEntry, BindingType};
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    BindGroupLayoutEntry, BindingType,
+};
 
 use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
 
@@ -36,12 +39,17 @@ pub enum BindingTypeName {
     Texture,
     Sampler,
     AccelerationStructure,
+    ExternalTexture,
 }
 
 impl From<&ResourceType> for BindingTypeName {
     fn from(ty: &ResourceType) -> BindingTypeName {
         match ty {
             ResourceType::Buffer { .. } => BindingTypeName::Buffer,
+            ResourceType::Texture {
+                class: naga::ImageClass::External,
+                ..
+            } => BindingTypeName::ExternalTexture,
             ResourceType::Texture { .. } => BindingTypeName::Texture,
             ResourceType::Sampler { .. } => BindingTypeName::Sampler,
             ResourceType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
@@ -57,6 +65,7 @@ impl From<&BindingType> for BindingTypeName {
             BindingType::StorageTexture { .. } => BindingTypeName::Texture,
             BindingType::Sampler { .. } => BindingTypeName::Sampler,
             BindingType::AccelerationStructure { .. } => BindingTypeName::AccelerationStructure,
+            BindingType::ExternalTexture => BindingTypeName::ExternalTexture,
         }
     }
 }
@@ -219,6 +228,12 @@ pub enum BindingError {
     BadStorageFormat(wgt::TextureFormat),
 }
 
+impl WebGpuError for BindingError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum FilteringError {
@@ -226,6 +241,12 @@ pub enum FilteringError {
     Integer,
     #[error("Non-filterable float textures can't be sampled with a filtering sampler")]
     Float,
+}
+
+impl WebGpuError for FilteringError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -239,6 +260,12 @@ pub enum InputError {
     InterpolationMismatch(Option<naga::Interpolation>),
     #[error("Input sampling doesn't match provided {0:?}")]
     SamplingMismatch(Option<naga::Sampling>),
+}
+
+impl WebGpuError for InputError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 /// Errors produced when validating a programmable stage of a pipeline.
@@ -286,6 +313,31 @@ pub enum StageError {
     MultipleEntryPointsFound,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+}
+
+impl WebGpuError for StageError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Binding(_, e) => e,
+            Self::InvalidResource(e) => e,
+            Self::Filtering {
+                texture: _,
+                sampler: _,
+                error,
+            } => error,
+            Self::Input {
+                location: _,
+                var: _,
+                error,
+            } => error,
+            Self::InvalidWorkgroupSize { .. }
+            | Self::TooManyVaryings { .. }
+            | Self::MissingEntryPoint(..)
+            | Self::NoEntryPointFound
+            | Self::MultipleEntryPointsFound => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 pub fn map_storage_format_to_naga(format: wgt::TextureFormat) -> Option<naga::StorageFormat> {
@@ -466,6 +518,7 @@ impl Resource {
                 let view_dimension = match entry.ty {
                     BindingType::Texture { view_dimension, .. }
                     | BindingType::StorageTexture { view_dimension, .. } => view_dimension,
+                    BindingType::ExternalTexture => wgt::TextureViewDimension::D2,
                     _ => {
                         return Err(BindingError::WrongTextureViewDimension {
                             dim,
@@ -545,6 +598,7 @@ impl Resource {
                             access: naga_access,
                         }
                     }
+                    BindingType::ExternalTexture => naga::ImageClass::External,
                     _ => {
                         return Err(BindingError::WrongType {
                             binding: (&entry.ty).into(),
@@ -652,6 +706,7 @@ impl Resource {
                             f
                         },
                     },
+                    naga::ImageClass::External => BindingType::ExternalTexture,
                 }
             }
             ResourceType::AccelerationStructure { vertex_return } => {
@@ -888,7 +943,7 @@ impl Interface {
                 // the reality is - every shader coming from `glslc` outputs an array
                 // of clip distances and hits this path :(
                 // So we lower it to `log::warn` to be less annoying.
-                log::warn!("Unexpected varying type: {:?}", other);
+                log::warn!("Unexpected varying type: {other:?}");
                 return;
             }
         };
@@ -1147,6 +1202,9 @@ impl Interface {
                 );
                 let texture_sample_type = match texture_layout.ty {
                     BindingType::Texture { sample_type, .. } => sample_type,
+                    BindingType::ExternalTexture => {
+                        wgt::TextureSampleType::Float { filterable: true }
+                    }
                     _ => unreachable!(),
                 };
 
@@ -1230,6 +1288,7 @@ impl Interface {
                                         )
                                     }
                                     naga::ShaderStage::Compute => (false, 0),
+                                    // TODO: add validation for these, see https://github.com/gfx-rs/wgpu/issues/8003
                                     naga::ShaderStage::Task | naga::ShaderStage::Mesh => {
                                         unreachable!()
                                     }

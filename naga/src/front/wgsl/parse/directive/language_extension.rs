@@ -2,8 +2,6 @@
 //!
 //! The focal point of this module is the [`LanguageExtension`] API.
 
-use strum::VariantArray;
-
 /// A language extension recognized by Naga, but not guaranteed to be present in all environments.
 ///
 /// WGSL spec.: <https://www.w3.org/TR/WGSL/#language-extensions-sec>
@@ -54,7 +52,8 @@ impl LanguageExtension {
 }
 
 /// A variant of [`LanguageExtension::Implemented`].
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, VariantArray)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(test, derive(strum::VariantArray))]
 pub enum ImplementedLanguageExtension {
     ReadOnlyAndReadWriteStorageTextures,
     Packed4x8IntegerDotProduct,
@@ -62,6 +61,13 @@ pub enum ImplementedLanguageExtension {
 }
 
 impl ImplementedLanguageExtension {
+    /// A slice of all variants of [`ImplementedLanguageExtension`].
+    pub const VARIANTS: &'static [Self] = &[
+        Self::ReadOnlyAndReadWriteStorageTextures,
+        Self::Packed4x8IntegerDotProduct,
+        Self::PointerCompositeAccess,
+    ];
+
     /// Returns slice of all variants of [`ImplementedLanguageExtension`].
     pub const fn all() -> &'static [Self] {
         Self::VARIANTS
@@ -81,6 +87,16 @@ impl ImplementedLanguageExtension {
             }
         }
     }
+}
+
+#[test]
+/// Asserts that the manual implementation of VARIANTS is the same as the derived strum version would be
+/// while still allowing strum to be a dev-only dependency
+fn test_manual_variants_array_is_correct() {
+    assert_eq!(
+        <ImplementedLanguageExtension as strum::VariantArray>::VARIANTS,
+        ImplementedLanguageExtension::VARIANTS
+    );
 }
 
 /// A variant of [`LanguageExtension::Unimplemented`].

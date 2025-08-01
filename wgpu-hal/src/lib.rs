@@ -225,6 +225,8 @@
     clippy::missing_safety_doc,
     // It gets in the way a lot and does not prevent bugs in practice.
     clippy::pattern_type_mismatch,
+    // We should investigate these.
+    clippy::large_enum_variant
 )]
 #![warn(
     clippy::alloc_instead_of_core,
@@ -275,6 +277,11 @@ pub mod api {
 }
 
 mod dynamic;
+#[cfg(feature = "validation_canary")]
+mod validation_canary;
+
+#[cfg(feature = "validation_canary")]
+pub use validation_canary::{ValidationCanary, VALIDATION_CANARY};
 
 pub(crate) use dynamic::impl_dyn_resource;
 pub use dynamic::{
@@ -287,20 +294,27 @@ pub use dynamic::{
 
 #[allow(unused)]
 use alloc::boxed::Box;
-use alloc::{borrow::Cow, string::String, sync::Arc, vec::Vec};
+use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::{
     borrow::Borrow,
     error::Error,
     fmt,
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroU64},
     ops::{Range, RangeInclusive},
     ptr::NonNull,
 };
 
 use bitflags::bitflags;
-use parking_lot::Mutex;
 use thiserror::Error;
 use wgt::WasmNotSendSync;
+
+cfg_if::cfg_if! {
+    if #[cfg(supports_ptr_atomics)] {
+        use alloc::sync::Arc;
+    } else if #[cfg(feature = "portable-atomic")] {
+        use portable_atomic_util::Arc;
+    }
+}
 
 // - Vertex + Fragment
 // - Compute
@@ -363,8 +377,6 @@ pub enum DeviceError {
     OutOfMemory,
     #[error("Device is lost")]
     Lost,
-    #[error("Creation of a resource failed for a reason other than running out of memory.")]
-    ResourceCreationFailed,
     #[error("Unexpected error variant (driver implementation is at fault)")]
     Unexpected,
 }
@@ -446,14 +458,32 @@ impl InstanceError {
     }
     #[allow(dead_code)] // may be unused on some platforms
     pub(crate) fn with_source(message: String, source: impl Error + Send + Sync + 'static) -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(supports_ptr_atomics)] {
+                let source = Arc::new(source);
+            } else {
+                // TODO(https://github.com/rust-lang/rust/issues/18598): avoid indirection via Box once arbitrary types support unsized coercion
+                let source: Box<dyn Error + Send + Sync + 'static> = Box::new(source);
+                let source = Arc::from(source);
+            }
+        }
         Self {
             message,
-            source: Some(Arc::new(source)),
+            source: Some(source),
         }
     }
 }
 
-pub trait Api: Clone + fmt::Debug + Sized {
+/// All the types and methods that make up a implementation on top of a backend.
+///
+/// Only the types that have non-dyn trait bounds have methods on them. Most methods
+/// are either on [`CommandEncoder`] or [`Device`].
+///
+/// The api can either be used through generics (through use of this trait and associated
+/// types) or dynamically through using the `Dyn*` traits.
+pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
+    const VARIANT: wgt::Backend;
+
     type Instance: DynInstance + Instance<A = Self>;
     type Surface: DynSurface + Surface<A = Self>;
     type Adapter: DynAdapter + Adapter<A = Self>;
@@ -896,15 +926,6 @@ pub trait Device: WasmNotSendSync {
     unsafe fn create_render_pipeline(
         &self,
         desc: &RenderPipelineDescriptor<
-            <Self::A as Api>::PipelineLayout,
-            <Self::A as Api>::ShaderModule,
-            <Self::A as Api>::PipelineCache,
-        >,
-    ) -> Result<<Self::A as Api>::RenderPipeline, PipelineError>;
-    #[allow(clippy::type_complexity)]
-    unsafe fn create_mesh_pipeline(
-        &self,
-        desc: &MeshPipelineDescriptor<
             <Self::A as Api>::PipelineLayout,
             <Self::A as Api>::ShaderModule,
             <Self::A as Api>::PipelineCache,
@@ -1785,6 +1806,10 @@ pub struct Capabilities {
     pub downlevel: wgt::DownlevelCapabilities,
 }
 
+/// An adapter with all the information needed to reason about its capabilities.
+///
+/// These are either made by [`Instance::enumerate_adapters`] or by backend specific
+/// methods on the backend [`Instance`] or [`Adapter`].
 #[derive(Debug)]
 pub struct ExposedAdapter<A: Api> {
     pub adapter: A::Adapter,
@@ -1839,6 +1864,10 @@ pub struct AcquiredSurfaceTexture<A: Api> {
     pub suboptimal: bool,
 }
 
+/// An open connection to a device and a queue.
+///
+/// This can be created from [`Adapter::open`] or backend
+/// specific methods on the backend's [`Instance`] or [`Adapter`].
 #[derive(Debug)]
 pub struct OpenDevice<A: Api> {
     pub device: A::Device,
@@ -1949,11 +1978,18 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 ///
 /// [`BindGroup`]: Api::BindGroup
 ///
+/// ## Construction
+///
+/// The recommended way to construct a `BufferBinding` is using the `binding`
+/// method on a wgpu-core `Buffer`, which will validate the binding size
+/// against the buffer size. A `new_unchecked` constructor is also provided for
+/// cases where direct construction is necessary.
+///
 /// ## Accessible region
 ///
 /// `wgpu_hal` guarantees that shaders compiled with
 /// [`ShaderModuleDescriptor::runtime_checks`] set to `true` cannot read or
-/// write data via this binding outside the *accessible region* of [`buffer`]:
+/// write data via this binding outside the *accessible region* of a buffer:
 ///
 /// - The accessible region starts at [`offset`].
 ///
@@ -1973,28 +2009,39 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
 /// parts of which buffers shaders might observe. This optimization is only
 /// sound if shader access is bounds-checked.
 ///
-/// [`buffer`]: BufferBinding::buffer
+/// ## Zero-length bindings
+///
+/// Some back ends cannot tolerate zero-length regions; for example, see
+/// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
+/// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
+/// documentation for GLES's [glBindBufferRange][bbr]. This documentation
+/// previously stated that a `BufferBinding` must have `offset` strictly less
+/// than the size of the buffer, but this restriction was not honored elsewhere
+/// in the code, so has been removed. However, it remains the case that
+/// some backends do not support zero-length bindings, so additional
+/// logic is needed somewhere to handle this properly. See
+/// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+///
 /// [`offset`]: BufferBinding::offset
 /// [`size`]: BufferBinding::size
 /// [`Storage`]: wgt::BufferBindingType::Storage
 /// [`Uniform`]: wgt::BufferBindingType::Uniform
+/// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
+/// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
+/// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
 /// [woob]: https://gpuweb.github.io/gpuweb/wgsl/#out-of-bounds-access-sec
 #[derive(Debug)]
 pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     /// The buffer being bound.
-    pub buffer: &'a B,
+    ///
+    /// This is not fully `pub` to prevent direct construction of
+    /// `BufferBinding`s, while still allowing public read access to the `offset`
+    /// and `size` properties.
+    pub(crate) buffer: &'a B,
 
     /// The offset at which the bound region starts.
     ///
-    /// This must be less than the size of the buffer. Some back ends
-    /// cannot tolerate zero-length regions; for example, see
-    /// [VUID-VkDescriptorBufferInfo-offset-00340][340] and
-    /// [VUID-VkDescriptorBufferInfo-range-00341][341], or the
-    /// documentation for GLES's [glBindBufferRange][bbr].
-    ///
-    /// [340]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-offset-00340
-    /// [341]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VUID-VkDescriptorBufferInfo-range-00341
-    /// [bbr]: https://registry.khronos.org/OpenGL-Refpages/es3.0/html/glBindBufferRange.xhtml
+    /// This must be less or equal to the size of the buffer.
     pub offset: wgt::BufferAddress,
 
     /// The size of the region bound, in bytes.
@@ -2005,12 +2052,71 @@ pub struct BufferBinding<'a, B: DynBuffer + ?Sized> {
     pub size: Option<wgt::BufferSize>,
 }
 
-impl<'a, T: DynBuffer + ?Sized> Clone for BufferBinding<'a, T> {
+// We must implement this manually because `B` is not necessarily `Clone`.
+impl<B: DynBuffer + ?Sized> Clone for BufferBinding<'_, B> {
     fn clone(&self) -> Self {
         BufferBinding {
             buffer: self.buffer,
             offset: self.offset,
             size: self.size,
+        }
+    }
+}
+
+/// Temporary convenience trait to let us call `.get()` on `u64`s in code that
+/// really wants to be using `NonZeroU64`.
+/// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove this
+pub trait ShouldBeNonZeroExt {
+    fn get(&self) -> u64;
+}
+
+impl ShouldBeNonZeroExt for NonZeroU64 {
+    fn get(&self) -> u64 {
+        NonZeroU64::get(*self)
+    }
+}
+
+impl ShouldBeNonZeroExt for u64 {
+    fn get(&self) -> u64 {
+        *self
+    }
+}
+
+impl ShouldBeNonZeroExt for Option<NonZeroU64> {
+    fn get(&self) -> u64 {
+        match *self {
+            Some(non_zero) => non_zero.get(),
+            None => 0,
+        }
+    }
+}
+
+impl<'a, B: DynBuffer + ?Sized> BufferBinding<'a, B> {
+    /// Construct a `BufferBinding` with the given contents.
+    ///
+    /// When possible, use the `binding` method on a wgpu-core `Buffer` instead
+    /// of this method. `Buffer::binding` validates the size of the binding
+    /// against the size of the buffer.
+    ///
+    /// It is more difficult to provide a validating constructor here, due to
+    /// not having direct access to the size of a `DynBuffer`.
+    ///
+    /// SAFETY: The caller is responsible for ensuring that a binding of `size`
+    /// bytes starting at `offset` is contained within the buffer.
+    ///
+    /// The `S` type parameter is a temporary convenience to allow callers to
+    /// pass a zero size. When the zero-size binding issue is resolved, the
+    /// argument should just match the type of the member.
+    /// TODO(<https://github.com/gfx-rs/wgpu/issues/3170>): remove the parameter
+    pub fn new_unchecked<S: Into<Option<NonZeroU64>>>(
+        buffer: &'a B,
+        offset: wgt::BufferAddress,
+        size: S,
+    ) -> Self {
+        Self {
+            buffer,
+            offset,
+            size: size.into(),
         }
     }
 }
@@ -2026,6 +2132,23 @@ impl<'a, T: DynTextureView + ?Sized> Clone for TextureBinding<'a, T> {
         TextureBinding {
             view: self.view,
             usage: self.usage,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ExternalTextureBinding<'a, B: DynBuffer + ?Sized, T: DynTextureView + ?Sized> {
+    pub planes: [TextureBinding<'a, T>; 3],
+    pub params: BufferBinding<'a, B>,
+}
+
+impl<'a, B: DynBuffer + ?Sized, T: DynTextureView + ?Sized> Clone
+    for ExternalTextureBinding<'a, B, T>
+{
+    fn clone(&self) -> Self {
+        ExternalTextureBinding {
+            planes: self.planes.clone(),
+            params: self.params.clone(),
         }
     }
 }
@@ -2063,6 +2186,7 @@ pub struct BindGroupDescriptor<
     pub textures: &'a [TextureBinding<'a, T>],
     pub entries: &'a [BindGroupEntry],
     pub acceleration_structures: &'a [&'a A],
+    pub external_textures: &'a [ExternalTextureBinding<'a, B, T>],
 }
 
 #[derive(Clone, Debug)]
@@ -2100,6 +2224,16 @@ pub enum ShaderInput<'a> {
         num_workgroups: (u32, u32, u32),
     },
     SpirV(&'a [u32]),
+    Dxil {
+        shader: &'a [u8],
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+    },
+    Hlsl {
+        shader: &'a str,
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+    },
 }
 
 pub struct ShaderModuleDescriptor<'a> {
@@ -2180,6 +2314,20 @@ pub struct VertexBufferLayout<'a> {
     pub attributes: &'a [wgt::VertexAttribute],
 }
 
+#[derive(Clone, Debug)]
+pub enum VertexProcessor<'a, M: DynShaderModule + ?Sized> {
+    Standard {
+        /// The format of any vertex buffers used with this pipeline.
+        vertex_buffers: &'a [VertexBufferLayout<'a>],
+        /// The vertex stage for this pipeline.
+        vertex_stage: ProgrammableStage<'a, M>,
+    },
+    Mesh {
+        task_stage: Option<ProgrammableStage<'a, M>>,
+        mesh_stage: ProgrammableStage<'a, M>,
+    },
+}
+
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
 pub struct RenderPipelineDescriptor<
@@ -2191,37 +2339,8 @@ pub struct RenderPipelineDescriptor<
     pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
     pub layout: &'a Pl,
-    /// The format of any vertex buffers used with this pipeline.
-    pub vertex_buffers: &'a [VertexBufferLayout<'a>],
-    /// The vertex stage for this pipeline.
-    pub vertex_stage: ProgrammableStage<'a, M>,
-    /// The properties of the pipeline at the primitive assembly and rasterization level.
-    pub primitive: wgt::PrimitiveState,
-    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil: Option<wgt::DepthStencilState>,
-    /// The multi-sampling properties of the pipeline.
-    pub multisample: wgt::MultisampleState,
-    /// The fragment stage for this pipeline.
-    pub fragment_stage: Option<ProgrammableStage<'a, M>>,
-    /// The effect of draw calls on the color aspect of the output target.
-    pub color_targets: &'a [Option<wgt::ColorTargetState>],
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
-    pub multiview: Option<NonZeroU32>,
-    /// The cache which will be used and filled when compiling this pipeline
-    pub cache: Option<&'a Pc>,
-}
-pub struct MeshPipelineDescriptor<
-    'a,
-    Pl: DynPipelineLayout + ?Sized,
-    M: DynShaderModule + ?Sized,
-    Pc: DynPipelineCache + ?Sized,
-> {
-    pub label: Label<'a>,
-    /// The layout of bind groups for this pipeline.
-    pub layout: &'a Pl,
-    pub task_stage: Option<ProgrammableStage<'a, M>>,
-    pub mesh_stage: ProgrammableStage<'a, M>,
+    /// The vertex processing state(vertex shader + buffers or task + mesh shaders)
+    pub vertex_processor: VertexProcessor<'a, M>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
@@ -2373,42 +2492,6 @@ pub struct RenderPassDescriptor<'a, Q: DynQuerySet + ?Sized, T: DynTextureView +
 pub struct ComputePassDescriptor<'a, Q: DynQuerySet + ?Sized> {
     pub label: Label<'a>,
     pub timestamp_writes: Option<PassTimestampWrites<'a, Q>>,
-}
-
-/// Stores the text of any validation errors that have occurred since
-/// the last call to `get_and_reset`.
-///
-/// Each value is a validation error and a message associated with it,
-/// or `None` if the error has no message from the api.
-///
-/// This is used for internal wgpu testing only and _must not_ be used
-/// as a way to check for errors.
-///
-/// This works as a static because `cargo nextest` runs all of our
-/// tests in separate processes, so each test gets its own canary.
-///
-/// This prevents the issue of one validation error terminating the
-/// entire process.
-pub static VALIDATION_CANARY: ValidationCanary = ValidationCanary {
-    inner: Mutex::new(Vec::new()),
-};
-
-/// Flag for internal testing.
-pub struct ValidationCanary {
-    inner: Mutex<Vec<String>>,
-}
-
-impl ValidationCanary {
-    #[allow(dead_code)] // in some configurations this function is dead
-    fn add(&self, msg: String) {
-        self.inner.lock().push(msg);
-    }
-
-    /// Returns any API validation errors that have occurred in this process
-    /// since the last call to this function.
-    pub fn get_and_reset(&self) -> Vec<String> {
-        self.inner.lock().drain(..).collect()
-    }
 }
 
 #[test]

@@ -29,9 +29,13 @@ harness = true
 
 [features]
 webgl = ["wgpu/webgl"]
+# This feature is not actually used by this package, but it being present somewhere in the workspace
+# allows us to force the build to have profiling code enabled so we can test that configuration.
+test-build-with-profiling = ["profiling/type-check"]
 
 [dependencies]
 wgpu = { workspace = true, features = ["noop"] }
+wgpu-hal = { workspace = true, features = ["validation_canary"] }
 wgpu-macros.workspace = true
 
 anyhow.workspace = true
@@ -39,7 +43,6 @@ arrayvec.workspace = true
 approx.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
-cargo_metadata.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true
@@ -61,9 +64,13 @@ trybuild.workspace = true
 
 # Non-Webassembly
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Cargo-metadata doesn't compile on wasm due to old cargo-util-schemas dependency.
+cargo_metadata.workspace = true
 env_logger.workspace = true
-nv-flip.workspace = true
 parking_lot = { workspace = true, features = ["deadlock_detection"] }
+
+[target.'cfg(not(any(target_arch = "wasm32", miri)))'.dependencies]
+nv-flip.workspace = true
 
 # Webassembly
 [target.'cfg(target_arch = "wasm32")'.dependencies]

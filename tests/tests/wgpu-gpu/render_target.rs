@@ -2,7 +2,19 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     vertex_attr_array,
 };
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        DRAW_TO_2D_VIEW,
+        DRAW_TO_2D_ARRAY_VIEW,
+        RESOLVE_TO_2D_VIEW,
+        RESOLVE_TO_2D_ARRAY_VIEW,
+        DRAW_TO_3D_VIEW,
+    ]);
+}
 
 #[gpu_test]
 static DRAW_TO_2D_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()

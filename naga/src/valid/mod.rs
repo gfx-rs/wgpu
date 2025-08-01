@@ -29,11 +29,14 @@ pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, Uniformi
 pub use compose::ComposeError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
-pub use function::{CallError, FunctionError, LocalVariableError};
+pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, PushConstantError, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
+
+/// Maximum size of a type, in bytes.
+pub const MAX_TYPE_SIZE: u32 = 0x4000_0000; // 1GB
 
 bitflags::bitflags! {
     /// Validation flags.
@@ -165,6 +168,8 @@ bitflags::bitflags! {
         const RAY_HIT_VERTEX_POSITION = 1 << 25;
         /// Support for 16-bit floating-point types.
         const SHADER_FLOAT16 = 1 << 26;
+        /// Support for [`ImageClass::External`]
+        const TEXTURE_EXTERNAL = 1 << 27;
     }
 }
 
@@ -195,8 +200,8 @@ bitflags::bitflags! {
         // We don't support these operations yet
         // /// Clustered
         // const CLUSTERED = 1 << 6;
-        // /// Quad supported
-        // const QUAD_FRAGMENT_COMPUTE = 1 << 7;
+        /// Quad supported
+        const QUAD_FRAGMENT_COMPUTE = 1 << 7;
         // /// Quad supported in all stages
         // const QUAD_ALL_STAGES = 1 << 8;
     }
@@ -221,6 +226,7 @@ impl super::GatherMode {
             Self::BroadcastFirst | Self::Broadcast(_) => S::BALLOT,
             Self::Shuffle(_) | Self::ShuffleXor(_) => S::SHUFFLE,
             Self::ShuffleUp(_) | Self::ShuffleDown(_) => S::SHUFFLE_RELATIVE,
+            Self::QuadBroadcast(_) | Self::QuadSwap(_) => S::QUAD_FRAGMENT_COMPUTE,
         }
     }
 }
@@ -453,11 +459,29 @@ impl crate::TypeInner {
 }
 
 impl Validator {
-    /// Construct a new validator instance.
+    /// Create a validator for Naga [`Module`]s.
+    ///
+    /// The `flags` argument indicates which stages of validation the
+    /// returned `Validator` should perform. Skipping stages can make
+    /// validation somewhat faster, but the validator may not reject some
+    /// invalid modules. Regardless of `flags`, validation always returns
+    /// a usable [`ModuleInfo`] value on success.
+    ///
+    /// If `flags` contains everything in `ValidationFlags::default()`,
+    /// then the returned Naga [`Validator`] will reject any [`Module`]
+    /// that would use capabilities not included in `capabilities`.
+    ///
+    /// [`Module`]: crate::Module
     pub fn new(flags: ValidationFlags, capabilities: Capabilities) -> Self {
         let subgroup_operations = if capabilities.contains(Capabilities::SUBGROUP) {
             use SubgroupOperationSet as S;
-            S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
+            S::BASIC
+                | S::VOTE
+                | S::ARITHMETIC
+                | S::BALLOT
+                | S::SHUFFLE
+                | S::SHUFFLE_RELATIVE
+                | S::QUAD_FRAGMENT_COMPUTE
         } else {
             SubgroupOperationSet::empty()
         };

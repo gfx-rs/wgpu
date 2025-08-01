@@ -78,3 +78,24 @@ fn index_dynamic_array_constant_index() -> f32 {
 fn set_dynamic_array_constant_index(v: f32) {
    globals.d[1000] = v;
 }
+
+@compute @workgroup_size(1)
+fn main() {
+    index_array(1);
+    index_dynamic_array(1);
+    index_vector(1);
+    index_vector_by_value(vec4f(2, 3, 4, 5), 6);
+    index_matrix(1);
+    index_twice(1, 2);
+    index_expensive(1);
+    index_in_bounds();
+    set_array(1, 2.);
+    set_dynamic_array(1, 2.);
+    set_vector(1, 2.);
+    set_matrix(1, vec4f(2, 3, 4, 5));
+    set_index_twice(1, 2, 1.);
+    set_expensive(1, 1.);
+    set_in_bounds(1.);
+    index_dynamic_array_constant_index();
+    set_dynamic_array_constant_index(1.);
+}

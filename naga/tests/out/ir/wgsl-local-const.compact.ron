@@ -26,6 +26,7 @@
         ray_desc: None,
         ray_intersection: None,
         ray_vertex_return: None,
+        external_texture_params: None,
         predeclared_types: {},
     ),
     constants: [
@@ -72,7 +73,35 @@
             diagnostic_filter_leaf: None,
         ),
     ],
-    entry_points: [],
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("main"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 0,
+                        arguments: [],
+                        result: None,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
     diagnostic_filters: [],
     diagnostic_filter_leaf: None,
+    doc_comments: None,
 )

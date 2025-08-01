@@ -106,7 +106,7 @@ impl Allocator {
         };
 
         let allocator = gpu_allocator::d3d12::Allocator::new(&allocator_desc).inspect_err(|e| {
-            log::error!("Failed to create d3d12 allocator, error: {}", e);
+            log::error!("Failed to create d3d12 allocator, error: {e}");
         })?;
 
         Ok(Self {
@@ -566,6 +566,14 @@ impl<'a> DeviceAllocationContext<'a> {
                 .GetResourceAllocationInfo(0, core::slice::from_ref(desc))
         };
 
+        // Some versions of WARP return SizeInBytes == 0 for very large
+        // allocations. Proceeding to attempt to allocate a zero-sized resource
+        // will result in a device lost error, so it seems preferable to return
+        // an out of memory error now.
+        if allocation_info.SizeInBytes == 0 {
+            return Err(crate::DeviceError::OutOfMemory);
+        }
+
         let Some(threshold) = self
             .mem_allocator
             .memory_budget_thresholds
@@ -602,8 +610,10 @@ impl<'a> DeviceAllocationContext<'a> {
             }
         };
 
-        if info.CurrentUsage + allocation_info.SizeInBytes.max(memblock_size)
-            >= info.Budget / 100 * threshold as u64
+        if info
+            .CurrentUsage
+            .checked_add(allocation_info.SizeInBytes.max(memblock_size))
+            .is_none_or(|usage| usage >= info.Budget / 100 * threshold as u64)
         {
             return Err(crate::DeviceError::OutOfMemory);
         }
@@ -617,7 +627,7 @@ impl From<gpu_allocator::AllocationError> for crate::DeviceError {
         match result {
             gpu_allocator::AllocationError::OutOfMemory => Self::OutOfMemory,
             gpu_allocator::AllocationError::FailedToMap(e) => {
-                log::error!("DX12 gpu-allocator: Failed to map: {}", e);
+                log::error!("DX12 gpu-allocator: Failed to map: {e}");
                 Self::Lost
             }
             gpu_allocator::AllocationError::NoCompatibleMemoryTypeFound => {
@@ -629,15 +639,12 @@ impl From<gpu_allocator::AllocationError> for crate::DeviceError {
                 Self::Lost
             }
             gpu_allocator::AllocationError::InvalidAllocatorCreateDesc(e) => {
-                log::error!(
-                    "DX12 gpu-allocator: Invalid Allocator Creation Description: {}",
-                    e
-                );
+                log::error!("DX12 gpu-allocator: Invalid Allocator Creation Description: {e}");
                 Self::Lost
             }
 
             gpu_allocator::AllocationError::Internal(e) => {
-                log::error!("DX12 gpu-allocator: Internal Error: {}", e);
+                log::error!("DX12 gpu-allocator: Internal Error: {e}");
                 Self::Lost
             }
             gpu_allocator::AllocationError::BarrierLayoutNeedsDevice10

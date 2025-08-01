@@ -1,7 +1,11 @@
 use wgpu::{DownlevelFlags, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest};
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([UNPACK4xU8, UNPACK4xI8, PACK4xU8, PACK4xI8]);
+}
 
 #[allow(non_snake_case)]
 fn create_unpack4xU8_test() -> Vec<ShaderTest> {

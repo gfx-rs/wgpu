@@ -20,7 +20,7 @@
 
 use super::{range::RangedStates, PendingTransition, PendingTransitionList};
 use crate::{
-    resource::{Texture, TextureInner, TextureView, Trackable},
+    resource::{RawResourceAccess, Texture, TextureInner, TextureView, Trackable},
     snatch::SnatchGuard,
     track::{
         invalid_resource_state, skip_barrier, ResourceMetadata, ResourceMetadataProvider,

@@ -236,7 +236,7 @@ impl super::DeviceShared {
         &self,
         buffer: &'a super::Buffer,
         ranges: I,
-    ) -> Option<impl 'a + Iterator<Item = vk::MappedMemoryRange>> {
+    ) -> Option<impl 'a + Iterator<Item = vk::MappedMemoryRange<'a>>> {
         let block = buffer.block.as_ref()?.lock();
         let mask = self.private_caps.non_coherent_map_mask;
         Some(ranges.map(move |range| {
@@ -573,16 +573,19 @@ impl super::Device {
         let images =
             unsafe { functor.get_swapchain_images(raw) }.map_err(super::map_host_device_oom_err)?;
 
-        // NOTE: It's important that we define at least images.len() wait
-        // semaphores, since we prospectively need to provide the call to
-        // acquire the next image with an unsignaled semaphore.
-        let surface_semaphores = (0..=images.len())
-            .map(|_| {
-                super::SwapchainImageSemaphores::new(&self.shared)
+        // NOTE: It's important that we define the same number of acquire/present semaphores
+        // as we will need to index into them with the image index.
+        let acquire_semaphores = (0..=images.len())
+            .map(|i| {
+                super::SwapchainAcquireSemaphore::new(&self.shared, i)
                     .map(Mutex::new)
                     .map(Arc::new)
             })
             .collect::<Result<Vec<_>, _>>()?;
+
+        let present_semaphores = (0..=images.len())
+            .map(|i| Arc::new(Mutex::new(super::SwapchainPresentSemaphores::new(i))))
+            .collect::<Vec<_>>();
 
         Ok(super::Swapchain {
             raw,
@@ -590,8 +593,9 @@ impl super::Device {
             device: Arc::clone(&self.shared),
             images,
             config: config.clone(),
-            surface_semaphores,
-            next_semaphore_index: 0,
+            acquire_semaphores,
+            next_acquire_index: 0,
+            present_semaphores,
             next_present_time: None,
         })
     }
@@ -603,6 +607,7 @@ impl super::Device {
     ///   `drop_callback` is [`Some`], `vk_image` must be valid until the callback is called.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
     pub unsafe fn texture_from_raw(
+        &self,
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
         drop_callback: Option<crate::DropCallback>,
@@ -624,6 +629,8 @@ impl super::Device {
             raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
         }
 
+        let identity = self.shared.texture_identity_factory.next();
+
         let drop_guard = crate::DropGuard::from_option(drop_callback);
 
         super::Texture {
@@ -633,6 +640,7 @@ impl super::Device {
             block: None,
             format: desc.format,
             copy_size: desc.copy_extent(),
+            identity,
         }
     }
 
@@ -752,7 +760,7 @@ impl super::Device {
             .contains(wgt::Features::VULKAN_EXTERNAL_MEMORY_WIN32)
         {
             log::error!("Vulkan driver does not support VK_KHR_external_memory_win32");
-            return Err(crate::DeviceError::ResourceCreationFailed);
+            return Err(crate::DeviceError::Unexpected);
         }
 
         let mut external_memory_image_info = vk::ExternalMemoryImageCreateInfo::default()
@@ -761,16 +769,26 @@ impl super::Device {
         let image =
             self.create_image_without_memory(desc, Some(&mut external_memory_image_info))?;
 
+        // Some external memory types require dedicated allocation
+        // https://docs.vulkan.org/guide/latest/extensions/external.html#_importing_memory
+        let mut dedicated_allocate_info =
+            vk::MemoryDedicatedAllocateInfo::default().image(image.raw);
+
         let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::default()
             .handle_type(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE)
             .handle(d3d11_shared_handle.0 as _);
+        // TODO: We should use `push_next` instead, but currently ash does not provide this method for the `ImportMemoryWin32HandleInfoKHR` type.
+        #[allow(clippy::unnecessary_mut_passed)]
+        {
+            import_memory_info.p_next = <*const _>::cast(&mut dedicated_allocate_info);
+        }
 
         let mem_type_index = self
             .find_memory_type_index(
                 image.requirements.memory_type_bits,
                 vk::MemoryPropertyFlags::DEVICE_LOCAL,
             )
-            .ok_or(crate::DeviceError::ResourceCreationFailed)?;
+            .ok_or(crate::DeviceError::Unexpected)?;
 
         let memory_allocate_info = vk::MemoryAllocateInfo::default()
             .allocation_size(image.requirements.size)
@@ -786,6 +804,8 @@ impl super::Device {
             unsafe { self.shared.set_object_name(image.raw, label) };
         }
 
+        let identity = self.shared.texture_identity_factory.next();
+
         self.counters.textures.add(1);
 
         Ok(super::Texture {
@@ -795,18 +815,8 @@ impl super::Device {
             block: None,
             format: desc.format,
             copy_size: image.copy_size,
+            identity,
         })
-    }
-
-    /// # Safety
-    ///
-    /// - `vk_buffer`'s memory must be managed by the caller
-    /// - Externally imported buffers can't be mapped by `wgpu`
-    pub unsafe fn buffer_from_raw(vk_buffer: vk::Buffer) -> super::Buffer {
-        super::Buffer {
-            raw: vk_buffer,
-            block: None,
-        }
     }
 
     fn create_shader_module_impl(
@@ -875,7 +885,7 @@ impl super::Device {
                     if let Some(ref debug) = naga_shader.debug_source {
                         temp_options.debug_info = Some(naga::back::spv::DebugInfo {
                             source_code: &debug.source_code,
-                            file_name: debug.file_name.as_ref().as_ref(),
+                            file_name: debug.file_name.as_ref().into(),
                             language: naga::back::spv::SourceLanguage::WGSL,
                         })
                     }
@@ -892,6 +902,7 @@ impl super::Device {
                 let (module, info) = naga::back::pipeline_constants::process_overrides(
                     &naga_shader.module,
                     &naga_shader.info,
+                    Some((naga_stage, stage.entry_point)),
                     stage.constants,
                 )
                 .map_err(|e| {
@@ -1142,7 +1153,7 @@ impl crate::Device for super::Device {
 
         Ok(super::Buffer {
             raw,
-            block: Some(Mutex::new(block)),
+            block: Some(Mutex::new(super::BufferMemoryBacking::Managed(block))),
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
@@ -1150,7 +1161,14 @@ impl crate::Device for super::Device {
         if let Some(block) = buffer.block {
             let block = block.into_inner();
             self.counters.buffer_memory.sub(block.size() as isize);
-            unsafe { self.mem_allocator.lock().dealloc(&*self.shared, block) };
+            match block {
+                super::BufferMemoryBacking::Managed(block) => unsafe {
+                    self.mem_allocator.lock().dealloc(&*self.shared, block)
+                },
+                super::BufferMemoryBacking::VulkanMemory { memory, .. } => unsafe {
+                    self.shared.raw.free_memory(memory, None);
+                },
+            }
         }
 
         self.counters.buffers.sub(1);
@@ -1168,18 +1186,27 @@ impl crate::Device for super::Device {
         if let Some(ref block) = buffer.block {
             let size = range.end - range.start;
             let mut block = block.lock();
-            let ptr = unsafe { block.map(&*self.shared, range.start, size as usize)? };
-            let is_coherent = block
-                .props()
-                .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT);
-            Ok(crate::BufferMapping { ptr, is_coherent })
+            if let super::BufferMemoryBacking::Managed(ref mut block) = *block {
+                let ptr = unsafe { block.map(&*self.shared, range.start, size as usize)? };
+                let is_coherent = block
+                    .props()
+                    .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT);
+                Ok(crate::BufferMapping { ptr, is_coherent })
+            } else {
+                crate::hal_usage_error("tried to map externally created buffer")
+            }
         } else {
             crate::hal_usage_error("tried to map external buffer")
         }
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
         if let Some(ref block) = buffer.block {
-            unsafe { block.lock().unmap(&*self.shared) };
+            match &mut *block.lock() {
+                super::BufferMemoryBacking::Managed(block) => unsafe { block.unmap(&*self.shared) },
+                super::BufferMemoryBacking::VulkanMemory { .. } => {
+                    crate::hal_usage_error("tried to unmap externally created buffer")
+                }
+            };
         } else {
             crate::hal_usage_error("tried to unmap external buffer")
         }
@@ -1258,6 +1285,8 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(image.raw, label) };
         }
 
+        let identity = self.shared.texture_identity_factory.next();
+
         self.counters.textures.add(1);
 
         Ok(super::Texture {
@@ -1267,6 +1296,7 @@ impl crate::Device for super::Device {
             block: Some(block),
             format: desc.format,
             copy_size: image.copy_size,
+            identity,
         })
     }
     unsafe fn destroy_texture(&self, texture: super::Texture) {
@@ -1319,6 +1349,8 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
+        let identity = self.shared.texture_view_identity_factory.next();
+
         self.counters.texture_views.add(1);
 
         Ok(super::TextureView {
@@ -1329,6 +1361,8 @@ impl crate::Device for super::Device {
             raw_format,
             base_mip_level: desc.range.base_mip_level,
             dimension: desc.dimension,
+            texture_identity: texture.identity,
+            view_identity: identity,
         })
     }
     unsafe fn destroy_texture_view(&self, view: super::TextureView) {
@@ -1482,6 +1516,7 @@ impl crate::Device for super::Device {
                 wgt::BindingType::AccelerationStructure { .. } => {
                     desc_count.acceleration_structure += count;
                 }
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             }
         }
 
@@ -1872,7 +1907,7 @@ impl crate::Device for super::Device {
                         .as_ref()
                         .map(|d| naga::back::spv::DebugInfo {
                             source_code: d.source_code.as_ref(),
-                            file_name: d.file_name.as_ref().as_ref(),
+                            file_name: d.file_name.as_ref().into(),
                             language: naga::back::spv::SourceLanguage::WGSL,
                         });
                 if !desc.runtime_checks.bounds_checks {
@@ -1895,6 +1930,9 @@ impl crate::Device for super::Device {
             }
             crate::ShaderInput::Msl { .. } => {
                 panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
+            }
+            crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
+                panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
             }
             crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
         };
@@ -1941,25 +1979,32 @@ impl crate::Device for super::Device {
             ..Default::default()
         };
         let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
-        let mut vertex_buffers = Vec::with_capacity(desc.vertex_buffers.len());
+        let mut vertex_buffers = Vec::new();
         let mut vertex_attributes = Vec::new();
 
-        for (i, vb) in desc.vertex_buffers.iter().enumerate() {
-            vertex_buffers.push(vk::VertexInputBindingDescription {
-                binding: i as u32,
-                stride: vb.array_stride as u32,
-                input_rate: match vb.step_mode {
-                    wgt::VertexStepMode::Vertex => vk::VertexInputRate::VERTEX,
-                    wgt::VertexStepMode::Instance => vk::VertexInputRate::INSTANCE,
-                },
-            });
-            for at in vb.attributes {
-                vertex_attributes.push(vk::VertexInputAttributeDescription {
-                    location: at.shader_location,
+        if let crate::VertexProcessor::Standard {
+            vertex_buffers: desc_vertex_buffers,
+            vertex_stage: _,
+        } = &desc.vertex_processor
+        {
+            vertex_buffers = Vec::with_capacity(desc_vertex_buffers.len());
+            for (i, vb) in desc_vertex_buffers.iter().enumerate() {
+                vertex_buffers.push(vk::VertexInputBindingDescription {
                     binding: i as u32,
-                    format: conv::map_vertex_format(at.format),
-                    offset: at.offset as u32,
+                    stride: vb.array_stride as u32,
+                    input_rate: match vb.step_mode {
+                        wgt::VertexStepMode::Vertex => vk::VertexInputRate::VERTEX,
+                        wgt::VertexStepMode::Instance => vk::VertexInputRate::INSTANCE,
+                    },
                 });
+                for at in vb.attributes {
+                    vertex_attributes.push(vk::VertexInputAttributeDescription {
+                        location: at.shader_location,
+                        binding: i as u32,
+                        format: conv::map_vertex_format(at.format),
+                        offset: at.offset as u32,
+                    });
+                }
             }
         }
 
@@ -1971,12 +2016,41 @@ impl crate::Device for super::Device {
             .topology(conv::map_topology(desc.primitive.topology))
             .primitive_restart_enable(desc.primitive.strip_index_format.is_some());
 
-        let compiled_vs = self.compile_stage(
-            &desc.vertex_stage,
-            naga::ShaderStage::Vertex,
-            &desc.layout.binding_arrays,
-        )?;
-        stages.push(compiled_vs.create_info);
+        let mut compiled_vs = None;
+        let mut compiled_ms = None;
+        let mut compiled_ts = None;
+        match &desc.vertex_processor {
+            crate::VertexProcessor::Standard {
+                vertex_buffers: _,
+                vertex_stage,
+            } => {
+                compiled_vs = Some(self.compile_stage(
+                    vertex_stage,
+                    naga::ShaderStage::Vertex,
+                    &desc.layout.binding_arrays,
+                )?);
+                stages.push(compiled_vs.as_ref().unwrap().create_info);
+            }
+            crate::VertexProcessor::Mesh {
+                task_stage,
+                mesh_stage,
+            } => {
+                if let Some(t) = task_stage.as_ref() {
+                    compiled_ts = Some(self.compile_stage(
+                        t,
+                        naga::ShaderStage::Task,
+                        &desc.layout.binding_arrays,
+                    )?);
+                    stages.push(compiled_ts.as_ref().unwrap().create_info);
+                }
+                compiled_ms = Some(self.compile_stage(
+                    mesh_stage,
+                    naga::ShaderStage::Mesh,
+                    &desc.layout.binding_arrays,
+                )?);
+                stages.push(compiled_ms.as_ref().unwrap().create_info);
+            }
+        }
         let compiled_fs = match desc.fragment_stage {
             Some(ref stage) => {
                 let compiled = self.compile_stage(
@@ -2139,228 +2213,13 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
-        if let Some(raw_module) = compiled_vs.temp_raw_module {
-            unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
-        }
         if let Some(CompiledStage {
             temp_raw_module: Some(raw_module),
             ..
-        }) = compiled_fs
+        }) = compiled_vs
         {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
-
-        self.counters.render_pipelines.add(1);
-
-        Ok(super::RenderPipeline { raw })
-    }
-    unsafe fn create_mesh_pipeline(
-        &self,
-        desc: &crate::MeshPipelineDescriptor<
-            <Self::A as crate::Api>::PipelineLayout,
-            <Self::A as crate::Api>::ShaderModule,
-            <Self::A as crate::Api>::PipelineCache,
-        >,
-    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
-        let dynamic_states = [
-            vk::DynamicState::VIEWPORT,
-            vk::DynamicState::SCISSOR,
-            vk::DynamicState::BLEND_CONSTANTS,
-            vk::DynamicState::STENCIL_REFERENCE,
-        ];
-        let mut compatible_rp_key = super::RenderPassKey {
-            sample_count: desc.multisample.count,
-            multiview: desc.multiview,
-            ..Default::default()
-        };
-        let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
-
-        let vk_input_assembly = vk::PipelineInputAssemblyStateCreateInfo::default()
-            .topology(conv::map_topology(desc.primitive.topology))
-            .primitive_restart_enable(desc.primitive.strip_index_format.is_some());
-
-        let compiled_ts = match desc.task_stage {
-            Some(ref stage) => {
-                let mut compiled = self.compile_stage(
-                    stage,
-                    naga::ShaderStage::Task,
-                    &desc.layout.binding_arrays,
-                )?;
-                compiled.create_info.stage = vk::ShaderStageFlags::TASK_EXT;
-                stages.push(compiled.create_info);
-                Some(compiled)
-            }
-            None => None,
-        };
-
-        let mut compiled_ms = self.compile_stage(
-            &desc.mesh_stage,
-            naga::ShaderStage::Mesh,
-            &desc.layout.binding_arrays,
-        )?;
-        compiled_ms.create_info.stage = vk::ShaderStageFlags::MESH_EXT;
-        stages.push(compiled_ms.create_info);
-        let compiled_fs = match desc.fragment_stage {
-            Some(ref stage) => {
-                let compiled = self.compile_stage(
-                    stage,
-                    naga::ShaderStage::Fragment,
-                    &desc.layout.binding_arrays,
-                )?;
-                stages.push(compiled.create_info);
-                Some(compiled)
-            }
-            None => None,
-        };
-
-        let mut vk_rasterization = vk::PipelineRasterizationStateCreateInfo::default()
-            .polygon_mode(conv::map_polygon_mode(desc.primitive.polygon_mode))
-            .front_face(conv::map_front_face(desc.primitive.front_face))
-            .line_width(1.0)
-            .depth_clamp_enable(desc.primitive.unclipped_depth);
-        if let Some(face) = desc.primitive.cull_mode {
-            vk_rasterization = vk_rasterization.cull_mode(conv::map_cull_face(face))
-        }
-        let mut vk_rasterization_conservative_state =
-            vk::PipelineRasterizationConservativeStateCreateInfoEXT::default()
-                .conservative_rasterization_mode(
-                    vk::ConservativeRasterizationModeEXT::OVERESTIMATE,
-                );
-        if desc.primitive.conservative {
-            vk_rasterization = vk_rasterization.push_next(&mut vk_rasterization_conservative_state);
-        }
-
-        let mut vk_depth_stencil = vk::PipelineDepthStencilStateCreateInfo::default();
-        if let Some(ref ds) = desc.depth_stencil {
-            let vk_format = self.shared.private_caps.map_texture_format(ds.format);
-            let vk_layout = if ds.is_read_only(desc.primitive.cull_mode) {
-                vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL
-            } else {
-                vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-            };
-            compatible_rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
-                base: super::AttachmentKey::compatible(vk_format, vk_layout),
-                stencil_ops: crate::AttachmentOps::all(),
-            });
-
-            if ds.is_depth_enabled() {
-                vk_depth_stencil = vk_depth_stencil
-                    .depth_test_enable(true)
-                    .depth_write_enable(ds.depth_write_enabled)
-                    .depth_compare_op(conv::map_comparison(ds.depth_compare));
-            }
-            if ds.stencil.is_enabled() {
-                let s = &ds.stencil;
-                let front = conv::map_stencil_face(&s.front, s.read_mask, s.write_mask);
-                let back = conv::map_stencil_face(&s.back, s.read_mask, s.write_mask);
-                vk_depth_stencil = vk_depth_stencil
-                    .stencil_test_enable(true)
-                    .front(front)
-                    .back(back);
-            }
-
-            if ds.bias.is_enabled() {
-                vk_rasterization = vk_rasterization
-                    .depth_bias_enable(true)
-                    .depth_bias_constant_factor(ds.bias.constant as f32)
-                    .depth_bias_clamp(ds.bias.clamp)
-                    .depth_bias_slope_factor(ds.bias.slope_scale);
-            }
-        }
-
-        let vk_viewport = vk::PipelineViewportStateCreateInfo::default()
-            .flags(vk::PipelineViewportStateCreateFlags::empty())
-            .scissor_count(1)
-            .viewport_count(1);
-
-        let vk_sample_mask = [
-            desc.multisample.mask as u32,
-            (desc.multisample.mask >> 32) as u32,
-        ];
-        let vk_multisample = vk::PipelineMultisampleStateCreateInfo::default()
-            .rasterization_samples(vk::SampleCountFlags::from_raw(desc.multisample.count))
-            .alpha_to_coverage_enable(desc.multisample.alpha_to_coverage_enabled)
-            .sample_mask(&vk_sample_mask);
-
-        let mut vk_attachments = Vec::with_capacity(desc.color_targets.len());
-        for cat in desc.color_targets {
-            let (key, attarchment) = if let Some(cat) = cat.as_ref() {
-                let mut vk_attachment = vk::PipelineColorBlendAttachmentState::default()
-                    .color_write_mask(vk::ColorComponentFlags::from_raw(cat.write_mask.bits()));
-                if let Some(ref blend) = cat.blend {
-                    let (color_op, color_src, color_dst) = conv::map_blend_component(&blend.color);
-                    let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_component(&blend.alpha);
-                    vk_attachment = vk_attachment
-                        .blend_enable(true)
-                        .color_blend_op(color_op)
-                        .src_color_blend_factor(color_src)
-                        .dst_color_blend_factor(color_dst)
-                        .alpha_blend_op(alpha_op)
-                        .src_alpha_blend_factor(alpha_src)
-                        .dst_alpha_blend_factor(alpha_dst);
-                }
-
-                let vk_format = self.shared.private_caps.map_texture_format(cat.format);
-                (
-                    Some(super::ColorAttachmentKey {
-                        base: super::AttachmentKey::compatible(
-                            vk_format,
-                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                        ),
-                        resolve: None,
-                    }),
-                    vk_attachment,
-                )
-            } else {
-                (None, vk::PipelineColorBlendAttachmentState::default())
-            };
-
-            compatible_rp_key.colors.push(key);
-            vk_attachments.push(attarchment);
-        }
-
-        let vk_color_blend =
-            vk::PipelineColorBlendStateCreateInfo::default().attachments(&vk_attachments);
-
-        let vk_dynamic_state =
-            vk::PipelineDynamicStateCreateInfo::default().dynamic_states(&dynamic_states);
-
-        let raw_pass = self.shared.make_render_pass(compatible_rp_key)?;
-
-        let vk_infos = [{
-            vk::GraphicsPipelineCreateInfo::default()
-                .layout(desc.layout.raw)
-                .stages(&stages)
-                .input_assembly_state(&vk_input_assembly)
-                .rasterization_state(&vk_rasterization)
-                .viewport_state(&vk_viewport)
-                .multisample_state(&vk_multisample)
-                .depth_stencil_state(&vk_depth_stencil)
-                .color_blend_state(&vk_color_blend)
-                .dynamic_state(&vk_dynamic_state)
-                .render_pass(raw_pass)
-        }];
-
-        let pipeline_cache = desc
-            .cache
-            .map(|it| it.raw)
-            .unwrap_or(vk::PipelineCache::null());
-
-        let mut raw_vec = {
-            profiling::scope!("vkCreateGraphicsPipelines");
-            unsafe {
-                self.shared
-                    .raw
-                    .create_graphics_pipelines(pipeline_cache, &vk_infos, None)
-                    .map_err(|(_, e)| super::map_pipeline_err(e))
-            }?
-        };
-
-        let raw = raw_vec.pop().unwrap();
-        if let Some(label) = desc.label {
-            unsafe { self.shared.set_object_name(raw, label) };
-        }
-        // NOTE: this could leak shaders in case of an error.
         if let Some(CompiledStage {
             temp_raw_module: Some(raw_module),
             ..
@@ -2368,7 +2227,11 @@ impl crate::Device for super::Device {
         {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
-        if let Some(raw_module) = compiled_ms.temp_raw_module {
+        if let Some(CompiledStage {
+            temp_raw_module: Some(raw_module),
+            ..
+        }) = compiled_ms
+        {
             unsafe { self.shared.raw.destroy_shader_module(raw_module, None) };
         }
         if let Some(CompiledStage {
@@ -2984,11 +2847,19 @@ impl crate::Device for super::Device {
 }
 
 impl super::DeviceShared {
-    pub(super) fn new_binary_semaphore(&self) -> Result<vk::Semaphore, crate::DeviceError> {
+    pub(super) fn new_binary_semaphore(
+        &self,
+        name: &str,
+    ) -> Result<vk::Semaphore, crate::DeviceError> {
         unsafe {
-            self.raw
+            let semaphore = self
+                .raw
                 .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
-                .map_err(super::map_host_device_oom_err)
+                .map_err(super::map_host_device_oom_err)?;
+
+            self.set_object_name(semaphore, name);
+
+            Ok(semaphore)
         }
     }
 

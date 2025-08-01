@@ -10,6 +10,7 @@ struct S {
 struct Test {
     S a;
     float b;
+    char _pad2[12];
 };
 struct type_2 {
     metal::float3 inner[2];
@@ -17,10 +18,12 @@ struct type_2 {
 struct Test2_ {
     type_2 a;
     float b;
+    char _pad2[12];
 };
 struct Test3_ {
     metal::float4x3 a;
     float b;
+    char _pad2[12];
 };
 
 struct vertex_Output {

@@ -29,7 +29,7 @@ OpExecutionMode %16 LocalSize 1 1 1
 %23 = OpConstantComposite  %7  %22 %22
 %24 = OpConstantComposite  %9  %22 %22 %22
 %25 = OpConstantComposite  %10  %22 %22 %22 %22
-%26 = OpConstant  %12  0.0
+%26 = OpConstant  %12  0
 %27 = OpConstantComposite  %11  %26 %26
 %28 = OpConstantComposite  %13  %26 %26 %26
 %29 = OpConstantComposite  %14  %26 %26 %26 %26

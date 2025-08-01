@@ -1,0 +1,388 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Matrix(
+                columns: Tri,
+                rows: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Matrix(
+                columns: Quad,
+                rows: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: Some("NagaExternalTextureParams"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("yuv_conversion_matrix"),
+                        ty: 3,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("sample_transform"),
+                        ty: 2,
+                        binding: None,
+                        offset: 64,
+                    ),
+                    (
+                        name: Some("load_transform"),
+                        ty: 2,
+                        binding: None,
+                        offset: 88,
+                    ),
+                    (
+                        name: Some("size"),
+                        ty: 1,
+                        binding: None,
+                        offset: 112,
+                    ),
+                    (
+                        name: Some("num_planes"),
+                        ty: 0,
+                        binding: None,
+                        offset: 120,
+                    ),
+                ],
+                span: 128,
+            ),
+        ),
+        (
+            name: None,
+            inner: Image(
+                dim: D2,
+                arrayed: false,
+                class: External,
+            ),
+        ),
+        (
+            name: None,
+            inner: Sampler(
+                comparison: false,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        external_texture_params: Some(4),
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("tex"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 5,
+            init: None,
+        ),
+        (
+            name: Some("samp"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 1,
+            )),
+            ty: 6,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [
+        (
+            name: Some("test"),
+            arguments: [
+                (
+                    name: Some("t"),
+                    ty: 5,
+                    binding: None,
+                ),
+            ],
+            result: Some((
+                ty: 7,
+                binding: None,
+            )),
+            local_variables: [
+                (
+                    name: Some("a"),
+                    ty: 7,
+                    init: None,
+                ),
+                (
+                    name: Some("b"),
+                    ty: 7,
+                    init: None,
+                ),
+                (
+                    name: Some("c"),
+                    ty: 1,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                FunctionArgument(0),
+                GlobalVariable(1),
+                Literal(F32(0.0)),
+                Splat(
+                    size: Bi,
+                    value: 2,
+                ),
+                ImageSample(
+                    image: 0,
+                    sampler: 1,
+                    gather: None,
+                    coordinate: 3,
+                    array_index: None,
+                    offset: None,
+                    level: Zero,
+                    depth_ref: None,
+                    clamp_to_edge: true,
+                ),
+                LocalVariable(0),
+                Literal(U32(0)),
+                Splat(
+                    size: Bi,
+                    value: 6,
+                ),
+                ImageLoad(
+                    image: 0,
+                    coordinate: 7,
+                    array_index: None,
+                    sample: None,
+                    level: None,
+                ),
+                LocalVariable(1),
+                ImageQuery(
+                    image: 0,
+                    query: Size(
+                        level: None,
+                    ),
+                ),
+                LocalVariable(2),
+                Load(
+                    pointer: 5,
+                ),
+                Load(
+                    pointer: 9,
+                ),
+                Binary(
+                    op: Add,
+                    left: 12,
+                    right: 13,
+                ),
+                Load(
+                    pointer: 11,
+                ),
+                As(
+                    expr: 15,
+                    kind: Float,
+                    convert: Some(4),
+                ),
+                Swizzle(
+                    size: Quad,
+                    vector: 16,
+                    pattern: (X, Y, X, Y),
+                ),
+                Binary(
+                    op: Add,
+                    left: 14,
+                    right: 17,
+                ),
+            ],
+            named_expressions: {
+                0: "t",
+            },
+            body: [
+                Emit((
+                    start: 3,
+                    end: 5,
+                )),
+                Store(
+                    pointer: 5,
+                    value: 4,
+                ),
+                Emit((
+                    start: 7,
+                    end: 9,
+                )),
+                Store(
+                    pointer: 9,
+                    value: 8,
+                ),
+                Emit((
+                    start: 10,
+                    end: 11,
+                )),
+                Store(
+                    pointer: 11,
+                    value: 10,
+                ),
+                Emit((
+                    start: 12,
+                    end: 19,
+                )),
+                Return(
+                    value: Some(18),
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            name: "fragment_main",
+            stage: Fragment,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("fragment_main"),
+                arguments: [],
+                result: Some((
+                    ty: 7,
+                    binding: Some(Location(
+                        location: 0,
+                        interpolation: Some(Perspective),
+                        sampling: Some(Center),
+                        blend_src: None,
+                    )),
+                )),
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(0),
+                    CallResult(0),
+                ],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 0,
+                        arguments: [
+                            0,
+                        ],
+                        result: Some(1),
+                    ),
+                    Return(
+                        value: Some(1),
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+        (
+            name: "vertex_main",
+            stage: Vertex,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("vertex_main"),
+                arguments: [],
+                result: Some((
+                    ty: 7,
+                    binding: Some(BuiltIn(Position(
+                        invariant: false,
+                    ))),
+                )),
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(0),
+                    CallResult(0),
+                ],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 0,
+                        arguments: [
+                            0,
+                        ],
+                        result: Some(1),
+                    ),
+                    Return(
+                        value: Some(1),
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+        (
+            name: "compute_main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("compute_main"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(0),
+                    CallResult(0),
+                ],
+                named_expressions: {},
+                body: [
+                    Call(
+                        function: 0,
+                        arguments: [
+                            0,
+                        ],
+                        result: Some(1),
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)

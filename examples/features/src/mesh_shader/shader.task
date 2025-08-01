@@ -1,0 +1,16 @@
+#version 450
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 4, local_size_y = 1, local_size_z = 1) in;
+
+struct TaskPayload {
+  vec4 colorMask;
+  bool visible;
+};
+taskPayloadSharedEXT TaskPayload taskPayload;
+
+void main() {
+  taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
+  taskPayload.visible = true;
+  EmitMeshTasksEXT(3, 1, 1);
+}

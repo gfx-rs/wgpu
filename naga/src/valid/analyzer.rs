@@ -664,6 +664,7 @@ impl FunctionInfo {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge: _,
             } => {
                 let image_storage = GlobalOrArgument::from_expression(expression_arena, image)?;
                 let sampler_storage = GlobalOrArgument::from_expression(expression_arena, sampler)?;
@@ -902,7 +903,7 @@ impl FunctionInfo {
                         ExitFlags::empty()
                     },
                 },
-                S::Barrier(_) => FunctionUniformity {
+                S::ControlBarrier(_) | S::MemoryBarrier(_) => FunctionUniformity {
                     result: Uniformity {
                         non_uniform_result: None,
                         requirements: UniformityRequirements::WORK_GROUP_BARRIER,
@@ -1142,9 +1143,11 @@ impl FunctionInfo {
                         | crate::GatherMode::Shuffle(index)
                         | crate::GatherMode::ShuffleDown(index)
                         | crate::GatherMode::ShuffleUp(index)
-                        | crate::GatherMode::ShuffleXor(index) => {
+                        | crate::GatherMode::ShuffleXor(index)
+                        | crate::GatherMode::QuadBroadcast(index) => {
                             let _ = self.add_ref(index);
                         }
+                        crate::GatherMode::QuadSwap(_) => {}
                     }
                     FunctionUniformity::new()
                 }

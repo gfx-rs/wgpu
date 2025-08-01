@@ -18,6 +18,7 @@ struct FragmentInput {
     float perspective_centroid;
     float perspective_sample;
     float perspective_center;
+    char _pad11[4];
 };
 
 struct vert_mainOutput {

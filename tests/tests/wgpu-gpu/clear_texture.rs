@@ -1,7 +1,19 @@
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, TestParameters,
-    TestingContext,
+    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        CLEAR_TEXTURE_UNCOMPRESSED_GLES,
+        CLEAR_TEXTURE_UNCOMPRESSED,
+        CLEAR_TEXTURE_DEPTH,
+        CLEAR_TEXTURE_DEPTH32_STENCIL8,
+        CLEAR_TEXTURE_COMPRESSED_BCN,
+        CLEAR_TEXTURE_COMPRESSED_ASTC,
+        CLEAR_TEXTURE_COMPRESSED_ETC2,
+    ]);
+}
 
 static TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R8Unorm,
@@ -209,12 +221,7 @@ async fn single_texture_clear_test(
     size: wgpu::Extent3d,
     dimension: wgpu::TextureDimension,
 ) {
-    log::info!(
-        "clearing texture with {:?}, dimension {:?}, size {:?}",
-        format,
-        dimension,
-        size
-    );
+    log::info!("clearing texture with {format:?}, dimension {dimension:?}, size {size:?}");
 
     let extra_usages = match format {
         wgpu::TextureFormat::Depth24Plus | wgpu::TextureFormat::Depth24PlusStencil8 => {
@@ -405,9 +412,14 @@ static CLEAR_TEXTURE_COMPRESSED_BCN: GpuTestConfiguration = GpuTestConfiguration
 static CLEAR_TEXTURE_COMPRESSED_ASTC: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TEXTURE_COMPRESSION_ASTC)
+            .features(
+                wgpu::Features::CLEAR_TEXTURE
+                    | wgpu::Features::TEXTURE_COMPRESSION_ASTC
+                    | wgpu::Features::TEXTURE_COMPRESSION_ASTC_SLICED_3D,
+            )
             .limits(wgpu::Limits {
                 max_texture_dimension_2d: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 12,
+                max_texture_dimension_3d: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 12,
                 ..wgpu::Limits::downlevel_defaults()
             })
             // https://bugs.chromium.org/p/angleproject/issues/detail?id=7056

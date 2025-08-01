@@ -1,8 +1,9 @@
+use crate::utils;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
 use std::f32::consts::PI;
 use std::ops::IndexMut;
-use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task, time::Instant};
+use std::{borrow::Cow, future::Future, iter, mem, ops::Range, pin::Pin, task};
 use wgpu::util::DeviceExt;
 
 // from cube
@@ -40,7 +41,7 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
         let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
         inner.poll(cx).map(|error| {
             if let Some(e) = error {
-                panic!("Rendering {}", e);
+                panic!("Rendering {e}");
             }
         })
     }
@@ -92,7 +93,7 @@ struct Material {
 
 fn load_model(scene: &mut RawSceneComponents, path: &str) {
     let path = env!("CARGO_MANIFEST_DIR").to_string() + "/src" + path;
-    println!("{}", path);
+    println!("{path}");
     let mut object = obj::Obj::load(path).unwrap();
     object.load_mtls().unwrap();
 
@@ -307,17 +308,16 @@ fn load_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> SceneComponents {
 struct Example {
     uniforms: Uniforms,
     uniform_buf: wgpu::Buffer,
-    tlas_package: wgpu::TlasPackage,
+    tlas: wgpu::Tlas,
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
-    start_inst: Instant,
     scene_components: SceneComponents,
+    animation_timer: utils::AnimationTimer,
 }
 
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::EXPERIMENTAL_RAY_QUERY
-            | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
@@ -328,7 +328,7 @@ impl crate::framework::Example for Example {
     }
 
     fn required_limits() -> wgpu::Limits {
-        wgpu::Limits::default()
+        wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()
     }
 
     fn init(
@@ -368,8 +368,6 @@ impl crate::framework::Example for Example {
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
         });
-
-        let tlas_package = wgpu::TlasPackage::new(tlas);
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -413,7 +411,7 @@ impl crate::framework::Example for Example {
                 },
                 wgpu::BindGroupEntry {
                     binding: 5,
-                    resource: tlas_package.as_binding(),
+                    resource: tlas.as_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -434,16 +432,14 @@ impl crate::framework::Example for Example {
             ],
         });
 
-        let start_inst = Instant::now();
-
         Example {
             uniforms,
             uniform_buf,
-            tlas_package,
+            tlas,
             pipeline,
             bind_group,
-            start_inst,
             scene_components,
+            animation_timer: utils::AnimationTimer::default(),
         }
     }
 
@@ -476,11 +472,11 @@ impl crate::framework::Example for Example {
 
             let side_count = 2;
 
-            let anim_time = self.start_inst.elapsed().as_secs_f64() as f32;
+            let anim_time = self.animation_timer.time();
 
             for x in 0..side_count {
                 for y in 0..side_count {
-                    let instance = self.tlas_package.index_mut(x + y * side_count);
+                    let instance = self.tlas.index_mut(x + y * side_count);
 
                     let blas_index = (x + y)
                         % self
@@ -522,7 +518,7 @@ impl crate::framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas_package));
+        encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas));
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -556,7 +552,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_scene",
     image_path: "/examples/features/src/ray_scene/screenshot.png",
     width: 1024,

@@ -11,6 +11,10 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
 use wgpu::RenderBundleDescriptor;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.push(VERTEX_INDICES);
+}
+
 /// Generic struct representing a draw call
 struct Draw {
     vertex: Range<u32>,

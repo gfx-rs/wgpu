@@ -35,5 +35,6 @@ void main() {
     const vec4 from_input_array = in_array[1];
     const float a = array_2d[0][0];
     const float b = array_toomanyd[0][0][0][0][0][0][0];
+    const LightScatteringParams light_scattering_params;
     out_array[0] = vec4(2.0);
 }

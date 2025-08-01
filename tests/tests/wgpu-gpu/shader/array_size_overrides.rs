@@ -3,6 +3,10 @@ use wgpu::util::DeviceExt;
 use wgpu::{BufferDescriptor, BufferUsages, MapMode, PollType};
 use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.push(ARRAY_SIZE_OVERRIDES);
+}
+
 const SHADER: &str = r#"
     const testing_shared: array<i32, 1> = array(8);
     override n = testing_shared[0u];
@@ -52,7 +56,9 @@ static ARRAY_SIZE_OVERRIDES: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(move |ctx| async move {
         array_size_overrides(&ctx, None, &[534], false).await;
         array_size_overrides(&ctx, Some(14), &[286480122], false).await;
-        array_size_overrides(&ctx, Some(1), &[0], true).await;
+        // // TODO: Restore this with the resolution for
+        // // <https://github.com/gfx-rs/wgpu/issues/7806>.
+        // array_size_overrides(&ctx, Some(1), &[0], true).await;
     });
 
 async fn array_size_overrides(

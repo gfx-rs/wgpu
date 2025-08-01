@@ -3,7 +3,7 @@ use wgpu::util::BufferInitDescriptor;
 use wgpu::{
     util::DeviceExt, Blas, BlasBuildEntry, BlasGeometries, BlasGeometrySizeDescriptors,
     BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor, Buffer, CreateBlasDescriptor,
-    CreateTlasDescriptor, TlasInstance, TlasPackage,
+    CreateTlasDescriptor, Tlas, TlasInstance,
 };
 use wgpu::{
     AccelerationStructureFlags, AccelerationStructureGeometryFlags,
@@ -14,15 +14,29 @@ use wgpu_test::TestingContext;
 mod as_build;
 mod as_create;
 mod as_use_after_free;
+mod limits;
 mod scene;
 mod shader;
+
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    as_build::all_tests(tests);
+    as_create::all_tests(tests);
+    as_use_after_free::all_tests(tests);
+    limits::all_tests(tests);
+    scene::all_tests(tests);
+    shader::all_tests(tests);
+}
+
+fn acceleration_structure_limits() -> wgpu::Limits {
+    wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()
+}
 
 pub struct AsBuildContext {
     vertices: Buffer,
     blas_size: BlasTriangleGeometrySizeDescriptor,
     blas: Blas,
     // Putting this last, forces the BLAS to die before the TLAS.
-    tlas_package: TlasPackage,
+    tlas: Tlas,
 }
 
 impl AsBuildContext {
@@ -56,15 +70,14 @@ impl AsBuildContext {
             },
         );
 
-        let tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
+        let mut tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
             label: Some("TLAS"),
             max_instances: 1,
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE | additional_tlas_flags,
             update_mode: AccelerationStructureUpdateMode::Build,
         });
 
-        let mut tlas_package = TlasPackage::new(tlas);
-        tlas_package[0] = Some(TlasInstance::new(
+        tlas[0] = Some(TlasInstance::new(
             &blas,
             [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
             0,
@@ -75,7 +88,7 @@ impl AsBuildContext {
             vertices,
             blas_size,
             blas,
-            tlas_package,
+            tlas,
         }
     }
 

@@ -1,11 +1,12 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 128
+; Bound: 133
 OpCapability Shader
-OpCapability Linkage
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %129 "main"
+OpExecutionMode %129 LocalSize 1 1 1
 OpDecorate %10 ArrayStride 4
 OpDecorate %12 ArrayStride 4
 OpDecorate %14 ArrayStride 16
@@ -33,11 +34,11 @@ OpDecorate %17 ArrayStride 16
 %24 = OpConstant  %5  44
 %25 = OpConstant  %5  45
 %26 = OpConstantComposite  %6  %24 %25
-%27 = OpConstant  %7  46.0
-%28 = OpConstant  %7  47.0
+%27 = OpConstant  %7  46
+%28 = OpConstant  %7  47
 %29 = OpConstantComposite  %8  %27 %28
-%30 = OpConstant  %7  48.0
-%31 = OpConstant  %7  49.0
+%30 = OpConstant  %7  48
+%31 = OpConstant  %7  49
 %32 = OpConstantComposite  %8  %30 %31
 %33 = OpConstant  %5  42
 %34 = OpConstant  %5  43
@@ -46,14 +47,14 @@ OpDecorate %17 ArrayStride 16
 %37 = OpConstantComposite  %4  %36 %36
 %38 = OpConstant  %5  0
 %39 = OpConstantComposite  %6  %38 %38
-%40 = OpConstant  %7  0.0
+%40 = OpConstant  %7  0
 %41 = OpConstantComposite  %8  %40 %40
 %42 = OpConstantComposite  %9  %41 %41
-%43 = OpConstant  %7  1.0
-%44 = OpConstant  %7  2.0
+%43 = OpConstant  %7  1
+%44 = OpConstant  %7  2
 %45 = OpConstantComposite  %8  %43 %44
-%46 = OpConstant  %7  3.0
-%47 = OpConstant  %7  4.0
+%46 = OpConstant  %7  3
+%47 = OpConstant  %7  4
 %48 = OpConstantComposite  %8  %46 %47
 %49 = OpConstantComposite  %9  %45 %48
 %50 = OpConstant  %3  1
@@ -140,5 +141,13 @@ OpBranch %73
 %125 = OpCompositeConstruct  %6  %124 %124
 %126 = OpLoad  %7  %70
 %127 = OpCompositeConstruct  %8  %126 %126
+OpReturn
+OpFunctionEnd
+%129 = OpFunction  %2  None %20
+%128 = OpLabel
+OpBranch %130
+%130 = OpLabel
+%131 = OpFunctionCall  %2  %19
+%132 = OpFunctionCall  %2  %63
 OpReturn
 OpFunctionEnd

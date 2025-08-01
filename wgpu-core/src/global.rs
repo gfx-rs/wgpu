@@ -2,7 +2,6 @@ use alloc::{borrow::ToOwned as _, sync::Arc};
 use core::fmt;
 
 use crate::{
-    hal_api::HalApi,
     hub::{Hub, HubReport},
     instance::{Instance, Surface},
     registry::{Registry, RegistryReport},
@@ -44,7 +43,7 @@ impl Global {
     /// # Safety
     ///
     /// Refer to the creation of wgpu-hal Instance for every backend.
-    pub unsafe fn from_hal_instance<A: HalApi>(name: &str, hal_instance: A::Instance) -> Self {
+    pub unsafe fn from_hal_instance<A: hal::Api>(name: &str, hal_instance: A::Instance) -> Self {
         profiling::scope!("Global::new");
 
         Self {
@@ -57,7 +56,7 @@ impl Global {
     /// # Safety
     ///
     /// - The raw instance handle returned must not be manually destroyed.
-    pub unsafe fn instance_as_hal<A: HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn instance_as_hal<A: hal::Api>(&self) -> Option<&A::Instance> {
         unsafe { self.instance.as_hal::<A>() }
     }
 

@@ -3,9 +3,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use wgpu::custom::{
-    AdapterInterface, ComputePipelineInterface, DeviceInterface, DispatchAdapter, DispatchDevice,
-    DispatchQueue, DispatchShaderModule, DispatchSurface, InstanceInterface, QueueInterface,
-    RequestAdapterFuture, ShaderModuleInterface,
+    AdapterInterface, ComputePipelineInterface, DeviceInterface, DispatchAdapter, DispatchBlas,
+    DispatchDevice, DispatchQueue, DispatchShaderModule, DispatchSurface, InstanceInterface,
+    QueueInterface, RequestAdapterFuture, ShaderModuleInterface,
 };
 
 #[derive(Debug, Clone)]
@@ -161,6 +161,13 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn create_mesh_pipeline(
+        &self,
+        _desc: &wgpu::MeshPipelineDescriptor<'_>,
+    ) -> wgpu::custom::DispatchRenderPipeline {
+        unimplemented!()
+    }
+
     fn create_compute_pipeline(
         &self,
         desc: &wgpu::ComputePipelineDescriptor<'_>,
@@ -181,6 +188,14 @@ impl DeviceInterface for CustomDevice {
     }
 
     fn create_texture(&self, _desc: &wgpu::TextureDescriptor<'_>) -> wgpu::custom::DispatchTexture {
+        unimplemented!()
+    }
+
+    fn create_external_texture(
+        &self,
+        _desc: &wgpu::ExternalTextureDescriptor<'_>,
+        _planes: &[&wgpu::TextureView],
+    ) -> wgpu::custom::DispatchExternalTexture {
         unimplemented!()
     }
 
@@ -337,13 +352,17 @@ impl QueueInterface for CustomQueue {
         unimplemented!()
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", feature = "web"))]
     fn copy_external_image_to_texture(
         &self,
         _source: &wgpu::CopyExternalImageSourceInfo,
         _dest: wgpu::CopyExternalImageDestInfo<&wgpu::Texture>,
         _size: wgpu::Extent3d,
     ) {
+        unimplemented!()
+    }
+
+    fn compact_blas(&self, _blas: &DispatchBlas) -> (Option<u64>, DispatchBlas) {
         unimplemented!()
     }
 }

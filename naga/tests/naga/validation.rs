@@ -1,4 +1,13 @@
-use naga::{valid, Expression, Function, Scalar};
+#![allow(
+    // We need to investiagate these.
+    clippy::result_large_err
+)]
+
+use naga::{
+    ir,
+    valid::{self, ModuleInfo},
+    Expression, Function, Module, Scalar,
+};
 
 /// Validation should fail if `AtomicResult` expressions are not
 /// populated by `Atomic` statements.
@@ -25,7 +34,7 @@ fn populate_atomic_result() {
     // the differences between the test cases.
     fn try_variant(
         variant: Variant,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -126,7 +135,7 @@ fn populate_call_result() {
     // the differences between the test cases.
     fn try_variant(
         variant: Variant,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -202,9 +211,7 @@ fn emit_workgroup_uniform_load_result() {
     //
     // Looking at uses of the `wg_load` makes it easy to identify the
     // differences between the two variants.
-    fn variant(
-        wg_load: bool,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    fn variant(wg_load: bool) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -275,7 +282,7 @@ fn builtin_cross_product_args() {
     fn variant(
         size: VectorSize,
         arity: usize,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_vec3f = module.types.insert(
@@ -537,7 +544,7 @@ fn main(input: VertexOutput) {{
 
 #[allow(dead_code)]
 struct BindingArrayFixture {
-    module: naga::Module,
+    module: Module,
     span: naga::Span,
     ty_u32: naga::Handle<naga::Type>,
     ty_array: naga::Handle<naga::Type>,
@@ -547,7 +554,7 @@ struct BindingArrayFixture {
 
 impl BindingArrayFixture {
     fn new() -> Self {
-        let mut module = naga::Module::default();
+        let mut module = Module::default();
         let span = naga::Span::default();
         let ty_u32 = module.types.insert(
             naga::Type {
@@ -648,9 +655,8 @@ fn binding_arrays_cannot_hold_scalars() {
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn validation_error_messages() {
-    let cases = [
-        (
-            r#"@group(0) @binding(0) var my_sampler: sampler;
+    let cases = [(
+        r#"@group(0) @binding(0) var my_sampler: sampler;
 
                 fn foo(tex: texture_2d<f32>) -> vec4<f32> {
                     return textureSampleLevel(tex, my_sampler, vec2f(0, 0), 0.0);
@@ -660,7 +666,7 @@ fn validation_error_messages() {
                     foo();
                 }
             "#,
-            "\
+        "\
 error: Function [1] 'main' is invalid
   ┌─ wgsl:7:17
   │  \n7 │ ╭                 fn main() {
@@ -671,48 +677,7 @@ error: Function [1] 'main' is invalid
   = Requires 1 arguments, but 0 are provided
 
 ",
-        ),
-        (
-            "\
-@compute @workgroup_size(1, 1)
-fn main() {
-    // Bad: `9001` isn't a `bool`.
-    _ = select(1, 2, 9001);
-}
-",
-            "\
-error: Entry point main at Compute is invalid
-  ┌─ wgsl:4:9
-  │
-4 │     _ = select(1, 2, 9001);
-  │         ^^^^^^ naga::ir::Expression [3]
-  │
-  = Expression [3] is invalid
-  = Expected selection condition to be a boolean value, got Scalar(Scalar { kind: Sint, width: 4 })
-
-",
-        ),
-        (
-            "\
-@compute @workgroup_size(1, 1)
-fn main() {
-    // Bad: `bool` and abstract int args. don't match.
-    _ = select(true, 1, false);
-}
-",
-            "\
-error: Entry point main at Compute is invalid
-  ┌─ wgsl:4:9
-  │
-4 │     _ = select(true, 1, false);
-  │         ^^^^^^ naga::ir::Expression [3]
-  │
-  = Expression [3] is invalid
-  = Expected selection argument types to match, but reject value of type Scalar(Scalar { kind: Bool, width: 1 }) does not match accept value of value Scalar(Scalar { kind: Sint, width: 4 })
-
-",
-        ),
-    ];
+    )];
 
     for (source, expected_err) in cases {
         let module = naga::front::wgsl::parse_str(source).unwrap();
@@ -727,7 +692,7 @@ error: Entry point main at Compute is invalid
 #[cfg(feature = "wgsl-in")]
 #[test]
 fn bad_texture_dimensions_level() {
-    fn validate(level: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
+    fn validate(level: &str) -> Result<ModuleInfo, naga::valid::ValidationError> {
         let source = format!(
             r#"
             @group(0) @binding(0)
@@ -743,9 +708,7 @@ fn bad_texture_dimensions_level() {
             .map_err(|err| err.into_inner()) // discard spans
     }
 
-    fn is_bad_level_error(
-        result: Result<naga::valid::ModuleInfo, naga::valid::ValidationError>,
-    ) -> bool {
+    fn is_bad_level_error(result: Result<ModuleInfo, naga::valid::ValidationError>) -> bool {
         matches!(
             result,
             Err(naga::valid::ValidationError::Function {
@@ -770,10 +733,9 @@ fn bad_texture_dimensions_level() {
 fn arity_check() {
     use ir::MathFunction as Mf;
     use naga::Span;
-    use naga::{ir, valid};
     let _ = env_logger::builder().is_test(true).try_init();
 
-    type Result = core::result::Result<naga::valid::ModuleInfo, naga::valid::ValidationError>;
+    type Result = core::result::Result<ModuleInfo, naga::valid::ValidationError>;
 
     fn validate(fun: ir::MathFunction, args: &[usize]) -> Result {
         let nowhere = Span::default();
@@ -921,5 +883,236 @@ fn main() {
     assert_eq!(
         info.get_entry_point(0)[global],
         naga::valid::GlobalUse::QUERY
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn global_use_unreachable() {
+    // We should allow statements after `return`, and such statements should
+    // still contribute to global usage. (Unreachable statements should not
+    // contribute to uniformity analysis, but there are multiple issues with
+    // the current implementation of uniformity analysis, see #4369.)
+
+    let source = "
+@group(0) @binding(0)
+var<storage, read_write> global: u32;
+
+@compute @workgroup_size(64)
+fn main() {
+    var used: u32;
+    return;
+    used = global;
+}
+    ";
+
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let mut validator = valid::Validator::new(Default::default(), valid::Capabilities::all());
+    let info = validator.validate(&module).unwrap();
+
+    let global = module.global_variables.iter().next().unwrap().0;
+    assert_eq!(
+        info.get_entry_point(0)[global],
+        naga::valid::GlobalUse::READ,
+    );
+}
+
+/// Parse and validate the module defined in `source`.
+///
+/// Panics if unsuccessful.
+#[cfg(feature = "wgsl-in")]
+fn parse_validate(source: &str) -> (Module, ModuleInfo) {
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+    (module, info)
+}
+
+/// Helper for `process_overrides` tests.
+///
+/// The goal of these tests is to verify that `process_overrides` accepts cases
+/// where all necessary overrides are specified (even if some unnecessary ones
+/// are not), and does not accept cases where necessary overrides are missing.
+/// "Necessary" means that the override is referenced in some way by some
+/// function reachable from the specified entry point.
+///
+/// Each test passes a source snippet containing a compute entry point `used`
+/// that makes use of the override `ov` in some way. We augment that with (1)
+/// the definition of `ov` and (2) a dummy entrypoint that does not use the
+/// override, and then test the matrix of (specified or not) x (used or not).
+///
+/// The optional `unused_body` can introduce additional objects to the module,
+/// to verify that they are adjusted correctly by compaction.
+#[cfg(feature = "wgsl-in")]
+fn override_test(test_case: &str, unused_body: Option<&str>) {
+    use hashbrown::HashMap;
+    use naga::back::pipeline_constants::PipelineConstantError;
+
+    let source = [
+        "override ov: u32;\n",
+        test_case,
+        "@compute @workgroup_size(64)
+fn unused() {
+",
+        unused_body.unwrap_or_default(),
+        "}
+",
+    ]
+    .concat();
+    let (module, info) = parse_validate(&source);
+
+    let overrides = HashMap::from([(String::from("ov"), 1.)]);
+
+    // Can translate `unused` with or without the override
+    naga::back::pipeline_constants::process_overrides(
+        &module,
+        &info,
+        Some((ir::ShaderStage::Compute, "unused")),
+        &HashMap::new(),
+    )
+    .unwrap();
+    naga::back::pipeline_constants::process_overrides(
+        &module,
+        &info,
+        Some((ir::ShaderStage::Compute, "unused")),
+        &overrides,
+    )
+    .unwrap();
+
+    // Cannot translate `used` without the override
+    let err = naga::back::pipeline_constants::process_overrides(
+        &module,
+        &info,
+        Some((ir::ShaderStage::Compute, "used")),
+        &HashMap::new(),
+    )
+    .unwrap_err();
+    assert!(matches!(err, PipelineConstantError::MissingValue(name) if name == "ov"));
+
+    // Can translate `used` if the override is specified
+    naga::back::pipeline_constants::process_overrides(
+        &module,
+        &info,
+        Some((ir::ShaderStage::Compute, "used")),
+        &overrides,
+    )
+    .unwrap();
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_workgroup_size() {
+    override_test(
+        "
+@compute @workgroup_size(ov)
+fn used() {
+}
+",
+        None,
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_workgroup_size_nested() {
+    // Initializer for override used in workgroup size refers to another
+    // override.
+    override_test(
+        "
+override ov2: u32 = ov + 5;
+
+@compute @workgroup_size(ov2)
+fn used() {
+}
+",
+        None,
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_function() {
+    override_test(
+        "
+fn foo() -> u32 {
+    return ov;
+}
+
+@compute @workgroup_size(64)
+fn used() {
+    foo();
+}
+",
+        None,
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_entrypoint() {
+    override_test(
+        "
+fn foo() -> u32 {
+    return ov;
+}
+
+@compute @workgroup_size(64)
+fn used() {
+    foo();
+}
+",
+        None,
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_array_size() {
+    override_test(
+        "
+var<workgroup> arr: array<u32, ov>;
+
+@compute @workgroup_size(64)
+fn used() {
+    _ = arr[5];
+}
+",
+        None,
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_in_global_init() {
+    override_test(
+        "
+var<private> foo: u32 = ov;
+
+@compute @workgroup_size(64)
+fn used() {
+    _ = foo;
+}
+",
+        None,
+    );
+}
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn override_with_multiple_globals() {
+    // Test that when compaction of the `unused` entrypoint removes `arr1`, the
+    // handle to `arr2` is adjusted correctly.
+    override_test(
+        "
+var<workgroup> arr1: array<u32, ov>;
+var<workgroup> arr2: array<u32, 4>;
+
+@compute @workgroup_size(64)
+fn used() {
+    _ = arr1[5];
+}
+",
+        Some("_ = arr2[3];"),
     );
 }

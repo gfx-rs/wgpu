@@ -9,16 +9,16 @@ use crate::{
         self, BindGroupEntry, BindingResource, BufferBinding, ResolvedBindGroupDescriptor,
         ResolvedBindGroupEntry, ResolvedBindingResource, ResolvedBufferBinding,
     },
-    command::{self, CommandBuffer},
+    command::{self, CommandEncoder},
     conv,
     device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
-    hal_api::HalApi,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
     pipeline::{
-        self, ResolvedComputePipelineDescriptor, ResolvedFragmentState,
-        ResolvedProgrammableStageDescriptor, ResolvedRenderPipelineDescriptor, ResolvedVertexState,
+        self, RenderPipelineVertexProcessor, ResolvedComputePipelineDescriptor,
+        ResolvedFragmentState, ResolvedGeneralRenderPipelineDescriptor, ResolvedMeshState,
+        ResolvedProgrammableStageDescriptor, ResolvedTaskState, ResolvedVertexState,
     },
     present,
     resource::{
@@ -31,7 +31,7 @@ use crate::{
 
 use wgt::{BufferAddress, TextureFormat};
 
-use super::{ImplicitPipelineIds, UserClosures};
+use super::UserClosures;
 
 impl Global {
     pub fn adapter_is_surface_supported(
@@ -179,6 +179,9 @@ impl Global {
         fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
+    /// Assign `id_in` an error with the given `label`.
+    ///
+    /// See [`Self::create_buffer_error`] for more context and explanation.
     pub fn create_render_bundle_error(
         &self,
         id_in: Option<id::RenderBundleId>,
@@ -190,13 +193,25 @@ impl Global {
 
     /// Assign `id_in` an error with the given `label`.
     ///
-    /// See `create_buffer_error` for more context and explanation.
+    /// See [`Self::create_buffer_error`] for more context and explanation.
     pub fn create_texture_error(
         &self,
         id_in: Option<id::TextureId>,
         desc: &resource::TextureDescriptor,
     ) {
         let fid = self.hub.textures.prepare(id_in);
+        fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+    }
+
+    /// Assign `id_in` an error with the given `label`.
+    ///
+    /// See [`Self::create_buffer_error`] for more context and explanation.
+    pub fn create_external_texture_error(
+        &self,
+        id_in: Option<id::ExternalTextureId>,
+        desc: &resource::ExternalTextureDescriptor,
+    ) {
+        let fid = self.hub.external_textures.prepare(id_in);
         fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
@@ -207,6 +222,8 @@ impl Global {
         offset: BufferAddress,
         data: &[u8],
     ) -> BufferAccessResult {
+        use crate::resource::RawResourceAccess;
+
         let hub = &self.hub;
 
         let buffer = hub.buffers.get(buffer_id).get()?;
@@ -252,13 +269,16 @@ impl Global {
         Ok(())
     }
 
-    pub fn buffer_destroy(&self, buffer_id: id::BufferId) -> Result<(), resource::DestroyError> {
+    pub fn buffer_destroy(&self, buffer_id: id::BufferId) {
         profiling::scope!("Buffer::destroy");
         api_log!("Buffer::destroy {buffer_id:?}");
 
         let hub = &self.hub;
 
-        let buffer = hub.buffers.get(buffer_id).get()?;
+        let Ok(buffer) = hub.buffers.get(buffer_id).get() else {
+            // If the buffer is already invalid, there's nothing to do.
+            return;
+        };
 
         #[cfg(feature = "trace")]
         if let Some(trace) = buffer.device.trace.lock().as_mut() {
@@ -270,7 +290,7 @@ impl Global {
             buffer_id,
         );
 
-        buffer.destroy()
+        buffer.destroy();
     }
 
     pub fn buffer_drop(&self, buffer_id: id::BufferId) {
@@ -380,7 +400,8 @@ impl Global {
     /// - `hal_buffer` must be created from `device_id` corresponding raw handle.
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
-    pub unsafe fn create_buffer_from_hal<A: HalApi>(
+    /// - `hal_buffer` must not have zero size.
+    pub unsafe fn create_buffer_from_hal<A: hal::Api>(
         &self,
         hal_buffer: A::Buffer,
         device_id: DeviceId,
@@ -401,7 +422,7 @@ impl Global {
             trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
         }
 
-        let (buffer, err) = device.create_buffer_from_hal(Box::new(hal_buffer), desc);
+        let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), desc) };
 
         let id = fid.assign(buffer);
         api_log!("Device::create_buffer -> {id:?}");
@@ -409,20 +430,23 @@ impl Global {
         (id, err)
     }
 
-    pub fn texture_destroy(&self, texture_id: id::TextureId) -> Result<(), resource::DestroyError> {
+    pub fn texture_destroy(&self, texture_id: id::TextureId) {
         profiling::scope!("Texture::destroy");
         api_log!("Texture::destroy {texture_id:?}");
 
         let hub = &self.hub;
 
-        let texture = hub.textures.get(texture_id).get()?;
+        let Ok(texture) = hub.textures.get(texture_id).get() else {
+            // If the texture is already invalid, there's nothing to do.
+            return;
+        };
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
             trace.add(trace::Action::FreeTexture(texture_id));
         }
 
-        texture.destroy()
+        texture.destroy();
     }
 
     pub fn texture_drop(&self, texture_id: id::TextureId) {
@@ -502,6 +526,94 @@ impl Global {
             }
         }
         Ok(())
+    }
+
+    pub fn device_create_external_texture(
+        &self,
+        device_id: DeviceId,
+        desc: &resource::ExternalTextureDescriptor,
+        planes: &[id::TextureViewId],
+        id_in: Option<id::ExternalTextureId>,
+    ) -> (
+        id::ExternalTextureId,
+        Option<resource::CreateExternalTextureError>,
+    ) {
+        profiling::scope!("Device::create_external_texture");
+
+        let hub = &self.hub;
+
+        let fid = hub.external_textures.prepare(id_in);
+
+        let error = 'error: {
+            let device = self.hub.devices.get(device_id);
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                let planes = Box::from(planes);
+                trace.add(trace::Action::CreateExternalTexture {
+                    id: fid.id(),
+                    desc: desc.clone(),
+                    planes,
+                });
+            }
+
+            let planes = planes
+                .iter()
+                .map(|plane_id| self.hub.texture_views.get(*plane_id).get())
+                .collect::<Result<Vec<_>, _>>();
+            let planes = match planes {
+                Ok(planes) => planes,
+                Err(error) => break 'error error.into(),
+            };
+
+            let external_texture = match device.create_external_texture(desc, &planes) {
+                Ok(external_texture) => external_texture,
+                Err(error) => break 'error error,
+            };
+
+            let id = fid.assign(Fallible::Valid(external_texture));
+            api_log!("Device::create_external_texture({desc:?}) -> {id:?}");
+
+            return (id, None);
+        };
+
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
+        (id, Some(error))
+    }
+
+    pub fn external_texture_destroy(&self, external_texture_id: id::ExternalTextureId) {
+        profiling::scope!("ExternalTexture::destroy");
+        api_log!("ExternalTexture::destroy {external_texture_id:?}");
+
+        let hub = &self.hub;
+
+        let Ok(external_texture) = hub.external_textures.get(external_texture_id).get() else {
+            // If the external texture is already invalid, there's nothing to do.
+            return;
+        };
+
+        #[cfg(feature = "trace")]
+        if let Some(trace) = external_texture.device.trace.lock().as_mut() {
+            trace.add(trace::Action::FreeExternalTexture(external_texture_id));
+        }
+
+        external_texture.destroy();
+    }
+
+    pub fn external_texture_drop(&self, external_texture_id: id::ExternalTextureId) {
+        profiling::scope!("ExternalTexture::drop");
+        api_log!("ExternalTexture::drop {external_texture_id:?}");
+
+        let hub = &self.hub;
+
+        let _external_texture = hub.external_textures.remove(external_texture_id);
+
+        #[cfg(feature = "trace")]
+        if let Ok(external_texture) = _external_texture.get() {
+            if let Some(t) = external_texture.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyExternalTexture(external_texture_id));
+            }
+        }
     }
 
     pub fn device_create_sampler(
@@ -648,6 +760,10 @@ impl Global {
                 trace.add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
             }
 
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
+            }
+
             let bind_group_layouts = {
                 let bind_group_layouts_guard = hub.bind_group_layouts.read();
                 desc.bind_group_layouts
@@ -716,6 +832,10 @@ impl Global {
                 trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
             }
 
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
+            }
+
             let layout = match hub.bind_group_layouts.get(desc.layout).get() {
                 Ok(layout) => layout,
                 Err(e) => break 'error e.into(),
@@ -727,6 +847,7 @@ impl Global {
                 sampler_storage: &Storage<Fallible<resource::Sampler>>,
                 texture_view_storage: &Storage<Fallible<resource::TextureView>>,
                 tlas_storage: &Storage<Fallible<resource::Tlas>>,
+                external_texture_storage: &Storage<Fallible<resource::ExternalTexture>>,
             ) -> Result<ResolvedBindGroupEntry<'a>, binding_model::CreateBindGroupError>
             {
                 let resolve_buffer = |bb: &BufferBinding| {
@@ -754,6 +875,12 @@ impl Global {
                 };
                 let resolve_tlas = |id: &id::TlasId| {
                     tlas_storage
+                        .get(*id)
+                        .get()
+                        .map_err(binding_model::CreateBindGroupError::from)
+                };
+                let resolve_external_texture = |id: &id::ExternalTextureId| {
+                    external_texture_storage
                         .get(*id)
                         .get()
                         .map_err(binding_model::CreateBindGroupError::from)
@@ -792,6 +919,9 @@ impl Global {
                     BindingResource::AccelerationStructure(ref tlas) => {
                         ResolvedBindingResource::AccelerationStructure(resolve_tlas(tlas)?)
                     }
+                    BindingResource::ExternalTexture(ref et) => {
+                        ResolvedBindingResource::ExternalTexture(resolve_external_texture(et)?)
+                    }
                 };
                 Ok(ResolvedBindGroupEntry {
                     binding: e.binding,
@@ -804,6 +934,7 @@ impl Global {
                 let texture_view_guard = hub.texture_views.read();
                 let sampler_guard = hub.samplers.read();
                 let tlas_guard = hub.tlas_s.read();
+                let external_texture_guard = hub.external_textures.read();
                 desc.entries
                     .iter()
                     .map(|e| {
@@ -813,6 +944,7 @@ impl Global {
                             &sampler_guard,
                             &texture_view_guard,
                             &tlas_guard,
+                            &external_texture_guard,
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()
@@ -978,6 +1110,18 @@ impl Global {
                                 runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
                             }
                         }
+                        pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
+                            pipeline::ShaderModuleDescriptor {
+                                label: inner.label.clone(),
+                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                            }
+                        }
+                        pipeline::ShaderModuleDescriptorPassthrough::Hlsl(inner) => {
+                            pipeline::ShaderModuleDescriptor {
+                                label: inner.label.clone(),
+                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                            }
+                        }
                     },
                     data,
                 });
@@ -1023,42 +1167,39 @@ impl Global {
         profiling::scope!("Device::create_command_encoder");
 
         let hub = &self.hub;
-        let fid = hub
-            .command_buffers
-            .prepare(id_in.map(|id| id.into_command_buffer_id()));
+        let fid = hub.command_encoders.prepare(id_in);
 
         let device = self.hub.devices.get(device_id);
 
         let error = 'error: {
-            let command_buffer = match device.create_command_encoder(&desc.label) {
-                Ok(command_buffer) => command_buffer,
+            let cmd_enc = match device.create_command_encoder(&desc.label) {
+                Ok(cmd_enc) => cmd_enc,
                 Err(e) => break 'error e,
             };
 
-            let id = fid.assign(command_buffer);
+            let id = fid.assign(cmd_enc);
             api_log!("Device::create_command_encoder -> {id:?}");
-            return (id.into_command_encoder_id(), None);
+            return (id, None);
         };
 
-        let id = fid.assign(Arc::new(CommandBuffer::new_invalid(&device, &desc.label)));
-        (id.into_command_encoder_id(), Some(error))
+        let id = fid.assign(Arc::new(CommandEncoder::new_invalid(
+            &device,
+            &desc.label,
+            error.clone().into(),
+        )));
+        (id, Some(error))
     }
 
     pub fn command_encoder_drop(&self, command_encoder_id: id::CommandEncoderId) {
         profiling::scope!("CommandEncoder::drop");
         api_log!("CommandEncoder::drop {command_encoder_id:?}");
-
-        let hub = &self.hub;
-
-        let _cmd_buf = hub
-            .command_buffers
-            .remove(command_encoder_id.into_command_buffer_id());
+        let _cmd_enc = self.hub.command_encoders.remove(command_encoder_id);
     }
 
     pub fn command_buffer_drop(&self, command_buffer_id: id::CommandBufferId) {
         profiling::scope!("CommandBuffer::drop");
         api_log!("CommandBuffer::drop {command_buffer_id:?}");
-        self.command_encoder_drop(command_buffer_id.into_command_encoder_id())
+        let _cmd_buf = self.hub.command_buffers.remove(command_buffer_id);
     }
 
     pub fn device_create_render_bundle_encoder(
@@ -1196,7 +1337,6 @@ impl Global {
         device_id: DeviceId,
         desc: &pipeline::RenderPipelineDescriptor,
         id_in: Option<id::RenderPipelineId>,
-        implicit_pipeline_ids: Option<ImplicitPipelineIds<'_>>,
     ) -> (
         id::RenderPipelineId,
         Option<pipeline::CreateRenderPipelineError>,
@@ -1205,27 +1345,59 @@ impl Global {
 
         let hub = &self.hub;
 
-        let missing_implicit_pipeline_ids =
-            desc.layout.is_none() && id_in.is_some() && implicit_pipeline_ids.is_none();
+        let fid = hub.render_pipelines.prepare(id_in);
+
+        let device = self.hub.devices.get(device_id);
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(trace::Action::CreateRenderPipeline {
+                id: fid.id(),
+                desc: desc.clone(),
+            });
+        }
+        self.device_create_general_render_pipeline(desc.clone().into(), device, fid)
+    }
+
+    pub fn device_create_mesh_pipeline(
+        &self,
+        device_id: DeviceId,
+        desc: &pipeline::MeshPipelineDescriptor,
+        id_in: Option<id::RenderPipelineId>,
+    ) -> (
+        id::RenderPipelineId,
+        Option<pipeline::CreateRenderPipelineError>,
+    ) {
+        let hub = &self.hub;
 
         let fid = hub.render_pipelines.prepare(id_in);
-        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
+
+        let device = self.hub.devices.get(device_id);
+        #[cfg(feature = "trace")]
+        if let Some(ref mut trace) = *device.trace.lock() {
+            trace.add(trace::Action::CreateMeshPipeline {
+                id: fid.id(),
+                desc: desc.clone(),
+            });
+        }
+        self.device_create_general_render_pipeline(desc.clone().into(), device, fid)
+    }
+
+    fn device_create_general_render_pipeline(
+        &self,
+        desc: pipeline::GeneralRenderPipelineDescriptor,
+        device: Arc<crate::device::resource::Device>,
+        fid: crate::registry::FutureId<Fallible<pipeline::RenderPipeline>>,
+    ) -> (
+        id::RenderPipelineId,
+        Option<pipeline::CreateRenderPipelineError>,
+    ) {
+        profiling::scope!("Device::create_general_render_pipeline");
+
+        let hub = &self.hub;
 
         let error = 'error: {
-            if missing_implicit_pipeline_ids {
-                // TODO: categorize this error as API misuse
-                break 'error pipeline::ImplicitLayoutError::MissingImplicitPipelineIds.into();
-            }
-
-            let device = self.hub.devices.get(device_id);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateRenderPipeline {
-                    id: fid.id(),
-                    desc: desc.clone(),
-                    implicit_context: implicit_context.clone(),
-                });
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
             }
 
             let layout = desc
@@ -1246,31 +1418,83 @@ impl Global {
                 Err(e) => break 'error e.into(),
             };
 
-            let vertex = {
-                let module = hub
-                    .shader_modules
-                    .get(desc.vertex.stage.module)
-                    .get()
-                    .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
-                        stage: wgt::ShaderStages::VERTEX,
-                        error: e.into(),
-                    });
-                let module = match module {
-                    Ok(module) => module,
-                    Err(e) => break 'error e,
-                };
-                let stage = ResolvedProgrammableStageDescriptor {
-                    module,
-                    entry_point: desc.vertex.stage.entry_point.clone(),
-                    constants: desc.vertex.stage.constants.clone(),
-                    zero_initialize_workgroup_memory: desc
-                        .vertex
-                        .stage
-                        .zero_initialize_workgroup_memory,
-                };
-                ResolvedVertexState {
-                    stage,
-                    buffers: desc.vertex.buffers.clone(),
+            let vertex = match desc.vertex {
+                RenderPipelineVertexProcessor::Vertex(ref vertex) => {
+                    let module = hub
+                        .shader_modules
+                        .get(vertex.stage.module)
+                        .get()
+                        .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
+                            stage: wgt::ShaderStages::VERTEX,
+                            error: e.into(),
+                        });
+                    let module = match module {
+                        Ok(module) => module,
+                        Err(e) => break 'error e,
+                    };
+                    let stage = ResolvedProgrammableStageDescriptor {
+                        module,
+                        entry_point: vertex.stage.entry_point.clone(),
+                        constants: vertex.stage.constants.clone(),
+                        zero_initialize_workgroup_memory: vertex
+                            .stage
+                            .zero_initialize_workgroup_memory,
+                    };
+                    RenderPipelineVertexProcessor::Vertex(ResolvedVertexState {
+                        stage,
+                        buffers: vertex.buffers.clone(),
+                    })
+                }
+                RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
+                    let task_module = if let Some(task) = task {
+                        let module = hub
+                            .shader_modules
+                            .get(task.stage.module)
+                            .get()
+                            .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
+                                stage: wgt::ShaderStages::VERTEX,
+                                error: e.into(),
+                            });
+                        let module = match module {
+                            Ok(module) => module,
+                            Err(e) => break 'error e,
+                        };
+                        let state = ResolvedProgrammableStageDescriptor {
+                            module,
+                            entry_point: task.stage.entry_point.clone(),
+                            constants: task.stage.constants.clone(),
+                            zero_initialize_workgroup_memory: task
+                                .stage
+                                .zero_initialize_workgroup_memory,
+                        };
+                        Some(ResolvedTaskState { stage: state })
+                    } else {
+                        None
+                    };
+                    let mesh_module =
+                        hub.shader_modules
+                            .get(mesh.stage.module)
+                            .get()
+                            .map_err(|e| pipeline::CreateRenderPipelineError::Stage {
+                                stage: wgt::ShaderStages::MESH,
+                                error: e.into(),
+                            });
+                    let mesh_module = match mesh_module {
+                        Ok(module) => module,
+                        Err(e) => break 'error e,
+                    };
+                    let mesh_stage = ResolvedProgrammableStageDescriptor {
+                        module: mesh_module,
+                        entry_point: mesh.stage.entry_point.clone(),
+                        constants: mesh.stage.constants.clone(),
+                        zero_initialize_workgroup_memory: mesh
+                            .stage
+                            .zero_initialize_workgroup_memory,
+                    };
+                    RenderPipelineVertexProcessor::Mesh(
+                        task_module,
+                        ResolvedMeshState { stage: mesh_stage },
+                    )
                 }
             };
 
@@ -1291,10 +1515,7 @@ impl Global {
                     module,
                     entry_point: state.stage.entry_point.clone(),
                     constants: state.stage.constants.clone(),
-                    zero_initialize_workgroup_memory: desc
-                        .vertex
-                        .stage
-                        .zero_initialize_workgroup_memory,
+                    zero_initialize_workgroup_memory: state.stage.zero_initialize_workgroup_memory,
                 };
                 Some(ResolvedFragmentState {
                     stage,
@@ -1304,7 +1525,7 @@ impl Global {
                 None
             };
 
-            let desc = ResolvedRenderPipelineDescriptor {
+            let desc = ResolvedGeneralRenderPipelineDescriptor {
                 label: desc.label.clone(),
                 layout,
                 vertex,
@@ -1321,40 +1542,6 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            if let Some(ids) = implicit_context.as_ref() {
-                let group_count = pipeline.layout.bind_group_layouts.len();
-                if ids.group_ids.len() < group_count {
-                    log::error!(
-                        "Not enough bind group IDs ({}) specified for the implicit layout ({})",
-                        ids.group_ids.len(),
-                        group_count
-                    );
-                    // TODO: categorize this error as API misuse
-                    break 'error pipeline::ImplicitLayoutError::MissingIds(group_count as _)
-                        .into();
-                }
-
-                let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-                let mut bgl_guard = hub.bind_group_layouts.write();
-                pipeline_layout_guard.insert(ids.root_id, Fallible::Valid(pipeline.layout.clone()));
-                let mut group_ids = ids.group_ids.iter();
-                // NOTE: If the first iterator is longer than the second, the `.zip()` impl will still advance the
-                // the first iterator before realizing that the second iterator has finished.
-                // The `pipeline.layout.bind_group_layouts` iterator will always be shorter than `ids.group_ids`,
-                // so using it as the first iterator for `.zip()` will work properly.
-                for (bgl, bgl_id) in pipeline
-                    .layout
-                    .bind_group_layouts
-                    .iter()
-                    .zip(&mut group_ids)
-                {
-                    bgl_guard.insert(*bgl_id, Fallible::Valid(bgl.clone()));
-                }
-                for bgl_id in group_ids {
-                    bgl_guard.insert(*bgl_id, Fallible::Invalid(Arc::new(String::new())));
-                }
-            }
-
             let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_render_pipeline -> {id:?}");
 
@@ -1362,17 +1549,6 @@ impl Global {
         };
 
         let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-
-        // We also need to assign errors to the implicit pipeline layout and the
-        // implicit bind group layouts.
-        if let Some(ids) = implicit_context {
-            let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-            let mut bgl_guard = hub.bind_group_layouts.write();
-            pipeline_layout_guard.insert(ids.root_id, Fallible::Invalid(Arc::new(String::new())));
-            for bgl_id in ids.group_ids {
-                bgl_guard.insert(bgl_id, Fallible::Invalid(Arc::new(String::new())));
-            }
-        }
 
         (id, Some(error))
     }
@@ -1431,7 +1607,6 @@ impl Global {
         device_id: DeviceId,
         desc: &pipeline::ComputePipelineDescriptor,
         id_in: Option<id::ComputePipelineId>,
-        implicit_pipeline_ids: Option<ImplicitPipelineIds<'_>>,
     ) -> (
         id::ComputePipelineId,
         Option<pipeline::CreateComputePipelineError>,
@@ -1440,18 +1615,9 @@ impl Global {
 
         let hub = &self.hub;
 
-        let missing_implicit_pipeline_ids =
-            desc.layout.is_none() && id_in.is_some() && implicit_pipeline_ids.is_none();
-
         let fid = hub.compute_pipelines.prepare(id_in);
-        let implicit_context = implicit_pipeline_ids.map(|ipi| ipi.prepare(hub));
 
         let error = 'error: {
-            if missing_implicit_pipeline_ids {
-                // TODO: categorize this error as API misuse
-                break 'error pipeline::ImplicitLayoutError::MissingImplicitPipelineIds.into();
-            }
-
             let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
@@ -1459,8 +1625,11 @@ impl Global {
                 trace.add(trace::Action::CreateComputePipeline {
                     id: fid.id(),
                     desc: desc.clone(),
-                    implicit_context: implicit_context.clone(),
                 });
+            }
+
+            if let Err(e) = device.check_is_valid() {
+                break 'error e.into();
             }
 
             let layout = desc
@@ -1505,40 +1674,6 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
-            if let Some(ids) = implicit_context.as_ref() {
-                let group_count = pipeline.layout.bind_group_layouts.len();
-                if ids.group_ids.len() < group_count {
-                    log::error!(
-                        "Not enough bind group IDs ({}) specified for the implicit layout ({})",
-                        ids.group_ids.len(),
-                        group_count
-                    );
-                    // TODO: categorize this error as API misuse
-                    break 'error pipeline::ImplicitLayoutError::MissingIds(group_count as _)
-                        .into();
-                }
-
-                let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-                let mut bgl_guard = hub.bind_group_layouts.write();
-                pipeline_layout_guard.insert(ids.root_id, Fallible::Valid(pipeline.layout.clone()));
-                let mut group_ids = ids.group_ids.iter();
-                // NOTE: If the first iterator is longer than the second, the `.zip()` impl will still advance the
-                // the first iterator before realizing that the second iterator has finished.
-                // The `pipeline.layout.bind_group_layouts` iterator will always be shorter than `ids.group_ids`,
-                // so using it as the first iterator for `.zip()` will work properly.
-                for (bgl, bgl_id) in pipeline
-                    .layout
-                    .bind_group_layouts
-                    .iter()
-                    .zip(&mut group_ids)
-                {
-                    bgl_guard.insert(*bgl_id, Fallible::Valid(bgl.clone()));
-                }
-                for bgl_id in group_ids {
-                    bgl_guard.insert(*bgl_id, Fallible::Invalid(Arc::new(String::new())));
-                }
-            }
-
             let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_compute_pipeline -> {id:?}");
 
@@ -1546,17 +1681,6 @@ impl Global {
         };
 
         let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
-
-        // We also need to assign errors to the implicit pipeline layout and the
-        // implicit bind group layouts.
-        if let Some(ids) = implicit_context {
-            let mut pipeline_layout_guard = hub.pipeline_layouts.write();
-            let mut bgl_guard = hub.bind_group_layouts.write();
-            pipeline_layout_guard.insert(ids.root_id, Fallible::Invalid(Arc::new(String::new())));
-            for bgl_id in ids.group_ids {
-                bgl_guard.insert(bgl_id, Fallible::Invalid(Arc::new(String::new())));
-            }
-        }
 
         (id, Some(error))
     }
@@ -1793,7 +1917,7 @@ impl Global {
             Ok(())
         }
 
-        log::debug!("configuring surface with {:?}", config);
+        log::debug!("configuring surface with {config:?}");
 
         let error = 'error: {
             // User callbacks must not be called while we are holding locks.
@@ -1928,7 +2052,7 @@ impl Global {
                                 E::Device(device.handle_hal_error(error))
                             }
                             hal::SurfaceError::Other(message) => {
-                                log::error!("surface configuration failed: {}", message);
+                                log::error!("surface configuration failed: {message}");
                                 E::InvalidSurface
                             }
                         }

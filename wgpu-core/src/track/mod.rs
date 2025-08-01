@@ -95,6 +95,7 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 [`UsageScope`]: https://gpuweb.github.io/gpuweb/#programming-model-synchronization
 */
 
+mod blas;
 mod buffer;
 mod metadata;
 mod range;
@@ -105,8 +106,9 @@ use crate::{
     binding_model, command,
     lock::{rank, Mutex},
     pipeline,
-    resource::{self, Labeled, ResourceErrorIdent},
+    resource::{self, Labeled, RawResourceAccess, ResourceErrorIdent},
     snatch::SnatchGuard,
+    track::blas::BlasTracker,
 };
 
 use alloc::{sync::Arc, vec::Vec};
@@ -123,7 +125,10 @@ pub(crate) use texture::{
     DeviceTextureTracker, TextureTracker, TextureTrackerSetSingle, TextureUsageScope,
     TextureViewBindGroupState,
 };
-use wgt::strict_assert_ne;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    strict_assert_ne,
+};
 
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -220,6 +225,7 @@ pub(crate) struct TrackerIndexAllocators {
     pub buffers: Arc<SharedTrackerIndexAllocator>,
     pub textures: Arc<SharedTrackerIndexAllocator>,
     pub texture_views: Arc<SharedTrackerIndexAllocator>,
+    pub external_textures: Arc<SharedTrackerIndexAllocator>,
     pub samplers: Arc<SharedTrackerIndexAllocator>,
     pub bind_groups: Arc<SharedTrackerIndexAllocator>,
     pub compute_pipelines: Arc<SharedTrackerIndexAllocator>,
@@ -236,6 +242,7 @@ impl TrackerIndexAllocators {
             buffers: Arc::new(SharedTrackerIndexAllocator::new()),
             textures: Arc::new(SharedTrackerIndexAllocator::new()),
             texture_views: Arc::new(SharedTrackerIndexAllocator::new()),
+            external_textures: Arc::new(SharedTrackerIndexAllocator::new()),
             samplers: Arc::new(SharedTrackerIndexAllocator::new()),
             bind_groups: Arc::new(SharedTrackerIndexAllocator::new()),
             compute_pipelines: Arc::new(SharedTrackerIndexAllocator::new()),
@@ -356,6 +363,12 @@ pub enum ResourceUsageCompatibilityError {
     },
 }
 
+impl WebGpuError for ResourceUsageCompatibilityError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 impl ResourceUsageCompatibilityError {
     fn from_buffer(
         buffer: &resource::Buffer,
@@ -425,6 +438,7 @@ impl<T: ResourceUses> fmt::Display for InvalidUse<T> {
 pub(crate) struct BindGroupStates {
     pub buffers: BufferBindGroupState,
     pub views: TextureViewBindGroupState,
+    pub external_textures: StatelessTracker<resource::ExternalTexture>,
     pub samplers: StatelessTracker<resource::Sampler>,
     pub acceleration_structures: StatelessTracker<resource::Tlas>,
 }
@@ -434,6 +448,7 @@ impl BindGroupStates {
         Self {
             buffers: BufferBindGroupState::new(),
             views: TextureViewBindGroupState::new(),
+            external_textures: StatelessTracker::new(),
             samplers: StatelessTracker::new(),
             acceleration_structures: StatelessTracker::new(),
         }
@@ -601,7 +616,7 @@ impl DeviceTracker {
 pub(crate) struct Tracker {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,
-    pub blas_s: StatelessTracker<resource::Blas>,
+    pub blas_s: BlasTracker,
     pub tlas_s: StatelessTracker<resource::Tlas>,
     pub views: StatelessTracker<resource::TextureView>,
     pub bind_groups: StatelessTracker<binding_model::BindGroup>,
@@ -616,7 +631,7 @@ impl Tracker {
         Self {
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
-            blas_s: StatelessTracker::new(),
+            blas_s: BlasTracker::new(),
             tlas_s: StatelessTracker::new(),
             views: StatelessTracker::new(),
             bind_groups: StatelessTracker::new(),

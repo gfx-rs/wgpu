@@ -1,5 +1,8 @@
 use thiserror::Error;
-use wgt::AdapterInfo;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    AdapterInfo,
+};
 
 pub const HEADER_LENGTH: usize = size_of::<PipelineCacheHeader>();
 
@@ -34,6 +37,12 @@ impl PipelineCacheValidationError {
             | PipelineCacheValidationError::Outdated
             | PipelineCacheValidationError::Corrupted => false,
         }
+    }
+}
+
+impl WebGpuError for PipelineCacheValidationError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
     }
 }
 

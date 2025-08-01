@@ -33,3 +33,9 @@ fn test_atomic_u32_() {
     return;
 }
 
+@compute @workgroup_size(1, 1, 1) 
+fn main() {
+    test_atomic_i32_();
+    test_atomic_u32_();
+    return;
+}

@@ -1,3 +1,17 @@
+#[allow(
+    clippy::allow_attributes,
+    reason = "Using expect is going to be much more verbose"
+)]
+#[allow(clippy::ptr_arg)]
+pub fn all_tests(_vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
+    _vec.push(SIMPLE_DRAW_CHECK_MEM_LEAKS);
+}
+
 #[cfg(any(
     not(target_arch = "wasm32"),
     target_os = "emscripten",
@@ -169,8 +183,9 @@ async fn draw_test_with_reports(
     assert_eq!(report.buffers.num_allocated, 1);
     assert_eq!(report.texture_views.num_allocated, 1);
     assert_eq!(report.texture_views.num_kept_from_user, 1);
-    assert_eq!(report.textures.num_allocated, 0);
-    assert_eq!(report.textures.num_kept_from_user, 0);
+    // TextureViews in `wgpu` have a reference to the texture.
+    assert_eq!(report.textures.num_allocated, 1);
+    assert_eq!(report.textures.num_kept_from_user, 1);
 
     let mut encoder = ctx
         .device
@@ -178,7 +193,7 @@ async fn draw_test_with_reports(
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report();
-    assert_eq!(report.command_buffers.num_allocated, 1);
+    assert_eq!(report.command_encoders.num_allocated, 1);
     assert_eq!(report.buffers.num_allocated, 1);
 
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -205,10 +220,10 @@ async fn draw_test_with_reports(
     assert_eq!(report.pipeline_layouts.num_allocated, 1);
     assert_eq!(report.render_pipelines.num_allocated, 1);
     assert_eq!(report.compute_pipelines.num_allocated, 0);
-    assert_eq!(report.command_buffers.num_allocated, 1);
+    assert_eq!(report.command_encoders.num_allocated, 1);
     assert_eq!(report.render_bundles.num_allocated, 0);
     assert_eq!(report.texture_views.num_allocated, 1);
-    assert_eq!(report.textures.num_allocated, 0);
+    assert_eq!(report.textures.num_allocated, 1);
 
     function(&mut rpass);
 
@@ -222,7 +237,7 @@ async fn draw_test_with_reports(
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report();
-    assert_eq!(report.command_buffers.num_kept_from_user, 1);
+    assert_eq!(report.command_encoders.num_kept_from_user, 1);
     assert_eq!(report.render_pipelines.num_kept_from_user, 0);
     assert_eq!(report.pipeline_layouts.num_kept_from_user, 0);
     assert_eq!(report.bind_group_layouts.num_kept_from_user, 0);
@@ -230,7 +245,7 @@ async fn draw_test_with_reports(
     assert_eq!(report.buffers.num_kept_from_user, 0);
     assert_eq!(report.texture_views.num_kept_from_user, 0);
     assert_eq!(report.textures.num_kept_from_user, 0);
-    assert_eq!(report.command_buffers.num_allocated, 1);
+    assert_eq!(report.command_encoders.num_allocated, 1);
     assert_eq!(report.render_pipelines.num_allocated, 0);
     assert_eq!(report.pipeline_layouts.num_allocated, 0);
     assert_eq!(report.bind_group_layouts.num_allocated, 0);
@@ -239,12 +254,18 @@ async fn draw_test_with_reports(
     assert_eq!(report.texture_views.num_allocated, 0);
     assert_eq!(report.textures.num_allocated, 0);
 
-    let submit_index = ctx.queue.submit(Some(encoder.finish()));
+    let command_buffer = encoder.finish();
 
-    // TODO: fix in https://github.com/gfx-rs/wgpu/pull/5141
-    // let global_report = ctx.instance.generate_report().unwrap();
-    // let report = global_report.hub_report();
-    // assert_eq!(report.command_buffers.num_allocated, 0);
+    let global_report = ctx.instance.generate_report().unwrap();
+    let report = global_report.hub_report();
+    assert_eq!(report.command_encoders.num_allocated, 0);
+    assert_eq!(report.command_buffers.num_allocated, 1);
+
+    let submit_index = ctx.queue.submit(Some(command_buffer));
+
+    let global_report = ctx.instance.generate_report().unwrap();
+    let report = global_report.hub_report();
+    assert_eq!(report.command_buffers.num_allocated, 0);
 
     ctx.async_poll(wgpu::PollType::wait_for(submit_index))
         .await
@@ -289,7 +310,8 @@ static SIMPLE_DRAW_CHECK_MEM_LEAKS: wgpu_test::GpuTestConfiguration =
         .parameters(
             wgpu_test::TestParameters::default()
                 .test_features_limits()
-                .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+                .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
+                .enable_noop(),
         )
         .run_async(|ctx| {
             draw_test_with_reports(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {

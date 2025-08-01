@@ -81,6 +81,12 @@ pub enum BindingResource<'a> {
     ///   built using `build_acceleration_structures` a validation error is generated otherwise this is a part of the
     ///   safety section of `build_acceleration_structures_unsafe_tlas` and so undefined behavior occurs.
     AccelerationStructure(&'a Tlas),
+    /// Binding is backed by an external texture.
+    ///
+    /// [`Features::EXTERNAL_TEXTURE`] must be supported to use this feature.
+    ///
+    /// Corresponds to [`wgt::BindingType::ExternalTexture`].
+    ExternalTexture(&'a ExternalTexture),
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindingResource<'_>: Send, Sync);

@@ -23,6 +23,7 @@ struct CompilationContext<'a> {
     name_binding_map: &'a mut NameBindingMap,
     push_constant_items: &'a mut Vec<naga::back::glsl::PushConstantItem>,
     multiview: Option<NonZeroU32>,
+    clip_distance_count: &'a mut u32,
 }
 
 impl CompilationContext<'_> {
@@ -103,6 +104,10 @@ impl CompilationContext<'_> {
         }
 
         *self.push_constant_items = reflection_info.push_constant_items;
+
+        if naga_stage == naga::ShaderStage::Vertex {
+            *self.clip_distance_count = reflection_info.clip_distance_count;
+        }
     }
 }
 
@@ -183,17 +188,17 @@ impl super::Device {
         unsafe { gl.shader_source(raw, shader) };
         unsafe { gl.compile_shader(raw) };
 
-        log::debug!("\tCompiled shader {:?}", raw);
+        log::debug!("\tCompiled shader {raw:?}");
 
         let compiled_ok = unsafe { gl.get_shader_compile_status(raw) };
         let msg = unsafe { gl.get_shader_info_log(raw) };
         if compiled_ok {
             if !msg.is_empty() {
-                log::warn!("\tCompile: {}", msg);
+                log::warn!("\tCompile: {msg}");
             }
             Ok(raw)
         } else {
-            log::error!("\tShader compilation failed: {}", msg);
+            log::error!("\tShader compilation failed: {msg}");
             unsafe { gl.delete_shader(raw) };
             Err(crate::PipelineError::Linkage(
                 map_naga_stage(naga_stage),
@@ -219,6 +224,7 @@ impl super::Device {
         let (module, info) = naga::back::pipeline_constants::process_overrides(
             &stage.module.naga.module,
             &stage.module.naga.info,
+            Some((naga_stage, stage.entry_point)),
             stage.constants,
         )
         .map_err(|e| {
@@ -280,7 +286,7 @@ impl super::Device {
             crate::PipelineError::Linkage(map_naga_stage(naga_stage), msg)
         })?;
 
-        log::debug!("Naga generated shader:\n{}", output);
+        log::debug!("Naga generated shader:\n{output}");
 
         context.consume_reflection(
             gl,
@@ -371,6 +377,7 @@ impl super::Device {
         let mut sampler_map = [None; super::MAX_TEXTURE_SLOTS];
         let mut has_stages = wgt::ShaderStages::empty();
         let mut shaders_to_delete = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
+        let mut clip_distance_count = 0;
 
         for &(naga_stage, stage) in &shaders {
             has_stages |= map_naga_stage(naga_stage);
@@ -384,6 +391,7 @@ impl super::Device {
                 name_binding_map: &mut name_binding_map,
                 push_constant_items: pc_item,
                 multiview,
+                clip_distance_count: &mut clip_distance_count,
             };
 
             let shader = Self::create_shader(gl, naga_stage, stage, context, program)?;
@@ -414,7 +422,7 @@ impl super::Device {
             unsafe { gl.delete_shader(shader) };
         }
 
-        log::debug!("\tLinked program {:?}", program);
+        log::debug!("\tLinked program {program:?}");
 
         let linked_ok = unsafe { gl.get_program_link_status(program) };
         let msg = unsafe { gl.get_program_info_log(program) };
@@ -422,7 +430,7 @@ impl super::Device {
             return Err(crate::PipelineError::Linkage(has_stages, msg));
         }
         if !msg.is_empty() {
-            log::warn!("\tLink: {}", msg);
+            log::warn!("\tLink: {msg}");
         }
 
         if !private_caps.contains(PrivateCapabilities::SHADER_BINDING_LAYOUT) {
@@ -430,7 +438,7 @@ impl super::Device {
             // in the shader. We can't remap storage buffers this way.
             unsafe { gl.use_program(Some(program)) };
             for (ref name, (register, slot)) in name_binding_map {
-                log::trace!("Get binding {:?} from program {:?}", name, program);
+                log::trace!("Get binding {name:?} from program {program:?}");
                 match register {
                     super::BindingRegister::UniformBuffers => {
                         let index = unsafe { gl.get_uniform_block_index(program, name) }.unwrap();
@@ -440,11 +448,7 @@ impl super::Device {
                     super::BindingRegister::StorageBuffers => {
                         let index =
                             unsafe { gl.get_shader_storage_block_index(program, name) }.unwrap();
-                        log::error!(
-                            "Unable to re-map shader storage block {} to {}",
-                            name,
-                            index
-                        );
+                        log::error!("Unable to re-map shader storage block {name} to {index}");
                         return Err(crate::DeviceError::Lost.into());
                     }
                     super::BindingRegister::Textures | super::BindingRegister::Images => {
@@ -495,6 +499,7 @@ impl super::Device {
             sampler_map,
             first_instance_location,
             push_constant_descs: uniforms,
+            clip_distance_count,
         }))
     }
 }
@@ -969,6 +974,8 @@ impl crate::Device for super::Device {
                 }
                 #[cfg(webgl)]
                 super::TextureInner::ExternalFramebuffer { .. } => {}
+                #[cfg(native)]
+                super::TextureInner::ExternalNativeFramebuffer { .. } => {}
             }
         }
 
@@ -1192,6 +1199,7 @@ impl crate::Device for super::Device {
                         ..
                     } => &mut num_storage_buffers,
                     wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                    wgt::BindingType::ExternalTexture => unimplemented!(),
                 };
 
                 binding_to_slot[entry.binding as usize] = *counter;
@@ -1302,6 +1310,7 @@ impl crate::Device for super::Device {
                     })
                 }
                 wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                wgt::BindingType::ExternalTexture => unimplemented!(),
             };
             contents.push(binding);
         }
@@ -1333,6 +1342,9 @@ impl crate::Device for super::Device {
                     panic!("`Features::MSL_SHADER_PASSTHROUGH` is not enabled")
                 }
                 crate::ShaderInput::Naga(naga) => naga,
+                crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
+                    panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
+                }
             },
             label: desc.label.map(|str| str.to_string()),
             id: self.shared.next_shader_id.fetch_add(1, Ordering::Relaxed),
@@ -1351,9 +1363,16 @@ impl crate::Device for super::Device {
             super::PipelineCache,
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
+        let (vertex_stage, vertex_buffers) = match &desc.vertex_processor {
+            crate::VertexProcessor::Standard {
+                vertex_buffers,
+                ref vertex_stage,
+            } => (vertex_stage, vertex_buffers),
+            crate::VertexProcessor::Mesh { .. } => unreachable!(),
+        };
         let gl = &self.shared.context.lock();
         let mut shaders = ArrayVec::new();
-        shaders.push((naga::ShaderStage::Vertex, &desc.vertex_stage));
+        shaders.push((naga::ShaderStage::Vertex, vertex_stage));
         if let Some(ref fs) = desc.fragment_stage {
             shaders.push((naga::ShaderStage::Fragment, fs));
         }
@@ -1363,7 +1382,7 @@ impl crate::Device for super::Device {
         let (vertex_buffers, vertex_attributes) = {
             let mut buffers = Vec::new();
             let mut attributes = Vec::new();
-            for (index, vb_layout) in desc.vertex_buffers.iter().enumerate() {
+            for (index, vb_layout) in vertex_buffers.iter().enumerate() {
                 buffers.push(super::VertexBufferDesc {
                     step: vb_layout.step_mode,
                     stride: vb_layout.array_stride as u32,
@@ -1417,16 +1436,6 @@ impl crate::Device for super::Device {
                 .map(|ds| conv::map_stencil(&ds.stencil)),
             alpha_to_coverage_enabled: desc.multisample.alpha_to_coverage_enabled,
         })
-    }
-    unsafe fn create_mesh_pipeline(
-        &self,
-        _desc: &crate::MeshPipelineDescriptor<
-            <Self::A as crate::Api>::PipelineLayout,
-            <Self::A as crate::Api>::ShaderModule,
-            <Self::A as crate::Api>::PipelineCache,
-        >,
-    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
-        unreachable!()
     }
 
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {

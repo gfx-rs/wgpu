@@ -85,6 +85,7 @@
         ray_desc: Some(5),
         ray_intersection: None,
         ray_vertex_return: None,
+        external_texture_params: None,
         predeclared_types: {},
     ),
     constants: [],
@@ -265,4 +266,5 @@
     ],
     diagnostic_filters: [],
     diagnostic_filter_leaf: None,
+    doc_comments: None,
 )

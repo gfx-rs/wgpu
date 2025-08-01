@@ -1,22 +1,23 @@
 use glam::{Mat4, Vec3};
 use std::mem;
-use std::time::Instant;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{include_wgsl, BufferUsages, IndexFormat, SamplerDescriptor};
 use wgpu::{
     AccelerationStructureFlags, AccelerationStructureUpdateMode, BlasBuildEntry, BlasGeometries,
     BlasGeometrySizeDescriptors, BlasTriangleGeometry, BlasTriangleGeometrySizeDescriptor,
-    CreateBlasDescriptor, CreateTlasDescriptor, TlasInstance, TlasPackage,
+    CreateBlasDescriptor, CreateTlasDescriptor, Tlas, TlasInstance,
 };
 
+use crate::utils;
+
 struct Example {
-    tlas_package: TlasPackage,
+    tlas: Tlas,
     compute_pipeline: wgpu::ComputePipeline,
     blit_pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     blit_bind_group: wgpu::BindGroup,
     storage_texture: wgpu::Texture,
-    start: Instant,
+    animation_timer: utils::AnimationTimer,
 }
 
 #[repr(C)]
@@ -28,12 +29,11 @@ struct Uniforms {
 
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
-        wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-            | wgpu::Features::EXPERIMENTAL_RAY_QUERY
+        wgpu::Features::EXPERIMENTAL_RAY_QUERY
     }
 
     fn required_limits() -> wgpu::Limits {
-        wgpu::Limits::default()
+        wgpu::Limits::default().using_minimum_supported_acceleration_structure_values()
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
@@ -145,16 +145,14 @@ impl crate::framework::Example for Example {
             },
         );
 
-        let tlas = device.create_tlas(&CreateTlasDescriptor {
+        let mut tlas = device.create_tlas(&CreateTlasDescriptor {
             label: None,
             max_instances: 3,
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: AccelerationStructureUpdateMode::Build,
         });
 
-        let mut tlas_package = TlasPackage::new(tlas);
-
-        tlas_package[0] = Some(TlasInstance::new(
+        tlas[0] = Some(TlasInstance::new(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: 0.0,
@@ -169,7 +167,7 @@ impl crate::framework::Example for Example {
             0xff,
         ));
 
-        tlas_package[1] = Some(TlasInstance::new(
+        tlas[1] = Some(TlasInstance::new(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: -1.0,
@@ -184,7 +182,7 @@ impl crate::framework::Example for Example {
             0xff,
         ));
 
-        tlas_package[2] = Some(TlasInstance::new(
+        tlas[2] = Some(TlasInstance::new(
             &blas,
             Mat4::from_translation(Vec3 {
                 x: 1.0,
@@ -232,7 +230,7 @@ impl crate::framework::Example for Example {
                     transform_buffer_offset: None,
                 }]),
             }),
-            Some(&tlas_package),
+            Some(&tlas),
         );
 
         queue.submit(Some(encoder.finish()));
@@ -331,7 +329,7 @@ impl crate::framework::Example for Example {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::AccelerationStructure(tlas_package.tlas()),
+                    resource: wgpu::BindingResource::AccelerationStructure(&tlas),
                 },
             ],
         });
@@ -354,13 +352,13 @@ impl crate::framework::Example for Example {
         });
 
         Self {
-            tlas_package,
+            tlas,
             compute_pipeline,
             blit_pipeline,
             bind_group,
             blit_bind_group,
             storage_texture: storage_tex,
-            start: Instant::now(),
+            animation_timer: utils::AnimationTimer::default(),
         }
     }
 
@@ -375,8 +373,8 @@ impl crate::framework::Example for Example {
     fn update(&mut self, _event: winit::event::WindowEvent) {}
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        self.tlas_package[0].as_mut().unwrap().transform =
-            Mat4::from_rotation_y(self.start.elapsed().as_secs_f32())
+        self.tlas[0].as_mut().unwrap().transform =
+            Mat4::from_rotation_y(self.animation_timer.time())
                 .transpose()
                 .to_cols_array()[..12]
                 .try_into()
@@ -385,7 +383,7 @@ impl crate::framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        encoder.build_acceleration_structures(None, Some(&self.tlas_package));
+        encoder.build_acceleration_structures(None, Some(&self.tlas));
 
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -433,7 +431,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_traced_triangle",
     image_path: "/examples/features/src/ray_traced_triangle/screenshot.png",
     width: 1024,

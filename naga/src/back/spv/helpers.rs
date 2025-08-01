@@ -35,6 +35,9 @@ pub(super) fn string_to_byte_chunks(input: &str, limit: usize) -> Vec<&[u8]> {
     let mut words = vec![];
     while offset < input.len() {
         offset = input.floor_char_boundary(offset + limit);
+        // Clippy wants us to call as_bytes() first to avoid the UTF-8 check,
+        // but we want to assert the output is valid UTF-8.
+        #[allow(clippy::sliced_string_as_bytes)]
         words.push(input[start..offset].as_bytes());
         start = offset;
     }

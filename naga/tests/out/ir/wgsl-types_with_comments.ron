@@ -1,0 +1,230 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Matrix(
+                columns: Quad,
+                rows: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Matrix(
+                columns: Bi,
+                rows: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: Some("TestR"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("test_m"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: Some("TestS"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("test_m"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        external_texture_params: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: Some("test_c"),
+            ty: 2,
+            init: 0,
+        ),
+    ],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("mvp_matrix"),
+            space: Uniform,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 0,
+            init: None,
+        ),
+        (
+            name: Some("w_mem"),
+            space: WorkGroup,
+            binding: None,
+            ty: 1,
+            init: None,
+        ),
+        (
+            name: Some("w_mem2"),
+            space: WorkGroup,
+            binding: None,
+            ty: 1,
+            init: None,
+        ),
+    ],
+    global_expressions: [
+        Literal(U32(1)),
+    ],
+    functions: [
+        (
+            name: Some("test_f"),
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [],
+            named_expressions: {},
+            body: [
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+        (
+            name: Some("test_g"),
+            arguments: [],
+            result: None,
+            local_variables: [],
+            expressions: [],
+            named_expressions: {},
+            body: [
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            name: "test_ep",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("test_ep"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(2),
+                    Load(
+                        pointer: 0,
+                    ),
+                    ZeroValue(4),
+                ],
+                named_expressions: {
+                    1: "phony",
+                    2: "phony",
+                },
+                body: [
+                    Emit((
+                        start: 1,
+                        end: 2,
+                    )),
+                    Call(
+                        function: 1,
+                        arguments: [],
+                        result: None,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: Some((
+        types: {
+            3: [
+                "/// struct R doc comment",
+            ],
+            4: [
+                "/// struct S doc comment",
+            ],
+        },
+        struct_members: {
+            (3, 0): [
+                "/// member doc comment",
+            ],
+            (4, 0): [
+                "/// member doc comment",
+            ],
+        },
+        entry_points: {
+            0: [
+                "/// entry point doc comment",
+            ],
+        },
+        functions: {
+            0: [
+                "/// function f doc comment",
+            ],
+            1: [
+                "/// function g doc comment",
+            ],
+        },
+        constants: {
+            0: [
+                "/// constant doc comment",
+            ],
+        },
+        global_variables: {
+            0: [
+                "/**\n 🍽\u{fe0f} /* nested comment */\n */",
+            ],
+            1: [
+                "/// workgroup var 1 doc comment",
+                "/// 2nd line of workgroup var doc comment",
+            ],
+            2: [
+                "/// workgroup var 2 doc comment",
+            ],
+        },
+        module: [
+            "//! Module doc comment.",
+            "//! 2nd line of module doc comment.",
+        ],
+    )),
+)

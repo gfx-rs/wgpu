@@ -14,7 +14,7 @@ use alloc::string::{String, ToString};
 ///
 /// - If a type's WGSL form requires dynamic formatting, so that
 ///   returning a `&'static str` isn't feasible, consider implementing
-///   [`std::fmt::Display`] on some wrapper type instead.
+///   [`core::fmt::Display`] on some wrapper type instead.
 pub trait ToWgsl: Sized {
     /// Return WGSL source code representation of `self`.
     fn to_wgsl(self) -> &'static str;
@@ -32,7 +32,7 @@ pub trait ToWgsl: Sized {
 ///
 /// - If a type's WGSL form requires dynamic formatting, so that
 ///   returning a `&'static str` isn't feasible, consider implementing
-///   [`std::fmt::Display`] on some wrapper type instead.
+///   [`core::fmt::Display`] on some wrapper type instead.
 pub trait TryToWgsl: Sized {
     /// Return the WGSL form of `self` as a `'static` string.
     ///
@@ -165,6 +165,7 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::ViewIndex => "view_index",
             Bi::InstanceIndex => "instance_index",
             Bi::VertexIndex => "vertex_index",
+            Bi::ClipDistance => "clip_distances",
             Bi::FragDepth => "frag_depth",
             Bi::FrontFacing => "front_facing",
             Bi::PrimitiveIndex => "primitive_index",
@@ -183,7 +184,6 @@ impl TryToWgsl for crate::BuiltIn {
             // Non-standard built-ins.
             Bi::BaseInstance
             | Bi::BaseVertex
-            | Bi::ClipDistance
             | Bi::CullDistance
             | Bi::PointSize
             | Bi::DrawID

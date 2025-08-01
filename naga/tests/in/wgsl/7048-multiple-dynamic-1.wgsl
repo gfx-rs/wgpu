@@ -1,3 +1,4 @@
+@compute @workgroup_size(1)
 fn f() {
     let b = array<vec3f, 2>();
     var poly = vec4f(0);

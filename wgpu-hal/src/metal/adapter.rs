@@ -7,11 +7,27 @@ use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::sync::Arc;
-use std::thread;
 
 use super::TimestampQuerySupport;
 
-const MAX_COMMAND_BUFFERS: u64 = 2048;
+/// Maximum number of command buffers for `MTLCommandQueue`s that we create.
+///
+/// If a [new command buffer] is requested when Metal has run out of command
+/// buffers, it waits indefinitely for one to become available. If the
+/// outstanding command buffers are actively executing on the GPU, this will
+/// happen relatively quickly. But if the outstanding command buffers will only
+/// be recovered upon GC, and attempting to get a new command buffer prevents
+/// forward progress towards that GC, there is a deadlock.
+///
+/// This is mostly a problem for the CTS, which frequently creates command
+/// buffers that it does not submit. It is unclear how likely command buffer
+/// exhaustion is in real applications.
+///
+/// This limit was increased from a previous value of 2048 for
+/// <https://bugzilla.mozilla.org/show_bug.cgi?id=1971452>.
+///
+/// [new command buffer]: https://developer.apple.com/documentation/metal/mtlcommandqueue/makecommandbuffer()?language=objc
+const MAX_COMMAND_BUFFERS: u64 = 4096;
 
 unsafe impl Send for super::Adapter {}
 unsafe impl Sync for super::Adapter {}
@@ -342,13 +358,6 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
-        let current_extent = if surface.main_thread_id == thread::current().id() {
-            Some(surface.dimensions())
-        } else {
-            log::warn!("Unable to get the current view dimensions on a non-main thread");
-            None
-        };
-
         let mut formats = vec![
             wgt::TextureFormat::Bgra8Unorm,
             wgt::TextureFormat::Bgra8UnormSrgb,
@@ -380,7 +389,7 @@ impl crate::Adapter for super::Adapter {
                 wgt::CompositeAlphaMode::PostMultiplied,
             ],
 
-            current_extent,
+            current_extent: Some(surface.dimensions()),
             usage: wgt::TextureUses::COLOR_TARGET
                 | wgt::TextureUses::COPY_SRC
                 | wgt::TextureUses::COPY_DST
@@ -667,6 +676,8 @@ impl super::PrivateCapabilities {
                 || Self::supports_any(device, ASTC_PIXEL_FORMAT_FEATURES),
             // A13(Apple6) M1(Apple7) and later always support HDR ASTC pixel formats
             format_astc_hdr: family_check && device.supports_family(MTLGPUFamily::Apple6),
+            // Apple3 and later supports compressed volume texture formats including ASTC Sliced 3D
+            format_astc_3d: family_check && device.supports_family(MTLGPUFamily::Apple3),
             format_any8_unorm_srgb_all: Self::supports_any(device, ANY8_UNORM_SRGB_ALL),
             format_any8_unorm_srgb_no_write: !Self::supports_any(device, ANY8_UNORM_SRGB_ALL)
                 && !os_is_mac,
@@ -938,6 +949,7 @@ impl super::PrivateCapabilities {
         );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
+        features.set(F::TEXTURE_COMPRESSION_ASTC_SLICED_3D, self.format_astc_3d);
         features.set(F::TEXTURE_COMPRESSION_BC, self.format_bc);
         features.set(F::TEXTURE_COMPRESSION_BC_SLICED_3D, self.format_bc); // BC guarantees Sliced 3D
         features.set(F::TEXTURE_COMPRESSION_ETC2, self.format_eac_etc);
@@ -1065,6 +1077,22 @@ impl super::PrivateCapabilities {
                 max_compute_workgroups_per_dimension: 0xFFFF,
                 max_buffer_size: self.max_buffer_size,
                 max_non_sampler_bindings: u32::MAX,
+
+                max_task_workgroup_total_count: 0,
+                max_task_workgroups_per_dimension: 0,
+                max_mesh_multiview_count: 0,
+                max_mesh_output_layers: 0,
+
+                max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
+                max_blas_geometry_count: 0,  // When added: 2^24
+                max_tlas_instance_count: 0,  // When added: 2^24
+                // Unsure what this will be when added: acceleration structures count as a buffer so
+                // it may be worth using argument buffers for this all acceleration structures, then
+                // there will be no limit.
+                // From 2.17.7 in https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+                // > [Acceleration structures] are opaque objects that can be bound directly using
+                // buffer binding points or via argument buffers
+                max_acceleration_structures_per_shader_stage: 0,
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

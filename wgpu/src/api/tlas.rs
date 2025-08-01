@@ -1,19 +1,14 @@
-use alloc::{sync::Arc, vec, vec::Vec};
-use core::ops::{Index, IndexMut, Range};
-
 use crate::{api::blas::TlasInstance, dispatch};
-use crate::{BindingResource, Buffer, Label};
+use crate::{BindingResource, Label};
+use alloc::vec::Vec;
+#[cfg(wgpu_core)]
+use core::ops::Deref;
+use core::ops::{Index, IndexMut, Range};
 use wgt::WasmNotSendSync;
 
 /// Descriptor to create top level acceleration structures.
 pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
-
-#[derive(Debug)]
-pub(crate) struct TlasShared {
-    pub(crate) inner: dispatch::DispatchTlas,
-    pub(crate) max_instances: u32,
-}
 
 #[derive(Debug, Clone)]
 /// Top Level Acceleration Structure (TLAS).
@@ -21,87 +16,69 @@ pub(crate) struct TlasShared {
 /// A TLAS contains a series of [TLAS instances], which are a reference to
 /// a BLAS and a transformation matrix placing the geometry in the world.
 ///
-/// A TLAS contains TLAS instances in a device readable form, you cant interact
+/// A TLAS also contains an extra set of TLAS instances in a device readable form, you cant interact
 /// directly with these, instead you have to build the TLAS with [TLAS instances].
 ///
 /// [TLAS instances]: TlasInstance
 pub struct Tlas {
-    pub(crate) shared: Arc<TlasShared>,
+    pub(crate) inner: dispatch::DispatchTlas,
+    pub(crate) instances: Vec<Option<TlasInstance>>,
+    pub(crate) lowest_unmodified: u32,
 }
 static_assertions::assert_impl_all!(Tlas: WasmNotSendSync);
 
-crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .shared.inner);
+crate::cmp::impl_eq_ord_hash_proxy!(Tlas => .inner);
 
 impl Tlas {
-    /// Returns the inner hal Acceleration Structure using a callback. The hal acceleration structure
-    /// will be `None` if the backend type argument does not match with this wgpu Tlas
+    /// Get the [`wgpu_hal`] acceleration structure from this `Tlas`.
     ///
-    /// This method will start the wgpu_core level command recording.
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::AccelerationStructure`].
+    ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("AccelerationStructure")]
+    #[doc = crate::hal_type_metal!("AccelerationStructure")]
+    #[doc = crate::hal_type_dx12!("AccelerationStructure")]
+    #[doc = crate::hal_type_gles!("AccelerationStructure")]
+    ///
+    /// # Deadlocks
+    ///
+    /// - The returned guard holds a read-lock on a device-local "destruction"
+    ///   lock, which will cause all calls to `destroy` to block until the
+    ///   guard is released.
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The acceleration structure is not from the backend specified by `A`.
+    /// - The acceleration structure is from the `webgpu` or `custom` backend.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Acceleration Structure must not be manually destroyed
-    /// - If the raw handle is build,
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
+    ///
+    /// [`A::AccelerationStructure`]: hal::Api::AccelerationStructure
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&A::AccelerationStructure>) -> R,
-        R,
-    >(
+    pub unsafe fn as_hal<A: hal::Api>(
         &mut self,
-        hal_tlas_callback: F,
-    ) -> R {
-        if let Some(tlas) = self.shared.inner.as_core_opt() {
-            unsafe { tlas.context.tlas_as_hal::<A, F, R>(tlas, hal_tlas_callback) }
-        } else {
-            hal_tlas_callback(None)
-        }
+    ) -> Option<impl Deref<Target = A::AccelerationStructure>> {
+        let tlas = self.inner.as_core_opt()?;
+        unsafe { tlas.context.tlas_as_hal::<A>(tlas) }
     }
 
     #[cfg(custom)]
     /// Returns custom implementation of Tlas (if custom backend and is internally T)
     pub fn as_custom<T: crate::custom::TlasInterface>(&self) -> Option<&T> {
-        self.shared.inner.as_custom()
-    }
-}
-
-/// Entry for a top level acceleration structure build.
-/// Used with raw instance buffers for an unvalidated builds.
-/// See [`TlasPackage`] for the safe version.
-pub struct TlasBuildEntry<'a> {
-    /// Reference to the acceleration structure.
-    pub tlas: &'a Tlas,
-    /// Reference to the raw instance buffer, each instance is similar to [`TlasInstance`] but contains a handle to the BLAS.
-    pub instance_buffer: &'a Buffer,
-    /// Number of instances in the instance buffer.
-    pub instance_count: u32,
-}
-static_assertions::assert_impl_all!(TlasBuildEntry<'_>: WasmNotSendSync);
-
-/// The safe version of [`TlasBuildEntry`], containing [`TlasInstance`]s instead of a raw buffer.
-pub struct TlasPackage {
-    pub(crate) tlas: Tlas,
-    pub(crate) instances: Vec<Option<TlasInstance>>,
-    pub(crate) lowest_unmodified: u32,
-}
-static_assertions::assert_impl_all!(TlasPackage: WasmNotSendSync);
-
-impl TlasPackage {
-    /// Construct [`TlasPackage`] consuming the [`Tlas`] (prevents modification of the [`Tlas`] without using this package).
-    pub fn new(tlas: Tlas) -> Self {
-        let max_instances = tlas.shared.max_instances;
-        Self::new_with_instances(tlas, vec![None; max_instances as usize])
-    }
-
-    /// Construct [`TlasPackage`] consuming the [`Tlas`] (prevents modification of the [`Tlas`] without using this package).
-    /// This constructor moves the instances into the package (the number of instances needs to fit into tlas,
-    /// otherwise when building a validation error will be raised).
-    pub fn new_with_instances(tlas: Tlas, instances: Vec<Option<TlasInstance>>) -> Self {
-        Self {
-            tlas,
-            lowest_unmodified: instances.len() as u32,
-            instances,
-        }
+        self.inner.as_custom()
     }
 
     /// Get a reference to all instances.
@@ -147,16 +124,11 @@ impl TlasPackage {
     ///
     /// [`BindGroup`]: super::BindGroup
     pub fn as_binding(&self) -> BindingResource<'_> {
-        BindingResource::AccelerationStructure(&self.tlas)
-    }
-
-    /// Get a reference to the underling [`Tlas`].
-    pub fn tlas(&self) -> &Tlas {
-        &self.tlas
+        BindingResource::AccelerationStructure(self)
     }
 }
 
-impl Index<usize> for TlasPackage {
+impl Index<usize> for Tlas {
     type Output = Option<TlasInstance>;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -164,7 +136,7 @@ impl Index<usize> for TlasPackage {
     }
 }
 
-impl Index<Range<usize>> for TlasPackage {
+impl Index<Range<usize>> for Tlas {
     type Output = [Option<TlasInstance>];
 
     fn index(&self, index: Range<usize>) -> &Self::Output {
@@ -172,7 +144,7 @@ impl Index<Range<usize>> for TlasPackage {
     }
 }
 
-impl IndexMut<usize> for TlasPackage {
+impl IndexMut<usize> for Tlas {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         let idx = self.instances.index_mut(index);
         if index as u32 + 1 > self.lowest_unmodified {
@@ -182,7 +154,7 @@ impl IndexMut<usize> for TlasPackage {
     }
 }
 
-impl IndexMut<Range<usize>> for TlasPackage {
+impl IndexMut<Range<usize>> for Tlas {
     fn index_mut(&mut self, index: Range<usize>) -> &mut Self::Output {
         let idx = self.instances.index_mut(index.clone());
         if index.end > self.lowest_unmodified as usize {

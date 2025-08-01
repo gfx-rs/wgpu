@@ -37,25 +37,31 @@ mod webgpu_impl {
     pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC: u64 = 1 << 5;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 6;
+    pub const WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D: u64 = 1 << 6;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 7;
+    pub const WEBGPU_FEATURE_TIMESTAMP_QUERY: u64 = 1 << 7;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 8;
+    pub const WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE: u64 = 1 << 8;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 9;
+    pub const WEBGPU_FEATURE_SHADER_F16: u64 = 1 << 9;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 10;
+    pub const WEBGPU_FEATURE_RG11B10UFLOAT_RENDERABLE: u64 = 1 << 10;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 11;
+    pub const WEBGPU_FEATURE_BGRA8UNORM_STORAGE: u64 = 1 << 11;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 12;
+    pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 12;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 13;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 14;
 }
 
 macro_rules! bitflags_array_impl {
@@ -978,18 +984,21 @@ bitflags_array! {
         ///
         /// [`TextureFormat::NV12`]: super::TextureFormat::NV12
         const TEXTURE_FORMAT_NV12 = 1 << 29;
-        /// ***THIS IS EXPERIMENTAL:*** Features enabled by this may have
-        /// major bugs in them and are expected to be subject to breaking changes, suggestions
-        /// for the API exposed by this should be posted on [the ray-tracing issue](https://github.com/gfx-rs/wgpu/issues/1040)
+
+        /// Allows for the creation and usage of `ExternalTexture`s, and bind
+        /// group layouts containing external texture `BindingType`s.
         ///
-        /// Allows for the creation of ray-tracing acceleration structures. Currently,
-        /// ray-tracing acceleration structures are only useful when used with [Features::EXPERIMENTAL_RAY_QUERY]
+        /// Conceptually this should really be a [`crate::DownlevelFlags`] as
+        /// it corresponds to WebGPU's [`GPUExternalTexture`](
+        /// https://www.w3.org/TR/webgpu/#gpuexternaltexture).
+        /// However, the implementation is currently in-progress, and until it
+        /// is complete we do not want applications to ignore adapters due to
+        /// a missing downlevel flag, when they may not require this feature at
+        /// all.
         ///
         /// Supported platforms:
-        /// - Vulkan
-        ///
-        /// This is a native-only feature.
-        const EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE = 1 << 30;
+        /// - None
+        const EXTERNAL_TEXTURE = 1 << 30;
 
         // Shader:
 
@@ -1037,10 +1046,31 @@ bitflags_array! {
         const SHADER_PRIMITIVE_INDEX = 1 << 34;
         /// Allows shaders to use the `early_depth_test` attribute.
         ///
+        /// The attribute is applied to the fragment shader entry point. It can be used in two
+        /// ways:
+        ///
+        ///   1. Force early depth/stencil tests:
+        ///
+        ///      - `@early_depth_test(force)` (WGSL)
+        ///
+        ///      - `layout(early_fragment_tests) in;` (GLSL)
+        ///
+        ///   2. Provide a conservative depth specifier that allows an additional early
+        ///      depth test under certain conditions:
+        ///
+        ///      - `@early_depth_test(greater_equal/less_equal/unchanged)` (WGSL)
+        ///
+        ///      - `layout(depth_<greater/less/unchanged>) out float gl_FragDepth;` (GLSL)
+        ///
+        /// See [`EarlyDepthTest`] for more details.
+        ///
         /// Supported platforms:
+        /// - Vulkan
         /// - GLES 3.1+
         ///
         /// This is a native only feature.
+        ///
+        /// [`EarlyDepthTest`]: https://docs.rs/naga/latest/naga/ir/enum.EarlyDepthTest.html
         const SHADER_EARLY_DEPTH_TEST = 1 << 35;
         /// Allows shaders to use i64 and u64.
         ///
@@ -1193,6 +1223,25 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const EXPERIMENTAL_MESH_SHADER_MULTIVIEW = 1 << 49;
+
+        /// Allows usage of additional vertex formats in [BlasTriangleGeometrySizeDescriptor::vertex_format]
+        ///
+        /// Supported platforms
+        /// - Vulkan
+        /// - DX12
+        ///
+        /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor
+        const EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS = 1 << 50;
+
+        /// Enables creating shader modules from DirectX HLSL or DXIL shaders (unsafe)
+        ///
+        /// HLSL/DXIL data is not parsed or interpreted in any way
+        ///
+        /// Supported platforms:
+        /// - DX12
+        ///
+        /// This is a native only feature.
+        const HLSL_DXIL_SHADER_PASSTHROUGH = 1 << 51;
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1294,12 +1343,32 @@ bitflags_array! {
         /// Support for this feature guarantees availability of [`TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING`] for ASTC formats with Unorm/UnormSrgb channel type.
         /// [`Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`] may enable additional usages.
         ///
+        /// This feature does not guarantee availability of sliced 3d textures for ASTC formats.
+        /// If available, 3d support can be enabled by TEXTURE_COMPRESSION_ASTC_SLICED_3D feature.
+        ///
         /// Supported Platforms:
         /// - Vulkan on Intel
         /// - Mobile (some)
         ///
         /// This is a web and native feature.
         const TEXTURE_COMPRESSION_ASTC = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC;
+
+
+        /// Allows the 3d dimension for textures with ASTC compressed formats.
+        ///
+        /// This feature must be used in combination with TEXTURE_COMPRESSION_ASTC to enable 3D textures with ASTC compression.
+        /// It does not enable the ASTC formats by itself.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan (some)
+        /// - Metal on Apple3+
+        /// - OpenGL/WebGL (some)
+        ///
+        /// Not Supported:
+        /// - DX12
+        ///
+        /// This is a web and native feature.
+        const TEXTURE_COMPRESSION_ASTC_SLICED_3D = WEBGPU_FEATURE_TEXTURE_COMPRESSION_ASTC_SLICED_3D;
 
         /// Enables use of Timestamp Queries. These queries tell the current gpu timestamp when
         /// all work before the query is finished.
@@ -1410,7 +1479,18 @@ bitflags_array! {
         /// - Metal (with MSL 1.2+)
         /// - Vulkan (with dualSrcBlend)
         /// - DX12
+        ///
+        /// This is a web and native feature.
         const DUAL_SOURCE_BLENDING = WEBGPU_FEATURE_DUAL_SOURCE_BLENDING;
+
+        /// Allows the use of `@builtin(clip_distances)` in WGSL.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (mainly on Desktop GPUs)
+        /// - GL (Desktop or `GL_EXT_clip_cull_distance`)
+        ///
+        /// This is a web and native feature.
+        const CLIP_DISTANCES = WEBGPU_FEATURE_CLIP_DISTANCES;
     }
 }
 
@@ -1437,8 +1517,15 @@ impl Features {
     #[must_use]
     pub fn allowed_vertex_formats_for_blas(&self) -> Vec<VertexFormat> {
         let mut formats = Vec::new();
-        if self.contains(Self::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
+        if self.intersects(Self::EXPERIMENTAL_RAY_QUERY) {
             formats.push(VertexFormat::Float32x3);
+        }
+        if self.contains(Self::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS) {
+            formats.push(VertexFormat::Float32x2);
+            formats.push(VertexFormat::Float16x2);
+            formats.push(VertexFormat::Float16x4);
+            formats.push(VertexFormat::Snorm16x2);
+            formats.push(VertexFormat::Snorm16x4);
         }
         formats
     }
@@ -1488,10 +1575,10 @@ mod tests {
         use alloc::format;
 
         let feature = Features::CLEAR_TEXTURE;
-        assert_eq!(format!("{}", feature), "CLEAR_TEXTURE");
+        assert_eq!(format!("{feature}"), "CLEAR_TEXTURE");
 
         let feature = Features::CLEAR_TEXTURE | Features::BGRA8UNORM_STORAGE;
-        assert_eq!(format!("{}", feature), "CLEAR_TEXTURE | BGRA8UNORM_STORAGE");
+        assert_eq!(format!("{feature}"), "CLEAR_TEXTURE | BGRA8UNORM_STORAGE");
     }
 
     #[test]

@@ -25,6 +25,7 @@ fn main() {
         vulkan: { all(not(target_arch = "wasm32"), feature = "vulkan") },
         // ⚠️ Keep in sync with target.cfg() definition in Cargo.toml and cfg_alias in `wgpu` crate ⚠️
         static_dxc: { all(target_os = "windows", feature = "static-dxc", not(target_arch = "aarch64")) },
-        supports_64bit_atomics: { target_has_atomic = "64" }
+        supports_64bit_atomics: { target_has_atomic = "64" },
+        supports_ptr_atomics: { target_has_atomic = "ptr" }
     }
 }

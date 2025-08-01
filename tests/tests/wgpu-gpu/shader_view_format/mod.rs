@@ -1,6 +1,10 @@
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.push(REINTERPRET_SRGB);
+}
+
 #[gpu_test]
 static REINTERPRET_SRGB: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(

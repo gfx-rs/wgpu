@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use naga::compact::KeepUnused;
 use ron::de;
 
 const CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
@@ -80,6 +81,12 @@ where
 
 #[derive(Default, serde::Deserialize)]
 #[serde(default)]
+struct WgslInParameters {
+    parse_doc_comments: bool,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
 struct SpirvInParameters {
     adjust_coordinate_space: bool,
 }
@@ -116,6 +123,10 @@ struct FragmentModule {
 struct Parameters {
     // -- GOD MODE --
     god_mode: bool,
+
+    // -- wgsl-in options --
+    #[serde(rename = "wgsl-in")]
+    wgsl_in: WgslInParameters,
 
     // -- spirv-in options --
     #[serde(rename = "spv-in")]
@@ -233,6 +244,12 @@ impl Input {
                 return None;
             }
 
+            if let Ok(pat) = std::env::var("NAGA_SNAPSHOT") {
+                if !file_name.to_string_lossy().contains(&pat) {
+                    return None;
+                }
+            }
+
             let input = Input::new(
                 subdirectory,
                 file_name.file_stem().unwrap().to_str().unwrap(),
@@ -340,7 +357,7 @@ impl Input {
                 "spvasm" => params.targets = Some(Targets::non_wgsl_default()),
                 "vert" | "frag" | "comp" => params.targets = Some(Targets::non_wgsl_default()),
                 e => {
-                    panic!("Unknown extension: {}", e);
+                    panic!("Unknown extension: {e}");
                 }
             }
         }
@@ -412,9 +429,14 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
             );
         });
 
-    #[cfg(feature = "compact")]
     let info = {
-        naga::compact::compact(module);
+        // Our backends often generate temporary names based on handle indices,
+        // which means that adding or removing unused arena entries can affect
+        // the output even though they have no semantic effect. Such
+        // meaningless changes add noise to snapshot diffs, making accurate
+        // patch review difficult. Compacting the modules before generating
+        // snapshots makes the output independent of unused arena entries.
+        naga::compact::compact(module, KeepUnused::No);
 
         #[cfg(feature = "serialize")]
         {
@@ -454,7 +476,7 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
             if let Some(source_code) = source_code {
                 debug_info = Some(naga::back::spv::DebugInfo {
                     source_code,
-                    file_name: name,
+                    file_name: name.as_path().into(),
                     // wgpu#6266: we technically know all the information here to
                     // produce the valid language but it's not too important for
                     // validation purposes
@@ -599,7 +621,7 @@ fn write_output_spv(
     };
 
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
     if params.separate_entry_points {
@@ -663,7 +685,7 @@ fn write_output_msl(
     println!("generating MSL");
 
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
     let mut options = options.clone();
@@ -705,7 +727,7 @@ fn write_output_glsl(
 
     let mut buffer = String::new();
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
     let mut writer = glsl::Writer::new(
         &mut buffer,
@@ -737,11 +759,12 @@ fn write_output_hlsl(
     println!("generating HLSL");
 
     let (module, info) =
-        naga::back::pipeline_constants::process_overrides(module, info, pipeline_constants)
+        naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
             .expect("override evaluation failed");
 
     let mut buffer = String::new();
-    let mut writer = hlsl::Writer::new(&mut buffer, options);
+    let pipeline_options = Default::default();
+    let mut writer = hlsl::Writer::new(&mut buffer, options, &pipeline_options);
     let reflection_info = writer
         .write(&module, &info, frag_ep.as_ref())
         .expect("HLSL write failed");
@@ -795,7 +818,10 @@ fn write_output_wgsl(
     input.write_output_file("wgsl", "wgsl", string);
 }
 
+// While we _can_ run this test under miri, it is extremely slow (>5 minutes),
+// and naga isn't the primary target for miri testing, so we disable it.
 #[cfg(feature = "wgsl-in")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn convert_snapshots_wgsl() {
     let _ = env_logger::try_init();
@@ -804,7 +830,13 @@ fn convert_snapshots_wgsl() {
         let source = input.read_source();
         // crlf will make the large split output different on different platform
         let source = source.replace('\r', "");
-        match naga::front::wgsl::parse_str(&source) {
+
+        let params = input.read_parameters();
+        let WgslInParameters { parse_doc_comments } = params.wgsl_in;
+
+        let options = naga::front::wgsl::Options { parse_doc_comments };
+        let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
+        match frontend.parse(&source) {
             Ok(mut module) => check_targets(&input, &mut module, Some(&source)),
             Err(e) => panic!(
                 "{}",
@@ -814,7 +846,9 @@ fn convert_snapshots_wgsl() {
     }
 }
 
+// miri doesn't allow us to shell out to `spirv-as`
 #[cfg(feature = "spv-in")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn convert_snapshots_spv() {
     use std::process::Command;
@@ -854,7 +888,7 @@ fn convert_snapshots_spv() {
             &naga::front::spv::Options {
                 adjust_coordinate_space,
                 strict_capabilities: true,
-                block_ctx_dump_prefix: None,
+                ..Default::default()
             },
         )
         .unwrap();
@@ -863,7 +897,10 @@ fn convert_snapshots_spv() {
     }
 }
 
+// While we _can_ run this test under miri, it is extremely slow (>5 minutes),
+// and naga isn't the primary target for miri testing, so we disable it.
 #[cfg(feature = "glsl-in")]
+#[cfg_attr(miri, ignore)]
 #[allow(unused_variables)]
 #[test]
 fn convert_snapshots_glsl() {

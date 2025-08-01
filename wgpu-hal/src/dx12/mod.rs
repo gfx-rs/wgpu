@@ -85,10 +85,11 @@ mod suballocation;
 mod types;
 mod view;
 
-use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
+use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
 use core::{ffi, fmt, mem, num::NonZeroU32, ops::Deref};
 
 use arrayvec::ArrayVec;
+use hashbrown::HashMap;
 use parking_lot::{Mutex, RwLock};
 use suballocation::Allocator;
 use windows::{
@@ -397,6 +398,8 @@ impl D3DBlob {
 pub struct Api;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Dx12;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;
@@ -462,10 +465,15 @@ pub struct Instance {
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
 
 impl Instance {
+    /// Get the raw DXGI factory associated with this instance.
+    pub unsafe fn raw_factory4(&self) -> &Dxgi::IDXGIFactory4 {
+        self.factory.deref()
+    }
+
     pub unsafe fn create_surface_from_visual(&self, visual: *mut ffi::c_void) -> Surface {
         let visual = unsafe { DirectComposition::IDCompositionVisual::from_raw_borrowed(&visual) }
             .expect("COM pointer should not be NULL");
@@ -599,11 +607,17 @@ pub struct Adapter {
     #[allow(unused)]
     workarounds: Workarounds,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
 }
 
 unsafe impl Send for Adapter {}
 unsafe impl Sync for Adapter {}
+
+impl Adapter {
+    pub fn as_raw(&self) -> &Dxgi::IDXGIAdapter3 {
+        &self.raw
+    }
+}
 
 struct Event(pub Foundation::HANDLE);
 impl Event {
@@ -662,7 +676,8 @@ pub struct Device {
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
     mem_allocator: Allocator,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
+    shader_cache: Mutex<ShaderCache>,
     counters: Arc<wgt::HalCounters>,
 }
 
@@ -1077,16 +1092,39 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    naga: crate::NagaShader,
+    source: ShaderModuleSource,
     raw_name: Option<alloc::ffi::CString>,
     runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
 impl crate::DynShaderModule for ShaderModule {}
 
+#[derive(Default)]
+pub struct ShaderCache {
+    nr_of_shaders_compiled: u32,
+    entries: HashMap<ShaderCacheKey, ShaderCacheValue>,
+}
+
+#[derive(PartialEq, Eq, Hash)]
+pub(super) struct ShaderCacheKey {
+    source: String,
+    entry_point: String,
+    stage: naga::ShaderStage,
+    shader_model: naga::back::hlsl::ShaderModel,
+}
+
+pub(super) struct ShaderCacheValue {
+    /// This is the value of [`ShaderCache::nr_of_shaders_compiled`]
+    /// at the time the cache entry was last used.
+    last_used: u32,
+    shader: CompiledShader,
+}
+
+#[derive(Clone)]
 pub(super) enum CompiledShader {
     Dxc(Direct3D::Dxc::IDxcBlob),
     Fxc(Direct3D::ID3DBlob),
+    Precompiled(Vec<u8>),
 }
 
 impl CompiledShader {
@@ -1100,10 +1138,12 @@ impl CompiledShader {
                 pShaderBytecode: unsafe { shader.GetBufferPointer() },
                 BytecodeLength: unsafe { shader.GetBufferSize() },
             },
+            CompiledShader::Precompiled(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
+                pShaderBytecode: shader.as_ptr().cast(),
+                BytecodeLength: shader.len(),
+            },
         }
     }
-
-    unsafe fn destroy(self) {}
 }
 
 #[derive(Debug)]
@@ -1162,7 +1202,7 @@ impl SwapChain {
             Foundation::WAIT_OBJECT_0 => Ok(true),
             Foundation::WAIT_TIMEOUT => Ok(false),
             other => {
-                log::error!("Unexpected wait status: 0x{:x?}", other);
+                log::error!("Unexpected wait status: 0x{other:x?}");
                 Err(crate::SurfaceError::Lost)
             }
         }
@@ -1285,7 +1325,7 @@ impl crate::Surface for Surface {
                 };
 
                 let swap_chain1 = swap_chain1.map_err(|err| {
-                    log::error!("SwapChain creation error: {}", err);
+                    log::error!("SwapChain creation error: {err}");
                     crate::SurfaceError::Other("swapchain creation")
                 })?;
 
@@ -1499,4 +1539,24 @@ impl crate::Queue for Queue {
         let frequency = unsafe { self.raw.GetTimestampFrequency() }.expect("GetTimestampFrequency");
         (1_000_000_000.0 / frequency as f64) as f32
     }
+}
+#[derive(Debug)]
+pub struct DxilPassthroughShader {
+    pub shader: Vec<u8>,
+    pub entry_point: String,
+    pub num_workgroups: (u32, u32, u32),
+}
+
+#[derive(Debug)]
+pub struct HlslPassthroughShader {
+    pub shader: String,
+    pub entry_point: String,
+    pub num_workgroups: (u32, u32, u32),
+}
+
+#[derive(Debug)]
+pub enum ShaderModuleSource {
+    Naga(crate::NagaShader),
+    DxilPassthrough(DxilPassthroughShader),
+    HlslPassthrough(HlslPassthroughShader),
 }

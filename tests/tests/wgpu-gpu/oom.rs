@@ -5,13 +5,28 @@ use wgpu::{
     CreateTlasDescriptor, Error, ErrorFilter, Extent3d, Features, QuerySetDescriptor, QueryType,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, VertexFormat,
 };
+use wgpu_test::GpuTestInitializer;
 use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        TEXTURE_OOM_TEST,
+        BUFFER_OOM_TEST,
+        MAPPING_BUFFER_OOM_TEST,
+        QUERY_SET_OOM_TEST,
+        BLAS_OOM_TEST,
+        TLAS_OOM_TEST,
+    ]);
+}
 
 // Tests in this file must all end with "OOM_TEST" so that nextest doesn't run any other tests while it runs one of the OOM tests.
 // This is done so that other tests that create resources will not fail with OOM errors due to the OOM tests running in parallel.
 
 /// Backends for which OOM detection is implemented
 const OOM_DETECTION_IMPL: Backends = Backends::DX12.union(Backends::VULKAN);
+
+/// Backends for which query set OOM detection is implemented
+const QUERY_SET_OOM_DETECTION_IMPL: Backends = Backends::DX12;
 
 // All tests skip llvmpipe.
 // Even though llvmpipe supports VK_EXT_memory_budget it's happy to continue creating resources until
@@ -125,7 +140,8 @@ static MAPPING_BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new
 static QUERY_SET_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
+            // Vulkan: https://github.com/gfx-rs/wgpu/issues/7817
+            .skip(FailureCase::backend(!QUERY_SET_OOM_DETECTION_IMPL))
             // see comment at the top of the file
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )
@@ -155,10 +171,8 @@ static QUERY_SET_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
 static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            .features(Features::EXPERIMENTAL_RAY_QUERY)
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
-            // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "AMD"))
             // see comment at the top of the file
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )
@@ -199,10 +213,8 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
 static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
+            .features(Features::EXPERIMENTAL_RAY_QUERY)
             .skip(FailureCase::backend(!OOM_DETECTION_IMPL))
-            // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "AMD"))
             // see comment at the top of the file
             .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
     )

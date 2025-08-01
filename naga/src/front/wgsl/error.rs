@@ -399,6 +399,22 @@ pub(crate) enum Error<'a> {
         on_what: DiagnosticAttributeNotSupportedPosition,
         spans: Vec<Span>,
     },
+    SelectUnexpectedArgumentType {
+        arg_span: Span,
+        arg_type: String,
+    },
+    SelectRejectAndAcceptHaveNoCommonType {
+        reject_span: Span,
+        reject_type: String,
+        accept_span: Span,
+        accept_type: String,
+    },
+    StructMemberTooLarge {
+        member_name_span: Span,
+    },
+    TypeTooLarge {
+        span: Span,
+    },
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -469,6 +485,8 @@ impl<'a> Error<'a> {
                         Token::Arrow => "->".to_string(),
                         Token::Unknown(c) => format!("unknown (`{c}`)"),
                         Token::Trivia => "trivia".to_string(),
+                        Token::DocComment(s) => format!("doc comment ('{s}')"),
+                        Token::ModuleDocComment(s) => format!("module doc comment ('{s}')"),
                         Token::End => "end".to_string(),
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),
@@ -678,7 +696,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::UnknownEnableExtension(span, word) => ParseError {
-                message: format!("unknown enable-extension `{}`", word),
+                message: format!("unknown enable-extension `{word}`"),
                 labels: vec![(span, "".into())],
                 notes: vec![
                     "See available extensions at <https://www.w3.org/TR/WGSL/#enable-extension>."
@@ -1066,8 +1084,7 @@ impl<'a> Error<'a> {
                 } = **error;
                 ParseError {
                     message: format!(
-                        "automatic conversions cannot convert `{}` to `{}`",
-                        source_type, dest_type
+                        "automatic conversions cannot convert `{source_type}` to `{dest_type}`"
                     ),
                     labels: vec![
                         (
@@ -1091,15 +1108,13 @@ impl<'a> Error<'a> {
                 } = **error;
                 ParseError {
                     message: format!(
-                        "automatic conversions cannot convert elements of `{}` to `{}`",
-                        source_type, dest_scalar
+                        "automatic conversions cannot convert elements of `{source_type}` to `{dest_scalar}`"
                     ),
                     labels: vec![
                         (
                             dest_span,
                             format!(
-                                "a value with elements of type {} is required here",
-                                dest_scalar
+                                "a value with elements of type {dest_scalar} is required here"
                             )
                             .into(),
                         ),
@@ -1340,6 +1355,40 @@ impl<'a> Error<'a> {
                     ],
                 }
             }
+            Error::SelectUnexpectedArgumentType { arg_span, ref arg_type } => ParseError {
+                message: "unexpected argument type for `select` call".into(),
+                labels: vec![(arg_span, format!("this value of type {arg_type}").into())],
+                notes: vec!["expected a scalar or a `vecN` of scalars".into()],
+            },
+            Error::SelectRejectAndAcceptHaveNoCommonType {
+                reject_span,
+                ref reject_type,
+                accept_span,
+                ref accept_type,
+            } => ParseError {
+                message: "type mismatch for reject and accept values in `select` call".into(),
+                labels: vec![
+                    (reject_span, format!("reject value of type {reject_type}").into()),
+                    (accept_span, format!("accept value of type {accept_type}").into()),
+                ],
+                notes: vec![],
+            },
+            Error::StructMemberTooLarge { member_name_span } => ParseError {
+                message: "struct member is too large".into(),
+                labels: vec![(member_name_span, "this member exceeds the maximum size".into())],
+                notes: vec![format!(
+                    "the maximum size is {} bytes",
+                    crate::valid::MAX_TYPE_SIZE
+                )],
+            },
+            Error::TypeTooLarge { span } => ParseError {
+                message: "type is too large".into(),
+                labels: vec![(span, "this type exceeds the maximum size".into())],
+                notes: vec![format!(
+                    "the maximum size is {} bytes",
+                    crate::valid::MAX_TYPE_SIZE
+                )],
+            },
         }
     }
 }

@@ -1,5 +1,6 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::io::Write;
+use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -36,7 +37,7 @@ pub fn output_image_native(image_data: Vec<u8>, texture_dims: (usize, usize), pa
 
     let mut file = std::fs::File::create(&path).unwrap();
     file.write_all(&png_data[..]).unwrap();
-    log::info!("PNG file written to disc as \"{}\".", path);
+    log::info!("PNG file written to disc as \"{path}\".");
 }
 
 /// Effectively a version of `output_image_native` but meant for web browser contexts.
@@ -57,9 +58,8 @@ pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
             Err(e) => {
                 log::error!(
                     "In searching for a staging canvas for outputting an image \
-                    (element with id \"staging-canvas\"), found non-canvas element: {:?}.
-                    Replacing with standard staging canvas.",
-                    e
+                    (element with id \"staging-canvas\"), found non-canvas element: {e:?}.
+                    Replacing with standard staging canvas."
                 );
                 e.remove();
                 create_staging_canvas(&document)
@@ -100,9 +100,8 @@ pub fn output_image_wasm(image_data: Vec<u8>, texture_dims: (usize, usize)) {
             Ok(e) => e,
             Err(e) => {
                 log::error!(
-                    "Found an element with the id \"output-image-target\" but it was not an image: {:?}.
+                    "Found an element with the id \"output-image-target\" but it was not an image: {e:?}.
                     Replacing with default image output element.",
-                    e
                 );
                 e.remove();
                 create_output_image_element(&document)
@@ -263,4 +262,24 @@ pub(crate) async fn get_adapter_with_capabilities_or_from_env(
         required_downlevel_capabilities.flags - downlevel_capabilities.flags
     );
     adapter
+}
+
+/// A custom timer that only starts counting after the first call to get its time value.
+/// Useful because some examples have animations that would otherwise get started at initialization
+/// leading to random CI fails.
+#[derive(Default)]
+pub struct AnimationTimer {
+    start_time: Option<Instant>,
+}
+
+impl AnimationTimer {
+    pub fn time(&mut self) -> f32 {
+        match self.start_time {
+            None => {
+                self.start_time = Some(Instant::now());
+                0.0
+            }
+            Some(ref instant) => instant.elapsed().as_secs_f32(),
+        }
+    }
 }

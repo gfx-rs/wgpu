@@ -37,7 +37,6 @@ pub use error::Error;
 
 use alloc::{borrow::ToOwned, format, string::String, vec, vec::Vec};
 use core::{convert::TryInto, mem, num::NonZeroU32};
-use std::path::PathBuf;
 
 use half::f16;
 use petgraph::graphmap::GraphMap;
@@ -45,6 +44,7 @@ use petgraph::graphmap::GraphMap;
 use super::atomic_upgrade::Upgrades;
 use crate::{
     arena::{Arena, Handle, UniqueArena},
+    path_like::PathLikeOwned,
     proc::{Alignment, Layouter},
     FastHashMap, FastHashSet, FastIndexMap,
 };
@@ -381,7 +381,7 @@ pub struct Options {
     pub adjust_coordinate_space: bool,
     /// Only allow shaders with the known set of capabilities.
     pub strict_capabilities: bool,
-    pub block_ctx_dump_prefix: Option<PathBuf>,
+    pub block_ctx_dump_prefix: Option<PathLikeOwned>,
 }
 
 impl Default for Options {
@@ -515,7 +515,6 @@ enum MergeBlockInformation {
 /// [`blocks`]: BlockContext::blocks
 /// [`bodies`]: BlockContext::bodies
 /// [`phis`]: BlockContext::phis
-/// [`lower`]: function::lower
 #[derive(Debug)]
 struct BlockContext<'function> {
     /// Phi nodes encountered when parsing the function, used to generate spills
@@ -796,7 +795,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 dec.specialization_constant_id = Some(self.next()?);
             }
             other => {
-                log::warn!("Unknown decoration {:?}", other);
+                log::warn!("Unknown decoration {other:?}");
                 for _ in base_words + 1..inst.wc {
                     let _var = self.next()?;
                 }
@@ -1387,7 +1386,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         block: &mut crate::Block,
         body_idx: usize,
     ) -> Result<(Handle<crate::Expression>, Handle<crate::Type>), Error> {
-        log::trace!("\t\t\tlooking up pointer expr {:?}", pointer_id);
+        log::trace!("\t\t\tlooking up pointer expr {pointer_id:?}");
         let p_lexp_handle;
         let p_lexp_ty_id;
         {
@@ -1600,7 +1599,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         .remove(&result_id)
                         .and_then(|decor| decor.name);
                     if let Some(ref name) = name {
-                        log::debug!("\t\t\tid={} name={}", result_id, name);
+                        log::debug!("\t\t\tid={result_id} name={name}");
                     }
                     let lookup_ty = self.lookup_type.lookup(result_type_id)?;
                     let var_handle = ctx.local_arena.append(
@@ -1686,7 +1685,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let base_id = self.next()?;
-                    log::trace!("\t\t\tlooking up expr {:?}", base_id);
+                    log::trace!("\t\t\tlooking up expr {base_id:?}");
 
                     let mut acex = {
                         let lexp = self.lookup_expression.lookup(base_id)?;
@@ -1721,7 +1720,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     for _ in 4..inst.wc {
                         let access_id = self.next()?;
-                        log::trace!("\t\t\tlooking up index expr {:?}", access_id);
+                        log::trace!("\t\t\tlooking up index expr {access_id:?}");
                         let index_expr = self.lookup_expression.lookup(access_id)?.clone();
                         let index_expr_handle = get_expr_handle!(access_id, &index_expr);
                         let index_expr_data = &ctx.expressions[index_expr.handle];
@@ -2064,7 +2063,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let base_id = self.next()?;
-                    log::trace!("\t\t\tlooking up expr {:?}", base_id);
+                    log::trace!("\t\t\tlooking up expr {base_id:?}");
                     let mut lexp = self.lookup_expression.lookup(base_id)?.clone();
                     lexp.handle = get_expr_handle!(base_id, &lexp);
                     for _ in 4..inst.wc {
@@ -2084,7 +2083,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                 .base_id
                                 .ok_or(Error::InvalidAccessType(lexp.type_id))?,
                             ref other => {
-                                log::warn!("composite type {:?}", other);
+                                log::warn!("composite type {other:?}");
                                 return Err(Error::UnsupportedType(type_lookup.handle));
                             }
                         };
@@ -2153,7 +2152,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let mut components = Vec::with_capacity(inst.wc as usize - 2);
                     for _ in 3..inst.wc {
                         let comp_id = self.next()?;
-                        log::trace!("\t\t\tlooking up expr {:?}", comp_id);
+                        log::trace!("\t\t\tlooking up expr {comp_id:?}");
                         let lexp = self.lookup_expression.lookup(comp_id)?;
                         let handle = get_expr_handle!(comp_id, lexp);
                         components.push(handle);
@@ -3850,7 +3849,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let semantics = resolve_constant(ctx.gctx(), &semantics_const.inner)
                         .ok_or(Error::InvalidBarrierMemorySemantics(semantics_id))?;
 
-                    if exec_scope == spirv::Scope::Workgroup as u32 {
+                    if exec_scope == spirv::Scope::Workgroup as u32
+                        || exec_scope == spirv::Scope::Subgroup as u32
+                    {
                         let mut flags = crate::Barrier::empty();
                         flags.set(
                             crate::Barrier::STORAGE,
@@ -3858,20 +3859,59 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         );
                         flags.set(
                             crate::Barrier::WORK_GROUP,
-                            semantics
-                                & (spirv::MemorySemantics::SUBGROUP_MEMORY
-                                    | spirv::MemorySemantics::WORKGROUP_MEMORY)
-                                    .bits()
-                                != 0,
+                            semantics & (spirv::MemorySemantics::WORKGROUP_MEMORY).bits() != 0,
+                        );
+                        flags.set(
+                            crate::Barrier::SUB_GROUP,
+                            semantics & spirv::MemorySemantics::SUBGROUP_MEMORY.bits() != 0,
                         );
                         flags.set(
                             crate::Barrier::TEXTURE,
                             semantics & spirv::MemorySemantics::IMAGE_MEMORY.bits() != 0,
                         );
-                        block.push(crate::Statement::Barrier(flags), span);
+                        block.push(crate::Statement::ControlBarrier(flags), span);
                     } else {
-                        log::warn!("Unsupported barrier execution scope: {}", exec_scope);
+                        log::warn!("Unsupported barrier execution scope: {exec_scope}");
                     }
+                }
+                Op::MemoryBarrier => {
+                    inst.expect(3)?;
+                    let mem_scope_id = self.next()?;
+                    let semantics_id = self.next()?;
+                    let mem_scope_const = self.lookup_constant.lookup(mem_scope_id)?;
+                    let semantics_const = self.lookup_constant.lookup(semantics_id)?;
+
+                    let mem_scope = resolve_constant(ctx.gctx(), &mem_scope_const.inner)
+                        .ok_or(Error::InvalidBarrierScope(mem_scope_id))?;
+                    let semantics = resolve_constant(ctx.gctx(), &semantics_const.inner)
+                        .ok_or(Error::InvalidBarrierMemorySemantics(semantics_id))?;
+
+                    let mut flags = if mem_scope == spirv::Scope::Device as u32 {
+                        crate::Barrier::STORAGE
+                    } else if mem_scope == spirv::Scope::Workgroup as u32 {
+                        crate::Barrier::WORK_GROUP
+                    } else if mem_scope == spirv::Scope::Subgroup as u32 {
+                        crate::Barrier::SUB_GROUP
+                    } else {
+                        crate::Barrier::empty()
+                    };
+                    flags.set(
+                        crate::Barrier::STORAGE,
+                        semantics & spirv::MemorySemantics::UNIFORM_MEMORY.bits() != 0,
+                    );
+                    flags.set(
+                        crate::Barrier::WORK_GROUP,
+                        semantics & (spirv::MemorySemantics::WORKGROUP_MEMORY).bits() != 0,
+                    );
+                    flags.set(
+                        crate::Barrier::SUB_GROUP,
+                        semantics & spirv::MemorySemantics::SUBGROUP_MEMORY.bits() != 0,
+                    );
+                    flags.set(
+                        crate::Barrier::TEXTURE,
+                        semantics & spirv::MemorySemantics::IMAGE_MEMORY.bits() != 0,
+                    );
+                    block.push(crate::Statement::MemoryBarrier(flags), span);
                 }
                 Op::CopyObject => {
                     inst.expect(4)?;
@@ -4064,7 +4104,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | Op::GroupNonUniformShuffle
                 | Op::GroupNonUniformShuffleDown
                 | Op::GroupNonUniformShuffleUp
-                | Op::GroupNonUniformShuffleXor => {
+                | Op::GroupNonUniformShuffleXor
+                | Op::GroupNonUniformQuadBroadcast => {
                     inst.expect(if matches!(inst.op, Op::GroupNonUniformBroadcastFirst) {
                         5
                     } else {
@@ -4104,6 +4145,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             Op::GroupNonUniformShuffleXor => {
                                 crate::GatherMode::ShuffleXor(index_handle)
                             }
+                            Op::GroupNonUniformQuadBroadcast => {
+                                crate::GatherMode::QuadBroadcast(index_handle)
+                            }
                             _ => unreachable!(),
                         }
                     };
@@ -4135,6 +4179,60 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     );
                     emitter.start(ctx.expressions);
                 }
+                Op::GroupNonUniformQuadSwap => {
+                    inst.expect(6)?;
+                    block.extend(emitter.finish(ctx.expressions));
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let exec_scope_id = self.next()?;
+                    let argument_id = self.next()?;
+                    let direction_id = self.next()?;
+
+                    let argument_lookup = self.lookup_expression.lookup(argument_id)?;
+                    let argument_handle = get_expr_handle!(argument_id, argument_lookup);
+
+                    let exec_scope_const = self.lookup_constant.lookup(exec_scope_id)?;
+                    let _exec_scope = resolve_constant(ctx.gctx(), &exec_scope_const.inner)
+                        .filter(|exec_scope| *exec_scope == spirv::Scope::Subgroup as u32)
+                        .ok_or(Error::InvalidBarrierScope(exec_scope_id))?;
+
+                    let direction_const = self.lookup_constant.lookup(direction_id)?;
+                    let direction_const = resolve_constant(ctx.gctx(), &direction_const.inner)
+                        .ok_or(Error::InvalidOperand)?;
+                    let direction = match direction_const {
+                        0 => crate::Direction::X,
+                        1 => crate::Direction::Y,
+                        2 => crate::Direction::Diagonal,
+                        _ => unreachable!(),
+                    };
+
+                    let result_type = self.lookup_type.lookup(result_type_id)?;
+
+                    let result_handle = ctx.expressions.append(
+                        crate::Expression::SubgroupOperationResult {
+                            ty: result_type.handle,
+                        },
+                        span,
+                    );
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: result_handle,
+                            type_id: result_type_id,
+                            block_id,
+                        },
+                    );
+
+                    block.push(
+                        crate::Statement::SubgroupGather {
+                            mode: crate::GatherMode::QuadSwap(direction),
+                            result: result_handle,
+                            argument: argument_handle,
+                        },
+                        span,
+                    );
+                    emitter.start(ctx.expressions);
+                }
                 Op::AtomicLoad => {
                     inst.expect(6)?;
                     let start = self.data_offset;
@@ -4145,7 +4243,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let _memory_semantics_id = self.next()?;
                     let span = self.span_from_with_op(start);
 
-                    log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
+                    log::trace!("\t\t\tlooking up expr {pointer_id:?}");
                     let p_lexp_handle =
                         get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
 
@@ -4175,11 +4273,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let value_id = self.next()?;
                     let span = self.span_from_with_op(start);
 
-                    log::trace!("\t\t\tlooking up pointer expr {:?}", pointer_id);
+                    log::trace!("\t\t\tlooking up pointer expr {pointer_id:?}");
                     let p_lexp_handle =
                         get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
 
-                    log::trace!("\t\t\tlooking up value expr {:?}", pointer_id);
+                    log::trace!("\t\t\tlooking up value expr {pointer_id:?}");
                     let v_lexp_handle =
                         get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
 
@@ -4281,11 +4379,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         body_idx,
                     )?;
 
-                    log::trace!("\t\t\tlooking up value expr {:?}", value_id);
+                    log::trace!("\t\t\tlooking up value expr {value_id:?}");
                     let v_lexp_handle =
                         get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
 
-                    log::trace!("\t\t\tlooking up comparator expr {:?}", value_id);
+                    log::trace!("\t\t\tlooking up comparator expr {value_id:?}");
                     let c_lexp_handle = get_expr_handle!(
                         comparator_id,
                         self.lookup_expression.lookup(comparator_id)?
@@ -4508,7 +4606,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::Continue
                 | S::Return { .. }
                 | S::Kill
-                | S::Barrier(_)
+                | S::ControlBarrier(_)
+                | S::MemoryBarrier(_)
                 | S::Store { .. }
                 | S::ImageStore { .. }
                 | S::Atomic { .. }
@@ -4599,7 +4698,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             let generator = self.next()?;
             let _bound = self.next()?;
             let _schema = self.next()?;
-            log::info!("Generated by {} version {:x}", generator, version_raw);
+            log::info!("Generated by {generator} version {version_raw:x}");
             crate::Module::default()
         };
 
@@ -4740,7 +4839,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             if self.options.strict_capabilities {
                 return Err(Error::UnsupportedCapability(cap));
             } else {
-                log::warn!("Unknown capability {:?}", cap);
+                log::warn!("Unknown capability {cap:?}");
             }
         }
         Ok(())
@@ -4825,24 +4924,49 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         match mode {
             ExecutionMode::EarlyFragmentTests => {
-                if ep.early_depth_test.is_none() {
-                    ep.early_depth_test = Some(crate::EarlyDepthTest { conservative: None });
-                }
+                ep.early_depth_test = Some(crate::EarlyDepthTest::Force);
             }
             ExecutionMode::DepthUnchanged => {
-                ep.early_depth_test = Some(crate::EarlyDepthTest {
-                    conservative: Some(crate::ConservativeDepth::Unchanged),
-                });
+                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
+                    if let &mut crate::EarlyDepthTest::Allow {
+                        ref mut conservative,
+                    } = early_depth_test
+                    {
+                        *conservative = crate::ConservativeDepth::Unchanged;
+                    }
+                } else {
+                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
+                        conservative: crate::ConservativeDepth::Unchanged,
+                    });
+                }
             }
             ExecutionMode::DepthGreater => {
-                ep.early_depth_test = Some(crate::EarlyDepthTest {
-                    conservative: Some(crate::ConservativeDepth::GreaterEqual),
-                });
+                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
+                    if let &mut crate::EarlyDepthTest::Allow {
+                        ref mut conservative,
+                    } = early_depth_test
+                    {
+                        *conservative = crate::ConservativeDepth::GreaterEqual;
+                    }
+                } else {
+                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
+                        conservative: crate::ConservativeDepth::GreaterEqual,
+                    });
+                }
             }
             ExecutionMode::DepthLess => {
-                ep.early_depth_test = Some(crate::EarlyDepthTest {
-                    conservative: Some(crate::ConservativeDepth::LessEqual),
-                });
+                if let &mut Some(ref mut early_depth_test) = &mut ep.early_depth_test {
+                    if let &mut crate::EarlyDepthTest::Allow {
+                        ref mut conservative,
+                    } = early_depth_test
+                    {
+                        *conservative = crate::ConservativeDepth::LessEqual;
+                    }
+                } else {
+                    ep.early_depth_test = Some(crate::EarlyDepthTest::Allow {
+                        conservative: crate::ConservativeDepth::LessEqual,
+                    });
+                }
             }
             ExecutionMode::DepthReplacing => {
                 // Ignored because it can be deduced from the IR.
@@ -5905,7 +6029,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ) {
                             Ok(handle) => Some(handle),
                             Err(e) => {
-                                log::warn!("Failed to initialize output built-in: {}", e);
+                                log::warn!("Failed to initialize output built-in: {e}");
                                 None
                             }
                         }
@@ -5952,7 +6076,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let handle = module.global_variables.append(var, span);
 
         if module.types[ty].inner.can_comparison_sample(module) {
-            log::debug!("\t\ttracking {:?} for sampling properties", handle);
+            log::debug!("\t\ttracking {handle:?} for sampling properties");
 
             self.handle_sampling
                 .insert(handle, image::SamplingFlags::empty());

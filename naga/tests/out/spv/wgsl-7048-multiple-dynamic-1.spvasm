@@ -3,9 +3,10 @@
 ; Generator: rspirv
 ; Bound: 39
 OpCapability Shader
-OpCapability Linkage
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %11 "f"
+OpExecutionMode %11 LocalSize 1 1 1
 OpDecorate %5 ArrayStride 16
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
@@ -17,7 +18,7 @@ OpDecorate %5 ArrayStride 16
 %9 = OpTypeInt 32 1
 %12 = OpTypeFunction %2
 %13 = OpConstantNull  %5
-%14 = OpConstant  %4  0.0
+%14 = OpConstant  %4  0
 %15 = OpConstantComposite  %8  %14 %14 %14 %14
 %16 = OpConstant  %9  0
 %18 = OpTypePointer Function %8

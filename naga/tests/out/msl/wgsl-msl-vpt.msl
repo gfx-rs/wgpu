@@ -13,11 +13,13 @@ struct VertexOutput {
     metal::float4 position;
     metal::float4 color;
     metal::float2 texcoord;
+    char _pad3[8];
 };
 struct VertexInput {
     metal::float4 position;
     metal::float3 normal;
     metal::float2 texcoord;
+    char _pad3[8];
 };
 float unpackFloat32_(uint b0, uint b1, uint b2, uint b3) {
     return as_type<float>(b3 << 24 | b2 << 16 | b1 << 8 | b0);

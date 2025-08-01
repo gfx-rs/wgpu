@@ -1,3 +1,4 @@
+use crate::ray_tracing::acceleration_structure_limits;
 use wgpu::{
     AccelerationStructureFlags, AccelerationStructureGeometryFlags,
     AccelerationStructureUpdateMode, BlasGeometrySizeDescriptors,
@@ -7,12 +8,18 @@ use wgpu::{IndexFormat, VertexFormat};
 use wgpu_macros::gpu_test;
 use wgpu_test::{fail, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    tests.extend([BLAS_INVALID_VERTEX_FORMAT, BLAS_MISMATCHED_INDEX]);
+}
+
 #[gpu_test]
 static BLAS_INVALID_VERTEX_FORMAT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(invalid_vertex_format_blas_create);
 
@@ -52,7 +59,9 @@ static BLAS_MISMATCHED_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(mismatched_index_blas_create);
 

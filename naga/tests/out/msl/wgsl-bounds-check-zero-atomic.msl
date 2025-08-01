@@ -91,3 +91,18 @@ uint exchange_atomic_dynamic_sized_array_static_index(
     uint _e4 = uint(1000) < 1 + (_buffer_sizes.size0 - 44 - 4) / 4 ? metal::atomic_exchange_explicit(&globals.c[1000], 1u, metal::memory_order_relaxed) : DefaultConstructible();
     return _e4;
 }
+
+kernel void main_(
+  device Globals& globals [[user(fake0)]]
+, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
+) {
+    uint _e0 = fetch_add_atomic(globals, _buffer_sizes);
+    uint _e2 = fetch_add_atomic_static_sized_array(1, globals, _buffer_sizes);
+    uint _e4 = fetch_add_atomic_dynamic_sized_array(1, globals, _buffer_sizes);
+    uint _e5 = exchange_atomic(globals, _buffer_sizes);
+    uint _e7 = exchange_atomic_static_sized_array(1, globals, _buffer_sizes);
+    uint _e9 = exchange_atomic_dynamic_sized_array(1, globals, _buffer_sizes);
+    uint _e10 = fetch_add_atomic_dynamic_sized_array_static_index(globals, _buffer_sizes);
+    uint _e11 = exchange_atomic_dynamic_sized_array_static_index(globals, _buffer_sizes);
+    return;
+}

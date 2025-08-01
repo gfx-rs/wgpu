@@ -26,6 +26,7 @@
         ray_desc: None,
         ray_intersection: None,
         ray_vertex_return: None,
+        external_texture_params: None,
         predeclared_types: {},
     ),
     constants: [],
@@ -172,9 +173,17 @@
                     LocalVariable(2),
                     GlobalVariable(1),
                     Override(2),
+                    Override(1),
+                    Override(3),
+                    Override(6),
+                    Override(7),
                 ],
                 named_expressions: {
                     4: "a",
+                    13: "phony",
+                    14: "phony",
+                    15: "phony",
+                    16: "phony",
                 },
                 body: [
                     Emit((
@@ -215,4 +224,5 @@
     ],
     diagnostic_filters: [],
     diagnostic_filter_leaf: None,
+    doc_comments: None,
 )

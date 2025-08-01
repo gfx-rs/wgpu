@@ -1,6 +1,10 @@
 use wgpu::util::DeviceExt;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.extend([DRAW, DRAW_INDEXED]);
+}
+
 //
 // These tests render two triangles to a 2x2 render target. The first triangle
 // in the vertex buffer covers the bottom-left pixel, the second triangle

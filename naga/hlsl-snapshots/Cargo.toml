@@ -11,5 +11,5 @@ path = "src/lib.rs"
 test = false
 
 [dependencies]
-anyhow = "1.0.97"
-nanoserde = "0.2.1"
+anyhow.workspace = true
+nanoserde.workspace = true

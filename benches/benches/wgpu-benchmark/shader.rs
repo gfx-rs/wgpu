@@ -108,6 +108,10 @@ impl Inputs {
 
         self.inner.retain(|input| input.module_info.is_some());
     }
+
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
 }
 
 fn parse_glsl(stage: naga::ShaderStage, inputs: &Inputs) {
@@ -124,12 +128,14 @@ fn parse_glsl(stage: naga::ShaderStage, inputs: &Inputs) {
 }
 
 fn get_wgsl_inputs() -> Inputs {
-    let mut inputs = Inputs::from_dir("../naga/tests/in", "wgsl");
+    let mut inputs = Inputs::from_dir("../naga/tests/in/wgsl", "wgsl");
 
     // remove "large-source" tests, they skew the results
     inputs
         .inner
         .retain(|input| !input.filename.contains("large-source"));
+
+    assert!(!inputs.is_empty());
 
     inputs
 }
@@ -146,12 +152,22 @@ fn frontends(c: &mut Criterion) {
         let inputs_bin = inputs_wgsl
             .inner
             .iter()
-            .map(|input| bincode::serialize(&input.module.as_ref().unwrap()).unwrap())
+            .map(|input| {
+                bincode::serde::encode_to_vec(
+                    input.module.as_ref().unwrap(),
+                    bincode::config::standard(),
+                )
+                .unwrap()
+            })
             .collect::<Vec<_>>();
 
         b.iter(move || {
             for input in inputs_bin.iter() {
-                bincode::deserialize::<naga::Module>(input).unwrap();
+                bincode::serde::decode_from_slice::<naga::Module, _>(
+                    input,
+                    bincode::config::standard(),
+                )
+                .unwrap();
             }
         });
     });
@@ -168,6 +184,7 @@ fn frontends(c: &mut Criterion) {
     });
 
     let inputs_spirv = Inputs::from_dir("../naga/tests/in/spv", "spvasm");
+    assert!(!inputs_spirv.is_empty());
 
     // Assemble all the SPIR-V assembly.
     let mut assembled_spirv = Vec::<Vec<u32>>::new();
@@ -216,6 +233,8 @@ fn frontends(c: &mut Criterion) {
 
     let mut inputs_vertex = Inputs::from_dir("../naga/tests/in/glsl", "vert");
     let mut inputs_fragment = Inputs::from_dir("../naga/tests/in/glsl", "frag");
+    assert!(!inputs_vertex.is_empty());
+    assert!(!inputs_fragment.is_empty());
     // let mut inputs_compute = Inputs::from_dir("../naga/tests/in/glsl", "comp");
     group.throughput(Throughput::Bytes(
         inputs_vertex.bytes() + inputs_fragment.bytes(), // + inputs_compute.bytes()
@@ -259,6 +278,26 @@ fn validation(c: &mut Criterion) {
     group.finish();
 }
 
+fn compact(c: &mut Criterion) {
+    use naga::compact::{compact, KeepUnused};
+
+    let mut inputs = get_wgsl_inputs();
+
+    inputs.validate();
+    assert!(!inputs.is_empty());
+
+    let mut group = c.benchmark_group("compact");
+    group.throughput(Throughput::Bytes(inputs.bytes()));
+    group.bench_function("shader: compact", |b| {
+        b.iter(|| {
+            for input in &mut inputs.inner {
+                compact(input.module.as_mut().unwrap(), KeepUnused::No);
+            }
+        });
+    });
+    group.finish();
+}
+
 fn backends(c: &mut Criterion) {
     let mut inputs = get_wgsl_inputs();
 
@@ -267,6 +306,7 @@ fn backends(c: &mut Criterion) {
     // run this to properly know the size of the inputs, as any that fail validation
     // will be removed.
     inputs.validate();
+    assert!(!inputs.is_empty());
 
     group.throughput(Throughput::Bytes(inputs.bytes()));
     group.bench_function("shader: wgsl-out", |b| {
@@ -289,6 +329,10 @@ fn backends(c: &mut Criterion) {
             let mut data = Vec::new();
             let options = naga::back::spv::Options::default();
             for input in &inputs.inner {
+                if input.filename.contains("pointer-function-arg") {
+                    // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
+                    continue;
+                }
                 let mut writer = naga::back::spv::Writer::new(&options).unwrap();
                 let _ = writer.write(
                     input.module.as_ref().unwrap(),
@@ -306,6 +350,10 @@ fn backends(c: &mut Criterion) {
             let mut data = Vec::new();
             let options = naga::back::spv::Options::default();
             for input in &inputs.inner {
+                if input.filename.contains("pointer-function-arg") {
+                    // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
+                    continue;
+                }
                 let mut writer = naga::back::spv::Writer::new(&options).unwrap();
                 let module = input.module.as_ref().unwrap();
                 for ep in module.entry_points.iter() {
@@ -349,7 +397,9 @@ fn backends(c: &mut Criterion) {
             let options = naga::back::hlsl::Options::default();
             let mut string = String::new();
             for input in &inputs.inner {
-                let mut writer = naga::back::hlsl::Writer::new(&mut string, &options);
+                let pipeline_options = Default::default();
+                let mut writer =
+                    naga::back::hlsl::Writer::new(&mut string, &options, &pipeline_options);
                 let _ = writer.write(
                     input.module.as_ref().unwrap(),
                     input.module_info.as_ref().unwrap(),
@@ -398,4 +448,4 @@ fn backends(c: &mut Criterion) {
     });
 }
 
-criterion_group!(shader, frontends, validation, backends);
+criterion_group!(shader, frontends, validation, compact, backends);

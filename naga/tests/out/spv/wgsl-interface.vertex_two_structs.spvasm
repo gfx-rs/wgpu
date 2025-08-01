@@ -38,10 +38,10 @@ OpDecorate %24 BuiltIn PointSize
 %22 = OpVariable  %23  Output
 %25 = OpTypePointer Output %3
 %24 = OpVariable  %25  Output
-%26 = OpConstant  %3  1.0
+%26 = OpConstant  %3  1
 %28 = OpTypeFunction %2
 %29 = OpConstant  %6  2
-%30 = OpConstant  %3  0.0
+%30 = OpConstant  %3  0
 %32 = OpTypePointer Function %6
 %27 = OpFunction  %2  None %28
 %14 = OpLabel

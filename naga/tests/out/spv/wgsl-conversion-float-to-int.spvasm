@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 280
+; Bound: 314
 OpCapability Shader
 OpCapability Float16
 OpCapability StorageBuffer16BitAccess
@@ -29,12 +29,12 @@ OpExecutionMode %278 LocalSize 1 1 1
 %14 = OpTypeVector %9 2
 %15 = OpTypeVector %4 2
 %16 = OpTypeVector %5 2
-%17 = OpConstant  %3  9.0399e-41
-%18 = OpConstant  %3  4.4481e-41
-%19 = OpConstant  %4  -3.4028235e38
-%20 = OpConstant  %4  3.4028235e38
-%21 = OpConstant  %5  -1.7976931348623157e308
-%22 = OpConstant  %5  1.7976931348623157e308
+%17 = OpConstant  %3  0.000000000000000000000000000000000000000090399
+%18 = OpConstant  %3  0.000000000000000000000000000000000000000044481
+%19 = OpConstant  %4  -340282350000000000000000000000000000000
+%20 = OpConstant  %4  340282350000000000000000000000000000000
+%21 = OpConstant  %5  -179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+%22 = OpConstant  %5  179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 %25 = OpTypeFunction %2
 %26 = OpConstant  %6  -65504
 %27 = OpConstant  %6  65504
@@ -60,31 +60,31 @@ OpExecutionMode %278 LocalSize 1 1 1
 %54 = OpTypePointer Function %9
 %80 = OpTypeFunction %6 %3
 %87 = OpTypeFunction %7 %3
-%89 = OpConstant  %3  0.0
+%89 = OpConstant  %3  0
 %95 = OpTypeFunction %8 %3
 %102 = OpTypeFunction %9 %3
 %109 = OpTypeFunction %6 %4
-%111 = OpConstant  %4  -2147483600.0
-%112 = OpConstant  %4  2147483500.0
+%111 = OpConstant  %4  -2147483600
+%112 = OpConstant  %4  2147483500
 %118 = OpTypeFunction %7 %4
-%120 = OpConstant  %4  0.0
-%121 = OpConstant  %4  4294967000.0
+%120 = OpConstant  %4  0
+%121 = OpConstant  %4  4294967000
 %127 = OpTypeFunction %8 %4
-%129 = OpConstant  %4  -9.223372e18
-%130 = OpConstant  %4  9.2233715e18
+%129 = OpConstant  %4  -9223372000000000000
+%130 = OpConstant  %4  9223371500000000000
 %136 = OpTypeFunction %9 %4
-%138 = OpConstant  %4  1.8446743e19
+%138 = OpConstant  %4  18446743000000000000
 %144 = OpTypeFunction %6 %5
-%146 = OpConstant  %5  -2147483648.0
-%147 = OpConstant  %5  2147483647.0
+%146 = OpConstant  %5  -2147483648
+%147 = OpConstant  %5  2147483647
 %153 = OpTypeFunction %7 %5
-%155 = OpConstant  %5  0.0
-%156 = OpConstant  %5  4294967295.0
+%155 = OpConstant  %5  0
+%156 = OpConstant  %5  4294967295
 %162 = OpTypeFunction %8 %5
-%164 = OpConstant  %5  -9.223372036854776e18
-%165 = OpConstant  %5  9.223372036854775e18
+%164 = OpConstant  %5  -9223372036854776000
+%165 = OpConstant  %5  9223372036854775000
 %171 = OpTypeFunction %9 %5
-%173 = OpConstant  %5  1.844674407370955e19
+%173 = OpConstant  %5  18446744073709550000
 %179 = OpTypeFunction %11 %10
 %181 = OpConstantComposite  %10  %17 %17
 %182 = OpConstantComposite  %10  %18 %18
@@ -114,6 +114,15 @@ OpExecutionMode %278 LocalSize 1 1 1
 %266 = OpConstantComposite  %16  %165 %165
 %272 = OpTypeFunction %14 %16
 %274 = OpConstantComposite  %16  %173 %173
+%279 = OpConstant  %3  0.000000000000000000000000000000000000000021524
+%280 = OpConstant  %4  1
+%281 = OpConstant  %5  1
+%282 = OpConstant  %3  0.000000000000000000000000000000000000000022959
+%283 = OpConstantComposite  %10  %279 %282
+%284 = OpConstant  %4  2
+%285 = OpConstantComposite  %15  %280 %284
+%286 = OpConstant  %5  2
+%287 = OpConstantComposite  %16  %281 %286
 %24 = OpFunction  %2  None %25
 %23 = OpLabel
 %73 = OpVariable  %51  Function %40
@@ -366,7 +375,32 @@ OpReturnValue %276
 OpFunctionEnd
 %278 = OpFunction  %2  None %25
 %277 = OpLabel
-OpBranch %279
-%279 = OpLabel
+OpBranch %288
+%288 = OpLabel
+%289 = OpFunctionCall  %2  %24
+%290 = OpFunctionCall  %6  %79 %279
+%291 = OpFunctionCall  %7  %86 %279
+%292 = OpFunctionCall  %8  %94 %279
+%293 = OpFunctionCall  %9  %101 %279
+%294 = OpFunctionCall  %6  %108 %280
+%295 = OpFunctionCall  %7  %117 %280
+%296 = OpFunctionCall  %8  %126 %280
+%297 = OpFunctionCall  %9  %135 %280
+%298 = OpFunctionCall  %6  %143 %281
+%299 = OpFunctionCall  %7  %152 %281
+%300 = OpFunctionCall  %8  %161 %281
+%301 = OpFunctionCall  %9  %170 %281
+%302 = OpFunctionCall  %11  %178 %283
+%303 = OpFunctionCall  %12  %187 %283
+%304 = OpFunctionCall  %13  %195 %283
+%305 = OpFunctionCall  %14  %202 %283
+%306 = OpFunctionCall  %11  %209 %285
+%307 = OpFunctionCall  %12  %218 %285
+%308 = OpFunctionCall  %13  %227 %285
+%309 = OpFunctionCall  %14  %236 %285
+%310 = OpFunctionCall  %11  %244 %287
+%311 = OpFunctionCall  %12  %253 %287
+%312 = OpFunctionCall  %13  %262 %287
+%313 = OpFunctionCall  %14  %271 %287
 OpReturn
 OpFunctionEnd

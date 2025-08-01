@@ -1,6 +1,6 @@
 > [!NOTE]  
 > These are the examples for the development version of wgpu. If you want to see the examples for the latest crates.io release
-> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v25/examples#readme).
+> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v26/examples#readme).
 
 # Examples
 
@@ -23,7 +23,7 @@ be cloned out of the repository to serve as a starting point for your own projec
 You can also use [`cargo-generate`](https://github.com/cargo-generate/cargo-generate) to easily use these as a basis for your own projects.
 
 ```sh
-cargo generate gfx-rs/wgpu --branch v25
+cargo generate gfx-rs/wgpu --branch v26
 ```
 
 ## Framework Examples
@@ -43,6 +43,7 @@ These examples use a common framework to handle wgpu init, window creation, and 
 - `ray_cube_fragment` - Demonstrates using ray queries with a fragment shader.
 - `ray_scene` - Demonstrates using ray queries and model loading
 - `ray_shadows` - Demonstrates a simple use of ray queries - high quality shadows - uses a light set with push constants to raytrace through an untransformed scene and detect whether there is something obstructing the light.
+- `mesh_shader` - Rrenders a triangle to a window with mesh shaders, while showcasing most mesh shader related features(task shaders, payloads, per primitive data).
 
 #### Compute
 

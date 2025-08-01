@@ -6,6 +6,7 @@
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_shuffle : require
 #extension GL_KHR_shader_subgroup_shuffle_relative : require
+#extension GL_KHR_shader_subgroup_quad : require
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 uint global = 0u;
@@ -20,6 +21,7 @@ uint global_3 = 0u;
 void function() {
     uint _e5 = global_2;
     uint _e6 = global_3;
+    barrier();
     uvec4 _e9 = subgroupBallot(((_e6 & 1u) == 1u));
     uvec4 _e10 = subgroupBallot(true);
     bool _e12 = subgroupAll((_e6 != 0u));

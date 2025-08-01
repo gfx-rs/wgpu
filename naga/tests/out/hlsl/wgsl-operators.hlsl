@@ -7,7 +7,7 @@ float4 builtins()
 {
     int s1_ = (true ? int(1) : int(0));
     float4 s2_ = (true ? v_f32_one : v_f32_zero);
-    float4 s3_ = (bool4(false, false, false, false) ? v_f32_zero : v_f32_one);
+    float4 s3_ = float4(1.0, 1.0, 1.0, 1.0);
     float4 m1_ = lerp(v_f32_zero, v_f32_one, v_f32_half);
     float4 m2_ = lerp(v_f32_zero, v_f32_one, 0.1);
     float b1_ = asfloat(int(1));
@@ -90,6 +90,10 @@ uint naga_mod(uint lhs, uint rhs) {
     return lhs % (rhs == 0u ? 1u : rhs);
 }
 
+float naga_mod(float lhs, float rhs) {
+    return lhs - rhs * trunc(lhs / rhs);
+}
+
 int2 naga_mod(int2 lhs, int2 rhs) {
     int2 divisor = ((lhs == int(-2147483647 - 1) & rhs == -1) | (rhs == 0)) ? 1 : rhs;
     return lhs - (lhs / divisor) * divisor;
@@ -99,12 +103,20 @@ uint3 naga_mod(uint3 lhs, uint3 rhs) {
     return lhs % (rhs == 0u ? 1u : rhs);
 }
 
+float4 naga_mod(float4 lhs, float4 rhs) {
+    return lhs - rhs * trunc(lhs / rhs);
+}
+
 uint2 naga_div(uint2 lhs, uint2 rhs) {
     return lhs / (rhs == 0u ? 1u : rhs);
 }
 
 uint2 naga_mod(uint2 lhs, uint2 rhs) {
     return lhs % (rhs == 0u ? 1u : rhs);
+}
+
+float2 naga_mod(float2 lhs, float2 rhs) {
+    return lhs - rhs * trunc(lhs / rhs);
 }
 
 float3x3 ZeroValuefloat3x3() {
@@ -153,10 +165,10 @@ void arithmetic()
     float4 div5_ = ((2.0).xxxx / (1.0).xxxx);
     int rem0_ = naga_mod(int(2), int(1));
     uint rem1_ = naga_mod(2u, 1u);
-    float rem2_ = fmod(2.0, 1.0);
+    float rem2_ = naga_mod(2.0, 1.0);
     int2 rem3_ = naga_mod((int(2)).xx, (int(1)).xx);
     uint3 rem4_ = naga_mod((2u).xxx, (1u).xxx);
-    float4 rem5_ = fmod((2.0).xxxx, (1.0).xxxx);
+    float4 rem5_ = naga_mod((2.0).xxxx, (1.0).xxxx);
     {
         int2 add0_1 = asint(asuint((int(2)).xx) + asuint((int(1)).xx));
         int2 add1_1 = asint(asuint((int(2)).xx) + asuint((int(1)).xx));
@@ -186,8 +198,8 @@ void arithmetic()
         int2 rem1_1 = naga_mod((int(2)).xx, (int(1)).xx);
         uint2 rem2_1 = naga_mod((2u).xx, (1u).xx);
         uint2 rem3_1 = naga_mod((2u).xx, (1u).xx);
-        float2 rem4_1 = fmod((2.0).xx, (1.0).xx);
-        float2 rem5_1 = fmod((2.0).xx, (1.0).xx);
+        float2 rem4_1 = naga_mod((2.0).xx, (1.0).xx);
+        float2 rem5_1 = naga_mod((2.0).xx, (1.0).xx);
     }
     float3x3 add = (ZeroValuefloat3x3() + ZeroValuefloat3x3());
     float3x3 sub = (ZeroValuefloat3x3() - ZeroValuefloat3x3());
@@ -344,11 +356,13 @@ void main(uint3 id : SV_GroupID)
 {
     const float4 _e1 = builtins();
     const float4 _e6 = splat(float(id.x), int(id.y));
-    const float3 _e11 = bool_cast(float3(1.0, 1.0, 1.0));
+    const float2 _e7 = splat_assignment();
+    const float3 _e12 = bool_cast(float3(1.0, 1.0, 1.0));
     logical();
     arithmetic();
     bit();
     comparison();
     assignment();
+    negation_avoids_prefix_decrement();
     return;
 }

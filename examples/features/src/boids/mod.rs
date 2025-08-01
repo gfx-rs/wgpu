@@ -323,7 +323,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "boids",
     // Generated on 1080ti on Vk/Windows
     image_path: "/examples/features/src/boids/screenshot.png",

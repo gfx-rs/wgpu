@@ -105,13 +105,14 @@ use core::fmt::Debug;
 
 use crate::{
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
-    command::{CommandBuffer, RenderBundle},
+    command::{CommandBuffer, CommandEncoder, RenderBundle},
     device::{queue::Queue, Device},
     instance::Adapter,
     pipeline::{ComputePipeline, PipelineCache, RenderPipeline, ShaderModule},
     registry::{Registry, RegistryReport},
     resource::{
-        Blas, Buffer, Fallible, QuerySet, Sampler, StagingBuffer, Texture, TextureView, Tlas,
+        Blas, Buffer, ExternalTexture, Fallible, QuerySet, Sampler, StagingBuffer, Texture,
+        TextureView, Tlas,
     },
 };
 
@@ -124,6 +125,7 @@ pub struct HubReport {
     pub shader_modules: RegistryReport,
     pub bind_group_layouts: RegistryReport,
     pub bind_groups: RegistryReport,
+    pub command_encoders: RegistryReport,
     pub command_buffers: RegistryReport,
     pub render_bundles: RegistryReport,
     pub render_pipelines: RegistryReport,
@@ -133,6 +135,7 @@ pub struct HubReport {
     pub buffers: RegistryReport,
     pub textures: RegistryReport,
     pub texture_views: RegistryReport,
+    pub external_textures: RegistryReport,
     pub samplers: RegistryReport,
 }
 
@@ -171,6 +174,7 @@ pub struct Hub {
     pub(crate) shader_modules: Registry<Fallible<ShaderModule>>,
     pub(crate) bind_group_layouts: Registry<Fallible<BindGroupLayout>>,
     pub(crate) bind_groups: Registry<Fallible<BindGroup>>,
+    pub(crate) command_encoders: Registry<Arc<CommandEncoder>>,
     pub(crate) command_buffers: Registry<Arc<CommandBuffer>>,
     pub(crate) render_bundles: Registry<Fallible<RenderBundle>>,
     pub(crate) render_pipelines: Registry<Fallible<RenderPipeline>>,
@@ -181,6 +185,7 @@ pub struct Hub {
     pub(crate) staging_buffers: Registry<StagingBuffer>,
     pub(crate) textures: Registry<Fallible<Texture>>,
     pub(crate) texture_views: Registry<Fallible<TextureView>>,
+    pub(crate) external_textures: Registry<Fallible<ExternalTexture>>,
     pub(crate) samplers: Registry<Fallible<Sampler>>,
     pub(crate) blas_s: Registry<Fallible<Blas>>,
     pub(crate) tlas_s: Registry<Fallible<Tlas>>,
@@ -196,6 +201,7 @@ impl Hub {
             shader_modules: Registry::new(),
             bind_group_layouts: Registry::new(),
             bind_groups: Registry::new(),
+            command_encoders: Registry::new(),
             command_buffers: Registry::new(),
             render_bundles: Registry::new(),
             render_pipelines: Registry::new(),
@@ -206,6 +212,7 @@ impl Hub {
             staging_buffers: Registry::new(),
             textures: Registry::new(),
             texture_views: Registry::new(),
+            external_textures: Registry::new(),
             samplers: Registry::new(),
             blas_s: Registry::new(),
             tlas_s: Registry::new(),
@@ -221,6 +228,7 @@ impl Hub {
             shader_modules: self.shader_modules.generate_report(),
             bind_group_layouts: self.bind_group_layouts.generate_report(),
             bind_groups: self.bind_groups.generate_report(),
+            command_encoders: self.command_encoders.generate_report(),
             command_buffers: self.command_buffers.generate_report(),
             render_bundles: self.render_bundles.generate_report(),
             render_pipelines: self.render_pipelines.generate_report(),
@@ -230,6 +238,7 @@ impl Hub {
             buffers: self.buffers.generate_report(),
             textures: self.textures.generate_report(),
             texture_views: self.texture_views.generate_report(),
+            external_textures: self.external_textures.generate_report(),
             samplers: self.samplers.generate_report(),
         }
     }
