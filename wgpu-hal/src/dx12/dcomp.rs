@@ -33,13 +33,10 @@ impl InnerState {
     /// Creates a DirectComposition device and a target for the given window handle.
     /// From a Direct3D 12 device, it creates a Direct3D 11 device and then a DirectComposition device.
     pub unsafe fn init(hwnd: &HWND, device: &super::Device) -> Result<Self, crate::SurfaceError> {
-        let dcomp_device = {
+        let dcomp_device: DirectComposition::IDCompositionDevice = {
             profiling::scope!("DirectComposition::DCompositionCreateDevice");
             unsafe {
-                DirectComposition::DCompositionCreateDevice2::<
-                    _,
-                    DirectComposition::IDCompositionDevice,
-                >(None)
+                DirectComposition::DCompositionCreateDevice2(None)
             }
             .map_err(|err| {
                 log::error!("DirectComposition::DCompositionCreateDevice failed: {err}");
