@@ -1414,7 +1414,11 @@ impl crate::Device for super::Device {
         //
         // https://github.com/gfx-rs/wgpu/issues/6867
         if let Some(label) = desc.label {
+            let l = self.shared.sampler_cache.lock();
+            // SAFETY: we are holding a lock on the sampler cache,
+            // so we can only be setting the name from one thread.
             unsafe { self.shared.set_object_name(raw, label) };
+            drop(l);
         }
 
         self.counters.samplers.add(1);

@@ -53,6 +53,12 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
+### Bug Fixes
+
+#### Vulkan
+
+Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8043](https://github.com/gfx-rs/wgpu/pull/8043).
+
 ### Changes
 
 #### Naga
