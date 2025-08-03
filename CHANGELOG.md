@@ -55,7 +55,7 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 ### Changes
 
-#### Gemeral
+#### General
 
 - Prevent resources for acceleration structures being created if acceleration structures are not enabled. By @Vecvec in [#8036](https://github.com/gfx-rs/wgpu/pull/8036).
 
