@@ -43,6 +43,14 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Switch from `gpu-alloc` to `gpu-allocator` in the `vulkan` backend
+
+`gpu-allocator` is the allocator used in the `dx12` backend, allowing to configure
+the allocator the same way in those two backends converging their behavior.
+
+This also brings the `Device::generate_allocator_report` feature to
+the vulkan backend.
+
 #### `wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
 
 BREAKING CHANGE: `enumerate_adapters` is now `async`:

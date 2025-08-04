@@ -235,102 +235,14 @@ impl super::DeviceShared {
         buffer: &'a super::Buffer,
         ranges: I,
     ) -> Option<impl 'a + Iterator<Item = vk::MappedMemoryRange<'a>>> {
-        let block = buffer.block.as_ref()?.lock();
+        let allocation = buffer.allocation.as_ref()?.lock();
         let mask = self.private_caps.non_coherent_map_mask;
         Some(ranges.map(move |range| {
             vk::MappedMemoryRange::default()
-                .memory(*block.memory())
-                .offset((block.offset() + range.start) & !mask)
+                .memory(allocation.memory())
+                .offset((allocation.offset() + range.start) & !mask)
                 .size((range.end - range.start + mask) & !mask)
         }))
-    }
-}
-
-impl gpu_alloc::MemoryDevice<vk::DeviceMemory> for super::DeviceShared {
-    unsafe fn allocate_memory(
-        &self,
-        size: u64,
-        memory_type: u32,
-        flags: gpu_alloc::AllocationFlags,
-    ) -> Result<vk::DeviceMemory, gpu_alloc::OutOfMemory> {
-        let mut info = vk::MemoryAllocateInfo::default()
-            .allocation_size(size)
-            .memory_type_index(memory_type);
-
-        let mut info_flags;
-
-        if flags.contains(gpu_alloc::AllocationFlags::DEVICE_ADDRESS) {
-            info_flags = vk::MemoryAllocateFlagsInfo::default()
-                .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
-            info = info.push_next(&mut info_flags);
-        }
-
-        match unsafe { self.raw.allocate_memory(&info, None) } {
-            Ok(memory) => {
-                self.memory_allocations_counter.add(1);
-                Ok(memory)
-            }
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(gpu_alloc::OutOfMemory::OutOfDeviceMemory)
-            }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(gpu_alloc::OutOfMemory::OutOfHostMemory)
-            }
-            // We don't use VK_KHR_external_memory
-            // VK_ERROR_INVALID_EXTERNAL_HANDLE
-            // We don't use VK_KHR_buffer_device_address
-            // VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR
-            Err(err) => handle_unexpected(err),
-        }
-    }
-
-    unsafe fn deallocate_memory(&self, memory: vk::DeviceMemory) {
-        self.memory_allocations_counter.sub(1);
-
-        unsafe { self.raw.free_memory(memory, None) };
-    }
-
-    unsafe fn map_memory(
-        &self,
-        memory: &mut vk::DeviceMemory,
-        offset: u64,
-        size: u64,
-    ) -> Result<ptr::NonNull<u8>, gpu_alloc::DeviceMapError> {
-        match unsafe {
-            self.raw
-                .map_memory(*memory, offset, size, vk::MemoryMapFlags::empty())
-        } {
-            Ok(ptr) => Ok(ptr::NonNull::new(ptr.cast::<u8>())
-                .expect("Pointer to memory mapping must not be null")),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(gpu_alloc::DeviceMapError::OutOfDeviceMemory)
-            }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(gpu_alloc::DeviceMapError::OutOfHostMemory)
-            }
-            Err(vk::Result::ERROR_MEMORY_MAP_FAILED) => Err(gpu_alloc::DeviceMapError::MapFailed),
-            Err(err) => handle_unexpected(err),
-        }
-    }
-
-    unsafe fn unmap_memory(&self, memory: &mut vk::DeviceMemory) {
-        unsafe { self.raw.unmap_memory(*memory) };
-    }
-
-    unsafe fn invalidate_memory_ranges(
-        &self,
-        _ranges: &[gpu_alloc::MappedMemoryRange<'_, vk::DeviceMemory>],
-    ) -> Result<(), gpu_alloc::OutOfMemory> {
-        // should never be called
-        unimplemented!()
-    }
-
-    unsafe fn flush_memory_ranges(
-        &self,
-        _ranges: &[gpu_alloc::MappedMemoryRange<'_, vk::DeviceMemory>],
-    ) -> Result<(), gpu_alloc::OutOfMemory> {
-        // should never be called
-        unimplemented!()
     }
 }
 
@@ -966,59 +878,49 @@ impl crate::Device for super::Device {
                 .create_buffer(&vk_info, None)
                 .map_err(super::map_host_device_oom_and_ioca_err)?
         };
-        let req = unsafe { self.shared.raw.get_buffer_memory_requirements(raw) };
 
-        let mut alloc_usage = if desc
-            .usage
-            .intersects(wgt::BufferUses::MAP_READ | wgt::BufferUses::MAP_WRITE)
-        {
-            let mut flags = gpu_alloc::UsageFlags::HOST_ACCESS;
-            //TODO: find a way to use `crate::MemoryFlags::PREFER_COHERENT`
-            flags.set(
-                gpu_alloc::UsageFlags::DOWNLOAD,
-                desc.usage.contains(wgt::BufferUses::MAP_READ),
-            );
-            flags.set(
-                gpu_alloc::UsageFlags::UPLOAD,
-                desc.usage.contains(wgt::BufferUses::MAP_WRITE),
-            );
-            flags
-        } else {
-            gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS
+        let requirements = unsafe { self.shared.raw.get_buffer_memory_requirements(raw) };
+
+        let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
+        let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
+
+        let location = match (is_cpu_read, is_cpu_write) {
+            (true, true) => gpu_allocator::MemoryLocation::CpuToGpu,
+            (true, false) => gpu_allocator::MemoryLocation::GpuToCpu,
+            (false, true) => gpu_allocator::MemoryLocation::CpuToGpu,
+            (false, false) => gpu_allocator::MemoryLocation::GpuOnly,
         };
-        alloc_usage.set(
-            gpu_alloc::UsageFlags::TRANSIENT,
-            desc.memory_flags.contains(crate::MemoryFlags::TRANSIENT),
-        );
 
-        let needs_host_access = alloc_usage.contains(gpu_alloc::UsageFlags::HOST_ACCESS);
+        let needs_host_access = is_cpu_read || is_cpu_write;
 
-        self.error_if_would_oom_on_resource_allocation(needs_host_access, req.size)
+        self.error_if_would_oom_on_resource_allocation(needs_host_access, requirements.size)
             .inspect_err(|_| {
                 unsafe { self.shared.raw.destroy_buffer(raw, None) };
             })?;
 
-        let alignment_mask = req.alignment - 1;
+        let name = desc.label.unwrap_or("Unlabeled buffer");
 
-        let block = unsafe {
-            self.mem_allocator.lock().alloc(
-                &*self.shared,
-                gpu_alloc::Request {
-                    size: req.size,
-                    align_mask: alignment_mask,
-                    usage: alloc_usage,
-                    memory_types: req.memory_type_bits & self.valid_ash_memory_types,
+        let allocation = self
+            .mem_allocator
+            .lock()
+            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
+                name,
+                requirements: vk::MemoryRequirements {
+                    memory_type_bits: requirements.memory_type_bits & self.valid_ash_memory_types,
+                    ..requirements
                 },
-            )
-        }
-        .inspect_err(|_| {
-            unsafe { self.shared.raw.destroy_buffer(raw, None) };
-        })?;
+                location,
+                linear: true, // Buffers are always linear
+                allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
+            })
+            .inspect_err(|_| {
+                unsafe { self.shared.raw.destroy_buffer(raw, None) };
+            })?;
 
         unsafe {
             self.shared
                 .raw
-                .bind_buffer_memory(raw, *block.memory(), block.offset())
+                .bind_buffer_memory(raw, allocation.memory(), allocation.offset())
         }
         .map_err(super::map_host_device_oom_and_ioca_err)
         .inspect_err(|_| {
@@ -1029,23 +931,26 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
-        self.counters.buffer_memory.add(block.size() as isize);
+        self.counters.buffer_memory.add(allocation.size() as isize);
         self.counters.buffers.add(1);
 
         Ok(super::Buffer {
             raw,
-            block: Some(Mutex::new(super::BufferMemoryBacking::Managed(block))),
+            allocation: Some(Mutex::new(super::BufferMemoryBacking::Managed(allocation))),
         })
     }
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         unsafe { self.shared.raw.destroy_buffer(buffer.raw, None) };
-        if let Some(block) = buffer.block {
-            let block = block.into_inner();
-            self.counters.buffer_memory.sub(block.size() as isize);
-            match block {
-                super::BufferMemoryBacking::Managed(block) => unsafe {
-                    self.mem_allocator.lock().dealloc(&*self.shared, block)
-                },
+        if let Some(allocation) = buffer.allocation {
+            let allocation = allocation.into_inner();
+            self.counters.buffer_memory.sub(allocation.size() as isize);
+            match allocation {
+                super::BufferMemoryBacking::Managed(allocation) => {
+                    let result = self.mem_allocator.lock().free(allocation);
+                    if let Err(err) = result {
+                        log::warn!("Failed to free buffer allocation: {err}");
+                    }
+                }
                 super::BufferMemoryBacking::VulkanMemory { memory, .. } => unsafe {
                     self.shared.raw.free_memory(memory, None);
                 },
@@ -1064,15 +969,22 @@ impl crate::Device for super::Device {
         buffer: &super::Buffer,
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
-        if let Some(ref block) = buffer.block {
-            let size = range.end - range.start;
-            let mut block = block.lock();
-            if let super::BufferMemoryBacking::Managed(ref mut block) = *block {
-                let ptr = unsafe { block.map(&*self.shared, range.start, size as usize)? };
-                let is_coherent = block
-                    .props()
-                    .contains(gpu_alloc::MemoryPropertyFlags::HOST_COHERENT);
-                Ok(crate::BufferMapping { ptr, is_coherent })
+        if let Some(ref allocation) = buffer.allocation {
+            let mut allocation = allocation.lock();
+            if let super::BufferMemoryBacking::Managed(ref mut allocation) = *allocation {
+                let is_coherent = allocation
+                    .memory_properties()
+                    .contains(vk::MemoryPropertyFlags::HOST_COHERENT);
+                Ok(crate::BufferMapping {
+                    ptr: unsafe {
+                        allocation
+                            .mapped_ptr()
+                            .unwrap()
+                            .cast()
+                            .offset(range.start as isize)
+                    },
+                    is_coherent,
+                })
             } else {
                 crate::hal_usage_error("tried to map externally created buffer")
             }
@@ -1080,14 +992,10 @@ impl crate::Device for super::Device {
             crate::hal_usage_error("tried to map external buffer")
         }
     }
+
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
-        if let Some(ref block) = buffer.block {
-            match &mut *block.lock() {
-                super::BufferMemoryBacking::Managed(block) => unsafe { block.unmap(&*self.shared) },
-                super::BufferMemoryBacking::VulkanMemory { .. } => {
-                    crate::hal_usage_error("tried to unmap externally created buffer")
-                }
-            };
+        if buffer.allocation.is_some() {
+            // gpu-allocator maps the buffer when allocated and unmap it when free'd
         } else {
             crate::hal_usage_error("tried to unmap external buffer")
         }
@@ -1135,27 +1043,32 @@ impl crate::Device for super::Device {
                 unsafe { self.shared.raw.destroy_image(image.raw, None) };
             })?;
 
-        let block = unsafe {
-            self.mem_allocator.lock().alloc(
-                &*self.shared,
-                gpu_alloc::Request {
-                    size: image.requirements.size,
-                    align_mask: image.requirements.alignment - 1,
-                    usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-                    memory_types: image.requirements.memory_type_bits & self.valid_ash_memory_types,
-                },
-            )
-        }
-        .inspect_err(|_| {
-            unsafe { self.shared.raw.destroy_image(image.raw, None) };
-        })?;
+        let name = desc.label.unwrap_or("Unlabeled texture");
 
-        self.counters.texture_memory.add(block.size() as isize);
+        let allocation = self
+            .mem_allocator
+            .lock()
+            .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
+                name,
+                requirements: vk::MemoryRequirements {
+                    memory_type_bits: image.requirements.memory_type_bits
+                        & self.valid_ash_memory_types,
+                    ..image.requirements
+                },
+                location: gpu_allocator::MemoryLocation::GpuOnly,
+                linear: false,
+                allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
+            })
+            .inspect_err(|_| {
+                unsafe { self.shared.raw.destroy_image(image.raw, None) };
+            })?;
+
+        self.counters.texture_memory.add(allocation.size() as isize);
 
         unsafe {
             self.shared
                 .raw
-                .bind_image_memory(image.raw, *block.memory(), block.offset())
+                .bind_image_memory(image.raw, allocation.memory(), allocation.offset())
         }
         .map_err(super::map_host_device_oom_err)
         .inspect_err(|_| {
@@ -1163,7 +1076,12 @@ impl crate::Device for super::Device {
         })?;
 
         Ok(unsafe {
-            self.texture_from_raw(image.raw, desc, None, super::TextureMemory::Block(block))
+            self.texture_from_raw(
+                image.raw,
+                desc,
+                None,
+                super::TextureMemory::Allocation(allocation),
+            )
         })
     }
 
@@ -1173,10 +1091,13 @@ impl crate::Device for super::Device {
         }
 
         match texture.memory {
-            super::TextureMemory::Block(block) => unsafe {
-                self.counters.texture_memory.sub(block.size() as isize);
-                self.mem_allocator.lock().dealloc(&*self.shared, block);
-            },
+            super::TextureMemory::Allocation(allocation) => {
+                self.counters.texture_memory.sub(allocation.size() as isize);
+                let result = self.mem_allocator.lock().free(allocation);
+                if let Err(err) = result {
+                    log::warn!("Failed to free texture allocation: {err}");
+                }
+            }
             super::TextureMemory::Dedicated(memory) => unsafe {
                 self.shared.raw.free_memory(memory, None);
             },
@@ -2548,32 +2469,35 @@ impl crate::Device for super::Device {
                 .raw
                 .create_buffer(&vk_buffer_info, None)
                 .map_err(super::map_host_device_oom_and_ioca_err)?;
-            let req = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
 
-            self.error_if_would_oom_on_resource_allocation(false, req.size)
+            let requirements = self.shared.raw.get_buffer_memory_requirements(raw_buffer);
+
+            self.error_if_would_oom_on_resource_allocation(false, requirements.size)
                 .inspect_err(|_| {
                     self.shared.raw.destroy_buffer(raw_buffer, None);
                 })?;
 
-            let block = self
+            let name = desc
+                .label
+                .unwrap_or("Unlabeled acceleration structure buffer");
+
+            let allocation = self
                 .mem_allocator
                 .lock()
-                .alloc(
-                    &*self.shared,
-                    gpu_alloc::Request {
-                        size: req.size,
-                        align_mask: req.alignment - 1,
-                        usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-                        memory_types: req.memory_type_bits & self.valid_ash_memory_types,
-                    },
-                )
+                .allocate(&gpu_allocator::vulkan::AllocationCreateDesc {
+                    name,
+                    requirements,
+                    location: gpu_allocator::MemoryLocation::GpuOnly,
+                    linear: true, // Buffers are always linear
+                    allocation_scheme: gpu_allocator::vulkan::AllocationScheme::GpuAllocatorManaged,
+                })
                 .inspect_err(|_| {
                     self.shared.raw.destroy_buffer(raw_buffer, None);
                 })?;
 
             self.shared
                 .raw
-                .bind_buffer_memory(raw_buffer, *block.memory(), block.offset())
+                .bind_buffer_memory(raw_buffer, allocation.memory(), allocation.offset())
                 .map_err(super::map_host_device_oom_and_ioca_err)
                 .inspect_err(|_| {
                     self.shared.raw.destroy_buffer(raw_buffer, None);
@@ -2626,7 +2550,7 @@ impl crate::Device for super::Device {
             Ok(super::AccelerationStructure {
                 raw: raw_acceleration_structure,
                 buffer: raw_buffer,
-                block: Mutex::new(block),
+                allocation,
                 compacted_size_query: pool,
             })
         }
@@ -2650,9 +2574,13 @@ impl crate::Device for super::Device {
             self.shared
                 .raw
                 .destroy_buffer(acceleration_structure.buffer, None);
-            self.mem_allocator
+            let result = self
+                .mem_allocator
                 .lock()
-                .dealloc(&*self.shared, acceleration_structure.block.into_inner());
+                .free(acceleration_structure.allocation);
+            if let Err(err) = result {
+                log::warn!("Failed to free buffer acceleration structure: {err}");
+            }
             if let Some(query) = acceleration_structure.compacted_size_query {
                 self.shared.raw.destroy_query_pool(query, None)
             }
@@ -2665,6 +2593,39 @@ impl crate::Device for super::Device {
             .set(self.shared.memory_allocations_counter.read());
 
         self.counters.as_ref().clone()
+    }
+
+    fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
+        let gpu_allocator::AllocatorReport {
+            allocations,
+            blocks,
+            total_allocated_bytes,
+            total_capacity_bytes,
+        } = self.mem_allocator.lock().generate_report();
+
+        let allocations = allocations
+            .into_iter()
+            .map(|alloc| wgt::AllocationReport {
+                name: alloc.name,
+                offset: alloc.offset,
+                size: alloc.size,
+            })
+            .collect();
+
+        let blocks = blocks
+            .into_iter()
+            .map(|block| wgt::MemoryBlockReport {
+                size: block.size,
+                allocations: block.allocations.clone(),
+            })
+            .collect();
+
+        Some(wgt::AllocatorReport {
+            allocations,
+            blocks,
+            total_allocated_bytes,
+            total_reserved_bytes: total_capacity_bytes,
+        })
     }
 
     fn tlas_instance_to_bytes(&self, instance: TlasInstance) -> Vec<u8> {
@@ -2805,24 +2766,6 @@ impl super::DeviceShared {
     }
 }
 
-impl From<gpu_alloc::AllocationError> for crate::DeviceError {
-    fn from(error: gpu_alloc::AllocationError) -> Self {
-        use gpu_alloc::AllocationError as Ae;
-        match error {
-            Ae::OutOfDeviceMemory | Ae::OutOfHostMemory | Ae::TooManyObjects => Self::OutOfMemory,
-            Ae::NoCompatibleMemoryTypes => crate::hal_usage_error(error),
-        }
-    }
-}
-impl From<gpu_alloc::MapError> for crate::DeviceError {
-    fn from(error: gpu_alloc::MapError) -> Self {
-        use gpu_alloc::MapError as Me;
-        match error {
-            Me::OutOfDeviceMemory | Me::OutOfHostMemory | Me::MapFailed => Self::OutOfMemory,
-            Me::NonHostVisible | Me::AlreadyMapped => crate::hal_usage_error(error),
-        }
-    }
-}
 impl From<gpu_descriptor::AllocationError> for crate::DeviceError {
     fn from(error: gpu_descriptor::AllocationError) -> Self {
         use gpu_descriptor::AllocationError as Ae;
