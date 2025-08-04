@@ -6,7 +6,7 @@ use alloc::{
 };
 use core::{error::Error, fmt, ops::Range};
 
-use crate::{path_like::PathLike, Arena, Handle, UniqueArena};
+use crate::{error::replace_control_chars, path_like::PathLike, Arena, Handle, UniqueArena};
 
 /// A source code span, used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -291,7 +291,7 @@ impl<E> WithSpan<E> {
         use codespan_reporting::{files, term};
 
         let path = path.to_string_lossy();
-        let files = files::SimpleFile::new(path, source);
+        let files = files::SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
 
         cfg_if::cfg_if! {
@@ -323,7 +323,7 @@ impl<E> WithSpan<E> {
         use codespan_reporting::{files, term};
 
         let path = path.to_string_lossy();
-        let files = files::SimpleFile::new(path, source);
+        let files = files::SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
 
         let mut writer = crate::error::DiagnosticBuffer::new();
