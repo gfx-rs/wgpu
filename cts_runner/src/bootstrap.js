@@ -223,6 +223,7 @@ const windowOrWorkerGlobalScope = {
   GPUInternalError: util.nonEnumerable(webgpu.GPUInternalError),
   GPUValidationError: util.nonEnumerable(webgpu.GPUValidationError),
   GPUOutOfMemoryError: util.nonEnumerable(webgpu.GPUOutOfMemoryError),
+  GPUUncapturedErrorEvent: util.nonEnumerable(webgpu.GPUUncapturedErrorEvent),
 };
 
 windowOrWorkerGlobalScope.console.enumerable = false;
