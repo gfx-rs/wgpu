@@ -58,10 +58,22 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 #### General
 
 - Prevent resources for acceleration structures being created if acceleration structures are not enabled. By @Vecvec in [#8036](https://github.com/gfx-rs/wgpu/pull/8036).
+- Validate that each `push_debug_group` pairs with exactly one `pop_debug_group`. By @andyleiserson in [#8048](https://github.com/gfx-rs/wgpu/pull/8048).
+- `set_viewport` now requires that the supplied minimum depth value is less than the maximum depth value. By @andyleiserson in [#8040](https://github.com/gfx-rs/wgpu/pull/8040).
+- Validation of `copy_texture_to_buffer`, `copy_buffer_to_texture`, and `copy_texture_to_texture` operations more closely follows the WebGPU specification. By @andyleiserson in various PRs.
+  - Copies within the same texture must not overlap.
+  - Copies of multisampled or depth/stencil formats must span an entire subresource (layer).
+  - Copies of depth/stencil formats must be 4B aligned.
+- The offset for `set_vertex_buffer` and `set_index_buffer` must be 4B aligned. By @andyleiserson in [#7929](https://github.com/gfx-rs/wgpu/pull/7929).
+- The offset and size of bindings are validated as fitting within the underlying buffer in more cases. By @andyleiserson in [#7911](https://github.com/gfx-rs/wgpu/pull/7911).
 
 #### Naga
 
 Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
+
+#### DX12
+
+Fixed a bug where access to matrices with 2 rows would not work in some cases. By @andyleiserson in [#7438](https://github.com/gfx-rs/wgpu/pull/7438).
 
 ### Bug Fixes
 
