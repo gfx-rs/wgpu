@@ -727,6 +727,7 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 /// [`map_async`]: BufferSlice::map_async
 #[derive(Debug)]
 pub struct BufferView {
+    // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
     buffer: Buffer,
     offset: BufferAddress,
     size: BufferSize,
@@ -779,6 +780,7 @@ impl AsRef<[u8]> for BufferView {
 /// [map]: Buffer#mapping-buffers
 #[derive(Debug)]
 pub struct BufferViewMut {
+    // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
     buffer: Buffer,
     offset: BufferAddress,
     size: BufferSize,
