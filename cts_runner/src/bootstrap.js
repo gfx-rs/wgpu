@@ -220,6 +220,7 @@ const windowOrWorkerGlobalScope = {
   GPURenderBundle: util.nonEnumerable(webgpu.GPURenderBundle),
   GPUQuerySet: util.nonEnumerable(webgpu.GPUQuerySet),
   GPUError: util.nonEnumerable(webgpu.GPUError),
+  GPUInternalError: util.nonEnumerable(webgpu.GPUInternalError),
   GPUValidationError: util.nonEnumerable(webgpu.GPUValidationError),
   GPUOutOfMemoryError: util.nonEnumerable(webgpu.GPUOutOfMemoryError),
 };
