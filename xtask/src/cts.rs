@@ -63,6 +63,7 @@ struct TestLine {
 pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     let skip_checkout = args.contains("--skip-checkout");
     let llvm_cov = args.contains("--llvm-cov");
+    let release = args.contains("--release");
     let running_on_backend = args.opt_value_from_str::<_, String>("--backend")?;
 
     if running_on_backend.is_none() {
@@ -220,13 +221,18 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         }
 
         log::info!("Running {}", test.selector.to_string_lossy());
-        shell
+        let mut cmd = shell
             .cmd("cargo")
             .args(run_flags)
             .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
             .args(["-p", "cts_runner"])
-            .args(["--bin", "cts_runner"])
-            .args(["--", "./tools/run_deno", "--verbose"])
+            .args(["--bin", "cts_runner"]);
+
+        if release {
+            cmd = cmd.arg("--release")
+        }
+
+        cmd.args(["--", "./tools/run_deno", "--verbose"])
             .args([&test.selector])
             .run()
             .context("CTS failed")?;
