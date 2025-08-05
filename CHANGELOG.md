@@ -40,6 +40,14 @@ Bottom level categories:
 
 ## Unreleased
 
+## v26.0.4 (2025-08-06)
+
+### Bug Fixes
+
+#### Vulkan
+
+Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8043](https://github.com/gfx-rs/wgpu/pull/8043).
+
 ## v26.0.3 (2025-07-30)
 
 ### Bug Fixes
