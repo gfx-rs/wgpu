@@ -2470,28 +2470,6 @@ impl Device {
             ),
         };
 
-        if matches!(binding_ty, wgt::BufferBindingType::Storage { .. }) {
-            // NOTE: We stay `Option`al here to avoid potentially overflowing ops with the offset
-            // and size. This overflow is checked later.
-            let effective_buffer_binding_size = bb
-                .size
-                .map(|s| s.get())
-                .or_else(|| bb.buffer.size.checked_sub(bb.offset));
-
-            if let Some(effective_buffer_binding_size) = effective_buffer_binding_size {
-                let storage_buf_size_alignment = 4;
-
-                let aligned =
-                    effective_buffer_binding_size % u64::from(storage_buf_size_alignment) == 0;
-                if !aligned {
-                    return Err(Error::UnalignedEffectiveBufferBindingSizeForStorage {
-                        alignment: storage_buf_size_alignment,
-                        size: effective_buffer_binding_size,
-                    });
-                }
-            }
-        }
-
         let (align, align_limit_name) =
             binding_model::buffer_binding_type_alignment(&self.limits, binding_ty);
         if bb.offset % align as u64 != 0 {
@@ -2511,6 +2489,19 @@ impl Device {
         buffer.check_usage(pub_usage)?;
 
         let (bb, bind_size) = buffer.binding(bb.offset, bb.size, snatch_guard)?;
+
+        if matches!(binding_ty, wgt::BufferBindingType::Storage { .. }) {
+            let storage_buf_size_alignment = 4;
+
+            let aligned = bind_size % u64::from(storage_buf_size_alignment) == 0;
+            if !aligned {
+                return Err(Error::UnalignedEffectiveBufferBindingSizeForStorage {
+                    alignment: storage_buf_size_alignment,
+                    size: bind_size,
+                });
+            }
+        }
+
         let bind_end = bb.offset + bind_size;
 
         if bind_size > range_limit as u64 {
