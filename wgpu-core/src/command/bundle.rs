@@ -111,8 +111,8 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{
-        Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice,
-        RawResourceAccess, TrackingData,
+        Buffer, DestroyedResourceError, Fallible, Labeled, ParentDevice, RawResourceAccess,
+        TrackingData,
     },
     resource_log,
     snatch::SnatchGuard,
@@ -1601,8 +1601,6 @@ pub(super) enum RenderBundleErrorInner {
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
     Bind(#[from] BindError),
-    #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
 }
 
 impl<T> From<T> for RenderBundleErrorInner
@@ -1632,7 +1630,6 @@ impl WebGpuError for RenderBundleError {
             RenderBundleErrorInner::Draw(e) => e,
             RenderBundleErrorInner::MissingDownlevelFlags(e) => e,
             RenderBundleErrorInner::Bind(e) => e,
-            RenderBundleErrorInner::InvalidResource(e) => e,
         };
         e.webgpu_error_type()
     }

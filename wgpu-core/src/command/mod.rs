@@ -41,7 +41,8 @@ use crate::snatch::SnatchGuard;
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::ray_tracing::{AsAction, BuildAccelerationStructureError};
 use crate::resource::{
-    DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice as _, QuerySet,
+    impl_resource_errors, BadResourceError, DestroyedResourceError, Fallible, InvalidResourceError,
+    Labeled, ParentDevice as _, QuerySet,
 };
 use crate::storage::Storage;
 use crate::track::{DeviceTracker, ResourceUsageCompatibilityError, Tracker, UsageScope};
@@ -1042,9 +1043,9 @@ pub enum CommandEncoderError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    DestroyedResource(DestroyedResourceError),
     #[error(transparent)]
     ResourceUsage(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
@@ -1066,6 +1067,8 @@ pub enum CommandEncoderError {
     #[error(transparent)]
     RenderPass(#[from] RenderPassError),
 }
+
+impl_resource_errors!(CommandEncoderError);
 
 impl CommandEncoderError {
     fn is_destroyed_error(&self) -> bool {
@@ -1310,7 +1313,7 @@ impl Global {
             + From<QueryUseError>
             + From<DeviceError>
             + From<MissingFeatures>
-            + From<InvalidResourceError>,
+            + From<BadResourceError>,
     {
         let &PassTimestampWrites {
             query_set,

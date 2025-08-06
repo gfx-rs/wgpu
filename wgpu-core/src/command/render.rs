@@ -9,11 +9,6 @@ use wgt::{
     TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
-use crate::command::{
-    pass, pass_base, pass_try, validate_and_begin_occlusion_query,
-    validate_and_begin_pipeline_statistics_query, DebugGroupError, EncoderStateError,
-    InnerCommandEncoder, PassStateError, TimestampWritesError,
-};
 use crate::pipeline::{RenderPipeline, VertexStep};
 use crate::resource::RawResourceAccess;
 use crate::resource::{InvalidResourceError, ResourceErrorIdent};
@@ -37,11 +32,20 @@ use crate::{
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
     pipeline::PipelineFlags,
     resource::{
-        DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
-        ParentDevice, QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
+        impl_resource_errors, DestroyedResourceError, Labeled, MissingBufferUsageError,
+        MissingTextureUsageError, ParentDevice, QuerySet, Texture, TextureView,
+        TextureViewNotRenderableReason,
     },
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
     Label,
+};
+use crate::{
+    command::{
+        pass, pass_base, pass_try, validate_and_begin_occlusion_query,
+        validate_and_begin_pipeline_statistics_query, DebugGroupError, EncoderStateError,
+        InnerCommandEncoder, PassStateError, TimestampWritesError,
+    },
+    resource::BadResourceError,
 };
 
 #[cfg(feature = "serde")]
@@ -778,14 +782,16 @@ pub enum RenderPassErrorInner {
     #[error("missing occlusion query set")]
     MissingOcclusionQuerySet,
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    DestroyedResource(DestroyedResourceError),
     #[error("The compute pass has already been ended and no further commands can be recorded")]
     PassEnded,
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
     #[error(transparent)]
     TimestampWrites(#[from] TimestampWritesError),
 }
+
+impl_resource_errors!(RenderPassErrorInner);
 
 impl From<MissingBufferUsageError> for RenderPassErrorInner {
     fn from(error: MissingBufferUsageError) -> Self {
@@ -3079,7 +3085,7 @@ impl Global {
     fn resolve_render_pass_buffer_id(
         &self,
         buffer_id: id::Id<id::markers::Buffer>,
-    ) -> Result<Arc<crate::resource::Buffer>, InvalidResourceError> {
+    ) -> Result<Arc<crate::resource::Buffer>, BadResourceError> {
         let hub = &self.hub;
         let buffer = hub.buffers.get(buffer_id).get()?;
 
@@ -3089,7 +3095,7 @@ impl Global {
     fn resolve_render_pass_query_set(
         &self,
         query_set_id: id::Id<id::markers::QuerySet>,
-    ) -> Result<Arc<QuerySet>, InvalidResourceError> {
+    ) -> Result<Arc<QuerySet>, BadResourceError> {
         let hub = &self.hub;
         let query_set = hub.query_sets.get(query_set_id).get()?;
 

@@ -4,6 +4,7 @@ use core::mem::{size_of, ManuallyDrop};
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::device::DeviceError;
+use crate::resource::BadResourceError;
 use crate::{
     api_log,
     device::Device,
@@ -15,9 +16,7 @@ use crate::{
     ray_tracing::BlasPrepareCompactError,
     ray_tracing::{CreateBlasError, CreateTlasError},
     resource,
-    resource::{
-        BlasCompactCallback, BlasCompactState, Fallible, InvalidResourceError, TrackingData,
-    },
+    resource::{BlasCompactCallback, BlasCompactState, Fallible, TrackingData},
     snatch::Snatchable,
     LabelHelpers,
 };
@@ -387,7 +386,7 @@ impl Global {
         }
     }
 
-    pub fn ready_for_compaction(&self, blas_id: BlasId) -> Result<bool, InvalidResourceError> {
+    pub fn ready_for_compaction(&self, blas_id: BlasId) -> Result<bool, BadResourceError> {
         profiling::scope!("Blas::prepare_compact_async");
         api_log!("Blas::prepare_compact_async {blas_id:?}");
 

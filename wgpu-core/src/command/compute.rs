@@ -7,9 +7,6 @@ use wgt::{
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, str};
 
-use crate::command::{
-    pass, CommandEncoder, DebugGroupError, EncoderStateError, PassStateError, TimestampWritesError,
-};
 use crate::resource::DestroyedResourceError;
 use crate::{binding_model::BindError, resource::RawResourceAccess};
 use crate::{
@@ -33,6 +30,13 @@ use crate::{
     },
     track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex},
     Label,
+};
+use crate::{
+    command::{
+        pass, CommandEncoder, DebugGroupError, EncoderStateError, PassStateError,
+        TimestampWritesError,
+    },
+    resource::impl_resource_errors,
 };
 
 pub type ComputeBasePass = BasePass<ArcComputeCommand, ComputePassError>;
@@ -150,7 +154,9 @@ pub enum ComputePassErrorInner {
     #[error(transparent)]
     BindGroupIndexOutOfRange(#[from] pass::BindGroupIndexOutOfRange),
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
     #[error("Indirect buffer offset {0:?} is not a multiple of 4")]
     UnalignedIndirectBufferOffset(BufferAddress),
     #[error("Indirect buffer uses bytes {offset}..{end_offset} which overruns indirect buffer of size {buffer_size}")]
@@ -184,13 +190,13 @@ pub enum ComputePassErrorInner {
     #[error("The compute pass has already been ended and no further commands can be recorded")]
     PassEnded,
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
-    #[error(transparent)]
     TimestampWrites(#[from] TimestampWritesError),
     // This one is unreachable, but required for generic pass support
     #[error(transparent)]
     InvalidValuesOffset(#[from] pass::InvalidValuesOffset),
 }
+
+impl_resource_errors!(ComputePassErrorInner);
 
 /// Error encountered when performing a compute pass, stored for later reporting
 /// when encoding ends.

@@ -2,7 +2,7 @@ use alloc::{sync::Arc, vec::Vec};
 use core::mem;
 
 use crate::id::{Id, Marker};
-use crate::resource::ResourceType;
+use crate::resource::{Fallible, ParentDevice, ResourceType};
 use crate::{Epoch, Index};
 
 /// An entry in a `Storage::map` table.
@@ -138,5 +138,22 @@ where
             self.kind, id
         );
         result
+    }
+}
+
+impl<T: StorageItem + ParentDevice> Storage<Fallible<T>> {
+    #[allow(dead_code)]
+    pub(crate) fn mark_destroyed(&mut self, id: Id<T::Marker>) -> Option<Arc<T>> {
+        let (index, epoch) = id.unzip();
+        let stored = self.map.get_mut(index as usize);
+        match stored {
+            Some(&mut Element::Occupied(ref mut value, storage_epoch)) => {
+                assert_eq!(epoch, storage_epoch, "id epoch mismatch");
+                value.mark_destroyed()
+            }
+            Some(&mut Element::Vacant) | None => {
+                panic!("{}[{:?}] does not exist", self.kind, id);
+            }
+        }
     }
 }

@@ -25,9 +25,9 @@ use crate::{
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{
-        Buffer, DestroyedResourceError, ExternalTexture, InvalidResourceError, Labeled,
-        MissingBufferUsageError, MissingTextureUsageError, RawResourceAccess, ResourceErrorIdent,
-        Sampler, TextureView, Tlas, TrackingData,
+        impl_resource_errors, Buffer, DestroyedResourceError, ExternalTexture,
+        InvalidResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
+        RawResourceAccess, ResourceErrorIdent, Sampler, TextureView, Tlas, TrackingData,
     },
     resource_log,
     snatch::{SnatchGuard, Snatchable},
@@ -134,7 +134,9 @@ pub enum CreateBindGroupError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
     #[error(transparent)]
     BindingError(#[from] BindingError),
     #[error(
@@ -254,9 +256,9 @@ pub enum CreateBindGroupError {
     StorageReadWriteNotSupported(wgt::TextureFormat),
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
-    #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
 }
+
+impl_resource_errors!(CreateBindGroupError);
 
 impl WebGpuError for CreateBindGroupError {
     fn webgpu_error_type(&self) -> ErrorType {
@@ -800,8 +802,12 @@ pub enum CreatePipelineLayoutError {
     #[error("Bind group layout count {actual} exceeds device bind group limit {max}")]
     TooManyGroups { actual: usize, max: usize },
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
 }
+
+impl_resource_errors!(CreatePipelineLayoutError);
 
 impl WebGpuError for CreatePipelineLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
@@ -809,6 +815,7 @@ impl WebGpuError for CreatePipelineLayoutError {
             Self::Device(e) => e,
             Self::MissingFeatures(e) => e,
             Self::InvalidResource(e) => e,
+            Self::DestroyedResource(e) => e,
             Self::TooManyBindings(e) => e,
             Self::MisalignedPushConstantRange { .. }
             | Self::MoreThanOnePushConstantRangePerStage { .. }
@@ -1275,14 +1282,19 @@ pub enum GetBindGroupLayoutError {
     #[error("Invalid group index {0}")]
     InvalidGroupIndex(u32),
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
 }
+
+impl_resource_errors!(GetBindGroupLayoutError);
 
 impl WebGpuError for GetBindGroupLayoutError {
     fn webgpu_error_type(&self) -> ErrorType {
         match self {
             Self::InvalidGroupIndex(_) => ErrorType::Validation,
             Self::InvalidResource(e) => e.webgpu_error_type(),
+            Self::DestroyedResource(e) => e.webgpu_error_type(),
         }
     }
 }

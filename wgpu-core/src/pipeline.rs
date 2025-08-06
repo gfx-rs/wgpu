@@ -18,7 +18,9 @@ use crate::{
     command::ColorAttachmentError,
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
-    resource::{InvalidResourceError, Labeled, TrackingData},
+    resource::{
+        impl_resource_errors, DestroyedResourceError, InvalidResourceError, Labeled, TrackingData,
+    },
     resource_log, validation, Label,
 };
 
@@ -250,14 +252,19 @@ pub enum CreateComputePipelineError {
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
 }
+
+impl_resource_errors!(CreateComputePipelineError);
 
 impl WebGpuError for CreateComputePipelineError {
     fn webgpu_error_type(&self) -> ErrorType {
         let e: &dyn WebGpuError = match self {
             Self::Device(e) => e,
             Self::InvalidResource(e) => e,
+            Self::DestroyedResource(e) => e,
             Self::MissingDownlevelFlags(e) => e,
             Self::Implicit(e) => e,
             Self::Stage(e) => e,
@@ -693,14 +700,19 @@ pub enum CreateRenderPipelineError {
     ))]
     NoTargetSpecified,
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
 }
+
+impl_resource_errors!(CreateRenderPipelineError);
 
 impl WebGpuError for CreateRenderPipelineError {
     fn webgpu_error_type(&self) -> ErrorType {
         let e: &dyn WebGpuError = match self {
             Self::Device(e) => e,
             Self::InvalidResource(e) => e,
+            Self::DestroyedResource(e) => e,
             Self::MissingFeatures(e) => e,
             Self::MissingDownlevelFlags(e) => e,
 

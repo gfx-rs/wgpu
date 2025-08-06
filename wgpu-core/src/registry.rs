@@ -4,6 +4,7 @@ use crate::{
     id::Id,
     identity::IdentityManager,
     lock::{rank, RwLock, RwLockReadGuard},
+    resource::{Fallible, ParentDevice},
     storage::{Element, Storage, StorageItem},
 };
 
@@ -118,6 +119,13 @@ impl<T: StorageItem> Registry<T> {
 impl<T: StorageItem + Clone> Registry<T> {
     pub(crate) fn get(&self, id: Id<T::Marker>) -> T {
         self.read().get(id)
+    }
+}
+
+impl<T: StorageItem + ParentDevice> Registry<Fallible<T>> {
+    #[expect(dead_code)] // will be used soon
+    pub(crate) fn mark_destroyed(&self, id: Id<T::Marker>) -> Option<Arc<T>> {
+        self.storage.write().mark_destroyed(id)
     }
 }
 

@@ -13,7 +13,11 @@ use wgt::{
     BindGroupLayoutEntry, BindingType,
 };
 
-use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
+use crate::{
+    device::bgl,
+    resource::{impl_resource_errors, DestroyedResourceError, InvalidResourceError},
+    FastHashMap, FastHashSet,
+};
 
 #[derive(Debug)]
 enum ResourceType {
@@ -312,14 +316,19 @@ pub enum StageError {
     )]
     MultipleEntryPointsFound,
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
 }
+
+impl_resource_errors!(StageError);
 
 impl WebGpuError for StageError {
     fn webgpu_error_type(&self) -> ErrorType {
         let e: &dyn WebGpuError = match self {
             Self::Binding(_, e) => e,
             Self::InvalidResource(e) => e,
+            Self::DestroyedResource(e) => e,
             Self::Filtering {
                 texture: _,
                 sampler: _,

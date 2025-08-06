@@ -10,8 +10,8 @@ use crate::{
     id,
     init_tracker::MemoryInitKind,
     resource::{
-        DestroyedResourceError, InvalidResourceError, MissingBufferUsageError, ParentDevice,
-        QuerySet, RawResourceAccess, Trackable,
+        impl_resource_errors, DestroyedResourceError, InvalidResourceError,
+        MissingBufferUsageError, ParentDevice, QuerySet, RawResourceAccess, Trackable,
     },
     track::{StatelessTracker, TrackerIndex},
     FastHashMap,
@@ -107,10 +107,12 @@ pub enum QueryError {
     #[error("Error encountered while trying to resolve a query")]
     Resolve(#[from] ResolveError),
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    DestroyedResource(DestroyedResourceError),
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
 }
+
+impl_resource_errors!(QueryError);
 
 impl WebGpuError for QueryError {
     fn webgpu_error_type(&self) -> ErrorType {

@@ -6,6 +6,7 @@ use wgt::error::{ErrorType, WebGpuError};
 
 use super::bind::BinderError;
 use crate::command::pass;
+use crate::resource::{impl_resource_errors, InvalidResourceError};
 use crate::{
     binding_model::{BindingError, LateMinBufferBindingSizeMismatch, PushConstantUploadError},
     resource::{
@@ -103,7 +104,9 @@ pub enum RenderCommandError {
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]
@@ -124,11 +127,14 @@ pub enum RenderCommandError {
     Unimplemented(&'static str),
 }
 
+impl_resource_errors!(RenderCommandError);
+
 impl WebGpuError for RenderCommandError {
     fn webgpu_error_type(&self) -> ErrorType {
         let e: &dyn WebGpuError = match self {
             Self::IncompatiblePipelineTargets(e) => e,
             Self::ResourceUsageCompatibility(e) => e,
+            Self::InvalidResource(e) => e,
             Self::DestroyedResource(e) => e,
             Self::MissingBufferUsage(e) => e,
             Self::MissingTextureUsage(e) => e,

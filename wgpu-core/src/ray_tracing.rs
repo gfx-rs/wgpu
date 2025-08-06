@@ -21,8 +21,9 @@ use crate::{
     device::{DeviceError, MissingFeatures},
     id::{BlasId, BufferId, TlasId},
     resource::{
-        Blas, BlasCompactCallback, BlasPrepareCompactResult, DestroyedResourceError,
-        InvalidResourceError, MissingBufferUsageError, ResourceErrorIdent, Tlas,
+        impl_resource_errors, Blas, BlasCompactCallback, BlasPrepareCompactResult,
+        DestroyedResourceError, InvalidResourceError, MissingBufferUsageError, ResourceErrorIdent,
+        Tlas,
     },
 };
 
@@ -93,10 +94,10 @@ pub enum BuildAccelerationStructureError {
     Device(#[from] DeviceError),
 
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
 
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    DestroyedResource(DestroyedResourceError),
 
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
@@ -180,6 +181,8 @@ pub enum BuildAccelerationStructureError {
     )]
     TlasDependentMissingVertexReturn(ResourceErrorIdent, ResourceErrorIdent),
 }
+
+impl_resource_errors!(BuildAccelerationStructureError);
 
 impl WebGpuError for BuildAccelerationStructureError {
     fn webgpu_error_type(&self) -> ErrorType {
@@ -352,7 +355,9 @@ pub enum BlasPrepareCompactError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
     #[error("Compaction is already being prepared")]
     CompactionPreparingAlready,
     #[error("Cannot compact an already compacted BLAS")]
@@ -363,11 +368,14 @@ pub enum BlasPrepareCompactError {
     CompactionUnsupported,
 }
 
+impl_resource_errors!(BlasPrepareCompactError);
+
 impl WebGpuError for BlasPrepareCompactError {
     fn webgpu_error_type(&self) -> ErrorType {
         let e: &dyn WebGpuError = match self {
             Self::Device(e) => e,
             Self::InvalidResource(e) => e,
+            Self::DestroyedResource(e) => e,
             Self::CompactionPreparingAlready
             | Self::DoubleCompaction
             | Self::NotBuilt
@@ -386,10 +394,10 @@ pub enum CompactBlasError {
     Device(#[from] DeviceError),
 
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
 
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    DestroyedResource(DestroyedResourceError),
 
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
@@ -397,6 +405,8 @@ pub enum CompactBlasError {
     #[error("BLAS was not prepared for compaction")]
     BlasNotReady,
 }
+
+impl_resource_errors!(CompactBlasError);
 
 impl WebGpuError for CompactBlasError {
     fn webgpu_error_type(&self) -> ErrorType {

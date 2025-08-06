@@ -214,6 +214,36 @@ macro_rules! impl_trackable {
     };
 }
 
+macro_rules! impl_resource_errors {
+    ($err:ty) => {
+        impl From<$crate::resource::BadResourceError> for $err {
+            fn from(e: $crate::resource::BadResourceError) -> Self {
+                match e {
+                    $crate::resource::BadResourceError::Invalid(ident) => {
+                        <$err>::InvalidResource($crate::resource::InvalidResourceError(ident))
+                    }
+                    $crate::resource::BadResourceError::Destroyed(ident) => {
+                        <$err>::DestroyedResource($crate::resource::DestroyedResourceError(ident))
+                    }
+                }
+            }
+        }
+
+        impl From<$crate::resource::InvalidResourceError> for $err {
+            fn from(e: $crate::resource::InvalidResourceError) -> Self {
+                <$err>::InvalidResource(e)
+            }
+        }
+
+        impl From<$crate::resource::DestroyedResourceError> for $err {
+            fn from(e: $crate::resource::DestroyedResourceError) -> Self {
+                <$err>::DestroyedResource(e)
+            }
+        }
+    };
+}
+pub(crate) use impl_resource_errors;
+
 #[derive(Debug)]
 pub(crate) enum BufferMapState {
     /// Mapped at creation.
@@ -263,7 +293,7 @@ pub enum BufferAccessError {
     #[error("Buffer map failed")]
     Failed,
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    DestroyedResource(DestroyedResourceError),
     #[error("Buffer is already mapped")]
     AlreadyMapped,
     #[error("Buffer map is pending")]
@@ -300,8 +330,10 @@ pub enum BufferAccessError {
     #[error("Buffer map aborted")]
     MapAborted,
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
 }
+
+impl_resource_errors!(BufferAccessError);
 
 impl WebGpuError for BufferAccessError {
     fn webgpu_error_type(&self) -> ErrorType {
@@ -381,17 +413,52 @@ impl WebGpuError for InvalidResourceError {
 pub enum Fallible<T: ParentDevice> {
     Valid(Arc<T>),
     Invalid(Arc<String>),
+    Destroyed(ResourceErrorIdent),
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum BadResourceError {
+    #[error("{0} is invalid")]
+    Invalid(ResourceErrorIdent),
+    #[error("{0} was already destroyed")]
+    Destroyed(ResourceErrorIdent),
+}
+
+impl WebGpuError for BadResourceError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
+impl BadResourceError {
+    pub fn ident(&self) -> &ResourceErrorIdent {
+        match self {
+            BadResourceError::Invalid(ident) | BadResourceError::Destroyed(ident) => ident,
+        }
+    }
 }
 
 impl<T: ParentDevice> Fallible<T> {
-    pub fn get(self) -> Result<Arc<T>, InvalidResourceError> {
+    pub fn get(self) -> Result<Arc<T>, BadResourceError> {
         match self {
             Fallible::Valid(v) => Ok(v),
-            Fallible::Invalid(label) => Err(InvalidResourceError(ResourceErrorIdent {
+            Fallible::Invalid(label) => Err(BadResourceError::Invalid(ResourceErrorIdent {
                 r#type: Cow::Borrowed(T::TYPE),
                 label: (*label).clone(),
             })),
+            Fallible::Destroyed(ident) => Err(BadResourceError::Destroyed(ident)),
         }
+    }
+
+    pub fn mark_destroyed(&mut self) -> Option<Arc<T>> {
+        let error_ident = match self {
+            Fallible::Valid(v) => v.error_ident(),
+            _ => return None,
+        };
+        let Fallible::Valid(v) = mem::replace(self, Fallible::Destroyed(error_ident)) else {
+            unreachable!();
+        };
+        Some(v)
     }
 }
 
@@ -400,6 +467,7 @@ impl<T: ParentDevice> Clone for Fallible<T> {
         match self {
             Self::Valid(v) => Self::Valid(v.clone()),
             Self::Invalid(l) => Self::Invalid(l.clone()),
+            Self::Destroyed(ident) => Self::Destroyed(ident.clone()),
         }
     }
 }
@@ -1708,7 +1776,7 @@ pub enum CreateTextureViewError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    DestroyedResource(DestroyedResourceError),
     #[error("Invalid texture view dimension `{view:?}` with texture of dimension `{texture:?}`")]
     InvalidTextureViewDimension {
         view: wgt::TextureViewDimension,
@@ -1757,10 +1825,12 @@ pub enum CreateTextureViewError {
         view: wgt::TextureFormat,
     },
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
 }
+
+impl_resource_errors!(CreateTextureViewError);
 
 impl WebGpuError for CreateTextureViewError {
     fn webgpu_error_type(&self) -> ErrorType {
@@ -1834,7 +1904,9 @@ pub enum CreateExternalTextureError {
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
     #[error(transparent)]
     CreateBuffer(#[from] CreateBufferError),
     #[error(transparent)]
@@ -1866,12 +1938,15 @@ pub enum CreateExternalTextureError {
     },
 }
 
+impl_resource_errors!(CreateExternalTextureError);
+
 impl WebGpuError for CreateExternalTextureError {
     fn webgpu_error_type(&self) -> ErrorType {
         let e: &dyn WebGpuError = match self {
             CreateExternalTextureError::Device(e) => e,
             CreateExternalTextureError::MissingFeatures(e) => e,
             CreateExternalTextureError::InvalidResource(e) => e,
+            CreateExternalTextureError::DestroyedResource(e) => e,
             CreateExternalTextureError::CreateBuffer(e) => e,
             CreateExternalTextureError::QueueWrite(e) => e,
             CreateExternalTextureError::MissingTextureUsage(e) => e,

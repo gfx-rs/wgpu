@@ -13,8 +13,9 @@ use crate::{
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
-        DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
-        ParentDevice, RawResourceAccess, ResourceErrorIdent, Texture, TextureClearMode,
+        impl_resource_errors, DestroyedResourceError, InvalidResourceError, Labeled,
+        MissingBufferUsageError, ParentDevice, RawResourceAccess, ResourceErrorIdent, Texture,
+        TextureClearMode,
     },
     snatch::SnatchGuard,
     track::TextureTrackerSetSingle,
@@ -31,8 +32,6 @@ use wgt::{
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ClearError {
-    #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error("{0} can not be cleared")]
@@ -78,8 +77,12 @@ whereas subesource range specified start {subresource_base_array_layer} and coun
     #[error(transparent)]
     EncoderState(#[from] EncoderStateError),
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
+    #[error(transparent)]
+    DestroyedResource(DestroyedResourceError),
 }
+
+impl_resource_errors!(ClearError);
 
 impl WebGpuError for ClearError {
     fn webgpu_error_type(&self) -> ErrorType {

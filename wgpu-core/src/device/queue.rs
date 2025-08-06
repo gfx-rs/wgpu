@@ -33,8 +33,8 @@ use crate::{
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
     resource::{
-        Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState, DestroyedBuffer,
-        DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
+        impl_resource_errors, Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState,
+        DestroyedBuffer, DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
         InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
         TextureInner, Trackable, TrackingData,
     },
@@ -462,10 +462,12 @@ pub enum QueueWriteError {
     #[error(transparent)]
     MemoryInitFailure(#[from] ClearError),
     #[error(transparent)]
-    DestroyedResource(#[from] DestroyedResourceError),
+    DestroyedResource(DestroyedResourceError),
     #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
+    InvalidResource(InvalidResourceError),
 }
+
+impl_resource_errors!(QueueWriteError);
 
 impl WebGpuError for QueueWriteError {
     fn webgpu_error_type(&self) -> ErrorType {
