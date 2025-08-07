@@ -40,7 +40,7 @@ Bottom level categories:
 
 ## Unreleased
 
-## v26.0.4 (2025-08-06)
+## v26.0.4 (2025-08-07)
 
 ### Bug Fixes
 
