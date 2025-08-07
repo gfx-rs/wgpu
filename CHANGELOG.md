@@ -166,9 +166,9 @@ let (device, queue) = adapter
     .unwrap();
 ```
 
-More examples of this 
+More examples of this
 
-By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829). 
+By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
 
 ### Naga
 
@@ -251,7 +251,6 @@ By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
   - Variants holding a `CommandEncoderError` in the error enums `ClearError`, `ComputePassErrorInner`, `QueryError`, and `RenderPassErrorInner` have been replaced with variants holding an `EncoderStateError`.
   - The definition of `enum CommandEncoderError` has changed significantly, to reflect which errors can be raised by `CommandEncoder.finish()`. There are also some errors that no longer appear directly in `CommandEncoderError`, and instead appear nested within the `RenderPass` or `ComputePass` variants.
   - `CopyError` has been removed. Errors that were previously a `CopyError` are now a `CommandEncoderError` returned by `finish()`. (The detailed reasons for copies to fail were and still are described by `TransferError`, which was previously a variant of `CopyError`, and is now a variant of `CommandEncoderError`).
-
 
 #### Naga
 
