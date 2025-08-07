@@ -81,14 +81,23 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 - Validate that effective buffer binding size is aligned to 4 when creating bind groups with buffer entries.. By @ErichDonGubler in [8041](https://github.com/gfx-rs/wgpu/pull/8041).
 
-#### Vulkan
-
-- Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8043](https://github.com/gfx-rs/wgpu/pull/8043).
-
-##### DX12
+#### DX12
 
 - Fixed a bug where access to matrices with 2 rows would not work in some cases. By @andyleiserson in [#7438](https://github.com/gfx-rs/wgpu/pull/7438).
 
+## v26.0.4 (2025-08-07)
+
+### Bug Fixes
+
+#### Vulkan
+
+- Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8043](https://github.com/gfx-rs/wgpu/pull/8043), [#8056](https://github.com/gfx-rs/wgpu/pull/8056).
+
+## v26.0.3 (2025-07-30)
+
+### Bug Fixes
+
+- Fixed memory leak in vulkan backend. By @cwfitzgerald in [#8031](https://github.com/gfx-rs/wgpu/pull/8031).
 
 ## v26.0.2 (2025-07-23)
 
@@ -96,6 +105,7 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 - Fixed vulkan validation error regarding the swapchain in latest SDK. By @cwfitzgerald in [#7971](https://github.com/gfx-rs/wgpu/pull/7971).
 - Fixed flickering on AMD devices and crashes inside Renderdoc due to incorrect caching of `VkFramebuffer`s when the driver re-used image view handles. By @cwfitzgerald in [#7972](https://github.com/gfx-rs/wgpu/pull/7972).
+
 > [!WARNING]
 > There is formally a breaking change in `wgpu_hal::vulkan::Device::texture_from_raw` as there is now a `&self` receiver where
 > there previously wasn't one. This will not affect you unless you explicitly use this api. We have gone ahead with the release
