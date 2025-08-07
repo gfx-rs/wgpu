@@ -54,12 +54,13 @@ Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. B
 
 - Fixed memory leak in vulkan backend. By @cwfitzgerald in [#8031](https://github.com/gfx-rs/wgpu/pull/8031).
 
-## v26.0.2 (2025-07-26)
+## v26.0.2 (2025-07-23)
 
 ### Bug Fixes
 
 - Fixed vulkan validation error regarding the swapchain in latest SDK. By @cwfitzgerald in [#7971](https://github.com/gfx-rs/wgpu/pull/7971).
 - Fixed flickering on AMD devices and crashes inside Renderdoc due to incorrect caching of `VkFramebuffer`s when the driver re-used image view handles. By @cwfitzgerald in [#7972](https://github.com/gfx-rs/wgpu/pull/7972).
+
 > [!WARNING]
 > There is formally a breaking change in `wgpu_hal::vulkan::Device::texture_from_raw` as there is now a `&self` receiver where
 > there previously wasn't one. This will not affect you unless you explicitly use this api. We have gone ahead with the release
@@ -130,9 +131,9 @@ let (device, queue) = adapter
     .unwrap();
 ```
 
-More examples of this 
+More examples of this
 
-By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829). 
+By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
 
 ### Naga
 
@@ -214,7 +215,6 @@ By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
   - Variants holding a `CommandEncoderError` in the error enums `ClearError`, `ComputePassErrorInner`, `QueryError`, and `RenderPassErrorInner` have been replaced with variants holding an `EncoderStateError`.
   - The definition of `enum CommandEncoderError` has changed significantly, to reflect which errors can be raised by `CommandEncoder.finish()`. There are also some errors that no longer appear directly in `CommandEncoderError`, and instead appear nested within the `RenderPass` or `ComputePass` variants.
   - `CopyError` has been removed. Errors that were previously a `CopyError` are now a `CommandEncoderError` returned by `finish()`. (The detailed reasons for copies to fail were and still are described by `TransferError`, which was previously a variant of `CopyError`, and is now a variant of `CommandEncoderError`).
-
 
 #### Naga
 
