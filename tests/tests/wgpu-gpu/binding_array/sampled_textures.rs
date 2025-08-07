@@ -2,8 +2,16 @@ use std::num::NonZeroU32;
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, TestParameters, TestingContext,
+    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([
+        BINDING_ARRAY_SAMPLED_TEXTURES,
+        PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES,
+    ]);
+}
 
 #[gpu_test]
 static BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()

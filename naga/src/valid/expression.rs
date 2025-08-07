@@ -266,7 +266,7 @@ impl super::Validator {
                     | Ti::ValuePointer { size: Some(_), .. }
                     | Ti::BindingArray { .. } => {}
                     ref other => {
-                        log::error!("Indexing of {:?}", other);
+                        log::error!("Indexing of {other:?}");
                         return Err(ExpressionError::InvalidBaseType(base));
                     }
                 };
@@ -277,7 +277,7 @@ impl super::Validator {
                         ..
                     }) => {}
                     ref other => {
-                        log::error!("Indexing by {:?}", other);
+                        log::error!("Indexing by {other:?}");
                         return Err(ExpressionError::InvalidIndexType(index));
                     }
                 }
@@ -332,7 +332,7 @@ impl super::Validator {
                         }
                         Ti::Struct { ref members, .. } => members.len() as u32,
                         ref other => {
-                            log::error!("Indexing of {:?}", other);
+                            log::error!("Indexing of {other:?}");
                             return Err(ExpressionError::InvalidBaseType(top));
                         }
                     };
@@ -348,7 +348,7 @@ impl super::Validator {
             E::Splat { size: _, value } => match resolver[value] {
                 Ti::Scalar { .. } => ShaderStages::all(),
                 ref other => {
-                    log::error!("Splat scalar type {:?}", other);
+                    log::error!("Splat scalar type {other:?}");
                     return Err(ExpressionError::InvalidSplatType(value));
                 }
             },
@@ -360,7 +360,7 @@ impl super::Validator {
                 let vec_size = match resolver[vector] {
                     Ti::Vector { size: vec_size, .. } => vec_size,
                     ref other => {
-                        log::error!("Swizzle vector type {:?}", other);
+                        log::error!("Swizzle vector type {other:?}");
                         return Err(ExpressionError::InvalidVectorType(vector));
                     }
                 };
@@ -400,7 +400,7 @@ impl super::Validator {
                             .contains(TypeFlags::SIZED | TypeFlags::DATA) => {}
                     Ti::ValuePointer { .. } => {}
                     ref other => {
-                        log::error!("Loading {:?}", other);
+                        log::error!("Loading {other:?}");
                         return Err(ExpressionError::InvalidPointerType(pointer));
                     }
                 }
@@ -460,6 +460,7 @@ impl super::Validator {
                         kind: crate::ScalarKind::Uint | crate::ScalarKind::Sint,
                         multi: false,
                     } if gather.is_some() => false,
+                    crate::ImageClass::External => false,
                     crate::ImageClass::Depth { multi: false } => true,
                     _ => return Err(ExpressionError::InvalidImageClass(class)),
                 };
@@ -551,7 +552,7 @@ impl super::Validator {
                         crate::ImageClass::Sampled {
                             kind: crate::ScalarKind::Float,
                             multi: false
-                        }
+                        } | crate::ImageClass::External
                     ) {
                         return Err(ExpressionError::InvalidSampleClampCoordinateToEdge(
                             alloc::format!("image class `{class:?}`"),
@@ -766,7 +767,7 @@ impl super::Validator {
                     | (Uo::LogicalNot, Some(Sk::Bool))
                     | (Uo::BitwiseNot, Some(Sk::Sint | Sk::Uint)) => {}
                     other => {
-                        log::error!("Op {:?} kind {:?}", op, other);
+                        log::error!("Op {op:?} kind {other:?}");
                         return Err(ExpressionError::InvalidUnaryOperandType(op, expr));
                     }
                 }
@@ -875,7 +876,7 @@ impl super::Validator {
                                 Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => false,
                             },
                             ref other => {
-                                log::error!("Op {:?} left type {:?}", op, other);
+                                log::error!("Op {op:?} left type {other:?}");
                                 false
                             }
                         }
@@ -887,7 +888,7 @@ impl super::Validator {
                             ..
                         } => left_inner == right_inner,
                         ref other => {
-                            log::error!("Op {:?} left type {:?}", op, other);
+                            log::error!("Op {op:?} left type {other:?}");
                             false
                         }
                     },
@@ -897,7 +898,7 @@ impl super::Validator {
                             Sk::Float | Sk::AbstractInt | Sk::AbstractFloat => false,
                         },
                         ref other => {
-                            log::error!("Op {:?} left type {:?}", op, other);
+                            log::error!("Op {op:?} left type {other:?}");
                             false
                         }
                     },
@@ -907,7 +908,7 @@ impl super::Validator {
                             Sk::Bool | Sk::Float | Sk::AbstractInt | Sk::AbstractFloat => false,
                         },
                         ref other => {
-                            log::error!("Op {:?} left type {:?}", op, other);
+                            log::error!("Op {op:?} left type {other:?}");
                             false
                         }
                     },
@@ -916,7 +917,7 @@ impl super::Validator {
                             Ti::Scalar(scalar) => (Ok(None), scalar),
                             Ti::Vector { size, scalar } => (Ok(Some(size)), scalar),
                             ref other => {
-                                log::error!("Op {:?} base type {:?}", op, other);
+                                log::error!("Op {op:?} base type {other:?}");
                                 (Err(()), Sc::BOOL)
                             }
                         };
@@ -927,7 +928,7 @@ impl super::Validator {
                                 scalar: Sc { kind: Sk::Uint, .. },
                             } => Ok(Some(size)),
                             ref other => {
-                                log::error!("Op {:?} shift type {:?}", op, other);
+                                log::error!("Op {op:?} shift type {other:?}");
                                 Err(())
                             }
                         };
@@ -1032,7 +1033,7 @@ impl super::Validator {
                             ..
                         } => {}
                         ref other => {
-                            log::error!("All/Any of type {:?}", other);
+                            log::error!("All/Any of type {other:?}");
                             return Err(ExpressionError::InvalidBooleanVector(argument));
                         }
                     },
@@ -1040,7 +1041,7 @@ impl super::Validator {
                         Ti::Scalar(scalar) | Ti::Vector { scalar, .. }
                             if scalar.kind == Sk::Float => {}
                         ref other => {
-                            log::error!("Float test of type {:?}", other);
+                            log::error!("Float test of type {other:?}");
                             return Err(ExpressionError::InvalidFloatArgument(argument));
                         }
                     },
@@ -1164,7 +1165,7 @@ impl super::Validator {
                     }
                 }
                 ref other => {
-                    log::error!("Array length of {:?}", other);
+                    log::error!("Array length of {other:?}");
                     return Err(ExpressionError::InvalidArrayType(expr));
                 }
             },
@@ -1179,12 +1180,12 @@ impl super::Validator {
                 } => match resolver.types[base].inner {
                     Ti::RayQuery { .. } => ShaderStages::all(),
                     ref other => {
-                        log::error!("Intersection result of a pointer to {:?}", other);
+                        log::error!("Intersection result of a pointer to {other:?}");
                         return Err(ExpressionError::InvalidRayQueryType(query));
                     }
                 },
                 ref other => {
-                    log::error!("Intersection result of {:?}", other);
+                    log::error!("Intersection result of {other:?}");
                     return Err(ExpressionError::InvalidRayQueryType(query));
                 }
             },
@@ -1200,12 +1201,12 @@ impl super::Validator {
                         vertex_return: true,
                     } => ShaderStages::all(),
                     ref other => {
-                        log::error!("Intersection result of a pointer to {:?}", other);
+                        log::error!("Intersection result of a pointer to {other:?}");
                         return Err(ExpressionError::InvalidRayQueryType(query));
                     }
                 },
                 ref other => {
-                    log::error!("Intersection result of {:?}", other);
+                    log::error!("Intersection result of {other:?}");
                     return Err(ExpressionError::InvalidRayQueryType(query));
                 }
             },

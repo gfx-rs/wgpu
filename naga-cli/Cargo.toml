@@ -41,7 +41,7 @@ naga = { workspace = true, features = [
     "fs",
 ] }
 
-bincode.workspace = true
+bincode = { workspace = true, features = ["serde"] }
 codespan-reporting = { workspace = true, default-features = false, features = [
     "std",
     "termcolor",

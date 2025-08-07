@@ -317,7 +317,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "conservative-raster",
     image_path: "/examples/features/src/conservative_raster/screenshot.png",
     width: 1024,

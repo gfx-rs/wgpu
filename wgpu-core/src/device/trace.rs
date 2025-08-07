@@ -58,6 +58,13 @@ pub enum Action<'a> {
         desc: crate::resource::TextureViewDescriptor<'a>,
     },
     DestroyTextureView(id::TextureViewId),
+    CreateExternalTexture {
+        id: id::ExternalTextureId,
+        desc: crate::resource::ExternalTextureDescriptor<'a>,
+        planes: alloc::boxed::Box<[id::TextureViewId]>,
+    },
+    FreeExternalTexture(id::ExternalTextureId),
+    DestroyExternalTexture(id::ExternalTextureId),
     CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
     DestroySampler(id::SamplerId),
     GetSurfaceTexture {
@@ -90,15 +97,15 @@ pub enum Action<'a> {
     CreateComputePipeline {
         id: id::ComputePipelineId,
         desc: crate::pipeline::ComputePipelineDescriptor<'a>,
-        #[cfg_attr(feature = "replay", serde(default))]
-        implicit_context: Option<super::ImplicitPipelineContext>,
     },
     DestroyComputePipeline(id::ComputePipelineId),
     CreateRenderPipeline {
         id: id::RenderPipelineId,
         desc: crate::pipeline::RenderPipelineDescriptor<'a>,
-        #[cfg_attr(feature = "replay", serde(default))]
-        implicit_context: Option<super::ImplicitPipelineContext>,
+    },
+    CreateMeshPipeline {
+        id: id::RenderPipelineId,
+        desc: crate::pipeline::MeshPipelineDescriptor<'a>,
     },
     DestroyRenderPipeline(id::RenderPipelineId),
     CreatePipelineCache {
@@ -220,7 +227,7 @@ pub struct Trace {
 #[cfg(feature = "trace")]
 impl Trace {
     pub fn new(path: std::path::PathBuf) -> Result<Self, std::io::Error> {
-        log::info!("Tracing into '{:?}'", path);
+        log::info!("Tracing into '{path:?}'");
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;
         Ok(Self {
@@ -241,10 +248,10 @@ impl Trace {
     pub(crate) fn add(&mut self, action: Action) {
         match ron::ser::to_string_pretty(&action, self.config.clone()) {
             Ok(string) => {
-                let _ = writeln!(self.file, "{},", string);
+                let _ = writeln!(self.file, "{string},");
             }
             Err(e) => {
-                log::warn!("RON serialization failure: {:?}", e);
+                log::warn!("RON serialization failure: {e:?}");
             }
         }
     }

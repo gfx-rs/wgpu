@@ -1,0 +1,15 @@
+god_mode = true
+targets = "HLSL | IR | WGSL"
+
+[[hlsl.binding_map]]
+resource_binding = { group = 0, binding = 1 }
+bind_target = { register = 0, space = 0 }
+
+[[hlsl.external_texture_binding_map]]
+resource_binding = { group = 0, binding = 0 }
+bind_target.planes = [
+    { space = 0, register = 0 },
+    { space = 0, register = 1 },
+    { space = 0, register = 2 },
+]
+bind_target.params = { space = 0, register = 3 }

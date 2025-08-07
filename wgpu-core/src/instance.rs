@@ -15,7 +15,6 @@ use crate::{
     api_log, api_log_debug,
     device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
     global::Global,
-    hal_api::HalApi,
     id::{markers, AdapterId, DeviceId, QueueId, SurfaceId},
     lock::{rank, Mutex},
     present::Presentation,
@@ -117,7 +116,7 @@ impl Instance {
     }
 
     /// Helper for `Instance::new()`; attempts to add a single `wgpu-hal` backend to this instance.
-    fn try_add_hal<A: HalApi>(&mut self, _: A, instance_desc: &wgt::InstanceDescriptor) {
+    fn try_add_hal<A: hal::Api>(&mut self, _: A, instance_desc: &wgt::InstanceDescriptor) {
         // Whether or not the backend was requested, and whether or not it succeeds,
         // note that we *could* try it.
         self.supported_backends |= A::VARIANT.into();
@@ -151,7 +150,7 @@ impl Instance {
         }
     }
 
-    pub(crate) fn from_hal_instance<A: HalApi>(
+    pub(crate) fn from_hal_instance<A: hal::Api>(
         name: String,
         hal_instance: <A as hal::Api>::Instance,
     ) -> Self {
@@ -175,7 +174,7 @@ impl Instance {
     /// # Safety
     ///
     /// - The raw instance handle returned must not be manually destroyed.
-    pub unsafe fn as_hal<A: HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<&A::Instance> {
         self.raw(A::VARIANT).map(|instance| {
             instance
                 .as_any()
@@ -221,9 +220,7 @@ impl Instance {
                 }
                 Err(err) => {
                     log::debug!(
-                        "Instance::create_surface: failed to create surface for {:?}: {:?}",
-                        backend,
-                        err
+                        "Instance::create_surface: failed to create surface for {backend:?}: {err:?}"
                     );
                     errors.insert(*backend, err);
                 }
@@ -416,7 +413,7 @@ impl Instance {
         {
             // NOTE: We might be using `profiling` without any features. The empty backend of this
             // macro emits no code, so unused code linting changes depending on the backend.
-            profiling::scope!("enumerating", &*alloc::format!("{:?}", _backend));
+            profiling::scope!("enumerating", &*alloc::format!("{_backend:?}"));
 
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
             for raw in hal_adapters {
@@ -453,7 +450,7 @@ impl Instance {
             let mut backend_adapters =
                 unsafe { instance.enumerate_adapters(compatible_hal_surface) };
             if backend_adapters.is_empty() {
-                log::debug!("enabled backend `{:?}` has no adapters", backend);
+                log::debug!("enabled backend `{backend:?}` has no adapters");
                 no_adapter_backends |= Backends::from(backend);
                 // by continuing, we avoid setting the further error bits below
                 continue;
@@ -469,7 +466,7 @@ impl Instance {
                     keep
                 });
                 if backend_adapters.is_empty() {
-                    log::debug!("* Backend `{:?}` has no fallback adapters", backend);
+                    log::debug!("* Backend `{backend:?}` has no fallback adapters");
                     no_fallback_backends |= Backends::from(backend);
                     continue;
                 }
@@ -779,7 +776,7 @@ impl Adapter {
         let device = Device::new(hal_device.device, self, desc, instance_flags)?;
         let device = Arc::new(device);
 
-        let queue = Queue::new(device.clone(), hal_device.queue)?;
+        let queue = Queue::new(device.clone(), hal_device.queue, instance_flags)?;
         let queue = Arc::new(queue);
 
         device.set_queue(&queue);
@@ -805,11 +802,7 @@ impl Adapter {
             && !caps.downlevel.is_webgpu_compliant()
         {
             let missing_flags = wgt::DownlevelFlags::compliant() - caps.downlevel.flags;
-            log::warn!(
-                "Missing downlevel flags: {:?}\n{}",
-                missing_flags,
-                DOWNLEVEL_WARNING_MESSAGE
-            );
+            log::warn!("Missing downlevel flags: {missing_flags:?}\n{DOWNLEVEL_WARNING_MESSAGE}");
             log::warn!("{:#?}", caps.downlevel);
         }
 

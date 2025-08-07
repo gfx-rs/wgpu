@@ -1,12 +1,21 @@
 use wgpu::*;
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        STENCIL_ONLY_VIEW_CREATION,
+        DEPTH_ONLY_VIEW_CREATION,
+        SHARED_USAGE_VIEW_CREATION,
+    ]);
+}
 
 #[gpu_test]
 static STENCIL_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .skip(FailureCase::webgl2()) // WebGL doesn't have stencil only views
-            .limits(wgpu::Limits::downlevel_defaults()),
+            .limits(wgpu::Limits::downlevel_defaults())
+            .enable_noop(),
     )
     .run_async(|ctx| async move {
         for format in [TextureFormat::Stencil8, TextureFormat::Depth24PlusStencil8] {
@@ -34,8 +43,9 @@ static STENCIL_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::
     });
 
 #[gpu_test]
-static DEPTH_ONLY_VIEW_CREATION: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static DEPTH_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         for format in [
             TextureFormat::Depth16Unorm,
             TextureFormat::Depth24Plus,
@@ -66,7 +76,11 @@ static DEPTH_ONLY_VIEW_CREATION: GpuTestConfiguration =
 
 #[gpu_test]
 static SHARED_USAGE_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().downlevel_flags(DownlevelFlags::VIEW_FORMATS))
+    .parameters(
+        TestParameters::default()
+            .downlevel_flags(DownlevelFlags::VIEW_FORMATS)
+            .enable_noop(),
+    )
     .run_async(|ctx| async move {
         {
             let (texture_format, view_format) =

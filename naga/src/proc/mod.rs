@@ -18,7 +18,7 @@ pub use constant_evaluator::{
 pub use emitter::Emitter;
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
-pub use namer::{EntryPointIndex, NameKey, Namer};
+pub use namer::{EntryPointIndex, ExternalTextureNameKey, NameKey, Namer};
 pub use overloads::{Conclusion, MissingSpecialType, OverloadSet, Rule};
 pub use terminator::ensure_block_returns;
 use thiserror::Error;
@@ -383,6 +383,7 @@ impl super::ImageClass {
         match self {
             crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => multi,
             crate::ImageClass::Storage { .. } => false,
+            crate::ImageClass::External => false,
         }
     }
 
@@ -390,6 +391,7 @@ impl super::ImageClass {
         match self {
             crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => !multi,
             crate::ImageClass::Storage { .. } => false,
+            crate::ImageClass::External => false,
         }
     }
 

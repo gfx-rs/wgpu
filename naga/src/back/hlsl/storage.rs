@@ -108,6 +108,13 @@ pub(super) enum StoreValue {
         base: Handle<crate::Type>,
         member_index: u32,
     },
+    // Access to a single column of a Cx2 matrix within a struct
+    TempColumnAccess {
+        depth: usize,
+        base: Handle<crate::Type>,
+        member_index: u32,
+        column: u32,
+    },
 }
 
 impl<W: fmt::Write> super::Writer<'_, W> {
@@ -290,6 +297,15 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 let name = &self.names[&NameKey::StructMember(base, member_index)];
                 write!(self.out, "{STORE_TEMP_NAME}{depth}.{name}")?
             }
+            StoreValue::TempColumnAccess {
+                depth,
+                base,
+                member_index,
+                column,
+            } => {
+                let name = &self.names[&NameKey::StructMember(base, member_index)];
+                write!(self.out, "{STORE_TEMP_NAME}{depth}.{name}_{column}")?
+            }
         }
         Ok(())
     }
@@ -302,6 +318,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
         value: StoreValue,
         func_ctx: &FunctionCtx,
         level: crate::back::Level,
+        within_struct: Option<Handle<crate::Type>>,
     ) -> BackendResult {
         let temp_resolution;
         let ty_resolution = match value {
@@ -324,6 +341,9 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 };
                 temp_resolution = TypeResolution::Handle(ty_handle);
                 &temp_resolution
+            }
+            StoreValue::TempColumnAccess { .. } => {
+                unreachable!("attempting write_storage_store for TempColumnAccess");
             }
         };
         match *ty_resolution.inner_with(&module.types) {
@@ -372,37 +392,92 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 rows,
                 scalar,
             } => {
-                // first, assign the value to a temporary
-                writeln!(self.out, "{level}{{")?;
-                let depth = level.0 + 1;
-                write!(
-                    self.out,
-                    "{}{}{}x{} {}{} = ",
-                    level.next(),
-                    scalar.to_hlsl_str()?,
-                    columns as u8,
-                    rows as u8,
-                    STORE_TEMP_NAME,
-                    depth,
-                )?;
-                self.write_store_value(module, &value, func_ctx)?;
-                writeln!(self.out, ";")?;
-
                 // Note: Matrices containing vec3s, due to padding, act like they contain vec4s.
                 let row_stride = Alignment::from(rows) * scalar.width as u32;
 
-                // then iterate the stores
-                for i in 0..columns as u32 {
-                    self.temp_access_chain
-                        .push(SubAccess::Offset(i * row_stride));
-                    let ty_inner = crate::TypeInner::Vector { size: rows, scalar };
-                    let sv = StoreValue::TempIndex {
-                        depth,
-                        index: i,
-                        ty: TypeResolution::Value(ty_inner),
-                    };
-                    self.write_storage_store(module, var_handle, sv, func_ctx, level.next())?;
-                    self.temp_access_chain.pop();
+                writeln!(self.out, "{level}{{")?;
+
+                match within_struct {
+                    Some(containing_struct) if rows == crate::VectorSize::Bi => {
+                        // If we are within a struct, then the struct was already assigned to
+                        // a temporary, we don't need to make another.
+                        let mut chain = mem::take(&mut self.temp_access_chain);
+                        for i in 0..columns as u32 {
+                            chain.push(SubAccess::Offset(i * row_stride));
+                            // working around the borrow checker in `self.write_expr`
+                            let var_name = &self.names[&NameKey::GlobalVariable(var_handle)];
+                            let StoreValue::TempAccess { member_index, .. } = value else {
+                                unreachable!(
+                                    "write_storage_store within_struct but not TempAccess"
+                                );
+                            };
+                            let column_value = StoreValue::TempColumnAccess {
+                                depth: level.0, // note not incrementing, b/c no temp
+                                base: containing_struct,
+                                member_index,
+                                column: i,
+                            };
+                            // See note about DXC and Load/Store in the module's documentation.
+                            if scalar.width == 4 {
+                                write!(
+                                    self.out,
+                                    "{}{}.Store{}(",
+                                    level.next(),
+                                    var_name,
+                                    rows as u8
+                                )?;
+                                self.write_storage_address(module, &chain, func_ctx)?;
+                                write!(self.out, ", asuint(")?;
+                                self.write_store_value(module, &column_value, func_ctx)?;
+                                writeln!(self.out, "));")?;
+                            } else {
+                                write!(self.out, "{}{var_name}.Store(", level.next())?;
+                                self.write_storage_address(module, &chain, func_ctx)?;
+                                write!(self.out, ", ")?;
+                                self.write_store_value(module, &column_value, func_ctx)?;
+                                writeln!(self.out, ");")?;
+                            }
+                            chain.pop();
+                        }
+                        self.temp_access_chain = chain;
+                    }
+                    _ => {
+                        // first, assign the value to a temporary
+                        let depth = level.0 + 1;
+                        write!(
+                            self.out,
+                            "{}{}{}x{} {}{} = ",
+                            level.next(),
+                            scalar.to_hlsl_str()?,
+                            columns as u8,
+                            rows as u8,
+                            STORE_TEMP_NAME,
+                            depth,
+                        )?;
+                        self.write_store_value(module, &value, func_ctx)?;
+                        writeln!(self.out, ";")?;
+
+                        // then iterate the stores
+                        for i in 0..columns as u32 {
+                            self.temp_access_chain
+                                .push(SubAccess::Offset(i * row_stride));
+                            let ty_inner = crate::TypeInner::Vector { size: rows, scalar };
+                            let sv = StoreValue::TempIndex {
+                                depth,
+                                index: i,
+                                ty: TypeResolution::Value(ty_inner),
+                            };
+                            self.write_storage_store(
+                                module,
+                                var_handle,
+                                sv,
+                                func_ctx,
+                                level.next(),
+                                None,
+                            )?;
+                            self.temp_access_chain.pop();
+                        }
+                    }
                 }
                 // done
                 writeln!(self.out, "{level}}}")?;
@@ -415,7 +490,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                 // first, assign the value to a temporary
                 writeln!(self.out, "{level}{{")?;
                 write!(self.out, "{}", level.next())?;
-                self.write_value_type(module, &module.types[base].inner)?;
+                self.write_type(module, base)?;
                 let depth = level.next().0;
                 write!(self.out, " {STORE_TEMP_NAME}{depth}")?;
                 self.write_array_size(module, base, crate::ArraySize::Constant(size))?;
@@ -430,7 +505,7 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                         index: i,
                         ty: TypeResolution::Handle(base),
                     };
-                    self.write_storage_store(module, var_handle, sv, func_ctx, level.next())?;
+                    self.write_storage_store(module, var_handle, sv, func_ctx, level.next(), None)?;
                     self.temp_access_chain.pop();
                 }
                 // done
@@ -461,7 +536,14 @@ impl<W: fmt::Write> super::Writer<'_, W> {
                         base: struct_ty,
                         member_index: i as u32,
                     };
-                    self.write_storage_store(module, var_handle, sv, func_ctx, level.next())?;
+                    self.write_storage_store(
+                        module,
+                        var_handle,
+                        sv,
+                        func_ctx,
+                        level.next(),
+                        Some(struct_ty),
+                    )?;
                     self.temp_access_chain.pop();
                 }
                 // done

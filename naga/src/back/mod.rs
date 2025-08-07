@@ -196,6 +196,31 @@ impl FunctionCtx<'_> {
         }
     }
 
+    /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for an external texture
+    /// function argument.
+    ///
+    /// # Panics
+    /// - If the function arguments are less or equal to `arg`
+    /// - If `self.ty` is not `FunctionType::Function`.
+    pub const fn external_texture_argument_key(
+        &self,
+        arg: u32,
+        external_texture_key: crate::proc::ExternalTextureNameKey,
+    ) -> crate::proc::NameKey {
+        match self.ty {
+            FunctionType::Function(handle) => {
+                crate::proc::NameKey::ExternalTextureFunctionArgument(
+                    handle,
+                    arg,
+                    external_texture_key,
+                )
+            }
+            FunctionType::EntryPoint(_) => {
+                panic!("External textures cannot be used as arguments to entry points")
+            }
+        }
+    }
+
     /// Returns true if the given expression points to a fixed-function pipeline input.
     pub fn is_fixed_function_input(
         &self,

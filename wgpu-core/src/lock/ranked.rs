@@ -59,6 +59,8 @@ use core::{cell::Cell, fmt, ops, panic::Location};
 
 use super::rank::LockRank;
 
+pub use LockState as RankData;
+
 /// A `Mutex` instrumented for deadlock prevention.
 ///
 /// This is just a wrapper around a [`parking_lot::Mutex`], along with
@@ -87,7 +89,7 @@ std::thread_local! {
 
 /// Per-thread state for the deadlock checker.
 #[derive(Debug, Copy, Clone)]
-struct LockState {
+pub struct LockState {
     /// The last lock we acquired, and where.
     last_acquired: Option<(LockRank, &'static Location<'static>)>,
 
@@ -183,7 +185,7 @@ impl<T> Mutex<T> {
     }
 
     #[track_caller]
-    pub fn lock(&self) -> MutexGuard<T> {
+    pub fn lock(&self) -> MutexGuard<'_, T> {
         let saved = acquire(self.rank, Location::caller());
         MutexGuard {
             inner: self.inner.lock(),
@@ -254,7 +256,7 @@ impl<T> RwLock<T> {
     }
 
     #[track_caller]
-    pub fn read(&self) -> RwLockReadGuard<T> {
+    pub fn read(&self) -> RwLockReadGuard<'_, T> {
         let saved = acquire(self.rank, Location::caller());
         RwLockReadGuard {
             inner: self.inner.read(),
@@ -263,12 +265,33 @@ impl<T> RwLock<T> {
     }
 
     #[track_caller]
-    pub fn write(&self) -> RwLockWriteGuard<T> {
+    pub fn write(&self) -> RwLockWriteGuard<'_, T> {
         let saved = acquire(self.rank, Location::caller());
         RwLockWriteGuard {
             inner: self.inner.write(),
             saved: LockStateGuard(saved),
         }
+    }
+
+    /// Force an read-unlock operation on this lock.
+    ///
+    /// Safety:
+    /// - A read lock must be held which is not held by a guard.
+    pub unsafe fn force_unlock_read(&self, data: RankData) {
+        release(data);
+        unsafe { self.inner.force_unlock_read() };
+    }
+}
+
+impl<'a, T> RwLockReadGuard<'a, T> {
+    // Forget the read guard, leaving the lock in a locked state with no guard.
+    //
+    // Equivalent to std::mem::forget, but preserves the information about the lock
+    // rank.
+    pub fn forget(this: Self) -> RankData {
+        core::mem::forget(this.inner);
+
+        this.saved.0
     }
 }
 

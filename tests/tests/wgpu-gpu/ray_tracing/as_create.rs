@@ -8,13 +8,22 @@ use wgpu::{IndexFormat, VertexFormat};
 use wgpu_macros::gpu_test;
 use wgpu_test::{fail, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    tests.extend([
+        BLAS_INVALID_VERTEX_FORMAT,
+        BLAS_MISMATCHED_INDEX,
+        UNSUPPORTED_ACCELERATION_STRUCTURE_RESOURCES,
+    ]);
+}
+
 #[gpu_test]
 static BLAS_INVALID_VERTEX_FORMAT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(invalid_vertex_format_blas_create);
 
@@ -55,7 +64,8 @@ static BLAS_MISMATCHED_INDEX: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(mismatched_index_blas_create);
 
@@ -114,6 +124,45 @@ fn mismatched_index_blas_create(ctx: TestingContext) {
                     descriptors: vec![blas_size.clone()],
                 },
             );
+        },
+        None,
+    );
+}
+
+#[gpu_test]
+static UNSUPPORTED_ACCELERATION_STRUCTURE_RESOURCES: GpuTestConfiguration =
+    GpuTestConfiguration::new()
+        .parameters(TestParameters::default().test_features_limits())
+        .run_sync(unsupported_acceleration_structure_resources);
+
+fn unsupported_acceleration_structure_resources(ctx: TestingContext) {
+    fail(
+        &ctx.device,
+        || {
+            ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
+                size: 4,
+                usage: wgpu::BufferUsages::BLAS_INPUT,
+                mapped_at_creation: false,
+            })
+        },
+        None,
+    );
+    fail(
+        &ctx.device,
+        || {
+            ctx.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: None,
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::AccelerationStructure {
+                            vertex_return: false,
+                        },
+                        count: None,
+                    }],
+                })
         },
         None,
     );

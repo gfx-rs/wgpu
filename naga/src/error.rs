@@ -56,7 +56,7 @@ impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>
             writer.into_string()
         };
 
-        write!(f, "\nShader validation {}", writer)
+        write!(f, "\nShader validation {writer}")
     }
 }
 

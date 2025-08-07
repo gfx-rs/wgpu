@@ -3,8 +3,8 @@
 ; Generator: rspirv
 ; Bound: 95
 OpCapability Shader
-OpCapability DotProductKHR
-OpCapability DotProductInput4x8BitPackedKHR
+OpCapability DotProduct
+OpCapability DotProductInput4x8BitPacked
 OpExtension "SPV_KHR_integer_dot_product"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
@@ -16,7 +16,7 @@ OpExecutionMode %89 LocalSize 1 1 1
 %5 = OpTypeInt 32 1
 %6 = OpTypeInt 32 0
 %9 = OpTypeFunction %3
-%10 = OpConstant  %4  2.0
+%10 = OpConstant  %4  2
 %11 = OpConstantComposite  %3  %10 %10
 %12 = OpConstant  %4  0.5
 %13 = OpConstantComposite  %3  %12 %12
@@ -96,14 +96,14 @@ OpFunctionEnd
 %69 = OpLabel
 OpBranch %79
 %79 = OpLabel
-%80 = OpSDotKHR  %5  %22 %72 PackedVectorFormat4x8BitKHR
-%81 = OpUDotKHR  %6  %73 %74 PackedVectorFormat4x8BitKHR
+%80 = OpSDot  %5  %22 %72 PackedVectorFormat4x8Bit
+%81 = OpUDot  %6  %73 %74 PackedVectorFormat4x8Bit
 %82 = OpIAdd  %6  %75 %81
 %83 = OpIAdd  %6  %76 %81
-%84 = OpSDotKHR  %5  %82 %83 PackedVectorFormat4x8BitKHR
+%84 = OpSDot  %5  %82 %83 PackedVectorFormat4x8Bit
 %85 = OpIAdd  %6  %77 %81
 %86 = OpIAdd  %6  %78 %81
-%87 = OpUDotKHR  %6  %85 %86 PackedVectorFormat4x8BitKHR
+%87 = OpUDot  %6  %85 %86 PackedVectorFormat4x8Bit
 OpReturnValue %87
 OpFunctionEnd
 %89 = OpFunction  %2  None %90

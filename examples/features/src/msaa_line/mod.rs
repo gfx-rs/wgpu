@@ -47,7 +47,7 @@ impl Example {
         vertex_buffer: &wgpu::Buffer,
         vertex_count: u32,
     ) -> wgpu::RenderBundle {
-        log::info!("sample_count: {}", sample_count);
+        log::info!("sample_count: {sample_count}");
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(pipeline_layout),
@@ -321,7 +321,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "msaa-line",
     image_path: "/examples/features/src/msaa_line/screenshot.png",
     width: 1024,

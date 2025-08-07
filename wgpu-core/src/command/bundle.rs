@@ -93,6 +93,7 @@ use core::{
 use arrayvec::ArrayVec;
 use thiserror::Error;
 
+use wgpu_hal::ShouldBeNonZeroExt;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
@@ -111,7 +112,7 @@ use crate::{
     pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{
         Buffer, DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice,
-        TrackingData,
+        RawResourceAccess, TrackingData,
     },
     resource_log,
     snatch::SnatchGuard,
@@ -122,7 +123,7 @@ use crate::{
 use super::{
     pass,
     render_command::{ArcRenderCommand, RenderCommand},
-    DrawKind,
+    DrawCommandFamily, DrawKind,
 };
 
 /// Describes a [`RenderBundleEncoder`].
@@ -379,7 +380,7 @@ impl RenderBundleEncoder {
                 } => {
                     let scope = PassErrorScope::Draw {
                         kind: DrawKind::Draw,
-                        indexed: false,
+                        family: DrawCommandFamily::Draw,
                     };
                     draw(
                         &mut state,
@@ -400,7 +401,7 @@ impl RenderBundleEncoder {
                 } => {
                     let scope = PassErrorScope::Draw {
                         kind: DrawKind::Draw,
-                        indexed: true,
+                        family: DrawCommandFamily::DrawIndexed,
                     };
                     draw_indexed(
                         &mut state,
@@ -413,15 +414,33 @@ impl RenderBundleEncoder {
                     )
                     .map_pass_err(scope)?;
                 }
+                RenderCommand::DrawMeshTasks {
+                    group_count_x,
+                    group_count_y,
+                    group_count_z,
+                } => {
+                    let scope = PassErrorScope::Draw {
+                        kind: DrawKind::Draw,
+                        family: DrawCommandFamily::DrawMeshTasks,
+                    };
+                    draw_mesh_tasks(
+                        &mut state,
+                        &base.dynamic_offsets,
+                        group_count_x,
+                        group_count_y,
+                        group_count_z,
+                    )
+                    .map_pass_err(scope)?;
+                }
                 RenderCommand::DrawIndirect {
                     buffer_id,
                     offset,
                     count: 1,
-                    indexed,
+                    family,
                 } => {
                     let scope = PassErrorScope::Draw {
                         kind: DrawKind::DrawIndirect,
-                        indexed,
+                        family,
                     };
                     multi_draw_indirect(
                         &mut state,
@@ -429,21 +448,25 @@ impl RenderBundleEncoder {
                         &buffer_guard,
                         buffer_id,
                         offset,
-                        indexed,
+                        family,
                     )
                     .map_pass_err(scope)?;
                 }
                 RenderCommand::DrawIndirect { .. }
-                | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
-                RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
-                RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
-                RenderCommand::PopDebugGroup => unimplemented!(),
+                | RenderCommand::MultiDrawIndirectCount { .. }
+                | RenderCommand::PushDebugGroup { color: _, len: _ }
+                | RenderCommand::InsertDebugMarker { color: _, len: _ }
+                | RenderCommand::PopDebugGroup => {
+                    unimplemented!("not supported by a render bundle")
+                }
                 // Must check the TIMESTAMP_QUERY_INSIDE_PASSES feature
                 RenderCommand::WriteTimestamp { .. }
                 | RenderCommand::BeginOcclusionQuery { .. }
                 | RenderCommand::EndOcclusionQuery
                 | RenderCommand::BeginPipelineStatisticsQuery { .. }
-                | RenderCommand::EndPipelineStatisticsQuery => unimplemented!(),
+                | RenderCommand::EndPipelineStatisticsQuery => {
+                    unimplemented!("not supported by a render bundle")
+                }
                 RenderCommand::ExecuteBundle(_)
                 | RenderCommand::SetBlendConstant(_)
                 | RenderCommand::SetStencilReference(_)
@@ -602,6 +625,7 @@ fn set_pipeline(
     Ok(())
 }
 
+// This function is duplicative of `render::set_index_buffer`.
 fn set_index_buffer(
     state: &mut State,
     buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
@@ -620,21 +644,27 @@ fn set_index_buffer(
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDEX)?;
 
-    let end = match size {
-        Some(s) => offset + s.get(),
-        None => buffer.size,
-    };
+    if offset % u64::try_from(index_format.byte_size()).unwrap() != 0 {
+        return Err(RenderCommandError::UnalignedIndexBuffer {
+            offset,
+            alignment: index_format.byte_size(),
+        }
+        .into());
+    }
+    let end = offset + buffer.resolve_binding_size(offset, size)?;
+
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
             &buffer,
-            offset..end,
+            offset..end.get(),
             MemoryInitKind::NeedsInitializedMemory,
         ));
-    state.set_index_buffer(buffer, index_format, offset..end);
+    state.set_index_buffer(buffer, index_format, offset..end.get());
     Ok(())
 }
 
+// This function is duplicative of `render::set_vertex_buffer`.
 fn set_vertex_buffer(
     state: &mut State,
     buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
@@ -662,18 +692,19 @@ fn set_vertex_buffer(
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::VERTEX)?;
 
-    let end = match size {
-        Some(s) => offset + s.get(),
-        None => buffer.size,
-    };
+    if offset % wgt::VERTEX_ALIGNMENT != 0 {
+        return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
+    }
+    let end = offset + buffer.resolve_binding_size(offset, size)?;
+
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
             &buffer,
-            offset..end,
+            offset..end.get(),
             MemoryInitKind::NeedsInitializedMemory,
         ));
-    state.vertex[slot as usize] = Some(VertexState::new(buffer, offset..end));
+    state.vertex[slot as usize] = Some(VertexState::new(buffer, offset..end.get()));
     Ok(())
 }
 
@@ -774,13 +805,48 @@ fn draw_indexed(
     Ok(())
 }
 
+fn draw_mesh_tasks(
+    state: &mut State,
+    dynamic_offsets: &[u32],
+    group_count_x: u32,
+    group_count_y: u32,
+    group_count_z: u32,
+) -> Result<(), RenderBundleErrorInner> {
+    let pipeline = state.pipeline()?;
+    let used_bind_groups = pipeline.used_bind_groups;
+
+    let groups_size_limit = state.device.limits.max_task_workgroups_per_dimension;
+    let max_groups = state.device.limits.max_task_workgroup_total_count;
+    if group_count_x > groups_size_limit
+        || group_count_y > groups_size_limit
+        || group_count_z > groups_size_limit
+        || group_count_x * group_count_y * group_count_z > max_groups
+    {
+        return Err(RenderBundleErrorInner::Draw(DrawError::InvalidGroupSize {
+            current: [group_count_x, group_count_y, group_count_z],
+            limit: groups_size_limit,
+            max_total: max_groups,
+        }));
+    }
+
+    if group_count_x > 0 && group_count_y > 0 && group_count_z > 0 {
+        state.flush_binds(used_bind_groups, dynamic_offsets);
+        state.commands.push(ArcRenderCommand::DrawMeshTasks {
+            group_count_x,
+            group_count_y,
+            group_count_z,
+        });
+    }
+    Ok(())
+}
+
 fn multi_draw_indirect(
     state: &mut State,
     dynamic_offsets: &[u32],
     buffer_guard: &crate::storage::Storage<Fallible<Buffer>>,
     buffer_id: id::Id<id::markers::Buffer>,
     offset: u64,
-    indexed: bool,
+    family: DrawCommandFamily,
 ) -> Result<(), RenderBundleErrorInner> {
     state
         .device
@@ -796,7 +862,7 @@ fn multi_draw_indirect(
 
     let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
 
-    let stride = super::get_stride_of_indirect_args(indexed);
+    let stride = super::get_stride_of_indirect_args(family);
     state
         .buffer_memory_init_actions
         .extend(buffer.initialization_status.read().create_action(
@@ -805,7 +871,7 @@ fn multi_draw_indirect(
             MemoryInitKind::NeedsInitializedMemory,
         ));
 
-    let vertex_or_index_limit = if indexed {
+    let vertex_or_index_limit = if family == DrawCommandFamily::DrawIndexed {
         let index = match state.index {
             Some(ref mut index) => index,
             None => return Err(DrawError::MissingIndexBuffer.into()),
@@ -831,7 +897,7 @@ fn multi_draw_indirect(
         buffer,
         offset,
         count: 1,
-        indexed,
+        family,
 
         vertex_or_index_limit,
         instance_limit,
@@ -965,11 +1031,9 @@ impl RenderBundle {
                     size,
                 } => {
                     let buffer = buffer.try_raw(snatch_guard)?;
-                    let bb = hal::BufferBinding {
-                        buffer,
-                        offset: *offset,
-                        size: *size,
-                    };
+                    // SAFETY: The binding size was checked against the buffer size
+                    // in `set_index_buffer` and again in `IndexState::flush`.
+                    let bb = hal::BufferBinding::new_unchecked(buffer, *offset, *size);
                     unsafe { raw.set_index_buffer(bb, *index_format) };
                 }
                 Cmd::SetVertexBuffer {
@@ -979,11 +1043,9 @@ impl RenderBundle {
                     size,
                 } => {
                     let buffer = buffer.try_raw(snatch_guard)?;
-                    let bb = hal::BufferBinding {
-                        buffer,
-                        offset: *offset,
-                        size: *size,
-                    };
+                    // SAFETY: The binding size was checked against the buffer size
+                    // in `set_vertex_buffer` and again in `VertexState::flush`.
+                    let bb = hal::BufferBinding::new_unchecked(buffer, *offset, *size);
                     unsafe { raw.set_vertex_buffer(*slot, bb) };
                 }
                 Cmd::SetPushConstant {
@@ -1057,11 +1119,18 @@ impl RenderBundle {
                         )
                     };
                 }
+                Cmd::DrawMeshTasks {
+                    group_count_x,
+                    group_count_y,
+                    group_count_z,
+                } => unsafe {
+                    raw.draw_mesh_tasks(*group_count_x, *group_count_y, *group_count_z);
+                },
                 Cmd::DrawIndirect {
                     buffer,
                     offset,
                     count: 1,
-                    indexed,
+                    family,
 
                     vertex_or_index_limit,
                     instance_limit,
@@ -1072,7 +1141,7 @@ impl RenderBundle {
                             &self.device,
                             buffer,
                             *offset,
-                            *indexed,
+                            *family,
                             *vertex_or_index_limit,
                             *instance_limit,
                         )?;
@@ -1083,10 +1152,14 @@ impl RenderBundle {
                     } else {
                         (buffer.try_raw(snatch_guard)?, *offset)
                     };
-                    if *indexed {
-                        unsafe { raw.draw_indexed_indirect(buffer, offset, 1) };
-                    } else {
-                        unsafe { raw.draw_indirect(buffer, offset, 1) };
+                    match family {
+                        DrawCommandFamily::Draw => unsafe { raw.draw_indirect(buffer, offset, 1) },
+                        DrawCommandFamily::DrawIndexed => unsafe {
+                            raw.draw_indexed_indirect(buffer, offset, 1)
+                        },
+                        DrawCommandFamily::DrawMeshTasks => unsafe {
+                            raw.draw_mesh_tasks_indirect(buffer, offset, 1);
+                        },
                     }
                 }
                 Cmd::DrawIndirect { .. } | Cmd::MultiDrawIndirectCount { .. } => {
@@ -1131,6 +1204,9 @@ crate::impl_trackable!(RenderBundle);
 /// [`RenderBundleEncoder::finish`] records the currently set index buffer here,
 /// and calls [`State::flush_index`] before any indexed draw command to produce
 /// a `SetIndexBuffer` command if one is necessary.
+///
+/// Binding ranges must be validated against the size of the buffer before
+/// being stored in `IndexState`.
 #[derive(Debug)]
 struct IndexState {
     buffer: Arc<Buffer>,
@@ -1152,13 +1228,21 @@ impl IndexState {
     /// Generate a `SetIndexBuffer` command to prepare for an indexed draw
     /// command, if needed.
     fn flush(&mut self) -> Option<ArcRenderCommand> {
+        // This was all checked before, but let's check again just in case.
+        let binding_size = self
+            .range
+            .end
+            .checked_sub(self.range.start)
+            .filter(|_| self.range.end <= self.buffer.size)
+            .expect("index range must be contained in buffer");
+
         if self.is_dirty {
             self.is_dirty = false;
             Some(ArcRenderCommand::SetIndexBuffer {
                 buffer: self.buffer.clone(),
                 index_format: self.format,
                 offset: self.range.start,
-                size: wgt::BufferSize::new(self.range.end - self.range.start),
+                size: NonZeroU64::new(binding_size),
             })
         } else {
             None
@@ -1174,6 +1258,9 @@ impl IndexState {
 /// calls this type's [`flush`] method just before any draw command to
 /// produce a `SetVertexBuffer` commands if one is necessary.
 ///
+/// Binding ranges must be validated against the size of the buffer before
+/// being stored in `VertexState`.
+///
 /// [`flush`]: IndexState::flush
 #[derive(Debug)]
 struct VertexState {
@@ -1183,6 +1270,9 @@ struct VertexState {
 }
 
 impl VertexState {
+    /// Create a new `VertexState`.
+    ///
+    /// The `range` must be contained within `buffer`.
     fn new(buffer: Arc<Buffer>, range: Range<wgt::BufferAddress>) -> Self {
         Self {
             buffer,
@@ -1195,13 +1285,20 @@ impl VertexState {
     ///
     /// `slot` is the index of the vertex buffer slot that `self` tracks.
     fn flush(&mut self, slot: u32) -> Option<ArcRenderCommand> {
+        let binding_size = self
+            .range
+            .end
+            .checked_sub(self.range.start)
+            .filter(|_| self.range.end <= self.buffer.size)
+            .expect("vertex range must be contained in buffer");
+
         if self.is_dirty {
             self.is_dirty = false;
             Some(ArcRenderCommand::SetVertexBuffer {
                 slot,
                 buffer: self.buffer.clone(),
                 offset: self.range.start,
-                size: wgt::BufferSize::new(self.range.end - self.range.start),
+                size: NonZeroU64::new(binding_size),
             })
         } else {
             None
@@ -1564,7 +1661,7 @@ where
 
 pub mod bundle_ffi {
     use super::{RenderBundleEncoder, RenderCommand};
-    use crate::{id, RawString};
+    use crate::{command::DrawCommandFamily, id, RawString};
     use core::{convert::TryInto, slice};
     use wgt::{BufferAddress, BufferSize, DynamicOffset, IndexFormat};
 
@@ -1719,7 +1816,7 @@ pub mod bundle_ffi {
             buffer_id,
             offset,
             count: 1,
-            indexed: false,
+            family: DrawCommandFamily::Draw,
         });
     }
 
@@ -1732,7 +1829,7 @@ pub mod bundle_ffi {
             buffer_id,
             offset,
             count: 1,
-            indexed: true,
+            family: DrawCommandFamily::DrawIndexed,
         });
     }
 

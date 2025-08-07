@@ -1,9 +1,21 @@
 use wgpu::{util::DeviceExt, Backends};
-use wgpu_test::{fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{
+    fail, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        BUFFER_DESTROY,
+        TEXTURE_DESTROY,
+        BUFFER_DESTROY_BEFORE_SUBMIT,
+        TEXTURE_DESTROY_BEFORE_SUBMIT,
+    ]);
+}
 
 #[gpu_test]
-static BUFFER_DESTROY: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("buffer"),
             size: 256,
@@ -69,8 +81,9 @@ static BUFFER_DESTROY: GpuTestConfiguration =
     });
 
 #[gpu_test]
-static TEXTURE_DESTROY: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static TEXTURE_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: wgpu::Extent3d {
@@ -107,7 +120,9 @@ static TEXTURE_DESTROY: GpuTestConfiguration =
 static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         // https://github.com/gfx-rs/wgpu/issues/7854
-        TestParameters::default().skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+        TestParameters::default()
+            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
+            .enable_noop(),
     )
     .run_sync(|ctx| {
         let buffer_source = ctx
@@ -147,7 +162,9 @@ static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration
 static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         // https://github.com/gfx-rs/wgpu/issues/7854
-        TestParameters::default().skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe")),
+        TestParameters::default()
+            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
+            .enable_noop(),
     )
     .run_sync(|ctx| {
         let descriptor = wgpu::TextureDescriptor {

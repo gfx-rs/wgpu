@@ -180,7 +180,7 @@ pub(crate) fn run_vendor_web_sys(shell: Shell, mut args: Arguments) -> anyhow::R
 
     let git_url: Option<String> = args.opt_value_from_str("--git-url")?;
     if let Some(url) = &git_url {
-        write!(&mut argument_description, " --git-url {}", url)?;
+        write!(&mut argument_description, " --git-url {url}")?;
     }
 
     let unknown_args = args.finish();
@@ -295,11 +295,11 @@ pub(crate) fn run_vendor_web_sys(shell: Shell, mut args: Arguments) -> anyhow::R
     module_file_contents.push_str("use web_sys::{Event, EventTarget};\n");
 
     for &feature in WEB_SYS_FEATURES_NEEDED {
-        module_file_contents.push_str(&format!("mod gen_{};\n", feature));
-        module_file_contents.push_str(&format!("pub use gen_{}::*;\n", feature));
+        module_file_contents.push_str(&format!("mod gen_{feature};\n"));
+        module_file_contents.push_str(&format!("pub use gen_{feature}::*;\n"));
     }
 
-    shell.write_file(format!("{}/mod.rs", WEBGPU_SYS_PATH), module_file_contents)?;
+    shell.write_file(format!("{WEBGPU_SYS_PATH}/mod.rs"), module_file_contents)?;
 
     eprintln!("# Formatting files");
 

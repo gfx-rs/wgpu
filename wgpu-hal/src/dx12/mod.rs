@@ -397,6 +397,8 @@ impl D3DBlob {
 pub struct Api;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Dx12;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;
@@ -1193,7 +1195,7 @@ impl SwapChain {
             Foundation::WAIT_OBJECT_0 => Ok(true),
             Foundation::WAIT_TIMEOUT => Ok(false),
             other => {
-                log::error!("Unexpected wait status: 0x{:x?}", other);
+                log::error!("Unexpected wait status: 0x{other:x?}");
                 Err(crate::SurfaceError::Lost)
             }
         }
@@ -1314,7 +1316,7 @@ impl crate::Surface for Surface {
                 };
 
                 let swap_chain1 = swap_chain1.map_err(|err| {
-                    log::error!("SwapChain creation error: {}", err);
+                    log::error!("SwapChain creation error: {err}");
                     crate::SurfaceError::Other("swapchain creation")
                 })?;
 

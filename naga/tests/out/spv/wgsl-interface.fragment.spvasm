@@ -56,8 +56,8 @@ OpDecorate %34 Location 0
 %32 = OpVariable  %33  Output
 %34 = OpVariable  %31  Output
 %36 = OpTypeFunction %2
-%37 = OpConstant  %3  0.0
-%38 = OpConstant  %3  1.0
+%37 = OpConstant  %3  0
+%38 = OpConstant  %3  1
 %35 = OpFunction  %2  None %36
 %14 = OpLabel
 %18 = OpLoad  %4  %16

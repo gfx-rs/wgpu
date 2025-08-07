@@ -220,9 +220,9 @@ impl super::Adapter {
         let vendor = unsafe { gl.get_parameter_string(vendor_const) };
         let renderer = unsafe { gl.get_parameter_string(renderer_const) };
         let version = unsafe { gl.get_parameter_string(glow::VERSION) };
-        log::debug!("Vendor: {}", vendor);
-        log::debug!("Renderer: {}", renderer);
-        log::debug!("Version: {}", version);
+        log::debug!("Vendor: {vendor}");
+        log::debug!("Renderer: {renderer}");
+        log::debug!("Version: {version}");
 
         let full_ver = Self::parse_full_version(&version).ok();
         let es_ver = full_ver.map_or_else(|| Self::parse_version(&version).ok(), |_| None);
@@ -293,7 +293,7 @@ impl super::Adapter {
             }
         };
 
-        log::debug!("Supported GL Extensions: {:#?}", extensions);
+        log::debug!("Supported GL Extensions: {extensions:#?}");
 
         let supported = |(req_es_major, req_es_minor), (req_full_major, req_full_minor)| {
             let es_supported = es_ver
@@ -801,6 +801,12 @@ impl super::Adapter {
             max_compute_workgroups_per_dimension,
             max_buffer_size: i32::MAX as u64,
             max_non_sampler_bindings: u32::MAX,
+
+            max_task_workgroup_total_count: 0,
+            max_task_workgroups_per_dimension: 0,
+            max_mesh_multiview_count: 0,
+            max_mesh_output_layers: 0,
+
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
             max_tlas_instance_count: 0,
@@ -909,7 +915,7 @@ impl super::Adapter {
         if !unsafe { gl.get_shader_compile_status(shader) } {
             let msg = unsafe { gl.get_shader_info_log(shader) };
             if !msg.is_empty() {
-                log::error!("\tShader compile error: {}", msg);
+                log::error!("\tShader compile error: {msg}");
             }
             unsafe { gl.delete_shader(shader) };
             None
@@ -946,7 +952,7 @@ impl super::Adapter {
         let linked_ok = unsafe { gl.get_program_link_status(program) };
         let msg = unsafe { gl.get_program_info_log(program) };
         if !msg.is_empty() {
-            log::warn!("Shader link error: {}", msg);
+            log::warn!("Shader link error: {msg}");
         }
         if !linked_ok {
             return None;

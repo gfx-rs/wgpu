@@ -120,8 +120,8 @@ OpDecorate %115 BuiltIn LocalInvocationId
 %42 = OpConstant  %8  0
 %44 = OpTypePointer Uniform %12
 %47 = OpConstant  %4  0.707
-%48 = OpConstant  %4  0.0
-%49 = OpConstant  %4  1.0
+%48 = OpConstant  %4  0
+%49 = OpConstant  %4  1
 %50 = OpConstantComposite  %5  %47 %48 %48 %49
 %51 = OpConstantComposite  %5  %48 %47 %48 %49
 %52 = OpConstantComposite  %20  %50 %51

@@ -36,10 +36,10 @@ OpDecorate %77 BuiltIn Position
 %36 = OpConstantComposite  %9  %32 %35
 %38 = OpTypePointer Function %9
 %46 = OpTypeFunction %10 %3 %3
-%47 = OpConstant  %10  1.0
-%48 = OpConstant  %10  2.0
-%49 = OpConstant  %10  3.0
-%50 = OpConstant  %10  4.0
+%47 = OpConstant  %10  1
+%48 = OpConstant  %10  2
+%49 = OpConstant  %10  3
+%50 = OpConstant  %10  4
 %51 = OpConstantComposite  %12  %47 %48
 %52 = OpConstantComposite  %12  %49 %50
 %53 = OpConstantComposite  %11  %51 %52

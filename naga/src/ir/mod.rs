@@ -347,7 +347,21 @@ pub enum AddressSpace {
     Storage { access: StorageAccess },
     /// Opaque handles, such as samplers and images.
     Handle,
+
     /// Push constants.
+    ///
+    /// A [`Module`] may contain at most one [`GlobalVariable`] in
+    /// this address space. Its contents are provided not by a buffer
+    /// but by `SetPushConstant` pass commands, allowing the CPU to
+    /// establish different values for each draw/dispatch.
+    ///
+    /// `PushConstant` variables may not contain `f16` values, even if
+    /// the [`SHADER_FLOAT16`] capability is enabled.
+    ///
+    /// Backends generally place tight limits on the size of
+    /// `PushConstant` variables.
+    ///
+    /// [`SHADER_FLOAT16`]: crate::valid::Capabilities::SHADER_FLOAT16
     PushConstant,
 }
 
@@ -409,6 +423,18 @@ pub enum VectorSize {
 
 impl VectorSize {
     pub const MAX: usize = Self::Quad as usize;
+}
+
+impl From<VectorSize> for u8 {
+    fn from(size: VectorSize) -> u8 {
+        size as u8
+    }
+}
+
+impl From<VectorSize> for u32 {
+    fn from(size: VectorSize) -> u32 {
+        size as u32
+    }
 }
 
 /// Primitive type for a scalar.
@@ -640,6 +666,8 @@ pub enum ImageClass {
         /// Multi-sampled depth image.
         multi: bool,
     },
+    /// External texture.
+    External,
     /// Storage image.
     Storage {
         format: StorageFormat,
@@ -2331,6 +2359,51 @@ pub struct SpecialTypes {
     ///
     /// Call [`Module::generate_vertex_return_type`]
     pub ray_vertex_return: Option<Handle<Type>>,
+
+    /// Struct containing parameters required by some backends to emit code for
+    /// [`ImageClass::External`] textures.
+    ///
+    /// See `wgpu_core::device::resource::ExternalTextureParams` for the
+    /// documentation of each field.
+    ///
+    /// In WGSL, this type would be:
+    ///
+    /// ```ignore
+    /// struct NagaExternalTextureParams {         // align size offset
+    ///     yuv_conversion_matrix: mat4x4<f32>,    //    16   64      0
+    ///     gamut_conversion_matrix: mat3x3<f32>,  //    16   48     64
+    ///     src_tf: NagaExternalTextureTransferFn, //     4   16    112
+    ///     dst_tf: NagaExternalTextureTransferFn, //     4   16    128
+    ///     sample_transform: mat3x2<f32>,         //     8   24    144
+    ///     load_transform: mat3x2<f32>,           //     8   24    168
+    ///     size: vec2<u32>,                       //     8    8    192
+    ///     num_planes: u32,                       //     4    4    200
+    /// }                            // whole struct:    16  208
+    /// ```
+    ///
+    /// Call [`Module::generate_external_texture_types`] to populate this if
+    /// needed.
+    pub external_texture_params: Option<Handle<Type>>,
+
+    /// Struct describing a gamma encoding transfer function. Member of
+    /// `NagaExternalTextureParams`, describing how the backend should perform
+    /// color space conversion when sampling from [`ImageClass::External`]
+    /// textures.
+    ///
+    /// In WGSL, this type would be:
+    ///
+    /// ```ignore
+    /// struct NagaExternalTextureTransferFn { // align size offset
+    ///     a: f32,                            //     4    4      0
+    ///     b: f32,                            //     4    4      4
+    ///     g: f32,                            //     4    4      8
+    ///     k: f32,                            //     4    4     12
+    /// }                         // whole struct:    4   16
+    /// ```
+    ///
+    /// Call [`Module::generate_external_texture_types`] to populate this if
+    /// needed.
+    pub external_texture_transfer_function: Option<Handle<Type>>,
 
     /// Types for predeclared wgsl types instantiated on demand.
     ///

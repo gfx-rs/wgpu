@@ -139,6 +139,88 @@ macro_rules! include_wgsl {
     };
 }
 
+// Macros which help us generate the documentation of which hal types correspond to which backend.
+//
+// Because all backends are not compiled into the program, we cannot link to them in all situations,
+// we need to only link to the types if the backend is compiled in. These are used in #[doc] attributes
+// so cannot have more than one line, so cannot use internal cfgs.
+
+/// Helper macro to generate the documentation for dx12 hal methods, referencing the hal type.
+#[macro_export]
+#[doc(hidden)]
+#[cfg(dx12)]
+macro_rules! hal_type_dx12 {
+    ($ty: literal) => {
+        concat!("- [`hal::api::Dx12`] uses [`hal::dx12::", $ty, "`]")
+    };
+}
+/// Helper macro to generate the documentation for dx12 hal methods, referencing the hal type.
+#[macro_export]
+#[doc(hidden)]
+#[cfg(not(dx12))]
+macro_rules! hal_type_dx12 {
+    ($ty: literal) => {
+        concat!("- `hal::api::Dx12` uses `hal::dx12::", $ty, "`")
+    };
+}
+
+/// Helper macro to generate the documentation for metal hal methods, referencing the hal type.
+#[macro_export]
+#[doc(hidden)]
+#[cfg(metal)]
+macro_rules! hal_type_metal {
+    ($ty: literal) => {
+        concat!("- [`hal::api::Metal`] uses [`hal::metal::", $ty, "`]")
+    };
+}
+/// Helper macro to generate the documentation for metal hal methods, referencing the hal type.
+#[macro_export]
+#[doc(hidden)]
+#[cfg(not(metal))]
+macro_rules! hal_type_metal {
+    ($ty: literal) => {
+        concat!("- `hal::api::Metal` uses `hal::metal::", $ty, "`")
+    };
+}
+
+/// Helper macro to generate the documentation for vulkan hal methods, referencing the hal type.
+#[macro_export]
+#[doc(hidden)]
+#[cfg(vulkan)]
+macro_rules! hal_type_vulkan {
+    ($ty: literal) => {
+        concat!("- [`hal::api::Vulkan`] uses [`hal::vulkan::", $ty, "`]")
+    };
+}
+/// Helper macro to generate the documentation for vulkan hal methods, referencing the hal type.
+#[macro_export]
+#[doc(hidden)]
+#[cfg(not(vulkan))]
+macro_rules! hal_type_vulkan {
+    ($ty: literal) => {
+        concat!("- `hal::api::Vulkan` uses `hal::vulkan::", $ty, "`")
+    };
+}
+
+/// Helper macro to generate the documentation for gles hal methods, referencing the hal type.
+#[macro_export]
+#[doc(hidden)]
+#[cfg(gles)]
+macro_rules! hal_type_gles {
+    ($ty: literal) => {
+        concat!("- [`hal::api::Gles`] uses [`hal::gles::", $ty, "`]")
+    };
+}
+/// Helper macro to generate the documentation for gles hal methods, referencing the hal type.
+#[macro_export]
+#[doc(hidden)]
+#[cfg(not(gles))]
+macro_rules! hal_type_gles {
+    ($ty: literal) => {
+        concat!("- `hal::api::Gles` uses `hal::gles::", $ty, "`")
+    };
+}
+
 #[doc(hidden)]
 pub mod helpers {
     pub use alloc::borrow::Cow;

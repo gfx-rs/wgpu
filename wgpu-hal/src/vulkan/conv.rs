@@ -484,7 +484,7 @@ pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> Option<wgt::PresentMode>
         FIFO_LATEST_READY => None,
 
         _ => {
-            log::debug!("Unrecognized present mode {:?}", mode);
+            log::debug!("Unrecognized present mode {mode:?}");
             None
         }
     }
@@ -746,6 +746,12 @@ pub fn map_shader_stage(stage: wgt::ShaderStages) -> vk::ShaderStageFlags {
     }
     if stage.contains(wgt::ShaderStages::COMPUTE) {
         flags |= vk::ShaderStageFlags::COMPUTE;
+    }
+    if stage.contains(wgt::ShaderStages::TASK) {
+        flags |= vk::ShaderStageFlags::TASK_EXT;
+    }
+    if stage.contains(wgt::ShaderStages::MESH) {
+        flags |= vk::ShaderStageFlags::MESH_EXT;
     }
     flags
 }

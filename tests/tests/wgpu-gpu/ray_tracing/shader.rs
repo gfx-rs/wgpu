@@ -5,9 +5,14 @@ use wgpu::{
 };
 use wgpu::{AccelerationStructureFlags, BufferUsages};
 use wgpu_macros::gpu_test;
+use wgpu_test::GpuTestInitializer;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 
 const STRUCT_SIZE: wgpu::BufferAddress = 176;
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.push(ACCESS_ALL_STRUCT_MEMBERS);
+}
 
 #[gpu_test]
 static ACCESS_ALL_STRUCT_MEMBERS: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -15,10 +20,7 @@ static ACCESS_ALL_STRUCT_MEMBERS: GpuTestConfiguration = GpuTestConfiguration::n
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(
-                wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-                    | wgpu::Features::EXPERIMENTAL_RAY_QUERY,
-            ),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
     )
     .run_sync(access_all_struct_members);
 

@@ -375,7 +375,7 @@ impl Input {
                 "spvasm" => params.targets = Some(Targets::non_wgsl_default()),
                 "vert" | "frag" | "comp" => params.targets = Some(Targets::non_wgsl_default()),
                 e => {
-                    panic!("Unknown extension: {}", e);
+                    panic!("Unknown extension: {e}");
                 }
             }
         }
@@ -837,7 +837,10 @@ fn write_output_wgsl(
     input.write_output_file("wgsl", "wgsl", string);
 }
 
+// While we _can_ run this test under miri, it is extremely slow (>5 minutes),
+// and naga isn't the primary target for miri testing, so we disable it.
 #[cfg(feature = "wgsl-in")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn convert_snapshots_wgsl() {
     let _ = env_logger::try_init();
@@ -862,7 +865,9 @@ fn convert_snapshots_wgsl() {
     }
 }
 
+// miri doesn't allow us to shell out to `spirv-as`
 #[cfg(feature = "spv-in")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn convert_snapshots_spv() {
     use std::process::Command;
@@ -911,7 +916,10 @@ fn convert_snapshots_spv() {
     }
 }
 
+// While we _can_ run this test under miri, it is extremely slow (>5 minutes),
+// and naga isn't the primary target for miri testing, so we disable it.
 #[cfg(feature = "glsl-in")]
+#[cfg_attr(miri, ignore)]
 #[allow(unused_variables)]
 #[test]
 fn convert_snapshots_glsl() {

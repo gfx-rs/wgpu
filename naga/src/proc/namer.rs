@@ -15,6 +15,40 @@ use crate::{arena::Handle, FastHashMap, FastHashSet};
 pub type EntryPointIndex = u16;
 const SEPARATOR: char = '_';
 
+/// A component of a lowered external texture.
+///
+/// Whereas the WGSL backend implements [`ImageClass::External`]
+/// images directly, most other Naga backends lower them to a
+/// collection of ordinary textures that represent individual planes
+/// (as received from a video decoder, perhaps), together with a
+/// struct of parameters saying how they should be cropped, sampled,
+/// and color-converted.
+///
+/// This lowering means that individual globals and function
+/// parameters in Naga IR must be split out by the backends into
+/// collections of globals and parameters of simpler types.
+///
+/// A value of this enum serves as a name key for one specific
+/// component in the lowered representation of an external texture.
+/// That is, these keys are for variables/parameters that do not exist
+/// in the Naga IR, only in its lowered form.
+///
+/// [`ImageClass::External`]: crate::ir::ImageClass::External
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ExternalTextureNameKey {
+    Plane(usize),
+    Params,
+}
+
+impl ExternalTextureNameKey {
+    const ALL: &[(&str, ExternalTextureNameKey)] = &[
+        ("_plane0", ExternalTextureNameKey::Plane(0)),
+        ("_plane1", ExternalTextureNameKey::Plane(1)),
+        ("_plane2", ExternalTextureNameKey::Plane(2)),
+        ("_params", ExternalTextureNameKey::Params),
+    ];
+}
+
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub enum NameKey {
     Constant(Handle<crate::Constant>),
@@ -37,6 +71,17 @@ pub enum NameKey {
 
     /// Entry point version of `FunctionOobLocal`.
     EntryPointOobLocal(EntryPointIndex, Handle<crate::Type>),
+
+    /// A global variable holding a component of a lowered external texture.
+    ///
+    /// See [`ExternalTextureNameKey`] for details.
+    ExternalTextureGlobalVariable(Handle<crate::GlobalVariable>, ExternalTextureNameKey),
+
+    /// A function argument holding a component of a lowered external
+    /// texture.
+    ///
+    /// See [`ExternalTextureNameKey`] for details.
+    ExternalTextureFunctionArgument(Handle<crate::Function>, u32, ExternalTextureNameKey),
 }
 
 /// This processor assigns names to all the things in a module
@@ -201,7 +246,7 @@ impl Namer {
         self.keywords_case_insensitive.extend(
             reserved_keywords_case_insensitive
                 .iter()
-                .map(|string| (AsciiUniCase(*string))),
+                .map(|string| AsciiUniCase(*string)),
         );
 
         // Choose fallback names for anonymous entry point return types.
@@ -272,6 +317,27 @@ impl Namer {
             for (index, arg) in fun.arguments.iter().enumerate() {
                 let name = self.call_or(&arg.name, "param");
                 output.insert(NameKey::FunctionArgument(fun_handle, index as u32), name);
+
+                if matches!(
+                    module.types[arg.ty].inner,
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::External,
+                        ..
+                    }
+                ) {
+                    let base = arg.name.as_deref().unwrap_or("param");
+                    for &(suffix, ext_key) in ExternalTextureNameKey::ALL {
+                        let name = self.call(&format!("{base}_{suffix}"));
+                        output.insert(
+                            NameKey::ExternalTextureFunctionArgument(
+                                fun_handle,
+                                index as u32,
+                                ext_key,
+                            ),
+                            name,
+                        );
+                    }
+                }
             }
             for (handle, var) in fun.local_variables.iter() {
                 let name = self.call_or(&var.name, "local");
@@ -282,6 +348,23 @@ impl Namer {
         for (handle, var) in module.global_variables.iter() {
             let name = self.call_or(&var.name, "global");
             output.insert(NameKey::GlobalVariable(handle), name);
+
+            if matches!(
+                module.types[var.ty].inner,
+                crate::TypeInner::Image {
+                    class: crate::ImageClass::External,
+                    ..
+                }
+            ) {
+                let base = var.name.as_deref().unwrap_or("global");
+                for &(suffix, ext_key) in ExternalTextureNameKey::ALL {
+                    let name = self.call(&format!("{base}_{suffix}"));
+                    output.insert(
+                        NameKey::ExternalTextureGlobalVariable(handle, ext_key),
+                        name,
+                    );
+                }
+            }
         }
 
         for (handle, constant) in module.constants.iter() {

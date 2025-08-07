@@ -48,7 +48,7 @@ OpDecorate %15 Binding 2
 %24 = OpTypeVector %22 2
 %25 = OpConstantComposite  %24  %23 %23
 %27 = OpTypeVector %4 4
-%36 = OpConstant  %4  0.0
+%36 = OpConstant  %4  0
 %37 = OpConstantComposite  %27  %36 %36 %36 %36
 %17 = OpFunction  %2  None %18
 %16 = OpLabel

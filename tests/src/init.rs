@@ -65,8 +65,15 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
                 ..Default::default()
             }
             .with_env(),
-            // TODO(https://github.com/gfx-rs/wgpu/issues/7119): Enable noop backend?
-            noop: wgpu::NoopBackendOptions::default(),
+            // Allow the noop backend to be used in tests. This will not be used unless
+            // WGPU_GPU_TESTS_USE_NOOP_BACKEND env var is set, because wgpu-info will not
+            // enumerate the noop backend.
+            //
+            // However, we use wasm_bindgen_test to run tests on wasm, and wgpu
+            // will chose the noop on wasm32 for some reason.
+            noop: wgpu::NoopBackendOptions {
+                enable: !cfg!(target_arch = "wasm32"),
+            },
         },
     })
 }

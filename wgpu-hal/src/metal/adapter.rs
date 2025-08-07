@@ -1077,6 +1077,12 @@ impl super::PrivateCapabilities {
                 max_compute_workgroups_per_dimension: 0xFFFF,
                 max_buffer_size: self.max_buffer_size,
                 max_non_sampler_bindings: u32::MAX,
+
+                max_task_workgroup_total_count: 0,
+                max_task_workgroups_per_dimension: 0,
+                max_mesh_multiview_count: 0,
+                max_mesh_output_layers: 0,
+
                 max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
                 max_blas_geometry_count: 0,  // When added: 2^24
                 max_tlas_instance_count: 0,  // When added: 2^24

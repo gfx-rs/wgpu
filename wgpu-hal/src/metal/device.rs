@@ -140,7 +140,7 @@ impl super::Device {
             Some((naga_stage, stage.entry_point)),
             stage.constants,
         )
-        .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {:?}", e)))?;
+        .map_err(|e| crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {e:?}")))?;
 
         let ep_resources = &layout.per_stage_map[naga_stage];
 
@@ -193,7 +193,7 @@ impl super::Device {
 
         let (source, info) =
             naga::back::msl::write_string(&module, &module_info, &options, &pipeline_options)
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {:?}", e)))?;
+                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")))?;
 
         log::debug!(
             "Naga generated shader for entry point '{}' and stage {:?}\n{}",
@@ -215,8 +215,8 @@ impl super::Device {
             .lock()
             .new_library_with_source(source.as_ref(), &options)
             .map_err(|err| {
-                log::warn!("Naga generated shader:\n{}", source);
-                crate::PipelineError::Linkage(stage_bit, format!("Metal: {}", err))
+                log::warn!("Naga generated shader:\n{source}");
+                crate::PipelineError::Linkage(stage_bit, format!("Metal: {err}"))
             })?;
 
         let ep_index = module
@@ -227,7 +227,7 @@ impl super::Device {
         let ep = &module.entry_points[ep_index];
         let translated_ep_name = info.entry_point_names[0]
             .as_ref()
-            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{}", e)))?;
+            .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
 
         let wg_size = MTLSize {
             width: ep.workgroup_size[0] as _,
@@ -238,7 +238,7 @@ impl super::Device {
         let function = library
             .get_function(translated_ep_name, None)
             .map_err(|e| {
-                log::error!("get_function: {:?}", e);
+                log::error!("get_function: {e:?}");
                 crate::PipelineError::EntryPoint(naga_stage)
             })?;
 
@@ -777,7 +777,7 @@ impl crate::Device for super::Device {
                 || info.counters.textures > self.shared.private_caps.max_textures_per_stage
                 || info.counters.samplers > self.shared.private_caps.max_samplers_per_stage
             {
-                log::error!("Resource limit exceeded: {:?}", info);
+                log::error!("Resource limit exceeded: {info:?}");
                 return Err(crate::DeviceError::OutOfMemory);
             }
         }
@@ -1018,11 +1018,10 @@ impl crate::Device for super::Device {
                 let device = self.shared.device.lock();
                 let library = device
                     .new_library_with_source(&source, &options)
-                    .map_err(|e| crate::ShaderError::Compilation(format!("MSL: {:?}", e)))?;
+                    .map_err(|e| crate::ShaderError::Compilation(format!("MSL: {e:?}")))?;
                 let function = library.get_function(&entry_point, None).map_err(|_| {
                     crate::ShaderError::Compilation(format!(
-                        "Entry point '{}' not found",
-                        entry_point
+                        "Entry point '{entry_point}' not found"
                     ))
                 })?;
 
@@ -1057,6 +1056,14 @@ impl crate::Device for super::Device {
             super::PipelineCache,
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
+        let (desc_vertex_stage, desc_vertex_buffers) = match &desc.vertex_processor {
+            crate::VertexProcessor::Standard {
+                vertex_buffers,
+                vertex_stage,
+            } => (vertex_stage, *vertex_buffers),
+            crate::VertexProcessor::Mesh { .. } => unreachable!(),
+        };
+
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::RenderPipelineDescriptor::new();
 
@@ -1075,7 +1082,7 @@ impl crate::Device for super::Device {
             // Vertex shader
             let (vs_lib, vs_info) = {
                 let mut vertex_buffer_mappings = Vec::<naga::back::msl::VertexBufferMapping>::new();
-                for (i, vbl) in desc.vertex_buffers.iter().enumerate() {
+                for (i, vbl) in desc_vertex_buffers.iter().enumerate() {
                     let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
                     for attribute in vbl.attributes.iter() {
                         attributes.push(naga::back::msl::AttributeMapping {
@@ -1104,7 +1111,7 @@ impl crate::Device for super::Device {
                 }
 
                 let vs = self.load_shader(
-                    &desc.vertex_stage,
+                    desc_vertex_stage,
                     &vertex_buffer_mappings,
                     desc.layout,
                     primitive_class,
@@ -1217,12 +1224,12 @@ impl crate::Device for super::Device {
                 None => None,
             };
 
-            if desc.layout.total_counters.vs.buffers + (desc.vertex_buffers.len() as u32)
+            if desc.layout.total_counters.vs.buffers + (desc_vertex_buffers.len() as u32)
                 > self.shared.private_caps.max_vertex_buffers
             {
                 let msg = format!(
                     "pipeline needs too many buffers in the vertex stage: {} vertex and {} layout",
-                    desc.vertex_buffers.len(),
+                    desc_vertex_buffers.len(),
                     desc.layout.total_counters.vs.buffers
                 );
                 return Err(crate::PipelineError::Linkage(
@@ -1231,9 +1238,9 @@ impl crate::Device for super::Device {
                 ));
             }
 
-            if !desc.vertex_buffers.is_empty() {
+            if !desc_vertex_buffers.is_empty() {
                 let vertex_descriptor = metal::VertexDescriptor::new();
-                for (i, vb) in desc.vertex_buffers.iter().enumerate() {
+                for (i, vb) in desc_vertex_buffers.iter().enumerate() {
                     let buffer_index =
                         self.shared.private_caps.max_vertex_buffers as u64 - 1 - i as u64;
                     let buffer_desc = vertex_descriptor.layouts().object_at(buffer_index).unwrap();
@@ -1289,7 +1296,7 @@ impl crate::Device for super::Device {
                 .map_err(|e| {
                     crate::PipelineError::Linkage(
                         wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
-                        format!("new_render_pipeline_state: {:?}", e),
+                        format!("new_render_pipeline_state: {e:?}"),
                     )
                 })?;
 
@@ -1317,17 +1324,6 @@ impl crate::Device for super::Device {
                 depth_stencil,
             })
         })
-    }
-
-    unsafe fn create_mesh_pipeline(
-        &self,
-        _desc: &crate::MeshPipelineDescriptor<
-            <Self::A as crate::Api>::PipelineLayout,
-            <Self::A as crate::Api>::ShaderModule,
-            <Self::A as crate::Api>::PipelineCache,
-        >,
-    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
-        unreachable!()
     }
 
     unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {
@@ -1397,7 +1393,7 @@ impl crate::Device for super::Device {
                 .map_err(|e| {
                     crate::PipelineError::Linkage(
                         wgt::ShaderStages::COMPUTE,
-                        format!("new_compute_pipeline_state: {:?}", e),
+                        format!("new_compute_pipeline_state: {e:?}"),
                     )
                 })?;
 
@@ -1472,7 +1468,7 @@ impl crate::Device for super::Device {
                         match device.new_counter_sample_buffer_with_descriptor(&csb_desc) {
                             Ok(buffer) => buffer,
                             Err(err) => {
-                                log::error!("Failed to create counter sample buffer: {:?}", err);
+                                log::error!("Failed to create counter sample buffer: {err:?}");
                                 return Err(crate::DeviceError::Unexpected);
                             }
                         };
@@ -1540,7 +1536,7 @@ impl crate::Device for super::Device {
         {
             Some((_, cmd_buf)) => cmd_buf,
             None => {
-                log::error!("No active command buffers for fence value {}", wait_value);
+                log::error!("No active command buffers for fence value {wait_value}");
                 return Err(crate::DeviceError::Lost);
             }
         };

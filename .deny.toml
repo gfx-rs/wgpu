@@ -29,7 +29,8 @@ skip = [
     { name = "windows-result", version = "0.3.4" },
     { name = "windows-strings", version = "0.4.2" },
 
-    # cargo-metadata uses an old version of ordered-float. Only used for testing.
+    # cargo-metadata uses old version. Only used for infrastructure.
+    { name = "toml", version = "0.8.23" },
     { name = "ordered-float", version = "2.10.1" },
     # criterion uses an old version
     { name = "itertools", version = "0.10.5" },
@@ -41,6 +42,7 @@ skip = [
     # Strum uses an old version
     { name = "heck", version = "0.4.0" },
     # Deno uses an old version
+    { name = "bincode", version = "1.3.3" },
     { name = "strum", version = "0.25.0" },
 ]
 wildcards = "deny"
@@ -70,7 +72,7 @@ private = { ignore = true }
 
 [sources]
 allow-git = [
-    # Waiting on releases; used in examples only
+    # Waiting on releases; used in examples/tests only
 ]
 unknown-registry = "deny"
 unknown-git = "deny"

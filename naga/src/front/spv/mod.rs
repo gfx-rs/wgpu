@@ -515,7 +515,6 @@ enum MergeBlockInformation {
 /// [`blocks`]: BlockContext::blocks
 /// [`bodies`]: BlockContext::bodies
 /// [`phis`]: BlockContext::phis
-/// [`lower`]: function::lower
 #[derive(Debug)]
 struct BlockContext<'function> {
     /// Phi nodes encountered when parsing the function, used to generate spills
@@ -796,7 +795,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 dec.specialization_constant_id = Some(self.next()?);
             }
             other => {
-                log::warn!("Unknown decoration {:?}", other);
+                log::warn!("Unknown decoration {other:?}");
                 for _ in base_words + 1..inst.wc {
                     let _var = self.next()?;
                 }
@@ -1387,7 +1386,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         block: &mut crate::Block,
         body_idx: usize,
     ) -> Result<(Handle<crate::Expression>, Handle<crate::Type>), Error> {
-        log::trace!("\t\t\tlooking up pointer expr {:?}", pointer_id);
+        log::trace!("\t\t\tlooking up pointer expr {pointer_id:?}");
         let p_lexp_handle;
         let p_lexp_ty_id;
         {
@@ -1600,7 +1599,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         .remove(&result_id)
                         .and_then(|decor| decor.name);
                     if let Some(ref name) = name {
-                        log::debug!("\t\t\tid={} name={}", result_id, name);
+                        log::debug!("\t\t\tid={result_id} name={name}");
                     }
                     let lookup_ty = self.lookup_type.lookup(result_type_id)?;
                     let var_handle = ctx.local_arena.append(
@@ -1686,7 +1685,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let base_id = self.next()?;
-                    log::trace!("\t\t\tlooking up expr {:?}", base_id);
+                    log::trace!("\t\t\tlooking up expr {base_id:?}");
 
                     let mut acex = {
                         let lexp = self.lookup_expression.lookup(base_id)?;
@@ -1721,7 +1720,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                     for _ in 4..inst.wc {
                         let access_id = self.next()?;
-                        log::trace!("\t\t\tlooking up index expr {:?}", access_id);
+                        log::trace!("\t\t\tlooking up index expr {access_id:?}");
                         let index_expr = self.lookup_expression.lookup(access_id)?.clone();
                         let index_expr_handle = get_expr_handle!(access_id, &index_expr);
                         let index_expr_data = &ctx.expressions[index_expr.handle];
@@ -2064,7 +2063,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let base_id = self.next()?;
-                    log::trace!("\t\t\tlooking up expr {:?}", base_id);
+                    log::trace!("\t\t\tlooking up expr {base_id:?}");
                     let mut lexp = self.lookup_expression.lookup(base_id)?.clone();
                     lexp.handle = get_expr_handle!(base_id, &lexp);
                     for _ in 4..inst.wc {
@@ -2084,7 +2083,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                                 .base_id
                                 .ok_or(Error::InvalidAccessType(lexp.type_id))?,
                             ref other => {
-                                log::warn!("composite type {:?}", other);
+                                log::warn!("composite type {other:?}");
                                 return Err(Error::UnsupportedType(type_lookup.handle));
                             }
                         };
@@ -2153,7 +2152,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let mut components = Vec::with_capacity(inst.wc as usize - 2);
                     for _ in 3..inst.wc {
                         let comp_id = self.next()?;
-                        log::trace!("\t\t\tlooking up expr {:?}", comp_id);
+                        log::trace!("\t\t\tlooking up expr {comp_id:?}");
                         let lexp = self.lookup_expression.lookup(comp_id)?;
                         let handle = get_expr_handle!(comp_id, lexp);
                         components.push(handle);
@@ -3872,7 +3871,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         );
                         block.push(crate::Statement::ControlBarrier(flags), span);
                     } else {
-                        log::warn!("Unsupported barrier execution scope: {}", exec_scope);
+                        log::warn!("Unsupported barrier execution scope: {exec_scope}");
                     }
                 }
                 Op::MemoryBarrier => {
@@ -4244,7 +4243,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let _memory_semantics_id = self.next()?;
                     let span = self.span_from_with_op(start);
 
-                    log::trace!("\t\t\tlooking up expr {:?}", pointer_id);
+                    log::trace!("\t\t\tlooking up expr {pointer_id:?}");
                     let p_lexp_handle =
                         get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
 
@@ -4274,11 +4273,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let value_id = self.next()?;
                     let span = self.span_from_with_op(start);
 
-                    log::trace!("\t\t\tlooking up pointer expr {:?}", pointer_id);
+                    log::trace!("\t\t\tlooking up pointer expr {pointer_id:?}");
                     let p_lexp_handle =
                         get_expr_handle!(pointer_id, self.lookup_expression.lookup(pointer_id)?);
 
-                    log::trace!("\t\t\tlooking up value expr {:?}", pointer_id);
+                    log::trace!("\t\t\tlooking up value expr {pointer_id:?}");
                     let v_lexp_handle =
                         get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
 
@@ -4380,11 +4379,11 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         body_idx,
                     )?;
 
-                    log::trace!("\t\t\tlooking up value expr {:?}", value_id);
+                    log::trace!("\t\t\tlooking up value expr {value_id:?}");
                     let v_lexp_handle =
                         get_expr_handle!(value_id, self.lookup_expression.lookup(value_id)?);
 
-                    log::trace!("\t\t\tlooking up comparator expr {:?}", value_id);
+                    log::trace!("\t\t\tlooking up comparator expr {value_id:?}");
                     let c_lexp_handle = get_expr_handle!(
                         comparator_id,
                         self.lookup_expression.lookup(comparator_id)?
@@ -4699,7 +4698,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             let generator = self.next()?;
             let _bound = self.next()?;
             let _schema = self.next()?;
-            log::info!("Generated by {} version {:x}", generator, version_raw);
+            log::info!("Generated by {generator} version {version_raw:x}");
             crate::Module::default()
         };
 
@@ -4840,7 +4839,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             if self.options.strict_capabilities {
                 return Err(Error::UnsupportedCapability(cap));
             } else {
-                log::warn!("Unknown capability {:?}", cap);
+                log::warn!("Unknown capability {cap:?}");
             }
         }
         Ok(())
@@ -6030,7 +6029,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         ) {
                             Ok(handle) => Some(handle),
                             Err(e) => {
-                                log::warn!("Failed to initialize output built-in: {}", e);
+                                log::warn!("Failed to initialize output built-in: {e}");
                                 None
                             }
                         }
@@ -6077,7 +6076,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let handle = module.global_variables.append(var, span);
 
         if module.types[ty].inner.can_comparison_sample(module) {
-            log::debug!("\t\ttracking {:?} for sampling properties", handle);
+            log::debug!("\t\ttracking {handle:?} for sampling properties");
 
             self.handle_sampling
                 .insert(handle, image::SamplingFlags::empty());

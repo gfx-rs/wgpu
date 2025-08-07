@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 
 use wgt::{BufferAddress, BufferSize, Color};
 
-use super::{Rect, RenderBundle};
+use super::{DrawCommandFamily, Rect, RenderBundle};
 use crate::{
     binding_model::BindGroup,
     id,
@@ -82,11 +82,16 @@ pub enum RenderCommand {
         base_vertex: i32,
         first_instance: u32,
     },
+    DrawMeshTasks {
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
+    },
     DrawIndirect {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         count: u32,
-        indexed: bool,
+        family: DrawCommandFamily,
     },
     MultiDrawIndirectCount {
         buffer_id: id::BufferId,
@@ -94,7 +99,7 @@ pub enum RenderCommand {
         count_buffer_id: id::BufferId,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-        indexed: bool,
+        family: DrawCommandFamily,
     },
     PushDebugGroup {
         color: u32,
@@ -310,12 +315,21 @@ impl RenderCommand {
                             base_vertex,
                             first_instance,
                         },
+                        RenderCommand::DrawMeshTasks {
+                            group_count_x,
+                            group_count_y,
+                            group_count_z,
+                        } => ArcRenderCommand::DrawMeshTasks {
+                            group_count_x,
+                            group_count_y,
+                            group_count_z,
+                        },
 
                         RenderCommand::DrawIndirect {
                             buffer_id,
                             offset,
                             count,
-                            indexed,
+                            family,
                         } => ArcRenderCommand::DrawIndirect {
                             buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
                                 RenderPassError {
@@ -325,14 +339,14 @@ impl RenderCommand {
                                         } else {
                                             DrawKind::DrawIndirect
                                         },
-                                        indexed,
+                                        family,
                                     },
                                     inner: e.into(),
                                 }
                             })?,
                             offset,
                             count,
-                            indexed,
+                            family,
 
                             vertex_or_index_limit: 0,
                             instance_limit: 0,
@@ -344,11 +358,11 @@ impl RenderCommand {
                             count_buffer_id,
                             count_buffer_offset,
                             max_count,
-                            indexed,
+                            family,
                         } => {
                             let scope = PassErrorScope::Draw {
                                 kind: DrawKind::MultiDrawIndirectCount,
-                                indexed,
+                                family,
                             };
                             ArcRenderCommand::MultiDrawIndirectCount {
                                 buffer: buffers_guard.get(buffer_id).get().map_err(|e| {
@@ -366,7 +380,7 @@ impl RenderCommand {
                                 )?,
                                 count_buffer_offset,
                                 max_count,
-                                indexed,
+                                family,
                             }
                         }
 
@@ -392,6 +406,17 @@ impl RenderCommand {
 }
 
 /// Equivalent to `RenderCommand` with the Ids resolved into resource Arcs.
+///
+/// In a render pass, commands are stored in this format between when they are
+/// added to the pass, and when the pass is `end()`ed and the commands are
+/// replayed to the HAL encoder. Validation occurs when the pass is ended, which
+/// means that parameters stored in an `ArcRenderCommand` for a pass operation
+/// have generally not been validated.
+///
+/// In a render bundle, commands are stored in this format between when the bundle
+/// is `finish()`ed and when the bundle is executed. Validation occurs when the
+/// bundle is finished, which means that parameters stored in an `ArcRenderCommand`
+/// for a render bundle operation must have been validated.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 pub enum ArcRenderCommand {
@@ -462,11 +487,16 @@ pub enum ArcRenderCommand {
         base_vertex: i32,
         first_instance: u32,
     },
+    DrawMeshTasks {
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
+    },
     DrawIndirect {
         buffer: Arc<Buffer>,
         offset: BufferAddress,
         count: u32,
-        indexed: bool,
+        family: DrawCommandFamily,
 
         /// This limit is only populated for commands in a [`RenderBundle`].
         vertex_or_index_limit: u64,
@@ -479,7 +509,7 @@ pub enum ArcRenderCommand {
         count_buffer: Arc<Buffer>,
         count_buffer_offset: BufferAddress,
         max_count: u32,
-        indexed: bool,
+        family: DrawCommandFamily,
     },
     PushDebugGroup {
         #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]

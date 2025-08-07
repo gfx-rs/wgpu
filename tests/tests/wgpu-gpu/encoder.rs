@@ -1,21 +1,37 @@
 use wgpu::util::DeviceExt;
 use wgpu::CommandEncoder;
 use wgpu_test::{
-    fail, gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext,
+    fail, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        DROP_ENCODER,
+        DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER,
+        DROP_ENCODER_AFTER_ERROR,
+        ENCODER_OPERATIONS_FAIL_WHILE_PASS_ALIVE,
+    ]);
+}
+
 #[gpu_test]
-static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    let encoder = ctx
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    drop(encoder);
-});
+static DROP_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_sync(|ctx| {
+        let encoder = ctx
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        drop(encoder);
+    });
 
 #[gpu_test]
 static DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().expect_fail(FailureCase::always()))
+        .parameters(
+            TestParameters::default()
+                .expect_fail(FailureCase::always())
+                .enable_noop(),
+        )
         .run_sync(|ctx| {
             // Use the device after the queue is dropped. Currently this panics
             // but it probably shouldn't.
@@ -28,7 +44,7 @@ static DROP_QUEUE_BEFORE_CREATING_COMMAND_ENCODER: GpuTestConfiguration =
 
 #[gpu_test]
 static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let mut encoder = ctx
             .device
@@ -72,11 +88,15 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
 
 #[gpu_test]
 static ENCODER_OPERATIONS_FAIL_WHILE_PASS_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(
-        wgpu::Features::CLEAR_TEXTURE
-            | wgpu::Features::TIMESTAMP_QUERY
-            | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
-    ))
+    .parameters(
+        TestParameters::default()
+            .features(
+                wgpu::Features::CLEAR_TEXTURE
+                    | wgpu::Features::TIMESTAMP_QUERY
+                    | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
+            )
+            .enable_noop(),
+    )
     .run_sync(encoder_operations_fail_while_pass_alive);
 
 fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {

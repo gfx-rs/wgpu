@@ -3,7 +3,7 @@ name: Lazy
 on:
   pull_request:
     paths:
-      - '.github/workflows/lazy.yml'
+      - ".github/workflows/lazy.yml"
   push:
     branches: [trunk]
 
@@ -11,6 +11,13 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
+
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
 jobs:
   parse-dota2:
@@ -98,58 +105,58 @@ jobs:
 
       - name: Compile `spv` from `spvasm`
         run: |
-           cd naga/spirv-samples
-           mkdir -p spv
+          cd naga/spirv-samples
+          mkdir -p spv
 
-           find "./spvasm" -name '*.spvasm' | while read fname;
-           do
-               echo "Convert to spv with spirv-as: $fname"
-               ../install/bin/spirv-as --target-env spv1.3 $(realpath ${fname}) -o ./spv/$(basename ${fname}).spv
-           done;
+          find "./spvasm" -name '*.spvasm' | while read fname;
+          do
+              echo "Convert to spv with spirv-as: $fname"
+              ../install/bin/spirv-as --target-env spv1.3 $(realpath ${fname}) -o ./spv/$(basename ${fname}).spv
+          done;
 
       - name: Validate `spv` and generate `wgsl`
         run: |
-           set +e
-           cd naga/spirv-samples
-           SUCCESS_RESULT_COUNT=0
-           FILE_COUNT=0
-           mkdir -p spv
-           mkdir -p wgsl
+          set +e
+          cd naga/spirv-samples
+          SUCCESS_RESULT_COUNT=0
+          FILE_COUNT=0
+          mkdir -p spv
+          mkdir -p wgsl
 
-           echo "==== Validate spv and generate wgsl ===="
-           rm -f counter
-           touch counter
+          echo "==== Validate spv and generate wgsl ===="
+          rm -f counter
+          touch counter
 
-           find "./spv" -name '*.spv' | while read fname;
-           do
-               echo "Convert: $fname"
-               FILE_COUNT=$((FILE_COUNT+1))
-               ../../target/release/naga --validate 27 $(realpath ${fname}) ./wgsl/$(basename ${fname}).wgsl
-               if [[ $? -eq 0 ]]; then
-                   SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
-               fi
-               echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
-           done
-           cat counter
+          find "./spv" -name '*.spv' | while read fname;
+          do
+              echo "Convert: $fname"
+              FILE_COUNT=$((FILE_COUNT+1))
+              ../../target/release/naga --validate 27 $(realpath ${fname}) ./wgsl/$(basename ${fname}).wgsl
+              if [[ $? -eq 0 ]]; then
+                  SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
+              fi
+              echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
+          done
+          cat counter
 
       - name: Validate output `wgsl`
         run: |
-           set +e
-           cd naga/spirv-samples
-           SUCCESS_RESULT_COUNT=0
-           FILE_COUNT=0
+          set +e
+          cd naga/spirv-samples
+          SUCCESS_RESULT_COUNT=0
+          FILE_COUNT=0
 
-           rm -f counter
-           touch counter
+          rm -f counter
+          touch counter
 
-           find "./wgsl" -name '*.wgsl' | while read fname;
-           do
-               echo "Validate: $fname"
-               FILE_COUNT=$((FILE_COUNT+1))
-               ../../target/release/naga --validate 27 $(realpath ${fname})
-               if [[ $? -eq 0 ]]; then
-                   SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
-               fi
-               echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
-           done
-           cat counter
+          find "./wgsl" -name '*.wgsl' | while read fname;
+          do
+              echo "Validate: $fname"
+              FILE_COUNT=$((FILE_COUNT+1))
+              ../../target/release/naga --validate 27 $(realpath ${fname})
+              if [[ $? -eq 0 ]]; then
+                  SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
+              fi
+              echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
+          done
+          cat counter

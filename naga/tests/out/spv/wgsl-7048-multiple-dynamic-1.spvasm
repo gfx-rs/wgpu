@@ -18,7 +18,7 @@ OpDecorate %5 ArrayStride 16
 %9 = OpTypeInt 32 1
 %12 = OpTypeFunction %2
 %13 = OpConstantNull  %5
-%14 = OpConstant  %4  0.0
+%14 = OpConstant  %4  0
 %15 = OpConstantComposite  %8  %14 %14 %14 %14
 %16 = OpConstant  %9  0
 %18 = OpTypePointer Function %8

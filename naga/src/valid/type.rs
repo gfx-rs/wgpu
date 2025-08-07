@@ -133,6 +133,8 @@ pub enum TypeError {
     InvalidDynamicArray(String, Handle<crate::Type>),
     #[error("The base handle {0:?} has to be a struct")]
     BindingArrayBaseTypeNotStruct(Handle<crate::Type>),
+    #[error("Binding arrays of external textures are not yet supported")]
+    BindingArrayBaseExternalTextures,
     #[error("Structure member[{index}] at {offset} overlaps the previous member")]
     MemberOverlap { index: u32, offset: u32 },
     #[error(
@@ -261,6 +263,15 @@ impl super::Validator {
         }
     }
 
+    /// Check whether `scalar` is a permitted scalar width.
+    ///
+    /// If `scalar` is not a width allowed by the selected [`Capabilities`],
+    /// return an error explaining why.
+    ///
+    /// If `scalar` is allowed, return a [`PushConstantCompatibility`] result
+    /// that says whether `scalar` is allowed specifically in push constants.
+    ///
+    /// [`Capabilities`]: crate::valid::Capabilities
     pub(super) const fn check_width(
         &self,
         scalar: crate::Scalar,
@@ -732,6 +743,16 @@ impl super::Validator {
                 if arrayed && matches!(dim, crate::ImageDimension::Cube) {
                     self.require_type_capability(Capabilities::CUBE_ARRAY_TEXTURES)?;
                 }
+                if matches!(class, crate::ImageClass::External) {
+                    if dim != crate::ImageDimension::D2 || arrayed {
+                        return Err(TypeError::UnsupportedImageType {
+                            dim,
+                            arrayed,
+                            class,
+                        });
+                    }
+                    self.require_type_capability(Capabilities::TEXTURE_EXTERNAL)?;
+                }
                 TypeInfo::new(
                     TypeFlags::ARGUMENT | TypeFlags::CREATION_RESOLVED,
                     Alignment::ONE,
@@ -783,6 +804,17 @@ impl super::Validator {
                         crate::TypeInner::Struct { .. } => {}
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
                     };
+                }
+                if matches!(
+                    gctx.types[base].inner,
+                    crate::TypeInner::Image {
+                        class: crate::ImageClass::External,
+                        ..
+                    }
+                ) {
+                    // Binding arrays of external textures are not yet supported.
+                    // https://github.com/gfx-rs/wgpu/issues/8027
+                    return Err(TypeError::BindingArrayBaseExternalTextures);
                 }
 
                 if !base_info.flags.contains(TypeFlags::CREATION_RESOLVED) {

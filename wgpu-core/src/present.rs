@@ -177,7 +177,10 @@ impl Surface {
                 drop(fence);
 
                 let texture_desc = wgt::TextureDescriptor {
-                    label: Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
+                    label: hal_label(
+                        Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
+                        device.instance_flags,
+                    ),
                     size: wgt::Extent3d {
                         width: config.width,
                         height: config.height,
@@ -261,7 +264,7 @@ impl Surface {
                     }
                     hal::SurfaceError::Outdated => Status::Outdated,
                     hal::SurfaceError::Other(msg) => {
-                        log::error!("acquire error: {}", msg);
+                        log::error!("acquire error: {msg}");
                         Status::Lost
                     }
                 },
@@ -309,7 +312,7 @@ impl Surface {
                 }
                 hal::SurfaceError::Outdated => Ok(Status::Outdated),
                 hal::SurfaceError::Other(msg) => {
-                    log::error!("acquire error: {}", msg);
+                    log::error!("acquire error: {msg}");
                     Err(SurfaceError::Invalid)
                 }
             },

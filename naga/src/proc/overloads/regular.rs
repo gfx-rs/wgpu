@@ -195,7 +195,7 @@ fn make_rule(
     let inner = size.to_inner(scalar);
     let arg = TypeResolution::Value(inner.clone());
     Rule {
-        arguments: core::iter::repeat(arg.clone()).take(arity).collect(),
+        arguments: core::iter::repeat_n(arg.clone(), arity).collect(),
         conclusion: conclusion_rule.conclude(size, scalar),
     }
 }

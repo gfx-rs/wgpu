@@ -1,6 +1,10 @@
 use std::num::NonZeroU64;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(SUBGROUP_OPERATIONS);
+}
 
 const THREAD_COUNT: u64 = 128;
 const TEST_COUNT: u32 = 37;

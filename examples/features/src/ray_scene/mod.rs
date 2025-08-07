@@ -41,7 +41,7 @@ impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
         let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
         inner.poll(cx).map(|error| {
             if let Some(e) = error {
-                panic!("Rendering {}", e);
+                panic!("Rendering {e}");
             }
         })
     }
@@ -93,7 +93,7 @@ struct Material {
 
 fn load_model(scene: &mut RawSceneComponents, path: &str) {
     let path = env!("CARGO_MANIFEST_DIR").to_string() + "/src" + path;
-    println!("{}", path);
+    println!("{path}");
     let mut object = obj::Obj::load(path).unwrap();
     object.load_mtls().unwrap();
 
@@ -318,7 +318,6 @@ struct Example {
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
         wgpu::Features::EXPERIMENTAL_RAY_QUERY
-            | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
@@ -553,7 +552,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_scene",
     image_path: "/examples/features/src/ray_scene/screenshot.png",
     width: 1024,

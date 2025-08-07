@@ -405,8 +405,8 @@ OpDecorate %549 Location 0
 %117 = OpTypeVector %5 4
 %132 = OpTypeVector %15 3
 %195 = OpVariable  %94  Input
-%212 = OpConstant  %8  0.0
-%213 = OpConstant  %8  4294967000.0
+%212 = OpConstant  %8  0
+%213 = OpConstant  %8  4294967000
 %219 = OpTypePointer Output %24
 %218 = OpVariable  %219  Output
 %229 = OpConstant  %5  0
@@ -420,12 +420,12 @@ OpDecorate %549 Location 0
 %314 = OpConstant  %15  3
 %315 = OpConstantComposite  %14  %314 %88
 %316 = OpConstant  %8  2.3
-%317 = OpConstant  %8  2.0
+%317 = OpConstant  %8  2
 %319 = OpTypePointer Function %24
 %320 = OpConstantNull  %24
 %322 = OpTypeSampledImage %16
 %327 = OpTypeSampledImage %17
-%351 = OpConstant  %8  1.0
+%351 = OpConstant  %8  1
 %352 = OpConstantComposite  %310  %351 %351
 %359 = OpTypeSampledImage %19
 %420 = OpTypeSampledImage %21

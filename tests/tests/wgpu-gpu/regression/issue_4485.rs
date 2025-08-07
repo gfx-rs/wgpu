@@ -1,4 +1,10 @@
-use wgpu_test::{gpu_test, image, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(CONTINUE_SWITCH);
+}
 
 /// FXC doesn't accept `continue` inside a switch. Instead we store a flag for whether
 /// the loop should continue that is checked after the switch.
@@ -10,7 +16,7 @@ use wgpu_test::{gpu_test, image, GpuTestConfiguration, TestParameters, TestingCo
 /// This also tests that shaders generated with this fix execute correctly.
 #[gpu_test]
 static CONTINUE_SWITCH: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().force_fxc(true))
+    .parameters(TestParameters::default().force_fxc(true).enable_noop())
     .run_async(|ctx| async move { test_impl(&ctx).await });
 
 async fn test_impl(ctx: &TestingContext) {

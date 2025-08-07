@@ -198,7 +198,7 @@ impl super::CommandEncoder {
             self.pass.dirty_root_elements ^= 1 << index;
 
             match self.pass.root_elements[index as usize] {
-                super::RootElement::Empty => log::error!("Root index {} is not bound", index),
+                super::RootElement::Empty => log::error!("Root index {index} is not bound"),
                 super::RootElement::Constant => {
                     let info = self.pass.layout.root_constant_info.as_ref().unwrap();
 
@@ -1136,7 +1136,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) {
         let ibv = Direct3D12::D3D12_INDEX_BUFFER_VIEW {
             BufferLocation: binding.resolve_address(),
-            SizeInBytes: binding.resolve_size() as u32,
+            SizeInBytes: binding.resolve_size().try_into().unwrap(),
             Format: auxil::dxgi::conv::map_index_format(format),
         };
 
@@ -1149,7 +1149,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) {
         let vb = &mut self.pass.vertex_buffers[index as usize];
         vb.BufferLocation = binding.resolve_address();
-        vb.SizeInBytes = binding.resolve_size() as u32;
+        vb.SizeInBytes = binding.resolve_size().try_into().unwrap();
         self.pass.dirty_vertex_buffers |= 1 << index;
     }
 

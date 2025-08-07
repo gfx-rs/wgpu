@@ -167,7 +167,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         if let Some(ref prefix) = self.options.block_ctx_dump_prefix {
             let dump_suffix = match self.lookup_entry_point.get(&fun_id) {
                 Some(ep) => format!("block_ctx.{:?}-{}.txt", ep.stage, ep.name),
-                None => format!("block_ctx.Fun-{}.txt", function_index),
+                None => format!("block_ctx.Fun-{function_index}.txt"),
             };
 
             cfg_if::cfg_if! {
@@ -176,10 +176,10 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     let dest = prefix.join(dump_suffix);
                     let dump = format!("{block_ctx:#?}");
                     if let Err(e) = std::fs::write(&dest, dump) {
-                        log::error!("Unable to dump the block context into {:?}: {}", dest, e);
+                        log::error!("Unable to dump the block context into {dest:?}: {e}");
                     }
                 } else {
-                    log::error!("Unable to dump the block context into {:?}/{}: file system integration was not enabled with the `fs` feature", prefix, dump_suffix);
+                    log::error!("Unable to dump the block context into {prefix:?}/{dump_suffix}: file system integration was not enabled with the `fs` feature");
                 }
             }
         }
@@ -191,7 +191,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         // to get the spill.
         for phi in block_ctx.phis.iter() {
             // Get a pointer to the local variable for the phi's value.
-            let phi_pointer = block_ctx.expressions.append(
+            let phi_pointer: Handle<crate::Expression> = block_ctx.expressions.append(
                 crate::Expression::LocalVariable(phi.local),
                 crate::Span::default(),
             );
@@ -603,7 +603,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 }
 
 impl BlockContext<'_> {
-    pub(super) fn gctx(&self) -> crate::proc::GlobalCtx {
+    pub(super) fn gctx(&self) -> crate::proc::GlobalCtx<'_> {
         crate::proc::GlobalCtx {
             types: &self.module.types,
             constants: &self.module.constants,

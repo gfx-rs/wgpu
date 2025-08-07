@@ -7,7 +7,6 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
-use crate::common::ForDebugWithTypes;
 use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
@@ -18,6 +17,7 @@ use crate::{
     common::wgsl::{TryToWgsl, TypeContext},
     compact::KeepUnused,
 };
+use crate::{common::ForDebugWithTypes, proc::LayoutErrorInner};
 use crate::{ir, proc};
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
@@ -466,7 +466,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
-    fn as_const_evaluator(&mut self) -> proc::ConstantEvaluator {
+    fn as_const_evaluator(&mut self) -> proc::ConstantEvaluator<'_> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref mut rctx) => {
                 proc::ConstantEvaluator::for_wgsl_function(
@@ -513,7 +513,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn as_diagnostic_display<T>(
         &self,
         value: T,
-    ) -> crate::common::DiagnosticDisplay<(T, proc::GlobalCtx)> {
+    ) -> crate::common::DiagnosticDisplay<(T, proc::GlobalCtx<'_>)> {
         let ctx = self.module.to_ctx();
         crate::common::DiagnosticDisplay((value, ctx))
     }
@@ -982,7 +982,7 @@ impl Components {
         }
     }
 
-    fn single_component(name: &str, name_span: Span) -> Result<u32> {
+    fn single_component(name: &str, name_span: Span) -> Result<'_, u32> {
         let ch = name.chars().next().ok_or(Error::BadAccessor(name_span))?;
         match Self::letter_component(ch) {
             Some(sc) => Ok(sc as u32),
@@ -993,7 +993,7 @@ impl Components {
     /// Construct a `Components` value from a 'member' name, like `"wzy"` or `"x"`.
     ///
     /// Use `name_span` for reporting errors in parsing the component string.
-    fn new(name: &str, name_span: Span) -> Result<Self> {
+    fn new(name: &str, name_span: Span) -> Result<'_, Self> {
         let size = match name.len() {
             1 => return Ok(Components::Single(Self::single_component(name, name_span)?)),
             2 => ir::VectorSize::Bi,
@@ -3400,12 +3400,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ir::TypeInner::Pointer { base, .. } => match ctx.module.types[base].inner {
                 ir::TypeInner::Atomic(scalar) => Ok((pointer, scalar)),
                 ref other => {
-                    log::error!("Pointer type to {:?} passed to atomic op", other);
+                    log::error!("Pointer type to {other:?} passed to atomic op");
                     Err(Box::new(Error::InvalidAtomicPointer(span)))
                 }
             },
             ref other => {
-                log::error!("Type {:?} passed to atomic op", other);
+                log::error!("Type {other:?} passed to atomic op");
                 Err(Box::new(Error::InvalidAtomicPointer(span)))
             }
         }
@@ -3587,9 +3587,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         self.expression_with_leaf_scalar(args.next()?, ir::Scalar::F32, ctx)?
                     }
 
-                    // Sampling `Storage` textures isn't allowed at all. Let the
-                    // validator report the error.
-                    ir::ImageClass::Storage { .. } => self.expression(args.next()?, ctx)?,
+                    // Sampling `External` textures with a specified level isn't
+                    // allowed, and sampling `Storage` textures isn't allowed at
+                    // all. Let the validator report the error.
+                    ir::ImageClass::Storage { .. } | ir::ImageClass::External => {
+                        self.expression(args.next()?, ctx)?
+                    }
                 };
                 level = ir::SampleLevel::Exact(exact);
                 depth_ref = None;
@@ -3709,7 +3712,27 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         for member in s.members.iter() {
             let ty = self.resolve_ast_type(member.ty, &mut ctx.as_const())?;
 
-            ctx.layouter.update(ctx.module.to_ctx()).unwrap();
+            ctx.layouter.update(ctx.module.to_ctx()).map_err(|err| {
+                let LayoutErrorInner::TooLarge = err.inner else {
+                    unreachable!("unexpected layout error: {err:?}");
+                };
+                // Since anonymous types of struct members don't get a span,
+                // associate the error with the member. The layouter could have
+                // failed on any type that was pending layout, but if it wasn't
+                // the current struct member, it wasn't a struct member at all,
+                // because we resolve struct members one-by-one.
+                if ty == err.ty {
+                    Box::new(Error::StructMemberTooLarge {
+                        member_name_span: member.name.span,
+                    })
+                } else {
+                    // Lots of type definitions don't get spans, so this error
+                    // message may not be very useful.
+                    Box::new(Error::TypeTooLarge {
+                        span: ctx.module.types.get_span(err.ty),
+                    })
+                }
+            })?;
 
             let member_min_size = ctx.layouter[ty].size;
             let member_min_alignment = ctx.layouter[ty].alignment;
@@ -3761,6 +3784,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             });
 
             offset += member_size;
+            if offset > crate::valid::MAX_TYPE_SIZE {
+                return Err(Box::new(Error::TypeTooLarge { span }));
+            }
         }
 
         let size = struct_alignment.round_up(offset);
@@ -3938,7 +3964,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let base = self.resolve_ast_type(base, &mut ctx.as_const())?;
                 let size = self.array_size(size, ctx)?;
 
-                ctx.layouter.update(ctx.module.to_ctx()).unwrap();
+                // Determine the size of the base type, if needed.
+                ctx.layouter.update(ctx.module.to_ctx()).map_err(|err| {
+                    let LayoutErrorInner::TooLarge = err.inner else {
+                        unreachable!("unexpected layout error: {err:?}");
+                    };
+                    // Lots of type definitions don't get spans, so this error
+                    // message may not be very useful.
+                    Box::new(Error::TypeTooLarge {
+                        span: ctx.module.types.get_span(err.ty),
+                    })
+                })?;
                 let stride = ctx.layouter[base].to_stride();
 
                 ir::TypeInner::Array { base, size, stride }
@@ -3947,11 +3983,30 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 dim,
                 arrayed,
                 class,
-            } => ir::TypeInner::Image {
-                dim,
-                arrayed,
-                class,
-            },
+            } => {
+                if class == crate::ImageClass::External {
+                    // Other than the WGSL backend, every backend that supports
+                    // external textures does so by lowering them to a set of
+                    // ordinary textures and some parameters saying how to
+                    // sample from them. We don't know which backend will
+                    // consume the `Module` we're building, but in case it's not
+                    // WGSL, populate `SpecialTypes::external_texture_params`
+                    // and `SpecialTypes::external_texture_transfer_function`
+                    // with the types the backend will use for the parameter
+                    // buffer.
+                    //
+                    // Neither of these are the type we are lowering here:
+                    // that's an ordinary `TypeInner::Image`. But the fact we
+                    // are lowering a `texture_external` implies the backends
+                    // may need these additional types too.
+                    ctx.module.generate_external_texture_types();
+                }
+                ir::TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                }
+            }
             ast::Type::Sampler { comparison } => ir::TypeInner::Sampler { comparison },
             ast::Type::AccelerationStructure { vertex_return } => {
                 ir::TypeInner::AccelerationStructure { vertex_return }
@@ -4034,12 +4089,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ir::TypeInner::Pointer { base, .. } => match ctx.module.types[base].inner {
                 ir::TypeInner::RayQuery { .. } => Ok(pointer),
                 ref other => {
-                    log::error!("Pointer type to {:?} passed to ray query op", other);
+                    log::error!("Pointer type to {other:?} passed to ray query op");
                     Err(Box::new(Error::InvalidRayQueryPointer(span)))
                 }
             },
             ref other => {
-                log::error!("Type {:?} passed to ray query op", other);
+                log::error!("Type {other:?} passed to ray query op");
                 Err(Box::new(Error::InvalidRayQueryPointer(span)))
             }
         }

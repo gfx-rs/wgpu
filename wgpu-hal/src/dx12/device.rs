@@ -342,10 +342,7 @@ impl super::Device {
                     (source, entry_point)
                 };
                 log::info!(
-                    "Naga generated shader for {:?} at {:?}:\n{}",
-                    entry_point,
-                    naga_stage,
-                    source
+                    "Naga generated shader for {entry_point:?} at {naga_stage:?}:\n{source}"
                 );
 
                 ShaderCacheKey {
@@ -810,7 +807,8 @@ impl crate::Device for super::Device {
                 | wgt::BindingType::StorageTexture { .. }
                 | wgt::BindingType::AccelerationStructure { .. } => num_views += count,
                 wgt::BindingType::Sampler { .. } => has_sampler_in_group = true,
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                // Three texture planes and one params buffer
+                wgt::BindingType::ExternalTexture => num_views += 4 * count,
             }
         }
 
@@ -883,6 +881,7 @@ impl crate::Device for super::Device {
 
         let mut binding_map = hlsl::BindingMap::default();
         let mut sampler_buffer_binding_map = hlsl::SamplerIndexBufferBindingMap::default();
+        let mut external_texture_binding_map = hlsl::ExternalTextureBindingMap::default();
         let mut bind_cbv = hlsl::BindTarget::default();
         let mut bind_srv = hlsl::BindTarget::default();
         let mut bind_uav = hlsl::BindTarget::default();
@@ -942,6 +941,8 @@ impl crate::Device for super::Device {
                         ..
                     } => {}
                     wgt::BindingType::Sampler(_) => sampler_in_bind_group = true,
+                    // Three texture planes and one params buffer
+                    wgt::BindingType::ExternalTexture => total_non_dynamic_entries += 4,
                     _ => total_non_dynamic_entries += 1,
                 }
             }
@@ -996,61 +997,110 @@ impl crate::Device for super::Device {
             // SRV/CBV/UAV descriptor tables
             let range_base = ranges.len();
             for entry in bgl.entries.iter() {
-                let (range_ty, has_dynamic_offset) = match entry.ty {
-                    wgt::BindingType::Buffer {
-                        ty,
-                        has_dynamic_offset: true,
-                        ..
-                    } => match ty {
-                        wgt::BufferBindingType::Uniform => continue,
-                        wgt::BufferBindingType::Storage { .. } => {
-                            (conv::map_binding_type(&entry.ty), true)
-                        }
-                    },
-                    ref other => (conv::map_binding_type(other), false),
-                };
-                let bt = match range_ty {
-                    Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_CBV => &mut bind_cbv,
-                    Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV => &mut bind_srv,
-                    Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_UAV => &mut bind_uav,
-                    Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER => continue,
-                    _ => todo!(),
-                };
-
-                let binding_array_size = entry.count.map(NonZeroU32::get);
-
-                let dynamic_storage_buffer_offsets_index = if has_dynamic_offset {
-                    debug_assert!(
-                        binding_array_size.is_none(),
-                        "binding arrays and dynamic buffers are mutually exclusive"
+                let count = entry.count.map_or(1, NonZeroU32::get);
+                if let wgt::BindingType::ExternalTexture = entry.ty {
+                    // External textures need 3 SRVs (a texture for each plane)
+                    // and 1 CBV for the parameters buffer.
+                    let bind_target = hlsl::ExternalTextureBindTarget {
+                        planes: core::array::from_fn(|_| hlsl::BindTarget {
+                            register: {
+                                let register = bind_srv.register;
+                                bind_srv.register += count;
+                                register
+                            },
+                            ..bind_srv
+                        }),
+                        params: hlsl::BindTarget {
+                            register: {
+                                let register = bind_cbv.register;
+                                bind_cbv.register += count;
+                                register
+                            },
+                            ..bind_cbv
+                        },
+                    };
+                    external_texture_binding_map.insert(
+                        naga::ResourceBinding {
+                            group: index as u32,
+                            binding: entry.binding,
+                        },
+                        bind_target,
                     );
-                    let ret = Some(dynamic_storage_buffers);
-                    dynamic_storage_buffers += 1;
-                    ret
+                    for bt in bind_target.planes {
+                        ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
+                            RangeType: Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+                            NumDescriptors: count,
+                            BaseShaderRegister: bt.register,
+                            RegisterSpace: bt.space as u32,
+                            OffsetInDescriptorsFromTableStart:
+                                Direct3D12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                        });
+                    }
+                    ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
+                        RangeType: Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+                        NumDescriptors: count,
+                        BaseShaderRegister: bind_target.params.register,
+                        RegisterSpace: bind_target.params.space as u32,
+                        OffsetInDescriptorsFromTableStart:
+                            Direct3D12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                    });
                 } else {
-                    None
-                };
+                    let (range_ty, has_dynamic_offset) = match entry.ty {
+                        wgt::BindingType::Buffer {
+                            ty,
+                            has_dynamic_offset: true,
+                            ..
+                        } => match ty {
+                            wgt::BufferBindingType::Uniform => continue,
+                            wgt::BufferBindingType::Storage { .. } => {
+                                (conv::map_binding_type(&entry.ty), true)
+                            }
+                        },
+                        ref other => (conv::map_binding_type(other), false),
+                    };
+                    let bt = match range_ty {
+                        Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_CBV => &mut bind_cbv,
+                        Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV => &mut bind_srv,
+                        Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_UAV => &mut bind_uav,
+                        Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER => continue,
+                        _ => todo!(),
+                    };
 
-                binding_map.insert(
-                    naga::ResourceBinding {
-                        group: index as u32,
-                        binding: entry.binding,
-                    },
-                    hlsl::BindTarget {
-                        binding_array_size,
-                        dynamic_storage_buffer_offsets_index,
-                        ..*bt
-                    },
-                );
-                ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
-                    RangeType: range_ty,
-                    NumDescriptors: entry.count.map_or(1, |count| count.get()),
-                    BaseShaderRegister: bt.register,
-                    RegisterSpace: bt.space as u32,
-                    OffsetInDescriptorsFromTableStart:
-                        Direct3D12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
-                });
-                bt.register += entry.count.map(NonZeroU32::get).unwrap_or(1);
+                    let binding_array_size = entry.count.map(NonZeroU32::get);
+
+                    let dynamic_storage_buffer_offsets_index = if has_dynamic_offset {
+                        debug_assert!(
+                            binding_array_size.is_none(),
+                            "binding arrays and dynamic buffers are mutually exclusive"
+                        );
+                        let ret = Some(dynamic_storage_buffers);
+                        dynamic_storage_buffers += 1;
+                        ret
+                    } else {
+                        None
+                    };
+
+                    binding_map.insert(
+                        naga::ResourceBinding {
+                            group: index as u32,
+                            binding: entry.binding,
+                        },
+                        hlsl::BindTarget {
+                            binding_array_size,
+                            dynamic_storage_buffer_offsets_index,
+                            ..*bt
+                        },
+                    );
+                    ranges.push(Direct3D12::D3D12_DESCRIPTOR_RANGE {
+                        RangeType: range_ty,
+                        NumDescriptors: count,
+                        BaseShaderRegister: bt.register,
+                        RegisterSpace: bt.space as u32,
+                        OffsetInDescriptorsFromTableStart:
+                            Direct3D12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                    });
+                    bt.register += count;
+                }
             }
 
             let mut sampler_index_within_bind_group = 0;
@@ -1391,6 +1441,7 @@ impl crate::Device for super::Device {
                 restrict_indexing: true,
                 sampler_heap_target,
                 sampler_buffer_binding_map,
+                external_texture_binding_map,
                 force_loop_bounding: true,
             },
         })
@@ -1442,7 +1493,7 @@ impl crate::Device for super::Device {
                     let end = start + entry.count as usize;
                     for data in &desc.buffers[start..end] {
                         let gpu_address = data.resolve_address();
-                        let mut size = data.resolve_size() as u32;
+                        let mut size = data.resolve_size().try_into().unwrap();
 
                         if has_dynamic_offset {
                             match ty {
@@ -1576,7 +1627,31 @@ impl crate::Device for super::Device {
                         inner.stage.push(handle);
                     }
                 }
-                wgt::BindingType::ExternalTexture => unimplemented!(),
+                wgt::BindingType::ExternalTexture => {
+                    // We don't yet support binding arrays of external textures.
+                    // https://github.com/gfx-rs/wgpu/issues/8027
+                    assert_eq!(entry.count, 1);
+                    let external_texture = &desc.external_textures[entry.resource_index as usize];
+                    for plane in &external_texture.planes {
+                        let plane_handle = plane.view.handle_srv.unwrap();
+                        cpu_views.as_mut().unwrap().stage.push(plane_handle.raw);
+                    }
+                    let gpu_address = external_texture.params.resolve_address();
+                    let size = external_texture.params.resolve_size() as u32;
+                    let inner = cpu_views.as_mut().unwrap();
+                    let cpu_index = inner.stage.len() as u32;
+                    let params_handle = desc.layout.cpu_heap_views.as_ref().unwrap().at(cpu_index);
+                    let size_mask = Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
+                    let raw_desc = Direct3D12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
+                        BufferLocation: gpu_address,
+                        SizeInBytes: ((size - 1) | size_mask) + 1,
+                    };
+                    unsafe {
+                        self.raw
+                            .CreateConstantBufferView(Some(&raw_desc), params_handle)
+                    };
+                    inner.stage.push(params_handle);
+                }
             }
         }
 
@@ -1584,7 +1659,7 @@ impl crate::Device for super::Device {
             let buffer_size = (sampler_indexes.len() * size_of::<u32>()) as u64;
 
             let label = if let Some(label) = desc.label {
-                Cow::Owned(format!("{} (Internal Sampler Index Buffer)", label))
+                Cow::Owned(format!("{label} (Internal Sampler Index Buffer)"))
             } else {
                 Cow::Borrowed("Internal Sampler Index Buffer")
             };
@@ -1750,8 +1825,16 @@ impl crate::Device for super::Device {
         let (topology_class, topology) = conv::map_topology(desc.primitive.topology);
         let mut shader_stages = wgt::ShaderStages::VERTEX;
 
+        let (vertex_stage_desc, vertex_buffers_desc) = match &desc.vertex_processor {
+            crate::VertexProcessor::Standard {
+                vertex_buffers,
+                vertex_stage,
+            } => (vertex_stage, *vertex_buffers),
+            crate::VertexProcessor::Mesh { .. } => unreachable!(),
+        };
+
         let blob_vs = self.load_shader(
-            &desc.vertex_stage,
+            vertex_stage_desc,
             desc.layout,
             naga::ShaderStage::Vertex,
             desc.fragment_stage.as_ref(),
@@ -1768,7 +1851,7 @@ impl crate::Device for super::Device {
         let mut input_element_descs = Vec::new();
         for (i, (stride, vbuf)) in vertex_strides
             .iter_mut()
-            .zip(desc.vertex_buffers)
+            .zip(vertex_buffers_desc)
             .enumerate()
         {
             *stride = NonZeroU32::new(vbuf.array_stride as u32);
@@ -1920,17 +2003,6 @@ impl crate::Device for super::Device {
             topology,
             vertex_strides,
         })
-    }
-
-    unsafe fn create_mesh_pipeline(
-        &self,
-        _desc: &crate::MeshPipelineDescriptor<
-            <Self::A as crate::Api>::PipelineLayout,
-            <Self::A as crate::Api>::ShaderModule,
-            <Self::A as crate::Api>::PipelineCache,
-        >,
-    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
-        unreachable!()
     }
 
     unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {
@@ -2123,11 +2195,7 @@ impl crate::Device for super::Device {
                 }
             };
 
-            log::trace!(
-                "Waiting for fence value {} for {:?}",
-                value,
-                remaining_wait_duration
-            );
+            log::trace!("Waiting for fence value {value} for {remaining_wait_duration:?}");
 
             match unsafe {
                 Threading::WaitForSingleObject(
@@ -2145,13 +2213,13 @@ impl crate::Device for super::Device {
                     break Ok(false);
                 }
                 other => {
-                    log::error!("Unexpected wait status: 0x{:?}", other);
+                    log::error!("Unexpected wait status: 0x{other:?}");
                     break Err(crate::DeviceError::Lost);
                 }
             };
 
             fence_value = unsafe { fence.raw.GetCompletedValue() };
-            log::trace!("Wait complete! Fence actual value: {}", fence_value);
+            log::trace!("Wait complete! Fence actual value: {fence_value}");
 
             if fence_value >= value {
                 break Ok(true);

@@ -101,7 +101,7 @@ OpDecorate %89 Location 0
 %96 = OpConstantNull  %7
 %97 = OpConstant  %6  0
 %98 = OpConstant  %9  0
-%99 = OpConstant  %5  0.0
+%99 = OpConstant  %5  0
 %100 = OpConstantComposite  %11  %99 %99 %99 %99
 %21 = OpFunction  %5  None %22
 %19 = OpFunctionParameter  %7

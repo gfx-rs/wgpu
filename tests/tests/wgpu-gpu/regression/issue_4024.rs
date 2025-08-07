@@ -1,9 +1,13 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
-use wgpu_test::{gpu_test, GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 use wgpu::*;
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(QUEUE_SUBMITTED_CALLBACK_ORDERING);
+}
 
 /// The WebGPU specification has very specific requirements about the ordering of map_async
 /// and on_submitted_work_done callbacks. Specifically, all map_async callbacks that are initiated
@@ -14,6 +18,7 @@ use wgpu::*;
 /// to add them to. This is incorrect, as we do not immediately invoke map_async callbacks.
 #[gpu_test]
 static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         // Create a mappable buffer
         let buffer = ctx.device.create_buffer(&BufferDescriptor {

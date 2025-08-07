@@ -20,6 +20,13 @@ use crate::buffer::GPUBuffer;
 use crate::texture::GPUTextureFormat;
 use crate::Instance;
 
+fn c_string_truncated_at_first_nul<T: Into<Vec<u8>>>(src: T) -> std::ffi::CString {
+    std::ffi::CString::new(src).unwrap_or_else(|err| {
+        let nul_pos = err.nul_position();
+        std::ffi::CString::new(err.into_vec().split_at(nul_pos).0).unwrap()
+    })
+}
+
 pub struct GPURenderBundleEncoder {
     pub instance: Instance,
     pub error_handler: super::error::ErrorHandler,
@@ -70,7 +77,7 @@ impl GPURenderBundleEncoder {
             .as_mut()
             .ok_or_else(|| JsErrorBox::generic("Encoder has already been finished"))?;
 
-        let label = std::ffi::CString::new(group_label).unwrap();
+        let label = c_string_truncated_at_first_nul(group_label);
         // SAFETY: the string the raw pointer points to lives longer than the below
         // function invocation.
         unsafe {
@@ -99,8 +106,7 @@ impl GPURenderBundleEncoder {
             .as_mut()
             .ok_or_else(|| JsErrorBox::generic("Encoder has already been finished"))?;
 
-        let label = std::ffi::CString::new(marker_label).unwrap();
-
+        let label = c_string_truncated_at_first_nul(marker_label);
         // SAFETY: the string the raw pointer points to lives longer than the below
         // function invocation.
         unsafe {

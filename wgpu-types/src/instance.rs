@@ -8,27 +8,35 @@ use crate::Backends;
 use crate::{Backend, DownlevelFlags};
 
 /// Options for creating an instance.
-#[derive(Clone, Debug)]
+///
+/// If you want to allow control of instance settings via environment variables, call either
+/// [`InstanceDescriptor::from_env_or_default()`] or [`InstanceDescriptor::with_env()`]. Each type
+/// within this descriptor has its own equivalent methods, so you can select which options you want
+/// to expose to influence from the environment.
+#[derive(Clone, Debug, Default)]
 pub struct InstanceDescriptor {
-    /// Which `Backends` to enable.
+    /// Which [`Backends`] to enable.
+    ///
+    /// [`Backends::BROWSER_WEBGPU`] has an additional effect:
+    /// If it is set and a [`navigator.gpu`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/gpu)
+    /// object is present, this instance will *only* be able to create WebGPU adapters.
+    ///
+    /// ⚠️ On some browsers this check is insufficient to determine whether WebGPU is supported,
+    /// as the browser may define the `navigator.gpu` object, but be unable to create any WebGPU adapters.
+    /// For targeting _both_ WebGPU & WebGL, it is recommended to use [`crate::util::new_instance_with_webgpu_detection`](../wgpu/util/fn.new_instance_with_webgpu_detection.html).
+    ///
+    /// If you instead want to force use of WebGL, either disable the `webgpu` compile-time feature
+    /// or don't include the [`Backends::BROWSER_WEBGPU`] flag in this field.
+    /// If it is set and WebGPU support is *not* detected, the instance will use `wgpu-core`
+    /// to create adapters, meaning that if the `webgl` feature is enabled, it is able to create
+    /// a WebGL adapter.
     pub backends: Backends,
     /// Flags to tune the behavior of the instance.
     pub flags: InstanceFlags,
     /// Memory budget thresholds used by some backends.
     pub memory_budget_thresholds: MemoryBudgetThresholds,
-    /// Options the control the behavior of various backends.
+    /// Options the control the behavior of specific backends.
     pub backend_options: BackendOptions,
-}
-
-impl Default for InstanceDescriptor {
-    fn default() -> Self {
-        Self {
-            backends: Backends::all(),
-            flags: InstanceFlags::default(),
-            memory_budget_thresholds: MemoryBudgetThresholds::default(),
-            backend_options: BackendOptions::default(),
-        }
-    }
 }
 
 impl InstanceDescriptor {
@@ -70,9 +78,29 @@ bitflags::bitflags! {
         ///
         /// When `Self::from_env()` is used takes value from `WGPU_DEBUG` environment variable.
         const DEBUG = 1 << 0;
-        /// Enable validation, if possible.
+        /// Enable validation in the backend API, if possible:
         ///
-        /// When `Self::from_env()` is used takes value from `WGPU_VALIDATION` environment variable.
+        /// - On the Direct3D `dx12` backend, this calls [`ID3D12Debug::EnableDebugLayer`][dx12].
+        ///
+        /// - On the Vulkan backend, this enables the [Vulkan Validation Layer][vvl].
+        ///
+        /// - On the `gles` backend driving Windows OpenGL, this enables [debug
+        ///   output][gl:do], effectively calling `glEnable(GL_DEBUG_OUTPUT)`.
+        ///
+        /// - On non-Windows `gles` backends, this calls
+        ///   [`eglDebugMessageControlKHR`][gl:dm] to enable all debugging messages.
+        ///   If the GLES implementation is ANGLE running on Vulkan, this also
+        ///   enables the Vulkan validation layers by setting
+        ///   [`EGL_PLATFORM_ANGLE_DEBUG_LAYERS_ENABLED`][gl:av].
+        ///
+        /// When `Self::from_env()` is used, this bit is set if the `WGPU_VALIDATION`
+        /// environment variable has any value but "0".
+        ///
+        /// [dx12]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12sdklayers/nf-d3d12sdklayers-id3d12debug-enabledebuglayer
+        /// [vvl]: https://github.com/KhronosGroup/Vulkan-ValidationLayers
+        /// [gl:dm]: https://registry.khronos.org/EGL/extensions/KHR/EGL_KHR_debug.txt
+        /// [gl:do]: https://www.khronos.org/opengl/wiki/Debug_Output
+        /// [gl:av]: https://chromium.googlesource.com/angle/angle/+/HEAD/extensions/EGL_ANGLE_platform_angle.txt
         const VALIDATION = 1 << 1;
         /// Don't pass labels to wgpu-hal.
         ///

@@ -109,12 +109,29 @@ impl<W: Write> Writer<W> {
         self.required_polyfills.clear();
     }
 
-    fn is_builtin_wgsl_struct(&self, module: &Module, handle: Handle<crate::Type>) -> bool {
+    /// Determine if `ty` is the Naga IR presentation of a WGSL builtin type.
+    ///
+    /// Return true if `ty` refers to the Naga IR form of a WGSL builtin type
+    /// like `__atomic_compare_exchange_result`.
+    ///
+    /// Even though the module may use the type, the WGSL backend should avoid
+    /// emitting a definition for it, since it is [predeclared] in WGSL.
+    ///
+    /// This also covers types like [`NagaExternalTextureParams`], which other
+    /// backends use to lower WGSL constructs like external textures to their
+    /// implementations. WGSL can express these directly, so the types need not
+    /// be emitted.
+    ///
+    /// [predeclared]: https://www.w3.org/TR/WGSL/#predeclared
+    /// [`NagaExternalTextureParams`]: crate::ir::SpecialTypes::external_texture_params
+    fn is_builtin_wgsl_struct(&self, module: &Module, ty: Handle<crate::Type>) -> bool {
         module
             .special_types
             .predeclared_types
             .values()
-            .any(|t| *t == handle)
+            .any(|t| *t == ty)
+            || Some(ty) == module.special_types.external_texture_params
+            || Some(ty) == module.special_types.external_texture_transfer_function
     }
 
     pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {

@@ -226,6 +226,12 @@ impl RenderPass<'_> {
         self.inner.draw_indexed(indices, base_vertex, instances);
     }
 
+    /// Draws using a mesh shader pipeline
+    pub fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
+        self.inner
+            .draw_mesh_tasks(group_count_x, group_count_y, group_count_z);
+    }
+
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// This is like calling [`RenderPass::draw`] but the contents of the call are specified in the `indirect_buffer`.
@@ -247,6 +253,25 @@ impl RenderPass<'_> {
     ) {
         self.inner
             .draw_indexed_indirect(&indirect_buffer.inner, indirect_offset);
+    }
+
+    /// Draws using a mesh shader pipeline,
+    /// based on the contents of the `indirect_buffer`
+    ///
+    /// This is like calling [`RenderPass::draw_mesh_tasks`] but the contents of the call are specified in the `indirect_buffer`.
+    /// The structure expected in the `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
+    ///
+    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
+    /// these and issue an error.
+    ///
+    /// See details on the individual flags for more information.
+    pub fn draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+    ) {
+        self.inner
+            .draw_mesh_tasks_indirect(&indirect_buffer.inner, indirect_offset);
     }
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
@@ -305,6 +330,23 @@ impl RenderPass<'_> {
     ) {
         self.inner
             .multi_draw_indexed_indirect(&indirect_buffer.inner, indirect_offset, count);
+    }
+
+    /// Dispatches multiple draw calls based on the contents of the `indirect_buffer`.
+    /// `count` draw calls are issued.
+    ///
+    /// The structure expected in the `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
+    pub fn multi_draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+        count: u32,
+    ) {
+        self.inner
+            .multi_draw_mesh_tasks_indirect(&indirect_buffer.inner, indirect_offset, count);
     }
 
     #[cfg(custom)]
@@ -388,6 +430,34 @@ impl RenderPass<'_> {
         max_count: u32,
     ) {
         self.inner.multi_draw_indexed_indirect_count(
+            &indirect_buffer.inner,
+            indirect_offset,
+            &count_buffer.inner,
+            count_offset,
+            max_count,
+        );
+    }
+
+    /// Dispatches multiple draw calls based on the contents of the `indirect_buffer`. The count buffer is read to determine how many draws to issue.
+    ///
+    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count`
+    /// draws will be read. If `count` is greater than `max_count`, `max_count` will be used.
+    ///
+    /// The structure expected in the `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
+    ///
+    /// These draw structures are expected to be tightly packed.
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
+    pub fn multi_draw_mesh_tasks_indirect_count(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+        count_buffer: &Buffer,
+        count_offset: BufferAddress,
+        max_count: u32,
+    ) {
+        self.inner.multi_draw_mesh_tasks_indirect_count(
             &indirect_buffer.inner,
             indirect_offset,
             &count_buffer.inner,

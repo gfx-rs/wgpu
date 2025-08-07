@@ -3,7 +3,13 @@ use std::num::NonZeroU64;
 
 use wgpu::util::RenderEncoder;
 use wgpu::*;
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([PARTIAL_UPDATE, RENDER_PASS_TEST]);
+}
 
 /// We want to test that partial updates to push constants work as expected.
 ///

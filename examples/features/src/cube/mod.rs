@@ -381,7 +381,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "cube",
     // Generated on 1080ti on Vk/Windows
     image_path: "/examples/features/src/cube/screenshot.png",
@@ -397,7 +397,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_LINES: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_LINES: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "cube-lines",
     // Generated on 1080ti on Vk/Windows
     image_path: "/examples/features/src/cube/screenshot-lines.png",

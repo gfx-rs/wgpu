@@ -1,4 +1,6 @@
 use alloc::{boxed::Box, string::String, sync::Arc, vec};
+#[cfg(wgpu_core)]
+use core::ops::Deref;
 use core::{error, fmt, future::Future};
 
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
@@ -243,6 +245,13 @@ impl Device {
         RenderPipeline { inner: pipeline }
     }
 
+    /// Creates a mesh shader based [`RenderPipeline`].
+    #[must_use]
+    pub fn create_mesh_pipeline(&self, desc: &MeshPipelineDescriptor<'_>) -> RenderPipeline {
+        let pipeline = self.inner.create_mesh_pipeline(desc);
+        RenderPipeline { inner: pipeline }
+    }
+
     /// Creates a [`ComputePipeline`].
     #[must_use]
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> ComputePipeline {
@@ -287,6 +296,15 @@ impl Device {
 
     /// Creates a [`Texture`] from a wgpu-hal Texture.
     ///
+    /// # Types
+    ///
+    /// The type of `A::Texture` depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Texture")]
+    #[doc = crate::hal_type_metal!("Texture")]
+    #[doc = crate::hal_type_dx12!("Texture")]
+    #[doc = crate::hal_type_gles!("Texture")]
+    ///
     /// # Safety
     ///
     /// - `hal_texture` must be created from this device internal handle
@@ -294,7 +312,7 @@ impl Device {
     /// - `hal_texture` must be initialized
     #[cfg(wgpu_core)]
     #[must_use]
-    pub unsafe fn create_texture_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_texture_from_hal<A: hal::Api>(
         &self,
         hal_texture: A::Texture,
         desc: &TextureDescriptor<'_>,
@@ -315,16 +333,40 @@ impl Device {
         }
     }
 
+    /// Creates a new [`ExternalTexture`].
+    #[must_use]
+    pub fn create_external_texture(
+        &self,
+        desc: &ExternalTextureDescriptor<'_>,
+        planes: &[&TextureView],
+    ) -> ExternalTexture {
+        let external_texture = self.inner.create_external_texture(desc, planes);
+
+        ExternalTexture {
+            inner: external_texture,
+        }
+    }
+
     /// Creates a [`Buffer`] from a wgpu-hal Buffer.
+    ///
+    /// # Types
+    ///
+    /// The type of `A::Buffer` depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Buffer")]
+    #[doc = crate::hal_type_metal!("Buffer")]
+    #[doc = crate::hal_type_dx12!("Buffer")]
+    #[doc = crate::hal_type_gles!("Buffer")]
     ///
     /// # Safety
     ///
     /// - `hal_buffer` must be created from this device internal handle
     /// - `hal_buffer` must be created respecting `desc`
     /// - `hal_buffer` must be initialized
+    /// - `hal_buffer` must not have zero size
     #[cfg(wgpu_core)]
     #[must_use]
-    pub unsafe fn create_buffer_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_buffer_from_hal<A: hal::Api>(
         &self,
         hal_buffer: A::Buffer,
         desc: &BufferDescriptor<'_>,
@@ -462,39 +504,43 @@ impl Device {
         self.inner.generate_allocator_report()
     }
 
-    /// Apply a callback to this `Device`'s underlying backend device.
+    /// Get the [`wgpu_hal`] device from this `Device`.
     ///
-    /// If this `Device` is implemented by the backend API given by `A` (Vulkan,
-    /// Dx12, etc.), then apply `hal_device_callback` to `Some(&device)`, where
-    /// `device` is the underlying backend device type, [`A::Device`].
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
     ///
-    /// If this `Device` uses a different backend, apply `hal_device_callback`
-    /// to `None`.
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Device`].
     ///
-    /// The device is locked for reading while `hal_device_callback` runs. If
-    /// the callback attempts to perform any `wgpu` operations that require
-    /// write access to the device (destroying a buffer, say), deadlock will
-    /// occur. The locks are automatically released when the callback returns.
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Device")]
+    #[doc = crate::hal_type_metal!("Device")]
+    #[doc = crate::hal_type_dx12!("Device")]
+    #[doc = crate::hal_type_gles!("Device")]
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The device is not from the backend specified by `A`.
+    /// - The device is from the `webgpu` or `custom` backend.
     ///
     /// # Safety
     ///
-    /// - The raw handle passed to the callback must not be manually destroyed.
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
     ///
     /// [`A::Device`]: hal::Api::Device
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
-        hal_device_callback: F,
-    ) -> R {
-        if let Some(core_device) = self.inner.as_core_opt() {
-            unsafe {
-                core_device
-                    .context
-                    .device_as_hal::<A, F, R>(core_device, hal_device_callback)
-            }
-        } else {
-            hal_device_callback(None)
-        }
+    ) -> Option<impl Deref<Target = A::Device> + WasmNotSendSync> {
+        let device = self.inner.as_core_opt()?;
+        unsafe { device.context.device_as_hal::<A>(device) }
     }
 
     /// Destroy this device.
@@ -557,7 +603,7 @@ impl Device {
     }
 }
 
-/// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] must be enabled on the device in order to call these functions.
+/// [`Features::EXPERIMENTAL_RAY_QUERY`] must be enabled on the device in order to call these functions.
 impl Device {
     /// Create a bottom level acceleration structure, used inside a top level acceleration structure for ray tracing.
     /// - `desc`: The descriptor of the acceleration structure.
@@ -566,14 +612,14 @@ impl Device {
     /// # Validation
     /// If any of the following is not satisfied a validation error is generated
     ///
-    /// The device ***must*** have [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] enabled.
+    /// The device ***must*** have [`Features::EXPERIMENTAL_RAY_QUERY`] enabled.
     /// if `sizes` is [`BlasGeometrySizeDescriptors::Triangles`] then the following must be satisfied
     /// - For every geometry descriptor (for the purposes this is called `geo_desc`) of `sizes.descriptors` the following must be satisfied:
     ///     - `geo_desc.vertex_format` must be within allowed formats (allowed formats for a given feature set
     ///       may be queried with [`Features::allowed_vertex_formats_for_blas`]).
     ///     - Both or neither of `geo_desc.index_format` and `geo_desc.index_count` must be provided.
     ///
-    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::EXPERIMENTAL_RAY_QUERY`]: wgt::Features::EXPERIMENTAL_RAY_QUERY
     /// [`Features::allowed_vertex_formats_for_blas`]: wgt::Features::allowed_vertex_formats_for_blas
     #[must_use]
     pub fn create_blas(
@@ -595,9 +641,9 @@ impl Device {
     /// # Validation
     /// If any of the following is not satisfied a validation error is generated
     ///
-    /// The device ***must*** have [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] enabled.
+    /// The device ***must*** have [`Features::EXPERIMENTAL_RAY_QUERY`] enabled.
     ///
-    /// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [`Features::EXPERIMENTAL_RAY_QUERY`]: wgt::Features::EXPERIMENTAL_RAY_QUERY
     #[must_use]
     pub fn create_tlas(&self, desc: &CreateTlasDescriptor<'_>) -> Tlas {
         let tlas = self.inner.create_tlas(desc);
