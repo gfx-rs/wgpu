@@ -264,8 +264,8 @@ OpDecorate %284 Location 0
 %47 = OpVariable  %48  Output
 %49 = OpVariable  %48  Output
 %51 = OpTypeFunction %2
-%52 = OpConstant  %4  2.1524e-41
-%53 = OpConstant  %5  1.0
+%52 = OpConstant  %4  0.000000000000000000000000000000000000000021524
+%53 = OpConstant  %5  1
 %54 = OpConstantComposite  %6  %52 %52
 %55 = OpConstantComposite  %7  %53 %53
 %56 = OpConstantComposite  %8  %52 %52 %52
@@ -335,7 +335,7 @@ OpDecorate %284 Location 0
 %279 = OpVariable  %33  Input
 %282 = OpVariable  %33  Input
 %284 = OpVariable  %39  Output
-%286 = OpConstant  %4  0.0
+%286 = OpConstant  %4  0
 %288 = OpConstantNull  %12
 %50 = OpFunction  %2  None %51
 %13 = OpLabel
