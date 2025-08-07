@@ -53,6 +53,12 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
+### New Features
+
+#### General
+
+- Added mesh shader support to `wgpu`, with examples. Requires passthrough. By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345).
+
 ### Changes
 
 #### General
@@ -198,7 +204,6 @@ By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
 - Add acceleration structure limits. By @Vecvec in [#7845](https://github.com/gfx-rs/wgpu/pull/7845).
 - Add support for clip-distances feature for Vulkan and GL backends. By @dzamkov in [#7730](https://github.com/gfx-rs/wgpu/pull/7730)
 - Added `wgpu_types::error::{ErrorType, WebGpuError}` for classification of errors according to WebGPU's [`GPUError`]'s classification scheme, and implement `WebGpuError` for existing errors. This allows users of `wgpu-core` to offload error classification onto the WGPU ecosystem, rather than having to do it themselves without sufficient information. By @ErichDonGubler in [#6547](https://github.com/gfx-rs/wgpu/pull/6547).
-- Added mesh shader support to `wgpu`, with examples. Requires passthrough. By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345).
 
 [`GPUError`]: https://www.w3.org/TR/webgpu/#gpuerror
 
