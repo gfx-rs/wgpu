@@ -46,7 +46,7 @@ Bottom level categories:
 
 #### Vulkan
 
-Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8043](https://github.com/gfx-rs/wgpu/pull/8043).
+Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8056](https://github.com/gfx-rs/wgpu/pull/8056).
 
 ## v26.0.3 (2025-07-30)
 
