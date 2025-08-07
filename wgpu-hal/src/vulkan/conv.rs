@@ -78,6 +78,7 @@ impl super::PrivateCapabilities {
             }
             Tf::Depth16Unorm => F::D16_UNORM,
             Tf::NV12 => F::G8_B8R8_2PLANE_420_UNORM,
+            Tf::P010 => F::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16,
             Tf::Rgb9e5Ufloat => F::E5B9G9R9_UFLOAT_PACK32,
             Tf::Bc1RgbaUnorm => F::BC1_RGBA_UNORM_BLOCK,
             Tf::Bc1RgbaUnormSrgb => F::BC1_RGBA_SRGB_BLOCK,

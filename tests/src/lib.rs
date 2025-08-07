@@ -37,7 +37,7 @@ pub use wgpu_macros::gpu_test;
 pub fn fail<T>(
     device: &wgpu::Device,
     callback: impl FnOnce() -> T,
-    expected_msg_substring: Option<&'static str>,
+    expected_msg_substring: Option<&str>,
 ) -> T {
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let result = callback();

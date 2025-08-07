@@ -1734,7 +1734,7 @@ impl From<wgt::TextureFormat> for FormatAspects {
             wgt::TextureFormat::Depth32FloatStencil8 | wgt::TextureFormat::Depth24PlusStencil8 => {
                 Self::DEPTH_STENCIL
             }
-            wgt::TextureFormat::NV12 => Self::PLANE_0 | Self::PLANE_1,
+            wgt::TextureFormat::NV12 | wgt::TextureFormat::P010 => Self::PLANE_0 | Self::PLANE_1,
             _ => Self::COLOR,
         }
     }
