@@ -61,7 +61,8 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 #### Naga
 
-Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
+- Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
+- Add f16 IO polyfill on Vulkan backend to enable SHADER_F16 use without requiring `storageInputOutput16`. By @cryvosh in [#7884](https://github.com/gfx-rs/wgpu/pull/7884)
 
 ### Bug Fixes
 
@@ -161,7 +162,6 @@ By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
 - Diagnostic rendering methods (i.e., `naga::{front::wgsl::ParseError,WithSpan}::emit_error_to_string_with_path`) now accept more types for their `path` argument via a new sealed `AsDiagnosticFilePath` trait. By @atlv24, @bushrat011899, and @ErichDonGubler in [#7643](https://github.com/gfx-rs/wgpu/pull/7643).
 - Add support for [quad operations](https://www.w3.org/TR/WGSL/#quad-builtin-functions) (requires `SUBGROUP` feature to be enabled). By @dzamkov and @valaphee in [#7683](https://github.com/gfx-rs/wgpu/pull/7683).
 - Add support for `atomicCompareExchangeWeak` in HLSL and GLSL backends. By @cryvosh in [#7658](https://github.com/gfx-rs/wgpu/pull/7658)
-- Add f16 IO polyfill on Vulkan backend to enable SHADER_F16 use without requiring `storageInputOutput16`. By @cryvosh in [#7884](https://github.com/gfx-rs/wgpu/pull/7884)
 
 ### General
 
