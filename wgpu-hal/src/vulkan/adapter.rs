@@ -406,9 +406,7 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDevice16BitStorageFeatures::default()
                         .storage_buffer16_bit_access(true)
-                        .storage_input_output16(
-                            phd_features.supports_storage_input_output_16(),
-                        )
+                        .storage_input_output16(phd_features.supports_storage_input_output_16())
                         .uniform_and_storage_buffer16_bit_access(true),
                 )
             } else {
