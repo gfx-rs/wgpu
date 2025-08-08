@@ -198,6 +198,13 @@ impl PhysicalDeviceFeatures {
         info
     }
 
+    fn supports_storage_input_output_16(&self) -> bool {
+        self._16bit_storage
+            .as_ref()
+            .map(|features| features.storage_input_output16 != 0)
+            .unwrap_or(false)
+    }
+
     /// Create a `PhysicalDeviceFeatures` that can be used to create a logical
     /// device.
     ///
@@ -396,17 +403,12 @@ impl PhysicalDeviceFeatures {
                 _ => None,
             },
             _16bit_storage: if requested_features.contains(wgt::Features::SHADER_F16) {
-                // Check if the device actually supports `storage_input_output16`
-                let storage_input_output16_supported = phd_features
-                    ._16bit_storage
-                    .as_ref()
-                    .map(|features| features.storage_input_output16 != 0)
-                    .unwrap_or(false);
-
                 Some(
                     vk::PhysicalDevice16BitStorageFeatures::default()
                         .storage_buffer16_bit_access(true)
-                        .storage_input_output16(storage_input_output16_supported)
+                        .storage_input_output16(
+                            phd_features.supports_storage_input_output_16(),
+                        )
                         .uniform_and_storage_buffer16_bit_access(true),
                 )
             } else {
@@ -2138,15 +2140,8 @@ impl super::Adapter {
                     spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
                 force_loop_bounding: true,
-                use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16) && {
-                    // Check if the device actually supports storage_input_output16
-                    let phd_features = self.physical_device_features(enabled_extensions, features);
-                    phd_features
-                        ._16bit_storage
-                        .as_ref()
-                        .map(|storage_features| storage_features.storage_input_output16 != 0)
-                        .unwrap_or(false)
-                },
+                use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16)
+                    && self.phd_features.supports_storage_input_output_16(),
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,
