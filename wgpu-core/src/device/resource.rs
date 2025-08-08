@@ -3697,7 +3697,7 @@ impl Device {
 
                     if attribute.shader_location >= self.limits.max_vertex_attributes {
                         return Err(
-                            pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
+                            pipeline::CreateRenderPipelineError::VertexAttributeLocationTooLarge {
                                 given: attribute.shader_location,
                                 limit: self.limits.max_vertex_attributes,
                             },
