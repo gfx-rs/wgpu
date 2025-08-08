@@ -1465,6 +1465,8 @@ impl Queue {
         profiling::scope!("Queue::compact_blas");
         api_log!("Queue::compact_blas");
 
+        let new_label = blas.label.clone() + " (compacted)";
+
         self.device.check_is_valid()?;
         self.same_device_as(blas.as_ref())?;
 
@@ -1486,7 +1488,7 @@ impl Queue {
             device
                 .raw()
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: None,
+                    label: hal_label(Some(&new_label), device.instance_flags),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
                     allow_compaction: false,
@@ -1528,7 +1530,7 @@ impl Queue {
             // Bypass the submit checks which update this because we don't submit this normally.
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, Some(built_index)),
             handle,
-            label: blas.label.clone() + " compacted",
+            label: new_label,
             tracking_data: TrackingData::new(blas.device.tracker_indices.blas_s.clone()),
             compaction_buffer: None,
             compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Compacted),

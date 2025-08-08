@@ -75,6 +75,7 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 - The function you pass to `Device::on_uncaptured_error()` must now implement `Sync` in addition to `Send`, and be wrapped in `Arc` instead of `Box`.
   In exchange for this, it is no longer possible for calling `wgpu` functions while in that callback to cause a deadlock (not that we encourage you to actually do that).
   By @kpreid in [#8011](https://github.com/gfx-rs/wgpu/pull/8011).
+- Make a compacted hal acceleration structure inherit a label from the base BLAS. By @Vecvec in [#8103](https://github.com/gfx-rs/wgpu/pull/8103).
 
 #### Naga
 
