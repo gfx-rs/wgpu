@@ -76,6 +76,7 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 #### Naga
 
 - Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
+- If the shader source contains control characters, Naga now replaces them with U+FFFD ("replacement character") in diagnostic output. By @andyleiserson in [#8049](https://github.com/gfx-rs/wgpu/pull/8049).
 
 #### DX12
 
@@ -181,8 +182,6 @@ let (device, queue) = adapter
     .create_device_from_hal(hal_device, &wgpu::DeviceDescriptor { .. })
     .unwrap();
 ```
-
-More examples of this
 
 By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
 

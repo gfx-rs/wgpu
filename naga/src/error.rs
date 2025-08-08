@@ -140,17 +140,20 @@ where
 
 pub(crate) fn replace_control_chars(s: &str) -> Cow<'_, str> {
     const REPLACEMENT_CHAR: &str = "\u{FFFD}";
+    debug_assert_eq!(
+        REPLACEMENT_CHAR.chars().next().unwrap(),
+        char::REPLACEMENT_CHARACTER
+    );
 
     let mut res = Cow::Borrowed(s);
-    let mut base = 0;
+    let mut offset = 0;
 
-    while let Some(found_pos) = res[base..].find(|c: char| c.is_control() && !c.is_whitespace()) {
-        let found_len = res[base + found_pos..].chars().next().unwrap().len_utf8();
-        res.to_mut().replace_range(
-            base + found_pos..base + found_pos + found_len,
-            REPLACEMENT_CHAR,
-        );
-        base += found_pos + REPLACEMENT_CHAR.len();
+    while let Some(found_pos) = res[offset..].find(|c: char| c.is_control() && !c.is_whitespace()) {
+        offset += found_pos;
+        let found_len = res[offset..].chars().next().unwrap().len_utf8();
+        res.to_mut()
+            .replace_range(offset..offset + found_len, REPLACEMENT_CHAR);
+        offset += REPLACEMENT_CHAR.len();
     }
 
     res
