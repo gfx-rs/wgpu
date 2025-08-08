@@ -4,11 +4,12 @@ use objc2::{
 };
 use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLBlitCommandEncoder, MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder,
-    MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample,
-    MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
-    MTLSamplerState, MTLScissorRect, MTLSize, MTLStoreAction, MTLTexture,
-    MTLVertexAmplificationViewMapping, MTLViewport, MTLVisibilityResultMode,
+    MTLAccelerationStructure, MTLBlitCommandEncoder, MTLBlitPassDescriptor, MTLBuffer,
+    MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue, MTLComputeCommandEncoder,
+    MTLComputePassDescriptor, MTLCounterDontSample, MTLLoadAction, MTLPrimitiveType,
+    MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLSamplerState, MTLScissorRect, MTLSize,
+    MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
+    MTLVisibilityResultMode,
 };
 
 use super::{conv, TimestampQuerySupport};
@@ -76,6 +77,26 @@ impl Encoder<'_> {
                 Self::Task(enc) => enc.setObjectBuffer_offset_atIndex(buffer, offset, index),
                 Self::Mesh(enc) => enc.setMeshBuffer_offset_atIndex(buffer, offset, index),
                 Self::Compute(enc) => enc.setBuffer_offset_atIndex(buffer, offset, index),
+            }
+        }
+    }
+
+    fn set_acceleration_structure(
+        &self,
+        buffer: Option<&ProtocolObject<dyn MTLAccelerationStructure>>,
+        index: NSUInteger,
+    ) {
+        unsafe {
+            match *self {
+                Self::Vertex(enc) => {
+                    enc.setVertexAccelerationStructure_atBufferIndex(buffer, index)
+                }
+                Self::Fragment(enc) => {
+                    enc.setFragmentAccelerationStructure_atBufferIndex(buffer, index)
+                }
+                Self::Task(_) => {}
+                Self::Mesh(_) => {}
+                Self::Compute(enc) => enc.setAccelerationStructure_atBufferIndex(buffer, index),
             }
         }
     }
@@ -273,21 +294,35 @@ impl super::CommandEncoder {
         };
         let mut changes_sizes_buffer = false;
         for index in 0..buffers {
-            let buf = &group.buffers[(index_base.buffers + index) as usize];
-            let buffer = Some(unsafe { buf.ptr.as_ref() });
-            let mut offset = buf.offset;
-            if let Some(dyn_index) = buf.dynamic_index {
-                offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
-            }
-            let index = (resource_indices.buffers + index) as usize;
-            encoder.set_buffer(buffer, offset as usize, index);
-            if let Some(size) = buf.binding_size {
-                let br = naga::ResourceBinding {
-                    group: group_index,
-                    binding: buf.binding_location,
-                };
-                self.state.storage_buffer_length_map.insert(br, size);
-                changes_sizes_buffer = true;
+            let res = &group.buffers[(index_base.buffers + index) as usize];
+            match res {
+                super::BufferLikeResource::Buffer {
+                    ptr,
+                    mut offset,
+                    dynamic_index,
+                    binding_size,
+                    binding_location,
+                } => {
+                    let buffer = Some(unsafe { ptr.as_ref() });
+                    if let Some(dyn_index) = dynamic_index {
+                        offset += dynamic_offsets[*dyn_index as usize] as wgt::BufferAddress;
+                    }
+                    let index = (resource_indices.buffers + index) as usize;
+                    encoder.set_buffer(buffer, offset as usize, index);
+                    if let Some(size) = binding_size {
+                        let br = naga::ResourceBinding {
+                            group: group_index,
+                            binding: *binding_location,
+                        };
+                        self.state.storage_buffer_length_map.insert(br, *size);
+                        changes_sizes_buffer = true;
+                    }
+                }
+                super::BufferLikeResource::AccelerationStructure(ptr) => {
+                    let buffer = Some(unsafe { ptr.as_ref() });
+                    let index = (resource_indices.buffers + index) as usize;
+                    encoder.set_acceleration_structure(buffer, index);
+                }
             }
         }
         if changes_sizes_buffer {

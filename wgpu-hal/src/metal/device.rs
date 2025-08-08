@@ -14,16 +14,16 @@ use objc2::{
 };
 use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLBuffer, MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
-    MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
-    MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
-    MTLDevice, MTLFunction, MTLLanguageVersion, MTLLibrary, MTLMeshRenderPipelineDescriptor,
-    MTLMutability, MTLPipelineBufferDescriptorArray, MTLPixelFormat, MTLPrimitiveTopologyClass,
-    MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
-    MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
-    MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
-    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
-    MTLVertexStepFunction,
+    MTLAccelerationStructure, MTLBuffer, MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer,
+    MTLCommandBufferStatus, MTLCompileOptions, MTLComputePipelineDescriptor,
+    MTLComputePipelineState, MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode,
+    MTLDepthStencilDescriptor, MTLDevice, MTLFunction, MTLLanguageVersion, MTLLibrary,
+    MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPipelineBufferDescriptorArray,
+    MTLPixelFormat, MTLPrimitiveTopologyClass, MTLRenderPipelineColorAttachmentDescriptorArray,
+    MTLRenderPipelineDescriptor, MTLResource, MTLResourceID, MTLResourceOptions,
+    MTLSamplerAddressMode, MTLSamplerDescriptor, MTLSamplerMipFilter, MTLSamplerState, MTLSize,
+    MTLStencilDescriptor, MTLStorageMode, MTLTexture, MTLTextureDescriptor, MTLTextureType,
+    MTLTriangleFillMode, MTLVertexDescriptor, MTLVertexStepFunction,
 };
 
 use super::{conv, PassthroughShader, ShaderModuleSource};
@@ -799,7 +799,10 @@ impl crate::Device for super::Device {
                                     wgt::StorageTextureAccess::Atomic => true,
                                 };
                             }
-                            wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                            wgt::BindingType::AccelerationStructure { .. } => {
+                                target.buffer = Some(info.counters.buffers as _);
+                                info.counters.buffers += 1;
+                            }
                             wgt::BindingType::ExternalTexture => {
                                 target.external_texture =
                                     Some(naga::back::msl::BindExternalTextureTarget {
@@ -966,12 +969,33 @@ impl crate::Device for super::Device {
                                     // need to be passed to useResource
                                 }
                             }
+                            wgt::BindingType::AccelerationStructure { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + count as usize;
+                                let acceleration_structures =
+                                    &desc.acceleration_structures[start..end];
+
+                                for (idx, &acceleration_structure) in
+                                    acceleration_structures.iter().enumerate()
+                                {
+                                    contents[idx] = acceleration_structure.raw.gpuResourceID();
+
+                                    let use_info = bg
+                                        .resources_to_use
+                                        .entry(acceleration_structure.as_raw().cast())
+                                        .or_default();
+                                    use_info.stages |= stages;
+                                    use_info.uses |= uses;
+                                    use_info.visible_in_compute |=
+                                        layout.visibility.contains(wgt::ShaderStages::COMPUTE);
+                                }
+                            }
                             _ => {
                                 unimplemented!();
                             }
                         }
 
-                        bg.buffers.push(super::BufferResource {
+                        bg.buffers.push(super::BufferLikeResource::Buffer {
                             ptr: NonNull::from(&*buffer),
                             offset: 0,
                             dynamic_index: None,
@@ -1015,7 +1039,7 @@ impl crate::Device for super::Device {
                                             }
                                             _ => None,
                                         };
-                                        super::BufferResource {
+                                        super::BufferLikeResource::Buffer {
                                             ptr: source.buffer.as_raw(),
                                             offset: source.offset,
                                             dynamic_index: if has_dynamic_offset {
@@ -1048,7 +1072,20 @@ impl crate::Device for super::Device {
                                 );
                                 counter.textures += 1;
                             }
-                            wgt::BindingType::AccelerationStructure { .. } => unimplemented!(),
+                            wgt::BindingType::AccelerationStructure { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + 1;
+                                bg.buffers.extend(
+                                    desc.acceleration_structures[start..end].iter().map(
+                                        |acceleration_structure| {
+                                            super::BufferLikeResource::AccelerationStructure(
+                                                acceleration_structure.as_raw(),
+                                            )
+                                        },
+                                    ),
+                                );
+                                counter.buffers += 1;
+                            }
                             wgt::BindingType::ExternalTexture => {
                                 // We don't yet support binding arrays of external textures.
                                 // https://github.com/gfx-rs/wgpu/issues/8027
@@ -1061,7 +1098,7 @@ impl crate::Device for super::Device {
                                         .iter()
                                         .map(|plane| plane.view.as_raw()),
                                 );
-                                bg.buffers.push(super::BufferResource {
+                                bg.buffers.push(super::BufferLikeResource::Buffer {
                                     ptr: external_texture.params.buffer.as_raw(),
                                     offset: external_texture.params.offset,
                                     dynamic_index: None,

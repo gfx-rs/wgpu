@@ -742,22 +742,25 @@ pub struct PipelineLayout {
 impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
-struct BufferResource {
-    ptr: NonNull<ProtocolObject<dyn MTLBuffer>>,
-    offset: wgt::BufferAddress,
-    dynamic_index: Option<u32>,
+enum BufferLikeResource {
+    Buffer {
+        ptr: NonNull<ProtocolObject<dyn MTLBuffer>>,
+        offset: wgt::BufferAddress,
+        dynamic_index: Option<u32>,
 
-    /// The buffer's size, if it is a [`Storage`] binding. Otherwise `None`.
-    ///
-    /// Buffers with the [`wgt::BufferBindingType::Storage`] binding type can
-    /// hold WGSL runtime-sized arrays. When one does, we must pass its size to
-    /// shader entry points to implement bounds checks and WGSL's `arrayLength`
-    /// function. See `device::CompiledShader::sized_bindings` for details.
-    ///
-    /// [`Storage`]: wgt::BufferBindingType::Storage
-    binding_size: Option<wgt::BufferSize>,
+        /// The buffer's size, if it is a [`Storage`] binding. Otherwise `None`.
+        ///
+        /// Buffers with the [`wgt::BufferBindingType::Storage`] binding type can
+        /// hold WGSL runtime-sized arrays. When one does, we must pass its size to
+        /// shader entry points to implement bounds checks and WGSL's `arrayLength`
+        /// function. See `device::CompiledShader::sized_bindings` for details.
+        ///
+        /// [`Storage`]: wgt::BufferBindingType::Storage
+        binding_size: Option<wgt::BufferSize>,
 
-    binding_location: u32,
+        binding_location: u32,
+    },
+    AccelerationStructure(NonNull<ProtocolObject<dyn MTLAccelerationStructure>>),
 }
 
 #[derive(Debug)]
@@ -780,7 +783,7 @@ impl Default for UseResourceInfo {
 #[derive(Debug, Default)]
 pub struct BindGroup {
     counters: MultiStageResourceCounters,
-    buffers: Vec<BufferResource>,
+    buffers: Vec<BufferLikeResource>,
     samplers: Vec<NonNull<ProtocolObject<dyn MTLSamplerState>>>,
     textures: Vec<NonNull<ProtocolObject<dyn MTLTexture>>>,
 
