@@ -253,7 +253,7 @@ fn f16_io_capabilities() {
         .unwrap();
     let caps_native = writer_native.get_capabilities_used();
 
-    // Should include StorageInputOutput16 for native f16 I/O
+    // Should include `StorageInputOutput16` for native `f16` I/O
     assert!(caps_native.contains(&Ca::StorageInputOutput16));
 
     // Test polyfill path: use_storage_input_output_16 = false
@@ -269,10 +269,10 @@ fn f16_io_capabilities() {
         .unwrap();
     let caps_polyfill = writer_polyfill.get_capabilities_used();
 
-    // Should not include StorageInputOutput16 when polyfilled
+    // Should not include `StorageInputOutput16` when polyfilled
     assert!(!caps_polyfill.contains(&Ca::StorageInputOutput16));
 
-    // But should still include the basic f16 capabilities
+    // But should still include the basic `f16` capabilities
     assert!(caps_polyfill.contains(&Ca::Float16));
 }
 

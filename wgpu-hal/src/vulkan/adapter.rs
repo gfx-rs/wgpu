@@ -396,7 +396,7 @@ impl PhysicalDeviceFeatures {
                 _ => None,
             },
             _16bit_storage: if requested_features.contains(wgt::Features::SHADER_F16) {
-                // Check if the device actually supports storage_input_output16
+                // Check if the device actually supports `storage_input_output16`
                 let storage_input_output16_supported = phd_features
                     ._16bit_storage
                     .as_ref()
