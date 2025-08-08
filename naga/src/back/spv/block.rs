@@ -2325,9 +2325,7 @@ impl BlockContext<'_> {
             ExpressionPointer::Ready { pointer_id } => {
                 let id = self.gen_id();
 
-                if let Some(f32_ty) =
-                    self.writer.io_f16_polyfills.get_polyfill_info(pointer_id)
-                {
+                if let Some(f32_ty) = self.writer.io_f16_polyfills.get_polyfill_info(pointer_id) {
                     block
                         .body
                         .push(Instruction::load(f32_ty, id, pointer_id, None));

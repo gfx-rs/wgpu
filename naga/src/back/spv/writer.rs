@@ -779,9 +779,7 @@ impl Writer {
                         )?;
                         iface.varying_ids.push(varying_id);
                         let mut id = self.id_gen.next();
-                        if let Some(f32_ty) =
-                            self.io_f16_polyfills.get_polyfill_info(varying_id)
-                        {
+                        if let Some(f32_ty) = self.io_f16_polyfills.get_polyfill_info(varying_id) {
                             prelude
                                 .body
                                 .push(Instruction::load(f32_ty, id, varying_id, None));
@@ -1961,8 +1959,7 @@ impl Writer {
 
             let f32_type_id = self.get_localtype_id(f32_value_local);
             let ptr_id = self.get_pointer_type_id(f32_type_id, class);
-            self.io_f16_polyfills
-                .register_variable(id, f32_type_id);
+            self.io_f16_polyfills.register_variable(id, f32_type_id);
 
             ptr_id
         } else {
