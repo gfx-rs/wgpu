@@ -16,7 +16,7 @@ use alloc::vec::Vec;
 #[derive(Default)]
 pub(in crate::back::spv) struct F16IoPolyfill {
     use_native: bool,
-    variable_map: crate::FastHashMap<Word, (Word, Word)>,
+    variable_map: crate::FastHashMap<Word, Word>,
 }
 
 impl F16IoPolyfill {
@@ -42,12 +42,11 @@ impl F16IoPolyfill {
             }
     }
 
-    pub fn register_variable(&mut self, variable_id: Word, f32_type_id: Word, f16_type_id: Word) {
-        self.variable_map
-            .insert(variable_id, (f32_type_id, f16_type_id));
+    pub fn register_variable(&mut self, variable_id: Word, f32_type_id: Word) {
+        self.variable_map.insert(variable_id, f32_type_id);
     }
 
-    pub fn get_polyfill_info(&self, variable_id: Word) -> Option<(Word, Word)> {
+    pub fn get_polyfill_info(&self, variable_id: Word) -> Option<Word> {
         self.variable_map.get(&variable_id).copied()
     }
 

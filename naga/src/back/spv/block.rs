@@ -237,7 +237,7 @@ impl Writer {
                 }
             };
 
-            if let Some((f32_ty, _)) = self.io_f16_polyfills.get_polyfill_info(res_member.id) {
+            if let Some(f32_ty) = self.io_f16_polyfills.get_polyfill_info(res_member.id) {
                 let converted = self.id_gen.next();
                 super::f16_polyfill::F16IoPolyfill::emit_f16_to_f32_conversion(
                     member_value_id,
@@ -2325,7 +2325,7 @@ impl BlockContext<'_> {
             ExpressionPointer::Ready { pointer_id } => {
                 let id = self.gen_id();
 
-                if let Some((f32_ty, _)) =
+                if let Some(f32_ty) =
                     self.writer.io_f16_polyfills.get_polyfill_info(pointer_id)
                 {
                     block
