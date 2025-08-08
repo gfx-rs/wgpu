@@ -16,14 +16,14 @@ use alloc::vec::Vec;
 #[derive(Default)]
 pub(in crate::back::spv) struct F16IoPolyfill {
     use_native: bool,
-    variable_map: crate::FastHashMap<Word, Word>,
+    io_var_to_f32_type: crate::FastHashMap<Word, Word>,
 }
 
 impl F16IoPolyfill {
     pub fn new(use_storage_input_output_16: bool) -> Self {
         Self {
             use_native: use_storage_input_output_16,
-            variable_map: crate::FastHashMap::default(),
+            io_var_to_f32_type: crate::FastHashMap::default(),
         }
     }
 
@@ -42,12 +42,12 @@ impl F16IoPolyfill {
             }
     }
 
-    pub fn register_variable(&mut self, variable_id: Word, f32_type_id: Word) {
-        self.variable_map.insert(variable_id, f32_type_id);
+    pub fn register_io_var(&mut self, variable_id: Word, f32_type_id: Word) {
+        self.io_var_to_f32_type.insert(variable_id, f32_type_id);
     }
 
-    pub fn get_polyfill_info(&self, variable_id: Word) -> Option<Word> {
-        self.variable_map.get(&variable_id).copied()
+    pub fn get_f32_io_type(&self, variable_id: Word) -> Option<Word> {
+        self.io_var_to_f32_type.get(&variable_id).copied()
     }
 
     pub fn emit_f16_to_f32_conversion(
@@ -98,7 +98,7 @@ impl F16IoPolyfill {
 
 impl crate::back::spv::recyclable::Recyclable for F16IoPolyfill {
     fn recycle(mut self) -> Self {
-        self.variable_map = self.variable_map.recycle();
+        self.io_var_to_f32_type = self.io_var_to_f32_type.recycle();
         self
     }
 }

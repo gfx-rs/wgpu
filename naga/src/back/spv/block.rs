@@ -237,18 +237,7 @@ impl Writer {
                 }
             };
 
-            if let Some(f32_ty) = self.io_f16_polyfills.get_polyfill_info(res_member.id) {
-                let converted = self.id_gen.next();
-                super::f16_polyfill::F16IoPolyfill::emit_f16_to_f32_conversion(
-                    member_value_id,
-                    f32_ty,
-                    converted,
-                    body,
-                );
-                body.push(Instruction::store(res_member.id, converted, None));
-            } else {
-                body.push(Instruction::store(res_member.id, member_value_id, None));
-            }
+            self.store_io_with_f16_polyfill(body, res_member.id, member_value_id);
 
             match res_member.built_in {
                 Some(crate::BuiltIn::Position { .. })
@@ -2325,16 +2314,16 @@ impl BlockContext<'_> {
             ExpressionPointer::Ready { pointer_id } => {
                 let id = self.gen_id();
 
-                if let Some(f32_ty) = self.writer.io_f16_polyfills.get_polyfill_info(pointer_id) {
-                    block
-                        .body
-                        .push(Instruction::load(f32_ty, id, pointer_id, None));
-                    let converted = self.gen_id();
-                    super::f16_polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
-                        id,
-                        result_type_id,
-                        converted,
+                if self
+                    .writer
+                    .io_f16_polyfills
+                    .get_f32_io_type(pointer_id)
+                    .is_some()
+                {
+                    let converted = self.writer.load_io_with_f16_polyfill(
                         &mut block.body,
+                        pointer_id,
+                        result_type_id,
                     );
                     return Ok(converted);
                 }

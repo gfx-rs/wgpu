@@ -732,28 +732,11 @@ impl Writer {
                         binding,
                     )?;
                     iface.varying_ids.push(varying_id);
-                    let mut id = self.id_gen.next();
-
-                    if let Some(f32_ty) = self.io_f16_polyfills.get_polyfill_info(varying_id) {
-                        prelude
-                            .body
-                            .push(Instruction::load(f32_ty, id, varying_id, None));
-                        let converted = self.id_gen.next();
-                        super::f16_polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
-                            id,
-                            argument_type_id,
-                            converted,
-                            &mut prelude.body,
-                        );
-                        id = converted;
-                    } else {
-                        prelude.body.push(Instruction::load(
-                            argument_type_id,
-                            id,
-                            varying_id,
-                            None,
-                        ));
-                    }
+                    let id = self.load_io_with_f16_polyfill(
+                        &mut prelude.body,
+                        varying_id,
+                        argument_type_id,
+                    );
 
                     if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
                         local_invocation_id = Some(id);
@@ -778,26 +761,9 @@ impl Writer {
                             binding,
                         )?;
                         iface.varying_ids.push(varying_id);
-                        let mut id = self.id_gen.next();
-                        if let Some(f32_ty) = self.io_f16_polyfills.get_polyfill_info(varying_id) {
-                            prelude
-                                .body
-                                .push(Instruction::load(f32_ty, id, varying_id, None));
-                            let converted = self.id_gen.next();
-                            super::f16_polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
-                                id,
-                                type_id,
-                                converted,
-                                &mut prelude.body,
-                            );
-                            id = converted;
-                            constituent_ids.push(id);
-                        } else {
-                            prelude
-                                .body
-                                .push(Instruction::load(type_id, id, varying_id, None));
-                            constituent_ids.push(id);
-                        }
+                        let id =
+                            self.load_io_with_f16_polyfill(&mut prelude.body, varying_id, type_id);
+                        constituent_ids.push(id);
 
                         if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
                             local_invocation_id = Some(id);
@@ -1959,7 +1925,7 @@ impl Writer {
 
             let f32_type_id = self.get_localtype_id(f32_value_local);
             let ptr_id = self.get_pointer_type_id(f32_type_id, class);
-            self.io_f16_polyfills.register_variable(id, f32_type_id);
+            self.io_f16_polyfills.register_io_var(id, f32_type_id);
 
             ptr_id
         } else {
@@ -2170,6 +2136,49 @@ impl Writer {
         }
 
         Ok(id)
+    }
+
+    /// Load an IO variable, converting from `f32` to `f16` if polyfill is active.
+    /// Returns the id of the loaded value matching `target_type_id`.
+    pub(super) fn load_io_with_f16_polyfill(
+        &mut self,
+        body: &mut Vec<Instruction>,
+        varying_id: Word,
+        target_type_id: Word,
+    ) -> Word {
+        let tmp = self.id_gen.next();
+        if let Some(f32_ty) = self.io_f16_polyfills.get_f32_io_type(varying_id) {
+            body.push(Instruction::load(f32_ty, tmp, varying_id, None));
+            let converted = self.id_gen.next();
+            super::f16_polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
+                tmp,
+                target_type_id,
+                converted,
+                body,
+            );
+            converted
+        } else {
+            body.push(Instruction::load(target_type_id, tmp, varying_id, None));
+            tmp
+        }
+    }
+
+    /// Store an IO variable, converting from `f16` to `f32` if polyfill is active.
+    pub(super) fn store_io_with_f16_polyfill(
+        &mut self,
+        body: &mut Vec<Instruction>,
+        varying_id: Word,
+        value_id: Word,
+    ) {
+        if let Some(f32_ty) = self.io_f16_polyfills.get_f32_io_type(varying_id) {
+            let converted = self.id_gen.next();
+            super::f16_polyfill::F16IoPolyfill::emit_f16_to_f32_conversion(
+                value_id, f32_ty, converted, body,
+            );
+            body.push(Instruction::store(varying_id, converted, None));
+        } else {
+            body.push(Instruction::store(varying_id, value_id, None));
+        }
     }
 
     fn write_global_variable(
