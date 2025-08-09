@@ -7996,7 +7996,7 @@ pub enum DeviceLostReason {
 }
 
 /// Descriptor for a shader module given by any of several sources, with optional reflection information.
-/// All shader types that may be used by the backend must be `Some`, otherwise usage is undefined behavior
+/// At least one shader type that may be used by the backend must be `Some` or a panic is caused.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
@@ -8006,7 +8006,7 @@ pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
     pub label: L,
     /// Number of workgroups in each dimension x, y and z. Unused for Spir-V.
     pub num_workgroups: (u32, u32, u32),
-    /// Optional reflection information
+    /// Optional reflection information (currently empty and meaningless).
     pub reflection: Option<ShaderModuleReflection>,
     /// Runtime checks that should be enabled.
     pub runtime_checks: ShaderRuntimeChecks,
@@ -8098,4 +8098,5 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
 /// Reflection information for a shader compiled with `naga`
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct ShaderModuleReflection {}

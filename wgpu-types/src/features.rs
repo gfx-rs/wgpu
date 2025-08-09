@@ -1212,8 +1212,9 @@ bitflags_array! {
 
         /// Enables creating shaders from passthrough with reflection info (unsafe)
         ///
+        /// Allows using `Device::create_shader_module_passthrough`.
         /// Shader code isn't parsed or interpreted in any way. It is the user's
-        /// responsibility to ensure the reflection is correct.
+        /// responsibility to ensure the code and reflection (if passed) are correct.
         ///
         /// Supported platforms
         /// - Vulkan
