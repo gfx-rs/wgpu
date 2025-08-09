@@ -321,7 +321,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "msaa-line",
     image_path: "/examples/features/src/msaa_line/screenshot.png",
     width: 1024,

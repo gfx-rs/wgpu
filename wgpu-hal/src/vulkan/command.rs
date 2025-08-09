@@ -180,6 +180,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.free
             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
         self.free.append(&mut self.discarded);
+        // Delete framebuffers from the framebuffer cache
+        for (_, framebuffer) in self.framebuffers.drain() {
+            unsafe { self.device.raw.destroy_framebuffer(framebuffer, None) };
+        }
         let _ = unsafe {
             self.device
                 .raw

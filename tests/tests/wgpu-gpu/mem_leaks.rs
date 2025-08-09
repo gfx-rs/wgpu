@@ -1,3 +1,17 @@
+#[allow(
+    clippy::allow_attributes,
+    reason = "Using expect is going to be much more verbose"
+)]
+#[allow(clippy::ptr_arg)]
+pub fn all_tests(_vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    #[cfg(any(
+        not(target_arch = "wasm32"),
+        target_os = "emscripten",
+        feature = "webgl"
+    ))]
+    _vec.push(SIMPLE_DRAW_CHECK_MEM_LEAKS);
+}
+
 #[cfg(any(
     not(target_arch = "wasm32"),
     target_os = "emscripten",
@@ -296,7 +310,8 @@ static SIMPLE_DRAW_CHECK_MEM_LEAKS: wgpu_test::GpuTestConfiguration =
         .parameters(
             wgpu_test::TestParameters::default()
                 .test_features_limits()
-                .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
+                .features(wgpu::Features::VERTEX_WRITABLE_STORAGE)
+                .enable_noop(),
         )
         .run_async(|ctx| {
             draw_test_with_reports(ctx, &[0, 1, 2, 3, 4, 5], |cmb| {

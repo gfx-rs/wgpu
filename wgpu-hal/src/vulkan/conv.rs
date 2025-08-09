@@ -747,6 +747,12 @@ pub fn map_shader_stage(stage: wgt::ShaderStages) -> vk::ShaderStageFlags {
     if stage.contains(wgt::ShaderStages::COMPUTE) {
         flags |= vk::ShaderStageFlags::COMPUTE;
     }
+    if stage.contains(wgt::ShaderStages::TASK) {
+        flags |= vk::ShaderStageFlags::TASK_EXT;
+    }
+    if stage.contains(wgt::ShaderStages::MESH) {
+        flags |= vk::ShaderStageFlags::MESH_EXT;
+    }
     flags
 }
 

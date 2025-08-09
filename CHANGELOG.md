@@ -58,9 +58,46 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 ### Changes
 
+#### General
+
+- Prevent resources for acceleration structures being created if acceleration structures are not enabled. By @Vecvec in [#8036](https://github.com/gfx-rs/wgpu/pull/8036).
+- Validate that each `push_debug_group` pairs with exactly one `pop_debug_group`. By @andyleiserson in [#8048](https://github.com/gfx-rs/wgpu/pull/8048).
+- `set_viewport` now requires that the supplied minimum depth value is less than the maximum depth value. By @andyleiserson in [#8040](https://github.com/gfx-rs/wgpu/pull/8040).
+- Validation of `copy_texture_to_buffer`, `copy_buffer_to_texture`, and `copy_texture_to_texture` operations more closely follows the WebGPU specification. By @andyleiserson in various PRs.
+  - Copies within the same texture must not overlap.
+  - Copies of multisampled or depth/stencil formats must span an entire subresource (layer).
+  - Copies of depth/stencil formats must be 4B aligned.
+- The offset for `set_vertex_buffer` and `set_index_buffer` must be 4B aligned. By @andyleiserson in [#7929](https://github.com/gfx-rs/wgpu/pull/7929).
+- The offset and size of bindings are validated as fitting within the underlying buffer in more cases. By @andyleiserson in [#7911](https://github.com/gfx-rs/wgpu/pull/7911).
+
 #### Naga
 
-Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
+- Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
+
+#### DX12
+
+- Fixed a bug where access to matrices with 2 rows would not work in some cases. By @andyleiserson in [#7438](https://github.com/gfx-rs/wgpu/pull/7438).
+
+### Bug Fixes
+
+#### General
+
+- Validate that effective buffer binding size is aligned to 4 when creating bind groups with buffer entries.. By @ErichDonGubler in [8041](https://github.com/gfx-rs/wgpu/pull/8041).
+
+#### Vulkan
+
+- Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8043](https://github.com/gfx-rs/wgpu/pull/8043).
+
+## v26.0.2 (2025-07-23)
+
+### Bug Fixes
+
+- Fixed vulkan validation error regarding the swapchain in latest SDK. By @cwfitzgerald in [#7971](https://github.com/gfx-rs/wgpu/pull/7971).
+- Fixed flickering on AMD devices and crashes inside Renderdoc due to incorrect caching of `VkFramebuffer`s when the driver re-used image view handles. By @cwfitzgerald in [#7972](https://github.com/gfx-rs/wgpu/pull/7972).
+> [!WARNING]
+> There is formally a breaking change in `wgpu_hal::vulkan::Device::texture_from_raw` as there is now a `&self` receiver where
+> there previously wasn't one. This will not affect you unless you explicitly use this api. We have gone ahead with the release
+> as the bug was pervasive and made wgpu unusable for the affected people on v26.
 
 ## v26.0.1 (2025-07-10)
 
@@ -149,6 +186,7 @@ By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
 - Add acceleration structure limits. By @Vecvec in [#7845](https://github.com/gfx-rs/wgpu/pull/7845).
 - Add support for clip-distances feature for Vulkan and GL backends. By @dzamkov in [#7730](https://github.com/gfx-rs/wgpu/pull/7730)
 - Added `wgpu_types::error::{ErrorType, WebGpuError}` for classification of errors according to WebGPU's [`GPUError`]'s classification scheme, and implement `WebGpuError` for existing errors. This allows users of `wgpu-core` to offload error classification onto the WGPU ecosystem, rather than having to do it themselves without sufficient information. By @ErichDonGubler in [#6547](https://github.com/gfx-rs/wgpu/pull/6547).
+- Added mesh shader support to `wgpu`, with examples. Requires passthrough. By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345).
 
 [`GPUError`]: https://www.w3.org/TR/webgpu/#gpuerror
 

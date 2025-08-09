@@ -1354,6 +1354,102 @@ impl dispatch::DeviceInterface for CoreDevice {
         .into()
     }
 
+    fn create_mesh_pipeline(
+        &self,
+        desc: &crate::MeshPipelineDescriptor<'_>,
+    ) -> dispatch::DispatchRenderPipeline {
+        use wgc::pipeline as pipe;
+
+        let mesh_constants = desc
+            .mesh
+            .compilation_options
+            .constants
+            .iter()
+            .map(|&(key, value)| (String::from(key), value))
+            .collect();
+        let descriptor = pipe::MeshPipelineDescriptor {
+            label: desc.label.map(Borrowed),
+            task: desc.task.as_ref().map(|task| {
+                let task_constants = task
+                    .compilation_options
+                    .constants
+                    .iter()
+                    .map(|&(key, value)| (String::from(key), value))
+                    .collect();
+                pipe::TaskState {
+                    stage: pipe::ProgrammableStageDescriptor {
+                        module: task.module.inner.as_core().id,
+                        entry_point: task.entry_point.map(Borrowed),
+                        constants: task_constants,
+                        zero_initialize_workgroup_memory: desc
+                            .mesh
+                            .compilation_options
+                            .zero_initialize_workgroup_memory,
+                    },
+                }
+            }),
+            mesh: pipe::MeshState {
+                stage: pipe::ProgrammableStageDescriptor {
+                    module: desc.mesh.module.inner.as_core().id,
+                    entry_point: desc.mesh.entry_point.map(Borrowed),
+                    constants: mesh_constants,
+                    zero_initialize_workgroup_memory: desc
+                        .mesh
+                        .compilation_options
+                        .zero_initialize_workgroup_memory,
+                },
+            },
+            layout: desc.layout.map(|layout| layout.inner.as_core().id),
+            primitive: desc.primitive,
+            depth_stencil: desc.depth_stencil.clone(),
+            multisample: desc.multisample,
+            fragment: desc.fragment.as_ref().map(|frag| {
+                let frag_constants = frag
+                    .compilation_options
+                    .constants
+                    .iter()
+                    .map(|&(key, value)| (String::from(key), value))
+                    .collect();
+                pipe::FragmentState {
+                    stage: pipe::ProgrammableStageDescriptor {
+                        module: frag.module.inner.as_core().id,
+                        entry_point: frag.entry_point.map(Borrowed),
+                        constants: frag_constants,
+                        zero_initialize_workgroup_memory: frag
+                            .compilation_options
+                            .zero_initialize_workgroup_memory,
+                    },
+                    targets: Borrowed(frag.targets),
+                }
+            }),
+            multiview: desc.multiview,
+            cache: desc.cache.map(|cache| cache.inner.as_core().id),
+        };
+
+        let (id, error) = self
+            .context
+            .0
+            .device_create_mesh_pipeline(self.id, &descriptor, None);
+        if let Some(cause) = error {
+            if let wgc::pipeline::CreateRenderPipelineError::Internal { stage, ref error } = cause {
+                log::error!("Shader translation error for stage {stage:?}: {error}");
+                log::error!("Please report it to https://github.com/gfx-rs/wgpu");
+            }
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                desc.label,
+                "Device::create_render_pipeline",
+            );
+        }
+        CoreRenderPipeline {
+            context: self.context.clone(),
+            id,
+            error_sink: Arc::clone(&self.error_sink),
+        }
+        .into()
+    }
+
     fn create_compute_pipeline(
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
@@ -3125,6 +3221,22 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         }
     }
 
+    fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
+        if let Err(cause) = self.context.0.render_pass_draw_mesh_tasks(
+            &mut self.pass,
+            group_count_x,
+            group_count_y,
+            group_count_z,
+        ) {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RenderPass::draw_mesh_tasks",
+            );
+        }
+    }
+
     fn draw_indirect(
         &mut self,
         indirect_buffer: &dispatch::DispatchBuffer,
@@ -3163,6 +3275,27 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
                 cause,
                 self.pass.label(),
                 "RenderPass::draw_indexed_indirect",
+            );
+        }
+    }
+
+    fn draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &dispatch::DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+    ) {
+        let indirect_buffer = indirect_buffer.as_core();
+
+        if let Err(cause) = self.context.0.render_pass_draw_mesh_tasks_indirect(
+            &mut self.pass,
+            indirect_buffer.id,
+            indirect_offset,
+        ) {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RenderPass::draw_mesh_tasks_indirect",
             );
         }
     }
@@ -3209,6 +3342,29 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
                 cause,
                 self.pass.label(),
                 "RenderPass::multi_draw_indexed_indirect",
+            );
+        }
+    }
+
+    fn multi_draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &dispatch::DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+        count: u32,
+    ) {
+        let indirect_buffer = indirect_buffer.as_core();
+
+        if let Err(cause) = self.context.0.render_pass_multi_draw_mesh_tasks_indirect(
+            &mut self.pass,
+            indirect_buffer.id,
+            indirect_offset,
+            count,
+        ) {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RenderPass::multi_draw_mesh_tasks_indirect",
             );
         }
     }
@@ -3269,6 +3425,38 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
                 cause,
                 self.pass.label(),
                 "RenderPass::multi_draw_indexed_indirect_count",
+            );
+        }
+    }
+
+    fn multi_draw_mesh_tasks_indirect_count(
+        &mut self,
+        indirect_buffer: &dispatch::DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+        count_buffer: &dispatch::DispatchBuffer,
+        count_buffer_offset: crate::BufferAddress,
+        max_count: u32,
+    ) {
+        let indirect_buffer = indirect_buffer.as_core();
+        let count_buffer = count_buffer.as_core();
+
+        if let Err(cause) = self
+            .context
+            .0
+            .render_pass_multi_draw_mesh_tasks_indirect_count(
+                &mut self.pass,
+                indirect_buffer.id,
+                indirect_offset,
+                count_buffer.id,
+                count_buffer_offset,
+                max_count,
+            )
+        {
+            self.context.handle_error(
+                &self.error_sink,
+                cause,
+                self.pass.label(),
+                "RenderPass::multi_draw_mesh_tasks_indirect_count",
             );
         }
     }

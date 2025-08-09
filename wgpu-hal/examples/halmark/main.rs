@@ -254,13 +254,15 @@ impl<A: hal::Api> Example<A> {
         let pipeline_desc = hal::RenderPipelineDescriptor {
             label: None,
             layout: &pipeline_layout,
-            vertex_stage: hal::ProgrammableStage {
-                module: &shader,
-                entry_point: "vs_main",
-                constants: &constants,
-                zero_initialize_workgroup_memory: true,
+            vertex_processor: hal::VertexProcessor::Standard {
+                vertex_stage: hal::ProgrammableStage {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    constants: &constants,
+                    zero_initialize_workgroup_memory: true,
+                },
+                vertex_buffers: &[],
             },
-            vertex_buffers: &[],
             fragment_stage: Some(hal::ProgrammableStage {
                 module: &shader,
                 entry_point: "fs_main",

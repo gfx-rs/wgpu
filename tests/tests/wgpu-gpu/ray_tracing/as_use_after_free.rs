@@ -13,6 +13,10 @@ use wgpu::{
 use wgpu_macros::gpu_test;
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    tests.push(ACCELERATION_STRUCTURE_USE_AFTER_FREE);
+}
+
 fn required_features() -> wgpu::Features {
     wgpu::Features::EXPERIMENTAL_RAY_QUERY
 }

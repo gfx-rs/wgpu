@@ -161,6 +161,13 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn create_mesh_pipeline(
+        &self,
+        _desc: &wgpu::MeshPipelineDescriptor<'_>,
+    ) -> wgpu::custom::DispatchRenderPipeline {
+        unimplemented!()
+    }
+
     fn create_compute_pipeline(
         &self,
         desc: &wgpu::ComputePipelineDescriptor<'_>,

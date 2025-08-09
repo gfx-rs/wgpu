@@ -431,7 +431,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "texture-arrays",
     image_path: "/examples/features/src/texture_arrays/screenshot.png",
     width: 1024,
@@ -444,20 +444,21 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_UNIFORM: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
-    name: "texture-arrays-uniform",
-    image_path: "/examples/features/src/texture_arrays/screenshot.png",
-    width: 1024,
-    height: 768,
-    optional_features: wgpu::Features::empty(),
-    base_test_parameters: wgpu_test::TestParameters::default(),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
-    _phantom: std::marker::PhantomData::<Example>,
-};
+pub static TEST_UNIFORM: crate::framework::ExampleTestParams =
+    crate::framework::ExampleTestParams {
+        name: "texture-arrays-uniform",
+        image_path: "/examples/features/src/texture_arrays/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::empty(),
+        base_test_parameters: wgpu_test::TestParameters::default(),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
+        _phantom: std::marker::PhantomData::<Example>,
+    };
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_NON_UNIFORM: crate::framework::ExampleTestParams =
+pub static TEST_NON_UNIFORM: crate::framework::ExampleTestParams =
     crate::framework::ExampleTestParams {
         name: "texture-arrays-non-uniform",
         image_path: "/examples/features/src/texture_arrays/screenshot.png",

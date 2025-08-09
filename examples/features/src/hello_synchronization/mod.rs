@@ -208,4 +208,4 @@ pub fn main() {
 }
 
 #[cfg(test)]
-mod tests;
+pub mod tests;

@@ -113,6 +113,10 @@ pub enum Action<'a> {
         id: id::RenderPipelineId,
         desc: crate::pipeline::RenderPipelineDescriptor<'a>,
     },
+    CreateMeshPipeline {
+        id: id::RenderPipelineId,
+        desc: crate::pipeline::MeshPipelineDescriptor<'a>,
+    },
     DestroyRenderPipeline(id::RenderPipelineId),
     CreatePipelineCache {
         id: id::PipelineCacheId,

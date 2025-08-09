@@ -147,6 +147,10 @@ pub trait DeviceInterface: CommonTraits {
         &self,
         desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> DispatchRenderPipeline;
+    fn create_mesh_pipeline(
+        &self,
+        desc: &crate::MeshPipelineDescriptor<'_>,
+    ) -> DispatchRenderPipeline;
     fn create_compute_pipeline(
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
@@ -420,12 +424,18 @@ pub trait RenderPassInterface: CommonTraits {
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
+    fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32);
     fn draw_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
     );
     fn draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+    );
+    fn draw_mesh_tasks_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
@@ -451,7 +461,21 @@ pub trait RenderPassInterface: CommonTraits {
         count_buffer_offset: crate::BufferAddress,
         max_count: u32,
     );
+    fn multi_draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+        count: u32,
+    );
     fn multi_draw_indexed_indirect_count(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+        count_buffer: &DispatchBuffer,
+        count_buffer_offset: crate::BufferAddress,
+        max_count: u32,
+    );
+    fn multi_draw_mesh_tasks_indirect_count(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,

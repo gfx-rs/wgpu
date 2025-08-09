@@ -3983,11 +3983,30 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 dim,
                 arrayed,
                 class,
-            } => ir::TypeInner::Image {
-                dim,
-                arrayed,
-                class,
-            },
+            } => {
+                if class == crate::ImageClass::External {
+                    // Other than the WGSL backend, every backend that supports
+                    // external textures does so by lowering them to a set of
+                    // ordinary textures and some parameters saying how to
+                    // sample from them. We don't know which backend will
+                    // consume the `Module` we're building, but in case it's not
+                    // WGSL, populate `SpecialTypes::external_texture_params`
+                    // and `SpecialTypes::external_texture_transfer_function`
+                    // with the types the backend will use for the parameter
+                    // buffer.
+                    //
+                    // Neither of these are the type we are lowering here:
+                    // that's an ordinary `TypeInner::Image`. But the fact we
+                    // are lowering a `texture_external` implies the backends
+                    // may need these additional types too.
+                    ctx.module.generate_external_texture_types();
+                }
+                ir::TypeInner::Image {
+                    dim,
+                    arrayed,
+                    class,
+                }
+            }
             ast::Type::Sampler { comparison } => ir::TypeInner::Sampler { comparison },
             ast::Type::AccelerationStructure { vertex_return } => {
                 ir::TypeInner::AccelerationStructure { vertex_return }

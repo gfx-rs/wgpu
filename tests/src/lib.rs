@@ -17,7 +17,7 @@ mod run;
 pub use init::initialize_html_canvas;
 
 pub use self::image::ComparisonType;
-pub use config::GpuTestConfiguration;
+pub use config::{GpuTestConfiguration, GpuTestInitializer};
 #[doc(hidden)]
 pub use ctor;
 pub use expectations::{FailureApplicationReasons, FailureBehavior, FailureCase, FailureReason};
@@ -114,17 +114,22 @@ pub fn did_oom<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool,
 }
 
 /// Adds the necessary main function for our gpu test harness.
+///
+/// Takes a single argument which is an expression that evaluates to `Vec<wgpu_test::GpuTestInitializer>`.
 #[macro_export]
 macro_rules! gpu_test_main {
-    () => {
+    ($tests: expr) => {
         #[cfg(target_arch = "wasm32")]
         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
         #[cfg(target_arch = "wasm32")]
-        fn main() {}
+        fn main() {
+            // Ensure that value is used so that warnings don't happen.
+            let _ = $tests;
+        }
 
         #[cfg(not(target_arch = "wasm32"))]
         fn main() -> $crate::native::MainResult {
-            $crate::native::main()
+            $crate::native::main($tests)
         }
     };
 }

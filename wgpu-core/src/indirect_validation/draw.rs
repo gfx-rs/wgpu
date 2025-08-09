@@ -919,7 +919,7 @@ impl DrawBatcher {
         device: &Device,
         src_buffer: &Arc<crate::resource::Buffer>,
         offset: u64,
-        indexed: bool,
+        family: crate::command::DrawCommandFamily,
         vertex_or_index_limit: u64,
         instance_limit: u64,
     ) -> Result<(usize, u64), DeviceError> {
@@ -929,7 +929,7 @@ impl DrawBatcher {
         } else {
             0
         };
-        let stride = extra + crate::command::get_stride_of_indirect_args(indexed);
+        let stride = extra + crate::command::get_stride_of_indirect_args(family);
 
         let (dst_resource_index, dst_offset) = indirect_draw_validation_resources
             .get_dst_subrange(stride, &mut self.current_dst_entry)?;
@@ -941,7 +941,7 @@ impl DrawBatcher {
         let src_buffer_tracker_index = src_buffer.tracker_index();
 
         let entry = MetadataEntry::new(
-            indexed,
+            family == crate::command::DrawCommandFamily::DrawIndexed,
             src_offset,
             dst_offset,
             vertex_or_index_limit,

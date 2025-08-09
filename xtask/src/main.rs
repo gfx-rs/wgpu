@@ -7,6 +7,7 @@ use anyhow::Context;
 use pico_args::Arguments;
 
 mod cts;
+mod miri;
 mod run_wasm;
 mod test;
 mod util;
@@ -36,6 +37,14 @@ Commands:
     --retries   Number of times to retry failing tests
 
     All extra arguments will be forwarded to cargo-nextest (NOT wgpu-info)
+
+  miri
+    Run all miri-compatible tests under miri. Requires a nightly toolchain
+    with the x86_64-unknown-linux-gnu target and miri component installed.
+
+    --toolchain <toolchain>   The toolchain to use for miri tests.
+                              Must be a nightly toolchain.
+                              Defaults to `nightly`.
 
   vendor-web-sys
     Re-vendor the WebGPU web-sys bindings.
@@ -85,6 +94,7 @@ fn main() -> anyhow::Result<ExitCode> {
     match subcommand.as_deref() {
         Some("cts") => cts::run_cts(shell, args)?,
         Some("run-wasm") => run_wasm::run_wasm(shell, args)?,
+        Some("miri") => miri::run_miri(shell, args)?,
         Some("test") => test::run_tests(shell, args)?,
         Some("vendor-web-sys") => vendor_web_sys::run_vendor_web_sys(shell, args)?,
         Some(subcommand) => {

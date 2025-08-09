@@ -1,7 +1,19 @@
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, TestParameters,
-    TestingContext,
+    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        CLEAR_TEXTURE_UNCOMPRESSED_GLES,
+        CLEAR_TEXTURE_UNCOMPRESSED,
+        CLEAR_TEXTURE_DEPTH,
+        CLEAR_TEXTURE_DEPTH32_STENCIL8,
+        CLEAR_TEXTURE_COMPRESSED_BCN,
+        CLEAR_TEXTURE_COMPRESSED_ASTC,
+        CLEAR_TEXTURE_COMPRESSED_ETC2,
+    ]);
+}
 
 static TEXTURE_FORMATS_UNCOMPRESSED_GLES_COMPAT: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::R8Unorm,

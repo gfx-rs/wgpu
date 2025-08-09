@@ -974,7 +974,7 @@ bitflags_array! {
         /// all.
         ///
         /// Supported platforms:
-        /// - None
+        /// - DX12
         const EXTERNAL_TEXTURE = 1 << 30;
 
         // Shader:

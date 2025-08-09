@@ -3,7 +3,20 @@ use std::fmt::Write;
 use wgpu::{Backends, DownlevelFlags, Features, Limits};
 
 use crate::shader::{shader_input_output_test, InputStorageType, ShaderTest, MAX_BUFFER_SIZE};
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        UNIFORM_INPUT,
+        STORAGE_INPUT,
+        PUSH_CONSTANT_INPUT,
+        UNIFORM_INPUT_INT64,
+        STORAGE_INPUT_INT64,
+        PUSH_CONSTANT_INPUT_INT64,
+        UNIFORM_INPUT_F16,
+        STORAGE_INPUT_F16,
+    ]);
+}
 
 #[gpu_test]
 static UNIFORM_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()

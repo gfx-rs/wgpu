@@ -421,6 +421,12 @@ impl GlobalPlay for wgc::global::Global {
                     panic!("{e}");
                 }
             }
+            Action::CreateMeshPipeline { id, desc } => {
+                let (_, error) = self.device_create_mesh_pipeline(device, &desc, Some(id));
+                if let Some(e) = error {
+                    panic!("{e}");
+                }
+            }
             Action::DestroyRenderPipeline(id) => {
                 self.render_pipeline_drop(id);
             }

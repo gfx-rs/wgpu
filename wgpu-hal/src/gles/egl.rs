@@ -574,7 +574,6 @@ impl Inner {
         })
         .unwrap();
 
-        let needs_robustness = true;
         let mut khr_context_flags = 0;
         let supports_khr_context = display_extensions.contains("EGL_KHR_create_context");
 
@@ -611,53 +610,108 @@ impl Inner {
                 log::debug!("\tEGL context: -debug");
             }
         }
-        if needs_robustness {
-            //Note: the core version can fail if robustness is not supported
-            // (regardless of whether the extension is supported!).
-            // In fact, Angle does precisely that awful behavior, so we don't try it there.
-            if version >= (1, 5) && !display_extensions.contains("EGL_ANGLE_") {
-                log::debug!("\tEGL context: +robust access");
-                context_attributes.push(khronos_egl::CONTEXT_OPENGL_ROBUST_ACCESS);
-                context_attributes.push(khronos_egl::TRUE as _);
-            } else if display_extensions.contains("EGL_EXT_create_context_robustness") {
-                log::debug!("\tEGL context: +robust access EXT");
-                context_attributes.push(EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT);
-                context_attributes.push(khronos_egl::TRUE as _);
-            } else {
-                //Note: we aren't trying `EGL_CONTEXT_OPENGL_ROBUST_ACCESS_BIT_KHR`
-                // because it's for desktop GL only, not GLES.
-                log::warn!("\tEGL context: -robust access");
-            }
-        }
+
         if khr_context_flags != 0 {
             context_attributes.push(EGL_CONTEXT_FLAGS_KHR);
             context_attributes.push(khr_context_flags);
         }
-        context_attributes.push(khronos_egl::NONE);
 
         gl_context_attributes.extend(&context_attributes);
         gles_context_attributes.extend(&context_attributes);
 
-        let context = if supports_opengl {
-            egl.create_context(display, config, None, &gl_context_attributes)
-                .or_else(|_| {
-                    egl.bind_api(khronos_egl::OPENGL_ES_API).unwrap();
+        let context = {
+            enum Robustness {
+                Core,
+                Ext,
+            }
+
+            let mut robustness = if version >= (1, 5) {
+                Some(Robustness::Core)
+            } else if display_extensions.contains("EGL_EXT_create_context_robustness") {
+                Some(Robustness::Ext)
+            } else {
+                None
+            };
+
+            loop {
+                let robustness_attributes = match robustness {
+                    Some(Robustness::Core) => {
+                        vec![
+                            khronos_egl::CONTEXT_OPENGL_ROBUST_ACCESS,
+                            khronos_egl::TRUE as _,
+                            khronos_egl::NONE,
+                        ]
+                    }
+                    Some(Robustness::Ext) => {
+                        vec![
+                            EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT,
+                            khronos_egl::TRUE as _,
+                            khronos_egl::NONE,
+                        ]
+                    }
+                    None => vec![khronos_egl::NONE],
+                };
+
+                let mut gl_context_attributes = gl_context_attributes.clone();
+                gl_context_attributes.extend(&robustness_attributes);
+
+                let mut gles_context_attributes = gles_context_attributes.clone();
+                gles_context_attributes.extend(&robustness_attributes);
+
+                let result = if supports_opengl {
+                    egl.create_context(display, config, None, &gl_context_attributes)
+                        .or_else(|_| {
+                            egl.bind_api(khronos_egl::OPENGL_ES_API).unwrap();
+                            egl.create_context(display, config, None, &gles_context_attributes)
+                        })
+                } else {
                     egl.create_context(display, config, None, &gles_context_attributes)
-                })
-                .map_err(|e| {
-                    crate::InstanceError::with_source(
-                        String::from("unable to create OpenGL or GLES 3.x context"),
-                        e,
-                    )
-                })
-        } else {
-            egl.create_context(display, config, None, &gles_context_attributes)
-                .map_err(|e| {
-                    crate::InstanceError::with_source(
-                        String::from("unable to create GLES 3.x context"),
-                        e,
-                    )
-                })
+                };
+
+                match (result, robustness) {
+                    // We have a context at the requested robustness level
+                    (Ok(_), robustness) => {
+                        match robustness {
+                            Some(Robustness::Core) => {
+                                log::debug!("\tEGL context: +robust access");
+                            }
+                            Some(Robustness::Ext) => {
+                                log::debug!("\tEGL context: +robust access EXT");
+                            }
+                            None => {
+                                log::debug!("\tEGL context: -robust access");
+                            }
+                        }
+
+                        break result;
+                    }
+
+                    // BadAttribute could mean that context creation is not supported at the requested robustness level
+                    // We try the next robustness level.
+                    (Err(khronos_egl::Error::BadAttribute), Some(r)) => {
+                        // Trying EXT robustness if Core robustness is not working
+                        // and EXT robustness is supported.
+                        robustness = if matches!(r, Robustness::Core)
+                            && display_extensions.contains("EGL_EXT_create_context_robustness")
+                        {
+                            Some(Robustness::Ext)
+                        } else {
+                            None
+                        };
+
+                        continue;
+                    }
+
+                    // Any other error, or depleted robustness levels, we give up.
+                    _ => break result,
+                }
+            }
+            .map_err(|e| {
+                crate::InstanceError::with_source(
+                    String::from("unable to create OpenGL or GLES 3.x context"),
+                    e,
+                )
+            })
         }?;
 
         // Testing if context can be binded without surface

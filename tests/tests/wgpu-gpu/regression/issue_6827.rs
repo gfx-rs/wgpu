@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([TEST_SINGLE_WRITE, TEST_SCATTER]);
+}
 
 #[gpu_test]
 static TEST_SINGLE_WRITE: GpuTestConfiguration = GpuTestConfiguration::new()

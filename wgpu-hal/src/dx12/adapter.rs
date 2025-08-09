@@ -362,7 +362,8 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_FORMAT_NV12
             | wgt::Features::FLOAT32_FILTERABLE
             | wgt::Features::TEXTURE_ATOMIC
-            | wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS;
+            | wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
+            | wgt::Features::EXTERNAL_TEXTURE;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
@@ -614,6 +615,12 @@ impl super::Adapter {
                     // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
                     max_buffer_size: i32::MAX as u64,
                     max_non_sampler_bindings: 1_000_000,
+
+                    max_task_workgroup_total_count: 0,
+                    max_task_workgroups_per_dimension: 0,
+                    max_mesh_multiview_count: 0,
+                    max_mesh_output_layers: 0,
+
                     max_blas_primitive_count: if supports_ray_tracing {
                         1 << 29 // 2^29
                     } else {

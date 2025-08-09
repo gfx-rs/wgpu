@@ -10,6 +10,10 @@ use wgpu::{
 use wgpu_macros::gpu_test;
 use wgpu_test::{fail, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    tests.push(LIMITS_HIT);
+}
+
 #[gpu_test]
 static LIMITS_HIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -22,7 +26,8 @@ static LIMITS_HIT: GpuTestConfiguration = GpuTestConfiguration::new()
                 max_acceleration_structures_per_shader_stage: 1,
                 ..Limits::default()
             })
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(hit_limits);
 

@@ -13,6 +13,7 @@ Anyone in the @gfx-rs/wgpu team can perform these steps.
 ## Major Release Process
 
 Approx 1 Week Before:
+
 - Determine if `glow` (@groves), `metal-rs` (@gfx-rs/wgpu) or any other dependant crates will need a release. If so, coordinate with their maintainers.
 - Go through the changelog:
   - Re-categorize miscategorized items.
@@ -21,6 +22,7 @@ Approx 1 Week Before:
   - Copy-edit the changelog for clarity.
 
 Day of Release:
+
 - Update the version number in the root `Cargo.toml` to the new version, this will update all crates to the new version.
 - Bump the wgpu dependency numbers in the following places:
   - `Cargo.toml`
@@ -67,7 +69,8 @@ Day of Release:
   - [Rust Community Discord](https://discord.gg/rust-lang-community) in the #games-and-graphics channel
 
 ## Patch Release Process
-- Enumerate all PRs that haven't been backported yet. These use the `needs-backport` label. [GH Link](https://github.com/gfx-rs/wgpu/pulls?q=sort%3Aupdated-desc+is%3Apr+label%3A%22PR%3A+needs+back-porting%22)
+
+- Enumerate all PRs that haven't been backported yet. These use the `PR: needs back-porting` label. [GH Link](https://github.com/gfx-rs/wgpu/pulls?q=sort%3Aupdated-desc+is%3Apr+label%3A%22PR%3A+needs+back-porting%22)
 - On _your own branch_ based on the latest release branch. Cherry-pick the PRs that need to be backported. When modifying the commits, use --append to retain their original authorship.
 - Remove the `needs-backport` label from the PRs.
 - Fix the changelogs items and add a new header for the patch release with the release version and date.

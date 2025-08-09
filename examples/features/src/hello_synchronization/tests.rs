@@ -2,7 +2,7 @@ use super::*;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
-static SYNC: GpuTestConfiguration = GpuTestConfiguration::new()
+pub static SYNC: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         // Taken from hello-compute tests.
         TestParameters::default()

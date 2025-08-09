@@ -245,7 +245,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "stencil-triangles",
     image_path: "/examples/features/src/stencil_triangles/screenshot.png",
     width: 1024,

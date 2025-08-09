@@ -801,6 +801,12 @@ impl super::Adapter {
             max_compute_workgroups_per_dimension,
             max_buffer_size: i32::MAX as u64,
             max_non_sampler_bindings: u32::MAX,
+
+            max_task_workgroup_total_count: 0,
+            max_task_workgroups_per_dimension: 0,
+            max_mesh_multiview_count: 0,
+            max_mesh_output_layers: 0,
+
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
             max_tlas_instance_count: 0,
