@@ -384,6 +384,7 @@ impl Writer {
             let mut binding_index = 0;
             for (member_id, member) in return_info.vertex_members.iter().enumerate() {
                 let val_to_copy = self.id_gen.next();
+                let mut needs_y_flip = false;
                 body.push(Instruction::composite_extract(
                     member.ty_id,
                     val_to_copy,
@@ -392,8 +393,7 @@ impl Writer {
                 ));
                 let ptr_to_copy_to = self.id_gen.next();
                 match member.binding {
-                    crate::Binding::BuiltIn(_) => {
-                        // TODO: flip coordinates
+                    crate::Binding::BuiltIn(bi) => {
                         body.push(Instruction::access_chain(
                             self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
                             ptr_to_copy_to,
@@ -403,6 +403,8 @@ impl Writer {
                                 self.get_constant_scalar(crate::Literal::U32(builtin_index)),
                             ],
                         ));
+                        needs_y_flip = matches!(bi, crate::BuiltIn::Position { .. })
+                            && self.flags.contains(WriterFlags::ADJUST_COORDINATE_SPACE);
                         builtin_index += 1;
                     }
                     crate::Binding::Location { .. } => {
@@ -416,6 +418,9 @@ impl Writer {
                     }
                 }
                 body.push(Instruction::store(ptr_to_copy_to, val_to_copy, None));
+                if needs_y_flip {
+                    self.write_epilogue_position_y_flip(ptr_to_copy_to, &mut body)?;
+                }
             }
             body
         };
