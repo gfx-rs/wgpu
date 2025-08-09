@@ -302,7 +302,7 @@ impl Writer {
         return_info: &super::MeshReturnInfo,
         body: &mut Vec<Instruction>,
     ) -> Result<(), Error> {
-        // TODO: (maybe) make this multithreaded if you have the patience
+        // TODO: (maybe) make this better multithreaded if you have the patience
         let vert_info = self.mesh_shader_output_variable(
             return_info.vertex_type,
             false,
@@ -328,7 +328,7 @@ impl Writer {
             None,
         ));
 
-        // All this for the vertex loop lol
+        // All this for a `for i in 0..num_vertices` lol
         let u32_type_id = self.get_u32_type_id();
         let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
         let vertex_loop_header = self.id_gen.next();
@@ -474,7 +474,7 @@ impl Writer {
             }
             body
         };
-
+        // TODO: make the increments atomic
         let mut get_loop_continue_id = |body: &mut Vec<Instruction>, mut loop_body_block, loop_header, loop_merge, count_id| {
             let condition_check = self.id_gen.next();
             let loop_continue = self.id_gen.next();
@@ -537,6 +537,7 @@ impl Writer {
         );
         {
             body.push(Instruction::label(in_between_loops));
+            // TODO: sync threads, make this an atomic write
             body.push(Instruction::store(counter_var, zero_u32, None));
             body.push(Instruction::branch(prim_loop_header));
         }
