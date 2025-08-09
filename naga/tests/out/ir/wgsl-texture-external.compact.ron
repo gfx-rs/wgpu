@@ -382,6 +382,8 @@
                 ],
                 diagnostic_filter_leaf: None,
             ),
+            mesh_info: None,
+            task_payload: None,
         ),
         (
             name: "vertex_main",
@@ -418,6 +420,8 @@
                 ],
                 diagnostic_filter_leaf: None,
             ),
+            mesh_info: None,
+            task_payload: None,
         ),
         (
             name: "compute_main",
@@ -449,6 +453,8 @@
                 ],
                 diagnostic_filter_leaf: None,
             ),
+            mesh_info: None,
+            task_payload: None,
         ),
     ],
     diagnostic_filters: [],
