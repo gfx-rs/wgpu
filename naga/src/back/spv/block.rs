@@ -330,7 +330,6 @@ impl Writer {
 
         // All this for the vertex loop lol
         let u32_type_id = self.get_u32_type_id();
-        let u32_ptr_id = self.get_pointer_type_id(u32_type_id, spirv::StorageClass::Function);
         let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
         let vertex_loop_header = self.id_gen.next();
         let prim_loop_header = self.id_gen.next();
@@ -339,12 +338,16 @@ impl Writer {
         let prim_loop_body = self.id_gen.next();
         let func_end = self.id_gen.next();
         let counter_var = self.id_gen.next();
-        body.push(Instruction::variable(
-            u32_ptr_id,
+
+        Instruction::variable(
+            self.get_pointer_type_id(u32_type_id, spirv::StorageClass::Workgroup),
             counter_var,
-            spirv::StorageClass::Function,
-            Some(zero_u32),
-        ));
+            spirv::StorageClass::Workgroup,
+            None,
+        )
+        .to_words(&mut self.logical_layout.declarations);
+
+        body.push(Instruction::store(counter_var, zero_u32, None));
 
         body.push(Instruction::branch(vertex_loop_header));
 
@@ -432,11 +435,12 @@ impl Writer {
                     member.ty_id,
                     val_to_copy,
                     vert_to_copy,
-                    &[self.get_constant_scalar(crate::Literal::U32(member_id as u32))],
+                    &[member_id as u32],
                 ));
                 let ptr_to_copy_to = self.id_gen.next();
                 match member.binding {
                     crate::Binding::BuiltIn(_) => {
+                        // TODO: flip coordinates
                         body.push(Instruction::access_chain(
                             self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
                             ptr_to_copy_to,
@@ -479,7 +483,7 @@ impl Writer {
             ));
             let prim_to_copy = self.id_gen.next();
             body.push(Instruction::load(
-                vert_info.inner_ty,
+                prim_info.inner_ty,
                 prim_to_copy,
                 prim_to_copy_ptr,
                 None,
@@ -493,7 +497,7 @@ impl Writer {
                     member.ty_id,
                     val_to_copy,
                     prim_to_copy,
-                    &[self.get_constant_scalar(crate::Literal::U32(member_id as u32))],
+                    &[member_id as u32],
                 ));
                 let ptr_to_copy_to = self.id_gen.next();
                 match member.binding {
@@ -3921,6 +3925,9 @@ impl BlockContext<'_> {
                     vertex_count,
                     primitive_count,
                 }) => {
+                    self.writer
+                        .require_any("mesh shaders", &[spirv::Capability::MeshShadingEXT])?;
+                    self.writer.use_extension("SPV_EXT_mesh_shader");
                     let mut ins = Instruction::new(spirv::Op::SetMeshOutputsEXT);
                     ins.add_operand(self.cached[vertex_count]);
                     ins.add_operand(self.cached[primitive_count]);
@@ -3961,7 +3968,7 @@ impl BlockContext<'_> {
                         .mesh_shader_output_variable(type_handle, is_prim, 0)?;
                     let out_ptr_id = self.gen_id();
                     block.body.push(Instruction::access_chain(
-                        self.get_pointer_type_id(info.inner_ty, spirv::StorageClass::Output),
+                        self.get_pointer_type_id(info.inner_ty, spirv::StorageClass::Workgroup),
                         out_ptr_id,
                         info.var_id,
                         &[self.cached[index]],

@@ -1059,6 +1059,10 @@ impl Writer {
                         vert_info.array_size_id,
                     )?;
                     iface.varying_ids.push(v.var_id);
+                    if self.flags.contains(WriterFlags::DEBUG) {
+                        Instruction::name(v.var_id, "naga_vertex_builtin_outputs")
+                            .to_words(&mut self.logical_layout.debugs);
+                    }
                     mesh_return_info.vertex_builtin_block = Some(v);
                 }
                 if mesh_return_info.primitive_members.iter().any(|a| {
@@ -1132,6 +1136,10 @@ impl Writer {
                     Instruction::decorate(v.var_id, spirv::Decoration::PerPrimitiveEXT, &[])
                         .to_words(&mut self.logical_layout.annotations);
                     iface.varying_ids.push(v.var_id);
+                    if self.flags.contains(WriterFlags::DEBUG) {
+                        Instruction::name(v.var_id, "naga_primitive_builtin_outputs")
+                            .to_words(&mut self.logical_layout.debugs);
+                    }
                     mesh_return_info.primitive_builtin_block = Some(v);
                 }
                 {
@@ -1195,6 +1203,10 @@ impl Writer {
                                 )
                                 .to_words(&mut self.logical_layout.annotations);
                                 iface.varying_ids.push(v.var_id);
+                                if self.flags.contains(WriterFlags::DEBUG) {
+                                    Instruction::name(v.var_id, "naga_primitive_indices_outputs")
+                                        .to_words(&mut self.logical_layout.debugs);
+                                }
                                 mesh_return_info.primitive_indices = Some(v);
                             }
                             crate::Binding::Location { location, .. } => {
@@ -2466,6 +2478,8 @@ impl Writer {
                 }
                 if per_primitive && stage == crate::ShaderStage::Fragment {
                     others.push(Decoration::PerPrimitiveEXT);
+                    self.require_any("mesh shaders", &[spirv::Capability::MeshShadingEXT])?;
+                    self.use_extension("SPV_EXT_mesh_shader");
                 }
                 Ok(BindingDecorations::Location {
                     location,
