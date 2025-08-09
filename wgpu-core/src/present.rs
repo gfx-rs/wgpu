@@ -177,7 +177,10 @@ impl Surface {
                 drop(fence);
 
                 let texture_desc = wgt::TextureDescriptor {
-                    label: Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
+                    label: hal_label(
+                        Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
+                        device.instance_flags,
+                    ),
                     size: wgt::Extent3d {
                         width: config.width,
                         height: config.height,

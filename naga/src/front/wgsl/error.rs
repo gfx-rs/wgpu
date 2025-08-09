@@ -422,6 +422,12 @@ pub(crate) enum Error<'a> {
         attribute_span: Span,
         struct_span: Span,
     },
+    StructMemberTooLarge {
+        member_name_span: Span,
+    },
+    TypeTooLarge {
+        span: Span,
+    },
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -1400,6 +1406,22 @@ impl<'a> Error<'a> {
                 message: "mesh primitive struct must have exactly one of point indices, line indices, or triangle indices".to_string(),
                 labels: vec![(attribute_span, "primitive type declared here".into()), (struct_span, "primitive struct declared here".into())],
                 notes: vec![]
+            },
+            Error::StructMemberTooLarge { member_name_span } => ParseError {
+                message: "struct member is too large".into(),
+                labels: vec![(member_name_span, "this member exceeds the maximum size".into())],
+                notes: vec![format!(
+                    "the maximum size is {} bytes",
+                    crate::valid::MAX_TYPE_SIZE
+                )],
+            },
+            Error::TypeTooLarge { span } => ParseError {
+                message: "type is too large".into(),
+                labels: vec![(span, "this type exceeds the maximum size".into())],
+                notes: vec![format!(
+                    "the maximum size is {} bytes",
+                    crate::valid::MAX_TYPE_SIZE
+                )],
             },
         }
     }

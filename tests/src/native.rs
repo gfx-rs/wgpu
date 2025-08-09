@@ -9,6 +9,7 @@ use parking_lot::Mutex;
 
 use crate::{
     config::GpuTestConfiguration, params::TestInfo, report::AdapterReport, run::execute_test,
+    GpuTestInitializer,
 };
 
 type NativeTestFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
@@ -76,28 +77,41 @@ pub static TEST_LIST: Mutex<Vec<crate::GpuTestConfiguration>> = Mutex::new(Vec::
 pub type MainResult = anyhow::Result<()>;
 
 /// Main function that runs every gpu function once for every adapter on the system.
-pub fn main() -> MainResult {
+pub fn main(tests: Vec<GpuTestInitializer>) -> MainResult {
     use anyhow::Context;
 
     use crate::report::GpuReport;
 
-    let config_text = {
-        profiling::scope!("Reading .gpuconfig");
-        &std::fs::read_to_string(format!("{}/../.gpuconfig", env!("CARGO_MANIFEST_DIR")))
-            .context("Failed to read .gpuconfig, did you run the tests via `cargo xtask test`?")?
+    // If this environment variable is set, we will only enumerate the noop backend. The
+    // main use case is running tests with miri, where we can't even enumerate adapters,
+    // as we cannot load DLLs or make any external calls.
+    let use_noop = std::env::var("WGPU_GPU_TESTS_USE_NOOP_BACKEND").as_deref() == Ok("1");
+
+    let report = if use_noop {
+        GpuReport::noop_only()
+    } else {
+        let config_text = {
+            profiling::scope!("Reading .gpuconfig");
+            &std::fs::read_to_string(format!("{}/../.gpuconfig", env!("CARGO_MANIFEST_DIR")))
+                .context(
+                    "Failed to read .gpuconfig, did you run the tests via `cargo xtask test`?",
+                )?
+        };
+        let mut report =
+            GpuReport::from_json(config_text).context("Could not parse .gpuconfig JSON")?;
+
+        // Filter out the adapters that are not part of WGPU_BACKEND.
+        let wgpu_backends = wgpu::Backends::from_env().unwrap_or_default();
+        report
+            .devices
+            .retain(|report| wgpu_backends.contains(wgpu::Backends::from(report.info.backend)));
+
+        report
     };
-    let mut report =
-        GpuReport::from_json(config_text).context("Could not parse .gpuconfig JSON")?;
 
-    // Filter out the adapters that are not part of WGPU_BACKEND.
-    let wgpu_backends = wgpu::Backends::from_env().unwrap_or_default();
-    report
-        .devices
-        .retain(|report| wgpu_backends.contains(wgpu::Backends::from(report.info.backend)));
-
-    let mut test_guard = TEST_LIST.lock();
     // Iterate through all the tests. Creating a test per adapter.
-    execute_native(test_guard.drain(..).flat_map(|test| {
+    execute_native(tests.into_iter().flat_map(|initializer| {
+        let test = initializer();
         report
             .devices
             .iter()

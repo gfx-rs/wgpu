@@ -245,6 +245,13 @@ impl Device {
         RenderPipeline { inner: pipeline }
     }
 
+    /// Creates a mesh shader based [`RenderPipeline`].
+    #[must_use]
+    pub fn create_mesh_pipeline(&self, desc: &MeshPipelineDescriptor<'_>) -> RenderPipeline {
+        let pipeline = self.inner.create_mesh_pipeline(desc);
+        RenderPipeline { inner: pipeline }
+    }
+
     /// Creates a [`ComputePipeline`].
     #[must_use]
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor<'_>) -> ComputePipeline {
@@ -323,6 +330,20 @@ impl Device {
                 view_formats: &[],
                 ..desc.clone()
             },
+        }
+    }
+
+    /// Creates a new [`ExternalTexture`].
+    #[must_use]
+    pub fn create_external_texture(
+        &self,
+        desc: &ExternalTextureDescriptor<'_>,
+        planes: &[&TextureView],
+    ) -> ExternalTexture {
+        let external_texture = self.inner.create_external_texture(desc, planes);
+
+        ExternalTexture {
+            inner: external_texture,
         }
     }
 

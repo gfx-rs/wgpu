@@ -7,7 +7,9 @@ use wgt::{
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, str};
 
-use crate::command::{pass, EncoderStateError, PassStateError, TimestampWritesError};
+use crate::command::{
+    pass, CommandEncoder, DebugGroupError, EncoderStateError, PassStateError, TimestampWritesError,
+};
 use crate::resource::DestroyedResourceError;
 use crate::{binding_model::BindError, resource::RawResourceAccess};
 use crate::{
@@ -18,8 +20,8 @@ use crate::{
         end_pipeline_statistics_query,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
         pass_base, pass_try, validate_and_begin_pipeline_statistics_query, ArcPassTimestampWrites,
-        BasePass, BindGroupStateChange, CommandBuffer, CommandEncoderError, MapPassErr,
-        PassErrorScope, PassTimestampWrites, QueryUseError, StateChange,
+        BasePass, BindGroupStateChange, CommandEncoderError, MapPassErr, PassErrorScope,
+        PassTimestampWrites, QueryUseError, StateChange,
     },
     device::{DeviceError, MissingDownlevelFlags, MissingFeatures},
     global::Global,
@@ -46,12 +48,12 @@ pub struct ComputePass {
     /// All pass data & records is stored here.
     base: ComputeBasePass,
 
-    /// Parent command buffer that this pass records commands into.
+    /// Parent command encoder that this pass records commands into.
     ///
     /// If this is `Some`, then the pass is in WebGPU's "open" state. If it is
     /// `None`, then the pass is in the "ended" state.
     /// See <https://www.w3.org/TR/webgpu/#encoder-state>
-    parent: Option<Arc<CommandBuffer>>,
+    parent: Option<Arc<CommandEncoder>>,
 
     timestamp_writes: Option<ArcPassTimestampWrites>,
 
@@ -61,8 +63,8 @@ pub struct ComputePass {
 }
 
 impl ComputePass {
-    /// If the parent command buffer is invalid, the returned pass will be invalid.
-    fn new(parent: Arc<CommandBuffer>, desc: ArcComputePassDescriptor) -> Self {
+    /// If the parent command encoder is invalid, the returned pass will be invalid.
+    fn new(parent: Arc<CommandEncoder>, desc: ArcComputePassDescriptor) -> Self {
         let ArcComputePassDescriptor {
             label,
             timestamp_writes,
@@ -78,7 +80,7 @@ impl ComputePass {
         }
     }
 
-    fn new_invalid(parent: Arc<CommandBuffer>, label: &Label, err: ComputePassError) -> Self {
+    fn new_invalid(parent: Arc<CommandEncoder>, label: &Label, err: ComputePassError) -> Self {
         Self {
             base: BasePass::new_invalid(label, err),
             parent: Some(parent),
@@ -97,7 +99,7 @@ impl ComputePass {
 impl fmt::Debug for ComputePass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.parent {
-            Some(ref cmd_buf) => write!(f, "ComputePass {{ parent: {} }}", cmd_buf.error_ident()),
+            Some(ref cmd_enc) => write!(f, "ComputePass {{ parent: {} }}", cmd_enc.error_ident()),
             None => write!(f, "ComputePass {{ parent: None }}"),
         }
     }
@@ -144,6 +146,8 @@ pub enum ComputePassErrorInner {
     #[error("Parent encoder is invalid")]
     InvalidParentEncoder,
     #[error(transparent)]
+    DebugGroupError(#[from] DebugGroupError),
+    #[error(transparent)]
     BindGroupIndexOutOfRange(#[from] pass::BindGroupIndexOutOfRange),
     #[error(transparent)]
     DestroyedResource(#[from] DestroyedResourceError),
@@ -159,8 +163,6 @@ pub enum ComputePassErrorInner {
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
-    #[error(transparent)]
-    InvalidPopDebugGroup(#[from] pass::InvalidPopDebugGroup),
     #[error(transparent)]
     Dispatch(#[from] DispatchError),
     #[error(transparent)]
@@ -224,6 +226,7 @@ impl WebGpuError for ComputePassError {
         let e: &dyn WebGpuError = match inner {
             ComputePassErrorInner::Device(e) => e,
             ComputePassErrorInner::EncoderState(e) => e,
+            ComputePassErrorInner::DebugGroupError(e) => e,
             ComputePassErrorInner::DestroyedResource(e) => e,
             ComputePassErrorInner::ResourceUsageCompatibility(e) => e,
             ComputePassErrorInner::MissingBufferUsage(e) => e,
@@ -236,7 +239,6 @@ impl WebGpuError for ComputePassError {
             ComputePassErrorInner::InvalidResource(e) => e,
             ComputePassErrorInner::TimestampWrites(e) => e,
             ComputePassErrorInner::InvalidValuesOffset(e) => e,
-            ComputePassErrorInner::InvalidPopDebugGroup(e) => e,
 
             ComputePassErrorInner::InvalidParentEncoder
             | ComputePassErrorInner::BindGroupIndexOutOfRange { .. }
@@ -251,10 +253,10 @@ impl WebGpuError for ComputePassError {
     }
 }
 
-struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
+struct State<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder> {
     pipeline: Option<Arc<ComputePipeline>>,
 
-    general: pass::BaseState<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder>,
+    general: pass::BaseState<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder>,
 
     active_query: Option<(Arc<resource::QuerySet>, u32)>,
 
@@ -263,8 +265,8 @@ struct State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder> {
     intermediate_trackers: Tracker,
 }
 
-impl<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder>
-    State<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder>
+impl<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder>
+    State<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder>
 {
     fn is_ready(&self) -> Result<(), DispatchError> {
         if let Some(pipeline) = self.pipeline.as_ref() {
@@ -308,7 +310,7 @@ impl<'scope, 'snatch_guard, 'cmd_buf, 'raw_encoder>
                 );
         }
 
-        CommandBuffer::drain_barriers(
+        CommandEncoder::drain_barriers(
             self.general.raw_encoder,
             &mut self.intermediate_trackers,
             self.general.snatch_guard,
@@ -342,15 +344,15 @@ impl Global {
 
         let label = desc.label.as_deref().map(Cow::Borrowed);
 
-        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
 
         match cmd_buf_data.lock_encoder() {
             Ok(()) => {
                 drop(cmd_buf_data);
-                if let Err(err) = cmd_buf.device.check_is_valid() {
+                if let Err(err) = cmd_enc.device.check_is_valid() {
                     return (
-                        ComputePass::new_invalid(cmd_buf, &label, err.map_pass_err(scope)),
+                        ComputePass::new_invalid(cmd_enc, &label, err.map_pass_err(scope)),
                         None,
                     );
                 }
@@ -360,7 +362,7 @@ impl Global {
                     .as_ref()
                     .map(|tw| {
                         Self::validate_pass_timestamp_writes::<ComputePassErrorInner>(
-                            &cmd_buf.device,
+                            &cmd_enc.device,
                             &hub.query_sets.read(),
                             tw,
                         )
@@ -372,10 +374,10 @@ impl Global {
                             label,
                             timestamp_writes,
                         };
-                        (ComputePass::new(cmd_buf, arc_desc), None)
+                        (ComputePass::new(cmd_enc, arc_desc), None)
                     }
                     Err(err) => (
-                        ComputePass::new_invalid(cmd_buf, &label, err.map_pass_err(scope)),
+                        ComputePass::new_invalid(cmd_enc, &label, err.map_pass_err(scope)),
                         None,
                     ),
                 }
@@ -387,7 +389,7 @@ impl Global {
                 cmd_buf_data.invalidate(err.clone());
                 drop(cmd_buf_data);
                 (
-                    ComputePass::new_invalid(cmd_buf, &label, err.map_pass_err(scope)),
+                    ComputePass::new_invalid(cmd_enc, &label, err.map_pass_err(scope)),
                     None,
                 )
             }
@@ -396,7 +398,7 @@ impl Global {
                 // generates an immediate validation error.
                 drop(cmd_buf_data);
                 (
-                    ComputePass::new_invalid(cmd_buf, &label, err.clone().map_pass_err(scope)),
+                    ComputePass::new_invalid(cmd_enc, &label, err.clone().map_pass_err(scope)),
                     Some(err.into()),
                 )
             }
@@ -408,7 +410,7 @@ impl Global {
                 // invalid pass to save that work.
                 drop(cmd_buf_data);
                 (
-                    ComputePass::new_invalid(cmd_buf, &label, err.map_pass_err(scope)),
+                    ComputePass::new_invalid(cmd_enc, &label, err.map_pass_err(scope)),
                     None,
                 )
             }
@@ -433,11 +435,8 @@ impl Global {
     ) {
         #[cfg(feature = "trace")]
         {
-            let cmd_buf = self
-                .hub
-                .command_buffers
-                .get(encoder_id.into_command_buffer_id());
-            let mut cmd_buf_data = cmd_buf.data.lock();
+            let cmd_enc = self.hub.command_encoders.get(encoder_id);
+            let mut cmd_buf_data = cmd_enc.data.lock();
             let cmd_buf_data = cmd_buf_data.get_inner();
 
             if let Some(ref mut list) = cmd_buf_data.commands {
@@ -495,8 +494,8 @@ impl Global {
             pass.base.label.as_deref().unwrap_or("")
         );
 
-        let cmd_buf = pass.parent.take().ok_or(EncoderStateError::Ended)?;
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = pass.parent.take().ok_or(EncoderStateError::Ended)?;
+        let mut cmd_buf_data = cmd_enc.data.lock();
 
         if let Some(err) = pass.base.error.take() {
             if matches!(
@@ -521,7 +520,7 @@ impl Global {
         }
 
         cmd_buf_data.unlock_and_record(|cmd_buf_data| -> Result<(), ComputePassError> {
-            let device = &cmd_buf.device;
+            let device = &cmd_enc.device;
             device.check_is_valid().map_pass_err(pass_scope)?;
 
             let base = &mut pass.base;
@@ -582,7 +581,7 @@ impl Global {
             let timestamp_writes: Option<hal::PassTimestampWrites<'_, dyn hal::DynQuerySet>> =
                 if let Some(tw) = pass.timestamp_writes.take() {
                     tw.query_set
-                        .same_device_as(cmd_buf.as_ref())
+                        .same_device_as(cmd_enc.as_ref())
                         .map_pass_err(pass_scope)?;
 
                     let query_set = state.general.tracker.query_sets.insert_single(tw.query_set);
@@ -637,7 +636,7 @@ impl Global {
                         let scope = PassErrorScope::SetBindGroup;
                         pass::set_bind_group::<ComputePassErrorInner>(
                             &mut state.general,
-                            cmd_buf.as_ref(),
+                            cmd_enc.as_ref(),
                             &base.dynamic_offsets,
                             index,
                             num_dynamic_offsets,
@@ -648,7 +647,7 @@ impl Global {
                     }
                     ArcComputeCommand::SetPipeline(pipeline) => {
                         let scope = PassErrorScope::SetPipelineCompute;
-                        set_pipeline(&mut state, cmd_buf.as_ref(), pipeline).map_pass_err(scope)?;
+                        set_pipeline(&mut state, cmd_enc.as_ref(), pipeline).map_pass_err(scope)?;
                     }
                     ArcComputeCommand::SetPushConstant {
                         offset,
@@ -680,7 +679,7 @@ impl Global {
                     }
                     ArcComputeCommand::DispatchIndirect { buffer, offset } => {
                         let scope = PassErrorScope::Dispatch { indirect: true };
-                        dispatch_indirect(&mut state, cmd_buf.as_ref(), buffer, offset)
+                        dispatch_indirect(&mut state, cmd_enc.as_ref(), buffer, offset)
                             .map_pass_err(scope)?;
                     }
                     ArcComputeCommand::PushDebugGroup { color: _, len } => {
@@ -701,7 +700,7 @@ impl Global {
                         let scope = PassErrorScope::WriteTimestamp;
                         pass::write_timestamp::<ComputePassErrorInner>(
                             &mut state.general,
-                            cmd_buf.as_ref(),
+                            cmd_enc.as_ref(),
                             None,
                             query_set,
                             query_index,
@@ -717,7 +716,7 @@ impl Global {
                             query_set,
                             state.general.raw_encoder,
                             &mut state.general.tracker.query_sets,
-                            cmd_buf.as_ref(),
+                            cmd_enc.as_ref(),
                             query_index,
                             None,
                             &mut state.active_query,
@@ -735,6 +734,13 @@ impl Global {
                 }
             }
 
+            if state.general.debug_scope_depth > 0 {
+                Err(
+                    ComputePassErrorInner::DebugGroupError(DebugGroupError::MissingPop)
+                        .map_pass_err(pass_scope),
+                )?;
+            }
+
             unsafe {
                 state.general.raw_encoder.end_compute_pass();
             }
@@ -750,14 +756,17 @@ impl Global {
                 ..
             } = state;
 
-            // Stop the current command buffer.
+            // Stop the current command encoder.
             encoder.close().map_pass_err(pass_scope)?;
 
-            // Create a new command buffer, which we will insert _before_ the body of the compute pass.
+            // Create a new command encoder, which we will insert _before_ the body of the compute pass.
             //
             // Use that buffer to insert barriers and clear discarded images.
             let transit = encoder
-                .open_pass(Some("(wgpu internal) Pre Pass"))
+                .open_pass(hal_label(
+                    Some("(wgpu internal) Pre Pass"),
+                    self.instance.flags,
+                ))
                 .map_pass_err(pass_scope)?;
             fixup_discarded_surfaces(
                 pending_discard_init_fixups.into_iter(),
@@ -766,13 +775,13 @@ impl Global {
                 device,
                 &snatch_guard,
             );
-            CommandBuffer::insert_barriers_from_tracker(
+            CommandEncoder::insert_barriers_from_tracker(
                 transit,
                 tracker,
                 &intermediate_trackers,
                 &snatch_guard,
             );
-            // Close the command buffer, and swap it with the previous.
+            // Close the command encoder, and swap it with the previous.
             encoder.close_and_swap().map_pass_err(pass_scope)?;
 
             Ok(())
@@ -782,10 +791,10 @@ impl Global {
 
 fn set_pipeline(
     state: &mut State,
-    cmd_buf: &CommandBuffer,
+    cmd_enc: &CommandEncoder,
     pipeline: Arc<ComputePipeline>,
 ) -> Result<(), ComputePassErrorInner> {
-    pipeline.same_device_as(cmd_buf)?;
+    pipeline.same_device_as(cmd_enc)?;
 
     state.pipeline = Some(pipeline.clone());
 
@@ -859,11 +868,11 @@ fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorI
 
 fn dispatch_indirect(
     state: &mut State,
-    cmd_buf: &CommandBuffer,
+    cmd_enc: &CommandEncoder,
     buffer: Arc<Buffer>,
     offset: u64,
 ) -> Result<(), ComputePassErrorInner> {
-    buffer.same_device_as(cmd_buf)?;
+    buffer.same_device_as(cmd_enc)?;
 
     state.is_ready()?;
 

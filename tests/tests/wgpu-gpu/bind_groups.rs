@@ -1,7 +1,19 @@
 use std::num::NonZeroU64;
 
 use wgpu::{BufferUsages, PollType};
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        MULTIPLE_BINDINGS_WITH_DIFFERENT_SIZES,
+        BIND_GROUP_NONFILTERING_LAYOUT_NONFILTERING_SAMPLER,
+        BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER,
+        BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER,
+        BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER,
+    ]);
+}
 
 /// Create two bind groups against the same bind group layout, in the same
 /// compute pass, but against two different shaders that have different binding
@@ -164,14 +176,15 @@ static MULTIPLE_BINDINGS_WITH_DIFFERENT_SIZES: GpuTestConfiguration = GpuTestCon
     .parameters(
         TestParameters::default()
             .limits(wgpu::Limits::downlevel_defaults())
-            .expect_fail(FailureCase::always()), // https://github.com/gfx-rs/wgpu/issues/7359
+            .expect_fail(FailureCase::always())
+            .enable_noop(), // https://github.com/gfx-rs/wgpu/issues/7359
     )
     .run_sync(multiple_bindings_with_differing_sizes);
 
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_NONFILTERING_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,
@@ -189,7 +202,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_NONFILTERING_SAMPLER: GpuTestConfiguration
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,
@@ -207,7 +220,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER: GpuTestConfiguration =
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,
@@ -225,7 +238,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER: GpuTestConfiguration =
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,

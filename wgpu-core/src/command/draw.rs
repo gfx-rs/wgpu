@@ -56,6 +56,21 @@ pub enum DrawError {
     },
     #[error(transparent)]
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
+
+    #[error(
+        "Wrong pipeline type for this draw command. Attempted to call {} draw command on {} pipeline",
+        if *wanted_mesh_pipeline {"mesh shader"} else {"standard"},
+        if *wanted_mesh_pipeline {"standard"} else {"mesh shader"},
+    )]
+    WrongPipelineType { wanted_mesh_pipeline: bool },
+    #[error(
+        "Each current draw group size dimension ({current:?}) must be less or equal to {limit}, and the product must be less or equal to {max_total}"
+    )]
+    InvalidGroupSize {
+        current: [u32; 3],
+        limit: u32,
+        max_total: u32,
+    },
 }
 
 impl WebGpuError for DrawError {

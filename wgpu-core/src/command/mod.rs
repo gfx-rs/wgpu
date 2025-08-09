@@ -86,6 +86,8 @@ pub(crate) enum CommandEncoderStatus {
     /// <https://www.w3.org/TR/webgpu/#encoder-state-locked>
     Locked(CommandBufferMutable),
 
+    Consumed,
+
     /// Command recording is complete, and the buffer is ready for submission.
     ///
     /// [`Global::command_encoder_finish`] transitions a
@@ -145,6 +147,7 @@ impl CommandEncoderStatus {
             // Encoder is ended. Invalidate the encoder, do not record anything,
             // and return an immediate validation error.
             Self::Finished(_) => Err(self.invalidate(EncoderStateError::Ended)),
+            Self::Consumed => Err(EncoderStateError::Ended),
             // Encoder is already invalid. Do not record anything, but do not
             // return an immediate validation error.
             Self::Error(_) => Ok(()),
@@ -173,6 +176,7 @@ impl CommandEncoderStatus {
                 self.invalidate(EncoderStateError::Ended);
                 f(None)
             }
+            Self::Consumed => f(None),
             Self::Error(_) => f(None),
             Self::Transitioning => unreachable!(),
         }
@@ -186,6 +190,7 @@ impl CommandEncoderStatus {
             // playing back a recorded trace. If only to avoid having to
             // implement serialization for all the error types, we don't support
             // storing the errors in a trace.
+            Self::Consumed => unreachable!("command encoder is consumed"),
             Self::Error(_) => unreachable!("passes in a trace do not store errors"),
             Self::Transitioning => unreachable!(),
         }
@@ -210,6 +215,10 @@ impl CommandEncoderStatus {
                 Err(EncoderStateError::Ended)
             }
             Self::Locked(_) => Err(self.invalidate(EncoderStateError::Locked)),
+            st @ Self::Consumed => {
+                *self = st;
+                Err(EncoderStateError::Ended)
+            }
             st @ Self::Error(_) => {
                 *self = st;
                 Err(EncoderStateError::Invalid)
@@ -254,6 +263,10 @@ impl CommandEncoderStatus {
                 *self = Self::Error(EncoderStateError::Unlocked.into());
                 Err(EncoderStateError::Unlocked)
             }
+            st @ Self::Consumed => {
+                *self = st;
+                Err(EncoderStateError::Ended)
+            }
             st @ Self::Error(_) => {
                 // Encoder is invalid. Do not record anything, but do not
                 // return an immediate validation error.
@@ -264,21 +277,26 @@ impl CommandEncoderStatus {
         }
     }
 
-    fn finish(&mut self) -> Result<(), CommandEncoderError> {
-        match mem::replace(self, Self::Transitioning) {
+    fn finish(&mut self) -> Self {
+        // Replace our state with `Consumed`, and return either the inner
+        // state or an error, to be transferred to the command buffer.
+        match mem::replace(self, Self::Consumed) {
             Self::Recording(mut inner) => {
-                if let Err(e) = inner.encoder.close_if_open() {
-                    Err(self.invalidate(e.into()))
+                if let Err(err) = inner.encoder.close_if_open() {
+                    Self::Error(err.into())
+                } else if inner.debug_scope_depth > 0 {
+                    Self::Error(CommandEncoderError::DebugGroupError(
+                        DebugGroupError::MissingPop,
+                    ))
                 } else {
-                    *self = Self::Finished(inner);
                     // Note: if we want to stop tracking the swapchain texture view,
                     // this is the place to do it.
-                    Ok(())
+                    Self::Finished(inner)
                 }
             }
-            Self::Finished(_) => Err(self.invalidate(EncoderStateError::Ended.into())),
-            Self::Locked(_) => Err(self.invalidate(EncoderStateError::Locked.into())),
-            Self::Error(err) => Err(self.invalidate(err)),
+            Self::Consumed | Self::Finished(_) => Self::Error(EncoderStateError::Ended.into()),
+            Self::Locked(_) => Self::Error(EncoderStateError::Locked.into()),
+            st @ Self::Error(_) => st,
             Self::Transitioning => unreachable!(),
         }
     }
@@ -289,7 +307,9 @@ impl CommandEncoderStatus {
     // Since we do not track the state of an invalid encoder, it is not
     // necessary to unlock an encoder that has been invalidated.
     fn invalidate<E: Clone + Into<CommandEncoderError>>(&mut self, err: E) -> E {
-        *self = Self::Error(err.clone().into());
+        let enc_err = err.clone().into();
+        api_log!("Invalidating command encoder: {enc_err:?}");
+        *self = Self::Error(enc_err);
         err
     }
 }
@@ -372,6 +392,26 @@ impl<'a> ops::DerefMut for RecordingGuard<'a> {
     }
 }
 
+pub(crate) struct CommandEncoder {
+    pub(crate) device: Arc<Device>,
+
+    pub(crate) label: String,
+
+    /// The mutable state of this command encoder.
+    pub(crate) data: Mutex<CommandEncoderStatus>,
+}
+
+crate::impl_resource_type!(CommandEncoder);
+crate::impl_labeled!(CommandEncoder);
+crate::impl_parent_device!(CommandEncoder);
+crate::impl_storage_item!(CommandEncoder);
+
+impl Drop for CommandEncoder {
+    fn drop(&mut self) {
+        resource_log!("Drop {}", self.error_ident());
+    }
+}
+
 /// A raw [`CommandEncoder`][rce], and the raw [`CommandBuffer`][rcb]s built from it.
 ///
 /// Each wgpu-core [`CommandBuffer`] owns an instance of this type, which is
@@ -383,16 +423,11 @@ impl<'a> ops::DerefMut for RecordingGuard<'a> {
 /// commands into the middle of a recorded stream. However, hal queue submission
 /// accepts a series of command buffers at once, so we can simply break the
 /// stream up into multiple buffers, and then reorder the buffers. See
-/// [`CommandEncoder::close_and_swap`] for a specific example of this.
-///
-/// Note that a [`CommandEncoderId`] actually refers to a [`CommandBuffer`].
-/// Methods that take a command encoder id actually look up the command buffer,
-/// and then use its encoder.
+/// [`InnerCommandEncoder::close_and_swap`] for a specific example of this.
 ///
 /// [rce]: hal::Api::CommandEncoder
 /// [rcb]: hal::Api::CommandBuffer
-/// [`CommandEncoderId`]: crate::id::CommandEncoderId
-pub(crate) struct CommandEncoder {
+pub(crate) struct InnerCommandEncoder {
     /// The underlying `wgpu_hal` [`CommandEncoder`].
     ///
     /// Successfully executed command buffers' encoders are saved in a
@@ -425,10 +460,10 @@ pub(crate) struct CommandEncoder {
     /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
     pub(crate) is_open: bool,
 
-    pub(crate) hal_label: Option<String>,
+    pub(crate) label: String,
 }
 
-impl CommandEncoder {
+impl InnerCommandEncoder {
     /// Finish the current command buffer and insert it just before
     /// the last element in [`self.list`][l].
     ///
@@ -451,7 +486,7 @@ impl CommandEncoder {
     ///
     /// - If the encoder is not open.
     ///
-    /// [l]: CommandEncoder::list
+    /// [l]: InnerCommandEncoder::list
     /// [`transition_buffers`]: hal::CommandEncoder::transition_buffers
     /// [`transition_textures`]: hal::CommandEncoder::transition_textures
     fn close_and_swap(&mut self) -> Result<(), DeviceError> {
@@ -474,7 +509,7 @@ impl CommandEncoder {
     ///
     /// - If the encoder is not open.
     ///
-    /// [l]: CommandEncoder::list
+    /// [l]: InnerCommandEncoder::list
     pub(crate) fn close_and_push_front(&mut self) -> Result<(), DeviceError> {
         assert!(self.is_open);
         self.is_open = false;
@@ -495,7 +530,7 @@ impl CommandEncoder {
     ///
     /// - If the encoder is not open.
     ///
-    /// [l]: CommandEncoder::list
+    /// [l]: InnerCommandEncoder::list
     pub(crate) fn close(&mut self) -> Result<(), DeviceError> {
         assert!(self.is_open);
         self.is_open = false;
@@ -516,7 +551,7 @@ impl CommandEncoder {
     ///
     /// On return, the underlying hal encoder is closed.
     ///
-    /// [l]: CommandEncoder::list
+    /// [l]: InnerCommandEncoder::list
     fn close_if_open(&mut self) -> Result<(), DeviceError> {
         if self.is_open {
             self.is_open = false;
@@ -534,7 +569,7 @@ impl CommandEncoder {
     pub(crate) fn open(&mut self) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
         if !self.is_open {
             self.is_open = true;
-            let hal_label = self.hal_label.as_deref();
+            let hal_label = hal_label(Some(self.label.as_str()), self.device.instance_flags);
             unsafe { self.raw.begin_encoding(hal_label) }
                 .map_err(|e| self.device.handle_hal_error(e))?;
         }
@@ -565,7 +600,7 @@ impl CommandEncoder {
     }
 }
 
-impl Drop for CommandEncoder {
+impl Drop for InnerCommandEncoder {
     fn drop(&mut self) {
         if self.is_open {
             unsafe { self.raw.discard_encoding() };
@@ -582,7 +617,7 @@ impl Drop for CommandEncoder {
 /// Look at the documentation for [`CommandBufferMutable`] for an explanation of
 /// the fields in this struct. This is the "built" counterpart to that type.
 pub(crate) struct BakedCommands {
-    pub(crate) encoder: CommandEncoder,
+    pub(crate) encoder: InnerCommandEncoder,
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
     pub(crate) indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
@@ -596,7 +631,7 @@ pub struct CommandBufferMutable {
     /// they belong to.
     ///
     /// [`wgpu_hal::Api::CommandBuffer`]: hal::Api::CommandBuffer
-    pub(crate) encoder: CommandEncoder,
+    pub(crate) encoder: InnerCommandEncoder,
 
     /// All the resources that the commands recorded so far have referred to.
     pub(crate) trackers: Tracker,
@@ -616,6 +651,8 @@ pub struct CommandBufferMutable {
     temp_resources: Vec<TempResource>,
 
     indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
+
+    debug_scope_depth: u32,
 
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
@@ -645,25 +682,11 @@ impl CommandBufferMutable {
 
 /// A buffer of commands to be submitted to the GPU for execution.
 ///
-/// Whereas the WebGPU API uses two separate types for command buffers and
-/// encoders, this type is a fusion of the two:
-///
-/// - During command recording, this holds a [`CommandEncoder`] accepting this
-///   buffer's commands. In this state, the [`CommandBuffer`] type behaves like
-///   a WebGPU `GPUCommandEncoder`.
-///
-/// - Once command recording is finished by calling
-///   [`Global::command_encoder_finish`], no further recording is allowed. The
-///   internal [`CommandEncoder`] is retained solely as a storage pool for the
-///   raw command buffers. In this state, the value behaves like a WebGPU
-///   `GPUCommandBuffer`.
-///
-/// - Once a command buffer is submitted to the queue, it is removed from the id
-///   registry, and its contents are taken to construct a [`BakedCommands`],
-///   whose contents eventually become the property of the submission queue.
+/// Once a command buffer is submitted to the queue, its contents are taken
+/// to construct a [`BakedCommands`], whose contents eventually become the
+/// property of the submission queue.
 pub struct CommandBuffer {
     pub(crate) device: Arc<Device>,
-    support_clear_texture: bool,
     /// The `label` from the descriptor used to create the resource.
     label: String,
 
@@ -677,25 +700,24 @@ impl Drop for CommandBuffer {
     }
 }
 
-impl CommandBuffer {
+impl CommandEncoder {
     pub(crate) fn new(
         encoder: Box<dyn hal::DynCommandEncoder>,
         device: &Arc<Device>,
         label: &Label,
     ) -> Self {
-        CommandBuffer {
+        CommandEncoder {
             device: device.clone(),
-            support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
             label: label.to_string(),
             data: Mutex::new(
                 rank::COMMAND_BUFFER_DATA,
                 CommandEncoderStatus::Recording(CommandBufferMutable {
-                    encoder: CommandEncoder {
+                    encoder: InnerCommandEncoder {
                         raw: ManuallyDrop::new(encoder),
                         list: Vec::new(),
                         device: device.clone(),
                         is_open: false,
-                        hal_label: label.to_hal(device.instance_flags).map(str::to_owned),
+                        label: label.to_string(),
                     },
                     trackers: Tracker::new(),
                     buffer_memory_init_actions: Default::default(),
@@ -705,6 +727,7 @@ impl CommandBuffer {
                     temp_resources: Default::default(),
                     indirect_draw_validation_resources:
                         crate::indirect_validation::DrawResources::new(device.clone()),
+                    debug_scope_depth: 0,
                     #[cfg(feature = "trace")]
                     commands: if device.trace.lock().is_some() {
                         Some(Vec::new())
@@ -721,9 +744,8 @@ impl CommandBuffer {
         label: &Label,
         err: CommandEncoderError,
     ) -> Self {
-        CommandBuffer {
+        CommandEncoder {
             device: device.clone(),
-            support_clear_texture: device.features.contains(wgt::Features::CLEAR_TEXTURE),
             label: label.to_string(),
             data: Mutex::new(rank::COMMAND_BUFFER_DATA, CommandEncoderStatus::Error(err)),
         }
@@ -815,10 +837,7 @@ impl CommandBuffer {
         ) {
             St::Finished(command_buffer_mutable) => Ok(command_buffer_mutable),
             St::Error(err) => Err(err),
-            St::Recording(_) | St::Locked(_) => {
-                Err(InvalidResourceError(self.error_ident()).into())
-            }
-            St::Transitioning => unreachable!(),
+            St::Recording(_) | St::Locked(_) | St::Consumed | St::Transitioning => unreachable!(),
         }
     }
 }
@@ -1029,6 +1048,8 @@ pub enum CommandEncoderError {
     #[error(transparent)]
     ResourceUsage(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
+    DebugGroupError(#[from] DebugGroupError),
+    #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     Transfer(#[from] TransferError),
@@ -1082,6 +1103,7 @@ impl WebGpuError for CommandEncoderError {
         let e: &dyn WebGpuError = match self {
             Self::Device(e) => e,
             Self::InvalidResource(e) => e,
+            Self::DebugGroupError(e) => e,
             Self::MissingFeatures(e) => e,
             Self::State(e) => e,
             Self::DestroyedResource(e) => e,
@@ -1095,6 +1117,23 @@ impl WebGpuError for CommandEncoderError {
             Self::RenderPass(e) => e,
         };
         e.webgpu_error_type()
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum DebugGroupError {
+    #[error("Cannot pop debug group, because number of pushed debug groups is zero")]
+    InvalidPop,
+    #[error("A debug group was not popped before the encoder was finished")]
+    MissingPop,
+}
+
+impl WebGpuError for DebugGroupError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::InvalidPop | Self::MissingPop => ErrorType::Validation,
+        }
     }
 }
 
@@ -1121,22 +1160,33 @@ impl Global {
     pub fn command_encoder_finish(
         &self,
         encoder_id: id::CommandEncoderId,
-        _desc: &wgt::CommandBufferDescriptor<Label>,
+        desc: &wgt::CommandBufferDescriptor<Label>,
+        id_in: Option<id::CommandBufferId>,
     ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
         profiling::scope!("CommandEncoder::finish");
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
+        let cmd_enc = hub.command_encoders.get(encoder_id);
+
+        let data = cmd_enc.data.lock().finish();
 
         // Errors related to destroyed resources are not reported until the
         // command buffer is submitted.
-        let error = match cmd_buf.data.lock().finish() {
-            Err(e) if !e.is_destroyed_error() => Some(e),
+        let error = match data {
+            CommandEncoderStatus::Error(ref e) if !e.is_destroyed_error() => Some(e.clone()),
             _ => None,
         };
 
-        (encoder_id.into_command_buffer_id(), error)
+        let cmd_buf = CommandBuffer {
+            device: cmd_enc.device.clone(),
+            label: desc.label.to_string(),
+            data: Mutex::new(rank::COMMAND_BUFFER_DATA, data),
+        };
+
+        let cmd_buf_id = hub.command_buffers.prepare(id_in).assign(Arc::new(cmd_buf));
+
+        (cmd_buf_id, error)
     }
 
     pub fn command_encoder_push_debug_group(
@@ -1149,18 +1199,20 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
+            cmd_buf_data.debug_scope_depth += 1;
+
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::PushDebugGroup(label.to_owned()));
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
             let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-            if !cmd_buf
+            if !cmd_enc
                 .device
                 .instance_flags
                 .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
@@ -1184,17 +1236,17 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
-            if !cmd_buf
+            if !cmd_enc
                 .device
                 .instance_flags
                 .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
@@ -1218,18 +1270,23 @@ impl Global {
 
         let hub = &self.hub;
 
-        let cmd_buf = hub.command_buffers.get(encoder_id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.data.lock();
+        let cmd_enc = hub.command_encoders.get(encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
+            if cmd_buf_data.debug_scope_depth == 0 {
+                return Err(DebugGroupError::InvalidPop.into());
+            }
+            cmd_buf_data.debug_scope_depth -= 1;
+
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::PopDebugGroup);
             }
 
-            cmd_buf.device.check_is_valid()?;
+            cmd_enc.device.check_is_valid()?;
 
             let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-            if !cmd_buf
+            if !cmd_enc
                 .device
                 .instance_flags
                 .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
@@ -1419,6 +1476,15 @@ pub enum DrawKind {
     MultiDrawIndirectCount,
 }
 
+/// The type of draw command(indexed or not, or mesh shader)
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DrawCommandFamily {
+    Draw,
+    DrawIndexed,
+    DrawMeshTasks,
+}
+
 /// A command that can be recorded in a pass or bundle.
 ///
 /// This is used to provide context for errors during command recording.
@@ -1457,7 +1523,10 @@ pub enum PassErrorScope {
     #[error("In a set_scissor_rect command")]
     SetScissorRect,
     #[error("In a draw command, kind: {kind:?}")]
-    Draw { kind: DrawKind, indexed: bool },
+    Draw {
+        kind: DrawKind,
+        family: DrawCommandFamily,
+    },
     #[error("In a write_timestamp command")]
     WriteTimestamp,
     #[error("In a begin_occlusion_query command")]

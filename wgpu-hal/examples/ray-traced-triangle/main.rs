@@ -622,6 +622,7 @@ impl<A: hal::Api> Example<A> {
                 samplers: &[],
                 textures: &[texture_binding],
                 acceleration_structures: &[&tlas],
+                external_textures: &[],
                 entries: &[
                     hal::BindGroupEntry {
                         binding: 0,

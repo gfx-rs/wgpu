@@ -1,6 +1,13 @@
 //! Tests for FLOAT32_FILTERABLE feature.
 
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        FLOAT32_FILTERABLE_WITHOUT_FEATURE,
+        FLOAT32_FILTERABLE_WITH_FEATURE,
+    ]);
+}
 
 fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, filterable: bool) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -46,7 +53,7 @@ fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, fi
 
 #[gpu_test]
 static FLOAT32_FILTERABLE_WITHOUT_FEATURE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let device = &ctx.device;
         // Unorm textures are always filterable
@@ -73,7 +80,11 @@ static FLOAT32_FILTERABLE_WITHOUT_FEATURE: GpuTestConfiguration = GpuTestConfigu
 
 #[gpu_test]
 static FLOAT32_FILTERABLE_WITH_FEATURE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::FLOAT32_FILTERABLE))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::FLOAT32_FILTERABLE)
+            .enable_noop(),
+    )
     .run_sync(|ctx| {
         let device = &ctx.device;
         // With the feature enabled, it does work!

@@ -2,8 +2,14 @@ name: cargo-generate
 
 on:
   push:
-    branches: ["*"]
-    tags: [v0.*]
+    branches-ignore: [
+        # Renovate branches are always PRs, so they will be covered
+        # by the pull_request event.
+        "renovate/**",
+        # Branches with the `gh-readonly-queue` prefix are used by the
+        # merge queue, so they are already covered by the `merge_group` event.
+        "gh-readonly-queue/**",
+      ]
   pull_request:
   merge_group:
 

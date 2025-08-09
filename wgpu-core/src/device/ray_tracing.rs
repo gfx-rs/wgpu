@@ -8,6 +8,7 @@ use crate::{
     api_log,
     device::Device,
     global::Global,
+    hal_label,
     id::{self, BlasId, TlasId},
     lock::RwLock,
     lock::{rank, Mutex},
@@ -231,7 +232,7 @@ impl Device {
             self.alignments.raw_tlas_instance_size * desc.max_instances.max(1) as usize;
         let instance_buffer = unsafe {
             self.raw().create_buffer(&hal::BufferDescriptor {
-                label: Some("(wgpu-core) instances_buffer"),
+                label: hal_label(Some("(wgpu-core) instances_buffer"), self.instance_flags),
                 size: instance_buffer_size as u64,
                 usage: wgt::BufferUses::COPY_DST
                     | wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,

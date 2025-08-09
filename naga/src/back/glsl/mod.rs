@@ -1177,6 +1177,7 @@ impl<'a, W: Write> Writer<'a, W> {
             Ic::Depth { multi: true } => ("sampler", float, "MS", ""),
             Ic::Depth { multi: false } => ("sampler", float, "", "Shadow"),
             Ic::Storage { format, .. } => ("image", format.into(), "", ""),
+            Ic::External => unimplemented!(),
         };
 
         let precision = if self.options.version.is_es() {
@@ -3311,6 +3312,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 write!(self.out, "imageSize(")?;
                                 self.write_expr(image, ctx)?;
                             }
+                            ImageClass::External => unimplemented!(),
                         }
                         write!(self.out, ")")?;
                         if components != 1 || self.options.version.is_es() {
@@ -3326,6 +3328,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         let fun_name = match class {
                             ImageClass::Sampled { .. } | ImageClass::Depth { .. } => "textureSize",
                             ImageClass::Storage { .. } => "imageSize",
+                            ImageClass::External => unimplemented!(),
                         };
                         write!(self.out, "{fun_name}(")?;
                         self.write_expr(image, ctx)?;
@@ -3345,6 +3348,7 @@ impl<'a, W: Write> Writer<'a, W> {
                                 "textureSamples"
                             }
                             ImageClass::Storage { .. } => "imageSamples",
+                            ImageClass::External => unimplemented!(),
                         };
                         write!(self.out, "{fun_name}(")?;
                         self.write_expr(image, ctx)?;
@@ -4627,6 +4631,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     "WGSL `textureLoad` from depth textures is not supported in GLSL".to_string(),
                 ))
             }
+            crate::ImageClass::External => unimplemented!(),
         };
 
         // openGL es doesn't have 1D images so we need workaround it

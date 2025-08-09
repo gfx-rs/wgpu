@@ -3,12 +3,13 @@ name: Shaders
 on:
   push:
     branches-ignore: [
-        # We don't need to run on renovate PRs.
+        # Renovate branches are always PRs, so they will be covered
+        # by the pull_request event.
         "renovate/**",
-        # This is the branch the merge queue creates.
+        # Branches with the `gh-readonly-queue` prefix are used by the
+        # merge queue, so they are already covered by the `merge_group` event.
         "gh-readonly-queue/**",
       ]
-    tags: [v0.*]
   pull_request:
   merge_group:
 

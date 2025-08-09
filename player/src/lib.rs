@@ -6,7 +6,7 @@
 extern crate wgpu_core as wgc;
 extern crate wgpu_types as wgt;
 
-use wgc::device::trace;
+use wgc::{device::trace, identity::IdentityManager};
 
 use std::{borrow::Cow, fs, path::Path};
 
@@ -15,6 +15,7 @@ pub trait GlobalPlay {
         &self,
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
+        command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     ) -> wgc::id::CommandBufferId;
     fn process(
         &self,
@@ -22,7 +23,8 @@ pub trait GlobalPlay {
         queue: wgc::id::QueueId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::markers::CommandBuffer>,
+        command_encoder_id_manager: &mut IdentityManager<wgc::id::markers::CommandEncoder>,
+        command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     );
 }
 
@@ -31,6 +33,7 @@ impl GlobalPlay for wgc::global::Global {
         &self,
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
+        command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     ) -> wgc::id::CommandBufferId {
         for command in commands {
             match command {
@@ -172,8 +175,11 @@ impl GlobalPlay for wgc::global::Global {
                 }
             }
         }
-        let (cmd_buf, error) =
-            self.command_encoder_finish(encoder, &wgt::CommandBufferDescriptor { label: None });
+        let (cmd_buf, error) = self.command_encoder_finish(
+            encoder,
+            &wgt::CommandBufferDescriptor { label: None },
+            Some(command_buffer_id_manager.process()),
+        );
         if let Some(e) = error {
             panic!("{e}");
         }
@@ -186,7 +192,8 @@ impl GlobalPlay for wgc::global::Global {
         queue: wgc::id::QueueId,
         action: trace::Action,
         dir: &Path,
-        comb_manager: &mut wgc::identity::IdentityManager<wgc::id::markers::CommandBuffer>,
+        command_encoder_id_manager: &mut IdentityManager<wgc::id::markers::CommandEncoder>,
+        command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     ) {
         use wgc::device::trace::Action;
         log::debug!("action {action:?}");
@@ -236,6 +243,19 @@ impl GlobalPlay for wgc::global::Global {
             }
             Action::DestroyTextureView(id) => {
                 self.texture_view_drop(id).unwrap();
+            }
+            Action::CreateExternalTexture { id, desc, planes } => {
+                let (_, error) =
+                    self.device_create_external_texture(device, &desc, &planes, Some(id));
+                if let Some(e) = error {
+                    panic!("{e}");
+                }
+            }
+            Action::FreeExternalTexture(id) => {
+                self.external_texture_destroy(id);
+            }
+            Action::DestroyExternalTexture(id) => {
+                self.external_texture_drop(id);
             }
             Action::CreateSampler(id, desc) => {
                 let (_, error) = self.device_create_sampler(device, &desc, Some(id));
@@ -313,6 +333,12 @@ impl GlobalPlay for wgc::global::Global {
                     panic!("{e}");
                 }
             }
+            Action::CreateMeshPipeline { id, desc } => {
+                let (_, error) = self.device_create_mesh_pipeline(device, &desc, Some(id));
+                if let Some(e) = error {
+                    panic!("{e}");
+                }
+            }
             Action::DestroyRenderPipeline(id) => {
                 self.render_pipeline_drop(id);
             }
@@ -379,12 +405,12 @@ impl GlobalPlay for wgc::global::Global {
                 let (encoder, error) = self.device_create_command_encoder(
                     device,
                     &wgt::CommandEncoderDescriptor { label: None },
-                    Some(comb_manager.process().into_command_encoder_id()),
+                    Some(command_encoder_id_manager.process()),
                 );
                 if let Some(e) = error {
                     panic!("{e}");
                 }
-                let cmdbuf = self.encode_commands(encoder, commands);
+                let cmdbuf = self.encode_commands(encoder, commands, command_buffer_id_manager);
                 self.queue_submit(queue, &[cmdbuf]).unwrap();
             }
             Action::CreateBlas { id, desc, sizes } => {

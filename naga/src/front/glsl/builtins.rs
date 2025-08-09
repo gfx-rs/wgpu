@@ -2138,6 +2138,7 @@ impl Frontend {
                 ImageClass::Depth { .. } => (true, false),
                 ImageClass::Storage { .. } => (false, true),
                 ImageClass::Sampled { .. } => (false, false),
+                ImageClass::External => unreachable!(),
             };
 
             let coordinate = match (image_size, coord_size) {
@@ -2259,6 +2260,7 @@ pub fn sampled_to_depth(
                 kind: ErrorKind::SemanticError("Not a texture".into()),
                 meta,
             }),
+            ImageClass::External => unreachable!(),
         },
         _ => errors.push(Error {
             kind: ErrorKind::SemanticError("Not a texture".into()),

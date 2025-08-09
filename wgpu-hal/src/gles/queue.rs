@@ -13,6 +13,18 @@ fn extract_marker<'a>(data: &'a [u8], range: &core::ops::Range<u32>) -> &'a str 
     core::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
 
+fn to_debug_str(s: &str) -> &str {
+    // The spec mentions that if the length given to debug functions is negative,
+    // the implementation will access the ptr and look for a null that terminates
+    // the string but some implementations will try to access the ptr even if the
+    // length is 0.
+    if s.is_empty() {
+        "<empty>"
+    } else {
+        s
+    }
+}
+
 fn get_2d_target(target: u32, array_layer: u32) -> u32 {
     const CUBEMAP_FACES: [u32; 6] = [
         glow::TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -1586,7 +1598,7 @@ impl super::Queue {
                             glow::DEBUG_TYPE_MARKER,
                             DEBUG_ID,
                             glow::DEBUG_SEVERITY_NOTIFICATION,
-                            marker,
+                            to_debug_str(marker),
                         )
                     }
                 };
@@ -1599,7 +1611,11 @@ impl super::Queue {
                         .private_caps
                         .contains(PrivateCapabilities::DEBUG_FNS)
                     {
-                        gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker)
+                        gl.push_debug_group(
+                            glow::DEBUG_SOURCE_APPLICATION,
+                            DEBUG_ID,
+                            to_debug_str(marker),
+                        )
                     }
                 };
             }
@@ -1865,7 +1881,13 @@ impl crate::Queue for super::Queue {
                     .private_caps
                     .contains(PrivateCapabilities::DEBUG_FNS)
                 {
-                    unsafe { gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label) };
+                    unsafe {
+                        gl.push_debug_group(
+                            glow::DEBUG_SOURCE_APPLICATION,
+                            DEBUG_ID,
+                            to_debug_str(label),
+                        )
+                    };
                 }
             }
 

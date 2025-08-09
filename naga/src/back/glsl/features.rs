@@ -421,7 +421,8 @@ impl<W> Writer<'_, W> {
                             _ => {}
                         },
                         ImageClass::Sampled { multi: false, .. }
-                        | ImageClass::Depth { multi: false } => {}
+                        | ImageClass::Depth { multi: false }
+                        | ImageClass::External => {}
                     }
                 }
                 _ => {}

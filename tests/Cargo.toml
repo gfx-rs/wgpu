@@ -67,8 +67,10 @@ trybuild.workspace = true
 # Cargo-metadata doesn't compile on wasm due to old cargo-util-schemas dependency.
 cargo_metadata.workspace = true
 env_logger.workspace = true
-nv-flip.workspace = true
 parking_lot = { workspace = true, features = ["deadlock_detection"] }
+
+[target.'cfg(not(any(target_arch = "wasm32", miri)))'.dependencies]
+nv-flip.workspace = true
 
 # Webassembly
 [target.'cfg(target_arch = "wasm32")'.dependencies]

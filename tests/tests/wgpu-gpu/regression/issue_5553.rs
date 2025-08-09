@@ -1,6 +1,10 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 use wgpu::*;
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(ALLOW_INPUT_NOT_CONSUMED);
+}
 
 /// Previously, for every user-defined vertex output a fragment shader had to have a corresponding
 /// user-defined input. This would generate `StageError::InputNotConsumed`.
@@ -10,8 +14,9 @@ use wgpu::*;
 /// the fragment inputs. This is necessary for generating correct hlsl:
 /// https://github.com/gfx-rs/wgpu/issues/5553
 #[gpu_test]
-static ALLOW_INPUT_NOT_CONSUMED: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static ALLOW_INPUT_NOT_CONSUMED: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let module = ctx
             .device
             .create_shader_module(include_wgsl!("issue_5553.wgsl"));

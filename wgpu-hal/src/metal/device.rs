@@ -1056,6 +1056,14 @@ impl crate::Device for super::Device {
             super::PipelineCache,
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
+        let (desc_vertex_stage, desc_vertex_buffers) = match &desc.vertex_processor {
+            crate::VertexProcessor::Standard {
+                vertex_buffers,
+                vertex_stage,
+            } => (vertex_stage, *vertex_buffers),
+            crate::VertexProcessor::Mesh { .. } => unreachable!(),
+        };
+
         objc::rc::autoreleasepool(|| {
             let descriptor = metal::RenderPipelineDescriptor::new();
 
@@ -1074,7 +1082,7 @@ impl crate::Device for super::Device {
             // Vertex shader
             let (vs_lib, vs_info) = {
                 let mut vertex_buffer_mappings = Vec::<naga::back::msl::VertexBufferMapping>::new();
-                for (i, vbl) in desc.vertex_buffers.iter().enumerate() {
+                for (i, vbl) in desc_vertex_buffers.iter().enumerate() {
                     let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
                     for attribute in vbl.attributes.iter() {
                         attributes.push(naga::back::msl::AttributeMapping {
@@ -1103,7 +1111,7 @@ impl crate::Device for super::Device {
                 }
 
                 let vs = self.load_shader(
-                    &desc.vertex_stage,
+                    desc_vertex_stage,
                     &vertex_buffer_mappings,
                     desc.layout,
                     primitive_class,
@@ -1216,12 +1224,12 @@ impl crate::Device for super::Device {
                 None => None,
             };
 
-            if desc.layout.total_counters.vs.buffers + (desc.vertex_buffers.len() as u32)
+            if desc.layout.total_counters.vs.buffers + (desc_vertex_buffers.len() as u32)
                 > self.shared.private_caps.max_vertex_buffers
             {
                 let msg = format!(
                     "pipeline needs too many buffers in the vertex stage: {} vertex and {} layout",
-                    desc.vertex_buffers.len(),
+                    desc_vertex_buffers.len(),
                     desc.layout.total_counters.vs.buffers
                 );
                 return Err(crate::PipelineError::Linkage(
@@ -1230,9 +1238,9 @@ impl crate::Device for super::Device {
                 ));
             }
 
-            if !desc.vertex_buffers.is_empty() {
+            if !desc_vertex_buffers.is_empty() {
                 let vertex_descriptor = metal::VertexDescriptor::new();
-                for (i, vb) in desc.vertex_buffers.iter().enumerate() {
+                for (i, vb) in desc_vertex_buffers.iter().enumerate() {
                     let buffer_index =
                         self.shared.private_caps.max_vertex_buffers as u64 - 1 - i as u64;
                     let buffer_desc = vertex_descriptor.layouts().object_at(buffer_index).unwrap();
@@ -1316,17 +1324,6 @@ impl crate::Device for super::Device {
                 depth_stencil,
             })
         })
-    }
-
-    unsafe fn create_mesh_pipeline(
-        &self,
-        _desc: &crate::MeshPipelineDescriptor<
-            <Self::A as crate::Api>::PipelineLayout,
-            <Self::A as crate::Api>::ShaderModule,
-            <Self::A as crate::Api>::PipelineCache,
-        >,
-    ) -> Result<<Self::A as crate::Api>::RenderPipeline, crate::PipelineError> {
-        unreachable!()
     }
 
     unsafe fn destroy_render_pipeline(&self, _pipeline: super::RenderPipeline) {

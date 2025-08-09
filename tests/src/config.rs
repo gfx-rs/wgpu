@@ -118,3 +118,5 @@ impl Default for GpuTestConfiguration {
         Self::new()
     }
 }
+
+pub type GpuTestInitializer = fn() -> GpuTestConfiguration;

@@ -58,6 +58,13 @@ pub enum Action<'a> {
         desc: crate::resource::TextureViewDescriptor<'a>,
     },
     DestroyTextureView(id::TextureViewId),
+    CreateExternalTexture {
+        id: id::ExternalTextureId,
+        desc: crate::resource::ExternalTextureDescriptor<'a>,
+        planes: alloc::boxed::Box<[id::TextureViewId]>,
+    },
+    FreeExternalTexture(id::ExternalTextureId),
+    DestroyExternalTexture(id::ExternalTextureId),
     CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
     DestroySampler(id::SamplerId),
     GetSurfaceTexture {
@@ -95,6 +102,10 @@ pub enum Action<'a> {
     CreateRenderPipeline {
         id: id::RenderPipelineId,
         desc: crate::pipeline::RenderPipelineDescriptor<'a>,
+    },
+    CreateMeshPipeline {
+        id: id::RenderPipelineId,
+        desc: crate::pipeline::MeshPipelineDescriptor<'a>,
     },
     DestroyRenderPipeline(id::RenderPipelineId),
     CreatePipelineCache {

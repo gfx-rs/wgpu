@@ -470,7 +470,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox",
     image_path: "/examples/features/src/skybox/screenshot.png",
     width: 1024,
@@ -485,7 +485,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-bc7",
     image_path: "/examples/features/src/skybox/screenshot_bc7.png",
     width: 1024,
@@ -498,7 +498,7 @@ static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::Example
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-etc2",
     image_path: "/examples/features/src/skybox/screenshot_etc2.png",
     width: 1024,
@@ -511,7 +511,7 @@ static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::Exampl
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_ASTC: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_ASTC: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-astc",
     image_path: "/examples/features/src/skybox/screenshot_astc.png",
     width: 1024,

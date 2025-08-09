@@ -72,12 +72,14 @@ pub type ShaderLocation = u32;
 /// [dynamic bind group offsets](../wgpu/struct.RenderPass.html#method.set_bind_group).
 pub type DynamicOffset = u32;
 
-/// Buffer-to-texture copies must have [`bytes_per_row`] aligned to this number.
+/// Buffer-texture copies must have [`bytes_per_row`] aligned to this number.
 ///
-/// This doesn't apply to [`Queue::write_texture`][Qwt], only to [`copy_buffer_to_texture()`].
+/// This doesn't apply to [`Queue::write_texture`][Qwt], only to [`copy_buffer_to_texture()`]
+/// and [`copy_texture_to_buffer()`].
 ///
 /// [`bytes_per_row`]: TexelCopyBufferLayout::bytes_per_row
 /// [`copy_buffer_to_texture()`]: ../wgpu/struct.Queue.html#method.copy_buffer_to_texture
+/// [`copy_texture_to_buffer()`]: ../wgpu/struct.Queue.html#method.copy_texture_to_buffer
 /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 
@@ -615,6 +617,17 @@ pub struct Limits {
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
+
+    /// The maximum total value of x*y*z for a given `draw_mesh_tasks` command
+    pub max_task_workgroup_total_count: u32,
+    /// The maximum value for each dimension of a `RenderPass::draw_mesh_tasks(x, y, z)` operation.
+    /// Defaults to 65535. Higher is "better".
+    pub max_task_workgroups_per_dimension: u32,
+    /// The maximum number of layers that can be output from a mesh shader
+    pub max_mesh_output_layers: u32,
+    /// The maximum number of views that can be used by a mesh shader
+    pub max_mesh_multiview_count: u32,
+
     /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
     /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
     /// is enabled.
@@ -683,6 +696,10 @@ impl Limits {
     ///     max_subgroup_size: 0,
     ///     max_push_constant_size: 0,
     ///     max_non_sampler_bindings: 1_000_000,
+    ///     max_task_workgroup_total_count: 0,
+    ///     max_task_workgroups_per_dimension: 0,
+    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_output_layers: 0,
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
@@ -731,6 +748,12 @@ impl Limits {
             max_subgroup_size: 0,
             max_push_constant_size: 0,
             max_non_sampler_bindings: 1_000_000,
+
+            max_task_workgroup_total_count: 0,
+            max_task_workgroups_per_dimension: 0,
+            max_mesh_multiview_count: 0,
+            max_mesh_output_layers: 0,
+
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
             max_tlas_instance_count: 0,
@@ -780,6 +803,12 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_non_sampler_bindings: 1_000_000,
+    ///
+    ///     max_task_workgroup_total_count: 0,
+    ///     max_task_workgroups_per_dimension: 0,
+    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_output_layers: 0,
+    ///
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
@@ -797,6 +826,11 @@ impl Limits {
             max_color_attachments: 4,
             // see: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_compute_workgroup_storage_size: 16352,
+
+            max_task_workgroups_per_dimension: 0,
+            max_task_workgroup_total_count: 0,
+            max_mesh_multiview_count: 0,
+            max_mesh_output_layers: 0,
             ..Self::defaults()
         }
     }
@@ -844,6 +878,12 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 0, // +
     ///     max_buffer_size: 256 << 20, // (256 MiB),
     ///     max_non_sampler_bindings: 1_000_000,
+    ///
+    ///     max_task_workgroup_total_count: 0,
+    ///     max_task_workgroups_per_dimension: 0,
+    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_output_layers: 0,
+    ///
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
@@ -929,6 +969,26 @@ impl Limits {
         }
     }
 
+    /// The recommended minimum limits for mesh shaders if you enable [`Features::EXPERIMENTAL_MESH_SHADER`]
+    ///
+    /// These are chosen somewhat arbitrarily. They are small enough that they should cover all physical devices,
+    /// but not necessarily all use cases.
+    #[must_use]
+    pub const fn using_recommended_minimum_mesh_shader_values(self) -> Self {
+        Self {
+            // Literally just made this up as 256^2 or 2^16.
+            // My GPU supports 2^22, and compute shaders don't have this kind of limit.
+            // This very likely is never a real limiter
+            max_task_workgroup_total_count: 65536,
+            max_task_workgroups_per_dimension: 256,
+            // llvmpipe reports 0 multiview count, which just means no multiview is allowed
+            max_mesh_multiview_count: 0,
+            // llvmpipe once again requires this to be 8. An RTX 3060 supports well over 1024.
+            max_mesh_output_layers: 8,
+            ..self
+        }
+    }
+
     /// Compares every limits within self is within the limits given in `allowed`.
     ///
     /// If you need detailed information on failures, look at [`Limits::check_limits_with_fail_fn`].
@@ -1008,6 +1068,12 @@ impl Limits {
         }
         compare!(max_push_constant_size, Less);
         compare!(max_non_sampler_bindings, Less);
+
+        compare!(max_task_workgroup_total_count, Less);
+        compare!(max_task_workgroups_per_dimension, Less);
+        compare!(max_mesh_multiview_count, Less);
+        compare!(max_mesh_output_layers, Less);
+
         compare!(max_blas_primitive_count, Less);
         compare!(max_blas_geometry_count, Less);
         compare!(max_tlas_instance_count, Less);
@@ -1402,9 +1468,9 @@ bitflags::bitflags! {
         const COMPUTE = 1 << 2;
         /// Binding is visible from the vertex and fragment shaders of a render pipeline.
         const VERTEX_FRAGMENT = Self::VERTEX.bits() | Self::FRAGMENT.bits();
-        /// Binding is visible from the task shader of a mesh pipeline
+        /// Binding is visible from the task shader of a mesh pipeline.
         const TASK = 1 << 3;
-        /// Binding is visible from the mesh shader of a mesh pipeline
+        /// Binding is visible from the mesh shader of a mesh pipeline.
         const MESH = 1 << 4;
     }
 }
@@ -2608,6 +2674,8 @@ impl TextureAspect {
     }
 }
 
+// There are some additional texture format helpers in `wgpu-core/src/conv.rs`,
+// that may need to be modified along with the ones here.
 impl TextureFormat {
     /// Returns the aspect-specific format of the original format
     ///
@@ -6198,6 +6266,168 @@ impl<L, V> TextureDescriptor<L, V> {
         match self.dimension {
             TextureDimension::D1 | TextureDimension::D3 => 1,
             TextureDimension::D2 => self.size.depth_or_array_layers,
+        }
+    }
+}
+
+/// Format of an `ExternalTexture`. This indicates the number of underlying
+/// planes used by the `ExternalTexture` as well as each plane's format.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ExternalTextureFormat {
+    /// Single [`TextureFormat::Rgba8Unorm`] or [`TextureFormat::Bgra8Unorm`] format plane.
+    Rgba,
+    /// [`TextureFormat::R8Unorm`] Y plane, and [`TextureFormat::Rg8Unorm`]
+    /// interleaved CbCr plane.
+    Nv12,
+    /// Separate [`TextureFormat::R8Unorm`] Y, Cb, and Cr planes.
+    Yu12,
+}
+
+/// Parameters describing a gamma encoding transfer function in the form
+/// tf = { k * linear                   | linear < b
+///      { a * pow(linear, 1/g) - (a-1) | linear >= b
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Zeroable, bytemuck::Pod)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[allow(missing_docs)]
+pub struct ExternalTextureTransferFunction {
+    pub a: f32,
+    pub b: f32,
+    pub g: f32,
+    pub k: f32,
+}
+
+impl Default for ExternalTextureTransferFunction {
+    fn default() -> Self {
+        Self {
+            a: 1.0,
+            b: 1.0,
+            g: 1.0,
+            k: 1.0,
+        }
+    }
+}
+
+/// Describes an [`ExternalTexture`](../wgpu/struct.ExternalTexture.html).
+///
+/// Note that [`width`] and [`height`] are the values that should be returned by
+/// size queries in shader code; they do not necessarily match the dimensions of
+/// the underlying plane texture(s). As a special case, if `(width, height)` is
+/// `(0, 0)`, the actual size of the first underlying plane should be used instead.
+///
+/// The size given by [`width`] and [`height`] must be consistent with
+/// [`sample_transform`]: they should be the size in texels of the rectangle
+/// covered by the square (0,0)..(1,1) after [`sample_transform`] has been applied
+/// to it.
+///
+/// [`width`]: Self::width
+/// [`height`]: Self::height
+/// [`sample_transform`]: Self::sample_transform
+///
+/// Corresponds to [WebGPU `GPUExternalTextureDescriptor`](
+/// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturedescriptor).
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ExternalTextureDescriptor<L> {
+    /// Debug label of the external texture. This will show up in graphics
+    /// debuggers for easy identification.
+    pub label: L,
+
+    /// Width of the external texture.
+    pub width: u32,
+
+    /// Height of the external texture.
+    pub height: u32,
+
+    /// Format of the external texture.
+    pub format: ExternalTextureFormat,
+
+    /// 4x4 column-major matrix with which to convert sampled YCbCr values
+    /// to RGBA.
+    /// This is ignored when `format` is [`ExternalTextureFormat::Rgba`].
+    pub yuv_conversion_matrix: [f32; 16],
+
+    /// 3x3 column-major matrix to transform linear RGB values in the source
+    /// color space to linear RGB values in the destination color space. In
+    /// combination with [`Self::src_transfer_function`] and
+    /// [`Self::dst_transfer_function`] this can be used to ensure that
+    /// [`ImageSample`] and [`ImageLoad`] operations return values in the
+    /// desired destination color space rather than the source color space of
+    /// the underlying planes.
+    ///
+    /// [`ImageSample`]: https://docs.rs/naga/latest/naga/ir/enum.Expression.html#variant.ImageSample
+    /// [`ImageLoad`]: https://docs.rs/naga/latest/naga/ir/enum.Expression.html#variant.ImageLoad
+    pub gamut_conversion_matrix: [f32; 9],
+
+    /// Transfer function for the source color space. The *inverse* of this
+    /// will be applied to decode non-linear RGB to linear RGB in the source
+    /// color space.
+    pub src_transfer_function: ExternalTextureTransferFunction,
+
+    /// Transfer function for the destination color space. This will be applied
+    /// to encode linear RGB to non-linear RGB in the destination color space.
+    pub dst_transfer_function: ExternalTextureTransferFunction,
+
+    /// Transform to apply to [`ImageSample`] coordinates.
+    ///
+    /// This is a 3x2 column-major matrix representing an affine transform from
+    /// normalized texture coordinates to the normalized coordinates that should
+    /// be sampled from the external texture's underlying plane(s).
+    ///
+    /// This transform may scale, translate, flip, and rotate in 90-degree
+    /// increments, but the result of transforming the rectangle (0,0)..(1,1)
+    /// must be an axis-aligned rectangle that falls within the bounds of
+    /// (0,0)..(1,1).
+    ///
+    /// [`ImageSample`]: https://docs.rs/naga/latest/naga/ir/enum.Expression.html#variant.ImageSample
+    pub sample_transform: [f32; 6],
+
+    /// Transform to apply to [`ImageLoad`] coordinates.
+    ///
+    /// This is a 3x2 column-major matrix representing an affine transform from
+    /// non-normalized texel coordinates to the non-normalized coordinates of
+    /// the texel that should be loaded from the external texture's underlying
+    /// plane 0. For planes 1 and 2, if present, plane 0's coordinates are
+    /// scaled according to the textures' relative sizes.
+    ///
+    /// This transform may scale, translate, flip, and rotate in 90-degree
+    /// increments, but the result of transforming the rectangle (0,0)..([`width`],
+    /// [`height`]) must be an axis-aligned rectangle that falls within the bounds
+    /// of (0,0)..([`width`], [`height`]).
+    ///
+    /// [`ImageLoad`]: https://docs.rs/naga/latest/naga/ir/enum.Expression.html#variant.ImageLoad
+    /// [`width`]: Self::width
+    /// [`height`]: Self::height
+    pub load_transform: [f32; 6],
+}
+
+impl<L> ExternalTextureDescriptor<L> {
+    /// Takes a closure and maps the label of the external texture descriptor into another.
+    #[must_use]
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> ExternalTextureDescriptor<K> {
+        ExternalTextureDescriptor {
+            label: fun(&self.label),
+            width: self.width,
+            height: self.height,
+            format: self.format,
+            yuv_conversion_matrix: self.yuv_conversion_matrix,
+            sample_transform: self.sample_transform,
+            load_transform: self.load_transform,
+            gamut_conversion_matrix: self.gamut_conversion_matrix,
+            src_transfer_function: self.src_transfer_function,
+            dst_transfer_function: self.dst_transfer_function,
+        }
+    }
+
+    /// The number of underlying planes used by the external texture.
+    pub fn num_planes(&self) -> usize {
+        match self.format {
+            ExternalTextureFormat::Rgba => 1,
+            ExternalTextureFormat::Nv12 => 2,
+            ExternalTextureFormat::Yu12 => 3,
         }
     }
 }

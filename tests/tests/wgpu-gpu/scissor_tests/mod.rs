@@ -1,4 +1,13 @@
-use wgpu_test::{gpu_test, image, GpuTestConfiguration, TestingContext};
+use wgpu_test::{gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestingContext};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        SCISSOR_TEST_FULL_RECT,
+        SCISSOR_TEST_EMPTY_RECT,
+        SCISSOR_TEST_EMPTY_RECT_WITH_OFFSET,
+        SCISSOR_TEST_CUSTOM_RECT,
+    ]);
+}
 
 struct Rect {
     x: u32,

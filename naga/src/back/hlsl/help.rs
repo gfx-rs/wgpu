@@ -33,8 +33,8 @@ use super::{
     super::FunctionCtx,
     writer::{
         ABS_FUNCTION, DIV_FUNCTION, EXTRACT_BITS_FUNCTION, F2I32_FUNCTION, F2I64_FUNCTION,
-        F2U32_FUNCTION, F2U64_FUNCTION, IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION,
-        INSERT_BITS_FUNCTION, MOD_FUNCTION, NEG_FUNCTION,
+        F2U32_FUNCTION, F2U64_FUNCTION, IMAGE_LOAD_EXTERNAL_FUNCTION,
+        IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION, INSERT_BITS_FUNCTION, MOD_FUNCTION, NEG_FUNCTION,
     },
     BackendResult, WrappedType,
 };
@@ -46,7 +46,13 @@ pub(super) struct WrappedArrayLength {
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub(super) struct WrappedImageLoad {
+    pub(super) class: crate::ImageClass,
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub(super) struct WrappedImageSample {
+    pub(super) class: crate::ImageClass,
     pub(super) clamp_to_edge: bool,
 }
 
@@ -195,6 +201,11 @@ impl<W: Write> super::Writer<'_, W> {
                 let storage_format_str = format.to_hlsl_str();
                 write!(self.out, "<{storage_format_str}>")?
             }
+            crate::ImageClass::External => {
+                unreachable!(
+                    "external images should be handled by `write_global_external_texture`"
+                );
+            }
         }
         Ok(())
     }
@@ -253,12 +264,282 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
+    /// Helper function used by [`Self::write_wrapped_image_load_function`] and
+    /// [`Self::write_wrapped_image_sample_function`] to write the shared YUV
+    /// to RGB conversion code for external textures. Expects the preceding
+    /// code to declare the Y component as a `float` variable of name `y`, the
+    /// UV components as a `float2` variable of name `uv`, and the external
+    /// texture params as a variable of name `params`. The emitted code will
+    /// return the result.
+    fn write_convert_yuv_to_rgb_and_return(
+        &mut self,
+        level: crate::back::Level,
+        y: &str,
+        uv: &str,
+        params: &str,
+    ) -> BackendResult {
+        let l1 = level;
+        let l2 = l1.next();
+
+        // Convert from YUV to non-linear RGB in the source color space. We
+        // declare our matrices as row_major in HLSL, therefore we must reverse
+        // the order of this multiplication
+        writeln!(
+            self.out,
+            "{l1}float3 srcGammaRgb = mul(float4({y}, {uv}, 1.0), {params}.yuv_conversion_matrix).rgb;"
+        )?;
+
+        // Apply the inverse of the source transfer function to convert to
+        // linear RGB in the source color space.
+        writeln!(
+            self.out,
+            "{l1}float3 srcLinearRgb = srcGammaRgb < {params}.src_tf.k * {params}.src_tf.b ?"
+        )?;
+        writeln!(self.out, "{l2}srcGammaRgb / {params}.src_tf.k :")?;
+        writeln!(self.out, "{l2}pow((srcGammaRgb + {params}.src_tf.a - 1.0) / {params}.src_tf.a, {params}.src_tf.g);")?;
+
+        // Multiply by the gamut conversion matrix to convert to linear RGB in
+        // the destination color space. We declare our matrices as row_major in
+        // HLSL, therefore we must reverse the order of this multiplication.
+        writeln!(
+            self.out,
+            "{l1}float3 dstLinearRgb = mul(srcLinearRgb, {params}.gamut_conversion_matrix);"
+        )?;
+
+        // Finally, apply the dest transfer function to convert to non-linear
+        // RGB in the destination color space, and return the result.
+        writeln!(
+            self.out,
+            "{l1}float3 dstGammaRgb = dstLinearRgb < {params}.dst_tf.b ?"
+        )?;
+        writeln!(self.out, "{l2}{params}.dst_tf.k * dstLinearRgb :")?;
+        writeln!(self.out, "{l2}{params}.dst_tf.a * pow(dstLinearRgb, 1.0 / {params}.dst_tf.g) - ({params}.dst_tf.a - 1);")?;
+
+        writeln!(self.out, "{l1}return float4(dstGammaRgb, 1.0);")?;
+        Ok(())
+    }
+
+    pub(super) fn write_wrapped_image_load_function(
+        &mut self,
+        module: &crate::Module,
+        load: WrappedImageLoad,
+    ) -> BackendResult {
+        match load {
+            WrappedImageLoad {
+                class: crate::ImageClass::External,
+            } => {
+                let l1 = crate::back::Level(1);
+                let l2 = l1.next();
+                let l3 = l2.next();
+                let params_ty_name = &self.names
+                    [&NameKey::Type(module.special_types.external_texture_params.unwrap())];
+                writeln!(self.out, "float4 {IMAGE_LOAD_EXTERNAL_FUNCTION}(")?;
+                writeln!(self.out, "{l1}Texture2D<float4> plane0,")?;
+                writeln!(self.out, "{l1}Texture2D<float4> plane1,")?;
+                writeln!(self.out, "{l1}Texture2D<float4> plane2,")?;
+                writeln!(self.out, "{l1}{params_ty_name} params,")?;
+                writeln!(self.out, "{l1}uint2 coords)")?;
+                writeln!(self.out, "{{")?;
+                writeln!(self.out, "{l1}uint2 plane0_size;")?;
+                writeln!(
+                    self.out,
+                    "{l1}plane0.GetDimensions(plane0_size.x, plane0_size.y);"
+                )?;
+                // Clamp coords to provided size of external texture to prevent OOB read.
+                // If params.size is zero then clamp to the actual size of the texture.
+                writeln!(
+                    self.out,
+                    "{l1}uint2 cropped_size = any(params.size) ? params.size : plane0_size;"
+                )?;
+                writeln!(self.out, "{l1}coords = min(coords, cropped_size - 1);")?;
+
+                // Apply load transformation. We declare our matrices as row_major in
+                // HLSL, therefore we must reverse the order of this multiplication
+                writeln!(self.out, "{l1}float3x2 load_transform = float3x2(")?;
+                writeln!(self.out, "{l2}params.load_transform_0,")?;
+                writeln!(self.out, "{l2}params.load_transform_1,")?;
+                writeln!(self.out, "{l2}params.load_transform_2")?;
+                writeln!(self.out, "{l1});")?;
+                writeln!(self.out, "{l1}uint2 plane0_coords = uint2(round(mul(float3(coords, 1.0), load_transform)));")?;
+                writeln!(self.out, "{l1}if (params.num_planes == 1u) {{")?;
+                // For single plane, simply read from plane0
+                writeln!(
+                    self.out,
+                    "{l2}return plane0.Load(uint3(plane0_coords, 0u));"
+                )?;
+                writeln!(self.out, "{l1}}} else {{")?;
+
+                // Chroma planes may be subsampled so we must scale the coords accordingly.
+                writeln!(self.out, "{l2}uint2 plane1_size;")?;
+                writeln!(
+                    self.out,
+                    "{l2}plane1.GetDimensions(plane1_size.x, plane1_size.y);"
+                )?;
+                writeln!(self.out, "{l2}uint2 plane1_coords = uint2(floor(float2(plane0_coords) * float2(plane1_size) / float2(plane0_size)));")?;
+
+                // For multi-plane, read the Y value from plane 0
+                writeln!(
+                    self.out,
+                    "{l2}float y = plane0.Load(uint3(plane0_coords, 0u)).x;"
+                )?;
+
+                writeln!(self.out, "{l2}float2 uv;")?;
+                writeln!(self.out, "{l2}if (params.num_planes == 2u) {{")?;
+                // Read UV from interleaved plane 1
+                writeln!(
+                    self.out,
+                    "{l3}uv = plane1.Load(uint3(plane1_coords, 0u)).xy;"
+                )?;
+                writeln!(self.out, "{l2}}} else {{")?;
+                // Read U and V from planes 1 and 2 respectively
+                writeln!(self.out, "{l3}uint2 plane2_size;")?;
+                writeln!(
+                    self.out,
+                    "{l3}plane2.GetDimensions(plane2_size.x, plane2_size.y);"
+                )?;
+                writeln!(self.out, "{l3}uint2 plane2_coords = uint2(floor(float2(plane0_coords) * float2(plane2_size) / float2(plane0_size)));")?;
+                writeln!(self.out, "{l3}uv = float2(plane1.Load(uint3(plane1_coords, 0u)).x, plane2.Load(uint3(plane2_coords, 0u)).x);")?;
+                writeln!(self.out, "{l2}}}")?;
+
+                self.write_convert_yuv_to_rgb_and_return(l2, "y", "uv", "params")?;
+
+                writeln!(self.out, "{l1}}}")?;
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
     pub(super) fn write_wrapped_image_sample_function(
         &mut self,
+        module: &crate::Module,
         sample: WrappedImageSample,
     ) -> BackendResult {
         match sample {
             WrappedImageSample {
+                class: crate::ImageClass::External,
+                clamp_to_edge: true,
+            } => {
+                let l1 = crate::back::Level(1);
+                let l2 = l1.next();
+                let l3 = l2.next();
+                let params_ty_name = &self.names
+                    [&NameKey::Type(module.special_types.external_texture_params.unwrap())];
+                writeln!(
+                    self.out,
+                    "float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}("
+                )?;
+                writeln!(self.out, "{l1}Texture2D<float4> plane0,")?;
+                writeln!(self.out, "{l1}Texture2D<float4> plane1,")?;
+                writeln!(self.out, "{l1}Texture2D<float4> plane2,")?;
+                writeln!(self.out, "{l1}{params_ty_name} params,")?;
+                writeln!(self.out, "{l1}SamplerState samp,")?;
+                writeln!(self.out, "{l1}float2 coords)")?;
+                writeln!(self.out, "{{")?;
+                writeln!(self.out, "{l1}float2 plane0_size;")?;
+                writeln!(
+                    self.out,
+                    "{l1}plane0.GetDimensions(plane0_size.x, plane0_size.y);"
+                )?;
+                writeln!(self.out, "{l1}float3x2 sample_transform = float3x2(")?;
+                writeln!(self.out, "{l2}params.sample_transform_0,")?;
+                writeln!(self.out, "{l2}params.sample_transform_1,")?;
+                writeln!(self.out, "{l2}params.sample_transform_2")?;
+                writeln!(self.out, "{l1});")?;
+                // Apply sample transformation. We declare our matrices as row_major in
+                // HLSL, therefore we must reverse the order of this multiplication
+                writeln!(
+                    self.out,
+                    "{l1}coords = mul(float3(coords, 1.0), sample_transform);"
+                )?;
+                // Calculate the sample bounds. The purported size of the texture
+                // (params.size) is irrelevant here as we are dealing with normalized
+                // coordinates. Usually we would clamp to (0,0)..(1,1). However, we must
+                // apply the sample transformation to that, also bearing in mind that it
+                // may contain a flip on either axis. We calculate and adjust for the
+                // half-texel separately for each plane as it depends on the actual
+                // texture size which may vary between planes.
+                writeln!(
+                    self.out,
+                    "{l1}float2 bounds_min = mul(float3(0.0, 0.0, 1.0), sample_transform);"
+                )?;
+                writeln!(
+                    self.out,
+                    "{l1}float2 bounds_max = mul(float3(1.0, 1.0, 1.0), sample_transform);"
+                )?;
+                writeln!(self.out, "{l1}float4 bounds = float4(min(bounds_min, bounds_max), max(bounds_min, bounds_max));")?;
+                writeln!(
+                    self.out,
+                    "{l1}float2 plane0_half_texel = float2(0.5, 0.5) / plane0_size;"
+                )?;
+                writeln!(
+                    self.out,
+                    "{l1}float2 plane0_coords = clamp(coords, bounds.xy + plane0_half_texel, bounds.zw - plane0_half_texel);"
+                )?;
+                writeln!(self.out, "{l1}if (params.num_planes == 1u) {{")?;
+                // For single plane, simply sample from plane0
+                writeln!(
+                    self.out,
+                    "{l2}return plane0.SampleLevel(samp, plane0_coords, 0.0f);"
+                )?;
+                writeln!(self.out, "{l1}}} else {{")?;
+
+                writeln!(self.out, "{l2}float2 plane1_size;")?;
+                writeln!(
+                    self.out,
+                    "{l2}plane1.GetDimensions(plane1_size.x, plane1_size.y);"
+                )?;
+                writeln!(
+                    self.out,
+                    "{l2}float2 plane1_half_texel = float2(0.5, 0.5) / plane1_size;"
+                )?;
+                writeln!(
+                    self.out,
+                    "{l2}float2 plane1_coords = clamp(coords, bounds.xy + plane1_half_texel, bounds.zw - plane1_half_texel);"
+                )?;
+
+                // For multi-plane, sample the Y value from plane 0
+                writeln!(
+                    self.out,
+                    "{l2}float y = plane0.SampleLevel(samp, plane0_coords, 0.0f).x;"
+                )?;
+                writeln!(self.out, "{l2}float2 uv;")?;
+                writeln!(self.out, "{l2}if (params.num_planes == 2u) {{")?;
+                // Sample UV from interleaved plane 1
+                writeln!(
+                    self.out,
+                    "{l3}uv = plane1.SampleLevel(samp, plane1_coords, 0.0f).xy;"
+                )?;
+                writeln!(self.out, "{l2}}} else {{")?;
+                // Sample U and V from planes 1 and 2 respectively
+                writeln!(self.out, "{l3}float2 plane2_size;")?;
+                writeln!(
+                    self.out,
+                    "{l3}plane2.GetDimensions(plane2_size.x, plane2_size.y);"
+                )?;
+                writeln!(
+                    self.out,
+                    "{l3}float2 plane2_half_texel = float2(0.5, 0.5) / plane2_size;"
+                )?;
+                writeln!(self.out, "{l3}float2 plane2_coords = clamp(coords, bounds.xy + plane2_half_texel, bounds.zw - plane2_half_texel);")?;
+                writeln!(self.out, "{l3}uv = float2(plane1.SampleLevel(samp, plane1_coords, 0.0f).x, plane2.SampleLevel(samp, plane2_coords, 0.0f).x);")?;
+                writeln!(self.out, "{l2}}}")?;
+
+                self.write_convert_yuv_to_rgb_and_return(l2, "y", "uv", "params")?;
+
+                writeln!(self.out, "{l1}}}")?;
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+            WrappedImageSample {
+                class:
+                    crate::ImageClass::Sampled {
+                        kind: ScalarKind::Float,
+                        multi: false,
+                    },
                 clamp_to_edge: true,
             } => {
                 writeln!(self.out, "float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}(Texture2D<float4> tex, SamplerState samp, float2 coords) {{")?;
@@ -290,6 +571,7 @@ impl<W: Write> super::Writer<'_, W> {
             crate::ImageClass::Depth { multi: false } => "Depth",
             crate::ImageClass::Sampled { multi: false, .. } => "",
             crate::ImageClass::Storage { .. } => "RW",
+            crate::ImageClass::External => "External",
         };
         let arrayed_str = if query.arrayed { "Array" } else { "" };
         let query_str = match query.query {
@@ -320,101 +602,133 @@ impl<W: Write> super::Writer<'_, W> {
             ImageDimension as IDim,
         };
 
-        const ARGUMENT_VARIABLE_NAME: &str = "tex";
-        const RETURN_VARIABLE_NAME: &str = "ret";
-        const MIP_LEVEL_PARAM: &str = "mip_level";
+        match wiq.class {
+            crate::ImageClass::External => {
+                if wiq.query != ImageQuery::Size {
+                    return Err(super::Error::Custom(
+                        "External images only support `Size` queries".into(),
+                    ));
+                }
 
-        // Write function return type and name
-        let ret_ty = func_ctx.resolve_type(expr_handle, &module.types);
-        self.write_value_type(module, ret_ty)?;
-        write!(self.out, " ")?;
-        self.write_wrapped_image_query_function_name(wiq)?;
+                write!(self.out, "uint2 ")?;
+                self.write_wrapped_image_query_function_name(wiq)?;
+                let params_name = &self.names
+                    [&NameKey::Type(module.special_types.external_texture_params.unwrap())];
+                // Only plane0 and params are used by this implementation, but it's easier to
+                // always take all of them as arguments so that we can unconditionally expand an
+                // external texture expression each of its parts.
+                writeln!(self.out, "(Texture2D<float4> plane0, Texture2D<float4> plane1, Texture2D<float4> plane2, {params_name} params) {{")?;
+                let l1 = crate::back::Level(1);
+                let l2 = l1.next();
+                writeln!(self.out, "{l1}if (any(params.size)) {{")?;
+                writeln!(self.out, "{l2}return params.size;")?;
+                writeln!(self.out, "{l1}}} else {{")?;
+                // params.size == (0, 0) indicates to query and return plane 0's actual size
+                writeln!(self.out, "{l2}uint2 ret;")?;
+                writeln!(self.out, "{l2}plane0.GetDimensions(ret.x, ret.y);")?;
+                writeln!(self.out, "{l2}return ret;")?;
+                writeln!(self.out, "{l1}}}")?;
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+            _ => {
+                const ARGUMENT_VARIABLE_NAME: &str = "tex";
+                const RETURN_VARIABLE_NAME: &str = "ret";
+                const MIP_LEVEL_PARAM: &str = "mip_level";
 
-        // Write function parameters
-        write!(self.out, "(")?;
-        // Texture always first parameter
-        self.write_image_type(wiq.dim, wiq.arrayed, wiq.class)?;
-        write!(self.out, " {ARGUMENT_VARIABLE_NAME}")?;
-        // Mipmap is a second parameter if exists
-        if let ImageQuery::SizeLevel = wiq.query {
-            write!(self.out, ", uint {MIP_LEVEL_PARAM}")?;
-        }
-        writeln!(self.out, ")")?;
+                // Write function return type and name
+                let ret_ty = func_ctx.resolve_type(expr_handle, &module.types);
+                self.write_value_type(module, ret_ty)?;
+                write!(self.out, " ")?;
+                self.write_wrapped_image_query_function_name(wiq)?;
 
-        // Write function body
-        writeln!(self.out, "{{")?;
+                // Write function parameters
+                write!(self.out, "(")?;
+                // Texture always first parameter
+                self.write_image_type(wiq.dim, wiq.arrayed, wiq.class)?;
+                write!(self.out, " {ARGUMENT_VARIABLE_NAME}")?;
+                // Mipmap is a second parameter if exists
+                if let ImageQuery::SizeLevel = wiq.query {
+                    write!(self.out, ", uint {MIP_LEVEL_PARAM}")?;
+                }
+                writeln!(self.out, ")")?;
 
-        let array_coords = usize::from(wiq.arrayed);
-        // extra parameter is the mip level count or the sample count
-        let extra_coords = match wiq.class {
-            crate::ImageClass::Storage { .. } => 0,
-            crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => 1,
-        };
+                // Write function body
+                writeln!(self.out, "{{")?;
 
-        // GetDimensions Overloaded Methods
-        // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions#overloaded-methods
-        let (ret_swizzle, number_of_params) = match wiq.query {
-            ImageQuery::Size | ImageQuery::SizeLevel => {
-                let ret = match wiq.dim {
-                    IDim::D1 => "x",
-                    IDim::D2 => "xy",
-                    IDim::D3 => "xyz",
-                    IDim::Cube => "xy",
+                let array_coords = usize::from(wiq.arrayed);
+                // extra parameter is the mip level count or the sample count
+                let extra_coords = match wiq.class {
+                    crate::ImageClass::Storage { .. } => 0,
+                    crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => 1,
+                    crate::ImageClass::External => unreachable!(),
                 };
-                (ret, ret.len() + array_coords + extra_coords)
-            }
-            ImageQuery::NumLevels | ImageQuery::NumSamples | ImageQuery::NumLayers => {
-                if wiq.arrayed || wiq.dim == IDim::D3 {
-                    ("w", 4)
-                } else {
-                    ("z", 3)
+
+                // GetDimensions Overloaded Methods
+                // https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-getdimensions#overloaded-methods
+                let (ret_swizzle, number_of_params) = match wiq.query {
+                    ImageQuery::Size | ImageQuery::SizeLevel => {
+                        let ret = match wiq.dim {
+                            IDim::D1 => "x",
+                            IDim::D2 => "xy",
+                            IDim::D3 => "xyz",
+                            IDim::Cube => "xy",
+                        };
+                        (ret, ret.len() + array_coords + extra_coords)
+                    }
+                    ImageQuery::NumLevels | ImageQuery::NumSamples | ImageQuery::NumLayers => {
+                        if wiq.arrayed || wiq.dim == IDim::D3 {
+                            ("w", 4)
+                        } else {
+                            ("z", 3)
+                        }
+                    }
+                };
+
+                // Write `GetDimensions` function.
+                writeln!(self.out, "{INDENT}uint4 {RETURN_VARIABLE_NAME};")?;
+                write!(self.out, "{INDENT}{ARGUMENT_VARIABLE_NAME}.GetDimensions(")?;
+                match wiq.query {
+                    ImageQuery::SizeLevel => {
+                        write!(self.out, "{MIP_LEVEL_PARAM}, ")?;
+                    }
+                    _ => match wiq.class {
+                        crate::ImageClass::Sampled { multi: true, .. }
+                        | crate::ImageClass::Depth { multi: true }
+                        | crate::ImageClass::Storage { .. } => {}
+                        _ => {
+                            // Write zero mipmap level for supported types
+                            write!(self.out, "0, ")?;
+                        }
+                    },
                 }
-            }
-        };
 
-        // Write `GetDimensions` function.
-        writeln!(self.out, "{INDENT}uint4 {RETURN_VARIABLE_NAME};")?;
-        write!(self.out, "{INDENT}{ARGUMENT_VARIABLE_NAME}.GetDimensions(")?;
-        match wiq.query {
-            ImageQuery::SizeLevel => {
-                write!(self.out, "{MIP_LEVEL_PARAM}, ")?;
-            }
-            _ => match wiq.class {
-                crate::ImageClass::Sampled { multi: true, .. }
-                | crate::ImageClass::Depth { multi: true }
-                | crate::ImageClass::Storage { .. } => {}
-                _ => {
-                    // Write zero mipmap level for supported types
-                    write!(self.out, "0, ")?;
+                for component in COMPONENTS[..number_of_params - 1].iter() {
+                    write!(self.out, "{RETURN_VARIABLE_NAME}.{component}, ")?;
                 }
-            },
+
+                // write last parameter without comma and space for last parameter
+                write!(
+                    self.out,
+                    "{}.{}",
+                    RETURN_VARIABLE_NAME,
+                    COMPONENTS[number_of_params - 1]
+                )?;
+
+                writeln!(self.out, ");")?;
+
+                // Write return value
+                writeln!(
+                    self.out,
+                    "{INDENT}return {RETURN_VARIABLE_NAME}.{ret_swizzle};"
+                )?;
+
+                // End of function body
+                writeln!(self.out, "}}")?;
+                // Write extra new line
+                writeln!(self.out)?;
+            }
         }
-
-        for component in COMPONENTS[..number_of_params - 1].iter() {
-            write!(self.out, "{RETURN_VARIABLE_NAME}.{component}, ")?;
-        }
-
-        // write last parameter without comma and space for last parameter
-        write!(
-            self.out,
-            "{}.{}",
-            RETURN_VARIABLE_NAME,
-            COMPONENTS[number_of_params - 1]
-        )?;
-
-        writeln!(self.out, ");")?;
-
-        // Write return value
-        writeln!(
-            self.out,
-            "{INDENT}return {RETURN_VARIABLE_NAME}.{ret_swizzle};"
-        )?;
-
-        // End of function body
-        writeln!(self.out, "}}")?;
-        // Write extra new line
-        writeln!(self.out)?;
-
         Ok(())
     }
 
@@ -1554,10 +1868,31 @@ impl<W: Write> super::Writer<'_, W> {
                         self.write_wrapped_array_length_function(wal)?;
                     }
                 }
-                crate::Expression::ImageSample { clamp_to_edge, .. } => {
-                    let wrapped = WrappedImageSample { clamp_to_edge };
+                crate::Expression::ImageLoad { image, .. } => {
+                    let class = match *func_ctx.resolve_type(image, &module.types) {
+                        crate::TypeInner::Image { class, .. } => class,
+                        _ => unreachable!(),
+                    };
+                    let wrapped = WrappedImageLoad { class };
+                    if self.wrapped.insert(WrappedType::ImageLoad(wrapped)) {
+                        self.write_wrapped_image_load_function(module, wrapped)?;
+                    }
+                }
+                crate::Expression::ImageSample {
+                    image,
+                    clamp_to_edge,
+                    ..
+                } => {
+                    let class = match *func_ctx.resolve_type(image, &module.types) {
+                        crate::TypeInner::Image { class, .. } => class,
+                        _ => unreachable!(),
+                    };
+                    let wrapped = WrappedImageSample {
+                        class,
+                        clamp_to_edge,
+                    };
                     if self.wrapped.insert(WrappedType::ImageSample(wrapped)) {
-                        self.write_wrapped_image_sample_function(wrapped)?;
+                        self.write_wrapped_image_sample_function(module, wrapped)?;
                     }
                 }
                 crate::Expression::ImageQuery { image, query } => {

@@ -145,6 +145,48 @@ pub struct FragmentState<'a> {
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(FragmentState<'_>: Send, Sync);
 
+/// Describes the task shader stage in a mesh shader pipeline.
+///
+/// For use in [`MeshPipelineDescriptor`]
+#[derive(Clone, Debug)]
+pub struct TaskState<'a> {
+    /// The compiled shader module for this stage.
+    pub module: &'a ShaderModule,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a vertex-stage shader entry point with this name in `module`.
+    /// Otherwise, expect exactly one vertex-stage entry point in `module`, which will be
+    /// selected.
+    pub entry_point: Option<&'a str>,
+    /// Advanced options for when this pipeline is compiled
+    ///
+    /// This implements `Default`, and for most users can be set to `Default::default()`
+    pub compilation_options: PipelineCompilationOptions<'a>,
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(TaskState<'_>: Send, Sync);
+
+/// Describes the mesh shader stage in a mesh shader pipeline.
+///
+/// For use in [`MeshPipelineDescriptor`]
+#[derive(Clone, Debug)]
+pub struct MeshState<'a> {
+    /// The compiled shader module for this stage.
+    pub module: &'a ShaderModule,
+    /// The name of the entry point in the compiled shader to use.
+    ///
+    /// If [`Some`], there must be a vertex-stage shader entry point with this name in `module`.
+    /// Otherwise, expect exactly one vertex-stage entry point in `module`, which will be
+    /// selected.
+    pub entry_point: Option<&'a str>,
+    /// Advanced options for when this pipeline is compiled
+    ///
+    /// This implements `Default`, and for most users can be set to `Default::default()`
+    pub compilation_options: PipelineCompilationOptions<'a>,
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(MeshState<'_>: Send, Sync);
+
 /// Describes a render (graphics) pipeline.
 ///
 /// For use with [`Device::create_render_pipeline`].
@@ -193,3 +235,51 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
+
+/// Describes a mesh shader (graphics) pipeline.
+///
+/// For use with [`Device::create_mesh_pipeline`].
+#[derive(Clone, Debug)]
+pub struct MeshPipelineDescriptor<'a> {
+    /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    ///
+    /// If this is set, then [`Device::create_render_pipeline`] will raise a validation error if
+    /// the layout doesn't match what the shader module(s) expect.
+    ///
+    /// Using the same [`PipelineLayout`] for many [`RenderPipeline`] or [`ComputePipeline`]
+    /// pipelines guarantees that you don't have to rebind any resources when switching between
+    /// those pipelines.
+    ///
+    /// ## Default pipeline layout
+    ///
+    /// If `layout` is `None`, then the pipeline has a [default layout] created and used instead.
+    /// The default layout is deduced from the shader modules.
+    ///
+    /// You can use [`RenderPipeline::get_bind_group_layout`] to create bind groups for use with the
+    /// default layout. However, these bind groups cannot be used with any other pipelines. This is
+    /// convenient for simple pipelines, but using an explicit layout is recommended in most cases.
+    ///
+    /// [default layout]: https://www.w3.org/TR/webgpu/#default-pipeline-layout
+    pub layout: Option<&'a PipelineLayout>,
+    /// The compiled task stage, its entry point, and the color targets.
+    pub task: Option<TaskState<'a>>,
+    /// The compiled mesh stage and its entry point
+    pub mesh: MeshState<'a>,
+    /// The properties of the pipeline at the primitive assembly and rasterization level.
+    pub primitive: PrimitiveState,
+    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
+    pub depth_stencil: Option<DepthStencilState>,
+    /// The multi-sampling properties of the pipeline.
+    pub multisample: MultisampleState,
+    /// The compiled fragment stage, its entry point, and the color targets.
+    pub fragment: Option<FragmentState<'a>>,
+    /// If the pipeline will be used with a multiview render pass, this indicates how many array
+    /// layers the attachments will have.
+    pub multiview: Option<NonZeroU32>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<&'a PipelineCache>,
+}
+#[cfg(send_sync)]
+static_assertions::assert_impl_all!(MeshPipelineDescriptor<'_>: Send, Sync);

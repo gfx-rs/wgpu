@@ -3,7 +3,29 @@ use std::iter;
 use crate::ray_tracing::{acceleration_structure_limits, AsBuildContext};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::*;
-use wgpu_test::{fail, fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    fail, fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
+};
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([
+        UNBUILT_BLAS,
+        UNBUILT_BLAS_COMPACTION,
+        BLAS_COMPACTION_WITHOUT_FLAGS,
+        UNPREPARED_BLAS_COMPACTION,
+        BLAS_COMPACTION,
+        OUT_OF_ORDER_AS_BUILD,
+        OUT_OF_ORDER_AS_BUILD_USE,
+        EMPTY_BUILD,
+        BUILD_WITH_TRANSFORM,
+        ONLY_BLAS_VERTEX_RETURN,
+        ONLY_TLAS_VERTEX_RETURN,
+        EXTRA_FORMAT_BUILD,
+        MISALIGNED_BUILD,
+        TOO_SMALL_STRIDE_BUILD,
+    ]);
+}
 
 #[gpu_test]
 static UNBUILT_BLAS: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -44,7 +66,8 @@ static UNBUILT_BLAS_COMPACTION: GpuTestConfiguration = GpuTestConfiguration::new
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(unbuilt_blas_compaction);
 
@@ -106,7 +129,8 @@ static UNPREPARED_BLAS_COMPACTION: GpuTestConfiguration = GpuTestConfiguration::
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(unprepared_blas_compaction);
 
@@ -273,7 +297,8 @@ static OUT_OF_ORDER_AS_BUILD_USE: GpuTestConfiguration = GpuTestConfiguration::n
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(out_of_order_as_build_use);
 
@@ -455,7 +480,8 @@ static EMPTY_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(empty_build);
 fn empty_build(ctx: TestingContext) {
@@ -476,7 +502,8 @@ static BUILD_WITH_TRANSFORM: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(build_with_transform);
 
@@ -688,7 +715,8 @@ static ONLY_TLAS_VERTEX_RETURN: GpuTestConfiguration = GpuTestConfiguration::new
             .features(
                 wgpu::Features::EXPERIMENTAL_RAY_QUERY
                     | wgpu::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN,
-            ),
+            )
+            .enable_noop(),
     )
     .run_sync(only_tlas_vertex_return);
 
@@ -727,7 +755,8 @@ static EXTRA_FORMAT_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
             .features(
                 wgpu::Features::EXPERIMENTAL_RAY_QUERY
                     | wgpu::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
-            ),
+            )
+            .enable_noop(),
     )
     .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Snorm16x4, 6, false));
 
@@ -737,7 +766,8 @@ static MISALIGNED_BUILD: GpuTestConfiguration = GpuTestConfiguration::new()
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     // Larger than the minimum size, but not aligned as required
     .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Float32x3, 13, true));
@@ -748,7 +778,8 @@ static TOO_SMALL_STRIDE_BUILD: GpuTestConfiguration = GpuTestConfiguration::new(
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     // Aligned as required, but smaller than minimum size
     .run_sync(|ctx| test_as_build_format_stride(ctx, VertexFormat::Float32x3, 8, true));

@@ -1,4 +1,10 @@
-use wgpu_test::{gpu_test, image, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(DEGENERATE_SWITCH);
+}
 
 /// FXC and potentially some glsl consumers have a bug when handling switch statements on a constant
 /// with just a default case. (not sure if the constant part is relevant)
@@ -10,7 +16,7 @@ use wgpu_test::{gpu_test, image, GpuTestConfiguration, TestParameters, TestingCo
 /// bug is avoided there.
 #[gpu_test]
 static DEGENERATE_SWITCH: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().force_fxc(true))
+    .parameters(TestParameters::default().force_fxc(true).enable_noop())
     .run_async(|ctx| async move { test_impl(&ctx).await });
 
 async fn test_impl(ctx: &TestingContext) {

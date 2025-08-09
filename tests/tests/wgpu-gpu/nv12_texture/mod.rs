@@ -1,10 +1,24 @@
 //! Tests for nv12 texture creation and sampling.
 
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([
+        NV12_TEXTURE_CREATION_SAMPLING,
+        NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT,
+        NV12_TEXTURE_VIEW_PLANE_OUT_OF_BOUNDS,
+        NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE,
+        NV12_TEXTURE_BAD_SIZE,
+    ]);
+}
 
 #[gpu_test]
 static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::TEXTURE_FORMAT_NV12)
+            .enable_noop(),
+    )
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 256,
@@ -125,7 +139,11 @@ static NV12_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
 #[gpu_test]
 static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
+        .parameters(
+            TestParameters::default()
+                .features(wgpu::Features::TEXTURE_FORMAT_NV12)
+                .enable_noop(),
+        )
         .run_sync(|ctx| {
             let size = wgpu::Extent3d {
                 width: 256,
@@ -156,7 +174,11 @@ static NV12_TEXTURE_VIEW_PLANE_ON_NON_PLANAR_FORMAT: GpuTestConfiguration =
 
 #[gpu_test]
 static NV12_TEXTURE_VIEW_PLANE_OUT_OF_BOUNDS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::TEXTURE_FORMAT_NV12)
+            .enable_noop(),
+    )
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 256,
@@ -188,7 +210,11 @@ static NV12_TEXTURE_VIEW_PLANE_OUT_OF_BOUNDS: GpuTestConfiguration = GpuTestConf
 
 #[gpu_test]
 static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::TEXTURE_FORMAT_NV12)
+            .enable_noop(),
+    )
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 256,
@@ -220,7 +246,11 @@ static NV12_TEXTURE_BAD_FORMAT_VIEW_PLANE: GpuTestConfiguration = GpuTestConfigu
 
 #[gpu_test]
 static NV12_TEXTURE_BAD_SIZE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_FORMAT_NV12))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::TEXTURE_FORMAT_NV12)
+            .enable_noop(),
+    )
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 255,

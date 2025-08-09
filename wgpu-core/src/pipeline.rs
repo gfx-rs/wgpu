@@ -402,6 +402,33 @@ pub struct FragmentState<'a, SM = ShaderModuleId> {
 /// cbindgen:ignore
 pub type ResolvedFragmentState<'a> = FragmentState<'a, Arc<ShaderModule>>;
 
+/// Describes the task shader in a mesh shader pipeline.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TaskState<'a, SM = ShaderModuleId> {
+    /// The compiled task stage and its entry point.
+    pub stage: ProgrammableStageDescriptor<'a, SM>,
+}
+
+pub type ResolvedTaskState<'a> = TaskState<'a, Arc<ShaderModule>>;
+
+/// Describes the mesh shader in a mesh shader pipeline.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MeshState<'a, SM = ShaderModuleId> {
+    /// The compiled mesh stage and its entry point.
+    pub stage: ProgrammableStageDescriptor<'a, SM>,
+}
+
+pub type ResolvedMeshState<'a> = MeshState<'a, Arc<ShaderModule>>;
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub(crate) enum RenderPipelineVertexProcessor<'a, SM = ShaderModuleId> {
+    Vertex(VertexState<'a, SM>),
+    Mesh(Option<TaskState<'a, SM>>, MeshState<'a, SM>),
+}
+
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -433,10 +460,109 @@ pub struct RenderPipelineDescriptor<
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
 }
+/// Describes a mesh shader pipeline.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MeshPipelineDescriptor<
+    'a,
+    PLL = PipelineLayoutId,
+    SM = ShaderModuleId,
+    PLC = PipelineCacheId,
+> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: Option<PLL>,
+    /// The task processing state for this pipeline.
+    pub task: Option<TaskState<'a, SM>>,
+    /// The mesh processing state for this pipeline
+    pub mesh: MeshState<'a, SM>,
+    /// The properties of the pipeline at the primitive assembly and rasterization level.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub primitive: wgt::PrimitiveState,
+    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub depth_stencil: Option<wgt::DepthStencilState>,
+    /// The multi-sampling properties of the pipeline.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub multisample: wgt::MultisampleState,
+    /// The fragment processing state for this pipeline.
+    pub fragment: Option<FragmentState<'a, SM>>,
+    /// If the pipeline will be used with a multiview render pass, this indicates how many array
+    /// layers the attachments will have.
+    pub multiview: Option<NonZeroU32>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<PLC>,
+}
+
+/// Describes a render (graphics) pipeline.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub(crate) struct GeneralRenderPipelineDescriptor<
+    'a,
+    PLL = PipelineLayoutId,
+    SM = ShaderModuleId,
+    PLC = PipelineCacheId,
+> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: Option<PLL>,
+    /// The vertex processing state for this pipeline.
+    pub vertex: RenderPipelineVertexProcessor<'a, SM>,
+    /// The properties of the pipeline at the primitive assembly and rasterization level.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub primitive: wgt::PrimitiveState,
+    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub depth_stencil: Option<wgt::DepthStencilState>,
+    /// The multi-sampling properties of the pipeline.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub multisample: wgt::MultisampleState,
+    /// The fragment processing state for this pipeline.
+    pub fragment: Option<FragmentState<'a, SM>>,
+    /// If the pipeline will be used with a multiview render pass, this indicates how many array
+    /// layers the attachments will have.
+    pub multiview: Option<NonZeroU32>,
+    /// The pipeline cache to use when creating this pipeline.
+    pub cache: Option<PLC>,
+}
+impl<'a, PLL, SM, PLC> From<RenderPipelineDescriptor<'a, PLL, SM, PLC>>
+    for GeneralRenderPipelineDescriptor<'a, PLL, SM, PLC>
+{
+    fn from(value: RenderPipelineDescriptor<'a, PLL, SM, PLC>) -> Self {
+        Self {
+            label: value.label,
+            layout: value.layout,
+            vertex: RenderPipelineVertexProcessor::Vertex(value.vertex),
+            primitive: value.primitive,
+            depth_stencil: value.depth_stencil,
+            multisample: value.multisample,
+            fragment: value.fragment,
+            multiview: value.multiview,
+            cache: value.cache,
+        }
+    }
+}
+impl<'a, PLL, SM, PLC> From<MeshPipelineDescriptor<'a, PLL, SM, PLC>>
+    for GeneralRenderPipelineDescriptor<'a, PLL, SM, PLC>
+{
+    fn from(value: MeshPipelineDescriptor<'a, PLL, SM, PLC>) -> Self {
+        Self {
+            label: value.label,
+            layout: value.layout,
+            vertex: RenderPipelineVertexProcessor::Mesh(value.task, value.mesh),
+            primitive: value.primitive,
+            depth_stencil: value.depth_stencil,
+            multisample: value.multisample,
+            fragment: value.fragment,
+            multiview: value.multiview,
+            cache: value.cache,
+        }
+    }
+}
 
 /// cbindgen:ignore
-pub type ResolvedRenderPipelineDescriptor<'a> =
-    RenderPipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
+pub(crate) type ResolvedGeneralRenderPipelineDescriptor<'a> =
+    GeneralRenderPipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -649,6 +775,8 @@ pub struct RenderPipeline {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
+    /// Whether this is a mesh shader pipeline
+    pub(crate) is_mesh: bool,
 }
 
 impl Drop for RenderPipeline {
