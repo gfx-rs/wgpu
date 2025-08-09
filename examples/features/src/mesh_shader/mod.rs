@@ -23,13 +23,11 @@ fn compile_glsl(
     println!("{shader_stage}");
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
-    let mut vec = vec![0u32; output.stdout.len() / 4];
-    bytemuck::cast_slice_mut(&mut vec).copy_from_slice(&output.stdout);
     unsafe {
         device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
             entry_point: "main".into(),
             label: None,
-            spirv: Some(vec.into()),
+            spirv: Some(wgpu::util::make_spirv_raw(&output.stdout)),
             ..Default::default()
         })
     }

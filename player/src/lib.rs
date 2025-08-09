@@ -8,7 +8,7 @@ extern crate wgpu_types as wgt;
 
 use wgc::{device::trace, identity::IdentityManager};
 
-use std::{borrow::Cow, fs, io::Read, path::Path};
+use std::{borrow::Cow, fs, path::Path};
 
 pub trait GlobalPlay {
     fn encode_commands(
@@ -326,17 +326,13 @@ impl GlobalPlay for wgc::global::Global {
             } => {
                 let spirv = data.iter().find_map(|a| {
                     if a.ends_with(".spv") {
-                        let mut file = fs::File::open(dir.join(a)).unwrap();
-                        let word_count = file.metadata().unwrap().len() as usize / 4;
-                        let mut vec = Vec::<u32>::with_capacity(word_count);
-                        unsafe {
-                            file.read_exact(std::slice::from_raw_parts_mut(
-                                vec.as_mut_ptr() as *mut u8,
-                                vec.len() * 4,
-                            ))
-                            .unwrap();
-                            vec.set_len(word_count);
-                        }
+                        let data = fs::read(dir.join(a)).unwrap();
+                        assert!(data.len() % 4 == 0);
+                        // Mom: we have bytemuck at home
+                        let vec: Vec<u32> = data
+                            .chunks_exact(4)
+                            .map(|chunk| u32::from_ne_bytes(chunk.try_into().unwrap()))
+                            .collect();
                         Some(Cow::Owned(vec))
                     } else {
                         None

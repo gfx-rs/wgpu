@@ -431,6 +431,8 @@ pub enum GPUFeatureName {
     ShaderPrimitiveIndex,
     #[webidl(rename = "shader-early-depth-test")]
     ShaderEarlyDepthTest,
+    #[webidl(rename = "passthrough-shaders")]
+    PassthroughShaders,
 }
 
 pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Features {
@@ -484,6 +486,7 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
       GPUFeatureName::ShaderI16 => Features::SHADER_I16,
       GPUFeatureName::ShaderPrimitiveIndex => Features::SHADER_PRIMITIVE_INDEX,
       GPUFeatureName::ShaderEarlyDepthTest => Features::SHADER_EARLY_DEPTH_TEST,
+      GPUFeatureName::PassthroughShaders => Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
     };
         features.set(feature, true);
     }
@@ -638,6 +641,9 @@ pub fn features_to_feature_names(features: wgpu_types::Features) -> HashSet<GPUF
     }
     if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
         return_features.insert(ShaderEarlyDepthTest);
+    }
+    if features.contains(wgpu_types::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS) {
+        return_features.insert(PassthroughShaders);
     }
 
     return_features

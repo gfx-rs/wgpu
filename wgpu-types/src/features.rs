@@ -1218,6 +1218,8 @@ bitflags_array! {
         /// Supported platforms
         /// - Vulkan
         /// - DX12
+        /// - Metal
+        /// - WebGPU
         ///
         /// Ideally, in the future, all platforms will be supported. For more info, see
         /// [my comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
