@@ -8025,6 +8025,26 @@ pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
     pub wgsl: Option<Cow<'a, str>>,
 }
 
+// This is so people don't have to fill in fields they don't use, like num_workgroups,
+// entry_point, or other shader languages they didn't compile for
+impl<'a, L: Default> Default for CreateShaderModuleDescriptorPassthrough<'a, L> {
+    fn default() -> Self {
+        Self {
+            entry_point: "main".into(),
+            label: Default::default(),
+            num_workgroups: (0, 0, 0),
+            reflection: None,
+            runtime_checks: ShaderRuntimeChecks::unchecked(),
+            spirv: None,
+            dxil: None,
+            msl: None,
+            hlsl: None,
+            glsl: None,
+            wgsl: None,
+        }
+    }
+}
+
 impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
     /// Takes a closure and maps the label of the shader module descriptor into another.
     pub fn map_label<K>(
