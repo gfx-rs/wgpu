@@ -4213,6 +4213,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive,
             }) => {
                 let blend_src = if let Some(blend_src) = blend_src {
                     Some(self.const_u32(blend_src, &mut ctx.as_const())?.0)
@@ -4225,6 +4226,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     interpolation,
                     sampling,
                     blend_src,
+                    per_primitive,
                 };
                 binding.apply_default_interpolation(&ctx.module.types[ty].inner);
                 Some(binding)

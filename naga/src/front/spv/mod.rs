@@ -263,6 +263,7 @@ impl Decoration {
                 interpolation,
                 sampling,
                 blend_src: None,
+                per_primitive: false,
             }),
             _ => Err(Error::MissingDecoration(spirv::Decoration::Location)),
         }

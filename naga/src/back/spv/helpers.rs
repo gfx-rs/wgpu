@@ -160,7 +160,7 @@ pub enum BindingDecorations {
     BuiltIn(spirv::BuiltIn, ArrayVec<spirv::Decoration, 2>),
     Location {
         location: Word,
-        others: ArrayVec<spirv::Decoration, 4>,
+        others: ArrayVec<spirv::Decoration, 5>,
         /// If this is `Some`, use Decoration::Index with blend_src as an operand
         blend_src: Option<Word>,
     },

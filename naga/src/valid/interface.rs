@@ -92,6 +92,10 @@ pub enum VaryingError {
     },
     #[error("Workgroup size is multi dimensional, `@builtin(subgroup_id)` and `@builtin(subgroup_invocation_id)` are not supported.")]
     InvalidMultiDimensionalSubgroupBuiltIn,
+    #[error("The `@per_primitive` attribute can only be used in fragment shader inputs or mesh shader primitive outputs")]
+    InvalidPerPrimitive,
+    #[error("Non-builtin members of a mesh primitive output struct must be decorated with `@per_primitive`")]
+    MissingPerPrimitive,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -139,8 +143,10 @@ pub enum EntryPointError {
     UnexpectedMeshShaderEntryResult,
     #[error("Task shader entry point must return @builtin(mesh_task_size) vec3<u32>")]
     WrongTaskShaderEntryResult,
-    #[error("Mesh output type must be a user-defined struct")]
+    #[error("Mesh output type must be a user-defined struct.")]
     InvalidMeshOutputType,
+    #[error("Mesh primitive outputs must have exactly one of `@builtin(triangle_indices)`, `@builtin(line_indices)`, or `@builtin(point_index)`")]
+    InvalidMeshPrimitiveOutputType,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -157,6 +163,13 @@ fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
     storage_usage
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MeshOutputType {
+    None,
+    VertexOutput,
+    PrimitiveOutput,
+}
+
 struct VaryingContext<'a> {
     stage: crate::ShaderStage,
     output: bool,
@@ -167,6 +180,7 @@ struct VaryingContext<'a> {
     built_ins: &'a mut crate::FastHashSet<crate::BuiltIn>,
     capabilities: Capabilities,
     flags: super::ValidationFlags,
+    mesh_output_type: MeshOutputType,
 }
 
 impl VaryingContext<'_> {
@@ -320,15 +334,15 @@ impl VaryingContext<'_> {
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::CullPrimitive => (
-                        self.stage == St::Mesh && self.output,
+                        self.mesh_output_type == MeshOutputType::PrimitiveOutput,
                         *ty_inner == Ti::Scalar(crate::Scalar::BOOL),
                     ),
                     Bi::PointIndex => (
-                        self.stage == St::Mesh && self.output,
+                        self.mesh_output_type == MeshOutputType::PrimitiveOutput,
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::LineIndices => (
-                        self.stage == St::Mesh && self.output,
+                        self.mesh_output_type == MeshOutputType::PrimitiveOutput,
                         *ty_inner
                             == Ti::Vector {
                                 size: Vs::Bi,
@@ -336,7 +350,7 @@ impl VaryingContext<'_> {
                             },
                     ),
                     Bi::TriangleIndices => (
-                        self.stage == St::Mesh && self.output,
+                        self.mesh_output_type == MeshOutputType::PrimitiveOutput,
                         *ty_inner
                             == Ti::Vector {
                                 size: Vs::Tri,
@@ -366,6 +380,7 @@ impl VaryingContext<'_> {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive,
             } => {
                 // Only IO-shareable types may be stored in locations.
                 if !self.type_info[ty.index()]
@@ -373,6 +388,14 @@ impl VaryingContext<'_> {
                     .contains(super::TypeFlags::IO_SHAREABLE)
                 {
                     return Err(VaryingError::NotIOShareableType(ty));
+                }
+                if !per_primitive && self.mesh_output_type == MeshOutputType::PrimitiveOutput {
+                    return Err(VaryingError::MissingPerPrimitive);
+                } else if per_primitive
+                    && ((self.stage != crate::ShaderStage::Fragment || self.output)
+                        && self.mesh_output_type != MeshOutputType::PrimitiveOutput)
+                {
+                    return Err(VaryingError::InvalidPerPrimitive);
                 }
 
                 if let Some(blend_src) = blend_src {
@@ -788,6 +811,7 @@ impl super::Validator {
                 built_ins: &mut argument_built_ins,
                 capabilities: self.capabilities,
                 flags: self.flags,
+                mesh_output_type: MeshOutputType::None,
             };
             ctx.validate(ep, fa.ty, fa.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Argument(index as u32, e).with_span())?;
@@ -806,6 +830,7 @@ impl super::Validator {
                 built_ins: &mut result_built_ins,
                 capabilities: self.capabilities,
                 flags: self.flags,
+                mesh_output_type: MeshOutputType::None,
             };
             ctx.validate(ep, fr.ty, fr.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
@@ -937,19 +962,54 @@ impl super::Validator {
                 }
             }
 
-            if !matches!(
-                module.types[mesh_info.vertex_output_type].inner,
-                crate::TypeInner::Struct { .. }
-            ) {
-                return Err(EntryPointError::InvalidMeshOutputType
-                    .with_span_handle(mesh_info.vertex_output_type, &module.types));
-            }
-            if !matches!(
-                module.types[mesh_info.primitive_output_type].inner,
-                crate::TypeInner::Struct { .. }
-            ) {
-                return Err(EntryPointError::InvalidMeshOutputType
-                    .with_span_handle(mesh_info.primitive_output_type, &module.types));
+            for (ty, mesh_output_type) in [
+                (mesh_info.vertex_output_type, MeshOutputType::VertexOutput),
+                (
+                    mesh_info.primitive_output_type,
+                    MeshOutputType::PrimitiveOutput,
+                ),
+            ] {
+                if !matches!(module.types[ty].inner, crate::TypeInner::Struct { .. }) {
+                    return Err(
+                        EntryPointError::InvalidMeshOutputType.with_span_handle(ty, &module.types)
+                    );
+                }
+                let mut result_built_ins = crate::FastHashSet::default();
+                let mut ctx = VaryingContext {
+                    stage: ep.stage,
+                    output: true,
+                    types: &module.types,
+                    type_info: &self.types,
+                    location_mask: &mut self.location_mask,
+                    blend_src_mask: &mut self.blend_src_mask,
+                    built_ins: &mut result_built_ins,
+                    capabilities: self.capabilities,
+                    flags: self.flags,
+                    mesh_output_type,
+                };
+                ctx.validate(ep, ty, None)
+                    .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
+                if mesh_output_type == MeshOutputType::PrimitiveOutput {
+                    let mut num_indices_builtins = 0;
+                    if result_built_ins.contains(&crate::BuiltIn::PointIndex) {
+                        num_indices_builtins += 1;
+                    }
+                    if result_built_ins.contains(&crate::BuiltIn::LineIndices) {
+                        num_indices_builtins += 1;
+                    }
+                    if result_built_ins.contains(&crate::BuiltIn::TriangleIndices) {
+                        num_indices_builtins += 1;
+                    }
+                    if num_indices_builtins != 1 {
+                        return Err(EntryPointError::InvalidMeshPrimitiveOutputType
+                            .with_span_handle(ty, &module.types));
+                    }
+                } else if mesh_output_type == MeshOutputType::VertexOutput
+                    && !result_built_ins.contains(&crate::BuiltIn::Position { invariant: false })
+                {
+                    return Err(EntryPointError::MissingVertexOutputPosition
+                        .with_span_handle(ty, &module.types));
+                }
             }
         } else if info.mesh_shader_info.vertex_type.is_some()
             || info.mesh_shader_info.primitive_type.is_some()

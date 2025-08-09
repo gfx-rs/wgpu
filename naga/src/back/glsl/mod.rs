@@ -1618,6 +1618,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive: _,
             } => (location, interpolation, sampling, blend_src),
             crate::Binding::BuiltIn(built_in) => {
                 match built_in {
@@ -1736,6 +1737,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 interpolation: None,
                 sampling: None,
                 blend_src,
+                per_primitive: false,
             },
             stage: self.entry_point.stage,
             options: VaryingOptions::from_writer_options(self.options, output),

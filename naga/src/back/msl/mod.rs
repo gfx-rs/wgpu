@@ -494,6 +494,7 @@ impl Options {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive: _,
             } => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => {

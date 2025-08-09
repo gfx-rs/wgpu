@@ -95,13 +95,13 @@ Mesh shaders must also be marked with `@primitive_output(OutputType, numOutputs)
 
 Vertex outputs from mesh shaders function identically to outputs of vertex shaders, and as such must have a field with `@builtin(position)`.
 
-Primitive outputs from mesh shaders have some additional builtins they can set. These include `@builtin(cull_primitive)`, which must be a boolean value. If this is set to true, then the primitive is skipped during rendering.
+Primitive outputs from mesh shaders have some additional builtins they can set. These include `@builtin(cull_primitive)`, which must be a boolean value. If this is set to true, then the primitive is skipped during rendering. All non-builtin primitive outputs must be decorated with `@per_primitive`.
 
 Mesh shader primitive outputs must also specify exactly one of `@builtin(triangle_indices)`, `@builtin(line_indices)`, or `@builtin(point_index)`. This determines the output topology of the mesh shader, and must match the output topology of the pipeline descriptor the mesh shader is used with. These must be of type `vec3<u32>`, `vec2<u32>`, and `u32` respectively. When setting this, each of the indices must be less than the number of vertices declared in `setMeshOutputs`.
 
 Additionally, the `@location` attributes from the vertex and primitive outputs can't overlap.
 
-Before setting any vertices or indices, or exiting, the mesh shader must call `setMeshOutputs(numVertices: u32, numIndices: u32)`, which declares the number of vertices and indices that will be written to. These must be less than the corresponding maximums set in `@vertex_output` and `@primitive_output`. The mesh shader must then write to exactly these numbers of vertices and primitives.
+Before setting any vertices or indices, or exiting, the mesh shader must call `setMeshOutputs(numVertices: u32, numIndices: u32)`, which declares the number of vertices and indices that will be written to. These must be less than the corresponding maximums set in `@vertex_output` and `@primitive_output`. The mesh shader must then write to exactly these numbers of vertices and primitives. A varying member with `@per_primitive` cannot be used in function interfaces except as the primitive output for mesh shaders or as input for fragment shaders.
 
 The mesh shader can write to vertices using the `setVertex(idx: u32, vertex: VertexOutput)` where `VertexOutput` is replaced with the vertex type declared in `@vertex_output`, and `idx` is the index of the vertex to write. Similarly, the mesh shader can write to vertices using `setPrimitive(idx: u32, primitive: PrimitiveOutput)`. These can be written to multiple times, however unsynchronized writes are undefined behavior. The primitives and indices are shared across the entire mesh shader workgroup.
 
@@ -109,7 +109,7 @@ The mesh shader can write to vertices using the `setVertex(idx: u32, vertex: Ver
 
 Fragment shaders can access vertex output data as if it is from a vertex shader. They can also access primitive output data, provided the input is decorated with `@per_primitive`. The `@per_primitive` attribute can be applied to a value directly, such as `@per_primitive @location(1) value: vec4<f32>`, to a struct such as `@per_primitive primitive_input: PrimitiveInput` where `PrimitiveInput` is a struct containing fields decorated with `@location` and `@builtin`, or to members of a struct that are themselves decorated with `@location` or `@builtin`.
 
-The primitive state is part of the fragment input and must match the output of the mesh shader in the pipeline. Using `@per_primitive` also requires enabling the mesh shader extension.
+The primitive state is part of the fragment input and must match the output of the mesh shader in the pipeline. Using `@per_primitive` also requires enabling the mesh shader extension. Additionally, the locations of vertex and primitive input cannot overlap.
 
 ### Full example
 
@@ -141,7 +141,7 @@ struct VertexOutput {
 struct PrimitiveOutput {
 	@builtin(triangle_indices) index: vec3<u32>,
 	@builtin(cull_primitive) cull: bool,
-	@location(1) colorMask: vec4<f32>,
+	@per_primitive @location(1) colorMask: vec4<f32>,
 }
 struct PrimitiveInput {
 	@location(1) colorMask: vec4<f32>,
@@ -184,7 +184,7 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 	setPrimitive(0, p);
 }
 @fragment
-fn fs_main(vertex: VertexOutput, @per_primitive primitive: PrimitiveInput) -> @location(0) vec4<f32> {
+fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
 	return vertex.color * primitive.colorMask;
 }
 ```

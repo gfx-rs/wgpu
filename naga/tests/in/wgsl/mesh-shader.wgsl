@@ -23,10 +23,10 @@ struct VertexOutput {
 struct PrimitiveOutput {
 	@builtin(triangle_indices) index: vec3<u32>,
 	@builtin(cull_primitive) cull: bool,
-	@location(1) colorMask: vec4<f32>,
+	@per_primitive @location(1) colorMask: vec4<f32>,
 }
 struct PrimitiveInput {
-	@location(1) colorMask: vec4<f32>,
+	@per_primitive @location(1) colorMask: vec4<f32>,
 }
 
 @task

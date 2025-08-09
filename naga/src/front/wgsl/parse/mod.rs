@@ -178,6 +178,7 @@ struct BindingParser<'a> {
     sampling: ParsedAttribute<crate::Sampling>,
     invariant: ParsedAttribute<bool>,
     blend_src: ParsedAttribute<Handle<ast::Expression<'a>>>,
+    per_primitive: ParsedAttribute<()>,
 }
 
 impl<'a> BindingParser<'a> {
@@ -237,6 +238,9 @@ impl<'a> BindingParser<'a> {
                     .set(parser.general_expression(lexer, ctx)?, name_span)?;
                 lexer.expect(Token::Paren(')'))?;
             }
+            "per_primitive" => {
+                self.per_primitive.set((), name_span)?;
+            }
             _ => return Err(Box::new(Error::UnknownAttribute(name_span))),
         }
         Ok(())
@@ -250,9 +254,10 @@ impl<'a> BindingParser<'a> {
             self.sampling.value,
             self.invariant.value.unwrap_or_default(),
             self.blend_src.value,
+            self.per_primitive.value,
         ) {
-            (None, None, None, None, false, None) => Ok(None),
-            (Some(location), None, interpolation, sampling, false, blend_src) => {
+            (None, None, None, None, false, None, None) => Ok(None),
+            (Some(location), None, interpolation, sampling, false, blend_src, per_primitive) => {
                 // Before handing over the completed `Module`, we call
                 // `apply_default_interpolation` to ensure that the interpolation and
                 // sampling have been explicitly specified on all vertex shader output and fragment
@@ -262,17 +267,18 @@ impl<'a> BindingParser<'a> {
                     interpolation,
                     sampling,
                     blend_src,
+                    per_primitive: per_primitive.is_some(),
                 }))
             }
-            (None, Some(crate::BuiltIn::Position { .. }), None, None, invariant, None) => {
+            (None, Some(crate::BuiltIn::Position { .. }), None, None, invariant, None, None) => {
                 Ok(Some(ast::Binding::BuiltIn(crate::BuiltIn::Position {
                     invariant,
                 })))
             }
-            (None, Some(built_in), None, None, false, None) => {
+            (None, Some(built_in), None, None, false, None, None) => {
                 Ok(Some(ast::Binding::BuiltIn(built_in)))
             }
-            (_, _, _, _, _, _) => Err(Box::new(Error::InconsistentBinding(span))),
+            (_, _, _, _, _, _, _) => Err(Box::new(Error::InconsistentBinding(span))),
         }
     }
 }

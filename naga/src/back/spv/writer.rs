@@ -2125,6 +2125,7 @@ impl Writer {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive,
             } => {
                 let mut others = ArrayVec::new();
 
@@ -2168,6 +2169,9 @@ impl Writer {
                             others.push(Decoration::Sample);
                         }
                     }
+                }
+                if per_primitive {
+                    others.push(Decoration::PerPrimitiveEXT);
                 }
                 Ok(BindingDecorations::Location {
                     location,
@@ -2372,10 +2376,6 @@ impl Writer {
                         None,
                     )
                     .to_words(&mut self.logical_layout.declarations);
-
-                    if is_primitive {
-                        self.decorate(var_id, spirv::Decoration::PerPrimitiveEXT, &[]);
-                    }
 
                     let binding = self.map_binding(
                         ir_module,

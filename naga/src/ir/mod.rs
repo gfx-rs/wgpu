@@ -984,6 +984,7 @@ pub enum Binding {
         /// Optional `blend_src` index used for dual source blending.
         /// See <https://www.w3.org/TR/WGSL/#attribute-blend_src>
         blend_src: Option<u32>,
+        per_primitive: bool,
     },
 }
 

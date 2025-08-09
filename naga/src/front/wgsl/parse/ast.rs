@@ -162,6 +162,7 @@ pub enum Binding<'a> {
         interpolation: Option<crate::Interpolation>,
         sampling: Option<crate::Sampling>,
         blend_src: Option<Handle<Expression<'a>>>,
+        per_primitive: bool,
     },
 }
 
