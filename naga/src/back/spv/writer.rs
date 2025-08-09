@@ -1052,7 +1052,7 @@ impl Writer {
                         &[],
                     ));
                     for dec in decorations {
-                        dec.to_words(&mut self.logical_layout.declarations);
+                        dec.to_words(&mut self.logical_layout.annotations);
                     }
                     let v = self.write_mesh_return_global_variable(
                         builtin_block_ty_id,
@@ -1123,14 +1123,14 @@ impl Writer {
                         &[],
                     ));
                     for dec in decorations {
-                        dec.to_words(&mut self.logical_layout.declarations);
+                        dec.to_words(&mut self.logical_layout.annotations);
                     }
                     let v = self.write_mesh_return_global_variable(
                         builtin_block_ty_id,
                         prim_info.array_size_id,
                     )?;
                     Instruction::decorate(v.var_id, spirv::Decoration::PerPrimitiveEXT, &[])
-                        .to_words(&mut self.logical_layout.declarations);
+                        .to_words(&mut self.logical_layout.annotations);
                     iface.varying_ids.push(v.var_id);
                     mesh_return_info.primitive_builtin_block = Some(v);
                 }
@@ -1142,14 +1142,14 @@ impl Writer {
                                 Instruction::type_struct(s_type, &[member.ty_id])
                                     .to_words(&mut self.logical_layout.declarations);
                                 Instruction::decorate(s_type, spirv::Decoration::Block, &[])
-                                    .to_words(&mut self.logical_layout.declarations);
+                                    .to_words(&mut self.logical_layout.annotations);
                                 Instruction::member_decorate(
                                     s_type,
                                     0,
                                     spirv::Decoration::Location,
                                     &[location],
                                 )
-                                .to_words(&mut self.logical_layout.declarations);
+                                .to_words(&mut self.logical_layout.annotations);
                                 let v = self.write_mesh_return_global_variable(
                                     s_type,
                                     prim_info.array_size_id,
@@ -1176,7 +1176,7 @@ impl Writer {
                                     spirv::Decoration::PerPrimitiveEXT,
                                     &[],
                                 )
-                                .to_words(&mut self.logical_layout.declarations);
+                                .to_words(&mut self.logical_layout.annotations);
                                 Instruction::decorate(
                                     v.var_id,
                                     spirv::Decoration::BuiltIn,
@@ -1193,7 +1193,7 @@ impl Writer {
                                         _ => unreachable!(),
                                     } as Word],
                                 )
-                                .to_words(&mut self.logical_layout.declarations);
+                                .to_words(&mut self.logical_layout.annotations);
                                 iface.varying_ids.push(v.var_id);
                                 mesh_return_info.primitive_indices = Some(v);
                             }
@@ -1202,14 +1202,14 @@ impl Writer {
                                 Instruction::type_struct(s_type, &[member.ty_id])
                                     .to_words(&mut self.logical_layout.declarations);
                                 Instruction::decorate(s_type, spirv::Decoration::Block, &[])
-                                    .to_words(&mut self.logical_layout.declarations);
+                                    .to_words(&mut self.logical_layout.annotations);
                                 Instruction::member_decorate(
                                     s_type,
                                     0,
                                     spirv::Decoration::Location,
                                     &[location],
                                 )
-                                .to_words(&mut self.logical_layout.declarations);
+                                .to_words(&mut self.logical_layout.annotations);
                                 let v = self.write_mesh_return_global_variable(
                                     s_type,
                                     prim_info.array_size_id,
@@ -1219,7 +1219,7 @@ impl Writer {
                                     spirv::Decoration::PerPrimitiveEXT,
                                     &[],
                                 )
-                                .to_words(&mut self.logical_layout.declarations);
+                                .to_words(&mut self.logical_layout.annotations);
                                 iface.varying_ids.push(v.var_id);
                                 mesh_return_info.primitive_bindings.push(v);
                             }
@@ -2629,7 +2629,8 @@ impl Writer {
                 .to_words(&mut self.logical_layout.declarations);
             self.mesh_state.num_vertices_var = Some(var_id);
             if self.flags.contains(WriterFlags::DEBUG) {
-                Instruction::name(var_id, "naga_num_vertices");
+                Instruction::name(var_id, "naga_num_vertices")
+                    .to_words(&mut self.logical_layout.debugs);
             }
         }
         if self.mesh_state.num_primitives_var.is_none() {
@@ -2640,7 +2641,8 @@ impl Writer {
                 .to_words(&mut self.logical_layout.declarations);
             self.mesh_state.num_primitives_var = Some(var_id);
             if self.flags.contains(WriterFlags::DEBUG) {
-                Instruction::name(var_id, "naga_num_primitives");
+                Instruction::name(var_id, "naga_num_primitives")
+                    .to_words(&mut self.logical_layout.debugs);
             }
         }
         let entry = if is_primitive {

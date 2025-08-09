@@ -368,13 +368,11 @@ impl Writer {
                 let val_i = self.id_gen.next();
                 body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
                 let cond = self.id_gen.next();
-                body.push(Instruction {
-                    op: spirv::Op::ULessThan,
-                    type_id: Some(self.get_bool_type_id()),
-                    result_id: Some(cond),
-                    wc: 2,
-                    operands: alloc::vec![val_i, count_id],
-                });
+                let mut cmp_ins = Instruction::new(spirv::Op::ULessThan);
+                cmp_ins.set_type(self.get_bool_type_id());
+                cmp_ins.set_result(cond);
+                cmp_ins.add_operands(alloc::vec![val_i, count_id]);
+                body.push(cmp_ins);
                 body.push(Instruction::branch_conditional(cond, loop_body, loop_merge));
             }
             // Loop continue - increment i
@@ -383,13 +381,14 @@ impl Writer {
                 let val_i = self.id_gen.next();
                 let new_val_i = self.id_gen.next();
                 body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
-                body.push(Instruction {
-                    op: spirv::Op::IAdd,
-                    type_id: Some(u32_type_id),
-                    result_id: Some(new_val_i),
-                    wc: 2,
-                    operands: alloc::vec![val_i, self.get_constant_scalar(crate::Literal::U32(1))],
-                });
+                let mut add_ins = Instruction::new(spirv::Op::IAdd);
+                add_ins.set_type(u32_type_id);
+                add_ins.set_result(new_val_i);
+                add_ins.add_operands(alloc::vec![
+                    val_i,
+                    self.get_constant_scalar(crate::Literal::U32(1))
+                ]);
+                body.push(add_ins);
                 body.push(Instruction::store(counter_var, new_val_i, None));
                 body.push(Instruction::branch(loop_header));
             }
@@ -442,7 +441,10 @@ impl Writer {
                             self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
                             ptr_to_copy_to,
                             return_info.vertex_builtin_block.as_ref().unwrap().var_id,
-                            &[val_i, builtin_index],
+                            &[
+                                val_i,
+                                self.get_constant_scalar(crate::Literal::U32(builtin_index as u32)),
+                            ],
                         ));
                         builtin_index += 1;
                     }
@@ -512,7 +514,10 @@ impl Writer {
                             self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
                             ptr_to_copy_to,
                             return_info.primitive_builtin_block.as_ref().unwrap().var_id,
-                            &[val_i, builtin_index],
+                            &[
+                                val_i,
+                                self.get_constant_scalar(crate::Literal::U32(builtin_index as u32)),
+                            ],
                         ));
                         builtin_index += 1;
                     }
