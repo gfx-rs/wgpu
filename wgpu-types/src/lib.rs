@@ -7996,7 +7996,7 @@ pub enum DeviceLostReason {
 }
 
 /// Descriptor for a shader module given by any of several sources, with optional reflection information.
-/// At least one shader type that may be used by the backend must be `Some` or a panic is caused.
+/// At least one shader type that may be used by the backend must be `Some` or a panic is raised.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
@@ -8030,7 +8030,7 @@ pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
 impl<'a, L: Default> Default for CreateShaderModuleDescriptorPassthrough<'a, L> {
     fn default() -> Self {
         Self {
-            entry_point: "main".into(),
+            entry_point: "".into(),
             label: Default::default(),
             num_workgroups: (0, 0, 0),
             reflection: None,
