@@ -2129,7 +2129,8 @@ impl Device {
 
         // TODO: when we get to use if-let chains, this will be a little nicer!
 
-        let hal_shader = match self.adapter.backend() {
+        log::info!("Backend: {}", self.backend());
+        let hal_shader = match self.backend() {
             wgt::Backend::Vulkan => hal::ShaderInput::SpirV(
                 descriptor
                     .spirv

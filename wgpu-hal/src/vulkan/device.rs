@@ -1930,10 +1930,10 @@ impl crate::Device for super::Device {
                     .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?,
                 )
             }
+            crate::ShaderInput::Spirv(data) => Cow::Borrowed(data),
             crate::ShaderInput::Msl { .. }
             | crate::ShaderInput::Dxil { .. }
             | crate::ShaderInput::Hlsl { .. }
-            | crate::ShaderInput::SpirV(..)
             | crate::ShaderInput::Glsl { .. } => unreachable!(),
         };
 
