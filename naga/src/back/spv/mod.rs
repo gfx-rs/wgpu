@@ -141,10 +141,39 @@ struct ResultMember {
     built_in: Option<crate::BuiltIn>,
 }
 
+struct MeshReturnGlobalVariable {
+    _inner_ty: u32,
+    var_id: u32,
+}
+
+#[derive(Clone)]
+struct MeshReturnMember {
+    ty_id: u32,
+    binding: crate::Binding,
+}
+struct MeshReturnInfo {
+    vertex_type: Handle<crate::Type>,
+    vertex_members: Vec<MeshReturnMember>,
+    max_vertices: u32,
+    primitive_type: Handle<crate::Type>,
+    primitive_members: Vec<MeshReturnMember>,
+    max_primitives: u32,
+    // In vulkan, all builtins must be in the same block.
+    // All bindings must be in their own unique block.
+    // Also, the primitive indices builtin family needs its own block.
+    // Also also, cull primitive doesn't care about having its own block.
+    vertex_builtin_block: Option<MeshReturnGlobalVariable>,
+    vertex_bindings: Vec<MeshReturnGlobalVariable>,
+    primitive_builtin_block: Option<MeshReturnGlobalVariable>,
+    primitive_bindings: Vec<MeshReturnGlobalVariable>,
+    primitive_indices: Option<MeshReturnGlobalVariable>,
+}
+
 struct EntryPointContext {
     argument_ids: Vec<Word>,
     results: Vec<ResultMember>,
     task_payload: Option<Word>,
+    mesh_state: Option<MeshReturnInfo>,
 }
 
 #[derive(Default)]
@@ -921,6 +950,8 @@ pub fn write_vec(
 pub struct WriteMeshInfo {
     pub vertex_outputs_by_type: crate::FastHashMap<Handle<crate::Type>, MeshOutputInfo>,
     pub primitive_outputs_by_type: crate::FastHashMap<Handle<crate::Type>, MeshOutputInfo>,
+    pub num_vertices_var: Option<Word>,
+    pub num_primitives_var: Option<Word>,
 }
 
 #[derive(Clone)]
@@ -932,14 +963,7 @@ pub struct MeshOutputInfo {
     /// tries to write to it, the function can still be valid if it is never called.
     pub index_of_length_decl: usize,
     pub inner_ty: Word,
-    // Structs with elements with layout can't have elements with builtins, and vice versa.
-    // Therefore, we separate it into 2 structs and whatnot
-    pub outputs: Vec<MeshOutputArrayInfo>,
-}
-#[derive(Clone)]
-pub struct MeshOutputArrayInfo {
-    pub member_ty: Word,
     pub array_ty: Word,
     pub var_id: Word,
-    pub member: crate::StructMember,
+    pub array_size_id: Word,
 }

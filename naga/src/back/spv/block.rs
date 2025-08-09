@@ -297,6 +297,244 @@ impl Writer {
         }
         Ok(Instruction::return_void())
     }
+    fn write_mesh_shader_return(
+        &mut self,
+        return_info: &super::MeshReturnInfo,
+        body: &mut Vec<Instruction>,
+    ) -> Result<(), Error> {
+        // TODO: (maybe) make this multithreaded if you have the patience
+        let vert_info = self.mesh_shader_output_variable(
+            return_info.vertex_type,
+            false,
+            return_info.max_vertices,
+        )?;
+        let prim_info = self.mesh_shader_output_variable(
+            return_info.primitive_type,
+            false,
+            return_info.max_primitives,
+        )?;
+        let vert_count_id = self.id_gen.next();
+        body.push(Instruction::load(
+            self.get_u32_type_id(),
+            vert_count_id,
+            self.mesh_state.num_vertices_var.unwrap(),
+            None,
+        ));
+        let prim_count_id = self.id_gen.next();
+        body.push(Instruction::load(
+            self.get_u32_type_id(),
+            prim_count_id,
+            self.mesh_state.num_primitives_var.unwrap(),
+            None,
+        ));
+
+        // All this for the vertex loop lol
+        let u32_type_id = self.get_u32_type_id();
+        let u32_ptr_id = self.get_pointer_type_id(u32_type_id, spirv::StorageClass::Function);
+        let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
+        let vertex_loop_header = self.id_gen.next();
+        let prim_loop_header = self.id_gen.next();
+        let in_between_loops = self.id_gen.next();
+        let vertex_loop_body = self.id_gen.next();
+        let prim_loop_body = self.id_gen.next();
+        let func_end = self.id_gen.next();
+        let counter_var = self.id_gen.next();
+        body.push(Instruction::variable(
+            u32_ptr_id,
+            counter_var,
+            spirv::StorageClass::Function,
+            Some(zero_u32),
+        ));
+
+        body.push(Instruction::branch(vertex_loop_header));
+
+        {
+            body.push(Instruction::label(in_between_loops));
+            body.push(Instruction::store(counter_var, zero_u32, None));
+            body.push(Instruction::branch(prim_loop_header));
+        }
+
+        let mut get_loop_continue_id = |loop_body, loop_header, loop_merge, count_id| {
+            let loop_continue = self.id_gen.next();
+
+            // Loop header - check if i is less than num vertices to copy
+            {
+                body.push(Instruction::label(loop_header));
+                body.push(Instruction::loop_merge(
+                    loop_merge,
+                    loop_continue,
+                    spirv::SelectionControl::empty(),
+                ));
+                let val_i = self.id_gen.next();
+                body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
+                let cond = self.id_gen.next();
+                body.push(Instruction {
+                    op: spirv::Op::ULessThan,
+                    type_id: Some(self.get_bool_type_id()),
+                    result_id: Some(cond),
+                    wc: 2,
+                    operands: alloc::vec![val_i, count_id],
+                });
+                body.push(Instruction::branch_conditional(cond, loop_body, loop_merge));
+            }
+            // Loop continue - increment i
+            {
+                body.push(Instruction::label(loop_continue));
+                let val_i = self.id_gen.next();
+                let new_val_i = self.id_gen.next();
+                body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
+                body.push(Instruction {
+                    op: spirv::Op::IAdd,
+                    type_id: Some(u32_type_id),
+                    result_id: Some(new_val_i),
+                    wc: 2,
+                    operands: alloc::vec![val_i, self.get_constant_scalar(crate::Literal::U32(1))],
+                });
+                body.push(Instruction::store(counter_var, new_val_i, None));
+                body.push(Instruction::branch(loop_header));
+            }
+            loop_continue
+        };
+        let vertex_continue = get_loop_continue_id(
+            vertex_loop_body,
+            vertex_loop_header,
+            in_between_loops,
+            vert_count_id,
+        );
+        let prim_continue =
+            get_loop_continue_id(prim_loop_body, prim_loop_header, func_end, prim_count_id);
+
+        // Vertex copies
+        {
+            body.push(Instruction::label(vertex_loop_body));
+            let val_i = self.id_gen.next();
+            body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
+
+            let vert_to_copy_ptr = self.id_gen.next();
+            body.push(Instruction::access_chain(
+                self.get_pointer_type_id(vert_info.inner_ty, spirv::StorageClass::Workgroup),
+                vert_to_copy_ptr,
+                vert_info.var_id,
+                &[val_i],
+            ));
+            let vert_to_copy = self.id_gen.next();
+            body.push(Instruction::load(
+                vert_info.inner_ty,
+                vert_to_copy,
+                vert_to_copy_ptr,
+                None,
+            ));
+
+            let mut builtin_index = 0;
+            let mut binding_index = 0;
+            for (member_id, member) in return_info.vertex_members.iter().enumerate() {
+                let val_to_copy = self.id_gen.next();
+                body.push(Instruction::composite_extract(
+                    member.ty_id,
+                    val_to_copy,
+                    vert_to_copy,
+                    &[self.get_constant_scalar(crate::Literal::U32(member_id as u32))],
+                ));
+                let ptr_to_copy_to = self.id_gen.next();
+                match member.binding {
+                    crate::Binding::BuiltIn(_) => {
+                        body.push(Instruction::access_chain(
+                            self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
+                            ptr_to_copy_to,
+                            return_info.vertex_builtin_block.as_ref().unwrap().var_id,
+                            &[val_i, builtin_index],
+                        ));
+                        builtin_index += 1;
+                    }
+                    crate::Binding::Location { .. } => {
+                        body.push(Instruction::access_chain(
+                            self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
+                            ptr_to_copy_to,
+                            return_info.vertex_bindings[binding_index].var_id,
+                            &[val_i, zero_u32],
+                        ));
+                        binding_index += 1;
+                    }
+                }
+                body.push(Instruction::store(ptr_to_copy_to, val_to_copy, None));
+            }
+
+            body.push(Instruction::branch(vertex_continue));
+        }
+
+        // Primitive copies
+        {
+            body.push(Instruction::label(prim_loop_body));
+            let val_i = self.id_gen.next();
+            body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
+
+            let prim_to_copy_ptr = self.id_gen.next();
+            body.push(Instruction::access_chain(
+                self.get_pointer_type_id(prim_info.inner_ty, spirv::StorageClass::Workgroup),
+                prim_to_copy_ptr,
+                prim_info.var_id,
+                &[val_i],
+            ));
+            let prim_to_copy = self.id_gen.next();
+            body.push(Instruction::load(
+                vert_info.inner_ty,
+                prim_to_copy,
+                prim_to_copy_ptr,
+                None,
+            ));
+
+            let mut builtin_index = 0;
+            let mut binding_index = 0;
+            for (member_id, member) in return_info.primitive_members.iter().enumerate() {
+                let val_to_copy = self.id_gen.next();
+                body.push(Instruction::composite_extract(
+                    member.ty_id,
+                    val_to_copy,
+                    prim_to_copy,
+                    &[self.get_constant_scalar(crate::Literal::U32(member_id as u32))],
+                ));
+                let ptr_to_copy_to = self.id_gen.next();
+                match member.binding {
+                    crate::Binding::BuiltIn(
+                        crate::BuiltIn::PointIndex
+                        | crate::BuiltIn::LineIndices
+                        | crate::BuiltIn::TriangleIndices,
+                    ) => {
+                        body.push(Instruction::access_chain(
+                            self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
+                            ptr_to_copy_to,
+                            return_info.primitive_indices.as_ref().unwrap().var_id,
+                            &[val_i],
+                        ));
+                    }
+                    crate::Binding::BuiltIn(_) => {
+                        body.push(Instruction::access_chain(
+                            self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
+                            ptr_to_copy_to,
+                            return_info.primitive_builtin_block.as_ref().unwrap().var_id,
+                            &[val_i, builtin_index],
+                        ));
+                        builtin_index += 1;
+                    }
+                    crate::Binding::Location { .. } => {
+                        body.push(Instruction::access_chain(
+                            self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
+                            ptr_to_copy_to,
+                            return_info.primitive_bindings[binding_index].var_id,
+                            &[val_i, zero_u32],
+                        ));
+                        binding_index += 1;
+                    }
+                }
+                body.push(Instruction::store(ptr_to_copy_to, val_to_copy, None));
+            }
+
+            body.push(Instruction::branch(prim_continue));
+        }
+
+        body.push(Instruction::label(func_end));
+        Ok(())
+    }
 }
 
 impl BlockContext<'_> {
@@ -3275,6 +3513,14 @@ impl BlockContext<'_> {
                     return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Return { value: None } => {
+                    if let Some(super::EntryPointContext {
+                        mesh_state: Some(ref mesh_state),
+                        ..
+                    }) = self.function.entry_point_context
+                    {
+                        self.writer
+                            .write_mesh_shader_return(mesh_state, &mut block.body)?;
+                    };
                     self.function.consume(block, Instruction::return_void());
                     return Ok(BlockExitDisposition::Discarded);
                 }
@@ -3674,6 +3920,16 @@ impl BlockContext<'_> {
                     ins.add_operand(self.cached[vertex_count]);
                     ins.add_operand(self.cached[primitive_count]);
                     block.body.push(ins);
+                    block.body.push(Instruction::store(
+                        self.writer.mesh_state.num_vertices_var.unwrap(),
+                        self.cached[vertex_count],
+                        None,
+                    ));
+                    block.body.push(Instruction::store(
+                        self.writer.mesh_state.num_primitives_var.unwrap(),
+                        self.cached[primitive_count],
+                        None,
+                    ));
                 }
                 Statement::MeshFunction(
                     crate::MeshFunction::SetVertex { index, value }
@@ -3695,14 +3951,21 @@ impl BlockContext<'_> {
                     } else {
                         self.fun_info.mesh_shader_info.vertex_type.unwrap().0
                     };
-                    let info = self.writer.mesh_shader_output_variable(
-                        self.ir_module,
-                        type_handle,
-                        is_prim,
-                        0,
-                    )?;
+                    let info = self
+                        .writer
+                        .mesh_shader_output_variable(type_handle, is_prim, 0)?;
+                    let out_ptr_id = self.gen_id();
+                    block.body.push(Instruction::access_chain(
+                        self.get_pointer_type_id(info.inner_ty, spirv::StorageClass::Output),
+                        out_ptr_id,
+                        info.var_id,
+                        &[self.cached[index]],
+                    ));
+                    block
+                        .body
+                        .push(Instruction::store(out_ptr_id, self.cached[value], None));
 
-                    for (i, member_info) in info.outputs.iter().enumerate() {
+                    /*for (i, member_info) in info.outputs.iter().enumerate() {
                         let member_ty = member_info.member_ty;
 
                         let in_value_id = self.gen_id();
@@ -3767,7 +4030,7 @@ impl BlockContext<'_> {
                                 .body
                                 .push(Instruction::store(access_id, flipped_y_val, None));
                         }
-                    }
+                    }*/
                 }
                 Statement::SubgroupBallot {
                     result,
