@@ -302,7 +302,7 @@ impl Writer {
         return_info: &super::MeshReturnInfo,
         body: &mut Vec<Instruction>,
     ) -> Result<(), Error> {
-        // TODO: (maybe) make this better multithreaded if you have the patience
+        // TODO: (maybe) make this better multithreaded if you have the patience (current atomic stuff is stupid asf)
         let vert_info = self.mesh_shader_output_variable(
             return_info.vertex_type,
             false,
@@ -310,7 +310,7 @@ impl Writer {
         )?;
         let prim_info = self.mesh_shader_output_variable(
             return_info.primitive_type,
-            false,
+            true,
             return_info.max_primitives,
         )?;
         let vert_count_id = self.id_gen.next();
@@ -336,17 +336,34 @@ impl Writer {
         let in_between_loops = self.id_gen.next();
         let func_end = self.id_gen.next();
         let counter_var = self.mesh_state.counter_var.unwrap();
+        let vertex_val_i = self.id_gen.next();
+        let primitive_val_i = self.id_gen.next();
+        let workgroup_scope_id =
+            self.get_constant_scalar(crate::Literal::U32(spirv::Scope::Workgroup as u32));
+        let relaxed_semantics_id =
+            self.get_constant_scalar(crate::Literal::U32(spirv::MemorySemantics::RELAXED.bits()));
+        let control_barrier_instruction = Instruction::control_barrier(
+            workgroup_scope_id,
+            workgroup_scope_id,
+            self.get_constant_scalar(crate::Literal::U32(
+                spirv::MemorySemantics::WORKGROUP_MEMORY.bits(),
+            )),
+        );
 
-        body.push(Instruction::store(counter_var, zero_u32, None));
+        body.push(Instruction::atomic_store(
+            counter_var,
+            workgroup_scope_id,
+            relaxed_semantics_id,
+            zero_u32,
+        ));
+        body.push(control_barrier_instruction.clone());
 
         body.push(Instruction::branch(vertex_loop_header));
 
-        let vertex_copy_body = 
         // Vertex copies
-        {
+        let vertex_copy_body = {
             let mut body = Vec::new();
-            let val_i = self.id_gen.next();
-            body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
+            let val_i = vertex_val_i;
 
             let vert_to_copy_ptr = self.id_gen.next();
             body.push(Instruction::access_chain(
@@ -406,8 +423,7 @@ impl Writer {
         // Primitive copies
         let primitive_copy_body = {
             let mut body = Vec::new();
-            let val_i = self.id_gen.next();
-            body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
+            let val_i = primitive_val_i;
 
             let prim_to_copy_ptr = self.id_gen.next();
             body.push(Instruction::access_chain(
@@ -475,7 +491,12 @@ impl Writer {
             body
         };
         // TODO: make the increments atomic
-        let mut get_loop_continue_id = |body: &mut Vec<Instruction>, mut loop_body_block, loop_header, loop_merge, count_id| {
+        let mut get_loop_continue_id = |body: &mut Vec<Instruction>,
+                                        mut loop_body_block,
+                                        loop_header,
+                                        loop_merge,
+                                        count_id,
+                                        val_i| {
             let condition_check = self.id_gen.next();
             let loop_continue = self.id_gen.next();
             let loop_body = self.id_gen.next();
@@ -493,8 +514,17 @@ impl Writer {
             // Condition check - check if i is less than num vertices to copy
             {
                 body.push(Instruction::label(condition_check));
-                let val_i = self.id_gen.next();
-                body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
+                let mut inc_ins = Instruction::new(spirv::Op::AtomicIAdd);
+                inc_ins.set_type(u32_type_id);
+                inc_ins.set_result(val_i);
+                inc_ins.add_operands(alloc::vec![
+                    counter_var,
+                    workgroup_scope_id,
+                    relaxed_semantics_id,
+                    self.get_constant_scalar(crate::Literal::U32(1))
+                ]);
+                body.push(inc_ins);
+
                 let cond = self.id_gen.next();
                 let mut cmp_ins = Instruction::new(spirv::Op::ULessThan);
                 cmp_ins.set_type(self.get_bool_type_id());
@@ -507,41 +537,44 @@ impl Writer {
             {
                 body.push(Instruction::label(loop_body));
                 body.append(&mut loop_body_block);
-                
                 body.push(Instruction::branch(loop_continue));
             }
             // Loop continue - increment i
             {
                 body.push(Instruction::label(loop_continue));
-                let val_i = self.id_gen.next();
-                let new_val_i = self.id_gen.next();
-                body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
-                let mut add_ins = Instruction::new(spirv::Op::IAdd);
-                add_ins.set_type(u32_type_id);
-                add_ins.set_result(new_val_i);
-                add_ins.add_operands(alloc::vec![
-                    val_i,
-                    self.get_constant_scalar(crate::Literal::U32(1))
-                ]);
-                body.push(add_ins);
-                body.push(Instruction::store(counter_var, new_val_i, None));
                 body.push(Instruction::branch(loop_header));
             }
         };
         get_loop_continue_id(
-             body,
+            body,
             vertex_copy_body,
             vertex_loop_header,
             in_between_loops,
             vert_count_id,
+            vertex_val_i,
         );
         {
             body.push(Instruction::label(in_between_loops));
-            // TODO: sync threads, make this an atomic write
-            body.push(Instruction::store(counter_var, zero_u32, None));
+
+            body.push(control_barrier_instruction.clone());
+            body.push(Instruction::atomic_store(
+                counter_var,
+                workgroup_scope_id,
+                relaxed_semantics_id,
+                zero_u32,
+            ));
+            body.push(control_barrier_instruction.clone());
+
             body.push(Instruction::branch(prim_loop_header));
         }
-        get_loop_continue_id(body, primitive_copy_body, prim_loop_header, func_end, prim_count_id);
+        get_loop_continue_id(
+            body,
+            primitive_copy_body,
+            prim_loop_header,
+            func_end,
+            prim_count_id,
+            primitive_val_i,
+        );
 
         body.push(Instruction::label(func_end));
         Ok(())

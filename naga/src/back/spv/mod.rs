@@ -52,6 +52,7 @@ struct LogicalLayout {
     function_definitions: Vec<Word>,
 }
 
+#[derive(Clone)]
 struct Instruction {
     op: spirv::Op,
     wc: u32,
