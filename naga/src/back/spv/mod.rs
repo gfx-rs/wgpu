@@ -952,6 +952,7 @@ pub struct WriteMeshInfo {
     pub primitive_outputs_by_type: crate::FastHashMap<Handle<crate::Type>, MeshOutputInfo>,
     pub num_vertices_var: Option<Word>,
     pub num_primitives_var: Option<Word>,
+    pub counter_var: Option<Word>,
 }
 
 #[derive(Clone)]

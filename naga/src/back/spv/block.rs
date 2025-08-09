@@ -334,81 +334,17 @@ impl Writer {
         let vertex_loop_header = self.id_gen.next();
         let prim_loop_header = self.id_gen.next();
         let in_between_loops = self.id_gen.next();
-        let vertex_loop_body = self.id_gen.next();
-        let prim_loop_body = self.id_gen.next();
         let func_end = self.id_gen.next();
-        let counter_var = self.id_gen.next();
-
-        Instruction::variable(
-            self.get_pointer_type_id(u32_type_id, spirv::StorageClass::Workgroup),
-            counter_var,
-            spirv::StorageClass::Workgroup,
-            None,
-        )
-        .to_words(&mut self.logical_layout.declarations);
+        let counter_var = self.mesh_state.counter_var.unwrap();
 
         body.push(Instruction::store(counter_var, zero_u32, None));
 
         body.push(Instruction::branch(vertex_loop_header));
 
-        {
-            body.push(Instruction::label(in_between_loops));
-            body.push(Instruction::store(counter_var, zero_u32, None));
-            body.push(Instruction::branch(prim_loop_header));
-        }
-
-        let mut get_loop_continue_id = |loop_body, loop_header, loop_merge, count_id| {
-            let loop_continue = self.id_gen.next();
-
-            // Loop header - check if i is less than num vertices to copy
-            {
-                body.push(Instruction::label(loop_header));
-                body.push(Instruction::loop_merge(
-                    loop_merge,
-                    loop_continue,
-                    spirv::SelectionControl::empty(),
-                ));
-                let val_i = self.id_gen.next();
-                body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
-                let cond = self.id_gen.next();
-                let mut cmp_ins = Instruction::new(spirv::Op::ULessThan);
-                cmp_ins.set_type(self.get_bool_type_id());
-                cmp_ins.set_result(cond);
-                cmp_ins.add_operands(alloc::vec![val_i, count_id]);
-                body.push(cmp_ins);
-                body.push(Instruction::branch_conditional(cond, loop_body, loop_merge));
-            }
-            // Loop continue - increment i
-            {
-                body.push(Instruction::label(loop_continue));
-                let val_i = self.id_gen.next();
-                let new_val_i = self.id_gen.next();
-                body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
-                let mut add_ins = Instruction::new(spirv::Op::IAdd);
-                add_ins.set_type(u32_type_id);
-                add_ins.set_result(new_val_i);
-                add_ins.add_operands(alloc::vec![
-                    val_i,
-                    self.get_constant_scalar(crate::Literal::U32(1))
-                ]);
-                body.push(add_ins);
-                body.push(Instruction::store(counter_var, new_val_i, None));
-                body.push(Instruction::branch(loop_header));
-            }
-            loop_continue
-        };
-        let vertex_continue = get_loop_continue_id(
-            vertex_loop_body,
-            vertex_loop_header,
-            in_between_loops,
-            vert_count_id,
-        );
-        let prim_continue =
-            get_loop_continue_id(prim_loop_body, prim_loop_header, func_end, prim_count_id);
-
+        let vertex_copy_body = 
         // Vertex copies
         {
-            body.push(Instruction::label(vertex_loop_body));
+            let mut body = Vec::new();
             let val_i = self.id_gen.next();
             body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
 
@@ -447,7 +383,7 @@ impl Writer {
                             return_info.vertex_builtin_block.as_ref().unwrap().var_id,
                             &[
                                 val_i,
-                                self.get_constant_scalar(crate::Literal::U32(builtin_index as u32)),
+                                self.get_constant_scalar(crate::Literal::U32(builtin_index)),
                             ],
                         ));
                         builtin_index += 1;
@@ -464,13 +400,12 @@ impl Writer {
                 }
                 body.push(Instruction::store(ptr_to_copy_to, val_to_copy, None));
             }
-
-            body.push(Instruction::branch(vertex_continue));
-        }
+            body
+        };
 
         // Primitive copies
-        {
-            body.push(Instruction::label(prim_loop_body));
+        let primitive_copy_body = {
+            let mut body = Vec::new();
             let val_i = self.id_gen.next();
             body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
 
@@ -520,7 +455,7 @@ impl Writer {
                             return_info.primitive_builtin_block.as_ref().unwrap().var_id,
                             &[
                                 val_i,
-                                self.get_constant_scalar(crate::Literal::U32(builtin_index as u32)),
+                                self.get_constant_scalar(crate::Literal::U32(builtin_index)),
                             ],
                         ));
                         builtin_index += 1;
@@ -537,9 +472,75 @@ impl Writer {
                 }
                 body.push(Instruction::store(ptr_to_copy_to, val_to_copy, None));
             }
+            body
+        };
 
-            body.push(Instruction::branch(prim_continue));
+        let mut get_loop_continue_id = |body: &mut Vec<Instruction>, mut loop_body_block, loop_header, loop_merge, count_id| {
+            let condition_check = self.id_gen.next();
+            let loop_continue = self.id_gen.next();
+            let loop_body = self.id_gen.next();
+
+            // Loop header
+            {
+                body.push(Instruction::label(loop_header));
+                body.push(Instruction::loop_merge(
+                    loop_merge,
+                    loop_continue,
+                    spirv::SelectionControl::empty(),
+                ));
+                body.push(Instruction::branch(condition_check));
+            }
+            // Condition check - check if i is less than num vertices to copy
+            {
+                body.push(Instruction::label(condition_check));
+                let val_i = self.id_gen.next();
+                body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
+                let cond = self.id_gen.next();
+                let mut cmp_ins = Instruction::new(spirv::Op::ULessThan);
+                cmp_ins.set_type(self.get_bool_type_id());
+                cmp_ins.set_result(cond);
+                cmp_ins.add_operands(alloc::vec![val_i, count_id]);
+                body.push(cmp_ins);
+                body.push(Instruction::branch_conditional(cond, loop_body, loop_merge));
+            }
+            // Loop body
+            {
+                body.push(Instruction::label(loop_body));
+                body.append(&mut loop_body_block);
+                
+                body.push(Instruction::branch(loop_continue));
+            }
+            // Loop continue - increment i
+            {
+                body.push(Instruction::label(loop_continue));
+                let val_i = self.id_gen.next();
+                let new_val_i = self.id_gen.next();
+                body.push(Instruction::load(u32_type_id, val_i, counter_var, None));
+                let mut add_ins = Instruction::new(spirv::Op::IAdd);
+                add_ins.set_type(u32_type_id);
+                add_ins.set_result(new_val_i);
+                add_ins.add_operands(alloc::vec![
+                    val_i,
+                    self.get_constant_scalar(crate::Literal::U32(1))
+                ]);
+                body.push(add_ins);
+                body.push(Instruction::store(counter_var, new_val_i, None));
+                body.push(Instruction::branch(loop_header));
+            }
+        };
+        get_loop_continue_id(
+             body,
+            vertex_copy_body,
+            vertex_loop_header,
+            in_between_loops,
+            vert_count_id,
+        );
+        {
+            body.push(Instruction::label(in_between_loops));
+            body.push(Instruction::store(counter_var, zero_u32, None));
+            body.push(Instruction::branch(prim_loop_header));
         }
+        get_loop_continue_id(body, primitive_copy_body, prim_loop_header, func_end, prim_count_id);
 
         body.push(Instruction::label(func_end));
         Ok(())

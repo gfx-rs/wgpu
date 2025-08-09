@@ -101,6 +101,7 @@ impl Writer {
                 primitive_outputs_by_type: crate::FastHashMap::default(),
                 num_vertices_var: None,
                 num_primitives_var: None,
+                counter_var: None,
             },
         })
     }
@@ -168,6 +169,7 @@ impl Writer {
                     .recycle(),
                 num_vertices_var: None,
                 num_primitives_var: None,
+                counter_var: None,
             },
         };
 
@@ -963,6 +965,7 @@ impl Writer {
                 iface
                     .varying_ids
                     .push(self.mesh_state.num_primitives_var.unwrap());
+                iface.varying_ids.push(self.mesh_state.counter_var.unwrap());
 
                 let vertex_members = match &ir_module.types[mesh_info.vertex_output_type] {
                     &crate::Type {
@@ -2635,9 +2638,9 @@ impl Writer {
         is_primitive: bool,
         array_len: Word,
     ) -> Result<super::MeshOutputInfo, Error> {
+        let u32_ty = self.get_u32_type_id();
+        let u32_ptr = self.get_pointer_type_id(u32_ty, spirv::StorageClass::Workgroup);
         if self.mesh_state.num_vertices_var.is_none() {
-            let u32_ty = self.get_u32_type_id();
-            let u32_ptr = self.get_pointer_type_id(u32_ty, spirv::StorageClass::Workgroup);
             let var_id = self.id_gen.next();
             Instruction::variable(u32_ptr, var_id, spirv::StorageClass::Workgroup, None)
                 .to_words(&mut self.logical_layout.declarations);
@@ -2648,8 +2651,6 @@ impl Writer {
             }
         }
         if self.mesh_state.num_primitives_var.is_none() {
-            let u32_ty = self.get_u32_type_id();
-            let u32_ptr = self.get_pointer_type_id(u32_ty, spirv::StorageClass::Workgroup);
             let var_id = self.id_gen.next();
             Instruction::variable(u32_ptr, var_id, spirv::StorageClass::Workgroup, None)
                 .to_words(&mut self.logical_layout.declarations);
@@ -2658,6 +2659,13 @@ impl Writer {
                 Instruction::name(var_id, "naga_num_primitives")
                     .to_words(&mut self.logical_layout.debugs);
             }
+        }
+        // Counter for when we copy stuff at the end, very hacky stuff (check it out in `write_mesh_shader_return`!)
+        if self.mesh_state.counter_var.is_none() {
+            let var_id = self.id_gen.next();
+            Instruction::variable(u32_ptr, var_id, spirv::StorageClass::Workgroup, None)
+                .to_words(&mut self.logical_layout.declarations);
+            self.mesh_state.counter_var = Some(var_id);
         }
         let entry = if is_primitive {
             self.mesh_state.primitive_outputs_by_type.get(&output_type)
