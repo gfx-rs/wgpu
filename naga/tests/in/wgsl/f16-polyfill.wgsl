@@ -69,3 +69,11 @@ fn test_return_partial(input_original: F16IO) -> @location(0) f16 {
     input.scalar_f16 = 0.0h;
     return input.scalar_f16;
 }
+
+@fragment
+fn test_component_access(input: F16IO) -> F16IO {
+    var output: F16IO;
+    output.vec2_f16.x = input.vec2_f16.y;
+    output.vec2_f16.y = input.vec2_f16.x;
+    return output;
+}

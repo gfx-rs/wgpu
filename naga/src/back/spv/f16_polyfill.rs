@@ -1,6 +1,6 @@
 /*!
-This module provides functionality polyfills `f16` input/output variables when the
-`StorageInputOutput16` capability is not available or disabled.
+This module provides functionality for polyfilling `f16` input/output variables
+when the `StorageInputOutput16` capability is not available or disabled.
 
 It works by:
 
