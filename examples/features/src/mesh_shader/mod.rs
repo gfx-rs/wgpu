@@ -1,37 +1,4 @@
-use std::{io::Write, process::Stdio};
-
-// Same as in mesh shader tests
-fn compile_glsl(
-    device: &wgpu::Device,
-    data: &[u8],
-    shader_stage: &'static str,
-) -> wgpu::ShaderModule {
-    let cmd = std::process::Command::new("glslc")
-        .args([
-            &format!("-fshader-stage={shader_stage}"),
-            "-",
-            "-o",
-            "-",
-            "--target-env=vulkan1.2",
-            "--target-spv=spv1.4",
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to call glslc");
-    cmd.stdin.as_ref().unwrap().write_all(data).unwrap();
-    println!("{shader_stage}");
-    let output = cmd.wait_with_output().expect("Error waiting for glslc");
-    assert!(output.status.success());
-    unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
-            wgpu::ShaderModuleDescriptorSpirV {
-                label: None,
-                source: wgpu::util::make_spirv_raw(&output.stdout),
-            },
-        ))
-    }
-}
+use wgpu::include_wgsl;
 
 pub struct Example {
     pipeline: wgpu::RenderPipeline,
@@ -48,27 +15,28 @@ impl crate::framework::Example for Example {
             bind_group_layouts: &[],
             push_constant_ranges: &[],
         });
-        let (ts, ms, fs) = (
-            compile_glsl(device, include_bytes!("shader.task"), "task"),
-            compile_glsl(device, include_bytes!("shader.mesh"), "mesh"),
-            compile_glsl(device, include_bytes!("shader.frag"), "frag"),
-        );
+        let shader_module = unsafe {
+            device.create_shader_module_trusted(
+                include_wgsl!("shader.wgsl"),
+                wgpu::ShaderRuntimeChecks::unchecked(),
+            )
+        };
         let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             task: Some(wgpu::TaskState {
-                module: &ts,
-                entry_point: Some("main"),
+                module: &shader_module,
+                entry_point: Some("ts_main"),
                 compilation_options: Default::default(),
             }),
             mesh: wgpu::MeshState {
-                module: &ms,
-                entry_point: Some("main"),
+                module: &shader_module,
+                entry_point: Some("ms_main"),
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &fs,
-                entry_point: Some("main"),
+                module: &shader_module,
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),

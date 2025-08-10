@@ -3047,20 +3047,18 @@ impl Writer {
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(debug_info) = debug_info.as_ref() {
                 let source_file_id = self.id_gen.next();
-                self.debugs.push(Instruction::string(
-                    &debug_info.file_name.to_string_lossy(),
-                    source_file_id,
-                ));
+                Instruction::string(&debug_info.file_name.to_string_lossy(), source_file_id)
+                    .to_words(&mut self.logical_layout.debugs);
 
                 debug_info_inner = Some(DebugInfoInner {
                     source_code: debug_info.source_code,
                     source_file_id,
                 });
-                self.debugs.append(&mut Instruction::source_auto_continued(
-                    debug_info.language,
-                    0,
-                    &debug_info_inner,
-                ));
+                for ins in
+                    Instruction::source_auto_continued(debug_info.language, 0, &debug_info_inner)
+                {
+                    ins.to_words(&mut self.logical_layout.debugs);
+                }
             }
         }
 

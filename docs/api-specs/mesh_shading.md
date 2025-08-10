@@ -119,9 +119,9 @@ The following is a full example of WGSL shaders that could be used to create a m
 enable mesh_shading;
 
 const positions = array(
-	vec4(0.,-1.,0.,1.),
-	vec4(-1.,1.,0.,1.),
-	vec4(1.,1.,0.,1.)
+	vec4(0.,1.,0.,1.),
+	vec4(-1.,-1.,0.,1.),
+	vec4(1.,-1.,0.,1.)
 );
 const colors = array(
 	vec4(0.,1.,0.,1.),
@@ -144,7 +144,7 @@ struct PrimitiveOutput {
 	@per_primitive @location(1) colorMask: vec4<f32>,
 }
 struct PrimitiveInput {
-	@location(1) colorMask: vec4<f32>,
+	@per_primitive @location(1) colorMask: vec4<f32>,
 }
 
 @task

@@ -1084,6 +1084,8 @@ impl Interface {
             wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
             wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
             wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
+            wgt::ShaderStages::MESH => naga::ShaderStage::Mesh,
+            wgt::ShaderStages::TASK => naga::ShaderStage::Task,
             _ => unreachable!(),
         }
     }

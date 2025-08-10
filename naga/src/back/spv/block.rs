@@ -345,8 +345,11 @@ impl Writer {
         let control_barrier_instruction = Instruction::control_barrier(
             workgroup_scope_id,
             workgroup_scope_id,
+            // TODO: ensure that I actually need these memory semantics given the silly atomic nonsense
             self.get_constant_scalar(crate::Literal::U32(
-                spirv::MemorySemantics::WORKGROUP_MEMORY.bits(),
+                (spirv::MemorySemantics::WORKGROUP_MEMORY
+                    | spirv::MemorySemantics::ACQUIRE_RELEASE)
+                    .bits(),
             )),
         );
 
@@ -418,8 +421,30 @@ impl Writer {
                     }
                 }
                 body.push(Instruction::store(ptr_to_copy_to, val_to_copy, None));
+                // Can't use epilogue flip because can't read from Output
                 if needs_y_flip {
-                    self.write_epilogue_position_y_flip(ptr_to_copy_to, &mut body)?;
+                    let prev_y = self.id_gen.next();
+                    body.push(Instruction::composite_extract(
+                        self.get_f32_type_id(),
+                        prev_y,
+                        val_to_copy,
+                        &[1],
+                    ));
+                    let new_y = self.id_gen.next();
+                    body.push(Instruction::unary(
+                        spirv::Op::FNegate,
+                        self.get_f32_type_id(),
+                        new_y,
+                        prev_y,
+                    ));
+                    let new_ptr_to_copy_to = self.id_gen.next();
+                    body.push(Instruction::access_chain(
+                        self.get_f32_pointer_type_id(spirv::StorageClass::Output),
+                        new_ptr_to_copy_to,
+                        ptr_to_copy_to,
+                        &[self.get_constant_scalar(crate::Literal::U32(1))],
+                    ));
+                    body.push(Instruction::store(new_ptr_to_copy_to, new_y, None));
                 }
             }
             body
