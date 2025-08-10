@@ -2535,8 +2535,7 @@ impl Writer {
                 }
                 if per_primitive && stage == crate::ShaderStage::Fragment {
                     others.push(Decoration::PerPrimitiveEXT);
-                    self.require_any("mesh shaders", &[spirv::Capability::MeshShadingEXT])?;
-                    self.use_extension("SPV_EXT_mesh_shader");
+                    self.require_mesh_shaders()?;
                 }
                 Ok(BindingDecorations::Location {
                     location,
@@ -3002,6 +3001,16 @@ impl Writer {
         self.physical_layout.bound = self.id_gen.0 + 1;
     }
 
+    pub(super) fn require_mesh_shaders(&mut self) -> Result<(), Error> {
+        self.use_extension("SPV_EXT_mesh_shader");
+        self.require_any("Mesh Shaders", &[spirv::Capability::MeshShadingEXT])?;
+        let lang_version = self.lang_version();
+        if lang_version.0 <= 1 && lang_version.1 < 4 {
+            return Err(Error::SpirvVersionTooLow(1, 4));
+        }
+        Ok(())
+    }
+
     fn write_logical_layout(
         &mut self,
         ir_module: &crate::Module,
@@ -3038,13 +3047,11 @@ impl Writer {
         let mut has_ray_query = ir_module.special_types.ray_desc.is_some()
             | ir_module.special_types.ray_intersection.is_some();
         let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
-        // Ways mesh shaders are required:
-        // * Mesh entry point used
-        // * Mesh function like setVertex used outside mesh entry point, this is handled elsewhere
-        // * Task payload global variable
-        // * Fragment shader with per primitive data (currently unhandle by naga in general)
 
-        // TODO: check for that last condition
+        // Ways mesh shaders are required:
+        // * Mesh entry point used - checked for
+        // * Mesh function like setVertex used outside mesh entry point, this is handled when those are written
+        // * Fragment shader with per primitive data - handled in `map_binding`
         let has_mesh_shaders = ir_module.entry_points.iter().any(|entry| {
             entry.stage == crate::ShaderStage::Mesh || entry.stage == crate::ShaderStage::Task
         }) || ir_module
@@ -3079,12 +3086,7 @@ impl Writer {
                 .to_words(&mut self.logical_layout.extensions);
         }
         if has_mesh_shaders {
-            self.use_extension("SPV_EXT_mesh_shader");
-            self.require_any("Mesh Shaders", &[spirv::Capability::MeshShadingEXT])?;
-            let lang_version = self.lang_version();
-            if lang_version.0 <= 1 && lang_version.1 < 4 {
-                return Err(Error::SpirvVersionTooLow(1, 4));
-            }
+            self.require_mesh_shaders()?;
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")

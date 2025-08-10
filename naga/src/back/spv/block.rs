@@ -302,7 +302,6 @@ impl Writer {
         return_info: &super::MeshReturnInfo,
         body: &mut Vec<Instruction>,
     ) -> Result<(), Error> {
-        // TODO: (maybe) make this better multithreaded if you have the patience (current atomic stuff is stupid asf)
         let vert_info = self.mesh_shader_output_variable(
             return_info.vertex_type,
             false,
@@ -510,7 +509,6 @@ impl Writer {
             }
             body
         };
-        // TODO: make the increments atomic
         let mut get_loop_continue_id = |body: &mut Vec<Instruction>,
                                         mut loop_body_block,
                                         loop_header,
@@ -3985,9 +3983,7 @@ impl BlockContext<'_> {
                     vertex_count,
                     primitive_count,
                 }) => {
-                    self.writer
-                        .require_any("mesh shaders", &[spirv::Capability::MeshShadingEXT])?;
-                    self.writer.use_extension("SPV_EXT_mesh_shader");
+                    self.writer.require_mesh_shaders()?;
                     block.body.push(Instruction::store(
                         self.writer.mesh_state.num_vertices_var.unwrap(),
                         self.cached[vertex_count],
@@ -4003,13 +3999,7 @@ impl BlockContext<'_> {
                     crate::MeshFunction::SetVertex { index, value }
                     | crate::MeshFunction::SetPrimitive { index, value },
                 ) => {
-                    self.writer
-                        .require_any("mesh shaders", &[spirv::Capability::MeshShadingEXT])?;
-                    self.writer.use_extension("SPV_EXT_mesh_shader");
-                    let lang_version = self.writer.lang_version();
-                    if lang_version.0 <= 1 && lang_version.1 < 4 {
-                        return Err(Error::SpirvVersionTooLow(1, 4));
-                    }
+                    self.writer.require_mesh_shaders()?;
                     let is_prim = matches!(
                         *statement,
                         Statement::MeshFunction(crate::MeshFunction::SetPrimitive { .. })
