@@ -168,6 +168,10 @@ struct MeshReturnInfo {
     primitive_builtin_block: Option<MeshReturnGlobalVariable>,
     primitive_bindings: Vec<MeshReturnGlobalVariable>,
     primitive_indices: Option<MeshReturnGlobalVariable>,
+    local_invocation_index_id: u32,
+    workgroup_size: u32,
+    /// The id of a function variable in the entry point for a u32
+    function_variable: u32,
 }
 
 struct EntryPointContext {
@@ -953,7 +957,6 @@ pub struct WriteMeshInfo {
     pub primitive_outputs_by_type: crate::FastHashMap<Handle<crate::Type>, MeshOutputInfo>,
     pub num_vertices_var: Option<Word>,
     pub num_primitives_var: Option<Word>,
-    pub counter_var: Option<Word>,
 }
 
 #[derive(Clone)]

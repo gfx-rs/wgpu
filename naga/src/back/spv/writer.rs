@@ -26,6 +26,7 @@ struct FunctionInterface<'a> {
     stage: crate::ShaderStage,
     task_payload: Option<Handle<crate::GlobalVariable>>,
     mesh_info: Option<crate::MeshStageInfo>,
+    workgroup_size: [u32; 3],
 }
 
 impl Function {
@@ -101,7 +102,6 @@ impl Writer {
                 primitive_outputs_by_type: crate::FastHashMap::default(),
                 num_vertices_var: None,
                 num_primitives_var: None,
-                counter_var: None,
             },
         })
     }
@@ -169,7 +169,6 @@ impl Writer {
                     .recycle(),
                 num_vertices_var: None,
                 num_primitives_var: None,
-                counter_var: None,
             },
         };
 
@@ -748,6 +747,9 @@ impl Writer {
         let mut local_invocation_id = None;
 
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
+
+        let mut local_invocation_index_id = None;
+
         for argument in ir_function.arguments.iter() {
             let class = spirv::StorageClass::Input;
             let handle_ty = ir_module.types[argument.ty].inner.is_handle();
@@ -777,6 +779,10 @@ impl Writer {
 
                     if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
                         local_invocation_id = Some(id);
+                    } else if binding
+                        == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
+                    {
+                        local_invocation_index_id = Some(id);
                     }
 
                     id
@@ -806,6 +812,10 @@ impl Writer {
 
                         if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
                             local_invocation_id = Some(id);
+                        } else if binding
+                            == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
+                        {
+                            local_invocation_index_id = Some(id);
                         }
                     }
                     prelude.body.push(Instruction::composite_construct(
@@ -965,7 +975,8 @@ impl Writer {
                 iface
                     .varying_ids
                     .push(self.mesh_state.num_primitives_var.unwrap());
-                iface.varying_ids.push(self.mesh_state.counter_var.unwrap());
+
+                // TODO: zero initialize num_vertices and num_primitives
 
                 let vertex_members = match &ir_module.types[mesh_info.vertex_output_type] {
                     &crate::Type {
@@ -993,6 +1004,43 @@ impl Writer {
                         .collect(),
                     _ => unreachable!(),
                 };
+                let local_invocation_index_id = match local_invocation_index_id {
+                    Some(a) => a,
+                    None => {
+                        let u32_id = self.get_u32_type_id();
+                        let var = self.id_gen.next();
+                        Instruction::variable(
+                            self.get_pointer_type_id(u32_id, spirv::StorageClass::Input),
+                            var,
+                            spirv::StorageClass::Input,
+                            None,
+                        )
+                        .to_words(&mut self.logical_layout.declarations);
+                        Instruction::decorate(
+                            var,
+                            spirv::Decoration::BuiltIn,
+                            &[spirv::BuiltIn::LocalInvocationIndex as u32],
+                        )
+                        .to_words(&mut self.logical_layout.annotations);
+
+                        let loaded_value = self.id_gen.next();
+                        prelude
+                            .body
+                            .push(Instruction::load(u32_id, loaded_value, var, None));
+                        loaded_value
+                    }
+                };
+                let u32_id = self.get_u32_type_id();
+                let function_variable = self.id_gen.next();
+                prelude.body.insert(
+                    0,
+                    Instruction::variable(
+                        self.get_pointer_type_id(u32_id, spirv::StorageClass::Function),
+                        function_variable,
+                        spirv::StorageClass::Function,
+                        None,
+                    ),
+                );
                 let mut mesh_return_info = super::MeshReturnInfo {
                     vertex_type: mesh_info.vertex_output_type,
                     vertex_members,
@@ -1005,6 +1053,11 @@ impl Writer {
                     primitive_bindings: Vec::new(),
                     primitive_builtin_block: None,
                     primitive_indices: None,
+                    local_invocation_index_id,
+                    workgroup_size: self.get_constant_scalar(crate::Literal::U32(
+                        iface.workgroup_size.iter().product(),
+                    )),
+                    function_variable,
                 };
                 if mesh_return_info
                     .vertex_members
@@ -1480,6 +1533,7 @@ impl Writer {
                 stage: entry_point.stage,
                 task_payload: entry_point.task_payload,
                 mesh_info: entry_point.mesh_info.clone(),
+                workgroup_size: entry_point.workgroup_size,
             }),
             debug_info,
         )?;
@@ -2659,13 +2713,6 @@ impl Writer {
                 Instruction::name(var_id, "naga_num_primitives")
                     .to_words(&mut self.logical_layout.debugs);
             }
-        }
-        // Counter for when we copy stuff at the end, very hacky stuff (check it out in `write_mesh_shader_return`!)
-        if self.mesh_state.counter_var.is_none() {
-            let var_id = self.id_gen.next();
-            Instruction::variable(u32_ptr, var_id, spirv::StorageClass::Workgroup, None)
-                .to_words(&mut self.logical_layout.declarations);
-            self.mesh_state.counter_var = Some(var_id);
         }
         let entry = if is_primitive {
             self.mesh_state.primitive_outputs_by_type.get(&output_type)
