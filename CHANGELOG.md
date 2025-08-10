@@ -73,7 +73,7 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 #### DX12
 
-- Fixed a bug where access to matrices with 2 rows would not work in some cases. By @andyleiserson in [#7438](https://github.com/gfx-rs/wgpu/pull/7438).
+- Allow disabling waiting for latency waitable object. By @marcpabst in [#7400](https://github.com/gfx-rs/wgpu/pull/7400)
 
 ### Bug Fixes
 
@@ -84,6 +84,11 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 #### Vulkan
 
 - Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8043](https://github.com/gfx-rs/wgpu/pull/8043).
+
+##### DX12
+
+- Fixed a bug where access to matrices with 2 rows would not work in some cases. By @andyleiserson in [#7438](https://github.com/gfx-rs/wgpu/pull/7438).
+
 
 ## v26.0.2 (2025-07-23)
 
