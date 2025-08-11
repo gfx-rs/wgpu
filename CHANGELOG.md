@@ -89,6 +89,10 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 - Fixed a bug where access to matrices with 2 rows would not work in some cases. By @andyleiserson in [#7438](https://github.com/gfx-rs/wgpu/pull/7438).
 
+##### EGL
+
+- Fixed unwrap failed in context creation for some Android devices. By @uael in [#8024](https://github.com/gfx-rs/wgpu/pull/8024).
+
 
 ## v26.0.2 (2025-07-23)
 
