@@ -53,6 +53,12 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
+### New Features
+
+#### General
+
+- Added mesh shader support to `wgpu`, with examples. Requires passthrough. By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345).
+
 ### Changes
 
 #### General
@@ -81,11 +87,7 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 - Validate that effective buffer binding size is aligned to 4 when creating bind groups with buffer entries.. By @ErichDonGubler in [8041](https://github.com/gfx-rs/wgpu/pull/8041).
 
-#### Vulkan
-
-- Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8043](https://github.com/gfx-rs/wgpu/pull/8043).
-
-##### DX12
+#### DX12
 
 - Fixed a bug where access to matrices with 2 rows would not work in some cases. By @andyleiserson in [#7438](https://github.com/gfx-rs/wgpu/pull/7438).
 
@@ -93,6 +95,19 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 - Fixed unwrap failed in context creation for some Android devices. By @uael in [#8024](https://github.com/gfx-rs/wgpu/pull/8024).
 
+## v26.0.4 (2025-08-07)
+
+### Bug Fixes
+
+#### Vulkan
+
+- Fix `STATUS_HEAP_CORRUPTION` crash when concurrently calling `create_sampler`. By @atlv24 in [#8043](https://github.com/gfx-rs/wgpu/pull/8043), [#8056](https://github.com/gfx-rs/wgpu/pull/8056).
+
+## v26.0.3 (2025-07-30)
+
+### Bug Fixes
+
+- Fixed memory leak in vulkan backend. By @cwfitzgerald in [#8031](https://github.com/gfx-rs/wgpu/pull/8031).
 
 ## v26.0.2 (2025-07-23)
 
@@ -100,6 +115,7 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 - Fixed vulkan validation error regarding the swapchain in latest SDK. By @cwfitzgerald in [#7971](https://github.com/gfx-rs/wgpu/pull/7971).
 - Fixed flickering on AMD devices and crashes inside Renderdoc due to incorrect caching of `VkFramebuffer`s when the driver re-used image view handles. By @cwfitzgerald in [#7972](https://github.com/gfx-rs/wgpu/pull/7972).
+
 > [!WARNING]
 > There is formally a breaking change in `wgpu_hal::vulkan::Device::texture_from_raw` as there is now a `&self` receiver where
 > there previously wasn't one. This will not affect you unless you explicitly use this api. We have gone ahead with the release
@@ -170,9 +186,9 @@ let (device, queue) = adapter
     .unwrap();
 ```
 
-More examples of this 
+More examples of this
 
-By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829). 
+By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
 
 ### Naga
 
@@ -192,7 +208,6 @@ By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
 - Add acceleration structure limits. By @Vecvec in [#7845](https://github.com/gfx-rs/wgpu/pull/7845).
 - Add support for clip-distances feature for Vulkan and GL backends. By @dzamkov in [#7730](https://github.com/gfx-rs/wgpu/pull/7730)
 - Added `wgpu_types::error::{ErrorType, WebGpuError}` for classification of errors according to WebGPU's [`GPUError`]'s classification scheme, and implement `WebGpuError` for existing errors. This allows users of `wgpu-core` to offload error classification onto the WGPU ecosystem, rather than having to do it themselves without sufficient information. By @ErichDonGubler in [#6547](https://github.com/gfx-rs/wgpu/pull/6547).
-- Added mesh shader support to `wgpu`, with examples. Requires passthrough. By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345).
 
 [`GPUError`]: https://www.w3.org/TR/webgpu/#gpuerror
 
@@ -255,7 +270,6 @@ By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
   - Variants holding a `CommandEncoderError` in the error enums `ClearError`, `ComputePassErrorInner`, `QueryError`, and `RenderPassErrorInner` have been replaced with variants holding an `EncoderStateError`.
   - The definition of `enum CommandEncoderError` has changed significantly, to reflect which errors can be raised by `CommandEncoder.finish()`. There are also some errors that no longer appear directly in `CommandEncoderError`, and instead appear nested within the `RenderPass` or `ComputePass` variants.
   - `CopyError` has been removed. Errors that were previously a `CopyError` are now a `CommandEncoderError` returned by `finish()`. (The detailed reasons for copies to fail were and still are described by `TransferError`, which was previously a variant of `CopyError`, and is now a variant of `CommandEncoderError`).
-
 
 #### Naga
 
