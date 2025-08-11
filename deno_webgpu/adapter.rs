@@ -196,7 +196,7 @@ pub enum CreateDeviceError {
     #[class(inherit)]
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
-    #[class(type)]
+    #[class("DOMExceptionOperationError")]
     #[error(transparent)]
     Device(#[from] wgpu_core::instance::RequestDeviceError),
 }
