@@ -3,7 +3,7 @@
 use crate::binding_model::{BindError, BindGroup, PushConstantUploadError};
 use crate::command::bind::Binder;
 use crate::command::memory_init::{CommandBufferTextureMemoryActions, SurfacesInDiscardState};
-use crate::command::{CommandEncoder, QueryResetMap, QueryUseError};
+use crate::command::{CommandEncoder, DebugGroupError, QueryResetMap, QueryUseError};
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::pipeline::LateSizedBufferGroup;
@@ -37,16 +37,6 @@ pub struct MissingPipeline;
 pub struct InvalidValuesOffset;
 
 impl WebGpuError for InvalidValuesOffset {
-    fn webgpu_error_type(&self) -> ErrorType {
-        ErrorType::Validation
-    }
-}
-
-#[derive(Clone, Debug, Error)]
-#[error("Cannot pop debug group, because number of pushed debug groups is zero")]
-pub struct InvalidPopDebugGroup;
-
-impl WebGpuError for InvalidPopDebugGroup {
     fn webgpu_error_type(&self) -> ErrorType {
         ErrorType::Validation
     }
@@ -332,12 +322,12 @@ pub(crate) fn push_debug_group(state: &mut BaseState, string_data: &[u8], len: u
 
 pub(crate) fn pop_debug_group<E>(state: &mut BaseState) -> Result<(), E>
 where
-    E: From<InvalidPopDebugGroup>,
+    E: From<DebugGroupError>,
 {
     api_log!("Pass::pop_debug_group");
 
     if state.debug_scope_depth == 0 {
-        return Err(InvalidPopDebugGroup.into());
+        return Err(DebugGroupError::InvalidPop.into());
     }
     state.debug_scope_depth -= 1;
     if !state

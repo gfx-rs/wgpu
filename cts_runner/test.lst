@@ -19,12 +19,20 @@ webgpu:api,operation,render_pass,storeOp:render_pass_store_op,color_attachment_w
 webgpu:api,operation,render_pass,storeOp:render_pass_store_op,color_attachment_only:*
 webgpu:api,operation,render_pass,storeOp:render_pass_store_op,multiple_color_attachments:*
 webgpu:api,operation,render_pass,storeOp:render_pass_store_op,depth_stencil_attachment_only:*
+webgpu:api,validation,createBindGroup:buffer,effective_buffer_binding_size:*
 webgpu:api,validation,encoding,beginComputePass:*
 webgpu:api,validation,encoding,beginRenderPass:*
 webgpu:api,validation,encoding,cmds,clearBuffer:*
 webgpu:api,validation,encoding,cmds,compute_pass:set_pipeline:*
 webgpu:api,validation,encoding,cmds,compute_pass:dispatch_sizes:*
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:*
+webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="non-pass"
+webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="compute%20pass"
+webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="render%20pass"
+//FAIL: webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="render%20bundle"
+// https://github.com/gfx-rs/wgpu/issues/8039
+webgpu:api,validation,encoding,cmds,debug:debug_group:*
+webgpu:api,validation,encoding,cmds,debug:debug_marker:*
 webgpu:api,validation,encoding,cmds,index_access:*
 //FAIL: webgpu:api,validation,encoding,cmds,render,draw:*
 webgpu:api,validation,encoding,cmds,render,draw:index_buffer_OOB:*
@@ -75,11 +83,7 @@ webgpu:api,validation,image_copy,layout_related:copy_end_overflows_u64:*
 // Fails with OOM in CI.
 fails-if(dx12) webgpu:api,validation,image_copy,layout_related:offset_alignment:*
 webgpu:api,validation,image_copy,texture_related:format:dimension="1d";*
-webgpu:api,validation,queue,submit:command_buffer,device_mismatch:*
-webgpu:api,validation,queue,submit:command_buffer,duplicate_buffers:*
-webgpu:api,validation,queue,submit:command_buffer,submit_invalidates:*
-//FAIL: webgpu:api,validation,queue,submit:command_buffer,invalid_submit_invalidates:*
-// https://github.com/gfx-rs/wgpu/issues/3911#issuecomment-2972995675
+webgpu:api,validation,queue,submit:command_buffer,*
 webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*
 webgpu:api,validation,render_pass,render_pass_descriptor:resolveTarget,*
 webgpu:api,validation,texture,rg11b10ufloat_renderable:*
@@ -93,6 +97,7 @@ webgpu:api,operation,rendering,color_target_state:blend_constant,setting:*
 webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
 webgpu:api,operation,shader_module,compilation_info:*
+// Likely due to https://github.com/gfx-rs/wgpu/issues/7357.
 fails-if(metal) webgpu:api,operation,uncapturederror:iff_uncaptured:*
 //FAIL: webgpu:shader,execution,expression,call,builtin,select:*
 // - Fails with `const`/abstract int cases on all platforms because of <https://github.com/gfx-rs/wgpu/issues/4507>.

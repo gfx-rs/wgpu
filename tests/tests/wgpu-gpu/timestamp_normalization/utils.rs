@@ -282,7 +282,5 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
 
     ctx.device.poll(wgpu::PollType::Wait).unwrap();
 
-    let value = pulldown_buffer.get_mapped_range(..).to_vec();
-
-    value
+    pulldown_buffer.get_mapped_range(..).to_vec()
 }

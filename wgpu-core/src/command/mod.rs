@@ -284,6 +284,10 @@ impl CommandEncoderStatus {
             Self::Recording(mut inner) => {
                 if let Err(err) = inner.encoder.close_if_open() {
                     Self::Error(err.into())
+                } else if inner.debug_scope_depth > 0 {
+                    Self::Error(CommandEncoderError::DebugGroupError(
+                        DebugGroupError::MissingPop,
+                    ))
                 } else {
                     // Note: if we want to stop tracking the swapchain texture view,
                     // this is the place to do it.
@@ -648,6 +652,8 @@ pub struct CommandBufferMutable {
 
     indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
 
+    debug_scope_depth: u32,
+
     #[cfg(feature = "trace")]
     pub(crate) commands: Option<Vec<TraceCommand>>,
 }
@@ -721,6 +727,7 @@ impl CommandEncoder {
                     temp_resources: Default::default(),
                     indirect_draw_validation_resources:
                         crate::indirect_validation::DrawResources::new(device.clone()),
+                    debug_scope_depth: 0,
                     #[cfg(feature = "trace")]
                     commands: if device.trace.lock().is_some() {
                         Some(Vec::new())
@@ -1041,6 +1048,8 @@ pub enum CommandEncoderError {
     #[error(transparent)]
     ResourceUsage(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
+    DebugGroupError(#[from] DebugGroupError),
+    #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
     #[error(transparent)]
     Transfer(#[from] TransferError),
@@ -1094,6 +1103,7 @@ impl WebGpuError for CommandEncoderError {
         let e: &dyn WebGpuError = match self {
             Self::Device(e) => e,
             Self::InvalidResource(e) => e,
+            Self::DebugGroupError(e) => e,
             Self::MissingFeatures(e) => e,
             Self::State(e) => e,
             Self::DestroyedResource(e) => e,
@@ -1107,6 +1117,23 @@ impl WebGpuError for CommandEncoderError {
             Self::RenderPass(e) => e,
         };
         e.webgpu_error_type()
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum DebugGroupError {
+    #[error("Cannot pop debug group, because number of pushed debug groups is zero")]
+    InvalidPop,
+    #[error("A debug group was not popped before the encoder was finished")]
+    MissingPop,
+}
+
+impl WebGpuError for DebugGroupError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::InvalidPop | Self::MissingPop => ErrorType::Validation,
+        }
     }
 }
 
@@ -1175,6 +1202,8 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
+            cmd_buf_data.debug_scope_depth += 1;
+
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::PushDebugGroup(label.to_owned()));
@@ -1244,6 +1273,11 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
+            if cmd_buf_data.debug_scope_depth == 0 {
+                return Err(DebugGroupError::InvalidPop.into());
+            }
+            cmd_buf_data.debug_scope_depth -= 1;
+
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
                 list.push(TraceCommand::PopDebugGroup);

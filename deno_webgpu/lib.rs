@@ -158,6 +158,7 @@ impl GPU {
                     backend_options: wgpu_types::BackendOptions {
                         dx12: wgpu_types::Dx12BackendOptions {
                             shader_compiler: wgpu_types::Dx12Compiler::Fxc,
+                            ..Default::default()
                         },
                         gl: wgpu_types::GlBackendOptions::default(),
                         noop: wgpu_types::NoopBackendOptions::default(),

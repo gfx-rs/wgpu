@@ -242,6 +242,7 @@ impl<A: hal::Api> Example<A> {
             backend_options: wgpu_types::BackendOptions {
                 dx12: Dx12BackendOptions {
                     shader_compiler: wgpu_types::Dx12Compiler::default_dynamic_dxc(),
+                    ..Default::default()
                 },
                 ..Default::default()
             },

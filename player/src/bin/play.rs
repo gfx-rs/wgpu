@@ -68,7 +68,8 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let global = wgc::global::Global::new("player", &wgt::InstanceDescriptor::default());
+    let global =
+        wgc::global::Global::new("player", &wgt::InstanceDescriptor::from_env_or_default());
     let mut command_encoder_id_manager = IdentityManager::new();
     let mut command_buffer_id_manager = IdentityManager::new();
 

@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, string::String};
+use alloc::{borrow::Cow, boxed::Box, string::String};
 use core::{error::Error, fmt};
 
 #[derive(Clone, Debug)]
@@ -41,7 +41,7 @@ impl fmt::Display for ShaderError<crate::WithSpan<crate::valid::ValidationError>
         use codespan_reporting::{files::SimpleFile, term};
 
         let label = self.label.as_deref().unwrap_or_default();
-        let files = SimpleFile::new(label, &self.source);
+        let files = SimpleFile::new(label, replace_control_chars(&self.source));
         let config = term::Config::default();
 
         let writer = {
@@ -136,4 +136,33 @@ where
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(&self.inner)
     }
+}
+
+pub(crate) fn replace_control_chars(s: &str) -> Cow<'_, str> {
+    const REPLACEMENT_CHAR: &str = "\u{FFFD}";
+    debug_assert_eq!(
+        REPLACEMENT_CHAR.chars().next().unwrap(),
+        char::REPLACEMENT_CHARACTER
+    );
+
+    let mut res = Cow::Borrowed(s);
+    let mut offset = 0;
+
+    while let Some(found_pos) = res[offset..].find(|c: char| c.is_control() && !c.is_whitespace()) {
+        offset += found_pos;
+        let found_len = res[offset..].chars().next().unwrap().len_utf8();
+        res.to_mut()
+            .replace_range(offset..offset + found_len, REPLACEMENT_CHAR);
+        offset += REPLACEMENT_CHAR.len();
+    }
+
+    res
+}
+
+#[test]
+fn test_replace_control_chars() {
+    // The UTF-8 encoding of \u{0080} is multiple bytes.
+    let input = "Foo\u{0080}Bar\u{0001}Baz\n";
+    let expected = "Foo\u{FFFD}Bar\u{FFFD}Baz\n";
+    assert_eq!(replace_control_chars(input), expected);
 }

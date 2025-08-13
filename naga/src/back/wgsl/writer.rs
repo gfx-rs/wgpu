@@ -131,6 +131,7 @@ impl<W: Write> Writer<W> {
             .values()
             .any(|t| *t == ty)
             || Some(ty) == module.special_types.external_texture_params
+            || Some(ty) == module.special_types.external_texture_transfer_function
     }
 
     pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {
