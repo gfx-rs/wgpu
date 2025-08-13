@@ -401,6 +401,8 @@ jobs:
         run: |
           set -e
 
+          # 1.23.2 requires bytemuck_derive 1.10.1
+          cargo update -p bytemuck --precise 1.23.1
           # 1.9.0 requires MSRV 1.84
           cargo update -p bytemuck_derive --precise 1.8.1
 
