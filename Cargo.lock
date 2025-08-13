@@ -1721,9 +1721,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26145e563e54f2cadc477553f1ec5ee650b00862f0a58bcd12cbdc5f0ea2d2f4"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi",
  "wasi 0.14.2+wasi-0.2.4",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2578,6 +2580,9 @@ name = "nanorand"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e3d189da485332e96ba8a5ef646a311871abd7915bf06ac848a9117f19cf6e4"
+dependencies = [
+ "getrandom 0.3.3",
+]
 
 [[package]]
 name = "nanoserde"
@@ -5034,6 +5039,7 @@ dependencies = [
  "env_logger",
  "fern",
  "flume",
+ "getrandom 0.3.3",
  "glam",
  "ktx2",
  "log",
