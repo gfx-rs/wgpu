@@ -445,7 +445,9 @@ pub enum Dx12SwapchainKind {
     /// This supports fullscreen optimization, making borderless windows just as efficient as exclusive fullscreen. It does not support transparent windows.
     #[default]
     Dxgi,
-    /// Use the DirectComposition presentation system.
+    /// Use a DXGI swapchain made from a DirectComposition visual made from the window.
+    ///
+    /// This supports transparent windows, but does not support fullscreen optimization.
     DirectComposition,
 }
 
