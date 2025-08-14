@@ -321,7 +321,6 @@ impl GlobalPlay for wgc::global::Global {
                 entry_point,
                 label,
                 num_workgroups,
-                reflection,
                 runtime_checks,
             } => {
                 let spirv = data.iter().find_map(|a| {
@@ -378,7 +377,6 @@ impl GlobalPlay for wgc::global::Global {
                     entry_point,
                     label,
                     num_workgroups,
-                    reflection,
                     runtime_checks,
 
                     spirv,

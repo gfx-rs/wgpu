@@ -228,17 +228,10 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 static_assertions::assert_impl_all!(ShaderModuleDescriptor<'_>: Send, Sync);
 
-/// Descriptor for a shader module given by any of several sources, with optional reflection information.
+/// Descriptor for a shader module given by any of several sources.
 /// At least one of the shader types that may be used by the backend must be `Some`
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
 pub type ShaderModuleDescriptorPassthrough<'a> =
     wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
-
-/// Reflection info for a shader module, created by compiling a shader with naga,
-/// either at compile-time or run-time.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-pub type ShaderModuleReflection = wgt::ShaderModuleReflection;

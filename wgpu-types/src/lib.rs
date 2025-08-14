@@ -8032,7 +8032,7 @@ pub enum DeviceLostReason {
     Destroyed = 1,
 }
 
-/// Descriptor for a shader module given by any of several sources, with optional reflection information.
+/// Descriptor for a shader module given by any of several sources.
 /// These shaders are passed through directly to the underlying api.
 /// At least one shader type that may be used by the backend must be `Some` or a panic is raised.
 #[derive(Debug, Clone)]
@@ -8044,8 +8044,6 @@ pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
     pub label: L,
     /// Number of workgroups in each dimension x, y and z. Unused for Spir-V.
     pub num_workgroups: (u32, u32, u32),
-    /// Optional reflection information (currently empty and meaningless).
-    pub reflection: Option<ShaderModuleReflection>,
     /// Runtime checks that should be enabled.
     pub runtime_checks: ShaderRuntimeChecks,
 
@@ -8071,7 +8069,6 @@ impl<'a, L: Default> Default for CreateShaderModuleDescriptorPassthrough<'a, L> 
             entry_point: "".into(),
             label: Default::default(),
             num_workgroups: (0, 0, 0),
-            reflection: None,
             runtime_checks: ShaderRuntimeChecks::unchecked(),
             spirv: None,
             dxil: None,
@@ -8093,7 +8090,6 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
             entry_point: self.entry_point.clone(),
             label: fun(&self.label),
             num_workgroups: self.num_workgroups,
-            reflection: self.reflection.clone(),
             runtime_checks: self.runtime_checks,
             spirv: self.spirv.clone(),
             dxil: self.dxil.clone(),
@@ -8132,9 +8128,3 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         }
     }
 }
-
-/// Reflection information for a shader compiled with `naga`
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
-pub struct ShaderModuleReflection {}

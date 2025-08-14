@@ -1114,7 +1114,6 @@ impl Global {
                     entry_point: desc.entry_point.clone(),
                     label: desc.label.clone(),
                     num_workgroups: desc.num_workgroups,
-                    reflection: desc.reflection.clone(),
                     runtime_checks: desc.runtime_checks,
                 });
             };
