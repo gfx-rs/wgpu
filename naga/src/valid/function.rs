@@ -217,6 +217,14 @@ pub enum FunctionError {
     EmitResult(Handle<crate::Expression>),
     #[error("Expression not visited by the appropriate statement")]
     UnvisitedExpression(Handle<crate::Expression>),
+    #[error("Expression {0:?} should be u32, but isn't")]
+    InvalidMeshFunctionCall(Handle<crate::Expression>),
+    #[error("Mesh output types differ from {0:?} to {1:?}")]
+    ConflictingMeshOutputTypes(Handle<crate::Expression>, Handle<crate::Expression>),
+    #[error("Task payload variables differ from {0:?} to {1:?}")]
+    ConflictingTaskPayloadVariables(Handle<crate::Expression>, Handle<crate::Expression>),
+    #[error("Mesh shader output at {0:?} is not a user-defined struct")]
+    InvalidMeshShaderOutputType(Handle<crate::Expression>),
 }
 
 bitflags::bitflags! {
@@ -1537,6 +1545,40 @@ impl super::Validator {
                         }
                         crate::RayQueryFunction::ConfirmIntersection => {}
                         crate::RayQueryFunction::Terminate => {}
+                    }
+                }
+                S::MeshFunction(func) => {
+                    let ensure_u32 =
+                        |expr: Handle<crate::Expression>| -> Result<(), WithSpan<FunctionError>> {
+                            let u32_ty = TypeResolution::Value(Ti::Scalar(crate::Scalar::U32));
+                            let ty = context
+                                .resolve_type_impl(expr, &self.valid_expression_set)
+                                .map_err_inner(|source| {
+                                    FunctionError::Expression {
+                                        source,
+                                        handle: expr,
+                                    }
+                                    .with_span_handle(expr, context.expressions)
+                                })?;
+                            if !context.compare_types(&u32_ty, ty) {
+                                return Err(FunctionError::InvalidMeshFunctionCall(expr)
+                                    .with_span_handle(expr, context.expressions));
+                            }
+                            Ok(())
+                        };
+                    match func {
+                        crate::MeshFunction::SetMeshOutputs {
+                            vertex_count,
+                            primitive_count,
+                        } => {
+                            ensure_u32(vertex_count)?;
+                            ensure_u32(primitive_count)?;
+                        }
+                        crate::MeshFunction::SetVertex { index, value: _ }
+                        | crate::MeshFunction::SetPrimitive { index, value: _ } => {
+                            ensure_u32(index)?;
+                            // TODO: ensure it is correct for the value
+                        }
                     }
                 }
                 S::SubgroupBallot { result, predicate } => {

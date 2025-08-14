@@ -80,32 +80,36 @@ This shader stage can be selected by marking a function with `@task`. Task shade
 
 The output of this determines how many workgroups of mesh shaders will be dispatched. Once dispatched, global id variables will be local to the task shader workgroup dispatch, and mesh shaders won't know the position of their dispatch among all mesh shader dispatches unless this is passed through the payload. The output may be zero to skip dispatching any mesh shader workgroups for the task shader workgroup.
 
-If task shaders are marked with `@payload(someVar)`, where `someVar` is global variable declared like `var<workgroup> someVar: <type>`, task shaders may write to `someVar`. This payload is passed to the mesh shader workgroup that is invoked. The mesh shader can skip declaring `@payload` to ignore this input.
+If task shaders are marked with `@payload(someVar)`, where `someVar` is global variable declared like `var<task_payload> someVar: <type>`, task shaders may use `someVar` as if it is a read-write workgroup storage variable. This payload is passed to the mesh shader workgroup that is invoked. The mesh shader can skip declaring `@payload` to ignore this input.
 
 ### Mesh shader
 This shader stage can be selected by marking a function with `@mesh`. Mesh shaders must not return anything.
 
-Mesh shaders can be marked with `@payload(someVar)` similar to task shaders. Unlike task shaders, mesh shaders cannot write to this workgroup memory. Declaring `@payload` in a pipeline with no task shader, in a pipeline with a task shader that doesn't declare `@payload`, or in a task shader with an `@payload` that is statically sized and smaller than the mesh shader payload is illegal.
+Mesh shaders can be marked with `@payload(someVar)` similar to task shaders. Unlike task shaders, mesh shaders cannot write to this memory. Declaring `@payload` in a pipeline with no task shader, in a pipeline with a task shader that doesn't declare `@payload`, or in a task shader with an `@payload` that is statically sized and smaller than the mesh shader payload is illegal.
 
-Mesh shaders must be marked with `@vertex_output(OutputType, numOutputs)`, where `numOutputs` is the maximum number of vertices to be output by a mesh shader, and `OutputType` is the data associated with vertices, similar to a standard vertex shader output.
+Mesh shaders must be marked with `@vertex_output(OutputType, numOutputs)`, where `numOutputs` is the maximum number of vertices to be output by a mesh shader, and `OutputType` is the data associated with vertices, similar to a standard vertex shader output, and must be a struct.
 
 Mesh shaders must also be marked with `@primitive_output(OutputType, numOutputs)`, which is similar to `@vertex_output` except it describes the primitive outputs.
 
 ### Mesh shader outputs
 
-Primitive outputs from mesh shaders have some additional builtins they can set. These include `@builtin(cull_primitive)`, which must be a boolean value. If this is set to true, then the primitive is skipped during rendering.
+Vertex outputs from mesh shaders function identically to outputs of vertex shaders, and as such must have a field with `@builtin(position)`.
+
+Primitive outputs from mesh shaders have some additional builtins they can set. These include `@builtin(cull_primitive)`, which must be a boolean value. If this is set to true, then the primitive is skipped during rendering. All non-builtin primitive outputs must be decorated with `@per_primitive`.
 
 Mesh shader primitive outputs must also specify exactly one of `@builtin(triangle_indices)`, `@builtin(line_indices)`, or `@builtin(point_index)`. This determines the output topology of the mesh shader, and must match the output topology of the pipeline descriptor the mesh shader is used with. These must be of type `vec3<u32>`, `vec2<u32>`, and `u32` respectively. When setting this, each of the indices must be less than the number of vertices declared in `setMeshOutputs`.
 
 Additionally, the `@location` attributes from the vertex and primitive outputs can't overlap.
 
-Before setting any vertices or indices, or exiting, the mesh shader must call `setMeshOutputs(numVertices: u32, numIndices: u32)`, which declares the number of vertices and indices that will be written to. These must be less than the corresponding maximums set in `@vertex_output` and `@primitive_output`. The mesh shader must then write to exactly these numbers of vertices and primitives.
+Before setting any vertices or indices, or exiting, the mesh shader must call `setMeshOutputs(numVertices: u32, numIndices: u32)`, which declares the number of vertices and indices that will be written to. These must be less than the corresponding maximums set in `@vertex_output` and `@primitive_output`. The mesh shader must then write to exactly these numbers of vertices and primitives. A varying member with `@per_primitive` cannot be used in function interfaces except as the primitive output for mesh shaders or as input for fragment shaders.
 
 The mesh shader can write to vertices using the `setVertex(idx: u32, vertex: VertexOutput)` where `VertexOutput` is replaced with the vertex type declared in `@vertex_output`, and `idx` is the index of the vertex to write. Similarly, the mesh shader can write to vertices using `setPrimitive(idx: u32, primitive: PrimitiveOutput)`. These can be written to multiple times, however unsynchronized writes are undefined behavior. The primitives and indices are shared across the entire mesh shader workgroup.
 
 ### Fragment shader
 
-Fragment shaders may now be passed the primitive info from a mesh shader the same was as they are passed vertex inputs, for example `fn fs_main(vertex: VertexOutput, primitive: PrimitiveOutput)`. The primitive state is part of the fragment input and must match the output of the mesh shader in the pipeline.
+Fragment shaders can access vertex output data as if it is from a vertex shader. They can also access primitive output data, provided the input is decorated with `@per_primitive`. The `@per_primitive` attribute can be applied to a value directly, such as `@per_primitive @location(1) value: vec4<f32>`, to a struct such as `@per_primitive primitive_input: PrimitiveInput` where `PrimitiveInput` is a struct containing fields decorated with `@location` and `@builtin`, or to members of a struct that are themselves decorated with `@location` or `@builtin`.
+
+The primitive state is part of the fragment input and must match the output of the mesh shader in the pipeline. Using `@per_primitive` also requires enabling the mesh shader extension. Additionally, the locations of vertex and primitive input cannot overlap.
 
 ### Full example
 
@@ -115,9 +119,9 @@ The following is a full example of WGSL shaders that could be used to create a m
 enable mesh_shading;
 
 const positions = array(
-	vec4(0.,-1.,0.,1.),
-	vec4(-1.,1.,0.,1.),
-	vec4(1.,1.,0.,1.)
+	vec4(0.,1.,0.,1.),
+	vec4(-1.,-1.,0.,1.),
+	vec4(1.,-1.,0.,1.)
 );
 const colors = array(
 	vec4(0.,1.,0.,1.),
@@ -128,7 +132,7 @@ struct TaskPayload {
 	colorMask: vec4<f32>,
 	visible: bool,
 }
-var<workgroup> taskPayload: TaskPayload;
+var<task_payload> taskPayload: TaskPayload;
 var<workgroup> workgroupData: f32;
 struct VertexOutput {
 	@builtin(position) position: vec4<f32>,
@@ -137,14 +141,12 @@ struct VertexOutput {
 struct PrimitiveOutput {
 	@builtin(triangle_indices) index: vec3<u32>,
 	@builtin(cull_primitive) cull: bool,
-	@location(1) colorMask: vec4<f32>,
+	@per_primitive @location(1) colorMask: vec4<f32>,
 }
 struct PrimitiveInput {
-	@location(1) colorMask: vec4<f32>,
+	@per_primitive @location(1) colorMask: vec4<f32>,
 }
-fn test_function(input: u32) {
 
-}
 @task
 @payload(taskPayload)
 @workgroup_size(1)
@@ -162,8 +164,6 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 	setMeshOutputs(3, 1);
 	workgroupData = 2.0;
 	var v: VertexOutput;
-
-	test_function(1);
 
 	v.position = positions[0];
 	v.color = colors[0] * taskPayload.colorMask;

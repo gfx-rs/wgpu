@@ -283,7 +283,8 @@ impl crate::ShaderStage {
             Self::Vertex => "vs",
             Self::Fragment => "ps",
             Self::Compute => "cs",
-            Self::Task | Self::Mesh => unreachable!(),
+            Self::Task => "ts",
+            Self::Mesh => "ms",
         }
     }
 }

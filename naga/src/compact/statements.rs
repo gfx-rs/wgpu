@@ -117,6 +117,20 @@ impl FunctionTracer<'_> {
                         self.expressions_used.insert(query);
                         self.trace_ray_query_function(fun);
                     }
+                    St::MeshFunction(crate::MeshFunction::SetMeshOutputs {
+                        vertex_count,
+                        primitive_count,
+                    }) => {
+                        self.expressions_used.insert(vertex_count);
+                        self.expressions_used.insert(primitive_count);
+                    }
+                    St::MeshFunction(
+                        crate::MeshFunction::SetPrimitive { index, value }
+                        | crate::MeshFunction::SetVertex { index, value },
+                    ) => {
+                        self.expressions_used.insert(index);
+                        self.expressions_used.insert(value);
+                    }
                     St::SubgroupBallot { result, predicate } => {
                         if let Some(predicate) = predicate {
                             self.expressions_used.insert(predicate);
@@ -334,6 +348,26 @@ impl FunctionMap {
                     } => {
                         adjust(query);
                         self.adjust_ray_query_function(fun);
+                    }
+                    St::MeshFunction(crate::MeshFunction::SetMeshOutputs {
+                        ref mut vertex_count,
+                        ref mut primitive_count,
+                    }) => {
+                        adjust(vertex_count);
+                        adjust(primitive_count);
+                    }
+                    St::MeshFunction(
+                        crate::MeshFunction::SetVertex {
+                            ref mut index,
+                            ref mut value,
+                        }
+                        | crate::MeshFunction::SetPrimitive {
+                            ref mut index,
+                            ref mut value,
+                        },
+                    ) => {
+                        adjust(index);
+                        adjust(value);
                     }
                     St::SubgroupBallot {
                         ref mut result,

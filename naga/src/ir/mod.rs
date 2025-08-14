@@ -329,6 +329,16 @@ pub enum ShaderStage {
     Mesh,
 }
 
+impl ShaderStage {
+    // TODO: make more things respect this
+    pub const fn compute_like(self) -> bool {
+        match self {
+            Self::Vertex | Self::Fragment => false,
+            Self::Compute | Self::Task | Self::Mesh => true,
+        }
+    }
+}
+
 /// Addressing space of variables.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -363,6 +373,8 @@ pub enum AddressSpace {
     ///
     /// [`SHADER_FLOAT16`]: crate::valid::Capabilities::SHADER_FLOAT16
     PushConstant,
+    /// Task shader to mesh shader payload
+    TaskPayload,
 }
 
 /// Built-in inputs and outputs.
@@ -373,7 +385,7 @@ pub enum AddressSpace {
 pub enum BuiltIn {
     Position { invariant: bool },
     ViewIndex,
-    // vertex
+    // vertex (and often mesh)
     BaseInstance,
     BaseVertex,
     ClipDistance,
@@ -386,10 +398,10 @@ pub enum BuiltIn {
     FragDepth,
     PointCoord,
     FrontFacing,
-    PrimitiveIndex,
+    PrimitiveIndex, // Also for mesh output
     SampleIndex,
     SampleMask,
-    // compute
+    // compute (and task/mesh)
     GlobalInvocationId,
     LocalInvocationId,
     LocalInvocationIndex,
@@ -401,6 +413,12 @@ pub enum BuiltIn {
     SubgroupId,
     SubgroupSize,
     SubgroupInvocationId,
+    // mesh
+    MeshTaskSize,
+    CullPrimitive,
+    PointIndex,
+    LineIndices,
+    TriangleIndices,
 }
 
 /// Number of bytes per scalar.
@@ -966,6 +984,7 @@ pub enum Binding {
         /// Optional `blend_src` index used for dual source blending.
         /// See <https://www.w3.org/TR/WGSL/#attribute-blend_src>
         blend_src: Option<u32>,
+        per_primitive: bool,
     },
 }
 
@@ -1935,7 +1954,9 @@ pub enum Statement {
     /// [`Loop`] statement.
     ///
     /// [`Loop`]: Statement::Loop
-    Return { value: Option<Handle<Expression>> },
+    Return {
+        value: Option<Handle<Expression>>,
+    },
 
     /// Aborts the current shader execution.
     ///
@@ -2141,6 +2162,7 @@ pub enum Statement {
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
     },
+    MeshFunction(MeshFunction),
     /// Calculate a bitmask using a boolean from each active thread in the subgroup
     SubgroupBallot {
         /// The [`SubgroupBallotResult`] expression representing this load's result.
@@ -2314,6 +2336,9 @@ pub struct EntryPoint {
     pub workgroup_size_overrides: Option<[Option<Handle<Expression>>; 3]>,
     /// The entrance function.
     pub function: Function,
+    /// The information relating to a mesh shader
+    pub mesh_info: Option<MeshStageInfo>,
+    pub task_payload: Option<Handle<GlobalVariable>>,
 }
 
 /// Return types predeclared for the frexp, modf, and atomicCompareExchangeWeak built-in functions.
@@ -2577,4 +2602,47 @@ pub struct Module {
     pub diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
     /// Doc comments.
     pub doc_comments: Option<Box<DocComments>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum MeshOutputTopology {
+    Points,
+    Lines,
+    Triangles,
+}
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+#[allow(dead_code)]
+pub struct MeshStageInfo {
+    pub topology: MeshOutputTopology,
+    pub max_vertices: u32,
+    pub max_vertices_override: Option<Handle<Expression>>,
+    pub max_primitives: u32,
+    pub max_primitives_override: Option<Handle<Expression>>,
+    pub vertex_output_type: Handle<Type>,
+    pub primitive_output_type: Handle<Type>,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum MeshFunction {
+    SetMeshOutputs {
+        vertex_count: Handle<Expression>,
+        primitive_count: Handle<Expression>,
+    },
+    SetVertex {
+        index: Handle<Expression>,
+        value: Handle<Expression>,
+    },
+    SetPrimitive {
+        index: Handle<Expression>,
+        value: Handle<Expression>,
+    },
 }

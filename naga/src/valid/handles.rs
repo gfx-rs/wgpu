@@ -801,6 +801,22 @@ impl super::Validator {
                 }
                 Ok(())
             }
+            crate::Statement::MeshFunction(func) => match func {
+                crate::MeshFunction::SetMeshOutputs {
+                    vertex_count,
+                    primitive_count,
+                } => {
+                    validate_expr(vertex_count)?;
+                    validate_expr(primitive_count)?;
+                    Ok(())
+                }
+                crate::MeshFunction::SetVertex { index, value }
+                | crate::MeshFunction::SetPrimitive { index, value } => {
+                    validate_expr(index)?;
+                    validate_expr(value)?;
+                    Ok(())
+                }
+            },
             crate::Statement::SubgroupBallot { result, predicate } => {
                 validate_expr_opt(predicate)?;
                 validate_expr(result)?;
