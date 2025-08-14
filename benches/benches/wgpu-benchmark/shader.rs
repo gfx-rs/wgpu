@@ -15,8 +15,10 @@ struct InputWithInfo {
 }
 impl From<Input> for InputWithInfo {
     fn from(value: Input) -> Self {
+        let mut options = value.read_parameters(DIR_IN);
+        options.targets = Some(options.targets.unwrap_or(Targets::all()));
         Self {
-            options: value.read_parameters(DIR_IN),
+            options,
             inner: value,
             data: Vec::new(),
             string: None,
@@ -326,13 +328,15 @@ fn backends(c: &mut Criterion) {
         b.iter(|| {
             let mut string = String::new();
             for input in &inputs.inner {
-                let mut writer =
-                    naga::back::wgsl::Writer::new(&mut string, (&input.options.wgsl).into());
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                );
-                string.clear();
+                if input.options.targets.unwrap().contains(Targets::WGSL) {
+                    let mut writer =
+                        naga::back::wgsl::Writer::new(&mut string, (&input.options.wgsl).into());
+                    let _ = writer.write(
+                        input.module.as_ref().unwrap(),
+                        input.module_info.as_ref().unwrap(),
+                    );
+                    string.clear();
+                }
             }
         });
     });
@@ -342,23 +346,25 @@ fn backends(c: &mut Criterion) {
             let mut data = Vec::new();
             let mut writer = naga::back::spv::Writer::new(&Default::default()).unwrap();
             for input in &inputs.inner {
-                if input.filename().contains("pointer-function-arg") {
-                    // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
-                    continue;
-                }
-                let opt = input
-                    .options
-                    .spv
-                    .to_options(input.options.bounds_check_policies, None);
-                if writer.set_options(&opt).is_ok() {
-                    let _ = writer.write(
-                        input.module.as_ref().unwrap(),
-                        input.module_info.as_ref().unwrap(),
-                        None,
-                        &None,
-                        &mut data,
-                    );
-                    data.clear();
+                if input.options.targets.unwrap().contains(Targets::SPIRV) {
+                    if input.filename().contains("pointer-function-arg") {
+                        // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
+                        continue;
+                    }
+                    let opt = input
+                        .options
+                        .spv
+                        .to_options(input.options.bounds_check_policies, None);
+                    if writer.set_options(&opt).is_ok() {
+                        let _ = writer.write(
+                            input.module.as_ref().unwrap(),
+                            input.module_info.as_ref().unwrap(),
+                            None,
+                            &None,
+                            &mut data,
+                        );
+                        data.clear();
+                    }
                 }
             }
         });
@@ -368,25 +374,27 @@ fn backends(c: &mut Criterion) {
             let mut data = Vec::new();
             let options = naga::back::spv::Options::default();
             for input in &inputs.inner {
-                if input.filename().contains("pointer-function-arg") {
-                    // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
-                    continue;
-                }
-                let mut writer = naga::back::spv::Writer::new(&options).unwrap();
-                let module = input.module.as_ref().unwrap();
-                for ep in module.entry_points.iter() {
-                    let pipeline_options = naga::back::spv::PipelineOptions {
-                        shader_stage: ep.stage,
-                        entry_point: ep.name.clone(),
-                    };
-                    let _ = writer.write(
-                        input.module.as_ref().unwrap(),
-                        input.module_info.as_ref().unwrap(),
-                        Some(&pipeline_options),
-                        &None,
-                        &mut data,
-                    );
-                    data.clear();
+                if input.options.targets.unwrap().contains(Targets::SPIRV) {
+                    if input.filename().contains("pointer-function-arg") {
+                        // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
+                        continue;
+                    }
+                    let mut writer = naga::back::spv::Writer::new(&options).unwrap();
+                    let module = input.module.as_ref().unwrap();
+                    for ep in module.entry_points.iter() {
+                        let pipeline_options = naga::back::spv::PipelineOptions {
+                            shader_stage: ep.stage,
+                            entry_point: ep.name.clone(),
+                        };
+                        let _ = writer.write(
+                            input.module.as_ref().unwrap(),
+                            input.module_info.as_ref().unwrap(),
+                            Some(&pipeline_options),
+                            &None,
+                            &mut data,
+                        );
+                        data.clear();
+                    }
                 }
             }
         });
@@ -397,15 +405,17 @@ fn backends(c: &mut Criterion) {
             let mut string = String::new();
             let options = naga::back::msl::Options::default();
             for input in &inputs.inner {
-                let pipeline_options = naga::back::msl::PipelineOptions::default();
-                let mut writer = naga::back::msl::Writer::new(&mut string);
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                    &options,
-                    &pipeline_options,
-                );
-                string.clear();
+                if input.options.targets.unwrap().contains(Targets::METAL) {
+                    let pipeline_options = naga::back::msl::PipelineOptions::default();
+                    let mut writer = naga::back::msl::Writer::new(&mut string);
+                    let _ = writer.write(
+                        input.module.as_ref().unwrap(),
+                        input.module_info.as_ref().unwrap(),
+                        &options,
+                        &pipeline_options,
+                    );
+                    string.clear();
+                }
             }
         });
     });
@@ -415,16 +425,17 @@ fn backends(c: &mut Criterion) {
             let options = naga::back::hlsl::Options::default();
             let mut string = String::new();
             for input in &inputs.inner {
-                let pipeline_options = Default::default();
-                let mut writer =
-                    naga::back::hlsl::Writer::new(&mut string, &options, &pipeline_options);
-                let err = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                    None,
-                ); // may fail on unimplemented things
-                err.unwrap();
-                string.clear();
+                if input.options.targets.unwrap().contains(Targets::HLSL) {
+                    let pipeline_options = Default::default();
+                    let mut writer =
+                        naga::back::hlsl::Writer::new(&mut string, &options, &pipeline_options);
+                    let _ = writer.write(
+                        input.module.as_ref().unwrap(),
+                        input.module_info.as_ref().unwrap(),
+                        None,
+                    ); // may fail on unimplemented things
+                    string.clear();
+                }
             }
         });
     });
@@ -439,28 +450,30 @@ fn backends(c: &mut Criterion) {
                 zero_initialize_workgroup_memory: true,
             };
             for input in &inputs.inner {
-                let module = input.module.as_ref().unwrap();
-                let info = input.module_info.as_ref().unwrap();
-                for ep in module.entry_points.iter() {
-                    let pipeline_options = naga::back::glsl::PipelineOptions {
-                        shader_stage: ep.stage,
-                        entry_point: ep.name.clone(),
-                        multiview: None,
-                    };
+                if input.options.targets.unwrap().contains(Targets::GLSL) {
+                    let module = input.module.as_ref().unwrap();
+                    let info = input.module_info.as_ref().unwrap();
+                    for ep in module.entry_points.iter() {
+                        let pipeline_options = naga::back::glsl::PipelineOptions {
+                            shader_stage: ep.stage,
+                            entry_point: ep.name.clone(),
+                            multiview: None,
+                        };
 
-                    // might be `Err` if missing features
-                    if let Ok(mut writer) = naga::back::glsl::Writer::new(
-                        &mut string,
-                        module,
-                        info,
-                        &options,
-                        &pipeline_options,
-                        naga::proc::BoundsCheckPolicies::default(),
-                    ) {
-                        let _ = writer.write(); // might be `Err` if unsupported
+                        // might be `Err` if missing features
+                        if let Ok(mut writer) = naga::back::glsl::Writer::new(
+                            &mut string,
+                            module,
+                            info,
+                            &options,
+                            &pipeline_options,
+                            naga::proc::BoundsCheckPolicies::default(),
+                        ) {
+                            let _ = writer.write(); // might be `Err` if unsupported
+                        }
+
+                        string.clear();
                     }
-
-                    string.clear();
                 }
             }
         });
