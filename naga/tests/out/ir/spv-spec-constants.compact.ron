@@ -151,6 +151,7 @@
                             interpolation: Some(Perspective),
                             sampling: Some(Center),
                             blend_src: None,
+                            per_primitive: false,
                         )),
                         offset: 0,
                     ),
@@ -510,6 +511,7 @@
                             interpolation: None,
                             sampling: None,
                             blend_src: None,
+                            per_primitive: false,
                         )),
                     ),
                     (
@@ -520,6 +522,7 @@
                             interpolation: None,
                             sampling: None,
                             blend_src: None,
+                            per_primitive: false,
                         )),
                     ),
                     (
@@ -530,6 +533,7 @@
                             interpolation: None,
                             sampling: None,
                             blend_src: None,
+                            per_primitive: false,
                         )),
                     ),
                 ],

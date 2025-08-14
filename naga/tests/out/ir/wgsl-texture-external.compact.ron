@@ -360,6 +360,7 @@
                         interpolation: Some(Perspective),
                         sampling: Some(Center),
                         blend_src: None,
+                        per_primitive: false,
                     )),
                 )),
                 local_variables: [],

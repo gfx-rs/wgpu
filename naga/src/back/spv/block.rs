@@ -257,7 +257,8 @@ impl Writer {
                 _ => {}
             }
         }
-        // MeshTaskSize must be called write before exiting
+        // OpEmitMeshTasksEXT must be called right before exiting (after setting other
+        // output variables if there are any)
         for (index, res_member) in result_members.iter().enumerate() {
             if res_member.built_in == Some(crate::BuiltIn::MeshTaskSize) {
                 let member_value_id = match ir_result.binding {
@@ -283,7 +284,6 @@ impl Writer {
                         &[i as Word],
                     );
                     body.push(instruction);
-                    // Use OpCompositeExtract to save the component of the vec3
                 }
                 let mut instruction = Instruction::new(spirv::Op::EmitMeshTasksEXT);
                 for id in values {
@@ -297,11 +297,15 @@ impl Writer {
         }
         Ok(Instruction::return_void())
     }
+
+    /// Writes the return call for a mesh shader, which involves copying previously
+    /// written vertices/primitives into the actual output location.
     fn write_mesh_shader_return(
         &mut self,
         return_info: &super::MeshReturnInfo,
         body: &mut Vec<Instruction>,
     ) -> Result<(), Error> {
+        // Gets the info about temporary buffers and such
         let vert_info = self.mesh_shader_output_variable(
             return_info.vertex_type,
             false,
@@ -312,6 +316,7 @@ impl Writer {
             true,
             return_info.max_primitives,
         )?;
+        // Load the actual vertex and primitive counts
         let vert_count_id = self.id_gen.next();
         body.push(Instruction::load(
             self.get_u32_type_id(),
@@ -327,6 +332,8 @@ impl Writer {
             None,
         ));
 
+        // Call this. It must be called exactly once, which the user shouldn't be assumed
+        // to have done correctly.
         {
             let mut ins = Instruction::new(spirv::Op::SetMeshOutputsEXT);
             ins.add_operand(vert_count_id);
@@ -335,6 +342,7 @@ impl Writer {
         }
 
         // All this for a `for i in 0..num_vertices` lol
+        // This is basically just a memcpy but the result is split up to multiple places
         let u32_type_id = self.get_u32_type_id();
         let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
         let vertex_loop_header = self.id_gen.next();
@@ -353,6 +361,7 @@ impl Writer {
         // Vertex copies
         let vertex_copy_body = {
             let mut body = Vec::new();
+            // Current index to copy
             let val_i = self.id_gen.next();
             body.push(Instruction::load(u32_type_id, val_i, index_var, None));
 
@@ -363,6 +372,8 @@ impl Writer {
                 vert_info.var_id,
                 &[val_i],
             ));
+
+            // Load the entire vertex value
             let vert_to_copy = self.id_gen.next();
             body.push(Instruction::load(
                 vert_info.inner_ty,
@@ -373,6 +384,7 @@ impl Writer {
 
             let mut builtin_index = 0;
             let mut binding_index = 0;
+            // Write individual members of the vertex
             for (member_id, member) in return_info.vertex_members.iter().enumerate() {
                 let val_to_copy = self.id_gen.next();
                 let mut needs_y_flip = false;
@@ -383,6 +395,8 @@ impl Writer {
                     &[member_id as u32],
                 ));
                 let ptr_to_copy_to = self.id_gen.next();
+                // Get the variable that holds it and indexed pointer, which points to
+                // the value and not a wrapper struct
                 match member.binding {
                     crate::Binding::BuiltIn(bi) => {
                         body.push(Instruction::access_chain(
@@ -409,7 +423,7 @@ impl Writer {
                     }
                 }
                 body.push(Instruction::store(ptr_to_copy_to, val_to_copy, None));
-                // Can't use epilogue flip because can't read from Output
+                // Can't use epilogue flip because can't read from this storage class I believe
                 if needs_y_flip {
                     let prev_y = self.id_gen.next();
                     body.push(Instruction::composite_extract(
@@ -440,6 +454,7 @@ impl Writer {
 
         // Primitive copies
         let primitive_copy_body = {
+            // See comments in `vertex_copy_body`
             let mut body = Vec::new();
             let val_i = self.id_gen.next();
             body.push(Instruction::load(u32_type_id, val_i, index_var, None));
@@ -509,6 +524,8 @@ impl Writer {
             }
             body
         };
+
+        // This writes the actual loop
         let mut get_loop_continue_id = |body: &mut Vec<Instruction>,
                                         mut loop_body_block,
                                         loop_header,
@@ -571,6 +588,7 @@ impl Writer {
                 body.push(Instruction::branch(loop_header));
             }
         };
+        // Write vertex copy loop
         get_loop_continue_id(
             body,
             vertex_copy_body,
@@ -579,6 +597,7 @@ impl Writer {
             vert_count_id,
             index_var,
         );
+        // In between loops, reset the initial index
         {
             body.push(Instruction::label(in_between_loops));
 
@@ -590,6 +609,7 @@ impl Writer {
 
             body.push(Instruction::branch(prim_loop_header));
         }
+        // Write primitive copy loop
         get_loop_continue_id(
             body,
             primitive_copy_body,
@@ -4022,73 +4042,6 @@ impl BlockContext<'_> {
                     block
                         .body
                         .push(Instruction::store(out_ptr_id, self.cached[value], None));
-
-                    /*for (i, member_info) in info.outputs.iter().enumerate() {
-                        let member_ty = member_info.member_ty;
-
-                        let in_value_id = self.gen_id();
-                        block.body.push(Instruction::composite_extract(
-                            member_ty,
-                            in_value_id,
-                            self.cached[value],
-                            &[i as Word],
-                        ));
-                        let out_ptr_id = self.gen_id();
-                        block.body.push(Instruction::access_chain(
-                            self.get_pointer_type_id(member_ty, spirv::StorageClass::Output),
-                            out_ptr_id,
-                            member_info.var_id,
-                            &[self.cached[index]],
-                        ));
-                        block
-                            .body
-                            .push(Instruction::store(out_ptr_id, in_value_id, None));
-
-                        // Coordinate flip
-                        if self
-                            .writer
-                            .flags
-                            .contains(WriterFlags::ADJUST_COORDINATE_SPACE)
-                            && matches!(
-                                member_info.member.binding,
-                                Some(crate::Binding::BuiltIn(crate::BuiltIn::Position { .. }))
-                            )
-                        {
-                            let float_ptr_type_id = self
-                                .writer
-                                .get_f32_pointer_type_id(spirv::StorageClass::Output);
-                            let index_y_id = self.get_index_constant(1);
-
-                            let access_id = self.gen_id();
-                            block.body.push(Instruction::access_chain(
-                                float_ptr_type_id,
-                                access_id,
-                                out_ptr_id,
-                                &[index_y_id],
-                            ));
-
-                            let float_type_id = self.writer.get_f32_type_id();
-                            let y_val = self.gen_id();
-                            block.body.push(Instruction::composite_extract(
-                                float_type_id,
-                                y_val,
-                                in_value_id,
-                                &[1],
-                            ));
-
-                            let flipped_y_val = self.gen_id();
-                            block.body.push(Instruction::unary(
-                                spirv::Op::FNegate,
-                                float_type_id,
-                                flipped_y_val,
-                                y_val,
-                            ));
-
-                            block
-                                .body
-                                .push(Instruction::store(access_id, flipped_y_val, None));
-                        }
-                    }*/
                 }
                 Statement::SubgroupBallot {
                     result,

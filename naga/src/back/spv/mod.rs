@@ -955,7 +955,9 @@ pub fn write_vec(
 pub struct WriteMeshInfo {
     pub vertex_outputs_by_type: crate::FastHashMap<Handle<crate::Type>, MeshOutputInfo>,
     pub primitive_outputs_by_type: crate::FastHashMap<Handle<crate::Type>, MeshOutputInfo>,
+    /// The workgroup variable containing the number of vertices to write
     pub num_vertices_var: Option<Word>,
+    /// The workgroup variable containing the number of primitives to write
     pub num_primitives_var: Option<Word>,
 }
 

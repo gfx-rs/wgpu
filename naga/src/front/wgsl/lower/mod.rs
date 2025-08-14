@@ -3260,7 +3260,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
 
-                            // TODO: fix this
                             // Emit all previous expressions, even if not used directly
                             rctx.block
                                 .extend(rctx.emitter.finish(&rctx.function.expressions));

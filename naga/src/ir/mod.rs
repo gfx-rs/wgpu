@@ -2619,7 +2619,6 @@ pub enum MeshOutputTopology {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[allow(dead_code)]
 pub struct MeshStageInfo {
-    /// Should be Some by the time it passes validation
     pub topology: MeshOutputTopology,
     pub max_vertices: u32,
     pub max_vertices_override: Option<Handle<Expression>>,
