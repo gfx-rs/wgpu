@@ -56,6 +56,24 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 #### New `EXPERIMENTAL_PRECOMPILED_SHADERS` API
 We have added `Features::EXPERIMENTAL_PRECOMPILED_SHADERS`, replacing existing passthrough types with a unified `CreateShaderModuleDescriptorPassthrough` which allows passing multiple shader codes for different backends. By @SupaMaggie70Incorporated in [#7834](https://github.com/gfx-rs/wgpu/pull/7834)
 
+Difference for SPIR-V passthrough:
+```diff
+- device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
+-     wgpu::ShaderModuleDescriptorSpirV {
+-         label: None,
+-         source: spirv_code,
+-     },
+- ))
++ device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
++     entry_point: "main".into(),
++     label: None,
++     spirv: Some(spirv_code),
++     ..Default::default()
+})
+```
+This allows using precompiled shaders without manually checking which backend's code to pass, for example if you have shaders precompiled for both DXIL and SPIR-V.
+
+
 ### New Features
 
 #### General
