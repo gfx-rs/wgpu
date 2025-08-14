@@ -58,6 +58,7 @@ impl super::Adapter {
         instance_flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         compiler_container: Arc<shader_compilation::CompilerContainer>,
+        backend_options: wgt::Dx12BackendOptions,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         // Create the device so that we can get the capabilities.
         let device = {
@@ -414,6 +415,35 @@ impl super::Adapter {
             bgra8unorm_storage_supported,
         );
 
+        let p010_format_supported = {
+            let mut p010_info = Direct3D12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
+                Format: Dxgi::Common::DXGI_FORMAT_P010,
+                ..Default::default()
+            };
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_FORMAT_SUPPORT,
+                    <*mut _>::cast(&mut p010_info),
+                    size_of_val(&p010_info) as u32,
+                )
+            };
+            if hr.is_ok() {
+                let supports_texture2d = p010_info
+                    .Support1
+                    .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_TEXTURE2D);
+                let supports_shader_load = p010_info
+                    .Support1
+                    .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD);
+                let supports_shader_sample = p010_info
+                    .Support1
+                    .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE);
+                supports_texture2d && supports_shader_load && supports_shader_sample
+            } else {
+                false
+            }
+        };
+        features.set(wgt::Features::TEXTURE_FORMAT_P010, p010_format_supported);
+
         let mut features1 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS1::default();
         let hr = unsafe {
             device.CheckFeatureSupport(
@@ -535,6 +565,7 @@ impl super::Adapter {
                 workarounds,
                 memory_budget_thresholds,
                 compiler_container,
+                options: backend_options,
             },
             info,
             features,
@@ -698,6 +729,7 @@ impl crate::Adapter for super::Adapter {
             &self.library,
             self.memory_budget_thresholds,
             self.compiler_container.clone(),
+            self.options.clone(),
         )?;
         Ok(crate::OpenDevice {
             device,

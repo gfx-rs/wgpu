@@ -185,7 +185,7 @@ pub trait DeviceInterface: CommonTraits {
 
     fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback);
 
-    fn on_uncaptured_error(&self, handler: Box<dyn crate::UncapturedErrorHandler>);
+    fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>);
     fn push_error_scope(&self, filter: crate::ErrorFilter);
     fn pop_error_scope(&self) -> Pin<Box<dyn PopErrorScopeFuture>>;
 

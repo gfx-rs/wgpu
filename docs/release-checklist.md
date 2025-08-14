@@ -74,6 +74,10 @@ Day of Release:
 - On _your own branch_ based on the latest release branch. Cherry-pick the PRs that need to be backported. When modifying the commits, use --append to retain their original authorship.
 - Remove the `needs-backport` label from the PRs.
 - Fix the changelogs items and add a new header for the patch release with the release version and date.
+  - The release section should start with a header saying the following (for example)
+    ```markdown
+    This release includes `crate1`, `crate2` and `crate3` version `X.Y.Z`. All other crates remain at their previous versions.
+    ```
 - Once all the PRs are cherry-picked, look at the diff between HEAD and the previous patch release. See what crates changed.
 - Bump all the versions of the crates that changed.
 - Create a PR with all of the version changes and changelog updates into the release branch.
@@ -81,10 +85,6 @@ Day of Release:
 - Checkout the release branch with the merged PR.
 - Publish all relevant crates (see list above).
 - Create a new release on the `wgpu` repo with the changelog and a tag called `vX.Y.Z` on the release branch.
-  - The release should start with a header saying the following (for example)
-    ```markdown
-    This release includes `crate1`, `crate2` and `crate3` version `X.Y.Z`. All other crates remain at their previous versions.
-    ```
 - Backport the changelog and version bumps to the `trunk` branch.
   - Ensure that any items in the newly-released changelog don't appear in the "unreleased" section of the trunk changelog.
 - Update the release checklist with any needed changes.
